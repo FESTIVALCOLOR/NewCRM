@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Базы данных (НЕ загружаем на GitHub!)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Логи
+logs/
+*.log
+
+# Кэш
+preview_cache/
+cache/
+*.cache
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Временные файлы
+nul
+*.tmp
+*.bak
+*.backup_*
+
+# Server environment (не загружаем токены!)
+server/.env
+.env
+
+# Конфиденциально
+config_local.py
+secrets.py
