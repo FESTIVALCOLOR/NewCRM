@@ -49,7 +49,8 @@
       "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_center_dialogs.py)",
       "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_center_dialogs2.py)",
       "Bash(del fix_center_dialogs.py fix_center_dialogs2.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" remove_emoji.py)"
+      "Bash(\".venv\\\\Scripts\\\\python.exe\" remove_emoji.py)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
