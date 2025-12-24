@@ -9,16 +9,32 @@ from database.db_manager import DatabaseManager
 from ui.main_window import MainWindow
 from ui.custom_message_box import CustomMessageBox
 from utils.resource_path import resource_path
+from config import MULTI_USER_MODE, API_BASE_URL
 
 # ========== ЛОГИРОВАНИЕ ==========
 from utils.logger import log_auth_attempt, app_logger
 # =================================
+
+# ========== API CLIENT ==========
+if MULTI_USER_MODE:
+    from utils.api_client import APIClient
+# ================================
 
 class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.db = DatabaseManager()
         self.main_window = None
+        self.api_client = None
+
+        # Инициализация API клиента если включен многопользовательский режим
+        if MULTI_USER_MODE:
+            try:
+                self.api_client = APIClient(API_BASE_URL)
+                app_logger.info(f"API клиент инициализирован: {API_BASE_URL}")
+            except Exception as e:
+                app_logger.error(f"Ошибка инициализации API клиента: {e}")
+
         self.init_ui()
         
     def init_ui(self):
@@ -189,8 +205,52 @@ class LoginWindow(QWidget):
             app_logger.warning("Попытка входа с пустыми полями")
             return
 
-        # Проверка в БД
-        app_logger.info(f"Попытка входа: логин='{login}'")
+        # Многопользовательский режим - аутентификация через API
+        if MULTI_USER_MODE and self.api_client:
+            try:
+                app_logger.info(f"API аутентификация: логин='{login}'")
+
+                # Вход через API
+                result = self.api_client.login(login, password)
+
+                # Формируем данные пользователя
+                employee = {
+                    'id': result['employee_id'],
+                    'full_name': result['full_name'],
+                    'role': result['role'],
+                    'position': result.get('position', result['role']),
+                    'department': result.get('department', ''),
+                    'login': login,
+                    'api_mode': True  # Флаг что работаем через API
+                }
+
+                log_auth_attempt(login, success=True)
+                app_logger.info(f"Успешный API вход: {result['full_name']} (роль: {result['role']})")
+
+                self.hide()
+                self.main_window = MainWindow(employee, api_client=self.api_client)
+                self.main_window.show()
+
+            except Exception as e:
+                log_auth_attempt(login, success=False)
+                app_logger.error(f"Ошибка API входа: {e}")
+
+                error_msg = str(e)
+                if "Не удалось войти" in error_msg or "401" in error_msg:
+                    error_msg = "Неверный логин или пароль!"
+                elif "ConnectionError" in error_msg or "Timeout" in error_msg:
+                    error_msg = f"Ошибка подключения к серверу.\nПроверьте интернет соединение и доступность сервера:\n{API_BASE_URL}"
+
+                CustomMessageBox(
+                    self,
+                    'Ошибка входа',
+                    error_msg,
+                    'error'
+                ).exec_()
+            return
+
+        # Локальный режим - аутентификация через SQLite БД
+        app_logger.info(f"Локальная аутентификация: логин='{login}'")
         employee = self.db.get_employee_by_login(login, password)
 
         if employee:
@@ -199,7 +259,7 @@ class LoginWindow(QWidget):
             role = employee.get('role', 'Unknown')
 
             log_auth_attempt(login, success=True)
-            app_logger.info(f"Успешный вход: {employee_name} (роль: {role})")
+            app_logger.info(f"Успешный локальный вход: {employee_name} (роль: {role})")
 
             self.hide()
             self.main_window = MainWindow(employee)
@@ -207,7 +267,7 @@ class LoginWindow(QWidget):
         else:
             # Неудачный вход
             log_auth_attempt(login, success=False)
-            app_logger.warning(f"Неудачная попытка входа: логин='{login}'")
+            app_logger.warning(f"Неудачная попытка локального входа: логин='{login}'")
 
             CustomMessageBox(
                 self,

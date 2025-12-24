@@ -65,10 +65,11 @@ def setup_logger(name='crm', level=logging.INFO):
     logger.addHandler(error_handler)
 
     # Handler 3: Консоль (опционально, можно отключить в продакшене)
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.WARNING)  # В консоль только WARNING и выше
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    # Отключаем консольный вывод для Windows, чтобы избежать проблем с emoji
+    # console_handler = logging.StreamHandler()
+    # console_handler.setLevel(logging.WARNING)  # В консоль только WARNING и выше
+    # console_handler.setFormatter(formatter)
+    # logger.addHandler(console_handler)
 
     return logger
 

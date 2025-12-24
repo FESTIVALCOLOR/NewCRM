@@ -21,29 +21,30 @@ from ui.employee_reports_tab import EmployeeReportsTab
 from utils.tab_helpers import disable_wheel_on_tabwidget
 
 class MainWindow(QMainWindow):
-    def __init__(self, employee_data):
+    def __init__(self, employee_data, api_client=None):
         super().__init__()
         self.employee = employee_data
+        self.api_client = api_client  # API    
         from database.db_manager import DatabaseManager
         self.db = DatabaseManager()
         
-        # Переменные для resize
+        #   resize
         self.resizing = False
         self.resize_edge = None
         self.resize_margin = 8
 
-        # Переменные для Snap Assist
-        self.snap_threshold = 10  # Порог прилипания в пикселях (уменьшен с 20 до 10)
+        #   Snap Assist
+        self.snap_threshold = 10  #     (  20  10)
         self.is_snapped = False
         self.snap_position = None  # 'left', 'right', 'top', 'maximized'
-        self.restore_geometry = None  # Геометрия до snap
+        self.restore_geometry = None  #   snap
         
         self.init_ui()
 
-        # ========== ПРИМЕНЯЕМ ГЛОБАЛЬНЫЙ СТИЛЬ КАЛЕНДАРЯ ==========
+        # ==========     ==========
         from utils.calendar_styles import CALENDAR_STYLE
 
-        # Получаем текущий стиль окна и добавляем стиль календаря
+        #        
         current_style = self.styleSheet()
         self.setStyleSheet(current_style + "\n" + CALENDAR_STYLE)
         # ===========================================================
@@ -53,23 +54,23 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1400, 800)
         self.resize(1400, 800)
         
-        # УБИРАЕМ СТАНДАРТНЫЙ TITLE BAR
+        #   TITLE BAR
         self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)  # Для border-radius
+        self.setAttribute(Qt.WA_TranslucentBackground, True)  #  border-radius
 
-        # ========== УСТАНАВЛИВАЕМ ФОН ГЛАВНОГО ОКНА ==========
+        # ==========     ==========
         self.setAutoFillBackground(True)
         palette = self.palette()
-        palette.setColor(QPalette.Window, QColor(0, 0, 0, 0))  # Прозрачный для border-radius
+        palette.setColor(QPalette.Window, QColor(0, 0, 0, 0))  #   border-radius
         self.setPalette(palette)
         # =====================================================
 
-        # ========== ВКЛЮЧАЕМ ОТСЛЕЖИВАНИЕ НАВЕДЕНИЯ ==========
+        # ==========    ==========
         self.setMouseTracking(True)
         self.setAttribute(Qt.WA_Hover, True)
         # ====================================================
 
-        # ========== ГЛАВНЫЙ КОНТЕЙНЕР ==========
+        # ==========   ==========
         main_container = QWidget()
         main_container.setObjectName("mainContainer")
         main_container.setStyleSheet("""
@@ -86,7 +87,7 @@ class MainWindow(QMainWindow):
         main_container.setLayout(container_layout)
         # ====================================================
 
-        # ========== КОНТЕЙНЕР С РАМКОЙ И СКРУГЛЕНИЕМ ==========
+        # ==========      ==========
         from PyQt5.QtWidgets import QFrame
         border_frame = QFrame()
         border_frame.setObjectName("mainBorderFrame")
@@ -100,7 +101,7 @@ class MainWindow(QMainWindow):
         container_layout.addWidget(border_frame)
         # ======================================================
 
-        # ========== ВКЛЮЧАЕМ MOUSE TRACKING ДЛЯ BORDER FRAME ==========
+        # ==========  MOUSE TRACKING  BORDER FRAME ==========
         border_frame.setMouseTracking(True)
         border_frame.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         # ==============================================================
@@ -109,14 +110,14 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         border_frame.setLayout(layout)
-        # ========== КАСТОМНЫЙ TITLE BAR ==========
+        # ==========  TITLE BAR ==========
         from ui.custom_title_bar import CustomTitleBar
         self.title_bar = CustomTitleBar(
             self,
-            "FESTIVAL COLOR - Система управления заказами",
+            "FESTIVAL COLOR -   ",
             simple_mode=False
         )
-        # ========== СКРУГЛЯЕМ ВЕРХНИЕ УГЛЫ TITLE BAR ==========
+        # ==========    TITLE BAR ==========
         self.title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -129,8 +130,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.title_bar)
         # =========================================
         
-        # Информационная панель (компактная)
-        info_label = QLabel(f'{self.employee["full_name"]} · {self.employee["position"]}')
+        #   ()
+        info_label = QLabel(f'{self.employee["full_name"]}  {self.employee["position"]}')
         info_label.setStyleSheet('''
             padding: 8px 15px; 
             background-color: #F8F9FA; 
@@ -141,7 +142,7 @@ class MainWindow(QMainWindow):
         ''')
         layout.addWidget(info_label)
         
-        # Вкладки
+        # 
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
@@ -160,28 +161,28 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        # Блокируем переключение вкладок колесом мыши
+        #     
         disable_wheel_on_tabwidget(self.tabs)
 
-        # Добавление вкладок в соответствии с ролью
+        #      
         self.setup_tabs()
         
         layout.addWidget(self.tabs)
         
-        # ========== БЛОК СТАТИСТИКИ (6 КАРТОЧЕК В 1 РЯД) ==========
+        # ==========   (6   1 ) ==========
         stats_container = QWidget()
         stats_container.setObjectName('stats_container')
         stats_container.setStyleSheet('background-color: #FFFFFF; padding: 5px; border-bottom: 1px ')
 
-        # СОЗДАЕМ GRIDLAYOUT
+        #  GRIDLAYOUT
         stats_layout = QGridLayout()
         stats_layout.setSpacing(10)
         stats_layout.setContentsMargins(10, 0, 10, 10)
 
-        # ВСЕ 6 КАРТОЧЕК В ОДИН РЯД (row=0)
+        #  6     (row=0)
         individual_orders_card = self.create_simple_stat_card(
             'individual_orders',
-            'Всего заказов индивидуальных',
+            '  ',
             '0',
             'resources/icons/clipboard1.svg',
             '#ffffff',
@@ -191,8 +192,8 @@ class MainWindow(QMainWindow):
 
         template_orders_card = self.create_simple_stat_card(
             'individual_area',
-            'Всего площадь индивидуальных',
-            '0 м²',
+            '  ',
+            '0 ',
             'resources/icons/codepen1.svg',
             '#ffffff',
             '#F57C00'
@@ -201,7 +202,7 @@ class MainWindow(QMainWindow):
 
         supervision_orders_card = self.create_simple_stat_card(
             'template_orders',
-            'Всего заказов шаблонных',
+            '  ',
             '0',
             'resources/icons/clipboard2.svg',
             '#ffffff',
@@ -212,8 +213,8 @@ class MainWindow(QMainWindow):
 
         individual_area_card = self.create_simple_stat_card(
             'template_area',
-            'Всего площадь шаблонных',
-            '0 м²',
+            '  ',
+            '0 ',
             'resources/icons/codepen2.svg',
             '#ffffff',
             '#C62828'
@@ -222,7 +223,7 @@ class MainWindow(QMainWindow):
 
         template_area_card = self.create_simple_stat_card(
             'supervision_orders',
-            'Всего заказов авторского надзора',
+            '   ',
             '0',
             'resources/icons/clipboard3.svg',
             '#ffffff',
@@ -232,15 +233,15 @@ class MainWindow(QMainWindow):
 
         supervision_area_card = self.create_simple_stat_card(
             'supervision_area',
-            'Всего площадь авторского надзора',
-            '0 м²',
+            '   ',
+            '0 ',
             'resources/icons/codepen3.svg',
             '#ffffff',
             '#388E3C'
         )
         stats_layout.addWidget(supervision_area_card, 0, 5)
 
-        # Растягиваем колонки
+        #  
         for col in range(6):
             stats_layout.setColumnStretch(col, 1)
 
@@ -248,7 +249,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(stats_container)
         # ======================================================
 
-        # ========== КАСТОМНЫЙ СТАТУС-БАР С ВЕРСИЕЙ ==========
+        # ==========  -   ==========
         from PyQt5.QtWidgets import QPushButton
         from PyQt5.QtGui import QIcon
         from config import APP_VERSION
@@ -259,31 +260,31 @@ class MainWindow(QMainWindow):
         status_bar_layout.setSpacing(10)
         status_bar_container.setLayout(status_bar_layout)
 
-        # Левая часть - статус
-        self.status_label = QLabel('Готово к работе')
+        #   - 
+        self.status_label = QLabel('  ')
         self.status_label.setStyleSheet("color: #555; font-size: 11px;")
         status_bar_layout.addWidget(self.status_label)
 
         status_bar_layout.addStretch()
 
-        # Правая часть - версия и кнопка обновления
-        self.version_label = QLabel(f'Версия: {APP_VERSION}')
+        #   -    
+        self.version_label = QLabel(f': {APP_VERSION}')
         self.version_label.setStyleSheet("color: #555; font-size: 11px;")
         status_bar_layout.addWidget(self.version_label)
 
-        # Кнопка "обновить" (видна только руководителю студии)
-        if self.employee.get('position') == 'Руководитель студии':
+        #  "" (   )
+        if self.employee.get('position') == ' ':
             from utils.resource_path import resource_path
             self.update_btn = QPushButton()
 
-            # Получаем путь к иконке через resource_path
+            #      resource_path
             icon_path = resource_path('resources/icons/refresh.svg')
 
             if os.path.exists(icon_path):
                 self.update_btn.setIcon(QIcon(icon_path))
 
             self.update_btn.setFixedSize(24, 24)
-            self.update_btn.setToolTip("Проверить обновления")
+            self.update_btn.setToolTip(" ")
             self.update_btn.setStyleSheet("""
                 QPushButton {
                     background-color: transparent;
@@ -297,7 +298,7 @@ class MainWindow(QMainWindow):
             self.update_btn.clicked.connect(self.check_for_updates_manual)
             status_bar_layout.addWidget(self.update_btn)
 
-        # Применяем стиль к контейнеру
+        #    
         status_bar_container.setStyleSheet("""
             QWidget {
                 background-color: #FFFFFF;
@@ -310,16 +311,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(status_bar_container)
         # ====================================================
 
-        # ========== УБИРАЕМ СТАНДАРТНЫЙ СТАТУС-БАР ==========
+        # ==========   - ==========
         self.setStatusBar(None)
         # ====================================================
 
-        # ========== ЗАГРУЗКА СТАТИСТИКИ ==========
+        # ==========   ==========
         QTimer.singleShot(100, self.load_dashboard_statistics)
         # =========================================
         
     def get_resize_edge(self, pos):
-        """Определение края/угла для изменения размера"""
+        """ /   """
         rect = self.rect()
         margin = self.resize_margin
         
@@ -328,7 +329,7 @@ class MainWindow(QMainWindow):
         on_top = pos.y() <= margin
         on_bottom = pos.y() >= rect.height() - margin
         
-        # Углы (приоритет)
+        #  ()
         if on_top and on_left:
             return 'top-left'
         elif on_top and on_right:
@@ -338,7 +339,7 @@ class MainWindow(QMainWindow):
         elif on_bottom and on_right:
             return 'bottom-right'
         
-        # Края
+        # 
         elif on_top:
             return 'top'
         elif on_bottom:
@@ -351,7 +352,7 @@ class MainWindow(QMainWindow):
         return None
 
     def set_cursor_shape(self, edge):
-        """Установка формы курсора"""
+        """  """
         if edge == 'top-left' or edge == 'bottom-right':
             self.setCursor(Qt.SizeFDiagCursor)
         elif edge == 'top-right' or edge == 'bottom-left':
@@ -364,28 +365,28 @@ class MainWindow(QMainWindow):
             self.setCursor(Qt.ArrowCursor)
 
     def snap_to_edge(self, pos):
-        """Прилипание окна к краю экрана при перетаскивании"""
+        """      """
         screen = QApplication.desktop().availableGeometry(self)
 
-        # Если окно уже прилипло и двигается достаточно далеко от края - восстанавливаем
-        restore_threshold = 50  # Больший порог для восстановления
+        #           - 
+        restore_threshold = 50  #    
         should_restore = False
 
         if self.is_snapped:
             if self.snap_position == 'maximized':
-                # Если двигаем вниз от верхнего края
+                #      
                 if pos.y() > screen.y() + restore_threshold:
                     should_restore = True
-                    # Для maximized: центрируем окно под курсором при восстановлении
+                    #  maximized:      
                     if self.restore_geometry:
-                        # Восстанавливаем минимальный размер ПЕРЕД изменением геометрии
+                        #      
                         self.setMinimumSize(1400, 800)
 
-                        # Вычисляем новую позицию так, чтобы курсор был в центре title bar
+                        #    ,      title bar
                         new_x = pos.x() - self.restore_geometry.width() // 2
-                        new_y = pos.y() - 20  # 20px - примерно середина title bar
+                        new_y = pos.y() - 20  # 20px -   title bar
 
-                        # ВАЖНО: Используем setGeometry для одновременной установки размера и позиции
+                        # :  setGeometry      
                         self.setGeometry(new_x, new_y, self.restore_geometry.width(), self.restore_geometry.height())
 
                         self.is_snapped = False
@@ -393,85 +394,85 @@ class MainWindow(QMainWindow):
                         self.restore_geometry = None
                         return
             elif self.snap_position == 'left':
-                # Если двигаем вправо от левого края
+                #      
                 if pos.x() > screen.x() + restore_threshold:
                     should_restore = True
             elif self.snap_position == 'right':
-                # Если двигаем влево от правого края
+                #      
                 if pos.x() < screen.x() + screen.width() - restore_threshold:
                     should_restore = True
 
-            # Для боковых snap - просто восстанавливаем геометрию
+            #   snap -   
             if should_restore and self.restore_geometry and self.snap_position in ['left', 'right']:
                 self.setGeometry(self.restore_geometry)
-                # Восстанавливаем минимальный размер
+                #   
                 self.setMinimumSize(1400, 800)
                 self.is_snapped = False
                 self.snap_position = None
                 self.restore_geometry = None
                 return
 
-        # Проверяем прилипание к верхнему краю (максимизация)
+        #      ()
         if pos.y() <= screen.y() + self.snap_threshold:
             if not self.is_snapped or self.snap_position != 'maximized':
                 self.restore_geometry = self.geometry()
                 self.is_snapped = True
                 self.snap_position = 'maximized'
-                # Не применяем геометрию сразу, ждем mouseReleaseEvent
+                #    ,  mouseReleaseEvent
 
-        # Проверяем прилипание к левому краю
+        #     
         elif pos.x() <= screen.x() + self.snap_threshold:
             if not self.is_snapped or self.snap_position != 'left':
                 self.restore_geometry = self.geometry()
                 self.is_snapped = True
                 self.snap_position = 'left'
 
-        # Проверяем прилипание к правому краю (ИСПРАВЛЕНО: учитываем screen.x())
+        #      (:  screen.x())
         elif pos.x() >= screen.x() + screen.width() - self.snap_threshold:
             if not self.is_snapped or self.snap_position != 'right':
                 self.restore_geometry = self.geometry()
                 self.is_snapped = True
                 self.snap_position = 'right'
         else:
-            # Если не у края - сбрасываем snap
+            #     -  snap
             if self.is_snapped:
                 self.is_snapped = False
                 self.snap_position = None
 
     def apply_snap(self):
-        """Применение прилипания после отпускания мыши"""
+        """    """
         if not self.is_snapped or not self.snap_position:
-            # Восстанавливаем обычный курсор
+            #   
             self.setCursor(Qt.ArrowCursor)
             return
 
         screen = QApplication.desktop().availableGeometry(self)
 
-        # КРИТИЧНО: Полностью снимаем ограничения размера для Snap Assist
+        # :      Snap Assist
         self.setMinimumSize(1, 1)
-        self.setMaximumSize(16777215, 16777215)  # Максимум Qt
+        self.setMaximumSize(16777215, 16777215)  #  Qt
 
         if self.snap_position == 'maximized':
-            # Развернуть на весь экран
+            #    
             self.setGeometry(screen)
 
         elif self.snap_position == 'left':
-            # Половина экрана слева
+            #   
             half_width = screen.width() // 2
             self.setGeometry(screen.x(), screen.y(), half_width, screen.height())
 
         elif self.snap_position == 'right':
-            # Половина экрана справа
+            #   
             half_width = screen.width() // 2
             self.setGeometry(screen.x() + half_width, screen.y(), half_width, screen.height())
 
-        # Восстанавливаем обычный курсор после применения snap
+        #      snap
         self.setCursor(Qt.ArrowCursor)
 
     def mousePressEvent(self, event):
-        """Начало изменения размера"""
+        """  """
         if event.button() == Qt.LeftButton:
-            # ВАЖНО: Если окно maximized, выходим из этого режима при попытке resize
+            # :   maximized,       resize
             if self.isMaximized():
                 self.showNormal()
 
@@ -487,10 +488,10 @@ class MainWindow(QMainWindow):
         super().mousePressEvent(event)
 
     def event(self, event):
-        """Обработка событий наведения мыши"""
+        """   """
         if event.type() == event.HoverMove:
-            # Изменяем курсор при наведении (без нажатия)
-            # Показываем курсор resize даже если окно maximized (чтобы пользователь видел возможность изменить размер)
+            #     ( )
+            #   resize    maximized (     )
             if not self.resizing:
                 edge = self.get_resize_edge(event.pos())
                 self.set_cursor_shape(edge)
@@ -498,7 +499,7 @@ class MainWindow(QMainWindow):
         return super().event(event)
 
     def mouseMoveEvent(self, event):
-        """Процесс изменения размера"""
+        """  """
         if self.resizing and self.resize_edge:
             delta = event.globalPos() - self.resize_start_pos
             
@@ -541,14 +542,14 @@ class MainWindow(QMainWindow):
             super().mouseMoveEvent(event)
             
     def mouseReleaseEvent(self, event):
-        """Завершение изменения размера"""
+        """  """
         if event.button() == Qt.LeftButton and self.resizing:
             self.resizing = False
             self.resize_edge = None
             self.setCursor(Qt.ArrowCursor)
 
-            # ВАЖНО: Сбрасываем snap состояние при ручном resize
-            # Это позволяет уменьшать окно после Snap Assist
+            # :  snap    resize
+            #      Snap Assist
             self.is_snapped = False
             self.snap_position = None
             self.restore_geometry = None
@@ -558,15 +559,15 @@ class MainWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
-        """Двойной клик - возврат к размеру по умолчанию (1400x800)"""
+        """  -      (1400x800)"""
         if event.button() == Qt.LeftButton:
-            # ВСЕГДА возвращаем к размеру по умолчанию, центрируем на экране
-            # Сбрасываем состояние snap
+            #      ,   
+            #   snap
             self.is_snapped = False
             self.snap_position = None
             self.restore_geometry = None
 
-            # Центрируем окно с размером по умолчанию
+            #      
             self.showNormal()
             self.resize(1400, 800)
 
@@ -582,7 +583,7 @@ class MainWindow(QMainWindow):
         super().mouseDoubleClickEvent(event)
 
     def create_simple_stat_card(self, object_name, title, value, icon_path, bg_color, border_color):
-        """Создание простой карточки статистики с иконкой из файла"""
+        """       """
         from utils.resource_path import resource_path
 
         card = QGroupBox()
@@ -590,7 +591,7 @@ class MainWindow(QMainWindow):
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         card.setFixedHeight(110)
 
-        # РАМКА 1px (вместо 2px)
+        #  1px ( 2px)
         card.setStyleSheet(f"""
             QGroupBox {{
                 background-color: {bg_color};
@@ -607,24 +608,24 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         layout.setContentsMargins(0, 2, 0, 2)
 
-        # Иконка слева (SVG из файла или fallback на эмодзи)
+        #   (SVG    fallback  )
         full_icon_path = resource_path(icon_path)
         if os.path.exists(full_icon_path):
             icon_widget = QSvgWidget(full_icon_path)
             icon_widget.setFixedSize(60, 60)
             layout.addWidget(icon_widget)
         else:
-            # Fallback на эмодзи
+            # Fallback  
             fallback_icons = {
-                'clipboard1.svg': '📐',
-                'clipboard2.svg': '📋',
-                'clipboard3.svg': '🏗️',
-                'codepen1.svg': '📏',
-                'codepen2.svg': '📐',
-                'codepen3.svg': '🏢'
+                'clipboard1.svg': '',
+                'clipboard2.svg': '',
+                'clipboard3.svg': '',
+                'codepen1.svg': '',
+                'codepen2.svg': '',
+                'codepen3.svg': ''
             }
             icon_name = os.path.basename(icon_path)
-            emoji = fallback_icons.get(icon_name, '📊')
+            emoji = fallback_icons.get(icon_name, '')
             
             icon_label = QLabel(emoji)
             icon_label.setStyleSheet('font-size: 40px; background-color: transparent;')
@@ -632,12 +633,12 @@ class MainWindow(QMainWindow):
             icon_label.setFixedWidth(50)
             layout.addWidget(icon_label)
         
-        # Данные справа (РАСШИРЕННЫЕ ПОЛЯ)
+        #   ( )
         data_layout = QVBoxLayout()
         data_layout.setSpacing(2)
         data_layout.setAlignment(Qt.AlignVCenter)
         
-        # Название (с переносом строк)
+        #  (  )
         title_label = QLabel(title)
         title_label.setStyleSheet(f'''
             font-size: 11px; 
@@ -645,11 +646,11 @@ class MainWindow(QMainWindow):
             font-weight: 600; 
             background-color: transparent;
         ''')
-        title_label.setWordWrap(True)  # ← Включаем перенос
-        title_label.setMinimumWidth(50)  # ← Расширяем поле
+        title_label.setWordWrap(True)  #   
+        title_label.setMinimumWidth(50)  #   
         data_layout.addWidget(title_label)
         
-        # Значение (КРУПНО)
+        #  ()
         value_label = QLabel(value)
         value_label.setObjectName('value')
         value_label.setStyleSheet('''
@@ -659,7 +660,7 @@ class MainWindow(QMainWindow):
             background-color: transparent;
         ''')
         value_label.setWordWrap(False)
-        value_label.setMinimumWidth(150)  # ← Расширяем поле
+        value_label.setMinimumWidth(150)  #   
         data_layout.addWidget(value_label)
         
         layout.addLayout(data_layout, 1)
@@ -668,7 +669,7 @@ class MainWindow(QMainWindow):
         return card
 
     def create_compact_stat_card(self, object_name, title, orders_value, area_value, icon, bg_color, border_color):
-        """Создание компактной карточки статистики (старый метод)"""
+        """    ( )"""
         
         card = QGroupBox()
         card.setObjectName(object_name)
@@ -711,7 +712,7 @@ class MainWindow(QMainWindow):
         title_label.setWordWrap(False)
         data_layout.addWidget(title_label)
         
-        orders_label = QLabel(f'Заказов: {orders_value}')
+        orders_label = QLabel(f': {orders_value}')
         orders_label.setObjectName('orders_value')
         orders_label.setStyleSheet('''
             font-size: 20px; 
@@ -722,7 +723,7 @@ class MainWindow(QMainWindow):
         orders_label.setWordWrap(False)
         data_layout.addWidget(orders_label)
         
-        area_label = QLabel(f'Площадь: {area_value}')
+        area_label = QLabel(f': {area_value}')
         area_label.setObjectName('area_value')
         area_label.setStyleSheet('''
             font-size: 13px; 
@@ -739,11 +740,11 @@ class MainWindow(QMainWindow):
         return card
     
     def load_dashboard_statistics(self):
-        """Загрузка статистики для dashboard"""
+        """   dashboard"""
         try:
             stats = self.db.get_dashboard_statistics()
             
-            # ========== ОБНОВЛЯЕМ ЗАКАЗЫ ==========
+            # ==========   ==========
             individual_orders = self.findChild(QGroupBox, 'individual_orders')
             if individual_orders:
                 individual_orders.findChild(QLabel, 'value').setText(str(stats['individual_orders']))
@@ -758,100 +759,100 @@ class MainWindow(QMainWindow):
             
             individual_area = self.findChild(QGroupBox, 'individual_area')
             if individual_area:
-                individual_area.findChild(QLabel, 'value').setText(f"{stats['individual_area']:,.0f} м²")
+                individual_area.findChild(QLabel, 'value').setText(f"{stats['individual_area']:,.0f} ")
             
             template_area = self.findChild(QGroupBox, 'template_area')
             if template_area:
-                template_area.findChild(QLabel, 'value').setText(f"{stats['template_area']:,.0f} м²")
+                template_area.findChild(QLabel, 'value').setText(f"{stats['template_area']:,.0f} ")
             
             supervision_area = self.findChild(QGroupBox, 'supervision_area')
             if supervision_area:
-                supervision_area.findChild(QLabel, 'value').setText(f"{stats['supervision_area']:,.0f} м²")
+                supervision_area.findChild(QLabel, 'value').setText(f"{stats['supervision_area']:,.0f} ")
             
-            print("✓ Статистика dashboard обновлена")
-            print(f"  Индивидуальные: {stats['individual_orders']} ({stats['individual_area']:.0f} м²)")
-            print(f"  Шаблонные: {stats['template_orders']} ({stats['template_area']:.0f} м²)")
-            print(f"  Надзор: {stats['supervision_orders']} ({stats['supervision_area']:.0f} м²)")
+            print("  dashboard ")
+            print(f"  : {stats['individual_orders']} ({stats['individual_area']:.0f} )")
+            print(f"  : {stats['template_orders']} ({stats['template_area']:.0f} )")
+            print(f"  : {stats['supervision_orders']} ({stats['supervision_area']:.0f} )")
             
         except Exception as e:
-            print(f"❌ Ошибка загрузки статистики: {e}")
+            print(f"   : {e}")
             import traceback
             traceback.print_exc()
             
     def setup_tabs(self):
-        """Настройка вкладок с подключением обновлений"""
+        """    """
         
-        # ========== ПОЛУЧАЕМ ОБЯЗАННОСТИ ==========
-        position = self.employee.get('position', 'Дизайнер')
+        # ==========   ==========
+        position = self.employee.get('position', '')
         secondary_position = self.employee.get('secondary_position', '')
         
-        # Получаем права основной должности
+        #    
         allowed_tabs = set(ROLES.get(position, {}).get('tabs', []))
         can_edit = ROLES.get(position, {}).get('can_edit', False)
         
-        # ========== ОБЪЕДИНЯЕМ ПРАВА ДОПОЛНИТЕЛЬНОЙ ДОЛЖНОСТИ ==========
+        # ==========     ==========
         if secondary_position:
             secondary_tabs = set(ROLES.get(secondary_position, {}).get('tabs', []))
-            allowed_tabs = allowed_tabs.union(secondary_tabs)  # Объединяем
+            allowed_tabs = allowed_tabs.union(secondary_tabs)  # 
             
-            # Если хотя бы одна должность дает can_edit - предоставляем
+            #       can_edit - 
             secondary_can_edit = ROLES.get(secondary_position, {}).get('can_edit', False)
             can_edit = can_edit or secondary_can_edit
         # ================================================================
         
-        print(f"\n🔐 ПРОВЕРКА ДОСТУПА:")
-        print(f"   Сотрудник: {self.employee['full_name']}")
-        print(f"   Основная должность: {position}")
+        print(f"\n  :")
+        print(f"   : {self.employee['full_name']}")
+        print(f"    : {position}")
         if secondary_position:
-            print(f"   Дополнительная должность: {secondary_position}")
-        print(f"   Разрешенные вкладки: {sorted(allowed_tabs)}")
-        print(f"   Права редактирования: {can_edit}\n")
+            print(f"    : {secondary_position}")
+        print(f"    : {sorted(allowed_tabs)}")
+        print(f"    : {can_edit}\n")
         
-        # Добавляем вкладки
-        if 'Клиенты' in allowed_tabs:
-            self.tabs.addTab(ClientsTab(self.employee), '  Клиенты  ')
+        #  
+        if '' in allowed_tabs:
+            self.tabs.addTab(ClientsTab(self.employee), '    ')
         
-        if 'Договора' in allowed_tabs:
-            self.tabs.addTab(ContractsTab(self.employee), '  Договора  ')
+        if '' in allowed_tabs:
+            self.tabs.addTab(ContractsTab(self.employee), '    ')
         
-        if 'СРМ' in allowed_tabs:
-            self.tabs.addTab(CRMTab(self.employee, can_edit), '  СРМ  ')
+        if '' in allowed_tabs:
+            self.tabs.addTab(CRMTab(self.employee, can_edit), '    ')
         
-        if 'СРМ надзора' in allowed_tabs:
-            self.tabs.addTab(CRMSupervisionTab(self.employee), '  СРМ надзора  ')
+        if ' ' in allowed_tabs:
+            self.tabs.addTab(CRMSupervisionTab(self.employee), '     ')
         
-        if 'Отчеты и Статистика' in allowed_tabs:
-            self.tabs.addTab(ReportsTab(self.employee), '  Отчеты и Статистика  ')
+        if '  ' in allowed_tabs:
+            self.tabs.addTab(ReportsTab(self.employee), '      ')
         
-        if 'Сотрудники' in allowed_tabs:
-            self.tabs.addTab(EmployeesTab(self.employee), '  Сотрудники  ')
+        if '' in allowed_tabs:
+            self.tabs.addTab(EmployeesTab(self.employee), '    ')
         
-        if 'Зарплаты' in allowed_tabs:
-            self.tabs.addTab(SalariesTab(self.employee), '  Зарплаты  ')
+        if '' in allowed_tabs:
+            self.tabs.addTab(SalariesTab(self.employee), '    ')
         
-        if 'Отчеты по сотрудникам' in allowed_tabs:
-            self.tabs.addTab(EmployeeReportsTab(self.employee), '  Отчеты по сотрудникам  ')
+        if '  ' in allowed_tabs:
+            self.tabs.addTab(EmployeeReportsTab(self.employee), '      ')
         
         self.tabs.currentChanged.connect(self.on_tab_changed)
         
     def on_tab_changed(self, index):
-        """Обновление данных + скрытие/показ dashboard"""
+        """  + / dashboard"""
         try:
             current_widget = self.tabs.widget(index)
             tab_name = self.tabs.tabText(index).strip()
             
-            # ========== СКРЫВАЕМ DASHBOARD НА ВКЛАДКЕ "ОТЧЕТЫ" ==========
-            stats_container = self.findChild(QWidget, 'stats_container')  # Нужно добавить objectName
+            # ==========  DASHBOARD   "" ==========
+            stats_container = self.findChild(QWidget, 'stats_container')  #   objectName
             if stats_container:
-                if 'Отчеты и Статистика' in tab_name:
+                if '  ' in tab_name:
                     stats_container.hide()
-                    print("📊 Dashboard скрыт (вкладка Reports)")
+                    print(" Dashboard  ( Reports)")
                 else:
                     stats_container.show()
-                    print("📊 Dashboard показан")
+                    print(" Dashboard ")
             # =============================================================
             
-            # Обновляем данные
+            #  
             self.load_dashboard_statistics()
             
             if hasattr(current_widget, 'load_all_statistics'):
@@ -860,27 +861,27 @@ class MainWindow(QMainWindow):
                 current_widget.refresh_current_tab()
             
         except Exception as e:
-            print(f"⚠️ Ошибка: {e}")
+            print(f" : {e}")
 
-    # ========== МЕТОДЫ ДЛЯ СИСТЕМЫ ОБНОВЛЕНИЙ ==========
+    # ==========     ==========
     def check_for_updates_manual(self):
-        """Ручная проверка обновлений (кнопка в статус-баре)"""
+        """   (  -)"""
         from utils.update_manager import UpdateManager
         from ui.update_dialogs import UpdateDialog, VersionDialog
         import threading
 
-        # Проверяем, нажата ли клавиша Shift для диалога изменения версии
+        # ,    Shift    
         from PyQt5.QtWidgets import QApplication
         modifiers = QApplication.keyboardModifiers()
         from PyQt5.QtCore import Qt
 
         if modifiers == Qt.ShiftModifier:
-            # Shift + клик = диалог изменения версии
+            # Shift +  =   
             dialog = VersionDialog(self)
             dialog.exec_()
             return
 
-        self.status_label.setText("Проверка обновлений...")
+        self.status_label.setText(" ...")
         self.update_btn.setEnabled(False)
 
         def check_thread():
@@ -888,7 +889,7 @@ class MainWindow(QMainWindow):
             update_info = manager.check_for_updates()
 
             if update_info.get("available"):
-                # Показать диалог обновления
+                #   
                 QTimer.singleShot(0, lambda: self._show_update_dialog(update_info))
             elif update_info.get("disabled"):
                 QTimer.singleShot(0, lambda: self._show_updates_disabled())
@@ -901,57 +902,57 @@ class MainWindow(QMainWindow):
         thread.start()
 
     def _show_update_dialog(self, update_info):
-        """Показать диалог обновления"""
+        """  """
         from ui.update_dialogs import UpdateDialog
 
-        self.status_label.setText("Готово к работе")
+        self.status_label.setText("  ")
         self.update_btn.setEnabled(True)
 
         dialog = UpdateDialog(update_info, self)
         dialog.exec_()
 
     def _show_no_updates(self):
-        """Показать сообщение об отсутствии обновлений"""
-        self.status_label.setText("Готово к работе")
+        """    """
+        self.status_label.setText("  ")
         self.update_btn.setEnabled(True)
 
         QMessageBox.information(
             self,
-            "Обновления",
-            "У вас установлена последняя версия программы."
+            "",
+            "     ."
         )
 
     def _show_updates_disabled(self):
-        """Показать сообщение о отключенных обновлениях"""
-        self.status_label.setText("Готово к работе")
+        """    """
+        self.status_label.setText("  ")
         self.update_btn.setEnabled(True)
 
         QMessageBox.information(
             self,
-            "Обновления",
-            "Проверка обновлений отключена в настройках."
+            "",
+            "    ."
         )
 
     def _show_update_error(self, error):
-        """Показать ошибку проверки обновлений"""
-        self.status_label.setText("Готово к работе")
+        """   """
+        self.status_label.setText("  ")
         self.update_btn.setEnabled(True)
 
         QMessageBox.warning(
             self,
-            "Ошибка проверки обновлений",
-            f"Не удалось проверить наличие обновлений:\n{error}"
+            "  ",
+            f"    :\n{error}"
         )
     # ===================================================
 
     def closeEvent(self, event):
-        """ИСПРАВЛЕНИЕ: Обработка закрытия окна с кастомным диалогом"""
+        """:      """
         from ui.custom_message_box import CustomQuestionBox
 
         dialog = CustomQuestionBox(
             self,
-            'Выход',
-            'Вы уверены, что хотите выйти из программы?'
+            '',
+            ' ,     ?'
         )
 
         if dialog.exec_() == QDialog.Accepted:

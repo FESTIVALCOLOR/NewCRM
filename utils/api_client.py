@@ -3,8 +3,12 @@ API клиент для взаимодействия с сервером
 Используется в PyQt5 клиенте
 """
 import requests
+import urllib3
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+# Отключаем предупреждения о самоподписанных сертификатах (только для разработки!)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class APIClient:
@@ -12,14 +16,16 @@ class APIClient:
     Клиент для работы с REST API сервера
     """
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, verify_ssl: bool = False):
         """
         Args:
             base_url: Базовый URL API (например: https://your-app.railway.app)
+            verify_ssl: Проверять SSL сертификат (False для самоподписанных)
         """
         self.base_url = base_url.rstrip('/')
         self.token: Optional[str] = None
         self.employee_id: Optional[int] = None
+        self.verify_ssl = verify_ssl  # Для самоподписанных сертификатов = False
         self.headers = {
             "Content-Type": "application/json"
         }
@@ -58,11 +64,12 @@ class APIClient:
             data={
                 "username": username,
                 "password": password
-            }
+            },
+            verify=self.verify_ssl
         )
 
         if response.status_code != 200:
-            raise Exception(f"Ошибка входа: {response.json().get('detail', 'Неизвестная ошибка')}")
+            raise Exception(f"Не удалось войти: {response.json().get('detail', 'Неизвестная ошибка')}")
 
         data = response.json()
         self.set_token(data["access_token"])
@@ -81,7 +88,7 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/api/auth/logout",
                 headers=self.headers
-            )
+            , verify=self.verify_ssl)
             self.clear_token()
             return response.status_code == 200
         except Exception as e:
@@ -99,7 +106,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/api/auth/me",
             headers=self.headers
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception("Не удалось получить данные пользователя")
@@ -116,7 +123,7 @@ class APIClient:
             f"{self.base_url}/api/clients",
             headers=self.headers,
             params={"skip": skip, "limit": limit}
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception("Ошибка получения клиентов")
@@ -128,7 +135,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/api/clients/{client_id}",
             headers=self.headers
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Клиент {client_id} не найден")
@@ -141,7 +148,7 @@ class APIClient:
             f"{self.base_url}/api/clients",
             headers=self.headers,
             json=client_data
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Ошибка создания клиента: {response.json().get('detail')}")
@@ -154,7 +161,7 @@ class APIClient:
             f"{self.base_url}/api/clients/{client_id}",
             headers=self.headers,
             json=client_data
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Ошибка обновления клиента: {response.json().get('detail')}")
@@ -171,7 +178,7 @@ class APIClient:
             f"{self.base_url}/api/contracts",
             headers=self.headers,
             params={"skip": skip, "limit": limit}
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception("Ошибка получения договоров")
@@ -183,7 +190,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/api/contracts/{contract_id}",
             headers=self.headers
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Договор {contract_id} не найден")
@@ -196,7 +203,7 @@ class APIClient:
             f"{self.base_url}/api/contracts",
             headers=self.headers,
             json=contract_data
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Ошибка создания договора: {response.json().get('detail')}")
@@ -209,7 +216,7 @@ class APIClient:
             f"{self.base_url}/api/contracts/{contract_id}",
             headers=self.headers,
             json=contract_data
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Ошибка обновления договора: {response.json().get('detail')}")
@@ -226,7 +233,7 @@ class APIClient:
             f"{self.base_url}/api/employees",
             headers=self.headers,
             params={"skip": skip, "limit": limit}
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception("Ошибка получения сотрудников")
@@ -238,7 +245,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/api/employees/{employee_id}",
             headers=self.headers
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception(f"Сотрудник {employee_id} не найден")
@@ -251,10 +258,11 @@ class APIClient:
             f"{self.base_url}/api/employees",
             headers=self.headers,
             json=employee_data
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
-            raise Exception(f"Ошибка создания сотрудника: {response.json().get('detail')}")
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка создания сотрудника (HTTP {response.status_code}): {error_detail}")
 
         return response.json()
 
@@ -279,7 +287,8 @@ class APIClient:
             json={
                 "last_sync_timestamp": last_sync_timestamp.isoformat(),
                 "entity_types": entity_types
-            }
+            },
+            verify=self.verify_ssl
         )
 
         if response.status_code != 200:
@@ -297,7 +306,7 @@ class APIClient:
             f"{self.base_url}/api/notifications",
             headers=self.headers,
             params={"unread_only": unread_only}
-        )
+        , verify=self.verify_ssl)
 
         if response.status_code != 200:
             raise Exception("Ошибка получения уведомлений")
@@ -309,7 +318,7 @@ class APIClient:
         response = requests.put(
             f"{self.base_url}/api/notifications/{notification_id}/read",
             headers=self.headers
-        )
+        , verify=self.verify_ssl)
 
         return response.status_code == 200
 
@@ -320,7 +329,7 @@ class APIClient:
     def health_check(self) -> bool:
         """Проверка доступности сервера"""
         try:
-            response = requests.get(f"{self.base_url}/health", timeout=5)
+            response = requests.get(f"{self.base_url}/health", timeout=5, verify=self.verify_ssl)
             return response.status_code == 200
         except Exception:
             return False
