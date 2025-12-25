@@ -2618,16 +2618,28 @@ class ContractDialog(QDialog):
             'tech_task_file_name': tech_task_file_name,
             'comments': self.comments.toPlainText().strip()
         }
-        
+
         try:
             if self.contract_data:
-                self.db.update_contract(self.contract_data['id'], contract_data)
+                # Обновление существующего договора
+                if self.api_client:
+                    # API режим
+                    self.api_client.update_contract(self.contract_data['id'], contract_data)
+                else:
+                    # Локальный режим
+                    self.db.update_contract(self.contract_data['id'], contract_data)
             else:
-                self.db.add_contract(contract_data)
+                # Создание нового договора
+                if self.api_client:
+                    # API режим
+                    self.api_client.create_contract(contract_data)
+                else:
+                    # Локальный режим
+                    self.db.add_contract(contract_data)
 
             # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
             self.accept()
-            
+
         except Exception as e:
             error_msg = str(e)
             if 'UNIQUE constraint failed' in error_msg:

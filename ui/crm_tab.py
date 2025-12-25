@@ -381,9 +381,14 @@ class CRMTab(QWidget):
     def load_cards_for_type(self, project_type):
         """Загрузка карточек для конкретного типа проекта"""
         print(f"\n=== ЗАГРУЗКА КАРТОЧЕК: {project_type} ===")
-        
+
         try:
-            cards = self.db.get_crm_cards_by_project_type(project_type)
+            # Загрузка через API или локальную БД
+            if self.api_client:
+                # TODO: Добавить метод get_crm_cards в API
+                cards = self.db.get_crm_cards_by_project_type(project_type)
+            else:
+                cards = self.db.get_crm_cards_by_project_type(project_type)
             print(f"Получено из БД: {len(cards) if cards else 0} карточек")
             
             if project_type == 'Индивидуальный':
