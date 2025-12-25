@@ -309,6 +309,157 @@ class APIClient:
 
         return True
 
+    # =========================
+    # CRM КАРТОЧКИ
+    # =========================
+
+    def get_crm_cards(self, project_type: str) -> List[Dict]:
+        """
+        Получить CRM карточки по типу проекта
+
+        Args:
+            project_type: Тип проекта ("Индивидуальный" или "Шаблонный")
+
+        Returns:
+            Список карточек с полной информацией
+        """
+        response = requests.get(
+            f"{self.base_url}/api/crm/cards",
+            headers=self.headers,
+            params={"project_type": project_type},
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка получения CRM карточек (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def get_crm_card(self, card_id: int) -> Dict:
+        """
+        Получить одну CRM карточку
+
+        Args:
+            card_id: ID карточки
+
+        Returns:
+            Данные карточки с исполнителями стадий
+        """
+        response = requests.get(
+            f"{self.base_url}/api/crm/cards/{card_id}",
+            headers=self.headers,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка получения CRM карточки (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def update_crm_card(self, card_id: int, updates: Dict[str, Any]) -> Dict:
+        """
+        Обновить CRM карточку (частичное обновление)
+
+        Args:
+            card_id: ID карточки
+            updates: Словарь с обновляемыми полями
+
+        Returns:
+            Обновлённые данные карточки
+        """
+        response = requests.patch(
+            f"{self.base_url}/api/crm/cards/{card_id}",
+            headers=self.headers,
+            json=updates,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка обновления CRM карточки (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def move_crm_card(self, card_id: int, column_name: str) -> Dict:
+        """
+        Переместить CRM карточку в другую колонку
+
+        Args:
+            card_id: ID карточки
+            column_name: Название колонки ("Новый заказ", "В работе" и т.д.)
+
+        Returns:
+            Обновлённые данные карточки
+        """
+        response = requests.patch(
+            f"{self.base_url}/api/crm/cards/{card_id}/column",
+            headers=self.headers,
+            json={"column_name": column_name},
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка перемещения CRM карточки (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def assign_stage_executor(self, card_id: int, stage_data: Dict[str, Any]) -> Dict:
+        """
+        Назначить исполнителя на стадию
+
+        Args:
+            card_id: ID карточки
+            stage_data: Данные назначения
+                {
+                    "stage_name": str,
+                    "executor_id": int,
+                    "deadline": str (optional, YYYY-MM-DD)
+                }
+
+        Returns:
+            Данные созданного назначения
+        """
+        response = requests.post(
+            f"{self.base_url}/api/crm/cards/{card_id}/stage-executor",
+            headers=self.headers,
+            json=stage_data,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка назначения исполнителя (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def complete_stage(self, card_id: int, stage_name: str, completed: bool = True) -> Dict:
+        """
+        Отметить стадию как завершённую
+
+        Args:
+            card_id: ID карточки
+            stage_name: Название стадии
+            completed: True - завершена, False - отменить завершение
+
+        Returns:
+            Обновлённые данные назначения
+        """
+        response = requests.patch(
+            f"{self.base_url}/api/crm/cards/{card_id}/stage-executor/{stage_name}",
+            headers=self.headers,
+            json={"completed": completed},
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка обновления стадии (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
     def delete_contract(self, contract_id: int) -> bool:
         """Удалить договор"""
         response = requests.delete(

@@ -385,8 +385,7 @@ class CRMTab(QWidget):
         try:
             # Загрузка через API или локальную БД
             if self.api_client:
-                # TODO: Добавить метод get_crm_cards в API
-                cards = self.db.get_crm_cards_by_project_type(project_type)
+                cards = self.api_client.get_crm_cards(project_type)
             else:
                 cards = self.db.get_crm_cards_by_project_type(project_type)
             print(f"Получено из БД: {len(cards) if cards else 0} карточек")
@@ -709,7 +708,10 @@ class CRMTab(QWidget):
             print(f"⚠ Ошибка проверки принятия работы: {e}")
 
         try:
-            self.db.update_crm_card_column(card_id, to_column)
+            if self.api_client:
+                self.api_client.move_crm_card(card_id, to_column)
+            else:
+                self.db.update_crm_card_column(card_id, to_column)
             print(f"✓ БД обновлена успешно")
         except Exception as e:
             print(f" Ошибка обновления БД: {e}")
@@ -723,10 +725,11 @@ class CRMTab(QWidget):
                 print(f"🔄 Возврат из архива: полный сброс данных")
                 self.db.reset_stage_completion(card_id)
                 self.db.reset_approval_stages(card_id)
-                self.db.update_crm_card(card_id, {
-                    'deadline': None,
-                    'is_approved': 0
-                })
+                updates = {'deadline': None, 'is_approved': 0}
+                if self.api_client:
+                    self.api_client.update_crm_card(card_id, updates)
+                else:
+                    self.db.update_crm_card(card_id, updates)
                 print(f"✓ Карточка очищена для повторного прохождения")
             except Exception as e:
                 print(f"⚠ Ошибка полного сброса: {e}")
@@ -745,7 +748,10 @@ class CRMTab(QWidget):
         if to_column in reset_deadline_columns:
             try:
                 updates = {'deadline': None}
-                self.db.update_crm_card(card_id, updates)
+                if self.api_client:
+                    self.api_client.update_crm_card(card_id, updates)
+                else:
+                    self.db.update_crm_card(card_id, updates)
                 print(f"✓ Дедлайн сброшен для колонки '{to_column}'")
             except Exception as e:
                 print(f"⚠ Ошибка сброса дедлайна: {e}")
@@ -2655,7 +2661,7 @@ class CRMCard(QFrame):
 
     def view_survey_date(self):
         """Просмотр даты замера"""
-        dialog = SurveyDateDialog(self, self.card_data.get('id'))
+        dialog = SurveyDateDialog(self, self.card_data.get('id'), self.parent_tab.api_client)
         if dialog.exec_() == QDialog.Accepted:
             # Перезагружаем карточки
             parent = self.parent()
@@ -3891,7 +3897,10 @@ class CardEditDialog(QDialog):
 
             # Обновляем crm_cards.survey_date
             updates = {'survey_date': survey_date.toString('yyyy-MM-dd'), 'surveyor_id': surveyor_id}
-            self.db.update_crm_card(self.card_data['id'], updates)
+            if self.parent_tab.api_client:
+                self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+            else:
+                self.db.update_crm_card(self.card_data['id'], updates)
             self.card_data['survey_date'] = survey_date.toString('yyyy-MM-dd')
             self.card_data['surveyor_id'] = surveyor_id
 
@@ -4082,7 +4091,10 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД - и crm_cards, и contracts
                 updates = {'survey_date': date_str}
-                self.db.update_crm_card(self.card_data['id'], updates)
+                if self.parent_tab.api_client:
+                    self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+                else:
+                    self.db.update_crm_card(self.card_data['id'], updates)
                 self.card_data['survey_date'] = date_str
 
                 # Обновляем contracts.measurement_date
@@ -4338,7 +4350,10 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД
                 updates = {'deadline': new_deadline_str}
-                self.db.update_crm_card(self.card_data['id'], updates)
+                if self.parent_tab.api_client:
+                    self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+                else:
+                    self.db.update_crm_card(self.card_data['id'], updates)
                 self.card_data['deadline'] = new_deadline_str
 
                 # Обновляем отображение на форме
@@ -5779,7 +5794,10 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД
                 updates = {'tech_task_file': file_url}
-                self.db.update_crm_card(self.card_data['id'], updates)
+                if self.parent_tab.api_client:
+                    self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+                else:
+                    self.db.update_crm_card(self.card_data['id'], updates)
                 self.card_data['tech_task_file'] = file_url
 
                 # Обновляем label
@@ -5914,7 +5932,10 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД crm_cards
                 updates = {'tech_task_date': date_str}
-                self.db.update_crm_card(self.card_data['id'], updates)
+                if self.parent_tab.api_client:
+                    self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+                else:
+                    self.db.update_crm_card(self.card_data['id'], updates)
                 self.card_data['tech_task_date'] = date_str
 
                 # Обновляем label в вкладке "Исполнители и дедлайн"
@@ -6091,7 +6112,10 @@ class CardEditDialog(QDialog):
                     'survey_date': date_str,
                     'surveyor_id': surveyor_id
                 }
-                self.db.update_crm_card(self.card_data['id'], updates)
+                if self.parent_tab.api_client:
+                    self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+                else:
+                    self.db.update_crm_card(self.card_data['id'], updates)
                 self.card_data['survey_date'] = date_str
                 self.card_data['surveyor_id'] = surveyor_id
 
@@ -7825,7 +7849,10 @@ class CardEditDialog(QDialog):
             if hasattr(self, 'surveyor'):
                 updates['surveyor_id'] = self.surveyor.currentData()
 
-            self.db.update_crm_card(self.card_data['id'], updates)
+            if self.parent_tab.api_client:
+                self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+            else:
+                self.db.update_crm_card(self.card_data['id'], updates)
 
             # Обновляем статус контракта
             contract_id = self.card_data.get('contract_id')
@@ -7945,7 +7972,10 @@ class CardEditDialog(QDialog):
 
         # Сохраняем только если есть что обновлять
         if updates:
-            self.db.update_crm_card(self.card_data['id'], updates)
+            if self.parent_tab.api_client:
+                self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+            else:
+                self.db.update_crm_card(self.card_data['id'], updates)
 
         try:
             if hasattr(self, 'designer_deadline') and self.designer_deadline and self.card_data.get('designer_name'):
@@ -8055,7 +8085,10 @@ class CardEditDialog(QDialog):
         field_name = role_to_field.get(role_name)
         if field_name:
             updates = {field_name: employee_id}
-            self.db.update_crm_card(self.card_data['id'], updates)
+            if self.parent_tab.api_client:
+                self.parent_tab.api_client.update_crm_card(self.card_data['id'], updates)
+            else:
+                self.db.update_crm_card(self.card_data['id'], updates)
             print(f"✓ Обновлено поле {field_name} в CRM карточке")
 
         try:
@@ -13444,10 +13477,11 @@ class ReassignExecutorDialog(QDialog):
 
 class SurveyDateDialog(QDialog):
     """Диалог установки даты замера"""
-    def __init__(self, parent, card_id):
+    def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
         self.db = DatabaseManager()
+        self.api_client = api_client
 
         # Убираем стандартную рамку окна
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -13584,7 +13618,10 @@ class SurveyDateDialog(QDialog):
         }
 
         try:
-            self.db.update_crm_card(self.card_id, updates)
+            if self.api_client:
+                self.api_client.update_crm_card(self.card_id, updates)
+            else:
+                self.db.update_crm_card(self.card_id, updates)
             self.accept()
         except Exception as e:
             from ui.custom_message_box import CustomMessageBox
@@ -14535,10 +14572,11 @@ class MeasurementDialog(QDialog):
 
 class SurveyDateDialog(QDialog):
     """Диалог установки даты замера"""
-    def __init__(self, parent, card_id):
+    def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
         self.db = DatabaseManager()
+        self.api_client = api_client
 
         # Убираем стандартную рамку окна
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -14675,7 +14713,10 @@ class SurveyDateDialog(QDialog):
         }
 
         try:
-            self.db.update_crm_card(self.card_id, updates)
+            if self.api_client:
+                self.api_client.update_crm_card(self.card_id, updates)
+            else:
+                self.db.update_crm_card(self.card_id, updates)
             self.accept()
         except Exception as e:
             from ui.custom_message_box import CustomMessageBox
