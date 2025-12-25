@@ -619,8 +619,11 @@ class CRMSupervisionTab(QWidget):
     def load_active_cards(self):
         """Загрузка активных карточек"""
         print("\n=== ЗАГРУЗКА АКТИВНЫХ КАРТОЧЕК НАДЗОРА ===")
-        
-        cards = self.db.get_supervision_cards_active()
+
+        if self.api_client:
+            cards = self.api_client.get_supervision_cards(status="active")
+        else:
+            cards = self.db.get_supervision_cards_active()
         print(f"Получено: {len(cards)} карточек")
         
         for card in cards:
@@ -661,8 +664,11 @@ class CRMSupervisionTab(QWidget):
     def load_archive_cards(self):
         """Загрузка архивных карточек"""
         print("\n=== ЗАГРУЗКА АРХИВА НАДЗОРА ===")
-        
-        cards = self.db.get_supervision_cards_archived()
+
+        if self.api_client:
+            cards = self.api_client.get_supervision_cards(status="archived")
+        else:
+            cards = self.db.get_supervision_cards_archived()
         print(f"Получено: {len(cards)} архивных карточек")
         
         archive_layout = self.archive_widget.archive_layout
@@ -864,7 +870,10 @@ class CRMSupervisionTab(QWidget):
                         self.db.close()
 
             # Обновляем колонку в БД
-            self.db.update_supervision_card_column(card_id, to_column)
+            if self.api_client:
+                self.api_client.move_supervision_card(card_id, to_column)
+            else:
+                self.db.update_supervision_card_column(card_id, to_column)
 
             # Сбрасываем приостановку при перемещении
             if to_column != from_column:

@@ -460,6 +460,106 @@ class APIClient:
 
         return response.json()
 
+    # =========================
+    # CRM SUPERVISION (Авторский надзор)
+    # =========================
+
+    def get_supervision_cards(self, status: str = "active") -> List[Dict]:
+        """
+        Получить карточки авторского надзора
+
+        Args:
+            status: "active" - активные (АВТОРСКИЙ НАДЗОР), "archived" - архивные
+
+        Returns:
+            Список карточек надзора
+        """
+        response = requests.get(
+            f"{self.base_url}/api/supervision/cards",
+            headers=self.headers,
+            params={"status": status},
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка получения карточек надзора (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def get_supervision_card(self, card_id: int) -> Dict:
+        """Получить одну карточку надзора"""
+        response = requests.get(
+            f"{self.base_url}/api/supervision/cards/{card_id}",
+            headers=self.headers,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка получения карточки надзора (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def update_supervision_card(self, card_id: int, updates: Dict[str, Any]) -> Dict:
+        """Обновить карточку надзора"""
+        response = requests.patch(
+            f"{self.base_url}/api/supervision/cards/{card_id}",
+            headers=self.headers,
+            json=updates,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка обновления карточки надзора (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def move_supervision_card(self, card_id: int, column_name: str) -> Dict:
+        """Переместить карточку надзора в другую колонку"""
+        response = requests.patch(
+            f"{self.base_url}/api/supervision/cards/{card_id}/column",
+            headers=self.headers,
+            json={"column_name": column_name},
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка перемещения карточки надзора (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def pause_supervision_card(self, card_id: int, pause_reason: str) -> Dict:
+        """Приостановить карточку надзора"""
+        response = requests.post(
+            f"{self.base_url}/api/supervision/cards/{card_id}/pause",
+            headers=self.headers,
+            json={"pause_reason": pause_reason},
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка приостановки карточки (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def resume_supervision_card(self, card_id: int) -> Dict:
+        """Возобновить карточку надзора"""
+        response = requests.post(
+            f"{self.base_url}/api/supervision/cards/{card_id}/resume",
+            headers=self.headers,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка возобновления карточки (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
     def delete_contract(self, contract_id: int) -> bool:
         """Удалить договор"""
         response = requests.delete(
