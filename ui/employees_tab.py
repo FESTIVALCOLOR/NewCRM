@@ -17,9 +17,10 @@ from ui.custom_combobox import CustomComboBox
 from utils.calendar_styles import CALENDAR_STYLE, add_today_button_to_dateedit
 
 class EmployeesTab(QWidget):
-    def __init__(self, employee, parent=None):
+    def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         
         # ========== ОПРЕДЕЛЯЕМ ПРАВА ==========
@@ -293,6 +294,22 @@ class EmployeesTab(QWidget):
                 edit_btn.clicked.connect(lambda checked, e=emp: self.edit_employee(e))
                 actions_layout.addWidget(edit_btn)
 
+                # Кнопка удаления
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=14)
+                delete_btn.setFixedSize(24, 24)
+                delete_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #FFE6E6;
+                        border: 1px solid #FFCCCC;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #E74C3C;
+                    }
+                ''')
+                delete_btn.clicked.connect(lambda checked, e=emp: self.delete_employee(e))
+                actions_layout.addWidget(delete_btn)
+
             actions_widget.setLayout(actions_layout)
             self.employees_table.setCellWidget(row, 7, actions_widget)
 
@@ -325,7 +342,13 @@ class EmployeesTab(QWidget):
         """Загрузка списка сотрудников с фильтрацией по отделу"""
         self.employees_table.setSortingEnabled(False)
 
-        employees = self.db.get_all_employees()
+        # Загружаем сотрудников из API или локальной БД
+        if self.api_client:
+            # Многопользовательский режим - загружаем из API
+            employees = self.api_client.get_employees()
+        else:
+            # Локальный режим - загружаем из локальной БД
+            employees = self.db.get_all_employees()
 
         if department == 'admin':
             positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
@@ -422,6 +445,22 @@ class EmployeesTab(QWidget):
                 edit_btn.clicked.connect(lambda checked, e=emp: self.edit_employee(e))
                 actions_layout.addWidget(edit_btn)
 
+                # Кнопка удаления
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=14)
+                delete_btn.setFixedSize(24, 24)
+                delete_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #FFE6E6;
+                        border: 1px solid #FFCCCC;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #E74C3C;
+                    }
+                ''')
+                delete_btn.clicked.connect(lambda checked, e=emp: self.delete_employee(e))
+                actions_layout.addWidget(delete_btn)
+
             actions_widget.setLayout(actions_layout)
             self.employees_table.setCellWidget(row, 7, actions_widget)
             
@@ -458,7 +497,63 @@ class EmployeesTab(QWidget):
         dialog = EmployeeDialog(self, employee_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_employees()
-            
+
+    def delete_employee(self, employee_data):
+        """Удаление сотрудника"""
+        from ui.custom_message_box import CustomQuestionBox
+
+        # Только Руководитель студии может удалять сотрудников
+        if self.employee['position'] != 'Руководитель студии':
+            CustomMessageBox(
+                self,
+                'Ошибка',
+                'У вас недостаточно прав для удаления сотрудников.\nТолько Руководитель студии может удалять сотрудников.',
+                'error'
+            ).exec_()
+            return
+
+        # Нельзя удалить самого себя
+        if employee_data['id'] == self.employee['id']:
+            CustomMessageBox(
+                self,
+                'Ошибка',
+                'Нельзя удалить самого себя.',
+                'error'
+            ).exec_()
+            return
+
+        reply = CustomQuestionBox(
+            self,
+            'Подтверждение',
+            f"Вы уверены, что хотите удалить сотрудника {employee_data['full_name']}?"
+        ).exec_()
+
+        if reply == QDialog.Accepted:
+            try:
+                if self.api_client:
+                    # API режим
+                    self.api_client.delete_employee(employee_data['id'])
+                else:
+                    # Локальный режим
+                    self.db.delete_employee(employee_data['id'])
+
+                CustomMessageBox(
+                    self,
+                    'Успех',
+                    'Сотрудник успешно удален',
+                    'success'
+                ).exec_()
+
+                self.load_employees()
+
+            except Exception as e:
+                CustomMessageBox(
+                    self,
+                    'Ошибка',
+                    f'Не удалось удалить сотрудника: {str(e)}',
+                    'error'
+                ).exec_()
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
@@ -477,14 +572,16 @@ class EmployeeDialog(QDialog):
         self.employee_data = employee_data
         self.view_only = view_only
         self.db = DatabaseManager()
-        
+        # Получаем api_client от родителя, если он есть
+        self.api_client = getattr(parent, 'api_client', None)
+
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
         # ==========================================
-        
+
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        
+
         self.init_ui()
         
         if employee_data:
@@ -777,11 +874,23 @@ class EmployeeDialog(QDialog):
                 if self.password.text() != self.password_confirm.text():
                     CustomMessageBox(self, 'Ошибка', 'Пароли не совпадают', 'warning').exec_()
                     return
-        
+
+        # Определяем department на основе position
+        position = self.position.currentText()
+        if position in ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']:
+            department = 'Административный отдел'
+        elif position in ['Дизайнер', 'Чертёжник']:
+            department = 'Проектный отдел'
+        elif position in ['Менеджер', 'ДАН', 'Замерщик']:
+            department = 'Исполнительный отдел'
+        else:
+            department = 'Другое'
+
         employee_data = {
             'full_name': self.full_name.text().strip(),
             'position': self.position.currentText(),
             'secondary_position': self.secondary_position.currentData() or '',
+            'department': department,  # Добавлено для API
             'status': self.status.currentText(),
             'birth_date': self.birth_date.date().toString('yyyy-MM-dd'),
             'phone': self.phone.text().strip(),
@@ -804,48 +913,55 @@ class EmployeeDialog(QDialog):
                     status_changed = True
                     print(f"⚠️ СТАТУС ИЗМЕНЁН: '{old_status}' → '{new_status}'")
             # ================================================
-            
-            if self.employee_data:
-                self.db.update_employee(self.employee_data['id'], employee_data)
-                
-                # ========== УВЕДОМЛЕНИЕ О ПЕРЕЗАХОДЕ ==========
-                if status_changed:
-                    # Проверяем, редактирует ли сотрудник сам себя
-                    current_user = self.parent().employee
-                    
-                    if self.employee_data['id'] == current_user['id']:
-                        # Редактирует сам себя - принудительный выход
-                        CustomMessageBox(
-                            self, 
-                            'Статус изменен', 
-                            'Ваш статус был изменен!\n\n'
-                            'Необходимо перезайти в систему для применения изменений.\n\n'
-                            'Приложение будет закрыто.', 
-                            'warning'
-                        ).exec_()
-                        
-                        # Закрываем все окна и возвращаемся к Login
-                        from PyQt5.QtWidgets import QApplication
-                        QApplication.quit()
-                        
-                        import sys
-                        python = sys.executable
-                        os.execl(python, python, *sys.argv)
-                        
-                    else:
-                        # Редактирует другого сотрудника - просто уведомление
-                        CustomMessageBox(
-                            self, 
-                            'Статус изменен', 
-                            f'Статус сотрудника изменен на "{new_status}".\n\n'
-                            f'Если этот сотрудник сейчас в системе, ему нужно перезайти\n'
-                            f'для применения изменений.', 
-                            'info'
-                        ).exec_()
-                # ==============================================
 
+            if self.api_client:
+                # Многопользовательский режим - сохраняем через API
+                if self.employee_data:
+                    self.api_client.update_employee(self.employee_data['id'], employee_data)
+                else:
+                    self.api_client.create_employee(employee_data)
             else:
-                self.db.add_employee(employee_data)
+                # Локальный режим - сохраняем в локальную БД
+                if self.employee_data:
+                    self.db.update_employee(self.employee_data['id'], employee_data)
+                else:
+                    self.db.add_employee(employee_data)
+
+            # ========== УВЕДОМЛЕНИЕ О ПЕРЕЗАХОДЕ ==========
+            if status_changed and self.employee_data:
+                # Проверяем, редактирует ли сотрудник сам себя
+                current_user = self.parent().employee
+
+                if self.employee_data['id'] == current_user['id']:
+                    # Редактирует сам себя - принудительный выход
+                    CustomMessageBox(
+                        self,
+                        'Статус изменен',
+                        'Ваш статус был изменен!\n\n'
+                        'Необходимо перезайти в систему для применения изменений.\n\n'
+                        'Приложение будет закрыто.',
+                        'warning'
+                    ).exec_()
+
+                    # Закрываем все окна и возвращаемся к Login
+                    from PyQt5.QtWidgets import QApplication
+                    QApplication.quit()
+
+                    import sys
+                    python = sys.executable
+                    os.execl(python, python, *sys.argv)
+
+                else:
+                    # Редактирует другого сотрудника - просто уведомление
+                    CustomMessageBox(
+                        self,
+                        'Статус изменен',
+                        f'Статус сотрудника изменен на "{new_status}".\n\n'
+                        f'Если этот сотрудник сейчас в системе, ему нужно перезайти\n'
+                        f'для применения изменений.',
+                        'info'
+                    ).exec_()
+            # ==============================================
 
             # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
             self.accept()

@@ -1,0 +1,26 @@
+        # Добавляем вкладки
+        if 'Клиенты' in allowed_tabs:
+            self.tabs.addTab(ClientsTab(self.employee), '  Клиенты  ')
+        
+        if 'Договора' in allowed_tabs:
+            self.tabs.addTab(ContractsTab(self.employee), '  Договора  ')
+        
+        if 'СРМ' in allowed_tabs:
+            self.tabs.addTab(CRMTab(self.employee, can_edit), '  СРМ  ')
+        
+        if 'СРМ надзора' in allowed_tabs:
+            self.tabs.addTab(CRMSupervisionTab(self.employee), '  СРМ надзора  ')
+        
+        if 'Отчеты и Статистика' in allowed_tabs:
+            self.tabs.addTab(ReportsTab(self.employee), '  Отчеты и Статистика  ')
+        
+        if 'Сотрудники' in allowed_tabs:
+            self.tabs.addTab(EmployeesTab(self.employee), '  Сотрудники  ')
+        
+        if 'Зарплаты' in allowed_tabs:
+            self.tabs.addTab(SalariesTab(self.employee), '  Зарплаты  ')
+        
+        if 'Отчеты по сотрудникам' in allowed_tabs:
+            self.tabs.addTab(EmployeeReportsTab(self.employee), '  Отчеты по сотрудникам  ')
+        
+        self.tabs.currentChanged.connect(self.on_tab_changed)

@@ -808,30 +808,30 @@ class MainWindow(QMainWindow):
         print(f"    : {sorted(allowed_tabs)}")
         print(f"    : {can_edit}\n")
         
-        # Добавляем вкладки
-        if 'Клиенты' in allowed_tabs:
-            self.tabs.addTab(ClientsTab(self.employee, api_client=self.api_client), '📋 Клиенты')
+        #  
+        if '' in allowed_tabs:
+            self.tabs.addTab(ClientsTab(self.employee), '    ')
         
-        if 'Договора' in allowed_tabs:
-            self.tabs.addTab(ContractsTab(self.employee, api_client=self.api_client), '📝 Договора')
+        if '' in allowed_tabs:
+            self.tabs.addTab(ContractsTab(self.employee), '    ')
         
-        if 'СРМ' in allowed_tabs:
-            self.tabs.addTab(CRMTab(self.employee, can_edit, api_client=self.api_client), '💼 СРМ')
+        if '' in allowed_tabs:
+            self.tabs.addTab(CRMTab(self.employee, can_edit), '    ')
         
-        if 'СРМ надзора' in allowed_tabs:
-            self.tabs.addTab(CRMSupervisionTab(self.employee, api_client=self.api_client), '👁️ СРМ надзора')
+        if ' ' in allowed_tabs:
+            self.tabs.addTab(CRMSupervisionTab(self.employee), '     ')
         
-        if 'Отчеты и Статистика' in allowed_tabs:
-            self.tabs.addTab(ReportsTab(self.employee, api_client=self.api_client), '📊 Отчеты и Статистика')
+        if '  ' in allowed_tabs:
+            self.tabs.addTab(ReportsTab(self.employee), '      ')
         
-        if 'Сотрудники' in allowed_tabs:
-            self.tabs.addTab(EmployeesTab(self.employee, api_client=self.api_client), '👥 Сотрудники')
+        if '' in allowed_tabs:
+            self.tabs.addTab(EmployeesTab(self.employee), '    ')
         
-        if 'Зарплаты' in allowed_tabs:
-            self.tabs.addTab(SalariesTab(self.employee, api_client=self.api_client), '💰 Зарплаты')
+        if '' in allowed_tabs:
+            self.tabs.addTab(SalariesTab(self.employee), '    ')
         
-        if 'Отчеты по сотрудникам' in allowed_tabs:
-            self.tabs.addTab(EmployeeReportsTab(self.employee, api_client=self.api_client), '📈 Отчеты по сотрудникам')
+        if '  ' in allowed_tabs:
+            self.tabs.addTab(EmployeeReportsTab(self.employee), '      ')
         
         self.tabs.currentChanged.connect(self.on_tab_changed)
         

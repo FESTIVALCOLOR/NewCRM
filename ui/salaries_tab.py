@@ -86,9 +86,10 @@ class PaymentStatusDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 class SalariesTab(QWidget):
-    def __init__(self, employee):
+    def __init__(self, employee, api_client=None):
         super().__init__()
         self.employee = employee
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.init_ui()
     

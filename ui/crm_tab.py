@@ -113,12 +113,13 @@ class DraggableListWidget(QListWidget):
         event.accept()
             
 class CRMTab(QWidget):
-    def __init__(self, employee, can_edit=True):
+    def __init__(self, employee, can_edit=True, api_client=None):
         super().__init__()
         self.employee = employee
         self.can_edit = can_edit
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
-        
+
         self.init_ui()
         self.load_cards_for_current_tab()
    

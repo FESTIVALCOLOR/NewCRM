@@ -2,12 +2,17 @@
 FastAPI приложение - главный файл
 REST API для многопользовательской CRM
 """
+import logging
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from config import get_settings
 from database import get_db, init_db, Employee, Client, Contract, Notification, UserSession, ActivityLog
@@ -86,7 +91,7 @@ async def login(
         )
 
     # Создание токена
-    access_token = create_access_token(data={"sub": employee.id})
+    access_token = create_access_token(data={"sub": str(employee.id)})
 
     # Обновление статуса
     employee.last_login = datetime.utcnow()
@@ -226,6 +231,84 @@ async def create_employee(
     return employee
 
 
+@app.put("/api/employees/{employee_id}", response_model=EmployeeResponse)
+async def update_employee(
+    employee_id: int,
+    employee_data: EmployeeUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Обновить сотрудника"""
+    # Проверка прав (только руководители)
+    allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
+    if current_user.role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    # Обновление полей
+    update_data = employee_data.model_dump(exclude_unset=True)
+
+    # Если обновляется пароль
+    if 'password' in update_data:
+        update_data['password_hash'] = get_password_hash(update_data.pop('password'))
+
+    for field, value in update_data.items():
+        setattr(employee, field, value)
+
+    employee.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(employee)
+
+    # Лог
+    log = ActivityLog(
+        employee_id=current_user.id,
+        action_type="update",
+        entity_type="employee",
+        entity_id=employee.id
+    )
+    db.add(log)
+    db.commit()
+
+    return employee
+
+
+@app.delete("/api/employees/{employee_id}")
+async def delete_employee(
+    employee_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Удалить сотрудника"""
+    # Проверка прав (только Руководитель студии может удалять)
+    if current_user.role != 'Руководитель студии':
+        raise HTTPException(status_code=403, detail="Недостаточно прав для удаления сотрудников")
+
+    # Нельзя удалить самого себя
+    if employee_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Нельзя удалить самого себя")
+
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    # Лог перед удалением
+    log = ActivityLog(
+        employee_id=current_user.id,
+        action_type="delete",
+        entity_type="employee",
+        entity_id=employee_id
+    )
+    db.add(log)
+
+    db.delete(employee)
+    db.commit()
+
+    return {"status": "success", "message": "Сотрудник удален"}
+
+
 # =========================
 # КЛИЕНТЫ
 # =========================
@@ -313,6 +396,32 @@ async def update_client(
     return client
 
 
+@app.delete("/api/clients/{client_id}")
+async def delete_client(
+    client_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Удалить клиента"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    # Лог перед удалением
+    log = ActivityLog(
+        employee_id=current_user.id,
+        action_type="delete",
+        entity_type="client",
+        entity_id=client_id
+    )
+    db.add(log)
+
+    db.delete(client)
+    db.commit()
+
+    return {"status": "success", "message": "Клиент удален"}
+
+
 # =========================
 # ДОГОВОРЫ
 # =========================
@@ -398,6 +507,32 @@ async def update_contract(
     db.commit()
 
     return contract
+
+
+@app.delete("/api/contracts/{contract_id}")
+async def delete_contract(
+    contract_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Удалить договор"""
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    # Лог перед удалением
+    log = ActivityLog(
+        employee_id=current_user.id,
+        action_type="delete",
+        entity_type="contract",
+        entity_id=contract_id
+    )
+    db.add(log)
+
+    db.delete(contract)
+    db.commit()
+
+    return {"status": "success", "message": "Договор удален"}
 
 
 # =========================

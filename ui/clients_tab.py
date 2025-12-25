@@ -15,9 +15,10 @@ from utils.calendar_styles import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.table_settings import TableSettings  # ← ДОБАВЛЕНО 
 
 class ClientsTab(QWidget):
-    def __init__(self, employee, parent=None):
+    def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
         self.init_ui()
@@ -228,7 +229,14 @@ class ClientsTab(QWidget):
         try:
             self.clients_table.setSortingEnabled(False)
 
-            clients = self.db.get_all_clients()
+            # Загружаем клиентов из API или локальной БД
+            if self.api_client:
+                # Многопользовательский режим - загружаем из API
+                clients = self.api_client.get_clients()
+            else:
+                # Локальный режим - загружаем из локальной БД
+                clients = self.db.get_all_clients()
+
             self.clients_table.setRowCount(len(clients))
 
             for row, client in enumerate(clients):
@@ -274,9 +282,18 @@ class ClientsTab(QWidget):
         ).exec_()
 
         if reply == QDialog.Accepted:
-            self.db.delete_client(client_id)
-            self.load_clients()
-            CustomMessageBox(self, 'Успех', 'Клиент удален', 'success').exec_()
+            try:
+                if self.api_client:
+                    # Многопользовательский режим - удаляем через API
+                    self.api_client.delete_client(client_id)
+                else:
+                    # Локальный режим - удаляем из локальной БД
+                    self.db.delete_client(client_id)
+
+                self.load_clients()
+                CustomMessageBox(self, 'Успех', 'Клиент удален', 'success').exec_()
+            except Exception as e:
+                CustomMessageBox(self, 'Ошибка', f'Не удалось удалить клиента: {e}', 'error').exec_()
 
     def show_context_menu(self, position):
         """Контекстное меню для копирования текста из ячеек"""
@@ -384,6 +401,8 @@ class ClientDialog(QDialog):
         self.client_data = client_data
         self.view_only = view_only
         self.db = DatabaseManager()
+        # Получаем api_client от родителя, если он есть
+        self.api_client = getattr(parent, 'api_client', None)
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -834,18 +853,18 @@ class ClientDialog(QDialog):
     def save_client(self):
         """Сохранение данных клиента"""
         client_type = self.client_type.currentText()
-        
+
         if client_type == 'Физическое лицо':
             if not self.full_name.text().strip() or not self.phone.text().strip():
                 # ========== ЗАМЕНИЛИ QMessageBox ==========
                 CustomMessageBox(
-                    self, 
-                    'Ошибка', 
-                    'Заполните все обязательные поля (ФИО, Телефон)', 
+                    self,
+                    'Ошибка',
+                    'Заполните все обязательные поля (ФИО, Телефон)',
                     'warning'
                 ).exec_()
                 return
-            
+
             client_data = {
                 'client_type': client_type,
                 'full_name': self.full_name.text().strip(),
@@ -861,13 +880,13 @@ class ClientDialog(QDialog):
             if not self.org_name.text().strip() or not self.org_phone.text().strip():
                 # ========== ЗАМЕНИЛИ QMessageBox ==========
                 CustomMessageBox(
-                    self, 
-                    'Ошибка', 
-                    'Заполните все обязательные поля (Название, Телефон)', 
+                    self,
+                    'Ошибка',
+                    'Заполните все обязательные поля (Название, Телефон)',
                     'warning'
                 ).exec_()
                 return
-            
+
             client_data = {
                 'client_type': client_type,
                 'organization_type': self.org_type.currentText(),
@@ -879,14 +898,30 @@ class ClientDialog(QDialog):
                 'phone': self.org_phone.text().strip(),
                 'email': self.org_email.text().strip()
             }
-        
-        if self.client_data:
-            self.db.update_client(self.client_data['id'], client_data)
-        else:
-            self.db.add_client(client_data)
 
-        # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
-        self.accept()
+        try:
+            if self.api_client:
+                # Многопользовательский режим - сохраняем через API
+                if self.client_data:
+                    self.api_client.update_client(self.client_data['id'], client_data)
+                else:
+                    self.api_client.create_client(client_data)
+            else:
+                # Локальный режим - сохраняем в локальную БД
+                if self.client_data:
+                    self.db.update_client(self.client_data['id'], client_data)
+                else:
+                    self.db.add_client(client_data)
+
+            # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
+            self.accept()
+        except Exception as e:
+            CustomMessageBox(
+                self,
+                'Ошибка',
+                f'Не удалось сохранить клиента: {e}',
+                'error'
+            ).exec_()
 
     def showEvent(self, event):
         """Центрирование при первом показе"""

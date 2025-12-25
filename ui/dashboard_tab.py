@@ -11,10 +11,11 @@ import os
 
 class DashboardTab(QWidget):
     """Главная страница со сводной статистикой"""
-    
-    def __init__(self, employee):
+
+    def __init__(self, employee, api_client=None):
         super().__init__()
         self.employee = employee
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.init_ui()
         self.load_statistics()
@@ -207,25 +208,79 @@ class DashboardTab(QWidget):
     def load_statistics(self):
         """Загрузка статистики за все время"""
         try:
-            # Получаем общую статистику из БД
-            stats = self.db.get_dashboard_statistics()
-            
+            if self.api_client:
+                # Многопользовательский режим - загружаем из API
+                stats = self.calculate_api_statistics()
+            else:
+                # Локальный режим - загружаем из локальной БД
+                stats = self.db.get_dashboard_statistics()
+
             # Обновляем карточки заказов
             self.update_card_value('individual_orders', str(stats['individual_orders']))
             self.update_card_value('template_orders', str(stats['template_orders']))
             self.update_card_value('supervision_orders', str(stats['supervision_orders']))
-            
+
             # Обновляем карточки площади
             self.update_card_value('individual_area', f"{stats['individual_area']:,.0f} м²")
             self.update_card_value('template_area', f"{stats['template_area']:,.0f} м²")
             self.update_card_value('supervision_area', f"{stats['supervision_area']:,.0f} м²")
-            
+
             print("✓ Статистика dashboard загружена")
-            
+
         except Exception as e:
             print(f"❌ Ошибка загрузки статистики dashboard: {e}")
             import traceback
             traceback.print_exc()
+
+    def calculate_api_statistics(self):
+        """Рассчитать статистику из данных API"""
+        try:
+            # Получаем все договоры с сервера
+            contracts = self.api_client.get_contracts(limit=1000)
+
+            # Инициализируем счетчики
+            stats = {
+                'individual_orders': 0,
+                'template_orders': 0,
+                'supervision_orders': 0,
+                'individual_area': 0.0,
+                'template_area': 0.0,
+                'supervision_area': 0.0
+            }
+
+            # Подсчитываем статистику
+            for contract in contracts:
+                project_type = contract.get('project_type', '')
+                area = float(contract.get('area', 0) or 0)
+                supervision = contract.get('supervision', False)
+
+                if project_type == 'Индивидуальный':
+                    stats['individual_orders'] += 1
+                    stats['individual_area'] += area
+                elif project_type == 'Шаблонный':
+                    stats['template_orders'] += 1
+                    stats['template_area'] += area
+
+                # Авторский надзор подсчитывается отдельно
+                if supervision:
+                    stats['supervision_orders'] += 1
+                    stats['supervision_area'] += area
+
+            return stats
+
+        except Exception as e:
+            print(f"❌ Ошибка расчета статистики из API: {e}")
+            import traceback
+            traceback.print_exc()
+            # Возвращаем нулевую статистику в случае ошибки
+            return {
+                'individual_orders': 0,
+                'template_orders': 0,
+                'supervision_orders': 0,
+                'individual_area': 0.0,
+                'template_area': 0.0,
+                'supervision_area': 0.0
+            }
     
     def update_card_value(self, card_name, value):
         """Обновление значения карточки"""

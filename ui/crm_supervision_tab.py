@@ -72,9 +72,10 @@ class SupervisionDraggableList(QListWidget):
 class CRMSupervisionTab(QWidget):
     """Вкладка CRM Авторского надзора"""
     
-    def __init__(self, employee):
+    def __init__(self, employee, api_client=None):
         super().__init__()
         self.employee = employee
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.init_ui()
         self.load_cards_for_current_tab()

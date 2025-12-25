@@ -266,6 +266,63 @@ class APIClient:
 
         return response.json()
 
+    def update_employee(self, employee_id: int, employee_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Обновить сотрудника"""
+        response = requests.put(
+            f"{self.base_url}/api/employees/{employee_id}",
+            headers=self.headers,
+            json=employee_data,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка обновления сотрудника (HTTP {response.status_code}): {error_detail}")
+
+        return response.json()
+
+    def delete_employee(self, employee_id: int) -> bool:
+        """Удалить сотрудника"""
+        response = requests.delete(
+            f"{self.base_url}/api/employees/{employee_id}",
+            headers=self.headers,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка удаления сотрудника (HTTP {response.status_code}): {error_detail}")
+
+        return True
+
+    def delete_client(self, client_id: int) -> bool:
+        """Удалить клиента"""
+        response = requests.delete(
+            f"{self.base_url}/api/clients/{client_id}",
+            headers=self.headers,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка удаления клиента (HTTP {response.status_code}): {error_detail}")
+
+        return True
+
+    def delete_contract(self, contract_id: int) -> bool:
+        """Удалить договор"""
+        response = requests.delete(
+            f"{self.base_url}/api/contracts/{contract_id}",
+            headers=self.headers,
+            verify=self.verify_ssl
+        )
+
+        if response.status_code != 200:
+            error_detail = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else response.text
+            raise Exception(f"Ошибка удаления договора (HTTP {response.status_code}): {error_detail}")
+
+        return True
+
     # =========================
     # СИНХРОНИЗАЦИЯ
     # =========================

@@ -175,9 +175,10 @@ class FormattedPeriodInput(QLineEdit):
 
 
 class ContractsTab(QWidget):
-    def __init__(self, employee, parent=None):
+    def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
+        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
         self.init_ui()
@@ -316,22 +317,45 @@ class ContractsTab(QWidget):
         layout.addWidget(self.contracts_table)
         
         self.setLayout(layout)
-    
+
     def load_contracts(self):
         """Загрузка списка договоров"""
         self.contracts_table.setSortingEnabled(False)
-        
-        contracts = self.db.get_all_contracts()
+
+        # Загружаем договоры из API или локальной БД
+        if self.api_client:
+            # Многопользовательский режим - загружаем из API
+            contracts = self.api_client.get_contracts()
+            # Также нам нужны клиенты для отображения имен
+            clients_dict = {}
+            try:
+                clients = self.api_client.get_clients()
+                clients_dict = {c['id']: c for c in clients}
+            except:
+                pass
+        else:
+            # Локальный режим - загружаем из локальной БД
+            contracts = self.db.get_all_contracts()
+            clients_dict = {}
+
         self.contracts_table.setRowCount(len(contracts))
-        
+
         for row, contract in enumerate(contracts):
             self.contracts_table.setRowHeight(row, 30)
-            
-            client = self.db.get_client_by_id(contract['client_id'])
-            client_name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
-            
+
+            # Получаем имя клиента
+            client_id = contract.get('client_id')
+            if self.api_client and client_id in clients_dict:
+                client = clients_dict[client_id]
+                client_name = client['full_name'] if client.get('client_type') == 'Физическое лицо' else client.get('organization_name', 'Неизвестно')
+            elif not self.api_client:
+                client = self.db.get_client_by_id(client_id)
+                client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', 'Неизвестно') if client else 'Неизвестно')
+            else:
+                client_name = 'Неизвестно'
+
             self.contracts_table.setItem(row, 0, QTableWidgetItem(contract['contract_number']))
-            
+
             date_str = contract.get('contract_date', '')
             if date_str:
                 try:
@@ -488,7 +512,7 @@ class ContractsTab(QWidget):
         dialog = ContractDialog(self, contract_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_contracts()
-            
+
     def delete_contract(self, contract_data):
         """Удаление договора"""
         # ========== ЗАМЕНИЛИ QMessageBox ==========
@@ -501,12 +525,18 @@ class ContractsTab(QWidget):
             f"ВНИМАНИЕ: Это действие нельзя отменить!\n"
             f"Будут удалены все связанные данные."
         ).exec_()
-        
+
         if reply == QDialog.Accepted:
             try:
                 contract_id = contract_data['id']
-                crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
-                self.db.delete_order(contract_id, crm_card_id)
+
+                if self.api_client:
+                    # Многопользовательский режим - удаляем через API
+                    self.api_client.delete_contract(contract_id)
+                else:
+                    # Локальный режим - удаляем из локальной БД
+                    crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
+                    self.db.delete_order(contract_id, crm_card_id)
                 
                 CustomMessageBox(
                     self, 
@@ -780,6 +810,8 @@ class ContractDialog(QDialog):
         self.contract_data = contract_data
         self.view_only = view_only
         self.db = DatabaseManager()
+        # Получаем api_client от родителя, если он есть
+        self.api_client = getattr(parent, 'api_client', None)
         self._uploading_files = 0  # Счётчик загружаемых файлов
 
         # Подключаем сигналы к обработчикам
