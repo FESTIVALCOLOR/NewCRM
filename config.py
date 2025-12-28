@@ -114,3 +114,37 @@ SYNC_INTERVAL = 5
 CACHE_ENABLED = True
 CACHE_PATH = os.path.join(BASE_DIR, 'cache')
 # ===================================================
+
+# ========== FASTAPI SETTINGS ==========
+from pydantic import BaseSettings
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    """Настройки для FastAPI сервера"""
+    # Настройки API
+    api_title: str = "Interior Studio CRM API"
+    api_version: str = APP_VERSION
+    api_description: str = "REST API для многопользовательской CRM системы"
+
+    # Безопасность
+    secret_key: str = "interior_studio_secret_key_change_in_production"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 1440  # 24 часа
+
+    # База данных
+    database_url: str = f"sqlite:///{DATABASE_PATH}"
+
+    # CORS
+    allow_origins: list = ["*"]  # В продакшене указать конкретные домены
+    allow_credentials: bool = True
+    allow_methods: list = ["*"]
+    allow_headers: list = ["*"]
+
+    class Config:
+        case_sensitive = False
+
+@lru_cache()
+def get_settings():
+    """Получить настройки приложения"""
+    return Settings()
+# ===================================================
