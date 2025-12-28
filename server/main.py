@@ -18,13 +18,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from config import get_settings
-from database import (
+from server.database import (
     get_db, init_db,
     Employee, Client, Contract, Notification, UserSession, ActivityLog,
     CRMCard, StageExecutor, SupervisionCard, SupervisionProjectHistory,
     Payment, Rate, Salary, ProjectFile, ActionHistory
 )
-from schemas import (
+from server.schemas import (
     LoginRequest, TokenResponse,
     EmployeeResponse, EmployeeCreate, EmployeeUpdate,
     ClientResponse, ClientCreate, ClientUpdate,
@@ -50,7 +50,7 @@ from schemas import (
     PaymentManualUpdateRequest, TemplateRateRequest, IndividualRateRequest,
     SupervisionRateRequest, SurveyorRateRequest
 )
-from auth import (
+from server.auth import (
     verify_password, get_password_hash, create_access_token,
     get_current_user
 )
