@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from config import get_settings
-from database import get_db, Employee
+from server.database import get_db, Employee
 
 settings = get_settings()
 
