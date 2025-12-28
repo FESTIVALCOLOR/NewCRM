@@ -61,7 +61,7 @@ class Employee(Base):
 
     # Связи
     sessions = relationship("UserSession", back_populates="employee")
-    permissions = relationship("UserPermission", back_populates="employee")
+    permissions = relationship("UserPermission", back_populates="employee", foreign_keys="[UserPermission.employee_id]")
     notifications = relationship("Notification", back_populates="employee")
 
 
@@ -263,6 +263,264 @@ class Contract(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Связи
+    crm_cards = relationship("CRMCard", back_populates="contract")
+    supervision_cards = relationship("SupervisionCard", back_populates="contract")
+
+
+# =========================
+# CRM КАРТОЧКИ
+# =========================
+
+class CRMCard(Base):
+    """CRM карточки проектов"""
+    __tablename__ = "crm_cards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+
+    column_name = Column(String, nullable=False, default="Новый заказ")
+    deadline = Column(String)
+    tags = Column(String)
+
+    is_approved = Column(Boolean, default=False)
+    approval_deadline = Column(String)
+    approval_stages = Column(Text)  # JSON строка
+
+    project_data_link = Column(String)
+    tech_task_file = Column(String)
+    tech_task_date = Column(String)
+    survey_date = Column(String)
+
+    # Менеджеры
+    senior_manager_id = Column(Integer, ForeignKey("employees.id"))
+    sdp_id = Column(Integer, ForeignKey("employees.id"))  # Старший дизайнер-проектировщик
+    gap_id = Column(Integer, ForeignKey("employees.id"))  # Главный архитектор-проектировщик
+    manager_id = Column(Integer, ForeignKey("employees.id"))
+    surveyor_id = Column(Integer, ForeignKey("employees.id"))
+
+    order_position = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Связи
+    contract = relationship("Contract", back_populates="crm_cards")
+    senior_manager = relationship("Employee", foreign_keys=[senior_manager_id])
+    sdp = relationship("Employee", foreign_keys=[sdp_id])
+    gap = relationship("Employee", foreign_keys=[gap_id])
+    manager = relationship("Employee", foreign_keys=[manager_id])
+    surveyor = relationship("Employee", foreign_keys=[surveyor_id])
+    stage_executors = relationship("StageExecutor", back_populates="crm_card")
+
+
+class StageExecutor(Base):
+    """Исполнители по стадиям"""
+    __tablename__ = "stage_executors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id"), nullable=False)
+
+    stage_name = Column(String, nullable=False)
+    executor_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+
+    assigned_date = Column(DateTime, default=datetime.utcnow)
+    assigned_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+
+    deadline = Column(String)
+    submitted_date = Column(DateTime)
+
+    completed = Column(Boolean, default=False)
+    completed_date = Column(DateTime)
+
+    # Связи
+    crm_card = relationship("CRMCard", back_populates="stage_executors")
+    executor = relationship("Employee", foreign_keys=[executor_id])
+
+
+# =========================
+# SUPERVISION (Авторский надзор)
+# =========================
+
+class SupervisionCard(Base):
+    """Карточки авторского надзора"""
+    __tablename__ = "supervision_cards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+
+    column_name = Column(String, nullable=False, default="Новый заказ")
+    deadline = Column(String)
+    tags = Column(String)
+
+    senior_manager_id = Column(Integer, ForeignKey("employees.id"))
+    dan_id = Column(Integer, ForeignKey("employees.id"))  # Дежурный по авторскому надзору
+    dan_completed = Column(Boolean, default=False)
+
+    is_paused = Column(Boolean, default=False)
+    pause_reason = Column(Text)
+    paused_at = Column(DateTime)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Связи
+    contract = relationship("Contract", back_populates="supervision_cards")
+    senior_manager = relationship("Employee", foreign_keys=[senior_manager_id])
+    dan = relationship("Employee", foreign_keys=[dan_id])
+    history = relationship("SupervisionProjectHistory", back_populates="supervision_card")
+
+
+class SupervisionProjectHistory(Base):
+    """История проектов надзора"""
+    __tablename__ = "supervision_project_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id"), nullable=False)
+
+    entry_type = Column(String, nullable=False)  # pause, resume, etc.
+    message = Column(Text, nullable=False)
+
+    created_by = Column(Integer, ForeignKey("employees.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Связи
+    supervision_card = relationship("SupervisionCard", back_populates="history")
+
+
+# =========================
+# ПЛАТЕЖИ И ТАРИФЫ
+# =========================
+
+class Payment(Base):
+    """Платежи/выплаты"""
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id"))
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id"))
+
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    role = Column(String, nullable=False)
+    stage_name = Column(String)
+
+    calculated_amount = Column(Float, nullable=False)
+    manual_amount = Column(Float)
+    final_amount = Column(Float, nullable=False)
+
+    is_manual = Column(Boolean, default=False)
+    payment_type = Column(String)  # Полная оплата, Аванс, Доплата, Оклад
+    report_month = Column(String)
+    payment_status = Column(String)
+
+    is_paid = Column(Boolean, default=False)
+    paid_date = Column(DateTime)
+    paid_by = Column(Integer, ForeignKey("employees.id"))
+
+    reassigned = Column(Boolean, default=False)
+    old_employee_id = Column(Integer)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Связи
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
+class Rate(Base):
+    """Тарифы"""
+    __tablename__ = "rates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_type = Column(String)  # Индивидуальный, Шаблонный, Авторский надзор
+    role = Column(String)
+    stage_name = Column(String)
+
+    rate_per_m2 = Column(Float)
+    area_from = Column(Float)
+    area_to = Column(Float)
+    fixed_price = Column(Float)
+    price = Column(Float)  # Цена (для шаблонных)
+
+    # Для авторского надзора
+    executor_rate = Column(Float)
+    manager_rate = Column(Float)
+
+    city = Column(String)
+    surveyor_price = Column(Float)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Salary(Base):
+    """Зарплаты/оклады"""
+    __tablename__ = "salaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"))
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+
+    payment_type = Column(String, nullable=False)
+    stage_name = Column(String)
+
+    amount = Column(Float, nullable=False)
+    advance_payment = Column(Float)
+
+    report_month = Column(String, nullable=False)
+    project_type = Column(String)
+    payment_status = Column(String)
+    comments = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Связи
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
+# =========================
+# ФАЙЛЫ ПРОЕКТА
+# =========================
+
+class ProjectFile(Base):
+    """Файлы проекта"""
+    __tablename__ = "project_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+
+    stage = Column(String, nullable=False)
+    file_type = Column(String, nullable=False)  # image, pdf, excel
+
+    public_link = Column(String)
+    yandex_path = Column(String, nullable=False)
+    file_name = Column(String, nullable=False)
+
+    upload_date = Column(DateTime, default=datetime.utcnow)
+    preview_cache_path = Column(String)
+    file_order = Column(Integer, default=0)
+    variation = Column(Integer, default=1)
+
+
+# =========================
+# ИСТОРИЯ ДЕЙСТВИЙ
+# =========================
+
+class ActionHistory(Base):
+    """История действий (для локальной совместимости)"""
+    __tablename__ = "action_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+
+    action_type = Column(String, nullable=False)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+
+    description = Column(Text)
+    action_date = Column(DateTime, default=datetime.utcnow)
 
 
 def init_db():
