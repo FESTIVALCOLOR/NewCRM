@@ -116,8 +116,12 @@ CACHE_PATH = os.path.join(BASE_DIR, 'cache')
 # ===================================================
 
 # ========== FASTAPI SETTINGS ==========
-from pydantic import BaseSettings
 from functools import lru_cache
+
+try:
+    from pydantic_settings import BaseSettings
+except ImportError:
+    from pydantic import BaseSettings
 
 class Settings(BaseSettings):
     """Настройки для FastAPI сервера"""
