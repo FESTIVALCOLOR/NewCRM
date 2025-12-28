@@ -126,6 +126,8 @@ except ImportError:
 class Settings(BaseSettings):
     """Настройки для FastAPI сервера"""
     # Настройки API
+    app_name: str = APP_NAME
+    app_version: str = APP_VERSION
     api_title: str = "Interior Studio CRM API"
     api_version: str = APP_VERSION
     api_description: str = "REST API для многопользовательской CRM системы"
