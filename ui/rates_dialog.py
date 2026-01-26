@@ -439,7 +439,7 @@ class RatesDialog(QDialog):
         """Загрузка тарифов из данных API"""
         try:
             # === 1. ИНДИВИДУАЛЬНЫЕ ===
-            print("\n1️⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов из API:")
+            print("\n1⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов из API:")
             table_individual = self.findChild(QTableWidget, 'individual_rates_table')
             individual_count = 0
 
@@ -473,7 +473,7 @@ class RatesDialog(QDialog):
             print(f"   Итого загружено: {individual_count} тарифов")
 
             # === 2. ЗАМЕРЩИКИ ===
-            print("\n2️⃣ Загрузка тарифов ЗАМЕРЩИКОВ из API:")
+            print("\n2⃣ Загрузка тарифов ЗАМЕРЩИКОВ из API:")
             table_surveyor = self.findChild(QTableWidget, 'surveyor_rates_table')
             surveyor_count = 0
 
@@ -497,7 +497,7 @@ class RatesDialog(QDialog):
             print(f"   Итого загружено: {surveyor_count} тарифов")
 
             # === 3. АВТОРСКИЙ НАДЗОР ===
-            print("\n3️⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА из API:")
+            print("\n3⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА из API:")
             supervision_count = 0
 
             for rate in rates_data:
@@ -525,7 +525,7 @@ class RatesDialog(QDialog):
             print(f"   Итого загружено: {supervision_count} значений")
 
             # === 4. ШАБЛОННЫЕ ===
-            print("\n4️⃣ Загрузка ШАБЛОННЫХ диапазонов:")
+            print("\n4⃣ Загрузка ШАБЛОННЫХ диапазонов:")
             print("   → Вызов load_template_ranges() для первой роли...")
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(100, self.load_template_ranges)
@@ -556,7 +556,7 @@ class RatesDialog(QDialog):
             cursor = conn.cursor()
             
             # === 1. ИНДИВИДУАЛЬНЫЕ ===
-            print("\n1️⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов:")
+            print("\n1⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов:")
             table_individual = self.findChild(QTableWidget, 'individual_rates_table')
             
             if table_individual:
@@ -599,7 +599,7 @@ class RatesDialog(QDialog):
                 print(f"   Итого загружено: {loaded_count} тарифов")
             
             # === 2. ЗАМЕРЩИКИ ===
-            print("\n2️⃣ Загрузка тарифов ЗАМЕРЩИКОВ:")
+            print("\n2⃣ Загрузка тарифов ЗАМЕРЩИКОВ:")
             table_surveyor = self.findChild(QTableWidget, 'surveyor_rates_table')
             
             if table_surveyor:
@@ -632,7 +632,7 @@ class RatesDialog(QDialog):
                 print(f"   Итого загружено: {loaded_count} тарифов")
             
             # === 3. АВТОРСКИЙ НАДЗОР ===
-            print("\n3️⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА:")
+            print("\n3⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА:")
             table_supervision = self.findChild(QTableWidget, 'supervision_rates_table')
             
             if table_supervision:
@@ -688,7 +688,7 @@ class RatesDialog(QDialog):
             self.db.close()
             
             # === 4. ШАБЛОННЫЕ (ВЫЗЫВАЕМ ОТДЕЛЬНО) ===
-            print("\n4️⃣ Загрузка ШАБЛОННЫХ диапазонов:")
+            print("\n4⃣ Загрузка ШАБЛОННЫХ диапазонов:")
             print("   → Вызов load_template_ranges() для первой роли...")
             
             # ========== КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ ==========
@@ -1192,7 +1192,7 @@ class RatesDialog(QDialog):
             if saved:
                 print(f"   ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.2f})")
             else:
-                print(f"   [WARN]️ ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
+                print(f"   [WARN] ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
             # =========================================
             
             self.db.close()

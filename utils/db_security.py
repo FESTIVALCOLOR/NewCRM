@@ -63,7 +63,7 @@ def validate_update_data(table_name: str, data: dict) -> dict:
     # Предупреждаем о пропущенных полях
     skipped = set(data.keys()) - set(validated.keys())
     if skipped:
-        print(f"[WARN]️ Пропущены неразрешённые поля: {', '.join(skipped)}")
+        print(f"[WARN] Пропущены неразрешённые поля: {', '.join(skipped)}")
 
     return validated
 

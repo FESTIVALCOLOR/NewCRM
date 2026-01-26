@@ -1447,7 +1447,7 @@ class SupervisionCard(QFrame):
         
         # Индикатор приостановки
         if self.card_data.get('is_paused'):
-            pause_label = QLabel('⏸️ ПРИОСТАНОВЛЕНО')
+            pause_label = QLabel('⏸ ПРИОСТАНОВЛЕНО')
             pause_label.setStyleSheet('''
                 color: white;
                 background-color: #F39C12;
@@ -1875,7 +1875,7 @@ class SupervisionCard(QFrame):
         info.setAlignment(Qt.AlignCenter)
         layout.addWidget(info)
         
-        yes_btn = QPushButton('▶️ Возобновить')
+        yes_btn = QPushButton('▶ Возобновить')
         yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27AE60;
@@ -2283,7 +2283,7 @@ class PauseDialog(QDialog):
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
         
-        header = QLabel('⏸️ Приостановка проекта')
+        header = QLabel('⏸ Приостановка проекта')
         header.setStyleSheet('font-size: 14px; font-weight: bold; color: #F39C12;')
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
@@ -2677,10 +2677,10 @@ class SupervisionCardEditDialog(QDialog):
         
         if entry_type == 'pause':
             bg_color = '#FFF3CD'
-            icon = '⏸️'
+            icon = '⏸'
         elif entry_type == 'resume':
             bg_color = '#ffffff'
-            icon = '▶️'
+            icon = '▶'
         elif entry_type == 'submitted':
             bg_color = '#D6EAF8'
             icon = ''
@@ -4630,7 +4630,7 @@ class SupervisionStatisticsDialog(QDialog):
             if stat.get('dan_completed'):
                 status_text = 'Работа сдана'
             elif stat.get('is_paused'):
-                status_text = '⏸️ Приостановлено'
+                status_text = '⏸ Приостановлено'
             else:
                 status_text = 'В работе'
             
