@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-
-                             QGroupBox, QPushButton, QComboBox, QGridLayout,
+                             QGroupBox, QPushButton, QComboBox,
                              QMessageBox, QFileDialog, QTabWidget, QScrollArea,
-                             QFrame, QDialog, QFormLayout, QLineEdit)  # ← ДОБАВИЛИ QDialog, QFormLayout, QLineEdit
-from PyQt5.QtCore import Qt, QDate, QUrl
+                             QDialog, QFormLayout, QLineEdit)
+from PyQt5.QtCore import Qt, QDate, QUrl, QTimer
 from PyQt5.QtGui import QFont, QPixmap, QTextDocument, QTextCursor, QTextTableFormat, QTextCharFormat, QBrush, QColor, QTextBlockFormat, QTextImageFormat
 from PyQt5.QtPrintSupport import QPrinter
-from PyQt5.QtSvg import QSvgWidget
 from ui.custom_combobox import CustomComboBox
 import os
 from database.db_manager import DatabaseManager
@@ -33,32 +31,32 @@ class ReportsTab(QWidget):
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.init_ui()
-        self.load_all_statistics()
-    
+        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
+        QTimer.singleShot(0, self.load_all_statistics)
+
     def init_ui(self):
         main_layout = QVBoxLayout()
         main_layout.setSpacing(5)
         main_layout.setContentsMargins(5, 5, 5, 5)
-        
+
         # Заголовок
         header_layout = QHBoxLayout()
-        
+
         header = QLabel(' Отчеты и Статистика ')
         header.setStyleSheet('font-size: 14px; font-weight: bold; color: #333333; padding: 5px;')
         header_layout.addWidget(header)
         header_layout.addStretch()
-        
+
         # Кнопка экспорта
-        export_all_btn = IconLoader.create_icon_button('export', 'Экспорт полного отчета в PDF', icon_size=16)
+        export_all_btn = IconLoader.create_icon_button('export', 'Экспорт в PDF', icon_size=12)
         export_all_btn.setStyleSheet("""
             QPushButton {
                 background-color: #E74C3C;
                 color: white;
-                padding: 8px 16px;
+                padding: 2px 8px;
+                font-size: 11px;
                 border-radius: 4px;
                 font-weight: bold;
-                font-size: 12px;
-                margin-right: 10px;
             }
             QPushButton:hover { background-color: #C0392B; }
         """)
@@ -99,7 +97,7 @@ class ReportsTab(QWidget):
                 padding: 0px;
             }
             QPushButton:hover {
-                background-color: #E8F4F8;
+                background-color: #ffffff;
                 border-radius: 12px;
             }
         """)
@@ -164,15 +162,16 @@ class ReportsTab(QWidget):
         filters_layout.addWidget(self.city_combo)
         
         filters_layout.addStretch()
-        
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить все фильтры', icon_size=14)
+
+        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить все фильтры', icon_size=12)
         reset_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: #333;
-                background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
             }
             QPushButton:hover {
@@ -206,13 +205,13 @@ class ReportsTab(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 5px;
                 background: white;
             }
             QTabBar::tab {
                 background-color: #F5F5F5;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-bottom: none;
                 border-top-left-radius: 5px;
                 border-top-right-radius: 5px;
@@ -226,7 +225,7 @@ class ReportsTab(QWidget):
                 border-bottom: 1px solid white;
             }
             QTabBar::tab:hover {
-                background-color: #E8F4F8;
+                background-color: #ffffff;
             }
         """)
         
@@ -251,117 +250,31 @@ class ReportsTab(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background: white; }")
-        
+
         content = QWidget()
         layout = QVBoxLayout()
         layout.setSpacing(20)
         layout.setContentsMargins(15, 15, 15, 15)
-        
+
         clean_type = project_type.strip()
-        
-        # Определяем иконки
-        if clean_type == 'Индивидуальный':
-            orders_icon = 'clipboard1.svg'
-            area_icon = 'codepen1.svg'
-        else:
-            orders_icon = 'clipboard2.svg'
-            area_icon = 'codepen2.svg'
-        
-        # РЯД 1 - БОЛЬШИЕ
+
+        # ТОЛЬКО ДИАГРАММЫ - карточки статистики показываются в дашборде main_window
         row1_layout = QHBoxLayout()
-        row1_layout.setSpacing(10)
-        
-        total_orders_card = self.create_stat_card(
-            f'{clean_type}_total_orders',
-            'Всего заказов',
-            '0',
-            orders_icon,
-            '#1976D2',
-            size=60
-        )
-        row1_layout.addWidget(total_orders_card)
-        
-        total_area_card = self.create_stat_card(
-            f'{clean_type}_total_area',
-            'Общая площадь заказов',
-            '0 м²',
-            area_icon,
-            '#F57C00',
-            size=60
-        )
-        row1_layout.addWidget(total_area_card)
-        
-        layout.addLayout(row1_layout)
-        
-        # РЯД 2 - МАЛЕНЬКИЕ
-        row2_layout = QHBoxLayout()
-        row2_layout.setSpacing(10)
-        
-        active_card = self.create_stat_card(
-            f'{clean_type}_active',
-            'Активные заказы',
-            '0',
-            'check-active.svg',
-            '#27AE60',
-            size=42
-        )
-        row2_layout.addWidget(active_card)
-        
-        completed_card = self.create_stat_card(
-            f'{clean_type}_completed',
-            'Выполненные заказы',
-            '0',
-            'check-square.svg',
-            '#2ECC71',
-            size=42
-        )
-        row2_layout.addWidget(completed_card)
-        
-        layout.addLayout(row2_layout)
-        
-        # РЯД 3 - МАЛЕНЬКИЕ
-        row3_layout = QHBoxLayout()
-        row3_layout.setSpacing(10)
-        
-        cancelled_card = self.create_stat_card(
-            f'{clean_type}_cancelled',
-            'Расторгнуто заказов',
-            '0',
-            'check-delete.svg',
-            '#E74C3C',
-            size=42
-        )
-        row3_layout.addWidget(cancelled_card)
-        
-        overdue_card = self.create_stat_card(
-            f'{clean_type}_overdue',
-            'Просрочек по заказам',
-            '0',
-            'check-clock.svg',
-            '#F39C12',
-            size=42
-        )
-        row3_layout.addWidget(overdue_card)
-        
-        layout.addLayout(row3_layout)
-        
-        # РЯД 4 - ДИАГРАММЫ
-        row4_layout = QHBoxLayout()
-        row4_layout.setSpacing(15)
-        
+        row1_layout.setSpacing(15)
+
         cities_chart = self.create_chart(f'{clean_type}_cities_chart', 'Распределение по городам')
         agents_chart = self.create_chart(f'{clean_type}_agents_chart', 'Распределение по типам агентов')
-        
-        row4_layout.addWidget(cities_chart)
-        row4_layout.addWidget(agents_chart)
-        
-        layout.addLayout(row4_layout)
-        
+
+        row1_layout.addWidget(cities_chart)
+        row1_layout.addWidget(agents_chart)
+
+        layout.addLayout(row1_layout)
+
         layout.addStretch()
-        
+
         content.setLayout(layout)
         scroll.setWidget(content)
-        
+
         return scroll
     
     def create_supervision_statistics_tab(self):
@@ -369,162 +282,31 @@ class ReportsTab(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background: white; }")
-        
+
         content = QWidget()
         layout = QVBoxLayout()
         layout.setSpacing(20)
         layout.setContentsMargins(15, 15, 15, 15)
-        
-        # РЯД 1
+
+        # ТОЛЬКО ДИАГРАММЫ - карточки статистики показываются в дашборде main_window
         row1_layout = QHBoxLayout()
-        row1_layout.setSpacing(10)
-        
-        total_orders_card = self.create_stat_card(
-            'supervision_total_orders',
-            'Всего заказов',
-            '0',
-            'clipboard3.svg',
-            '#1976D2',
-            size=60
-        )
-        row1_layout.addWidget(total_orders_card)
-        
-        total_area_card = self.create_stat_card(
-            'supervision_total_area',
-            'Общая площадь заказов',
-            '0 м²',
-            'codepen3.svg',
-            '#F57C00',
-            size=60
-        )
-        row1_layout.addWidget(total_area_card)
-        
-        layout.addLayout(row1_layout)
-        
-        # РЯД 2
-        row2_layout = QHBoxLayout()
-        row2_layout.setSpacing(10)
-        
-        active_card = self.create_stat_card(
-            'supervision_active',
-            'Активные заказы',
-            '0',
-            'check-active.svg',
-            '#27AE60',
-            size=42
-        )
-        row2_layout.addWidget(active_card)
-        
-        completed_card = self.create_stat_card(
-            'supervision_completed',
-            'Выполненные заказы',
-            '0',
-            'check-square.svg',
-            '#2ECC71',
-            size=42
-        )
-        row2_layout.addWidget(completed_card)
-        
-        layout.addLayout(row2_layout)
-        
-        # РЯД 3
-        row3_layout = QHBoxLayout()
-        row3_layout.setSpacing(10)
-        
-        cancelled_card = self.create_stat_card(
-            'supervision_cancelled',
-            'Расторгнуто заказов',
-            '0',
-            'check-delete.svg',
-            '#E74C3C',
-            size=42
-        )
-        row3_layout.addWidget(cancelled_card)
-        
-        overdue_card = self.create_stat_card(
-            'supervision_overdue',
-            'Просрочек по заказам',
-            '0',
-            'check-clock.svg',
-            '#F39C12',
-            size=42
-        )
-        row3_layout.addWidget(overdue_card)
-        
-        layout.addLayout(row3_layout)
-        
-        # РЯД 4
-        row4_layout = QHBoxLayout()
-        row4_layout.setSpacing(15)
-        
+        row1_layout.setSpacing(15)
+
         cities_chart = self.create_chart('supervision_cities_chart', 'Распределение по городам')
         agents_chart = self.create_chart('supervision_agents_chart', 'Распределение по типам агентов')
-        
-        row4_layout.addWidget(cities_chart)
-        row4_layout.addWidget(agents_chart)
-        
-        layout.addLayout(row4_layout)
-        
+
+        row1_layout.addWidget(cities_chart)
+        row1_layout.addWidget(agents_chart)
+
+        layout.addLayout(row1_layout)
+
         layout.addStretch()
-        
+
         content.setLayout(layout)
         scroll.setWidget(content)
-        
+
         return scroll
-    
-    def create_stat_card(self, object_name, title, value, icon_name, border_color, size=60):
-        """Создание карточки с регулируемым размером иконки"""
-        from utils.resource_path import resource_path
 
-        card = QGroupBox()
-        card.setObjectName(object_name)
-        card.setFixedHeight(110)
-
-        card.setStyleSheet(f"""
-            QGroupBox {{
-                background-color: #ffffff;
-                border: 1px solid {border_color};
-                border-radius: 5px;
-                padding: 8px;
-            }}
-            QGroupBox:hover {{ border: 2px solid {border_color}; }}
-        """)
-
-        layout = QHBoxLayout()
-        layout.setSpacing(12)
-        layout.setContentsMargins(0, 2, 0, 2)
-
-        # SVG ИКОНКА
-        icon_path = resource_path(f'resources/icons/{icon_name}')
-        if os.path.exists(icon_path):
-            icon_widget = QSvgWidget(icon_path)
-            icon_widget.setFixedSize(size, size)
-            layout.addWidget(icon_widget)
-        else:
-            print(f"⚠️ Иконка не найдена: {icon_path}")
-            icon_label = QLabel('📊')
-            icon_label.setStyleSheet(f'font-size: {size}px;')
-            icon_label.setFixedWidth(size)
-            layout.addWidget(icon_label)
-        
-        data_layout = QVBoxLayout()
-        data_layout.setSpacing(2)
-        data_layout.setAlignment(Qt.AlignVCenter)
-        
-        title_label = QLabel(title)
-        title_label.setStyleSheet(f'font-size: 11px; color: {border_color}; font-weight: 600;')
-        title_label.setWordWrap(True)
-        data_layout.addWidget(title_label)
-        
-        value_label = QLabel(value)
-        value_label.setObjectName('value_label')
-        value_label.setStyleSheet('font-size: 28px; font-weight: bold; color: #2C3E50;')
-        data_layout.addWidget(value_label)
-        
-        layout.addLayout(data_layout, 1)
-        card.setLayout(layout)
-        return card
-    
     def create_chart(self, object_name, title):
         """Создание круговой диаграммы"""
         group = QGroupBox(title)
@@ -532,7 +314,7 @@ class ReportsTab(QWidget):
         group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 15px;
@@ -569,15 +351,31 @@ class ReportsTab(QWidget):
         try:
             self.city_combo.clear()
             self.city_combo.addItem('Все')
-            
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != "" ORDER BY city')
-            cities = [row['city'] for row in cursor.fetchall()]
-            self.db.close()
-            
-            for city in cities:
-                self.city_combo.addItem(city)
+
+            if self.api_client and self.api_client.is_online:
+                try:
+                    cities = self.api_client.get_cities()
+                    for city in cities:
+                        self.city_combo.addItem(city)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API загрузки городов: {e}")
+                    # Fallback to local DB
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != "" ORDER BY city')
+                    cities = [row['city'] for row in cursor.fetchall()]
+                    self.db.close()
+                    for city in cities:
+                        self.city_combo.addItem(city)
+            else:
+                conn = self.db.connect()
+                cursor = conn.cursor()
+                cursor.execute('SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != "" ORDER BY city')
+                cities = [row['city'] for row in cursor.fetchall()]
+                self.db.close()
+
+                for city in cities:
+                    self.city_combo.addItem(city)
         except Exception as e:
             print(f"Ошибка загрузки городов: {e}")
     
@@ -586,20 +384,41 @@ class ReportsTab(QWidget):
         try:
             self.agent_type_combo.clear()
             self.agent_type_combo.addItem('Все')
-            
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-            SELECT DISTINCT agent_type 
-            FROM contracts 
-            WHERE agent_type IS NOT NULL AND agent_type != "" 
-            ORDER BY agent_type
-            ''')
-            agents = [row['agent_type'] for row in cursor.fetchall()]
-            self.db.close()
-            
-            for agent in agents:
-                self.agent_type_combo.addItem(agent)
+
+            if self.api_client and self.api_client.is_online:
+                try:
+                    agents = self.api_client.get_agent_types()
+                    for agent in agents:
+                        self.agent_type_combo.addItem(agent)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API загрузки типов агентов: {e}")
+                    # Fallback to local DB
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                    SELECT DISTINCT agent_type
+                    FROM contracts
+                    WHERE agent_type IS NOT NULL AND agent_type != ""
+                    ORDER BY agent_type
+                    ''')
+                    agents = [row['agent_type'] for row in cursor.fetchall()]
+                    self.db.close()
+                    for agent in agents:
+                        self.agent_type_combo.addItem(agent)
+            else:
+                conn = self.db.connect()
+                cursor = conn.cursor()
+                cursor.execute('''
+                SELECT DISTINCT agent_type
+                FROM contracts
+                WHERE agent_type IS NOT NULL AND agent_type != ""
+                ORDER BY agent_type
+                ''')
+                agents = [row['agent_type'] for row in cursor.fetchall()]
+                self.db.close()
+
+                for agent in agents:
+                    self.agent_type_combo.addItem(agent)
         except Exception as e:
             print(f"Ошибка загрузки типов агентов: {e}")
     
@@ -648,50 +467,44 @@ class ReportsTab(QWidget):
     def load_project_statistics(self, project_type, year, quarter, month, agent_type, city):
         """Загрузка статистики для типа проекта"""
         try:
-            stats = self.db.get_project_statistics(project_type, year, quarter, month, agent_type, city)
-            
-            self.update_card_value(f'{project_type}_total_orders', str(stats['total_orders']))
-            self.update_card_value(f'{project_type}_total_area', f"{stats['total_area']:,.0f} м²")
-            self.update_card_value(f'{project_type}_active', str(stats['active']))
-            self.update_card_value(f'{project_type}_completed', str(stats['completed']))
-            self.update_card_value(f'{project_type}_cancelled', str(stats['cancelled']))
-            self.update_card_value(f'{project_type}_overdue', str(stats['overdue']))
-            
+            if self.api_client and self.api_client.is_online:
+                try:
+                    stats = self.api_client.get_project_statistics(project_type, year, quarter, month, agent_type, city)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API статистики проектов: {e}")
+                    stats = self.db.get_project_statistics(project_type, year, quarter, month, agent_type, city)
+            else:
+                stats = self.db.get_project_statistics(project_type, year, quarter, month, agent_type, city)
+
+            # Обновляем только диаграммы - карточки статистики в дашборде main_window
             self.update_pie_chart(f'{project_type}_cities_chart', stats['by_cities'])
             self.update_pie_chart(f'{project_type}_agents_chart', stats['by_agents'])
-            
+
         except Exception as e:
-            print(f"❌ Ошибка: {e}")
+            print(f"Ошибка загрузки статистики: {e}")
             import traceback
             traceback.print_exc()
-    
+
     def load_supervision_statistics(self, year, quarter, month, agent_type, city):
         """Загрузка статистики авторского надзора"""
         try:
-            stats = self.db.get_supervision_statistics_report(year, quarter, month, agent_type, city)
-            
-            self.update_card_value('supervision_total_orders', str(stats['total_orders']))
-            self.update_card_value('supervision_total_area', f"{stats['total_area']:,.0f} м²")
-            self.update_card_value('supervision_active', str(stats['active']))
-            self.update_card_value('supervision_completed', str(stats['completed']))
-            self.update_card_value('supervision_cancelled', str(stats['cancelled']))
-            self.update_card_value('supervision_overdue', str(stats['overdue']))
-            
+            if self.api_client and self.api_client.is_online:
+                try:
+                    stats = self.api_client.get_supervision_statistics(year, quarter, month, agent_type, city)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API статистики надзора: {e}")
+                    stats = self.db.get_supervision_statistics_report(year, quarter, month, agent_type, city)
+            else:
+                stats = self.db.get_supervision_statistics_report(year, quarter, month, agent_type, city)
+
+            # Обновляем только диаграммы - карточки статистики в дашборде main_window
             self.update_pie_chart('supervision_cities_chart', stats['by_cities'])
             self.update_pie_chart('supervision_agents_chart', stats['by_agents'])
-            
+
         except Exception as e:
-            print(f"Ошибка: {e}")
+            print(f"Ошибка загрузки статистики надзора: {e}")
             import traceback
             traceback.print_exc()
-    
-    def update_card_value(self, card_name, value):
-        """Обновление значения карточки"""
-        card = self.findChild(QGroupBox, card_name)
-        if card:
-            value_label = card.findChild(QLabel, 'value_label')
-            if value_label:
-                value_label.setText(value)
     
     def update_pie_chart(self, chart_name, data):
         """Обновление круговой диаграммы"""
@@ -754,7 +567,7 @@ class ReportsTab(QWidget):
         filename_input = QLineEdit()
         default_filename = f'Полный отчет {datetime.now().strftime("%Y-%m-%d")}'
         filename_input.setText(default_filename)
-        filename_input.setStyleSheet('padding: 8px; border: 1px solid #DDD; border-radius: 4px;')
+        filename_input.setStyleSheet('padding: 8px; border: 1px solid #DDD; border-radius: 6px;')
         filename_layout.addRow('Имя файла:', filename_input)
         
         dialog_layout.addLayout(filename_layout)
@@ -765,7 +578,7 @@ class ReportsTab(QWidget):
                 background-color: #E74C3C;
                 color: white;
                 padding: 12px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-weight: bold;
             }
             QPushButton:hover { background-color: #C0392B; }
@@ -797,14 +610,25 @@ class ReportsTab(QWidget):
                 filename += '.pdf'
             
             full_path = f"{folder}/{filename}"
-            
+
             year = int(self.year_combo.currentText())
             quarter = self.quarter_combo.currentText() if self.quarter_combo.currentText() != 'Все' else None
             month = self.month_combo.currentIndex() if self.month_combo.currentText() != 'Все' else None
-            
-            individual = self.db.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
-            template = self.db.get_project_statistics('Шаблонный', year, quarter, month, None, None)
-            supervision = self.db.get_supervision_statistics_report(year, quarter, month, None, None)
+
+            if self.api_client and self.api_client.is_online:
+                try:
+                    individual = self.api_client.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
+                    template = self.api_client.get_project_statistics('Шаблонный', year, quarter, month, None, None)
+                    supervision = self.api_client.get_supervision_statistics(year, quarter, month, None, None)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API для PDF экспорта: {e}")
+                    individual = self.db.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
+                    template = self.db.get_project_statistics('Шаблонный', year, quarter, month, None, None)
+                    supervision = self.db.get_supervision_statistics_report(year, quarter, month, None, None)
+            else:
+                individual = self.db.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
+                template = self.db.get_project_statistics('Шаблонный', year, quarter, month, None, None)
+                supervision = self.db.get_supervision_statistics_report(year, quarter, month, None, None)
             
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
@@ -953,18 +777,18 @@ class ReportsTab(QWidget):
             success_layout.setSpacing(15)
             success_layout.setContentsMargins(20, 20, 20, 20)
             
-            success_title = QLabel('✓ PDF создан!')
+            success_title = QLabel('PDF создан!')
             success_title.setStyleSheet('font-size: 14px; font-weight: bold; color: #27AE60;')
             success_title.setAlignment(Qt.AlignCenter)
             success_layout.addWidget(success_title)
             
             path_label = QLabel(full_path)
             path_label.setWordWrap(True)
-            path_label.setStyleSheet('padding: 10px; background-color: #E8F4F8; border-radius: 4px;')
+            path_label.setStyleSheet('padding: 10px; background-color: #ffffff; border-radius: 6px;')
             success_layout.addWidget(path_label)
             
             open_btn = QPushButton('Открыть папку')
-            open_btn.setStyleSheet('background-color: #3498DB; color: white; padding: 10px; border-radius: 4px;')
+            open_btn.setStyleSheet('background-color: #ffd93c; color: white; padding: 10px; border-radius: 6px;')
             open_btn.clicked.connect(lambda: self.open_folder(folder))
             success_layout.addWidget(open_btn)
             
