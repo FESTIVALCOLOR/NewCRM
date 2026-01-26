@@ -63,7 +63,7 @@ def validate_update_data(table_name: str, data: dict) -> dict:
     # Предупреждаем о пропущенных полях
     skipped = set(data.keys()) - set(validated.keys())
     if skipped:
-        print(f"⚠️ Пропущены неразрешённые поля: {', '.join(skipped)}")
+        print(f"[WARN]️ Пропущены неразрешённые поля: {', '.join(skipped)}")
 
     return validated
 
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     validated = validate_update_data('clients', test_data)
     print(f"   Исходные поля: {list(test_data.keys())}")
     print(f"   Валидированные поля: {list(validated.keys())}")
-    print(f"   ✓ Вредоносное поле отфильтровано\n")
+    print(f"   Вредоносное поле отфильтровано\n")
 
     # Тест 2: Построение UPDATE запроса
     print("2. Построение UPDATE запроса:")
@@ -194,8 +194,8 @@ if __name__ == '__main__':
     print("4. Санитизация имени таблицы:")
     try:
         sanitize_table_name("clients; DROP TABLE employees")
-        print("   ✗ SQL-инъекция не обнаружена")
+        print("   SQL-инъекция не обнаружена")
     except ValueError as e:
-        print(f"   ✓ SQL-инъекция заблокирована: {e}\n")
+        print(f"   SQL-инъекция заблокирована: {e}\n")
 
     print("=== Все тесты завершены ===")

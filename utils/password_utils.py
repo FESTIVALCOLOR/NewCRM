@@ -114,11 +114,11 @@ if __name__ == '__main__':
 
     # Тест 2: Проверка правильного пароля
     is_valid = verify_password(test_password, hashed)
-    print(f"Проверка правильного пароля: {'✓ УСПЕХ' if is_valid else '✗ ОШИБКА'}")
+    print(f"Проверка правильного пароля: {'УСПЕХ' if is_valid else 'ОШИБКА'}")
 
     # Тест 3: Проверка неправильного пароля
     is_invalid = verify_password("WrongPassword", hashed)
-    print(f"Проверка неправильного пароля: {'✗ ОШИБКА' if is_invalid else '✓ УСПЕХ'}")
+    print(f"Проверка неправильного пароля: {'ОШИБКА' if is_invalid else 'УСПЕХ'}")
 
     # Тест 4: Генерация случайного пароля
     random_pass = generate_strong_password(16)
@@ -127,4 +127,4 @@ if __name__ == '__main__':
     # Тест 5: Обратная совместимость (plain text)
     plain_password = "admin"
     is_plain_valid = verify_password("admin", plain_password)
-    print(f"Проверка plain text пароля: {'✓ УСПЕХ' if is_plain_valid else '✗ ОШИБКА'}")
+    print(f"Проверка plain text пароля: {'УСПЕХ' if is_plain_valid else 'ОШИБКА'}")

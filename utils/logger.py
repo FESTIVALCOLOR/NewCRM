@@ -193,6 +193,6 @@ if __name__ == '__main__':
     log_business_event("Договор подписан", {"contract_id": 123, "amount": 500000})
     log_business_event("Проект завершён", {"project_id": 456, "duration": "45 дней"})
 
-    print(f"\n✓ Логи записаны в папку: {os.path.abspath(LOGS_DIR)}")
+    print(f"\nЛоги записаны в папку: {os.path.abspath(LOGS_DIR)}")
     print(f"  - Все логи: {os.path.join(LOGS_DIR, 'crm_all.log')}")
     print(f"  - Только ошибки: {os.path.join(LOGS_DIR, 'crm_errors.log')}")
