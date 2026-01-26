@@ -9,7 +9,7 @@ from ui.custom_combobox import CustomComboBox
 from database.db_manager import DatabaseManager
 from utils.pdf_generator import PDFGenerator
 from utils.icon_loader import IconLoader  # ← ДОБАВЛЕНО
-from utils.calendar_styles import ICONS_PATH
+from utils.calendar_helpers import ICONS_PATH
 from datetime import datetime
 
 class EmployeeReportsTab(QWidget):
@@ -20,12 +20,12 @@ class EmployeeReportsTab(QWidget):
         self.db = DatabaseManager()
         self.pdf_gen = PDFGenerator()
         self.init_ui()
-    
+
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setSpacing(5)
         layout.setContentsMargins(5, 5, 5, 5)
-        
+
         # Заголовок
         header = QLabel(' Отчеты по сотрудникам ')
         header.setStyleSheet('font-size: 14px; font-weight: bold; color: #333333; padding: 5px;')
@@ -64,8 +64,8 @@ class EmployeeReportsTab(QWidget):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 5)
 
-        toggle_filters_btn = IconLoader.create_icon_button('arrow-down-circle', '', 'Развернуть фильтры', icon_size=16)
-        toggle_filters_btn.setFixedSize(24, 24)
+        toggle_filters_btn = IconLoader.create_icon_button('arrow-down-circle', '', 'Развернуть фильтры', icon_size=12)
+        toggle_filters_btn.setFixedSize(20, 20)
         toggle_filters_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -73,7 +73,7 @@ class EmployeeReportsTab(QWidget):
                 padding: 0px;
             }
             QPushButton:hover {
-                background-color: #E8F4F8;
+                background-color: #ffffff;
                 border-radius: 12px;
             }
         """)
@@ -102,25 +102,25 @@ class EmployeeReportsTab(QWidget):
         year_spin.setStyleSheet(f"""
             QSpinBox {{
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: none;
                 border-radius: 4px;
                 padding: 4px 8px;
                 color: #333333;
                 font-size: 12px;
             }}
             QSpinBox:hover {{
-                border-color: #3498DB;
+                border-color: #ffd93c;
             }}
             QSpinBox::up-button,
             QSpinBox::down-button {{
                 background-color: #F8F9FA;
                 border: none;
                 width: 20px;
-                border-radius: 3px;
+                border-radius: 4px;
             }}
             QSpinBox::up-button:hover,
             QSpinBox::down-button:hover {{
-                background-color: #E8F4F8;
+                background-color: #ffffff;
             }}
             QSpinBox::up-arrow {{
                 image: url({ICONS_PATH}/arrow-up-circle.svg);
@@ -153,7 +153,7 @@ class EmployeeReportsTab(QWidget):
         filters_layout.addWidget(month_combo)
         
         # ========== ИЗМЕНЕНО: SVG иконка ==========
-        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', icon_size=14)
+        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', icon_size=12)
         refresh_btn.clicked.connect(lambda: self.load_report_data(project_type))
         filters_layout.addWidget(refresh_btn)
         # ==========================================
@@ -190,10 +190,15 @@ class EmployeeReportsTab(QWidget):
         completed_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
             }
             QTableCornerButton::section {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                background-color: #fafafa;
+                border: none;
+                border-bottom: 1px solid #e6e6e6;
+                border-right: 1px solid #f0f0f0;
+                border-top-left-radius: 8px;
             }
         """)
         completed_table.setObjectName(f'completed_table_{project_type}')
@@ -201,7 +206,11 @@ class EmployeeReportsTab(QWidget):
         completed_table.setHorizontalHeaderLabels(['Исполнитель', 'Должность', 'Количество'])
         completed_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         completed_table.setMaximumHeight(300)
-        
+
+        # Запрещаем изменение высоты строк
+        completed_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        completed_table.verticalHeader().setDefaultSectionSize(32)
+
         completed_layout.addWidget(completed_table)
         completed_group.setLayout(completed_layout)
         tables_layout.addWidget(completed_group)
@@ -214,10 +223,15 @@ class EmployeeReportsTab(QWidget):
         salary_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
             }
             QTableCornerButton::section {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                background-color: #fafafa;
+                border: none;
+                border-bottom: 1px solid #e6e6e6;
+                border-right: 1px solid #f0f0f0;
+                border-top-left-radius: 8px;
             }
         """)
         salary_table.setObjectName(f'salary_table_{project_type}')
@@ -225,7 +239,11 @@ class EmployeeReportsTab(QWidget):
         salary_table.setHorizontalHeaderLabels(['Исполнитель', 'Должность', 'Сумма'])
         salary_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         salary_table.setMaximumHeight(300)
-        
+
+        # Запрещаем изменение высоты строк
+        salary_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        salary_table.verticalHeader().setDefaultSectionSize(32)
+
         salary_layout.addWidget(salary_table)
         salary_group.setLayout(salary_layout)
         tables_layout.addWidget(salary_group)
@@ -237,11 +255,11 @@ class EmployeeReportsTab(QWidget):
         export_layout.addStretch()
         
         # ========== ИЗМЕНЕНО: SVG иконки ==========
-        export_completed_btn = IconLoader.create_icon_button('export', 'Экспорт: Выполненные заказы', icon_size=16)
+        export_completed_btn = IconLoader.create_icon_button('export', 'Экспорт: Выполненные заказы', icon_size=12)
         export_completed_btn.clicked.connect(lambda: self.export_report(project_type, 'completed'))
         export_layout.addWidget(export_completed_btn)
         
-        export_salary_btn = IconLoader.create_icon_button('export', 'Экспорт: Зарплаты', icon_size=16)
+        export_salary_btn = IconLoader.create_icon_button('export', 'Экспорт: Зарплаты', icon_size=12)
         export_salary_btn.clicked.connect(lambda: self.export_report(project_type, 'salary'))
         export_layout.addWidget(export_salary_btn)
         # =========================================
@@ -274,7 +292,7 @@ class EmployeeReportsTab(QWidget):
             month_combo = tab_widget.findChild(QComboBox, f'month_{project_type}')
             
             if not period_combo or not year_spin:
-                print(f"⚠️ Не найдены виджеты фильтров для {project_type}")
+                print(f"[WARN] Не найдены виджеты фильтров для {project_type}")
                 return
             
             period = period_combo.currentText()
@@ -282,8 +300,15 @@ class EmployeeReportsTab(QWidget):
             quarter = quarter_combo.currentText() if period == 'Квартал' else None
             month = month_combo.currentIndex() + 1 if period == 'Месяц' else None
             
-            # Получаем данные из БД
-            report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
+            # Получаем данные из API или БД
+            if self.api_client:
+                try:
+                    report_data = self.api_client.get_employee_report_data(project_type, period, year, quarter, month)
+                except Exception as e:
+                    print(f"[WARN] API ошибка get_employee_report_data: {e}")
+                    report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
+            else:
+                report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
             
             # Обновляем таблицы
             self.update_completed_table(tab_widget, project_type, report_data.get('completed', []))
@@ -378,7 +403,14 @@ class EmployeeReportsTab(QWidget):
             
             if filename:
                 # Получаем данные
-                report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
+                if self.api_client:
+                    try:
+                        report_data = self.api_client.get_employee_report_data(project_type, period, year, quarter, month)
+                    except Exception as e:
+                        print(f"[WARN] API ошибка get_employee_report_data: {e}")
+                        report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
+                else:
+                    report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
                 
                 # Генерируем PDF
                 if report_type == 'completed':

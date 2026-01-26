@@ -2,7 +2,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 
                              QGroupBox, QGridLayout, QScrollArea, QSizePolicy)
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QFont
 from PyQt5.QtSvg import QSvgWidget
 from database.db_manager import DatabaseManager
@@ -18,7 +18,8 @@ class DashboardTab(QWidget):
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.init_ui()
-        self.load_statistics()
+        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
+        QTimer.singleShot(0, self.load_statistics)
     
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -62,8 +63,8 @@ class DashboardTab(QWidget):
             'Индивидуальные проекты',
             '0',
             'resources/icons/clipboard1.svg',
-            '#E8F4F8',
-            '#3498DB'
+            '#fff4d9',
+            '#ffd93c'
         )
         grid_layout.addWidget(self.individual_orders_card, 0, 0)
 
@@ -177,9 +178,9 @@ class DashboardTab(QWidget):
             icon_widget.setFixedSize(64, 64)
             layout.addWidget(icon_widget, 0, Qt.AlignCenter)
         else:
-            # Fallback на текстовую иконку
-            icon_label = QLabel('📊')
-            icon_label.setStyleSheet('font-size: 48px; background-color: transparent;')
+            # Fallback на текстовую иконку (без эмодзи)
+            icon_label = QLabel('--')
+            icon_label.setStyleSheet(f'font-size: 32px; font-weight: bold; color: {border_color}; background-color: transparent;')
             icon_label.setAlignment(Qt.AlignCenter)
             layout.addWidget(icon_label)
         
@@ -193,7 +194,7 @@ class DashboardTab(QWidget):
         # Значение
         value_label = QLabel(value)
         value_label.setObjectName('value_label')
-        value_label.setStyleSheet('font-size: 36px; font-weight: bold; color: #2C3E50; background-color: transparent;')
+        value_label.setStyleSheet(f'font-size: 36px; font-weight: bold; color: {border_color}; background-color: transparent;')
         value_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(value_label)
         
@@ -208,9 +209,13 @@ class DashboardTab(QWidget):
     def load_statistics(self):
         """Загрузка статистики за все время"""
         try:
-            if self.api_client:
+            if self.api_client and self.api_client.is_online:
                 # Многопользовательский режим - загружаем из API
-                stats = self.calculate_api_statistics()
+                try:
+                    stats = self.calculate_api_statistics()
+                except Exception as e:
+                    print(f"[WARN] API error, using local DB: {e}")
+                    stats = self.db.get_dashboard_statistics()
             else:
                 # Локальный режим - загружаем из локальной БД
                 stats = self.db.get_dashboard_statistics()
@@ -225,12 +230,10 @@ class DashboardTab(QWidget):
             self.update_card_value('template_area', f"{stats['template_area']:,.0f} м²")
             self.update_card_value('supervision_area', f"{stats['supervision_area']:,.0f} м²")
 
-            print("✓ Статистика dashboard загружена")
+            print("Статистика dashboard загружена")
 
         except Exception as e:
-            print(f"❌ Ошибка загрузки статистики dashboard: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Ошибка загрузки статистики dashboard: {e}")
 
     def calculate_api_statistics(self):
         """Рассчитать статистику из данных API"""

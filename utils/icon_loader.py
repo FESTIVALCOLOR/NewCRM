@@ -34,37 +34,42 @@ class IconLoader:
             icon = QIcon(icon_path)
             return icon
         else:
-            print(f"⚠️ Иконка не найдена: {icon_path}")
+            print(f"[WARN] Иконка не найдена: {icon_path}")
             return QIcon()
     
     @staticmethod
     def create_icon_button(icon_name, text='', tooltip='', icon_size=18):
         """
         Создание кнопки с SVG иконкой
-        
+
         Args:
             icon_name: Имя SVG файла
             text: Текст кнопки
             tooltip: Подсказка
             icon_size: Размер иконки
-        
+
         Returns:
             QPushButton настроенная кнопка (без стилей)
         """
         from PyQt5.QtWidgets import QPushButton
-        
+
         btn = QPushButton()
-        
+
         # Загружаем иконку
         icon = IconLoader.load(icon_name)
         if icon and not icon.isNull():
             btn.setIcon(icon)
             btn.setIconSize(QSize(icon_size, icon_size))
-        
+
         # Устанавливаем текст и подсказку
         if text:
             btn.setText(text)
         if tooltip:
             btn.setToolTip(tooltip)
-        
+
+        # Если текста нет - это кнопка только с иконкой
+        # Устанавливаем свойство для QSS стилей
+        if not text:
+            btn.setProperty('icon-only', True)
+
         return btn

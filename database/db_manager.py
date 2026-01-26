@@ -7,25 +7,36 @@ from utils.password_utils import hash_password, verify_password
 from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 
+
+# Флаг для предотвращения повторных миграций
+_migrations_completed = False
+_migrations_lock = threading.Lock()
+
+
 class DatabaseManager:
     def __init__(self, db_path='interior_studio.db'):
+        global _migrations_completed
+
         self.db_path = db_path
         self.connection = None
-        
+
         # ========== КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ ==========
         # Создаем alias для совместимости со старым кодом
         self.conn = None  # Добавляем атрибут
         # =============================================
 
-        # Выполняем миграции при инициализации
-        self.run_migrations()
-        self.create_supervision_table_migration()
-        self.fix_supervision_cards_column_name()
-        self.create_supervision_history_table()
-        self.create_manager_acceptance_table()
-        self.create_payments_system_tables()
-        self.add_reassigned_field_to_payments()
-        self.add_submitted_date_to_stage_executors()
+        # Выполняем миграции только один раз за сессию
+        with _migrations_lock:
+            if not _migrations_completed:
+                self.run_migrations()
+                self.create_supervision_table_migration()
+                self.fix_supervision_cards_column_name()
+                self.create_supervision_history_table()
+                self.create_manager_acceptance_table()
+                self.create_payments_system_tables()
+                self.add_reassigned_field_to_payments()
+                self.add_submitted_date_to_stage_executors()
+                _migrations_completed = True
 
     def run_migrations(self):
         """Запуск миграций базы данных"""
@@ -326,7 +337,7 @@ class DatabaseManager:
             ('ПЕТРОВИЧ', '#FFA500'),
             ('ФЕСТИВАЛЬ', '#FF69B4')
             ''')
-            print("✓ Агенты по умолчанию добавлены с цветами")
+            print("Агенты по умолчанию добавлены с цветами")
 
         conn.commit()
         self.close()
@@ -443,7 +454,7 @@ class DatabaseManager:
         self.close()
         
         # ========== ОТЛАДКА ==========
-        print(f"🔍 Поиск сотрудников с должностью '{position}':")
+        print(f"Поиск сотрудников с должностью '{position}':")
         for emp in employees:
             pos_display = emp['position']
             if emp.get('secondary_position'):
@@ -693,17 +704,25 @@ class DatabaseManager:
         contracts = [dict(row) for row in cursor.fetchall()]
         self.close()
         return contracts
-    
-    def check_contract_number_exists(self, contract_number):
-        """Проверка существования номера договора"""
+
+    def check_contract_number_exists(self, contract_number, exclude_id=None):
+        """Проверка существования номера договора
+
+        Args:
+            contract_number: Номер договора для проверки
+            exclude_id: ID договора, который нужно исключить из проверки (для редактирования)
+        """
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            
-            cursor.execute('SELECT COUNT(*) as count FROM contracts WHERE contract_number = ?', (contract_number,))
+
+            if exclude_id is not None:
+                cursor.execute('SELECT COUNT(*) as count FROM contracts WHERE contract_number = ? AND id != ?', (contract_number, exclude_id))
+            else:
+                cursor.execute('SELECT COUNT(*) as count FROM contracts WHERE contract_number = ?', (contract_number,))
             exists = cursor.fetchone()['count'] > 0
             self.close()
-            
+
             return exists
         except Exception as e:
             print(f"Ошибка проверки номера договора: {e}")
@@ -1704,14 +1723,107 @@ class DatabaseManager:
         """Обновление сотрудника"""
         conn = self.connect()
         cursor = conn.cursor()
-        
+
         set_clause = ', '.join([f'{key} = ?' for key in employee_data.keys()])
         values = list(employee_data.values()) + [employee_id]
-        
+
         cursor.execute(f'UPDATE employees SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', values)
         conn.commit()
         self.close()
-    
+
+    def get_employee_by_id(self, employee_id):
+        """Получение сотрудника по ID"""
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM employees WHERE id = ?', (employee_id,))
+        row = cursor.fetchone()
+        self.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def delete_employee(self, employee_id):
+        """Удаление сотрудника"""
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('DELETE FROM employees WHERE id = ?', (employee_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Ошибка удаления сотрудника: {e}")
+            return False
+        finally:
+            self.close()
+
+    def cache_employee_password(self, employee_id: int, password: str) -> bool:
+        """
+        Кеширование пароля сотрудника для offline-аутентификации.
+        Вызывается после успешного API входа.
+
+        Args:
+            employee_id: ID сотрудника
+            password: Пароль в открытом виде (будет захеширован)
+
+        Returns:
+            True если успешно, False при ошибке
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Хешируем пароль
+            password_hash = hash_password(password)
+
+            # Обновляем пароль в локальной БД
+            cursor.execute(
+                'UPDATE employees SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (password_hash, employee_id)
+            )
+            conn.commit()
+            self.close()
+
+            print(f"[DB] Пароль сотрудника ID={employee_id} закеширован для offline-входа")
+            return True
+
+        except Exception as e:
+            print(f"[DB ERROR] Ошибка кеширования пароля: {e}")
+            return False
+
+    def get_employee_for_offline_login(self, login: str) -> dict:
+        """
+        Получение данных сотрудника для offline-аутентификации.
+        Возвращает сотрудника только если у него есть закешированный пароль.
+
+        Args:
+            login: Логин сотрудника
+
+        Returns:
+            Словарь с данными сотрудника или None
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT * FROM employees
+                WHERE login = ? AND status = 'активный' AND password IS NOT NULL AND password != ''
+            ''', (login,))
+
+            employee = cursor.fetchone()
+            self.close()
+
+            if employee:
+                return dict(employee)
+            return None
+
+        except Exception as e:
+            print(f"[DB ERROR] Ошибка получения сотрудника для offline-входа: {e}")
+            return None
+
     def check_login_exists(self, login):
         """Проверка существования логина"""
         conn = self.connect()
@@ -3000,26 +3112,11 @@ class DatabaseManager:
             self.close()
             
             return dict(row) if row else None
-            
+
         except Exception as e:
             print(f"[ERROR] Ошибка получения данных карточки: {e}")
             return None
-            
-    def check_contract_number_exists(self, contract_number):
-        """Проверка существования номера договора"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute('SELECT COUNT(*) as count FROM contracts WHERE contract_number = ?', (contract_number,))
-            exists = cursor.fetchone()['count'] > 0
-            self.close()
-            
-            return exists
-        except Exception as e:
-            print(f"Ошибка проверки номера договора: {e}")
-            return False
-        
+
     def get_dashboard_statistics(self):
         """Получение общей статистики для Dashboard за все время"""
         try:
@@ -4372,5 +4469,586 @@ class DatabaseManager:
         except Exception as e:
             print(f"[ERROR] Ошибка удаления шаблона проекта: {e}")
             return False
+
+    # ========== МЕТОДЫ ДЛЯ ДАШБОРДОВ ==========
+
+    def get_clients_dashboard_stats(self, year=None, agent_type=None):
+        """Статистика для дашборда страницы Клиенты
+
+        Returns:
+            dict: {
+                'total_clients': int,
+                'total_individual': int,
+                'total_legal': int,
+                'clients_by_year': int,
+                'agent_clients_total': int,
+                'agent_clients_by_year': int
+            }
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # 1. Всего клиентов
+            cursor.execute('SELECT COUNT(*) FROM clients')
+            total_clients = cursor.fetchone()[0]
+
+            # 2. Всего физлиц
+            cursor.execute("SELECT COUNT(*) FROM clients WHERE client_type = 'Физическое лицо'")
+            total_individual = cursor.fetchone()[0]
+
+            # 3. Всего юрлиц
+            cursor.execute("SELECT COUNT(*) FROM clients WHERE client_type = 'Юридическое лицо'")
+            total_legal = cursor.fetchone()[0]
+
+            # 4. Клиенты за год (через договоры)
+            if year:
+                cursor.execute('''
+                    SELECT COUNT(DISTINCT c.client_id)
+                    FROM contracts c
+                    WHERE strftime('%Y', c.contract_date) = ?
+                ''', (str(year),))
+                clients_by_year = cursor.fetchone()[0]
+            else:
+                clients_by_year = 0
+
+            # 5. Клиенты агента (всего)
+            if agent_type:
+                cursor.execute('''
+                    SELECT COUNT(DISTINCT c.client_id)
+                    FROM contracts c
+                    WHERE c.agent_type = ?
+                ''', (agent_type,))
+                agent_clients_total = cursor.fetchone()[0]
+            else:
+                agent_clients_total = 0
+
+            # 6. Клиенты агента за год
+            if agent_type and year:
+                cursor.execute('''
+                    SELECT COUNT(DISTINCT c.client_id)
+                    FROM contracts c
+                    WHERE c.agent_type = ? AND strftime('%Y', c.contract_date) = ?
+                ''', (agent_type, str(year)))
+                agent_clients_by_year = cursor.fetchone()[0]
+            else:
+                agent_clients_by_year = 0
+
+            self.close()
+
+            return {
+                'total_clients': total_clients,
+                'total_individual': total_individual,
+                'total_legal': total_legal,
+                'clients_by_year': clients_by_year,
+                'agent_clients_total': agent_clients_total,
+                'agent_clients_by_year': agent_clients_by_year
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики клиентов: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'total_clients': 0,
+                'total_individual': 0,
+                'total_legal': 0,
+                'clients_by_year': 0,
+                'agent_clients_total': 0,
+                'agent_clients_by_year': 0
+            }
+
+    def get_contracts_dashboard_stats(self, year=None, agent_type=None):
+        """Статистика для дашборда страницы Договора
+
+        Returns:
+            dict: {
+                'individual_orders': int,
+                'individual_area': float,
+                'template_orders': int,
+                'template_area': float,
+                'agent_orders_by_year': int,
+                'agent_area_by_year': float
+            }
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # 1-2. Индивидуальные проекты
+            cursor.execute('''
+                SELECT COUNT(*), COALESCE(SUM(area), 0)
+                FROM contracts
+                WHERE project_type = 'Индивидуальный'
+            ''')
+            row = cursor.fetchone()
+            individual_orders = row[0]
+            individual_area = row[1]
+
+            # 3-4. Шаблонные проекты
+            cursor.execute('''
+                SELECT COUNT(*), COALESCE(SUM(area), 0)
+                FROM contracts
+                WHERE project_type = 'Шаблонный'
+            ''')
+            row = cursor.fetchone()
+            template_orders = row[0]
+            template_area = row[1]
+
+            # 5-6. Заказы агента за год
+            if agent_type and year:
+                cursor.execute('''
+                    SELECT COUNT(*), COALESCE(SUM(area), 0)
+                    FROM contracts
+                    WHERE agent_type = ? AND strftime('%Y', contract_date) = ?
+                ''', (agent_type, str(year)))
+                row = cursor.fetchone()
+                agent_orders_by_year = row[0]
+                agent_area_by_year = row[1]
+            else:
+                agent_orders_by_year = 0
+                agent_area_by_year = 0
+
+            self.close()
+
+            return {
+                'individual_orders': individual_orders,
+                'individual_area': individual_area,
+                'template_orders': template_orders,
+                'template_area': template_area,
+                'agent_orders_by_year': agent_orders_by_year,
+                'agent_area_by_year': agent_area_by_year
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики договоров: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'individual_orders': 0,
+                'individual_area': 0,
+                'template_orders': 0,
+                'template_area': 0,
+                'agent_orders_by_year': 0,
+                'agent_area_by_year': 0
+            }
+
+    def get_crm_dashboard_stats(self, project_type, agent_type=None):
+        """Статистика для дашборда СРМ (Индивидуальные/Шаблонные/Надзор)
+
+        Args:
+            project_type: 'Индивидуальный', 'Шаблонный', или 'Авторский надзор'
+            agent_type: Тип агента для фильтрации
+
+        Returns:
+            dict: {
+                'total_orders': int,
+                'total_area': float,
+                'active_orders': int,
+                'archive_orders': int,
+                'agent_active_orders': int,
+                'agent_archive_orders': int
+            }
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Определяем условия для фильтрации
+            # Используем единую таблицу crm_cards для Индивидуальных и Шаблонных
+            # и crm_supervision для Авторского надзора
+            if project_type == 'Авторский надзор':
+                crm_table = 'supervision_cards'
+                contract_condition = "c.status = 'АВТОРСКИЙ НАДЗОР'"
+                # Для надзора используем supervision_cards
+                crm_join_condition = "crm.contract_id = c.id"
+            elif project_type == 'Индивидуальный':
+                crm_table = 'crm_cards'
+                contract_condition = "c.project_type = 'Индивидуальный'"
+                crm_join_condition = "crm.contract_id = c.id AND c.project_type = 'Индивидуальный'"
+            else:  # Шаблонный
+                crm_table = 'crm_cards'
+                contract_condition = "c.project_type = 'Шаблонный'"
+                crm_join_condition = "crm.contract_id = c.id AND c.project_type = 'Шаблонный'"
+
+            # 1-2. Всего заказов и площадь (из договоров)
+            cursor.execute(f'''
+                SELECT COUNT(*), COALESCE(SUM(c.area), 0)
+                FROM contracts c
+                WHERE {contract_condition}
+            ''')
+            row = cursor.fetchone()
+            total_orders = row[0]
+            total_area = row[1]
+
+            # 3. Активные заказы в СРМ (карточки в crm_cards/supervision_cards)
+            if project_type == 'Авторский надзор':
+                cursor.execute(f'SELECT COUNT(*) FROM {crm_table}')
+            else:
+                # Для Индивидуальных/Шаблонных фильтруем по project_type через JOIN
+                cursor.execute(f'''
+                    SELECT COUNT(*)
+                    FROM {crm_table} crm
+                    JOIN contracts c ON {crm_join_condition}
+                ''')
+            active_orders = cursor.fetchone()[0]
+
+            # 4. Архивные заказы - считаем договора без активных карточек в CRM
+            # (договора которые были завершены)
+            if project_type == 'Авторский надзор':
+                cursor.execute(f'''
+                    SELECT COUNT(*)
+                    FROM contracts c
+                    WHERE {contract_condition}
+                    AND c.id NOT IN (SELECT contract_id FROM {crm_table})
+                ''')
+            else:
+                cursor.execute(f'''
+                    SELECT COUNT(*)
+                    FROM contracts c
+                    WHERE {contract_condition}
+                    AND c.id NOT IN (SELECT contract_id FROM {crm_table})
+                ''')
+            archive_orders = cursor.fetchone()[0]
+
+            # 5. Активные заказы агента
+            agent_active_orders = 0
+            if agent_type:
+                if project_type == 'Авторский надзор':
+                    cursor.execute(f'''
+                        SELECT COUNT(*)
+                        FROM {crm_table} crm
+                        JOIN contracts c ON crm.contract_id = c.id
+                        WHERE c.agent_type = ?
+                    ''', (agent_type,))
+                else:
+                    cursor.execute(f'''
+                        SELECT COUNT(*)
+                        FROM {crm_table} crm
+                        JOIN contracts c ON crm.contract_id = c.id
+                        WHERE c.project_type = ? AND c.agent_type = ?
+                    ''', (project_type, agent_type))
+                agent_active_orders = cursor.fetchone()[0]
+
+            # 6. Архивные заказы агента
+            agent_archive_orders = 0
+            if agent_type:
+                if project_type == 'Авторский надзор':
+                    cursor.execute(f'''
+                        SELECT COUNT(*)
+                        FROM contracts c
+                        WHERE {contract_condition}
+                        AND c.agent_type = ?
+                        AND c.id NOT IN (SELECT contract_id FROM {crm_table})
+                    ''', (agent_type,))
+                else:
+                    cursor.execute(f'''
+                        SELECT COUNT(*)
+                        FROM contracts c
+                        WHERE c.project_type = ?
+                        AND c.agent_type = ?
+                        AND c.id NOT IN (SELECT contract_id FROM {crm_table})
+                    ''', (project_type, agent_type))
+                agent_archive_orders = cursor.fetchone()[0]
+
+            self.close()
+
+            return {
+                'total_orders': total_orders,
+                'total_area': total_area,
+                'active_orders': active_orders,
+                'archive_orders': archive_orders,
+                'agent_active_orders': agent_active_orders,
+                'agent_archive_orders': agent_archive_orders
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики СРМ: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'total_orders': 0,
+                'total_area': 0,
+                'active_orders': 0,
+                'archive_orders': 0,
+                'agent_active_orders': 0,
+                'agent_archive_orders': 0
+            }
+
+    def get_employees_dashboard_stats(self):
+        """Статистика для дашборда страницы Сотрудники
+
+        Returns:
+            dict: {
+                'active_employees': int,
+                'reserve_employees': int,
+                'active_admin': int,
+                'active_project': int,
+                'active_execution': int,
+                'nearest_birthday': str
+            }
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # 1. Активные сотрудники (используем LIKE для надёжности)
+            cursor.execute("SELECT COUNT(*) FROM employees WHERE status LIKE '%ктивн%'")
+            active_employees = cursor.fetchone()[0]
+
+            # 2. Сотрудники в резерве
+            cursor.execute("SELECT COUNT(*) FROM employees WHERE status LIKE '%езерв%'")
+            reserve_employees = cursor.fetchone()[0]
+
+            # 3. Активный руководящий состав (административный отдел)
+            cursor.execute("""
+                SELECT COUNT(*) FROM employees
+                WHERE status LIKE '%ктивн%' AND department LIKE '%дминистр%'
+            """)
+            active_admin = cursor.fetchone()[0]
+
+            # 4. Активный проектный отдел
+            cursor.execute("""
+                SELECT COUNT(*) FROM employees
+                WHERE status LIKE '%ктивн%' AND department LIKE '%роектн%'
+            """)
+            active_project = cursor.fetchone()[0]
+
+            # 5. Активный исполнительный отдел
+            cursor.execute("""
+                SELECT COUNT(*) FROM employees
+                WHERE status LIKE '%ктивн%' AND department LIKE '%сполнит%'
+            """)
+            active_execution = cursor.fetchone()[0]
+
+            # 6. Ближайший день рождения
+            from datetime import datetime, date
+            today = date.today()
+
+            cursor.execute("""
+                SELECT full_name, birth_date FROM employees
+                WHERE birth_date IS NOT NULL AND birth_date != ''
+            """)
+            employees = cursor.fetchall()
+
+            nearest_birthday = "Нет данных"
+            min_days = 366
+            birthday_names = []
+
+            for emp in employees:
+                try:
+                    birth_date = datetime.strptime(emp['birth_date'], '%Y-%m-%d').date()
+                    # Переносим день рождения на текущий год
+                    this_year_birthday = birth_date.replace(year=today.year)
+
+                    # Если день рождения уже прошел, берем следующий год
+                    if this_year_birthday < today:
+                        this_year_birthday = birth_date.replace(year=today.year + 1)
+
+                    days_until = (this_year_birthday - today).days
+
+                    if days_until < min_days:
+                        min_days = days_until
+                        birthday_names = [emp['full_name']]
+                    elif days_until == min_days:
+                        birthday_names.append(emp['full_name'])
+                except:
+                    continue
+
+            if birthday_names:
+                nearest_birthday = ", ".join(birthday_names)
+
+            self.close()
+
+            # Подсчитываем дни рождения в ближайшие 30 дней
+            upcoming_birthdays_count = 0
+            for emp in employees:
+                try:
+                    birth_date = datetime.strptime(emp['birth_date'], '%Y-%m-%d').date()
+                    this_year_birthday = birth_date.replace(year=today.year)
+                    if this_year_birthday < today:
+                        this_year_birthday = birth_date.replace(year=today.year + 1)
+                    days_until = (this_year_birthday - today).days
+                    if 0 <= days_until <= 30:
+                        upcoming_birthdays_count += 1
+                except:
+                    continue
+
+            return {
+                'active_employees': active_employees,
+                'reserve_employees': reserve_employees,
+                'active_admin': active_admin,
+                'active_project': active_project,
+                'active_execution': active_execution,
+                'nearest_birthday': nearest_birthday,
+                # Дополнительные ключи для EmployeeReportsDashboard
+                'active_management': active_admin,
+                'active_projects_dept': active_project,
+                'active_execution_dept': active_execution,
+                'upcoming_birthdays': upcoming_birthdays_count
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики сотрудников: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'active_employees': 0,
+                'reserve_employees': 0,
+                'active_admin': 0,
+                'active_project': 0,
+                'active_execution': 0,
+                'nearest_birthday': 'Нет данных',
+                # Дополнительные ключи для EmployeeReportsDashboard
+                'active_management': 0,
+                'active_projects_dept': 0,
+                'active_execution_dept': 0,
+                'upcoming_birthdays': 0
+            }
+
+    def get_salaries_dashboard_stats(self, year=None, month=None):
+        """Статистика для дашборда страницы Зарплаты
+
+        Args:
+            year: Год для фильтрации
+            month: Месяц для фильтрации (1-12)
+
+        Returns:
+            dict: {
+                'total_paid': float,
+                'paid_by_year': float,
+                'paid_by_month': float,
+                'individual_by_year': float,
+                'template_by_year': float,
+                'supervision_by_year': float
+            }
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # 1. Всего выплачено (за все время)
+            cursor.execute("""
+                SELECT COALESCE(SUM(final_amount), 0)
+                FROM payments
+                WHERE payment_status = 'Оплачено'
+            """)
+            total_paid = cursor.fetchone()[0]
+
+            # 2. Выплачено за год
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(final_amount), 0)
+                    FROM payments
+                    WHERE payment_status = 'Оплачено'
+                    AND report_month LIKE ?
+                """, (f'{year}-%',))
+                paid_by_year = cursor.fetchone()[0]
+            else:
+                paid_by_year = 0
+
+            # 3. Выплачено за месяц
+            if year and month:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(final_amount), 0)
+                    FROM payments
+                    WHERE payment_status = 'Оплачено'
+                    AND report_month = ?
+                """, (f'{year}-{month:02d}',))
+                paid_by_month = cursor.fetchone()[0]
+            else:
+                paid_by_month = 0
+
+            # 4. Выплачено по индивидуальным за год
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'Оплачено'
+                    AND p.report_month LIKE ?
+                    AND c.project_type = 'Индивидуальный'
+                """, (f'{year}-%',))
+                individual_by_year = cursor.fetchone()[0]
+            else:
+                individual_by_year = 0
+
+            # 5. Выплачено по шаблонным за год
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'Оплачено'
+                    AND p.report_month LIKE ?
+                    AND c.project_type = 'Шаблонный'
+                """, (f'{year}-%',))
+                template_by_year = cursor.fetchone()[0]
+            else:
+                template_by_year = 0
+
+            # 6. Выплачено по авторским надзорам за год
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'Оплачено'
+                    AND p.report_month LIKE ?
+                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                """, (f'{year}-%',))
+                supervision_by_year = cursor.fetchone()[0]
+            else:
+                supervision_by_year = 0
+
+            self.close()
+
+            return {
+                'total_paid': total_paid,
+                'paid_by_year': paid_by_year,
+                'paid_by_month': paid_by_month,
+                'individual_by_year': individual_by_year,
+                'template_by_year': template_by_year,
+                'supervision_by_year': supervision_by_year
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики зарплат: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'total_paid': 0,
+                'paid_by_year': 0,
+                'paid_by_month': 0,
+                'individual_by_year': 0,
+                'template_by_year': 0,
+                'supervision_by_year': 0
+            }
+
+    def get_agent_types(self):
+        """Получить список всех типов агентов из договоров
+
+        Returns:
+            list: Список уникальных типов агентов
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT DISTINCT agent_type
+                FROM contracts
+                WHERE agent_type IS NOT NULL AND agent_type != ''
+                ORDER BY agent_type
+            """)
+
+            agents = [row[0] for row in cursor.fetchall()]
+            self.close()
+
+            return agents
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения типов агентов: {e}")
+            return []
 
 

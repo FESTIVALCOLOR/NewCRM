@@ -13,10 +13,11 @@ from ui.custom_combobox import CustomComboBox
 
 class RatesDialog(QDialog):
     """Диалог управления тарифами (только для Руководителя студии)"""
-    
-    def __init__(self, parent):
+
+    def __init__(self, parent, api_client=None):
         super().__init__(parent)
         self.db = DatabaseManager()
+        self.api_client = api_client
         
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -75,6 +76,53 @@ class RatesDialog(QDialog):
         
         # Вкладки
         tabs = QTabWidget()
+
+        # Стили для таблиц и полей ввода
+        tabs.setStyleSheet("""
+            /* Таблицы */
+            QTableWidget {
+                background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
+                gridline-color: #e0e0e0;
+            }
+            QTableWidget::item {
+                padding: 4px;
+            }
+            QHeaderView::section {
+                background-color: #f5f5f5;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid #d9d9d9;
+                font-weight: bold;
+            }
+
+            /* Поля ввода цен (QDoubleSpinBox) */
+            QDoubleSpinBox {
+                padding: 6px 8px;
+                max-height: 28px;
+                min-height: 28px;
+                border: 1px solid #d9d9d9;
+                border-radius: 4px;
+                background-color: #FFFFFF;
+            }
+            QDoubleSpinBox:hover {
+                border-color: #c0c0c0;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #ffd93c;
+            }
+
+            /* Кнопки стрелок в QDoubleSpinBox */
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+                width: 16px;
+                border: none;
+                background-color: transparent;
+            }
+            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {
+                background-color: #f0f0f0;
+            }
+        """)
         
         # 1. Индивидуальные проекты
         individual_widget = self.create_individual_rates_tab()
@@ -96,7 +144,21 @@ class RatesDialog(QDialog):
         
         # Кнопка закрытия
         close_btn = QPushButton('Закрыть')
-        close_btn.setStyleSheet('padding: 10px 30px; font-weight: bold;')
+        close_btn.setFixedHeight(36)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                border: none;
+                font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
+        """)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
         
@@ -125,7 +187,7 @@ class RatesDialog(QDialog):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
         # ========== УВЕЛИЧЕННАЯ ВЫСОТА СТРОК ==========
-        table.verticalHeader().setDefaultSectionSize(30)  # 50px вместо 30px
+        table.verticalHeader().setDefaultSectionSize(36)  # Стандартная высота строк
         # ==============================================
         
         roles_stages = [
@@ -164,17 +226,20 @@ class RatesDialog(QDialog):
             
             # ========== КНОПКА "СОХРАНИТЬ" (КОМПАКТНАЯ) ==========
             save_btn = QPushButton(' Сохранить ')
+            save_btn.setFixedHeight(28)
             save_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #27AE60;
-                    color: white;
-                    padding: 5px 8px;
+                    background-color: #ffd93c;
+                    color: #333333;
+                    padding: 0px 8px;
                     border-radius: 3px;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-weight: bold;
+                    max-height: 28px;
+                    min-height: 28px;
                 }
-                QPushButton:hover { background-color: #229954; }
-                QPushButton:pressed { background-color: #1E8449; }
+                QPushButton:hover { background-color: #f0c929; }
+                QPushButton:pressed { background-color: #e0b919; }
             """)
             save_btn.clicked.connect(
                 lambda checked, r=role, s=stage, p=price_spin: 
@@ -221,7 +286,7 @@ class RatesDialog(QDialog):
             'Площадь от (м²)', 'Площадь до (м²)', 'Стоимость (₽)', 'Действия'
         ])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        table.verticalHeader().setDefaultSectionSize(30)
+        table.verticalHeader().setDefaultSectionSize(36)
         table.setRowCount(6)
         
         layout.addWidget(table)
@@ -256,7 +321,7 @@ class RatesDialog(QDialog):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
         # ========== УВЕЛИЧЕННАЯ ВЫСОТА ==========
-        table.verticalHeader().setDefaultSectionSize(30)
+        table.verticalHeader().setDefaultSectionSize(36)
         # ========================================
         
         stages = [
@@ -332,7 +397,7 @@ class RatesDialog(QDialog):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
         # ========== УВЕЛИЧЕННАЯ ВЫСОТА ==========
-        table.verticalHeader().setDefaultSectionSize(30)
+        table.verticalHeader().setDefaultSectionSize(36)
         # ========================================
         
         table.setRowCount(len(CITIES))
@@ -369,14 +434,124 @@ class RatesDialog(QDialog):
         
         widget.setLayout(layout)
         return widget
-    
+
+    def _load_rates_from_data(self, rates_data: list):
+        """Загрузка тарифов из данных API"""
+        try:
+            # === 1. ИНДИВИДУАЛЬНЫЕ ===
+            print("\n1️⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов из API:")
+            table_individual = self.findChild(QTableWidget, 'individual_rates_table')
+            individual_count = 0
+
+            if table_individual:
+                for row in range(table_individual.rowCount()):
+                    role_item = table_individual.item(row, 0)
+                    stage_item = table_individual.item(row, 1)
+
+                    if not role_item:
+                        continue
+
+                    role = role_item.text()
+                    stage = stage_item.text() if stage_item and stage_item.text() != '-' else None
+
+                    # Ищем тариф в данных API
+                    for rate in rates_data:
+                        if (rate.get('project_type') == 'Индивидуальный' and
+                            rate.get('role') == role):
+                            rate_stage = rate.get('stage_name')
+                            if (stage is None and rate_stage is None) or (stage == rate_stage):
+                                rate_value = rate.get('rate_per_m2', 0)
+                                if rate_value:
+                                    spin = table_individual.cellWidget(row, 2)
+                                    if spin:
+                                        spin.blockSignals(True)
+                                        spin.setValue(float(rate_value))
+                                        spin.blockSignals(False)
+                                        individual_count += 1
+                                break
+
+            print(f"   Итого загружено: {individual_count} тарифов")
+
+            # === 2. ЗАМЕРЩИКИ ===
+            print("\n2️⃣ Загрузка тарифов ЗАМЕРЩИКОВ из API:")
+            table_surveyor = self.findChild(QTableWidget, 'surveyor_rates_table')
+            surveyor_count = 0
+
+            if table_surveyor:
+                for rate in rates_data:
+                    if rate.get('role') == 'Замерщик' and rate.get('city'):
+                        city = rate.get('city')
+                        price = rate.get('surveyor_price', 0)
+
+                        for row in range(table_surveyor.rowCount()):
+                            city_item = table_surveyor.item(row, 0)
+                            if city_item and city_item.text() == city:
+                                spin = table_surveyor.cellWidget(row, 1)
+                                if spin and price:
+                                    spin.blockSignals(True)
+                                    spin.setValue(float(price))
+                                    spin.blockSignals(False)
+                                    surveyor_count += 1
+                                break
+
+            print(f"   Итого загружено: {surveyor_count} тарифов")
+
+            # === 3. АВТОРСКИЙ НАДЗОР ===
+            print("\n3️⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА из API:")
+            supervision_count = 0
+
+            for rate in rates_data:
+                if rate.get('project_type') == 'Авторский надзор':
+                    executor_rate = rate.get('executor_rate')
+                    manager_rate = rate.get('manager_rate')
+
+                    if executor_rate:
+                        spin = self.findChild(QDoubleSpinBox, 'supervision_executor_rate')
+                        if spin:
+                            spin.blockSignals(True)
+                            spin.setValue(float(executor_rate))
+                            spin.blockSignals(False)
+                            supervision_count += 1
+
+                    if manager_rate:
+                        spin = self.findChild(QDoubleSpinBox, 'supervision_manager_rate')
+                        if spin:
+                            spin.blockSignals(True)
+                            spin.setValue(float(manager_rate))
+                            spin.blockSignals(False)
+                            supervision_count += 1
+                    break
+
+            print(f"   Итого загружено: {supervision_count} значений")
+
+            # === 4. ШАБЛОННЫЕ ===
+            print("\n4️⃣ Загрузка ШАБЛОННЫХ диапазонов:")
+            print("   → Вызов load_template_ranges() для первой роли...")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(100, self.load_template_ranges)
+
+            print("="*60 + "\n")
+
+        except Exception as e:
+            print(f"❌ Ошибка загрузки тарифов из API: {e}")
+            import traceback
+            traceback.print_exc()
+
     def load_all_rates(self):
         """Загрузка всех тарифов из БД"""
         try:
             print("\n" + "="*60)
-            print("📥 ЗАГРУЗКА ТАРИФОВ ИЗ БД...")
+            print("[RATES] ЗАГРУЗКА ТАРИФОВ...")
             print("="*60)
-            
+
+            if self.api_client:
+                try:
+                    rates_data = self.api_client.get_rates()
+                    self._load_rates_from_data(rates_data)
+                    return
+                except Exception as e:
+                    print(f"[WARN] Ошибка API загрузки тарифов: {e}, fallback на локальную БД")
+
             conn = self.db.connect()
             cursor = conn.cursor()
             
@@ -418,7 +593,7 @@ class RatesDialog(QDialog):
                             spin.blockSignals(False)
                             
                             stage_text = f" ({stage})" if stage else ""
-                            print(f"   ✓ {role}{stage_text}: {rate['rate_per_m2']:.2f} ₽/м²")
+                            print(f"   {role}{stage_text}: {rate['rate_per_m2']:.2f} ₽/м²")
                             loaded_count += 1
                 
                 print(f"   Итого загружено: {loaded_count} тарифов")
@@ -451,7 +626,7 @@ class RatesDialog(QDialog):
                             spin.setValue(rate['surveyor_price'])
                             spin.blockSignals(False)
                             
-                            print(f"   ✓ {city}: {rate['surveyor_price']:.2f} ₽")
+                            print(f"   {city}: {rate['surveyor_price']:.2f} ₽")
                             loaded_count += 1
                 
                 print(f"   Итого загружено: {loaded_count} тарифов")
@@ -506,7 +681,7 @@ class RatesDialog(QDialog):
                     if rate_dan or rate_manager:
                         dan_price = rate_dan['rate_per_m2'] if rate_dan else 0
                         mgr_price = rate_manager['rate_per_m2'] if rate_manager else 0
-                        print(f"   ✓ {stage}: ДАН={dan_price:.2f}, Менеджер={mgr_price:.2f} ₽/м²")
+                        print(f"   {stage}: ДАН={dan_price:.2f}, Менеджер={mgr_price:.2f} ₽/м²")
                 
                 print(f"   Итого загружено: {loaded_count} значений")
             
@@ -533,33 +708,48 @@ class RatesDialog(QDialog):
         """Загрузка диапазонов для выбранной роли (Шаблонные)"""
         try:
             role = self.template_role_combo.currentText()
-            
+
             print(f"[RATES] Загрузка диапазонов для роли: {role}")
-            
+
             # Получаем таблицу
             table = self.findChild(QTableWidget, 'template_rates_table')
-            
+
             if not table:
-                print("⚠️ Таблица template_rates_table не найдена")
+                print("[WARN] Таблица template_rates_table не найдена")
                 return
-            
-            # ========== УСТАНАВЛИВАЕМ ВЫСОТУ СТРОК ==========
-            table.verticalHeader().setDefaultSectionSize(30)
-            # ================================================
-            
-            # Получаем тарифы из БД
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-            SELECT area_from, area_to, fixed_price
-            FROM rates
-            WHERE project_type = 'Шаблонный' AND role = ?
-            ORDER BY area_from ASC
-            ''', (role,))
-            
-            ranges = cursor.fetchall()
-            self.db.close()
+
+            # УСТАНАВЛИВАЕМ ВЫСОТУ СТРОК
+            table.verticalHeader().setDefaultSectionSize(36)
+
+            # Получаем тарифы из БД или API
+            if self.api_client:
+                try:
+                    ranges = self.api_client.get_template_rates(role)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API загрузки диапазонов: {e}")
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                    SELECT area_from, area_to, fixed_price
+                    FROM rates
+                    WHERE project_type = 'Шаблонный' AND role = ?
+                    ORDER BY area_from ASC
+                    ''', (role,))
+                    ranges = cursor.fetchall()
+                    self.db.close()
+            else:
+                conn = self.db.connect()
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                SELECT area_from, area_to, fixed_price
+                FROM rates
+                WHERE project_type = 'Шаблонный' AND role = ?
+                ORDER BY area_from ASC
+                ''', (role,))
+
+                ranges = cursor.fetchall()
+                self.db.close()
             
             # Очищаем таблицу
             table.setRowCount(0)
@@ -658,7 +848,7 @@ class RatesDialog(QDialog):
                     )
                     table.setCellWidget(row, 3, save_btn)
             
-            print(f"✓ Загружено диапазонов для {role}: {len(ranges)}")
+            print(f"Загружено диапазонов для {role}: {len(ranges)}")
             
         except Exception as e:
             print(f"❌ Ошибка загрузки диапазонов: {e}")
@@ -704,7 +894,7 @@ class RatesDialog(QDialog):
             )
             table.setCellWidget(row, 3, save_btn)
             
-            print(f"✓ Добавлена новая строка диапазона")
+            print(f"Добавлена новая строка диапазона")
             
         except Exception as e:
             print(f"❌ Ошибка добавления диапазона: {e}")
@@ -712,6 +902,22 @@ class RatesDialog(QDialog):
     def save_template_range(self, role, area_from, area_to, price):
         """Сохранение диапазона для шаблонного проекта"""
         try:
+            if self.api_client:
+                try:
+                    self.api_client.save_template_rate(role, area_from, area_to, price)
+                    print(f"[API] Сохранен диапазон: {role} {area_from}-{area_to} м² = {price:.2f} рублей")
+                    CustomMessageBox(
+                        self,
+                        'Успех',
+                        f'Тариф сохранен:\n\n'
+                        f'{role}\n'
+                        f'{area_from:.0f} - {area_to:.0f} м² = {price:,.2f} рублей',
+                        'success'
+                    ).exec_()
+                    return
+                except Exception as e:
+                    print(f"[WARN] Ошибка API сохранения: {e}, fallback на локальную БД")
+
             conn = self.db.connect()
             cursor = conn.cursor()
             
@@ -734,7 +940,7 @@ class RatesDialog(QDialog):
                 WHERE id = ?
                 ''', (price, existing['id']))
                 
-                print(f"✓ Обновлен диапазон: {role} {area_from}-{area_to} м² = {price:.2f} ₽")
+                print(f"Обновлен диапазон: {role} {area_from}-{area_to} м² = {price:.2f} ₽")
             else:
                 # Создаем новый
                 cursor.execute('''
@@ -743,7 +949,7 @@ class RatesDialog(QDialog):
                 VALUES ('Шаблонный', ?, ?, ?, ?)
                 ''', (role, area_from, area_to, price))
                 
-                print(f"✓ Создан диапазон: {role} {area_from}-{area_to} м² = {price:.2f} ₽")
+                print(f"Создан диапазон: {role} {area_from}-{area_to} м² = {price:.2f} ₽")
             
             conn.commit()
             self.db.close()
@@ -766,14 +972,31 @@ class RatesDialog(QDialog):
     def reset_rate(self, role):
         """Сброс тарифа (удаление из БД)"""
         reply = CustomMessageBox(
-            self, 
-            'Подтверждение', 
+            self,
+            'Подтверждение',
             f'Удалить тариф для роли "{role}"?',
             'question'
         ).exec_()
-        
+
         if reply == QDialog.Accepted:
             try:
+                if self.api_client:
+                    try:
+                        self.api_client.delete_individual_rate(role)
+                        # Обнуляем поле в таблице
+                        table = self.findChild(QTableWidget, 'individual_rates_table')
+                        for row in range(table.rowCount()):
+                            role_item = table.item(row, 0)
+                            if role_item and role_item.text() == role:
+                                spin = table.cellWidget(row, 1)
+                                if spin:
+                                    spin.setValue(0)
+                                break
+                        CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
+                        return
+                    except Exception as e:
+                        print(f"[WARN] Ошибка API удаления: {e}, fallback на локальную БД")
+
                 conn = self.db.connect()
                 cursor = conn.cursor()
                 
@@ -805,6 +1028,21 @@ class RatesDialog(QDialog):
     def save_supervision_rate(self, stage_name, executor_rate, manager_rate):
         """Сохранение тарифов для авторского надзора"""
         try:
+            if self.api_client:
+                try:
+                    self.api_client.save_supervision_rate(stage_name, executor_rate, manager_rate)
+                    CustomMessageBox(
+                        self,
+                        'Успех',
+                        f'Тарифы для стадии "{stage_name}" сохранены:\n\n'
+                        f'ДАН: {executor_rate:.2f} руб/м²\n'
+                        f'Старший менеджер: {manager_rate:.2f} руб/м²',
+                        'success'
+                    ).exec_()
+                    return
+                except Exception as e:
+                    print(f"[WARN] Ошибка API сохранения тарифа надзора: {e}, fallback на локальную БД")
+
             conn = self.db.connect()
             cursor = conn.cursor()
             
@@ -876,8 +1114,22 @@ class RatesDialog(QDialog):
             print(f"\n[SAVE] Сохранение тарифа:")
             print(f"   Роль: {role}")
             print(f"   Стадия: {stage_name}")
-            print(f"   Цена: {rate_per_m2:.2f} ₽/м²")
-            
+            print(f"   Цена: {rate_per_m2:.2f} руб/м²")
+
+            if self.api_client:
+                try:
+                    self.api_client.save_individual_rate(role, rate_per_m2, stage_name)
+                    stage_display = f'\n\nСтадия: {stage_name}' if stage_name else ''
+                    CustomMessageBox(
+                        self,
+                        'Успех',
+                        f'Тариф для {role} сохранен: {rate_per_m2:.2f} руб/м²{stage_display}',
+                        'success'
+                    ).exec_()
+                    return
+                except Exception as e:
+                    print(f"[WARN] Ошибка API сохранения: {e}, fallback на локальную БД")
+
             conn = self.db.connect()
             cursor = conn.cursor()
             
@@ -908,7 +1160,7 @@ class RatesDialog(QDialog):
                 ''', (rate_per_m2, existing['id']))
                 
                 stage_text = f" ({stage_name})" if stage_name else ""
-                print(f"   ✓ Обновлен тариф ID={existing['id']}: {role}{stage_text} = {rate_per_m2:.2f} ₽/м²")
+                print(f"   Обновлен тариф ID={existing['id']}: {role}{stage_text} = {rate_per_m2:.2f} ₽/м²")
             else:
                 # Создаем новый
                 cursor.execute('''
@@ -919,7 +1171,7 @@ class RatesDialog(QDialog):
                 
                 new_id = cursor.lastrowid
                 stage_text = f" ({stage_name})" if stage_name else ""
-                print(f"   ✓ Создан тариф ID={new_id}: {role}{stage_text} = {rate_per_m2:.2f} ₽/м²")
+                print(f"   Создан тариф ID={new_id}: {role}{stage_text} = {rate_per_m2:.2f} ₽/м²")
             
             conn.commit()
             
@@ -940,19 +1192,22 @@ class RatesDialog(QDialog):
             if saved:
                 print(f"   ✅ ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.2f})")
             else:
-                print(f"   ⚠️ ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
+                print(f"   [WARN]️ ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
             # =========================================
             
             self.db.close()
-            
+
             stage_display = f'\n\nСтадия: {stage_name}' if stage_name else ''
             CustomMessageBox(
-                self, 
-                'Успех', 
+                self,
+                'Успех',
                 f'Тариф для {role} сохранен: {rate_per_m2:.2f} ₽/м²{stage_display}',
                 'success'
             ).exec_()
-            
+
+            # НОВОЕ: Предложение пересчитать выплаты
+            self._offer_recalculate_payments(role)
+
         except Exception as e:
             print(f"❌ Ошибка сохранения тарифа: {e}")
             import traceback
@@ -962,6 +1217,26 @@ class RatesDialog(QDialog):
     def reset_individual_rate(self, role, stage_name=None):
         """Сброс тарифа с учетом стадии"""
         try:
+            if self.api_client:
+                try:
+                    self.api_client.delete_individual_rate(role, stage_name)
+                    # Обнуляем поле в таблице
+                    table = self.findChild(QTableWidget, 'individual_rates_table')
+                    for row in range(table.rowCount()):
+                        role_item = table.item(row, 0)
+                        stage_item = table.item(row, 1)
+                        if role_item and role_item.text() == role:
+                            current_stage = stage_item.text() if stage_item.text() != '-' else None
+                            if (stage_name and current_stage == stage_name) or (not stage_name and not current_stage):
+                                spin = table.cellWidget(row, 2)
+                                if spin:
+                                    spin.setValue(0)
+                                break
+                    CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
+                    return
+                except Exception as e:
+                    print(f"[WARN] Ошибка API удаления: {e}, fallback на локальную БД")
+
             conn = self.db.connect()
             cursor = conn.cursor()
             
@@ -1000,10 +1275,67 @@ class RatesDialog(QDialog):
         except Exception as e:
             print(f"❌ Ошибка сброса тарифа: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось удалить: {e}', 'error').exec_()
-         
+
+    def _offer_recalculate_payments(self, role: str = None):
+        """Предложение пересчитать выплаты после изменения тарифа"""
+        try:
+            if not self.api_client:
+                return
+
+            reply = CustomQuestionBox(
+                self,
+                'Пересчет выплат',
+                f'Тариф изменен.\n\n'
+                f'Пересчитать существующие выплаты по новому тарифу?\n\n'
+                f'Это обновит суммы всех незакрытых выплат.'
+            ).exec_()
+
+            if reply == QDialog.Accepted:
+                try:
+                    result = self.api_client.recalculate_payments(role=role)
+                    if result.get('status') == 'success':
+                        updated = result.get('updated', 0)
+                        total = result.get('total', 0)
+                        CustomMessageBox(
+                            self,
+                            'Пересчет завершен',
+                            f'Обновлено выплат: {updated} из {total}',
+                            'success'
+                        ).exec_()
+                    else:
+                        CustomMessageBox(
+                            self,
+                            'Ошибка',
+                            f'Ошибка пересчета: {result.get("error", "Неизвестная ошибка")}',
+                            'error'
+                        ).exec_()
+                except Exception as e:
+                    print(f"[ERROR] Ошибка пересчета выплат: {e}")
+                    CustomMessageBox(
+                        self,
+                        'Ошибка',
+                        f'Не удалось пересчитать выплаты:\n{str(e)}',
+                        'error'
+                    ).exec_()
+        except Exception as e:
+            print(f"[ERROR] Ошибка в _offer_recalculate_payments: {e}")
+
     def save_surveyor_rate(self, city, price):
         """Сохранение тарифа замерщика"""
         try:
+            if self.api_client:
+                try:
+                    self.api_client.save_surveyor_rate(city, price)
+                    CustomMessageBox(
+                        self,
+                        'Успех',
+                        f'Тариф замера в городе {city}: {price:.2f} рублей',
+                        'success'
+                    ).exec_()
+                    return
+                except Exception as e:
+                    print(f"[WARN] Ошибка API сохранения тарифа замера: {e}, fallback на локальную БД")
+
             conn = self.db.connect()
             cursor = conn.cursor()
             
@@ -1023,7 +1355,7 @@ class RatesDialog(QDialog):
                 WHERE id = ?
                 ''', (price, existing['id']))
                 
-                print(f"✓ Обновлен тариф замера: {city} = {price:.2f} ₽")
+                print(f"Обновлен тариф замера: {city} = {price:.2f} ₽")
             else:
                 # ========== ИСПРАВЛЕНИЕ: УКАЗЫВАЕМ project_type = NULL ==========
                 cursor.execute('''
@@ -1033,7 +1365,7 @@ class RatesDialog(QDialog):
                 ''', (city, price))
                 # ================================================================
                 
-                print(f"✓ Создан тариф замера: {city} = {price:.2f} ₽")
+                print(f"Создан тариф замера: {city} = {price:.2f} ₽")
             
             conn.commit()
             self.db.close()

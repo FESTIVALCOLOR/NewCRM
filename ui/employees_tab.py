@@ -7,14 +7,14 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QDateEdit, QCheckBox, QGroupBox, QTextEdit, QFrame,
                              QTabWidget)
 from ui.custom_dateedit import CustomDateEdit
-from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtCore import Qt, QDate, QTimer
 from database.db_manager import DatabaseManager
 from config import POSITIONS
 from utils.icon_loader import IconLoader
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
 from ui.custom_combobox import CustomComboBox
-from utils.calendar_styles import CALENDAR_STYLE, add_today_button_to_dateedit
+from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 
 class EmployeesTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
@@ -22,16 +22,19 @@ class EmployeesTab(QWidget):
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
-        
+        # Получаем offline_manager от родителя (main_window)
+        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+
         # ========== ОПРЕДЕЛЯЕМ ПРАВА ==========
         self.can_edit = employee['position'] in [
-            'Руководитель студии', 
+            'Руководитель студии',
             'Старший менеджер проектов'
         ]
         # ======================================
-        
+
         self.init_ui()
-        self.load_employees()
+        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
+        QTimer.singleShot(0, self.load_employees)
     
     def init_ui(self):
         layout = QVBoxLayout()
@@ -46,31 +49,45 @@ class EmployeesTab(QWidget):
         header_layout.addStretch()
 
         # ========== КНОПКА ПОИСКА ==========
-        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск сотрудников', icon_size=16)
+        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск сотрудников', icon_size=12)
         search_btn.clicked.connect(self.open_search)
         search_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: #333;
-                background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
-                margin-right: 10px;
             }
             QPushButton:hover {
-                background-color: #E8F4F8;
-                border-color: #3498DB;
+                background-color: #f5f5f5;
+                border-color: #ffd93c;
             }
         ''')
         header_layout.addWidget(search_btn)
         # ===================================
 
         # Кнопка добавления
-        if self.can_edit: 
-            add_btn = IconLoader.create_icon_button('add2', '  Добавить сотрудника  ', icon_size=16)
+        if self.can_edit:
+            add_btn = IconLoader.create_icon_button('add', 'Добавить сотрудника', icon_size=12)
             add_btn.clicked.connect(self.add_employee)
-            add_btn.setStyleSheet('padding: 8px 16px; font-weight: bold;')
+            add_btn.setStyleSheet('''
+                QPushButton {
+                    padding: 2px 8px;
+                    font-weight: 600;
+                    font-size: 11px;
+                    color: #000000;
+                    background-color: #ffd93c;
+                    border: 1px solid #e6c236;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #ffdb4d;
+                    border-color: #d9b530;
+                }
+            ''')
             header_layout.addWidget(add_btn)
 
         layout.addLayout(header_layout)
@@ -82,10 +99,10 @@ class EmployeesTab(QWidget):
 
         self.filter_buttons = {}
         departments = [
-            ('all', '  Все отделы  '),
-            ('admin', '   Административный отдел   '),
-            ('project', '  Проектный отдел  '),
-            ('executive', '  Исполнительный отдел  ')
+            ('all', 'Все отделы'),
+            ('admin', 'Административный отдел'),
+            ('project', 'Проектный отдел'),
+            ('executive', 'Исполнительный отдел')
         ]
 
         for dept_key, dept_name in departments:
@@ -93,8 +110,9 @@ class EmployeesTab(QWidget):
             btn.setCheckable(True)
             btn.setStyleSheet("""
                 QPushButton {
-                    padding: 8px 16px;
-                    border: 1px solid #E0E0E0;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    border: 1px solid #d9d9d9;
                     background-color: #FFFFFF;
                     border-radius: 4px;
                 }
@@ -124,10 +142,15 @@ class EmployeesTab(QWidget):
         self.employees_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
             }
             QTableCornerButton::section {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                background-color: #fafafa;
+                border: none;
+                border-bottom: 1px solid #e6e6e6;
+                border-right: 1px solid #f0f0f0;
+                border-top-left-radius: 8px;
             }
         """)
         self.employees_table.setColumnCount(8)  # ← Было 7, стало 8
@@ -157,6 +180,10 @@ class EmployeesTab(QWidget):
         header.setSectionResizeMode(7, QHeaderView.Fixed)  # ← Действия
         self.employees_table.setColumnWidth(7, 100)
 
+        # Запрещаем изменение высоты строк
+        self.employees_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.employees_table.verticalHeader().setDefaultSectionSize(32)
+
         self.employees_table.setSortingEnabled(True)
         self.employees_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.employees_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -179,9 +206,17 @@ class EmployeesTab(QWidget):
     def apply_search(self, params):
         """Применение фильтров поиска"""
         self.employees_table.setSortingEnabled(False)
-        
-        employees = self.db.get_all_employees()
-        
+
+        # Загружаем сотрудников через API или локальную БД
+        if self.api_client and self.api_client.is_online:
+            try:
+                employees = self.api_client.get_employees()
+            except Exception as e:
+                print(f"[WARN] API error, using local DB: {e}")
+                employees = self.db.get_all_employees()
+        else:
+            employees = self.db.get_all_employees()
+
         filtered_employees = []
         for emp in employees:
             if params.get('name'):
@@ -263,29 +298,29 @@ class EmployeesTab(QWidget):
             actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(4)
 
-            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=14)
-            view_btn.setFixedSize(24, 24)
+            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=12)
+            view_btn.setFixedSize(20, 20)
             view_btn.setStyleSheet('''
                 QPushButton {
                     background-color: #F8F9FA;
                     border: 1px solid #E0E0E0;
-                    border-radius: 3px;
+                    border-radius: 4px;
                 }
                 QPushButton:hover {
-                    background-color: #E8F4F8;
+                    background-color: #f5f5f5;
                 }
             ''')
             view_btn.clicked.connect(lambda checked, e=emp: self.view_employee(e))
             actions_layout.addWidget(view_btn)
 
             if self.can_edit:
-                edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=14)
-                edit_btn.setFixedSize(24, 24)
+                edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
+                edit_btn.setFixedSize(20, 20)
                 edit_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #d4e4bc;
                         border: 1px solid #c0d4a8;
-                        border-radius: 3px;
+                        border-radius: 4px;
                     }
                     QPushButton:hover {
                         background-color: #c0d4a8;
@@ -295,13 +330,13 @@ class EmployeesTab(QWidget):
                 actions_layout.addWidget(edit_btn)
 
                 # Кнопка удаления
-                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=14)
-                delete_btn.setFixedSize(24, 24)
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
+                delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #FFE6E6;
                         border: 1px solid #FFCCCC;
-                        border-radius: 3px;
+                        border-radius: 4px;
                     }
                     QPushButton:hover {
                         background-color: #E74C3C;
@@ -413,16 +448,16 @@ class EmployeesTab(QWidget):
             actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(4)
 
-            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=14)
-            view_btn.setFixedSize(24, 24)
+            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=12)
+            view_btn.setFixedSize(20, 20)
             view_btn.setStyleSheet('''
                 QPushButton {
                     background-color: #F8F9FA;
                     border: 1px solid #E0E0E0;
-                    border-radius: 3px;
+                    border-radius: 4px;
                 }
                 QPushButton:hover {
-                    background-color: #E8F4F8;
+                    background-color: #f5f5f5;
                 }
             ''')
             view_btn.clicked.connect(lambda checked, e=emp: self.view_employee(e))
@@ -430,13 +465,13 @@ class EmployeesTab(QWidget):
 
             # Кнопка "Редактировать" (только для админов)
             if self.can_edit:
-                edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=14)
-                edit_btn.setFixedSize(24, 24)
+                edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
+                edit_btn.setFixedSize(20, 20)
                 edit_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #d4e4bc;
                         border: 1px solid #c0d4a8;
-                        border-radius: 3px;
+                        border-radius: 4px;
                     }
                     QPushButton:hover {
                         background-color: #c0d4a8;
@@ -446,13 +481,13 @@ class EmployeesTab(QWidget):
                 actions_layout.addWidget(edit_btn)
 
                 # Кнопка удаления
-                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=14)
-                delete_btn.setFixedSize(24, 24)
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
+                delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #FFE6E6;
                         border: 1px solid #FFCCCC;
-                        border-radius: 3px;
+                        border-radius: 4px;
                     }
                     QPushButton:hover {
                         background-color: #E74C3C;
@@ -565,7 +600,23 @@ class EmployeesTab(QWidget):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
         center_dialog_on_parent(self)
-        
+
+    def on_sync_update(self, updated_employees):
+        """
+        Обработчик обновления данных от SyncManager.
+        Вызывается при изменении сотрудников другими пользователями.
+        """
+        try:
+            # Проверяем, есть ли реальные изменения (не пустой список)
+            if not updated_employees:
+                return
+
+            print(f"[SYNC] Получено обновление сотрудников: {len(updated_employees)} записей")
+            # Перезагружаем таблицу сотрудников
+            self.load_employees()
+        except Exception as e:
+            print(f"[ERROR] Ошибка синхронизации сотрудников: {e}")
+
 class EmployeeDialog(QDialog):
     def __init__(self, parent, employee_data=None, view_only=False):
         super().__init__(parent)
@@ -574,6 +625,8 @@ class EmployeeDialog(QDialog):
         self.db = DatabaseManager()
         # Получаем api_client от родителя, если он есть
         self.api_client = getattr(parent, 'api_client', None)
+        # Получаем offline_manager для работы в offline режиме
+        self.offline_manager = getattr(parent, 'offline_manager', None)
 
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
@@ -601,7 +654,7 @@ class EmployeeDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: none;
                 border-radius: 10px;
             }
         """)
@@ -693,11 +746,12 @@ class EmployeeDialog(QDialog):
         # Контактная информация
         contact_group = QGroupBox('Контактная информация')
         contact_layout = QFormLayout()
-        
+
         # В методе init_ui() класса EmployeeDialog
         self.phone = QLineEdit()
-        self.phone.setPlaceholderText('+7 (999) 123-45-67')
-        self.phone.setInputMask('+7 (999) 000-00-00;_') 
+        self.phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self.phone.textChanged.connect(self.format_phone)
+        self.phone.focusInEvent = lambda e: self.on_phone_focus_in(self.phone, e)
         contact_layout.addRow('Телефон:', self.phone)
         
         self.email = QLineEdit()
@@ -792,33 +846,82 @@ class EmployeeDialog(QDialog):
         self.setMinimumWidth(650)
     
     def format_phone(self, text):
-        """Форматирование телефона"""
+        """Форматирование телефона +7 (XXX) XXX-XX-XX"""
         self.phone.blockSignals(True)
-        
-        digits = ''.join(filter(str.isdigit, text))
-        
-        if digits.startswith('8'):
-            digits = '7' + digits[1:]
-        
-        if len(digits) == 0:
-            formatted = ''
-        elif len(digits) <= 1:
-            formatted = '+' + digits
-        elif len(digits) <= 4:
-            formatted = f'+{digits[0]} ({digits[1:]}'
-        elif len(digits) <= 7:
-            formatted = f'+{digits[0]} ({digits[1:4]}) {digits[4:]}'
-        elif len(digits) <= 9:
-            formatted = f'+{digits[0]} ({digits[1:4]}) {digits[4:7]}-{digits[7:]}'
-        else:
-            formatted = f'+{digits[0]} ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}'
-        
+
+        # Если поле пустое, оставляем пустым (для placeholder)
+        if not text:
+            self.phone.blockSignals(False)
+            return
+
         cursor_pos = self.phone.cursorPosition()
+
+        # Извлекаем только цифры
+        digits = ''.join(filter(str.isdigit, text))
+
+        # Если нет цифр, очищаем поле
+        if not digits:
+            self.phone.setText('')
+            self.phone.blockSignals(False)
+            return
+
+        # Подсчитываем сколько цифр было до курсора
+        digits_before_cursor = len(''.join(filter(str.isdigit, text[:cursor_pos])))
+
+        # Убираем первую 7 или 8, если пользователь её ввёл
+        if digits.startswith('7') or digits.startswith('8'):
+            digits = digits[1:]
+
+        # Ограничиваем 10 цифрами (код города + номер)
+        digits = digits[:10]
+
+        # Форматируем номер: +7 (XXX) XXX-XX-XX
+        if len(digits) == 0:
+            formatted = '+7 ('
+            new_cursor_pos = 4
+        elif len(digits) <= 3:
+            formatted = f'+7 ({digits}'
+            new_cursor_pos = 4 + len(digits)
+        elif len(digits) <= 6:
+            formatted = f'+7 ({digits[:3]}) {digits[3:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            else:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+        elif len(digits) <= 8:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            else:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+        else:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            elif digits_before_cursor <= 8:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+            else:
+                new_cursor_pos = 16 + (digits_before_cursor - 8)
+
         self.phone.setText(formatted)
-        self.phone.setCursorPosition(min(cursor_pos, len(formatted)))
-        
+        self.phone.setCursorPosition(min(new_cursor_pos, len(formatted)))
+
         self.phone.blockSignals(False)
-    
+
+    def on_phone_focus_in(self, line_edit, event):
+        """При фокусе на поле телефона начинаем с префикса +7 ("""
+        from PyQt5.QtWidgets import QLineEdit
+        QLineEdit.focusInEvent(line_edit, event)
+
+        # Если поле пустое, ставим начальный префикс
+        if not line_edit.text().strip():
+            line_edit.setText('+7 (')
+            line_edit.setCursorPosition(4)
+
     def fill_data(self):
         """Заполнение формы данными сотрудника"""
         if self.employee_data:
@@ -911,17 +1014,59 @@ class EmployeeDialog(QDialog):
                 
                 if old_status != new_status:
                     status_changed = True
-                    print(f"⚠️ СТАТУС ИЗМЕНЁН: '{old_status}' → '{new_status}'")
+                    print(f"[WARN] СТАТУС ИЗМЕНЁН: '{old_status}' → '{new_status}'")
             # ================================================
 
-            if self.api_client:
+            if self.api_client and self.api_client.is_online:
                 # Многопользовательский режим - сохраняем через API
                 if self.employee_data:
                     self.api_client.update_employee(self.employee_data['id'], employee_data)
                 else:
                     self.api_client.create_employee(employee_data)
+            elif self.api_client:
+                # Offline режим - сохраняем локально и добавляем в очередь
+                if self.employee_data:
+                    # Обновление существующего сотрудника
+                    self.db.update_employee(self.employee_data['id'], employee_data)
+                    # Добавляем в очередь для синхронизации
+                    if self.offline_manager:
+                        from utils.offline_manager import OperationType
+                        self.offline_manager.queue_operation(
+                            OperationType.UPDATE,
+                            'employee',
+                            self.employee_data['id'],
+                            employee_data
+                        )
+                        CustomMessageBox(
+                            self,
+                            'Offline режим',
+                            'Изменения сохранены локально.\n\n'
+                            'Данные будут синхронизированы с сервером\n'
+                            'при восстановлении подключения.',
+                            'info'
+                        ).exec_()
+                else:
+                    # Создание нового сотрудника
+                    new_id = self.db.add_employee(employee_data)
+                    # Добавляем в очередь для синхронизации
+                    if self.offline_manager:
+                        from utils.offline_manager import OperationType
+                        self.offline_manager.queue_operation(
+                            OperationType.CREATE,
+                            'employee',
+                            new_id,
+                            employee_data
+                        )
+                        CustomMessageBox(
+                            self,
+                            'Offline режим',
+                            'Сотрудник создан локально.\n\n'
+                            'Данные будут синхронизированы с сервером\n'
+                            'при восстановлении подключения.',
+                            'info'
+                        ).exec_()
             else:
-                # Локальный режим - сохраняем в локальную БД
+                # Локальный режим (без API) - сохраняем в локальную БД
                 if self.employee_data:
                     self.db.update_employee(self.employee_data['id'], employee_data)
                 else:
@@ -1017,7 +1162,7 @@ class EmployeeSearchDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: none;
                 border-radius: 10px;
             }
         """)
@@ -1069,10 +1214,12 @@ class EmployeeSearchDialog(QDialog):
         self.status_combo.addItem('уволен', 'уволен')
         self.status_combo.addItem('в резерве', 'в резерве')
         form_layout.addRow('Статус:', self.status_combo)
-        # ==============================================       
-        
+        # ==============================================
+
         self.phone_input = QLineEdit()
-        self.phone_input.setPlaceholderText('+7 (999) 123-45-67')
+        self.phone_input.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self.phone_input.textChanged.connect(self.format_phone_input)
+        self.phone_input.focusInEvent = lambda e: self.on_phone_focus_in(self.phone_input, e)
         form_layout.addRow('Телефон:', self.phone_input)
         
         self.email_input = QLineEdit()
@@ -1087,13 +1234,13 @@ class EmployeeSearchDialog(QDialog):
         
         buttons_layout = QHBoxLayout()
         
-        search_btn = IconLoader.create_icon_button('search2', 'Найти', 'Выполнить поиск', icon_size=16)
+        search_btn = IconLoader.create_icon_button('search2', 'Найти', 'Выполнить поиск', icon_size=12)
         search_btn.clicked.connect(self.accept)
         search_btn.setStyleSheet('''
             QPushButton {
                 padding: 10px 30px;
                 font-weight: bold;
-                background-color: #3498DB;
+                background-color: #ffd93c;
                 color: white;
                 border-radius: 5px;
             }
@@ -1102,7 +1249,7 @@ class EmployeeSearchDialog(QDialog):
             }
         ''')
         
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры', icon_size=16)
+        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры', icon_size=12)
         reset_btn.clicked.connect(self.reset_filters)
         reset_btn.setStyleSheet('padding: 10px 30px;')
         
@@ -1137,11 +1284,80 @@ class EmployeeSearchDialog(QDialog):
         
         CustomMessageBox(
             self, 
-            'Сброс', 
-            'Фильтры сброшены, показаны все сотрудники', 
+            'Сброс',
+            'Фильтры сброшены, показаны все сотрудники',
             'success'
         ).exec_()
-    
+
+    def format_phone_input(self, text):
+        """Форматирование телефона +7 (XXX) XXX-XX-XX"""
+        self.phone_input.blockSignals(True)
+
+        if not text:
+            self.phone_input.blockSignals(False)
+            return
+
+        cursor_pos = self.phone_input.cursorPosition()
+        digits = ''.join(filter(str.isdigit, text))
+
+        if not digits:
+            self.phone_input.setText('')
+            self.phone_input.blockSignals(False)
+            return
+
+        digits_before_cursor = len(''.join(filter(str.isdigit, text[:cursor_pos])))
+
+        if digits.startswith('7') or digits.startswith('8'):
+            digits = digits[1:]
+
+        digits = digits[:10]
+
+        if len(digits) == 0:
+            formatted = '+7 ('
+            new_cursor_pos = 4
+        elif len(digits) <= 3:
+            formatted = f'+7 ({digits}'
+            new_cursor_pos = 4 + len(digits)
+        elif len(digits) <= 6:
+            formatted = f'+7 ({digits[:3]}) {digits[3:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            else:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+        elif len(digits) <= 8:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            else:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+        else:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            elif digits_before_cursor <= 8:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+            else:
+                new_cursor_pos = 16 + (digits_before_cursor - 8)
+
+        self.phone_input.setText(formatted)
+        self.phone_input.setCursorPosition(min(new_cursor_pos, len(formatted)))
+
+        self.phone_input.blockSignals(False)
+
+    def on_phone_focus_in(self, line_edit, event):
+        """При фокусе на поле телефона начинаем с префикса +7 ("""
+        from PyQt5.QtWidgets import QLineEdit
+        QLineEdit.focusInEvent(line_edit, event)
+
+        # Если поле пустое, ставим начальный префикс
+        if not line_edit.text().strip():
+            line_edit.setText('+7 (')
+            line_edit.setCursorPosition(4)
+
     def get_search_params(self):
         """Получение параметров поиска"""
         return {
