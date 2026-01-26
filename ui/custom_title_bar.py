@@ -119,7 +119,7 @@ class CustomTitleBar(QWidget):
         if os.path.exists(icon_path):
             return QIcon(icon_path)
         else:
-            print(f"⚠️ SVG не найден: {icon_path}")
+            print(f"[WARN] SVG не найден: {icon_path}")
             return QIcon()
     
     def button_style(self):
