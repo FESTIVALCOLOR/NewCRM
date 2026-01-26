@@ -4623,7 +4623,7 @@ class CardEditDialog(QDialog):
                                     self.api_client.create_payment(payment_data)
                                     print(f"Выплата замерщику создана через API в отчетном месяце {report_month}")
                                 else:
-                                    print(f"ℹ️ Шаблонный проект: выплата замерщику будет создана при сдаче проекта")
+                                    print(f"[INFO] Шаблонный проект: выплата замерщику будет создана при сдаче проекта")
                         except Exception as e:
                             print(f"[WARNING] Ошибка работы с оплатами через API: {e}")
                     else:
@@ -4659,7 +4659,7 @@ class CardEditDialog(QDialog):
                                 print(f"Выплата замерщику создана в отчетном месяце {report_month}")
                                 conn = self.db.connect()
                             else:
-                                print(f"ℹ️ Шаблонный проект: выплата замерщику будет создана при сдаче проекта")
+                                print(f"[INFO] Шаблонный проект: выплата замерщику будет создана при сдаче проекта")
 
                         self.db.close()
                 # ========================================================
@@ -8974,7 +8974,7 @@ class CardEditDialog(QDialog):
                         if payment_id:
                             print(f"Создана выплата ID={payment_id} для роли {role_name}")
             else:
-                print(f"ℹ️ Сотрудник не назначен, выплаты удалены")
+                print(f"[INFO] Сотрудник не назначен, выплаты удалены")
 
             # Обновляем вкладку оплат
             self.refresh_payments_tab()
@@ -13741,7 +13741,7 @@ class ArchiveCardDetailsDialog(QDialog):
 
             # Информационное сообщение о правах
             if not can_edit_project_data:
-                info_label = QLabel('ℹ️ Данные отображаются в режиме просмотра')
+                info_label = QLabel('[INFO] Данные отображаются в режиме просмотра')
                 info_label.setStyleSheet('''
                     color: #7F8C8D;
                     font-size: 11px;
