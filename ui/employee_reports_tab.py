@@ -315,7 +315,7 @@ class EmployeeReportsTab(QWidget):
             self.update_salary_table(tab_widget, project_type, report_data.get('salaries', []))
             
         except Exception as e:
-            print(f"❌ Ошибка загрузки данных отчета: {e}")
+            print(f"Ошибка загрузки данных отчета: {e}")
             import traceback
             traceback.print_exc()
     

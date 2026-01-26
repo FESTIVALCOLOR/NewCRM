@@ -1941,11 +1941,11 @@ class SalariesTab(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(5, 5, 5, 5)
         
-        edit_btn = QPushButton('✏️')
+        edit_btn = QPushButton('️')
         edit_btn.setMaximumWidth(35)
         edit_btn.clicked.connect(lambda: self.edit_payment(payment_data, payment_type))
         
-        delete_btn = QPushButton('🗑️')
+        delete_btn = QPushButton('[DELETE]')
         delete_btn.setMaximumWidth(35)
         delete_btn.clicked.connect(lambda: self.delete_payment(payment_data['id']))
         

@@ -3767,7 +3767,7 @@ class CardEditDialog(QDialog):
 
             team_layout.addLayout(survey_date_row)
 
-            hint_survey = QLabel('💡 Дата проведения замера помещения')
+            hint_survey = QLabel('Дата проведения замера помещения')
             hint_survey.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
             team_layout.addWidget(hint_survey)
 
@@ -3778,7 +3778,7 @@ class CardEditDialog(QDialog):
 
             # ========== БЛОК ДИЗАЙНЕРА ==========
             if self.card_data.get('designer_name'):
-                designer_group = QGroupBox('🎨 Дизайнер')
+                designer_group = QGroupBox('Дизайнер')
                 designer_group.setStyleSheet("""
                     QGroupBox {
                         font-weight: bold;
@@ -3866,7 +3866,7 @@ class CardEditDialog(QDialog):
 
             # ========== БЛОК ЧЕРТЁЖНИКА ==========
             if self.card_data.get('draftsman_name'):
-                draftsman_group = QGroupBox('✏️ Чертёжник')
+                draftsman_group = QGroupBox('Чертёжник')
                 draftsman_group.setStyleSheet("""
                     QGroupBox {
                         font-weight: bold;
@@ -3953,7 +3953,7 @@ class CardEditDialog(QDialog):
             else:
                 self.draftsman_deadline = None
 
-            hint_executor_deadlines = QLabel('💡 Эти дедлайны отображаются исполнителям на карточке')
+            hint_executor_deadlines = QLabel('Эти дедлайны отображаются исполнителям на карточке')
             hint_executor_deadlines.setWordWrap(True)
             hint_executor_deadlines.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
             team_layout.addWidget(hint_executor_deadlines)
@@ -4003,7 +4003,7 @@ class CardEditDialog(QDialog):
         self.payments_tab_index = -1  # Храним индекс вкладки оплат
         if self.employee and self.employee['position'] in ['Руководитель студии', 'Старший менеджер проектов', 'Менеджер']:
             payments_widget = self.create_payments_tab()
-            self.payments_tab_index = self.tabs.addTab(payments_widget, '💰 Оплаты')
+            self.payments_tab_index = self.tabs.addTab(payments_widget, 'Оплаты')
 
         # Для исполнителей (дизайнеров и чертежников) открываем сразу вкладку "Данные по проекту"
         if is_executor:
@@ -6724,7 +6724,7 @@ class CardEditDialog(QDialog):
 
                 # Создаем новую вкладку с обновленными данными
                 payments_widget = self.create_payments_tab()
-                self.tabs.insertTab(self.payments_tab_index, payments_widget, '💰 Оплаты')
+                self.tabs.insertTab(self.payments_tab_index, payments_widget, 'Оплаты')
 
                 # ИСПРАВЛЕНИЕ: Возвращаемся на вкладку оплат, если она была активна
                 if current_tab_index == self.payments_tab_index:
@@ -6879,7 +6879,7 @@ class CardEditDialog(QDialog):
 
         tz_layout.addLayout(tz_file_row)
 
-        hint_tz_file = QLabel('💡 PDF файл с техническим заданием')
+        hint_tz_file = QLabel('PDF файл с техническим заданием')
         hint_tz_file.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
         tz_layout.addWidget(hint_tz_file)
 
@@ -6922,7 +6922,7 @@ class CardEditDialog(QDialog):
 
         tz_layout.addLayout(tz_date_row)
 
-        hint_tz_date = QLabel('💡 Дата утверждения технического задания')
+        hint_tz_date = QLabel('Дата утверждения технического задания')
         hint_tz_date.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
         tz_layout.addWidget(hint_tz_date)
 
@@ -7031,7 +7031,7 @@ class CardEditDialog(QDialog):
 
         survey_layout.addLayout(survey_file_row)
 
-        hint_survey_file = QLabel('💡 Фотография или сканированный лист замера')
+        hint_survey_file = QLabel('Фотография или сканированный лист замера')
         hint_survey_file.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
         survey_layout.addWidget(hint_survey_file)
 
@@ -7074,7 +7074,7 @@ class CardEditDialog(QDialog):
 
         survey_layout.addLayout(survey_date_row)
 
-        hint_survey_date = QLabel('💡 Дата выполнения замера объекта')
+        hint_survey_date = QLabel('Дата выполнения замера объекта')
         hint_survey_date.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
         survey_layout.addWidget(hint_survey_date)
 
@@ -7153,7 +7153,7 @@ class CardEditDialog(QDialog):
                 add_template_btn.clicked.connect(self.add_project_templates)
                 references_layout.addWidget(add_template_btn)
 
-            hint_templates = QLabel('💡 Ссылки на используемые в проекте шаблоны')
+            hint_templates = QLabel('Ссылки на используемые в проекте шаблоны')
             hint_templates.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
             references_layout.addWidget(hint_templates)
 
@@ -7235,7 +7235,7 @@ class CardEditDialog(QDialog):
 
             references_layout.addLayout(ref_folder_row)
 
-            hint_references = QLabel('💡 Изображения и PDF файлы с референсами')
+            hint_references = QLabel('Изображения и PDF файлы с референсами')
             hint_references.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
             references_layout.addWidget(hint_references)
 
@@ -7338,7 +7338,7 @@ class CardEditDialog(QDialog):
 
         photo_doc_layout.addLayout(photo_doc_folder_row)
 
-        hint_photo_doc = QLabel('💡 Изображения, PDF и видео файлы с фотофиксацией')
+        hint_photo_doc = QLabel('Изображения, PDF и видео файлы с фотофиксацией')
         hint_photo_doc.setStyleSheet('color: #666; font-size: 9px; font-style: italic;')
         photo_doc_layout.addWidget(hint_photo_doc)
 
@@ -7893,7 +7893,7 @@ class CardEditDialog(QDialog):
 
         # Дата сдачи работы
         if stage_dict.get('submitted_date'):
-            submitted_label = QLabel(f"📤 Сдано: {format_date(stage_dict.get('submitted_date'), 'N/A')}")
+            submitted_label = QLabel(f"Сдано: {format_date(stage_dict.get('submitted_date'), 'N/A')}")
             submitted_label.setStyleSheet('font-size: 10px; color: #ffd93c; font-weight: bold;')
             stage_layout.addWidget(submitted_label)
 
@@ -9253,7 +9253,7 @@ class CardEditDialog(QDialog):
                 full_label.setStyleSheet('font-weight: bold; color: #27AE60;')
 
                 if payment.get('is_manual'):
-                    manual_icon = QLabel(' ★')
+                    manual_icon = QLabel(' ')
                     manual_icon.setStyleSheet('color: #FF9800; font-size: 7px;')
                     manual_icon.setToolTip('Сумма установлена вручную')
                     full_layout.addWidget(manual_icon)
@@ -9290,7 +9290,7 @@ class CardEditDialog(QDialog):
                 advance_label.setStyleSheet('font-weight: bold; color: #ffd93c;')
 
                 if payment.get('is_manual'):
-                    manual_icon = QLabel(' ★')
+                    manual_icon = QLabel(' ')
                     manual_icon.setStyleSheet('color: #FF9800; font-size: 7px;')
                     manual_icon.setToolTip('Сумма установлена вручную')
                     advance_layout.addWidget(manual_icon)
@@ -9327,7 +9327,7 @@ class CardEditDialog(QDialog):
                 balance_label.setStyleSheet('font-weight: bold; color: #E67E22;')
 
                 if payment.get('is_manual'):
-                    manual_icon = QLabel(' ★')
+                    manual_icon = QLabel(' ')
                     manual_icon.setStyleSheet('color: #FF9800; font-size: 7px;')
                     manual_icon.setToolTip('Сумма установлена вручную')
                     balance_layout.addWidget(manual_icon)
@@ -11004,7 +11004,7 @@ class ExecutorSelectionDialog(QDialog):
         
         layout.addLayout(form_layout)
         
-        hint = QLabel('💡 Исполнитель получит доступ к карточке после назначения')
+        hint = QLabel('Исполнитель получит доступ к карточке после назначения')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
         layout.addWidget(hint)
@@ -12642,7 +12642,7 @@ class ExportPDFDialog(QDialog):
         
         layout.addLayout(filename_layout)
         
-        hint = QLabel('💡 Файл будет сохранен в выбранную папку с расширением .pdf')
+        hint = QLabel('Файл будет сохранен в выбранную папку с расширением .pdf')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
         hint.setAlignment(Qt.AlignCenter)
@@ -13417,21 +13417,21 @@ class ArchiveCardDetailsDialog(QDialog):
             team_layout.setSpacing(10)
             
             if self.card_data.get('senior_manager_name'):
-                team_layout.addRow('👔 Старший менеджер:', QLabel(str(self.card_data['senior_manager_name'])))
+                team_layout.addRow('Старший менеджер:', QLabel(str(self.card_data['senior_manager_name'])))
             if self.card_data.get('sdp_name'):
-                team_layout.addRow('🎨 СДП:', QLabel(str(self.card_data['sdp_name'])))
+                team_layout.addRow('СДП:', QLabel(str(self.card_data['sdp_name'])))
             if self.card_data.get('gap_name'):
-                team_layout.addRow('📋 ГАП:', QLabel(str(self.card_data['gap_name'])))
+                team_layout.addRow('ГАП:', QLabel(str(self.card_data['gap_name'])))
             if self.card_data.get('manager_name'):
-                team_layout.addRow('💼 Менеджер:', QLabel(str(self.card_data['manager_name'])))
+                team_layout.addRow('Менеджер:', QLabel(str(self.card_data['manager_name'])))
             if self.card_data.get('surveyor_name'):
                 team_layout.addRow('Замерщик:', QLabel(str(self.card_data['surveyor_name'])))
             if self.card_data.get('designer_name'):
-                team_layout.addRow('🎨 Дизайнер:', QLabel(str(self.card_data['designer_name'])))
+                team_layout.addRow('Дизайнер:', QLabel(str(self.card_data['designer_name'])))
             if self.card_data.get('draftsman_name'):
-                team_layout.addRow('✏️ Чертёжник:', QLabel(str(self.card_data['draftsman_name'])))
+                team_layout.addRow('Чертёжник:', QLabel(str(self.card_data['draftsman_name'])))
             if self.card_data.get('dan_name'):
-                team_layout.addRow('🎨 ДАН:', QLabel(str(self.card_data['dan_name'])))
+                team_layout.addRow('ДАН:', QLabel(str(self.card_data['dan_name'])))
             
             if team_layout.rowCount() == 0:
                 empty_label = QLabel('Команда не назначена')
@@ -13455,7 +13455,7 @@ class ArchiveCardDetailsDialog(QDialog):
 
             # Определяем тип оплат и название вкладки
             show_payments_tab = False
-            payments_tab_title = '💰 Оплаты'
+            payments_tab_title = 'Оплаты'
             payments = []
 
             # Показываем вкладку оплат только если есть права доступа
@@ -13463,13 +13463,13 @@ class ArchiveCardDetailsDialog(QDialog):
                 if self.card_type == 'supervision':
                     # Для CRM надзора: показываем только оплаты надзора
                     payments = self.db.get_payments_for_supervision(contract_id)
-                    payments_tab_title = '💰 Оплаты надзора'
+                    payments_tab_title = 'Оплаты надзора'
                     show_payments_tab = True
                 elif self.card_type == 'crm':
                     # Для основной CRM: показываем CRM-оплаты для СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР
                     if contract_status in ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']:
                         payments = self.db.get_payments_for_crm(contract_id)
-                        payments_tab_title = '💰 Оплаты'
+                        payments_tab_title = 'Оплаты'
                         show_payments_tab = True
 
             # Создаем вкладку оплат только если нужно ее показывать
@@ -13727,7 +13727,7 @@ class ArchiveCardDetailsDialog(QDialog):
             project_data_layout.setSpacing(10)
 
             # Заголовок
-            project_data_header = QLabel('📁 Данные по проекту')
+            project_data_header = QLabel('Данные по проекту')
             project_data_header.setStyleSheet('''
                 font-size: 13px;
                 font-weight: bold;
@@ -14029,7 +14029,7 @@ class ArchiveCardDetailsDialog(QDialog):
             project_data_layout.addWidget(project_data_scroll)
 
             project_data_widget.setLayout(project_data_layout)
-            tabs.addTab(project_data_widget, '📁 Данные по проекту')
+            tabs.addTab(project_data_widget, 'Данные по проекту')
 
             layout.addWidget(tabs, 1)
             

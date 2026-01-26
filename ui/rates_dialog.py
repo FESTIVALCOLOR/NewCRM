@@ -22,7 +22,7 @@ class RatesDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         
-        print("\n" + "🔓 ОТКРЫТИЕ ДИАЛОГА ТАРИФОВ " + "="*40)
+        print("\n" + "ОТКРЫТИЕ ДИАЛОГА ТАРИФОВ " + "="*40)
         
         self.init_ui()
         
@@ -55,7 +55,7 @@ class RatesDialog(QDialog):
         border_layout.setSpacing(0)
         
         # Title Bar
-        title_bar = CustomTitleBar(self, '⚙️ Управление тарифами', simple_mode=True)
+        title_bar = CustomTitleBar(self, 'Управление тарифами', simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -250,7 +250,7 @@ class RatesDialog(QDialog):
         
         layout.addWidget(table)
         
-        hint = QLabel('💡 Для чертёжника указаны РАЗНЫЕ тарифы на 2 стадии')
+        hint = QLabel('Для чертёжника указаны РАЗНЫЕ тарифы на 2 стадии')
         hint.setStyleSheet('color: #FF9800; font-size: 10px; font-style: italic; margin-top: 10px;')
         layout.addWidget(hint)
         
@@ -533,7 +533,7 @@ class RatesDialog(QDialog):
             print("="*60 + "\n")
 
         except Exception as e:
-            print(f"❌ Ошибка загрузки тарифов из API: {e}")
+            print(f"Ошибка загрузки тарифов из API: {e}")
             import traceback
             traceback.print_exc()
 
@@ -700,7 +700,7 @@ class RatesDialog(QDialog):
             print("="*60 + "\n")
             
         except Exception as e:
-            print(f"❌ Ошибка загрузки тарифов: {e}")
+            print(f"Ошибка загрузки тарифов: {e}")
             import traceback
             traceback.print_exc()
             
@@ -830,7 +830,7 @@ class RatesDialog(QDialog):
                     price_spin.setSuffix(' ₽')
                     table.setCellWidget(row, 2, price_spin)
                     
-                    save_btn = QPushButton('💾 Сохр.')
+                    save_btn = QPushButton('Сохр.')
                     save_btn.setStyleSheet("""
                         QPushButton {
                             background-color: #27AE60;
@@ -851,7 +851,7 @@ class RatesDialog(QDialog):
             print(f"Загружено диапазонов для {role}: {len(ranges)}")
             
         except Exception as e:
-            print(f"❌ Ошибка загрузки диапазонов: {e}")
+            print(f"Ошибка загрузки диапазонов: {e}")
             import traceback
             traceback.print_exc()
 
@@ -897,7 +897,7 @@ class RatesDialog(QDialog):
             print(f"Добавлена новая строка диапазона")
             
         except Exception as e:
-            print(f"❌ Ошибка добавления диапазона: {e}")
+            print(f"Ошибка добавления диапазона: {e}")
 
     def save_template_range(self, role, area_from, area_to, price):
         """Сохранение диапазона для шаблонного проекта"""
@@ -964,7 +964,7 @@ class RatesDialog(QDialog):
             ).exec_()
             
         except Exception as e:
-            print(f"❌ Ошибка сохранения диапазона: {e}")
+            print(f"Ошибка сохранения диапазона: {e}")
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()
@@ -1022,7 +1022,7 @@ class RatesDialog(QDialog):
                 CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
                 
             except Exception as e:
-                print(f"❌ Ошибка сброса тарифа: {e}")
+                print(f"Ошибка сброса тарифа: {e}")
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить: {e}', 'error').exec_()
 
     def save_supervision_rate(self, stage_name, executor_rate, manager_rate):
@@ -1103,7 +1103,7 @@ class RatesDialog(QDialog):
             ).exec_()
             
         except Exception as e:
-            print(f"❌ Ошибка сохранения тарифов надзора: {e}")
+            print(f"Ошибка сохранения тарифов надзора: {e}")
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()
@@ -1190,7 +1190,7 @@ class RatesDialog(QDialog):
             saved = cursor.fetchone()
             
             if saved:
-                print(f"   ✅ ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.2f})")
+                print(f"   ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.2f})")
             else:
                 print(f"   [WARN]️ ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
             # =========================================
@@ -1209,7 +1209,7 @@ class RatesDialog(QDialog):
             self._offer_recalculate_payments(role)
 
         except Exception as e:
-            print(f"❌ Ошибка сохранения тарифа: {e}")
+            print(f"Ошибка сохранения тарифа: {e}")
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()
@@ -1273,7 +1273,7 @@ class RatesDialog(QDialog):
             CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
             
         except Exception as e:
-            print(f"❌ Ошибка сброса тарифа: {e}")
+            print(f"Ошибка сброса тарифа: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось удалить: {e}', 'error').exec_()
 
     def _offer_recalculate_payments(self, role: str = None):
@@ -1378,7 +1378,7 @@ class RatesDialog(QDialog):
             ).exec_()
             
         except Exception as e:
-            print(f"❌ Ошибка сохранения тарифа замера: {e}")
+            print(f"Ошибка сохранения тарифа замера: {e}")
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()

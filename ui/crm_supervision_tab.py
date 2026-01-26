@@ -1461,7 +1461,7 @@ class SupervisionCard(QFrame):
         
         # Дедлайн
         if self.card_data.get('deadline'):
-            deadline_label = QLabel(f"📅 Дедлайн: {self.card_data['deadline']}")
+            deadline_label = QLabel(f"Дедлайн: {self.card_data['deadline']}")
             deadline_label.setStyleSheet('''
                 color: white;
                 background-color: #95A5A6;
@@ -1475,7 +1475,7 @@ class SupervisionCard(QFrame):
         
         # Теги
         if self.card_data.get('tags'):
-            tags_label = QLabel(f"🏷️ {self.card_data['tags']}")
+            tags_label = QLabel(f"{self.card_data['tags']}")
             tags_label.setStyleSheet('''
                 color: white;
                 background-color: #FF6B6B;
@@ -1676,9 +1676,9 @@ class SupervisionCard(QFrame):
         team_members = []
         
         if self.card_data.get('senior_manager_name'):
-            team_members.append(('👔 Ст.менеджер', self.card_data['senior_manager_name']))
+            team_members.append(('Ст.менеджер', self.card_data['senior_manager_name']))
         if self.card_data.get('dan_name'):
-            team_members.append(('🎨 ДАН', self.card_data['dan_name']))
+            team_members.append(('ДАН', self.card_data['dan_name']))
         
         if not team_members:
             return None
@@ -1689,7 +1689,7 @@ class SupervisionCard(QFrame):
         main_layout.setContentsMargins(0, 0, 0, 0)
         
         # Кнопка-заголовок
-        self.team_toggle_btn = QPushButton(f"👥 Команда ({len(team_members)})  ▶")
+        self.team_toggle_btn = QPushButton(f"Команда ({len(team_members)})  ▶")
         self.team_toggle_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F8F9FA;
@@ -2305,7 +2305,7 @@ class PauseDialog(QDialog):
         """)
         layout.addWidget(self.reason_text)
         
-        hint = QLabel('💡 Эта информация будет сохранена в истории проекта')
+        hint = QLabel('Эта информация будет сохранена в истории проекта')
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
         layout.addWidget(hint)
         
@@ -2532,7 +2532,7 @@ class SupervisionCardEditDialog(QDialog):
 
         # ВКЛАДКА 2: ОПЛАТЫ НАДЗОРА (для ВСЕХ)
         payments_widget = self.create_payments_widget()
-        self.payments_tab_index = self.tabs.addTab(payments_widget, '💰 Оплаты надзора')
+        self.payments_tab_index = self.tabs.addTab(payments_widget, 'Оплаты надзора')
 
         # ВКЛАДКА 3: ИНФОРМАЦИЯ О ПРОЕКТЕ (для ВСЕХ)
         info_widget = self.create_project_info_widget()
@@ -2689,7 +2689,7 @@ class SupervisionCardEditDialog(QDialog):
             icon = ''
         else:
             bg_color = '#F8F9FA'
-            icon = '📝'
+            icon = ''
         
         entry_frame.setStyleSheet(f"""
             QFrame {{
@@ -2939,7 +2939,7 @@ class SupervisionCardEditDialog(QDialog):
                     adjust_layout = QHBoxLayout()
                     adjust_layout.setContentsMargins(0, 0, 0, 0)
 
-                    adjust_btn = QPushButton('✏️ Изменить')
+                    adjust_btn = QPushButton('Изменить')
                     adjust_btn.setStyleSheet("""
                         QPushButton {
                             background-color: #FF9800;
@@ -2963,7 +2963,7 @@ class SupervisionCardEditDialog(QDialog):
                     delete_layout = QHBoxLayout()
                     delete_layout.setContentsMargins(0, 0, 0, 0)
 
-                    delete_btn = QPushButton('🗑️ Удалить')
+                    delete_btn = QPushButton('[DELETE] Удалить')
                     delete_btn.setStyleSheet("""
                         QPushButton {
                             background-color: #E74C3C;
@@ -3389,12 +3389,12 @@ class SupervisionCardEditDialog(QDialog):
         try:
             # Находим индекс вкладки оплат надзора
             for i in range(self.tabs.count()):
-                if self.tabs.tabText(i) == '💰 Оплаты надзора':
+                if self.tabs.tabText(i) == 'Оплаты надзора':
                     # Удаляем старую вкладку
                     self.tabs.removeTab(i)
                     # Создаем новую вкладку
                     payments_widget = self.create_payments_widget()
-                    self.tabs.insertTab(i, payments_widget, '💰 Оплаты надзора')
+                    self.tabs.insertTab(i, payments_widget, 'Оплаты надзора')
                     self.tabs.setCurrentIndex(i)
                     print(f"Вкладка оплат обновлена")
                     break
@@ -3472,7 +3472,7 @@ class SupervisionCardEditDialog(QDialog):
             submitted_stages = self.db.get_submitted_stages(self.card_data['id'])
 
         if submitted_stages:
-            submitted_header = QLabel('📤 Сданные стадии (ожидают согласования):')
+            submitted_header = QLabel('Сданные стадии (ожидают согласования):')
             submitted_header.setStyleSheet('font-size: 11px; font-weight: bold; color: #ffd93c; margin-bottom: 4px;')
             layout.addWidget(submitted_header)
 
@@ -3506,7 +3506,7 @@ class SupervisionCardEditDialog(QDialog):
                 block_layout.setSpacing(2)
                 block_layout.setContentsMargins(8, 6, 8, 6)
 
-                stage_name = QLabel(f"📤 {submitted['stage_name']}")
+                stage_name = QLabel(f"{submitted['stage_name']}")
                 stage_name.setWordWrap(True)
                 stage_name.setAlignment(Qt.AlignCenter)
                 stage_name.setStyleSheet('font-size: 9px; color: white; font-weight: bold;')
@@ -3584,7 +3584,7 @@ class SupervisionCardEditDialog(QDialog):
         #         # Дата сдачи
         #         if accepted.get('submitted_date'):
         #             from utils.date_utils import format_date
-        #             submitted_label = QLabel(f"📤 {format_date(accepted['submitted_date'])}")
+        #             submitted_label = QLabel(f"{format_date(accepted['submitted_date'])}")
         #             submitted_label.setAlignment(Qt.AlignCenter)
         #             submitted_label.setStyleSheet('font-size: 7px; color: #BBDEFB;')
         #             block_layout.addWidget(submitted_label)
@@ -3690,7 +3690,7 @@ class SupervisionCardEditDialog(QDialog):
 
         # Дата сдачи работы
         if stage.get('submitted_date'):
-            submitted_label = QLabel(f"📤 <b>Сдано:</b> {stage.get('submitted_date', 'N/A')}")
+            submitted_label = QLabel(f"<b>Сдано:</b> {stage.get('submitted_date', 'N/A')}")
             submitted_label.setStyleSheet('font-size: 10px; color: #ffd93c;')
             stage_layout.addWidget(submitted_label)
 
@@ -3716,7 +3716,7 @@ class SupervisionCardEditDialog(QDialog):
                         old_widget.deleteLater()
 
                     payments_widget = self.create_payments_widget()
-                    tabs.insertTab(self.payments_tab_index, payments_widget, '💰 Оплаты надзора')
+                    tabs.insertTab(self.payments_tab_index, payments_widget, 'Оплаты надзора')
                     print(f"Вкладка оплат обновлена")
             except Exception as e:
                 print(f" Ошибка обновления вкладки оплат: {e}")
@@ -4705,7 +4705,7 @@ class SupervisionStatisticsDialog(QDialog):
         
         layout.addLayout(filename_layout)
         
-        hint = QLabel('💡 Файл будет сохранен в выбранную папку с расширением .pdf')
+        hint = QLabel('Файл будет сохранен в выбранную папку с расширением .pdf')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
         hint.setAlignment(Qt.AlignCenter)
@@ -5367,7 +5367,7 @@ class AddProjectNoteDialog(QDialog):
         self.note_text.setMinimumHeight(120)
         layout.addWidget(self.note_text)
         
-        hint = QLabel('💡 Эта запись будет сохранена с датой и вашим именем')
+        hint = QLabel('Эта запись будет сохранена с датой и вашим именем')
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
         layout.addWidget(hint)
         
@@ -5590,7 +5590,7 @@ class SupervisionStageDeadlineDialog(QDialog):
         deadline_layout.addStretch()
         layout.addLayout(deadline_layout)
         
-        hint = QLabel('💡 Этот дедлайн будет отображаться на карточке')
+        hint = QLabel('Этот дедлайн будет отображаться на карточке')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic; margin-top: 5px;')
         hint.setAlignment(Qt.AlignCenter)

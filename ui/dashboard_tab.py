@@ -272,7 +272,7 @@ class DashboardTab(QWidget):
             return stats
 
         except Exception as e:
-            print(f"❌ Ошибка расчета статистики из API: {e}")
+            print(f"Ошибка расчета статистики из API: {e}")
             import traceback
             traceback.print_exc()
             # Возвращаем нулевую статистику в случае ошибки

@@ -118,9 +118,9 @@ class PDFGenerator:
         # Сборка документа
         try:
             doc.build(elements)
-            print(f"✅ PDF отчет создан: {filename}")
+            print(f"PDF отчет создан: {filename}")
         except Exception as e:
-            print(f"❌ Ошибка создания PDF: {e}")
+            print(f"Ошибка создания PDF: {e}")
             raise
         
         return filename
@@ -225,9 +225,9 @@ class PDFGenerator:
         # Сборка документа
         try:
             doc.build(elements)
-            print(f"✅ Общий отчет создан: {filename}")
+            print(f"Общий отчет создан: {filename}")
         except Exception as e:
-            print(f"❌ Ошибка создания общего отчета: {e}")
+            print(f"Ошибка создания общего отчета: {e}")
             raise
         
         return filename
@@ -278,4 +278,4 @@ if __name__ == '__main__':
         'Все'
     )
     
-    print("✅ Тесты завершены!")
+    print("Тесты завершены!")

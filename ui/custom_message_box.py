@@ -88,7 +88,7 @@ class CustomMessageBox(QDialog):
             bg_color = '#D5F4E6'
         else:  # info
             icon_text = 'ИНФО'
-            bg_color = '#E8F4F8'
+            bg_color = '#ffffff'
 
         icon_label.setText(icon_text)
         icon_label.setStyleSheet('font-size: 14px; font-weight: bold; background-color: transparent; padding: 5px;')
@@ -113,25 +113,20 @@ class CustomMessageBox(QDialog):
 
         # ========== КНОПКА OK ==========
         ok_btn = QPushButton('OK')
-        ok_btn.setFixedHeight(35)  # было 50
+        ok_btn.setFixedHeight(36)
         ok_btn.setStyleSheet("""
             QPushButton {
-                background-color: #FFFFFF;
+                background-color: #E0E0E0;
                 color: #333333;
-                border: 1px solid #CCCCCC;
+                padding: 0px 30px;
                 border-radius: 4px;
-                font-size: 12px;
+                border: none;
                 font-weight: bold;
-                padding: 8px 20px;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #F8F9FA;
-                border-color: #999999;
-            }
-            QPushButton:pressed {
-                background-color: #E8E9EA;
-                border-color: #666666;
-            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
         ok_btn.clicked.connect(self.accept)
         ok_btn.setCursor(Qt.PointingHandCursor)
@@ -214,7 +209,7 @@ class CustomQuestionBox(QDialog):
         content_layout.setSpacing(14)  # было 20
         content_layout.setContentsMargins(28, 20, 28, 28)  # было 40, 20, 40, 40
 
-        # ИСПРАВЛЕНИЕ: Убрана иконка вопроса (❓)
+        # ИСПРАВЛЕНИЕ: Убрана иконка вопроса ()
 
         # Сообщение
         message_label = QLabel(message)
@@ -225,7 +220,7 @@ class CustomQuestionBox(QDialog):
             color: #333;
             line-height: 1.6;
             padding: 10px;
-            background-color: #E8F4F8;
+            background-color: #ffffff;
             border-radius: 6px;
         ''')
         content_layout.addWidget(message_label)
@@ -237,48 +232,42 @@ class CustomQuestionBox(QDialog):
         buttons_layout.setSpacing(7)  # было 10
 
         yes_btn = QPushButton('Да')
-        yes_btn.setFixedHeight(35)  # было 50
-        yes_btn.setMinimumWidth(84)  # было 120
+        yes_btn.setFixedHeight(36)
+        yes_btn.setMinimumWidth(100)
         yes_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27AE60;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 12px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
-                padding: 8px 20px;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-            QPushButton:pressed {
-                background-color: #1E8449;
-            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
         yes_btn.clicked.connect(self.accept)
         yes_btn.setCursor(Qt.PointingHandCursor)
         buttons_layout.addWidget(yes_btn)
 
         no_btn = QPushButton('Нет')
-        no_btn.setFixedHeight(35)  # было 50
-        no_btn.setMinimumWidth(84)  # было 120
+        no_btn.setFixedHeight(36)
+        no_btn.setMinimumWidth(100)
         no_btn.setStyleSheet("""
             QPushButton {
-                background-color: #95A5A6;
-                color: white;
-                border: none;
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
                 border-radius: 4px;
-                font-size: 12px;
+                border: none;
                 font-weight: bold;
-                padding: 8px 20px;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #7F8C8D;
-            }
-            QPushButton:pressed {
-                background-color: #626D71;
-            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
         no_btn.clicked.connect(self.reject)
         no_btn.setCursor(Qt.PointingHandCursor)
