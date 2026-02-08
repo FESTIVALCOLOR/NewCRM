@@ -5028,7 +5028,7 @@ class DatabaseManager:
                         birthday_names = [emp['full_name']]
                     elif days_until == min_days:
                         birthday_names.append(emp['full_name'])
-                except:
+                except Exception:
                     continue
 
             if birthday_names:
@@ -5047,7 +5047,7 @@ class DatabaseManager:
                     days_until = (this_year_birthday - today).days
                     if 0 <= days_until <= 30:
                         upcoming_birthdays_count += 1
-                except:
+                except Exception:
                     continue
 
             return {

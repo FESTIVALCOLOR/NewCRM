@@ -44,4 +44,8 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Получить настройки (кэшированные)"""
-    return Settings()
+    settings = Settings()
+    if "change-this" in settings.secret_key or "change_in_production" in settings.secret_key:
+        import logging
+        logging.warning("SECURITY WARNING: JWT secret_key is using default value! Set SECRET_KEY in .env")
+    return settings

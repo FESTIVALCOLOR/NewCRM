@@ -918,7 +918,7 @@ class SalariesIndividualDashboard(DashboardWidget):
             self.agent_types = self.db.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Фестиваль', 'Петрович']
-        except:
+        except Exception:
             self.agent_types = ['Фестиваль', 'Петрович']
 
         self.setup_ui()
@@ -1078,7 +1078,7 @@ class SalariesTemplateDashboard(DashboardWidget):
             self.agent_types = self.db.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Фестиваль', 'Петрович']
-        except:
+        except Exception:
             self.agent_types = ['Фестиваль', 'Петрович']
 
         self.setup_ui()
@@ -1392,7 +1392,7 @@ class SalariesSupervisionDashboard(DashboardWidget):
             self.agent_types = self.db.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Фестиваль', 'Петрович']
-        except:
+        except Exception:
             self.agent_types = ['Фестиваль', 'Петрович']
 
         self.setup_ui()

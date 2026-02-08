@@ -12,7 +12,7 @@ from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from ui.custom_combobox import CustomComboBox
 from utils.icon_loader import IconLoader
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit, ICONS_PATH
-from utils.offline_manager import OperationType
+from utils.data_access import DataAccess
 from utils.table_settings import ProportionalResizeTable
 
 
@@ -93,9 +93,8 @@ class SalariesTab(QWidget):
         super().__init__(parent)
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
-        self.db = DatabaseManager()
-        # Получаем offline_manager от родителя (main_window)
-        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+        self.data = DataAccess(api_client=api_client)
+        self.db = self.data.db  # Для обратной совместимости и raw SQL запросов
 
         # Кеширование данных для быстрой фильтрации
         self._all_payments_cache = None  # Кеш всех выплат
@@ -1039,35 +1038,12 @@ class SalariesTab(QWidget):
                 # Обновляем данные выплаты
                 payment_data = dialog.get_payment_data()
 
-                # ИСПРАВЛЕНО: Используем API если доступен
-                if self.api_client and self.api_client.is_online:
-                    try:
-                        self.api_client.update_payment(payment['id'], {
-                            'final_amount': payment_data['amount'],
-                            'payment_type': payment_data['payment_type'],
-                            'report_month': payment_data['report_month']
-                        })
-                        print(f"[API] Выплата обновлена: ID={payment['id']}")
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API обновления: {e}, fallback на локальную БД")
-                        self._update_payment_locally(payment['id'], payment_data)
-                elif self.api_client:
-                    # Offline режим
-                    self._update_payment_locally(payment['id'], payment_data)
-                    if self.offline_manager:
-                        from utils.offline_manager import OperationType
-                        self.offline_manager.queue_operation(
-                            OperationType.UPDATE, 'payment', payment['id'], {
-                                'final_amount': payment_data['amount'],
-                                'payment_type': payment_data['payment_type'],
-                                'report_month': payment_data['report_month']
-                            }
-                        )
-                    CustomMessageBox(self, 'Offline режим',
-                        'Выплата обновлена локально.\nИзменения будут синхронизированы при восстановлении подключения.', 'info').exec_()
-                else:
-                    # Локальный режим без API
-                    self._update_payment_locally(payment['id'], payment_data)
+                self.data.update_payment(payment['id'], {
+                    'final_amount': payment_data['amount'],
+                    'payment_type': payment_data['payment_type'],
+                    'report_month': payment_data['report_month']
+                })
+                print(f"[DataAccess] Выплата обновлена: ID={payment['id']}")
 
                 CustomMessageBox(
                     self,
@@ -1129,34 +1105,19 @@ class SalariesTab(QWidget):
 
                 if is_salary:
                     # Обновляем оклад
-                    if self.api_client and self.api_client.is_online:
-                        try:
-                            self.api_client.update_salary(payment['id'], {
-                                'amount': new_data['amount'],
-                                'report_month': new_data['report_month']
-                            })
-                        except Exception as e:
-                            print(f"[WARN] Ошибка API обновления оклада: {e}")
-                            self.db.update_salary(payment['id'], new_data['amount'], new_data['report_month'])
-                    else:
-                        self.db.update_salary(payment['id'], new_data['amount'], new_data['report_month'])
+                    self.data.update_salary(payment['id'], {
+                        'amount': new_data['amount'],
+                        'report_month': new_data['report_month']
+                    })
                 else:
                     # Обновляем CRM выплату
                     # ИСПРАВЛЕНИЕ 07.02.2026: Сбрасываем флаг reassigned при редактировании (#6)
-                    update_data = {
+                    self.data.update_payment(payment['id'], {
                         'final_amount': new_data['amount'],
                         'payment_type': new_data['payment_type'],
                         'report_month': new_data['report_month'],
                         'reassigned': False  # Сбрасываем флаг переназначения
-                    }
-                    if self.api_client and self.api_client.is_online:
-                        try:
-                            self.api_client.update_payment(payment['id'], update_data)
-                        except Exception as e:
-                            print(f"[WARN] Ошибка API обновления выплаты: {e}")
-                            self._update_payment_locally(payment['id'], new_data)
-                    else:
-                        self._update_payment_locally(payment['id'], new_data)
+                    })
 
                 # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
                 self.invalidate_cache()
@@ -1181,6 +1142,7 @@ class SalariesTab(QWidget):
     def mark_as_paid(self, payment_id):
         """Отметка выплаты как оплаченной"""
         try:
+            # mark_payment_as_paid - специфичный метод, не в DataAccess, используем db напрямую
             if self.api_client:
                 try:
                     self.api_client.mark_payment_as_paid(payment_id, self.employee['id'])
@@ -1224,25 +1186,11 @@ class SalariesTab(QWidget):
 
         if reply == QDialog.Accepted:
             try:
-                # Удаляем запись из базы данных
-                if self.api_client and self.api_client.is_online:
-                    try:
-                        # ИСПРАВЛЕНО: delete_payment принимает только payment_id
-                        self.api_client.delete_payment(payment_id)
-                        print(f"[API] Оплата удалена: {role} - {employee_name} (ID: {payment_id}, Source: {source})")
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API удаления: {e}, fallback на локальную БД")
-                        self._delete_payment_locally(payment_id, source)
-                        self._queue_payment_delete(payment_id, source)
-                elif self.api_client:
-                    # Offline режим - удаляем локально и добавляем в очередь
-                    self._delete_payment_locally(payment_id, source)
-                    self._queue_payment_delete(payment_id, source)
-                    CustomMessageBox(self, 'Offline режим',
-                        'Оплата удалена локально.\nИзменения будут синхронизированы при восстановлении подключения.', 'info').exec_()
+                # Удаляем запись через DataAccess
+                if source == 'Оклад':
+                    self.data.delete_salary(payment_id)
                 else:
-                    # Локальный режим без API
-                    self._delete_payment_locally(payment_id, source)
+                    self.data.delete_payment(payment_id)
 
                 print(f"[OK] Оплата удалена: {role} - {employee_name} (ID: {payment_id}, Source: {source})")
 
@@ -1284,17 +1232,9 @@ class SalariesTab(QWidget):
             raise
 
     def _queue_payment_delete(self, payment_id: int, source: str):
-        """Добавление операции удаления платежа в очередь для синхронизации"""
-        if self.offline_manager:
-            # ИСПРАВЛЕНО: Используем правильный entity_type в зависимости от source
-            entity_type = 'salary' if source == 'Оклад' else 'payment'
-            self.offline_manager.queue_operation(
-                OperationType.DELETE,
-                entity_type,
-                payment_id,
-                {'source': source}
-            )
-            print(f"[QUEUE] Удаление {entity_type} добавлено в очередь: ID={payment_id}, Source={source}")
+        """Добавление операции удаления платежа в очередь для синхронизации (legacy)"""
+        # Очередь теперь обрабатывается внутри DataAccess
+        pass
 
     def on_period_filter_changed(self):
         """Обработка изменения типа периода"""
@@ -1376,7 +1316,8 @@ class SalariesTab(QWidget):
         if need_reload:
             # ИСПРАВЛЕНО 06.02.2026: include_null_month=True для включения платежей "В работе"
             # Загружаем данные за весь год (один запрос вместо 12)
-            if self.api_client and self.api_client.is_online:
+            # get_year_payments - специфичный метод, не в DataAccess, используем api_client/db напрямую
+            if self.api_client:
                 try:
                     # Получаем все выплаты за год одним запросом, включая NULL report_month
                     all_payments = self.api_client.get_year_payments(year, include_null_month=True)
@@ -1396,7 +1337,8 @@ class SalariesTab(QWidget):
                 all_payments = []
                 seen_ids = set()  # Множество для отслеживания уже добавленных платежей
                 for y in range(2020, 2031):
-                    if self.api_client and self.api_client.is_online:
+                    # get_year_payments - специфичный метод, не в DataAccess
+                    if self.api_client:
                         try:
                             year_payments = self.api_client.get_year_payments(y, include_null_month=True)
                         except Exception as e:
@@ -1444,7 +1386,7 @@ class SalariesTab(QWidget):
                 parts = report_month.split('-')
                 if len(parts) == 2:
                     return int(parts[0]) == year and int(parts[1]) == month
-            except:
+            except Exception:
                 pass
         return False
 
@@ -1458,7 +1400,7 @@ class SalariesTab(QWidget):
                     p_year = int(parts[0])
                     p_month = int(parts[1])
                     return p_year == year and start_month <= p_month <= end_month
-            except:
+            except Exception:
                 pass
         return False
 
@@ -1470,7 +1412,7 @@ class SalariesTab(QWidget):
                 parts = report_month.split('-')
                 if len(parts) >= 1:
                     return int(parts[0]) == year
-            except:
+            except Exception:
                 pass
         return False
 
@@ -1619,7 +1561,7 @@ class SalariesTab(QWidget):
                     months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                                 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
                     report_month = f"{months_ru[month_date.month - 1]} {month_date.year}"
-                except:
+                except Exception:
                     pass
             self.all_payments_table.setItem(row, 7, QTableWidgetItem(report_month))
 
@@ -1779,7 +1721,7 @@ class SalariesTab(QWidget):
                 else:
                     project_type_filter = None
 
-                # Проверяем наличие API клиента
+                # get_payments_by_type - специфичный API метод, не в DataAccess
                 if self.api_client:
                     try:
                         data = self.api_client.get_payments_by_type(payment_type, project_type_filter)
@@ -1869,7 +1811,7 @@ class SalariesTab(QWidget):
                                 months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                                             'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
                                 report_month = f"{months_ru[month_date.month - 1]} {month_date.year}"
-                            except:
+                            except Exception:
                                 pass
                         table.setItem(row, col, QTableWidgetItem(report_month))
                         col += 1
@@ -1952,7 +1894,7 @@ class SalariesTab(QWidget):
                             months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                                         'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
                             report_month = f"{months_ru[month_date.month - 1]} {month_date.year}"
-                        except:
+                        except Exception:
                             pass
                     table.setItem(row, col, QTableWidgetItem(report_month))
                     col += 1
@@ -2074,7 +2016,7 @@ class SalariesTab(QWidget):
                                 elif period == 'Год':
                                     if year_value != year:
                                         show_row = False
-                        except:
+                        except Exception:
                             show_row = False  # Если не удалось распарсить - скрываем
                 else:
                     # Если элемент отчетного месяца отсутствует - скрываем при выбранном периоде
@@ -2384,15 +2326,8 @@ class SalariesTab(QWidget):
 
         if reply == QMessageBox.Yes:
             salary_id = payment.get('id')
-            if self.api_client and self.api_client.is_online:
-                try:
-                    self.api_client.delete_salary(salary_id)
-                    print(f"[API] Оклад ID={salary_id} удален")
-                except Exception as e:
-                    print(f"[WARN] API ошибка delete_salary: {e}")
-                    self.db.delete_salary(salary_id)
-            else:
-                self.db.delete_salary(salary_id)
+            self.data.delete_salary(salary_id)
+            print(f"[DataAccess] Оклад ID={salary_id} удален")
             self.invalidate_cache()
             self.load_all_payments()
             self.load_payment_type_data('Оклады')
@@ -2407,14 +2342,7 @@ class SalariesTab(QWidget):
         )
 
         if reply == QMessageBox.Yes:
-            if self.api_client:
-                try:
-                    self.api_client.delete_payment(payment_id)
-                except Exception as e:
-                    print(f"[WARN] API ошибка delete_payment: {e}")
-                    self.db.delete_payment(payment_id)
-            else:
-                self.db.delete_payment(payment_id)
+            self.data.delete_payment(payment_id)
             self.invalidate_cache()
             self.load_all_payments()
 
@@ -2564,30 +2492,12 @@ class SalariesTab(QWidget):
                 update_data['report_month'] = datetime.now().strftime('%Y-%m')
                 print(f"[OK] Установлен report_month={update_data['report_month']} для ID={payment['id']}")
 
-            # ИСПРАВЛЕНО: Используем API если доступен
-            if self.api_client and self.api_client.is_online:
-                try:
-                    if is_salary:
-                        self.api_client.update_salary(payment['id'], update_data)
-                    else:
-                        self.api_client.update_payment(payment['id'], update_data)
-                    print(f"[API] Статус обновлен: ID={payment['id']}, status={new_status}")
-                except Exception as e:
-                    print(f"[WARN] Ошибка API обновления статуса: {e}, fallback на локальную БД")
-                    self._update_status_locally(payment['id'], update_data, is_salary)
-            elif self.api_client:
-                # Offline режим
-                self._update_status_locally(payment['id'], update_data, is_salary)
-                if self.offline_manager:
-                    from utils.offline_manager import OperationType
-                    entity_type = 'salary' if is_salary else 'payment'
-                    self.offline_manager.queue_operation(
-                        OperationType.UPDATE, entity_type, payment['id'],
-                        update_data
-                    )
+            # Используем DataAccess для обновления
+            if is_salary:
+                self.data.update_salary(payment['id'], update_data)
             else:
-                # Локальный режим без API
-                self._update_status_locally(payment['id'], update_data, is_salary)
+                self.data.update_payment(payment['id'], update_data)
+            print(f"[DataAccess] Статус обновлен: ID={payment['id']}, status={new_status}")
 
             # Обновляем все таблицы для синхронизации (инвалидируем кеш т.к. статус изменился)
             self.invalidate_cache()
@@ -2697,10 +2607,9 @@ class PaymentDialog(QDialog):
         super().__init__(parent)
         self.payment_data = payment_data
         self.payment_type = payment_type
-        self.db = DatabaseManager()
-        self.api_client = api_client
-        # Получаем offline_manager для работы в offline режиме
-        self.offline_manager = getattr(parent, 'offline_manager', None)
+        self.data = getattr(parent, 'data', DataAccess(api_client=api_client))
+        self.db = self.data.db
+        self.api_client = self.data.api_client
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -2766,14 +2675,7 @@ class PaymentDialog(QDialog):
         if self.payment_type == 'Оклады':
             # Исполнитель
             self.employee_combo = CustomComboBox()
-            if self.api_client:
-                try:
-                    employees = self.api_client.get_employees()
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки сотрудников: {e}")
-                    employees = self.db.get_all_employees()
-            else:
-                employees = self.db.get_all_employees()
+            employees = self.data.get_all_employees()
             for emp in employees:
                 self.employee_combo.addItem(emp['full_name'], emp['id'])
             form_layout.addRow('Исполнитель:', self.employee_combo)
@@ -2811,14 +2713,7 @@ class PaymentDialog(QDialog):
         else:
             # Договор
             self.contract_combo = CustomComboBox()
-            if self.api_client:
-                try:
-                    contracts = self.api_client.get_contracts()
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки договоров: {e}")
-                    contracts = self.db.get_all_contracts()
-            else:
-                contracts = self.db.get_all_contracts()
+            contracts = self.data.get_all_contracts()
             for contract in contracts:
                 self.contract_combo.addItem(
                     f"{contract['contract_number']} - {contract['address']}",
@@ -2828,14 +2723,7 @@ class PaymentDialog(QDialog):
 
             # Исполнитель
             self.employee_combo = CustomComboBox()
-            if self.api_client:
-                try:
-                    employees = self.api_client.get_employees()
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки сотрудников: {e}")
-                    employees = self.db.get_all_employees()
-            else:
-                employees = self.db.get_all_employees()
+            employees = self.data.get_all_employees()
             for emp in employees:
                 self.employee_combo.addItem(emp['full_name'], emp['id'])
             form_layout.addRow('Исполнитель:', self.employee_combo)
@@ -2937,23 +2825,9 @@ class PaymentDialog(QDialog):
             payment_data['project_type'] = self.project_type_combo.currentText()
         
         if self.payment_data:
-            if self.api_client:
-                try:
-                    self.api_client.update_salary(self.payment_data['id'], payment_data)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API обновления оклада: {e}")
-                    self.db.update_salary(self.payment_data['id'], payment_data)
-            else:
-                self.db.update_salary(self.payment_data['id'], payment_data)
+            self.data.update_salary(self.payment_data['id'], payment_data)
         else:
-            if self.api_client:
-                try:
-                    self.api_client.add_salary(payment_data)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API добавления оклада: {e}")
-                    self.db.add_salary(payment_data)
-            else:
-                self.db.add_salary(payment_data)
+            self.data.create_salary(payment_data)
         
         # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
         self.accept()
@@ -2976,7 +2850,9 @@ class EditPaymentDialog(QDialog):
     def __init__(self, parent, payment_data, api_client=None):
         super().__init__(parent)
         self.payment_data = payment_data
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', DataAccess(api_client=api_client))
+        self.db = self.data.db
+        self.api_client = self.data.api_client
         self._drag_pos = None
         self.init_ui()
 
@@ -3179,7 +3055,7 @@ class EditPaymentDialog(QDialog):
                 month_date = datetime.strptime(report_month, '%Y-%m')
                 self.month_combo.setCurrentIndex(month_date.month - 1)
                 self.year_spin.setValue(month_date.year)
-            except:
+            except Exception:
                 self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
                 self.year_spin.setValue(QDate.currentDate().year())
         else:

@@ -16,15 +16,15 @@ from ui.custom_message_box import CustomMessageBox
 from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.table_settings import ProportionalResizeTable
+from utils.data_access import DataAccess
 
 class EmployeesTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
-        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
-        self.db = DatabaseManager()
-        # Получаем offline_manager от родителя (main_window)
-        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+        self.api_client = api_client
+        self.data = DataAccess(api_client=api_client)
+        self.db = self.data.db
 
         # ========== ОПРЕДЕЛЯЕМ ПРАВА ==========
         self.can_edit = employee['position'] in [
@@ -216,15 +216,7 @@ class EmployeesTab(QWidget):
         """Применение фильтров поиска"""
         self.employees_table.setSortingEnabled(False)
 
-        # Загружаем сотрудников через API или локальную БД
-        if self.api_client and self.api_client.is_online:
-            try:
-                employees = self.api_client.get_employees()
-            except Exception as e:
-                print(f"[WARN] API error, using local DB: {e}")
-                employees = self.db.get_all_employees()
-        else:
-            employees = self.db.get_all_employees()
+        employees = self.data.get_all_employees()
 
         filtered_employees = []
         for emp in employees:
@@ -386,13 +378,7 @@ class EmployeesTab(QWidget):
         """Загрузка списка сотрудников с фильтрацией по отделу"""
         self.employees_table.setSortingEnabled(False)
 
-        # Загружаем сотрудников из API или локальной БД
-        if self.api_client:
-            # Многопользовательский режим - загружаем из API
-            employees = self.api_client.get_employees()
-        else:
-            # Локальный режим - загружаем из локальной БД
-            employees = self.db.get_all_employees()
+        employees = self.data.get_all_employees()
 
         if department == 'admin':
             positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
@@ -574,12 +560,7 @@ class EmployeesTab(QWidget):
 
         if reply == QDialog.Accepted:
             try:
-                if self.api_client:
-                    # API режим
-                    self.api_client.delete_employee(employee_data['id'])
-                else:
-                    # Локальный режим
-                    self.db.delete_employee(employee_data['id'])
+                self.data.delete_employee(employee_data['id'])
 
                 CustomMessageBox(
                     self,
@@ -631,11 +612,9 @@ class EmployeeDialog(QDialog):
         super().__init__(parent)
         self.employee_data = employee_data
         self.view_only = view_only
-        self.db = DatabaseManager()
-        # Получаем api_client от родителя, если он есть
-        self.api_client = getattr(parent, 'api_client', None)
-        # Получаем offline_manager для работы в offline режиме
-        self.offline_manager = getattr(parent, 'offline_manager', None)
+        self.data = getattr(parent, 'data', DataAccess())
+        self.db = self.data.db
+        self.api_client = self.data.api_client
 
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
@@ -1026,60 +1005,10 @@ class EmployeeDialog(QDialog):
                     print(f"[WARN] СТАТУС ИЗМЕНЁН: '{old_status}' → '{new_status}'")
             # ================================================
 
-            if self.api_client and self.api_client.is_online:
-                # Многопользовательский режим - сохраняем через API
-                if self.employee_data:
-                    self.api_client.update_employee(self.employee_data['id'], employee_data)
-                else:
-                    self.api_client.create_employee(employee_data)
-            elif self.api_client:
-                # Offline режим - сохраняем локально и добавляем в очередь
-                if self.employee_data:
-                    # Обновление существующего сотрудника
-                    self.db.update_employee(self.employee_data['id'], employee_data)
-                    # Добавляем в очередь для синхронизации
-                    if self.offline_manager:
-                        from utils.offline_manager import OperationType
-                        self.offline_manager.queue_operation(
-                            OperationType.UPDATE,
-                            'employee',
-                            self.employee_data['id'],
-                            employee_data
-                        )
-                        CustomMessageBox(
-                            self,
-                            'Offline режим',
-                            'Изменения сохранены локально.\n\n'
-                            'Данные будут синхронизированы с сервером\n'
-                            'при восстановлении подключения.',
-                            'info'
-                        ).exec_()
-                else:
-                    # Создание нового сотрудника
-                    new_id = self.db.add_employee(employee_data)
-                    # Добавляем в очередь для синхронизации
-                    if self.offline_manager:
-                        from utils.offline_manager import OperationType
-                        self.offline_manager.queue_operation(
-                            OperationType.CREATE,
-                            'employee',
-                            new_id,
-                            employee_data
-                        )
-                        CustomMessageBox(
-                            self,
-                            'Offline режим',
-                            'Сотрудник создан локально.\n\n'
-                            'Данные будут синхронизированы с сервером\n'
-                            'при восстановлении подключения.',
-                            'info'
-                        ).exec_()
+            if self.employee_data:
+                self.data.update_employee(self.employee_data['id'], employee_data)
             else:
-                # Локальный режим (без API) - сохраняем в локальную БД
-                if self.employee_data:
-                    self.db.update_employee(self.employee_data['id'], employee_data)
-                else:
-                    self.db.add_employee(employee_data)
+                self.data.create_employee(employee_data)
 
             # ========== УВЕДОМЛЕНИЕ О ПЕРЕЗАХОДЕ ==========
             if status_changed and self.employee_data:

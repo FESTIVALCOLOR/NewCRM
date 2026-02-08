@@ -14,6 +14,7 @@ from PyQt5.QtGui import (QTextDocument, QTextCursor, QTextTableFormat,
                          QTextCharFormat, QFont, QBrush,
                          QTextBlockFormat, QTextLength, QTextImageFormat)
 from database.db_manager import DatabaseManager
+from utils.data_access import DataAccess
 from utils.icon_loader import IconLoader
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_combobox import CustomComboBox
@@ -119,9 +120,8 @@ class CRMTab(QWidget):
         self.employee = employee
         self.can_edit = can_edit
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
-        self.db = DatabaseManager()
-        # Получаем offline_manager от родителя (main_window)
-        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+        self.data = DataAccess(api_client=api_client)
+        self.db = self.data.db
 
         self.init_ui()
         # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
@@ -413,28 +413,10 @@ class CRMTab(QWidget):
         print(f"\n=== ЗАГРУЗКА КАРТОЧЕК: {project_type} ===")
 
         cards = None
-        api_error = None
 
         try:
-            # Попытка загрузки через API
-            if self.api_client and self.api_client.is_online:
-                try:
-                    cards = self.api_client.get_crm_cards(project_type)
-                    print(f"[API] Получено: {len(cards) if cards else 0} карточек")
-                except Exception as e:
-                    api_error = e
-                    print(f"[API ERROR] {e}")
-                    print("[FALLBACK] Переключение на локальную БД...")
-
-            # Fallback на локальную БД или основной источник
-            if cards is None:
-                cards = self.db.get_crm_cards_by_project_type(project_type)
-                print(f"[DB] Получено: {len(cards) if cards else 0} карточек")
-
-                # Показываем уведомление об offline режиме
-                if api_error and not hasattr(self, '_offline_notification_shown'):
-                    self._offline_notification_shown = True
-                    self._show_offline_notification(api_error)
+            cards = self.data.get_crm_cards(project_type)
+            print(f"[DataAccess] Получено: {len(cards) if cards else 0} карточек")
 
             if project_type == 'Индивидуальный':
                 board_widget = self.individual_widget
@@ -516,22 +498,7 @@ class CRMTab(QWidget):
 
     def _api_update_card_with_fallback(self, card_id: int, updates: dict):
         """Обновить CRM карточку с fallback на локальную БД и очередью offline"""
-        if self.api_client and self.api_client.is_online:
-            try:
-                self.api_client.update_crm_card(card_id, updates)
-                return
-            except Exception as e:
-                print(f"[API ERROR] {e}, fallback на локальную БД")
-
-        # Fallback на локальную БД
-        self.db.update_crm_card(card_id, updates)
-
-        # Добавляем в очередь offline операций
-        if self.api_client and self.offline_manager:
-            from utils.offline_manager import OperationType
-            self.offline_manager.queue_operation(
-                OperationType.UPDATE, 'crm_card', card_id, updates
-            )
+        self.data.update_crm_card(card_id, updates)
             
     def on_tab_changed(self, index):
         """Обработка переключения вкладок"""
@@ -568,10 +535,7 @@ class CRMTab(QWidget):
             print(f"[OK] Исполнитель выбран - продолжаем перемещение")
 
         try:
-            if self.api_client:
-                card_data = self.api_client.get_crm_card(card_id)
-            else:
-                card_data = self.db.get_crm_card_data(card_id)
+            card_data = self.data.get_crm_card(card_id)
 
             if card_data:
                 if 'концепция' in from_column and card_data.get('designer_completed') == 1:
@@ -812,14 +776,8 @@ class CRMTab(QWidget):
 
             # Fallback на локальную БД
             if not api_success:
-                self.db.update_crm_card_column(card_id, to_column)
+                self.data.update_crm_card_column(card_id, to_column)
                 print(f"+ [DB] БД обновлена успешно")
-                # Добавляем в очередь offline операций
-                if self.api_client and self.offline_manager:
-                    from utils.offline_manager import OperationType
-                    self.offline_manager.queue_operation(
-                        OperationType.UPDATE, 'crm_card', card_id, {'column_name': to_column}
-                    )
 
         except Exception as e:
             print(f" Ошибка обновления БД: {e}")
@@ -876,14 +834,10 @@ class CRMTab(QWidget):
 
         if from_column == 'Новый заказ' and to_column != 'Выполненный проект':
             try:
-                if self.api_client:
-                    card_data = self.api_client.get_crm_card(card_id)
-                    contract_id = card_data.get('contract_id') if card_data else None
-                    if contract_id:
-                        self.api_client.update_contract(contract_id, {'status': 'В работе'})
-                else:
-                    contract_id = self.db.get_contract_id_by_crm_card(card_id)
-                    self.db.update_contract(contract_id, {'status': 'В работе'})
+                card_data = self.data.get_crm_card(card_id)
+                contract_id = card_data.get('contract_id') if card_data else None
+                if contract_id:
+                    self.data.update_contract(contract_id, {'status': 'В работе'})
                 print(f"+ Статус изменен на 'В работе'")
             except Exception as e:
                 print(f"! Ошибка установки статуса: {e}")
@@ -2322,7 +2276,7 @@ class CRMCard(QFrame):
                     try:
                         deadline_date = QDate.fromString(deadline_to_show, 'yyyy-MM-dd')
                         deadline_display = deadline_date.toString('dd.MM.yyyy')
-                    except:
+                    except Exception:
                         deadline_display = deadline_to_show
 
                     # Создаем контейнер для иконки и текста
@@ -3388,7 +3342,7 @@ class PreviewLoaderThread(threading.Thread):
                     # Удаляем временный файл
                     try:
                         os.unlink(tmp_path)
-                    except:
+                    except Exception:
                         pass
 
             except Exception as e:
@@ -3420,7 +3374,6 @@ class CardEditDialog(QDialog):
         self.card_data = card_data
         self.view_only = view_only
         self.employee = employee
-        self.db = DatabaseManager()
         self._loading_data = False  # Флаг для предотвращения автосохранения при загрузке
 
         # API клиент - принимаем напрямую или ищем через иерархию виджетов
@@ -3442,6 +3395,12 @@ class CardEditDialog(QDialog):
                     self.parent_tab = widget
                     break
                 widget = widget.parent() if hasattr(widget, 'parent') and callable(widget.parent) else None
+
+        # DataAccess - ищем у родителя или создаем новый
+        self.data = getattr(self.parent_tab, 'data', None)
+        if self.data is None:
+            self.data = DataAccess(api_client=self.api_client)
+        self.db = self.data.db
 
         # Переменные для ресайза окна
         self.resizing = False
@@ -3484,12 +3443,8 @@ class CardEditDialog(QDialog):
             return None
 
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                return contract.get('yandex_folder_path') if contract else None
-            else:
-                contract = self.db.get_contract_by_id(contract_id)
-                return contract.get('yandex_folder_path') if contract else None
+            contract = self.data.get_contract(contract_id)
+            return contract.get('yandex_folder_path') if contract else None
         except Exception as e:
             print(f"[ERROR CardEditDialog] Ошибка получения пути к папке договора: {e}")
             return None
@@ -3501,35 +3456,15 @@ class CardEditDialog(QDialog):
 
         user_id = self.employee.get('id') if self.employee else None
 
-        if self.api_client:
-            try:
-                history_data = {
-                    'user_id': user_id,
-                    'action_type': action_type,
-                    'entity_type': entity_type,
-                    'entity_id': entity_id,
-                    'description': description
-                }
-                self.api_client.create_action_history(history_data)
-                print(f"История действий записана через API: {action_type}")
-            except Exception as e:
-                print(f"[WARNING] Ошибка записи истории через API: {e}")
-                # Fallback на локальную БД
-                self.db.add_action_history(
-                    user_id=user_id,
-                    action_type=action_type,
-                    entity_type=entity_type,
-                    entity_id=entity_id,
-                    description=description
-                )
-        else:
-            self.db.add_action_history(
-                user_id=user_id,
-                action_type=action_type,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                description=description
-            )
+        self.data.add_action_history(
+            user_id=user_id,
+            action_type=action_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            description=description
+        )
+        print(f"История действий записана: {action_type}")
+
 
     def truncate_filename(self, filename, max_length=50):
         """Обрезает длинное имя файла с многоточием в середине"""
@@ -3860,14 +3795,8 @@ class CardEditDialog(QDialog):
             self.senior_manager = CustomComboBox()
             self.senior_manager.setFixedHeight(28)
             self.senior_manager.setEnabled(has_full_access)  # Только для полного доступа
-            # Загрузка сотрудников из API или локальной БД
-            if self.api_client:
-                try:
-                    managers = self.api_client.get_employees_by_position('Старший менеджер проектов')
-                except:
-                    managers = self.db.get_employees_by_position('Старший менеджер проектов')
-            else:
-                managers = self.db.get_employees_by_position('Старший менеджер проектов')
+            # Загрузка сотрудников
+            managers = self.data.get_employees_by_position('Старший менеджер проектов')
             self.senior_manager.addItem('Не назначен', None)
             for manager in managers:
                 self.senior_manager.addItem(manager['full_name'], manager['id'])
@@ -3888,14 +3817,8 @@ class CardEditDialog(QDialog):
                 self.sdp = CustomComboBox()
                 self.sdp.setFixedHeight(28)
                 self.sdp.setEnabled(has_full_access)  # Только для полного доступа
-                # Загрузка сотрудников из API или локальной БД
-                if self.api_client:
-                    try:
-                        sdps = self.api_client.get_employees_by_position('СДП')
-                    except:
-                        sdps = self.db.get_employees_by_position('СДП')
-                else:
-                    sdps = self.db.get_employees_by_position('СДП')
+                # Загрузка сотрудников
+                sdps = self.data.get_employees_by_position('СДП')
                 self.sdp.addItem('Не назначен', None)
                 for sdp in sdps:
                     self.sdp.addItem(sdp['full_name'], sdp['id'])
@@ -3915,14 +3838,8 @@ class CardEditDialog(QDialog):
             self.gap = CustomComboBox()
             self.gap.setFixedHeight(28)
             self.gap.setEnabled(has_full_access)  # Только для полного доступа
-            # Загрузка сотрудников из API или локальной БД
-            if self.api_client:
-                try:
-                    gaps = self.api_client.get_employees_by_position('ГАП')
-                except:
-                    gaps = self.db.get_employees_by_position('ГАП')
-            else:
-                gaps = self.db.get_employees_by_position('ГАП')
+            # Загрузка сотрудников
+            gaps = self.data.get_employees_by_position('ГАП')
             self.gap.addItem('Не назначен', None)
             for gap in gaps:
                 self.gap.addItem(gap['full_name'], gap['id'])
@@ -3945,14 +3862,8 @@ class CardEditDialog(QDialog):
             self.manager = CustomComboBox()
             self.manager.setFixedHeight(28)
             self.manager.setEnabled(has_full_access)  # Только для полного доступа
-            # Загрузка сотрудников из API или локальной БД
-            if self.api_client:
-                try:
-                    managers_list = self.api_client.get_employees_by_position('Менеджер')
-                except:
-                    managers_list = self.db.get_employees_by_position('Менеджер')
-            else:
-                managers_list = self.db.get_employees_by_position('Менеджер')
+            # Загрузка сотрудников
+            managers_list = self.data.get_employees_by_position('Менеджер')
             self.manager.addItem('Не назначен', None)
             for mgr in managers_list:
                 self.manager.addItem(mgr['full_name'], mgr['id'])
@@ -3970,14 +3881,8 @@ class CardEditDialog(QDialog):
             self.surveyor = CustomComboBox()
             self.surveyor.setFixedHeight(28)
             self.surveyor.setEnabled(has_full_access)  # Только для полного доступа
-            # Загрузка сотрудников из API или локальной БД
-            if self.api_client:
-                try:
-                    surveyors = self.api_client.get_employees_by_position('Замерщик')
-                except:
-                    surveyors = self.db.get_employees_by_position('Замерщик')
-            else:
-                surveyors = self.db.get_employees_by_position('Замерщик')
+            # Загрузка сотрудников
+            surveyors = self.data.get_employees_by_position('Замерщик')
             self.surveyor.addItem('Не назначен', None)
             for surv in surveyors:
                 self.surveyor.addItem(surv['full_name'], surv['id'])
@@ -4718,10 +4623,7 @@ class CardEditDialog(QDialog):
 
             # Обновляем crm_cards.survey_date
             updates = {'survey_date': survey_date.toString('yyyy-MM-dd'), 'surveyor_id': surveyor_id}
-            if self.api_client:
-                self.api_client.update_crm_card(self.card_data['id'], updates)
-            else:
-                self.db.update_crm_card(self.card_data['id'], updates)
+            self.data.update_crm_card(self.card_data["id"], updates)
             self.card_data['survey_date'] = survey_date.toString('yyyy-MM-dd')
             self.card_data['surveyor_id'] = surveyor_id
 
@@ -4863,7 +4765,7 @@ class CardEditDialog(QDialog):
                 from datetime import datetime
                 survey_date = datetime.strptime(self.card_data['survey_date'], '%Y-%m-%d')
                 date_input.setDate(QDate(survey_date.year, survey_date.month, survey_date.day))
-            except:
+            except Exception:
                 date_input.setDate(QDate.currentDate())
         else:
             date_input.setDate(QDate.currentDate())
@@ -4916,10 +4818,7 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД - и crm_cards, и contracts
                 updates = {'survey_date': date_str}
-                if self.api_client:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                else:
-                    self.db.update_crm_card(self.card_data['id'], updates)
+                self.data.update_crm_card(self.card_data["id"], updates)
                 self.card_data['survey_date'] = date_str
 
                 # Обновляем contracts.measurement_date
@@ -5088,7 +4987,7 @@ class CardEditDialog(QDialog):
             try:
                 deadline = datetime.strptime(self.card_data['deadline'], '%Y-%m-%d')
                 current_deadline_text.setText(deadline.strftime('%d.%m.%Y'))
-            except:
+            except Exception:
                 current_deadline_text.setText('Не установлен')
         else:
             current_deadline_text.setText('Не установлен')
@@ -5139,7 +5038,7 @@ class CardEditDialog(QDialog):
                 from datetime import datetime
                 deadline_date = datetime.strptime(self.card_data['deadline'], '%Y-%m-%d')
                 date_input.setDate(QDate(deadline_date.year, deadline_date.month, deadline_date.day))
-            except:
+            except Exception:
                 date_input.setDate(QDate.currentDate())
         else:
             date_input.setDate(QDate.currentDate())
@@ -5228,10 +5127,7 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД
                 updates = {'deadline': new_deadline_str}
-                if self.api_client:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                else:
-                    self.db.update_crm_card(self.card_data['id'], updates)
+                self.data.update_crm_card(self.card_data["id"], updates)
                 self.card_data['deadline'] = new_deadline_str
 
                 # Обновляем отображение на форме
@@ -5247,7 +5143,7 @@ class CardEditDialog(QDialog):
                             from datetime import datetime
                             old_date = datetime.strptime(old_deadline_str, '%Y-%m-%d')
                             old_deadline_formatted = old_date.strftime('%d.%m.%Y')
-                        except:
+                        except Exception:
                             old_deadline_formatted = old_deadline_str
 
                     description = f"Дедлайн изменен с {old_deadline_formatted} на {selected_date.toString('dd.MM.yyyy')}. Причина: {reason}"
@@ -5650,24 +5546,9 @@ class CardEditDialog(QDialog):
     def _on_references_uploaded(self, folder_link, contract_id):
         """Обработчик успешной загрузки референсов"""
         try:
-            # Обновляем через API в первую очередь
-            if self.api_client:
-                try:
-                    update_data = {'references_yandex_path': folder_link}
-                    self.api_client.update_contract(contract_id, update_data)
-                    print(f"[API] Ссылка на референсы обновлена через API")
-                except Exception as e:
-                    print(f"[API ERROR] Ошибка обновления референсов через API: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Fallback на локальную БД
-
-            # Обновляем локальную БД (как fallback или дублирование)
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE contracts SET references_yandex_path = ? WHERE id = ?', (folder_link, contract_id))
-            conn.commit()
-            conn.close()
+            # Обновляем через DataAccess (API + локальная БД)
+            self.data.update_contract(contract_id, {'references_yandex_path': folder_link})
+            print(f"[DataAccess] Ссылка на референсы обновлена")
 
             # Обновляем лейбл
             self.project_data_references_label.setText(f'<a href="{folder_link}">Открыть папку с референсами</a>')
@@ -5835,24 +5716,9 @@ class CardEditDialog(QDialog):
     def _on_photo_doc_uploaded(self, folder_link, contract_id):
         """Обработчик успешной загрузки фотофиксации"""
         try:
-            # Обновляем через API в первую очередь
-            if self.api_client:
-                try:
-                    update_data = {'photo_documentation_yandex_path': folder_link}
-                    self.api_client.update_contract(contract_id, update_data)
-                    print(f"[API] Ссылка на фотофиксацию обновлена через API")
-                except Exception as e:
-                    print(f"[API ERROR] Ошибка обновления фотофиксации через API: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Fallback на локальную БД
-
-            # Обновляем локальную БД (как fallback или дублирование)
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE contracts SET photo_documentation_yandex_path = ? WHERE id = ?', (folder_link, contract_id))
-            conn.commit()
-            conn.close()
+            # Обновляем через DataAccess (API + локальная БД)
+            self.data.update_contract(contract_id, {'photo_documentation_yandex_path': folder_link})
+            print(f"[DataAccess] Ссылка на фотофиксацию обновлена")
 
             # Обновляем лейбл
             self.project_data_photo_doc_label.setText(f'<a href="{folder_link}">Открыть папку с фотофиксацией</a>')
@@ -5933,7 +5799,7 @@ class CardEditDialog(QDialog):
                     # Обновляем дату в "Редактирование"
                     if hasattr(self, 'survey_date_label'):
                         self.survey_date_label.setText(date_str)
-                except:
+                except Exception:
                     if hasattr(self, 'project_data_survey_date_label'):
                         self.project_data_survey_date_label.setText('Не установлена')
                     if hasattr(self, 'survey_date_label'):
@@ -5974,18 +5840,9 @@ class CardEditDialog(QDialog):
         # Получаем путь к файлу на Яндекс.Диске перед удалением из БД
         yandex_path = None
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                yandex_path = contract.get('tech_task_yandex_path') if contract else None
-                print(f"[DEBUG] API вернул tech_task_yandex_path: {yandex_path}")
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT tech_task_yandex_path FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                yandex_path = result['tech_task_yandex_path'] if result and result['tech_task_yandex_path'] else None
-                print(f"[DEBUG] DB вернула tech_task_yandex_path: {yandex_path}")
-                conn.close()
+            contract = self.data.get_contract(contract_id)
+            yandex_path = contract.get('tech_task_yandex_path') if contract else None
+            print(f"[DEBUG] Получен tech_task_yandex_path: {yandex_path}")
         except Exception as e:
             print(f"[ERROR] Ошибка получения пути к файлу ТЗ: {e}")
             import traceback
@@ -5993,30 +5850,16 @@ class CardEditDialog(QDialog):
 
         # Удаляем все поля тех.задания из БД/API
         try:
-            if self.api_client:
-                update_data = {
-                    'tech_task_link': None,
-                    'tech_task_yandex_path': None,
-                    'tech_task_file_name': None
-                }
-                self.api_client.update_contract(contract_id, update_data)
-                # Также обновляем CRM карточку
-                card_id = self.card_data.get('id')
-                if card_id:
-                    self.api_client.update_crm_card(card_id, {'tech_task_file': None})
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE contracts
-                    SET tech_task_link = NULL,
-                        tech_task_yandex_path = NULL,
-                        tech_task_file_name = NULL
-                    WHERE id = ?
-                ''', (contract_id,))
-                cursor.execute('UPDATE crm_cards SET tech_task_file = NULL WHERE contract_id = ?', (contract_id,))
-                conn.commit()
-                conn.close()
+            update_data = {
+                'tech_task_link': None,
+                'tech_task_yandex_path': None,
+                'tech_task_file_name': None
+            }
+            self.data.update_contract(contract_id, update_data)
+            # Также обновляем CRM карточку
+            card_id = self.card_data.get('id')
+            if card_id:
+                self.data.update_crm_card(card_id, {'tech_task_file': None})
         except Exception as e:
             print(f"[ERROR] Ошибка удаления данных ТЗ: {e}")
 
@@ -6086,30 +5929,14 @@ class CardEditDialog(QDialog):
         # Получаем путь к папке на Яндекс.Диске перед удалением из БД
         contract_folder = None
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                contract_folder = contract.get('yandex_folder_path') if contract else None
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT yandex_folder_path FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                contract_folder = result['yandex_folder_path'] if result else None
-                conn.close()
+            contract = self.data.get_contract(contract_id)
+            contract_folder = contract.get('yandex_folder_path') if contract else None
         except Exception as e:
             print(f"[ERROR] Ошибка получения пути к папке: {e}")
 
         # Удаляем поле из БД/API
         try:
-            if self.api_client:
-                update_data = {'references_yandex_path': None}
-                self.api_client.update_contract(contract_id, update_data)
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('UPDATE contracts SET references_yandex_path = NULL WHERE id = ?', (contract_id,))
-                conn.commit()
-                conn.close()
+            self.data.update_contract(contract_id, {'references_yandex_path': None})
         except Exception as e:
             print(f"[ERROR] Ошибка удаления references_yandex_path: {e}")
 
@@ -6163,30 +5990,14 @@ class CardEditDialog(QDialog):
         # Получаем путь к папке на Яндекс.Диске перед удалением из БД
         contract_folder = None
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                contract_folder = contract.get('yandex_folder_path') if contract else None
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT yandex_folder_path FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                contract_folder = result['yandex_folder_path'] if result else None
-                conn.close()
+            contract = self.data.get_contract(contract_id)
+            contract_folder = contract.get('yandex_folder_path') if contract else None
         except Exception as e:
             print(f"[ERROR] Ошибка получения пути к папке: {e}")
 
         # Удаляем поле из БД/API
         try:
-            if self.api_client:
-                update_data = {'photo_documentation_yandex_path': None}
-                self.api_client.update_contract(contract_id, update_data)
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('UPDATE contracts SET photo_documentation_yandex_path = NULL WHERE id = ?', (contract_id,))
-                conn.commit()
-                conn.close()
+            self.data.update_contract(contract_id, {'photo_documentation_yandex_path': None})
         except Exception as e:
             print(f"[ERROR] Ошибка удаления photo_documentation_yandex_path: {e}")
 
@@ -6596,43 +6407,21 @@ class CardEditDialog(QDialog):
         # Получаем путь к файлу на Яндекс.Диске перед удалением из БД
         yandex_path = None
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                yandex_path = contract.get('measurement_yandex_path') if contract else None
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT measurement_yandex_path FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                yandex_path = result['measurement_yandex_path'] if result and result['measurement_yandex_path'] else None
-                conn.close()
+            contract = self.data.get_contract(contract_id)
+            yandex_path = contract.get('measurement_yandex_path') if contract else None
         except Exception as e:
             print(f"[ERROR] Ошибка получения пути к файлу замера: {e}")
 
-        # Удаляем данные через API или локальную БД
+        # Удаляем данные через DataAccess
         try:
-            if self.api_client:
-                update_data = {
-                    'measurement_image_link': None,
-                    'measurement_yandex_path': None,
-                    'measurement_file_name': None,
-                    'measurement_date': None
-                }
-                self.api_client.update_contract(contract_id, update_data)
-                print(f"[API] Данные замера удалены через API для договора {contract_id}")
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE contracts
-                    SET measurement_image_link = NULL,
-                        measurement_yandex_path = NULL,
-                        measurement_file_name = NULL,
-                        measurement_date = NULL
-                    WHERE id = ?
-                ''', (contract_id,))
-                conn.commit()
-                conn.close()
+            update_data = {
+                'measurement_image_link': None,
+                'measurement_yandex_path': None,
+                'measurement_file_name': None,
+                'measurement_date': None
+            }
+            self.data.update_contract(contract_id, update_data)
+            print(f"[DataAccess] Данные замера удалены для договора {contract_id}")
         except Exception as e:
             print(f"[ERROR] Ошибка удаления данных замера: {e}")
 
@@ -6777,10 +6566,7 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД
                 updates = {'tech_task_file': file_url}
-                if self.api_client:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                else:
-                    self.db.update_crm_card(self.card_data['id'], updates)
+                self.data.update_crm_card(self.card_data["id"], updates)
                 self.card_data['tech_task_file'] = file_url
 
                 # Обновляем label
@@ -6875,7 +6661,7 @@ class CardEditDialog(QDialog):
                 from datetime import datetime
                 tz_date = datetime.strptime(self.card_data['tech_task_date'], '%Y-%m-%d')
                 date_input.setDate(QDate(tz_date.year, tz_date.month, tz_date.day))
-            except:
+            except Exception:
                 date_input.setDate(QDate.currentDate())
         else:
             date_input.setDate(QDate.currentDate())
@@ -6928,10 +6714,7 @@ class CardEditDialog(QDialog):
 
                 # Обновляем в БД crm_cards
                 updates = {'tech_task_date': date_str}
-                if self.api_client:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                else:
-                    self.db.update_crm_card(self.card_data['id'], updates)
+                self.data.update_crm_card(self.card_data["id"], updates)
                 self.card_data['tech_task_date'] = date_str
 
                 # Обновляем label в вкладке "Исполнители и дедлайн"
@@ -7056,7 +6839,7 @@ class CardEditDialog(QDialog):
                 from datetime import datetime
                 survey_date = datetime.strptime(self.card_data['survey_date'], '%Y-%m-%d')
                 date_input.setDate(QDate(survey_date.year, survey_date.month, survey_date.day))
-            except:
+            except Exception:
                 date_input.setDate(QDate.currentDate())
         else:
             date_input.setDate(QDate.currentDate())
@@ -7113,10 +6896,7 @@ class CardEditDialog(QDialog):
                     'survey_date': date_str,
                     'surveyor_id': surveyor_id
                 }
-                if self.api_client:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                else:
-                    self.db.update_crm_card(self.card_data['id'], updates)
+                self.data.update_crm_card(self.card_data["id"], updates)
                 self.card_data['survey_date'] = date_str
                 self.card_data['surveyor_id'] = surveyor_id
 
@@ -8263,7 +8043,7 @@ class CardEditDialog(QDialog):
                 try:
                     action_date = datetime.strptime(action['action_date'], '%Y-%m-%d %H:%M:%S')
                     date_str = action_date.strftime('%d-%m-%Y')
-                except:
+                except Exception:
                     date_str = action['action_date']
 
                 action_text = f"{date_str} | {action['user_name']}: {action['description']}"
@@ -8451,7 +8231,7 @@ class CardEditDialog(QDialog):
                 try:
                     action_date = datetime.strptime(action['action_date'], '%Y-%m-%d %H:%M:%S')
                     date_str = action_date.strftime('%d-%m-%Y')
-                except:
+                except Exception:
                     date_str = action['action_date']
 
                 action_text = f"{date_str} | {action['user_name']}: {action['description']}"
@@ -8488,33 +8268,12 @@ class CardEditDialog(QDialog):
         # ИСПРАВЛЕНИЕ: Предотвращаем автосохранение во время загрузки
         self._loading_data = True
 
-        # Загружаем свежие данные из API или БД, чтобы гарантировать актуальность информации
+        # Загружаем свежие данные через DataAccess
         if self.card_data and self.card_data.get('id'):
-            if self.api_client:
-                try:
-                    # Загружаем из API
-                    fresh_data = self.api_client.get_crm_card(self.card_data['id'])
-                    if fresh_data:
-                        self.card_data = fresh_data
-                        print(f"[load_data] Загружены свежие данные из API для карточки {self.card_data['id']}")
-                except Exception as e:
-                    print(f"[WARNING] Ошибка загрузки данных карточки из API: {e}")
-                    # Fallback на локальную БД
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT * FROM crm_cards WHERE id = ?', (self.card_data['id'],))
-                    fresh_data = cursor.fetchone()
-                    conn.close()
-                    if fresh_data:
-                        self.card_data = dict(fresh_data)
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT * FROM crm_cards WHERE id = ?', (self.card_data['id'],))
-                fresh_data = cursor.fetchone()
-                conn.close()
-                if fresh_data:
-                    self.card_data = dict(fresh_data)
+            fresh_data = self.data.get_crm_card(self.card_data['id'])
+            if fresh_data:
+                self.card_data = fresh_data
+                print(f"[load_data] Загружены свежие данные для карточки {self.card_data['id']}")
 
         # Виджеты из вкладки "Редактирование" (могут отсутствовать для дизайнеров/чертежников)
         if hasattr(self, 'deadline_display'):
@@ -8547,14 +8306,7 @@ class CardEditDialog(QDialog):
         contract_id = self.card_data.get('contract_id')
         if contract_id:
             # Загружаем контракт из API или БД
-            if self.api_client:
-                try:
-                    contract = self.api_client.get_contract(contract_id)
-                except Exception as e:
-                    print(f"[WARNING] Ошибка загрузки контракта из API: {e}")
-                    contract = self.db.get_contract_by_id(contract_id)
-            else:
-                contract = self.db.get_contract_by_id(contract_id)
+            contract = self.data.get_contract(contract_id)
             if contract and contract.get('status'):
                 if hasattr(self, 'status_combo'):
                     self.status_combo.setCurrentText(contract['status'])
@@ -8579,7 +8331,7 @@ class CardEditDialog(QDialog):
                 try:
                     survey_date = datetime.strptime(self.card_data['survey_date'], '%Y-%m-%d')
                     self.survey_date_label.setText(survey_date.strftime('%d.%m.%Y'))
-                except:
+                except Exception:
                     self.survey_date_label.setText('Не установлена')
             else:
                 self.survey_date_label.setText('Не установлена')
@@ -8591,31 +8343,10 @@ class CardEditDialog(QDialog):
         tech_task_link_from_contract = None
         tech_task_file_name_from_contract = None
         if contract_id:
-            if self.api_client:
-                try:
-                    contract = self.api_client.get_contract(contract_id)
-                    if contract:
-                        tech_task_link_from_contract = contract.get('tech_task_link')
-                        tech_task_file_name_from_contract = contract.get('tech_task_file_name')
-                except Exception as e:
-                    print(f"[WARNING] Ошибка загрузки ТЗ из API: {e}")
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT tech_task_link, tech_task_file_name FROM contracts WHERE id = ?', (contract_id,))
-                    result = cursor.fetchone()
-                    conn.close()
-                    if result:
-                        tech_task_link_from_contract = result['tech_task_link']
-                        tech_task_file_name_from_contract = result['tech_task_file_name']
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT tech_task_link, tech_task_file_name FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                conn.close()
-                if result:
-                    tech_task_link_from_contract = result['tech_task_link']
-                    tech_task_file_name_from_contract = result['tech_task_file_name']
+            contract = self.data.get_contract(contract_id)
+            if contract:
+                tech_task_link_from_contract = contract.get('tech_task_link')
+                tech_task_file_name_from_contract = contract.get('tech_task_file_name')
 
         # Приоритет: только файл из договора (БД), НЕ используем кэш card_data
         tech_task_file = tech_task_link_from_contract or ''
@@ -8650,7 +8381,7 @@ class CardEditDialog(QDialog):
                     self.tech_task_date_label.setText(date_str)
                 if hasattr(self, 'project_data_tz_date_label'):
                     self.project_data_tz_date_label.setText(date_str)
-            except:
+            except Exception:
                 if hasattr(self, 'tech_task_date_label'):
                     self.tech_task_date_label.setText('Не установлена')
                 if hasattr(self, 'project_data_tz_date_label'):
@@ -8663,34 +8394,25 @@ class CardEditDialog(QDialog):
         # ================================
 
         # ========== ЗАГРУЗКА ЗАМЕРА ==========
-        # Получаем данные замера из договора (API или локальная БД)
+        # Получаем данные замера из договора через DataAccess
         if contract_id:
             result = None
             try:
-                if self.api_client:
-                    # Многопользовательский режим - загружаем из API
-                    contract = self.api_client.get_contract(contract_id)
-                    if contract:
-                        result = {
-                            'measurement_image_link': contract.get('measurement_image_link'),
-                            'measurement_file_name': contract.get('measurement_file_name'),
-                            'measurement_date': contract.get('measurement_date')
-                        }
-                else:
-                    # Локальный режим
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT measurement_image_link, measurement_file_name, measurement_date FROM contracts WHERE id = ?', (contract_id,))
-                    result = cursor.fetchone()
-                    conn.close()
+                contract = self.data.get_contract(contract_id)
+                if contract:
+                    result = {
+                        'measurement_image_link': contract.get('measurement_image_link'),
+                        'measurement_file_name': contract.get('measurement_file_name'),
+                        'measurement_date': contract.get('measurement_date')
+                    }
             except Exception as e:
                 print(f"[ERROR] Ошибка загрузки данных замера: {e}")
 
             if result:
                 # Изображение замера
-                measurement_link = result.get('measurement_image_link') if isinstance(result, dict) else result['measurement_image_link']
-                measurement_file_name = result.get('measurement_file_name') if isinstance(result, dict) else result['measurement_file_name']
-                measurement_date = result.get('measurement_date') if isinstance(result, dict) else result['measurement_date']
+                measurement_link = result.get('measurement_image_link')
+                measurement_file_name = result.get('measurement_file_name')
+                measurement_date = result.get('measurement_date')
 
                 if measurement_link:
                     # Используем сохраненное имя файла, если оно есть
@@ -8716,7 +8438,7 @@ class CardEditDialog(QDialog):
                         date_str = measurement_date_obj.strftime('%d.%m.%Y')
                         if hasattr(self, 'project_data_survey_date_label'):
                             self.project_data_survey_date_label.setText(date_str)
-                    except:
+                    except Exception:
                         if hasattr(self, 'project_data_survey_date_label'):
                             self.project_data_survey_date_label.setText('Не установлена')
                 else:
@@ -8739,31 +8461,22 @@ class CardEditDialog(QDialog):
         # ================================
 
         # ========== ЗАГРУЗКА РЕФЕРЕНСОВ И ФОТОФИКСАЦИИ ==========
-        # Получаем данные из договора (API или локальная БД)
+        # Получаем данные из договора через DataAccess
         if contract_id:
             ref_result = None
             try:
-                if self.api_client:
-                    # Многопользовательский режим - загружаем из API
-                    contract = self.api_client.get_contract(contract_id)
-                    if contract:
-                        ref_result = {
-                            'references_yandex_path': contract.get('references_yandex_path'),
-                            'photo_documentation_yandex_path': contract.get('photo_documentation_yandex_path')
-                        }
-                else:
-                    # Локальный режим
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT references_yandex_path, photo_documentation_yandex_path FROM contracts WHERE id = ?', (contract_id,))
-                    ref_result = cursor.fetchone()
-                    conn.close()
+                contract = self.data.get_contract(contract_id)
+                if contract:
+                    ref_result = {
+                        'references_yandex_path': contract.get('references_yandex_path'),
+                        'photo_documentation_yandex_path': contract.get('photo_documentation_yandex_path')
+                    }
             except Exception as e:
                 print(f"[ERROR] Ошибка загрузки референсов и фотофиксации: {e}")
 
             if ref_result:
-                references_path = ref_result.get('references_yandex_path') if isinstance(ref_result, dict) else ref_result['references_yandex_path']
-                photo_doc_path = ref_result.get('photo_documentation_yandex_path') if isinstance(ref_result, dict) else ref_result['photo_documentation_yandex_path']
+                references_path = ref_result.get('references_yandex_path')
+                photo_doc_path = ref_result.get('photo_documentation_yandex_path')
 
                 # Референсы
                 if references_path:
@@ -8888,31 +8601,9 @@ class CardEditDialog(QDialog):
             return
 
 
-        # Перезагружаем данные из API или локальной БД
+        # Перезагружаем данные через DataAccess
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                if not contract:
-                    return
-                result = {
-                    'tech_task_link': contract.get('tech_task_link'),
-                    'tech_task_file_name': contract.get('tech_task_file_name'),
-                    'measurement_image_link': contract.get('measurement_image_link'),
-                    'measurement_file_name': contract.get('measurement_file_name'),
-                    'references_yandex_path': contract.get('references_yandex_path'),
-                    'photo_documentation_yandex_path': contract.get('photo_documentation_yandex_path')
-                }
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT tech_task_link, tech_task_file_name,
-                           measurement_image_link, measurement_file_name,
-                           references_yandex_path, photo_documentation_yandex_path
-                    FROM contracts WHERE id = ?
-                ''', (contract_id,))
-                result = cursor.fetchone()
-                conn.close()
+            result = self.data.get_contract(contract_id)
 
             if not result:
                 return
@@ -9032,10 +8723,7 @@ class CardEditDialog(QDialog):
             if hasattr(self, 'surveyor'):
                 updates['surveyor_id'] = self.surveyor.currentData()
 
-            if self.api_client:
-                self.api_client.update_crm_card(self.card_data['id'], updates)
-            else:
-                self.db.update_crm_card(self.card_data['id'], updates)
+            self.data.update_crm_card(self.card_data["id"], updates)
 
             # Обновляем статус контракта
             contract_id = self.card_data.get('contract_id')
@@ -9184,14 +8872,7 @@ class CardEditDialog(QDialog):
 
         # Сохраняем только если есть что обновлять
         if updates:
-            if self.api_client:
-                try:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API при сохранении карточки: {e}, fallback на локальную БД")
-                    self.db.update_crm_card(self.card_data['id'], updates)
-            else:
-                self.db.update_crm_card(self.card_data['id'], updates)
+            self.data.update_crm_card(self.card_data["id"], updates)
 
         try:
             if hasattr(self, 'designer_deadline') and self.designer_deadline and self.card_data.get('designer_name'):
@@ -9238,33 +8919,28 @@ class CardEditDialog(QDialog):
         contract_id = self.card_data.get('contract_id')
         if contract_id and hasattr(self, 'status_combo'):
             new_status = self.status_combo.currentText()
-            # ИСПРАВЛЕНИЕ: Синхронизация статуса с API при сохранении
-            if self.api_client and self.api_client.is_online:
-                try:
-                    self.api_client.update_contract(contract_id, {'status': new_status})
-                    print(f"[API] Статус договора обновлен при сохранении: {new_status}")
+            # Обновляем статус через DataAccess
+            self.data.update_contract(contract_id, {'status': new_status})
+            print(f"[DataAccess] Статус договора обновлен: {new_status}")
 
-                    # ИСПРАВЛЕНИЕ: Если статус АВТОРСКИЙ НАДЗОР - создаём карточку надзора
-                    if new_status == 'АВТОРСКИЙ НАДЗОР':
-                        try:
-                            supervision_cards = self.api_client.get_supervision_cards()
-                            existing = [c for c in supervision_cards if c.get('contract_id') == contract_id]
-                            if not existing:
-                                result = self.api_client.create_supervision_card({
-                                    'contract_id': contract_id,
-                                    'column_name': 'Новый заказ'
-                                })
-                                print(f"[API] Создана карточка надзора ID={result.get('id')} для договора {contract_id}")
-                            else:
-                                print(f"[INFO] Карточка надзора для договора {contract_id} уже существует")
-                        except Exception as sup_e:
-                            print(f"[WARN] Ошибка создания карточки надзора через API: {sup_e}")
-                            self.db.create_supervision_card(contract_id)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API обновления статуса: {e}, fallback на локальную БД")
-                    self.db.update_contract(contract_id, {'status': new_status})
-            else:
-                self.db.update_contract(contract_id, {'status': new_status})
+            # Если статус АВТОРСКИЙ НАДЗОР - создаём карточку надзора
+            if new_status == 'АВТОРСКИЙ НАДЗОР':
+                try:
+                    if self.api_client:
+                        supervision_cards = self.api_client.get_supervision_cards()
+                        existing = [c for c in supervision_cards if c.get('contract_id') == contract_id]
+                        if not existing:
+                            result = self.data.create_supervision_card({
+                                'contract_id': contract_id,
+                                'column_name': 'Новый заказ'
+                            })
+                            print(f"[DataAccess] Создана карточка надзора для договора {contract_id}")
+                        else:
+                            print(f"[INFO] Карточка надзора для договора {contract_id} уже существует")
+                    else:
+                        self.db.create_supervision_card(contract_id)
+                except Exception as sup_e:
+                    print(f"[WARN] Ошибка создания карточки надзора: {sup_e}")
 
             # ИСПРАВЛЕНИЕ: Установка отчетного месяца при закрытии проекта
             if new_status in ['СДАН', 'АВТОРСКИЙ НАДЗОР']:
@@ -9327,14 +9003,7 @@ class CardEditDialog(QDialog):
         field_name = role_to_field.get(role_name)
         if field_name:
             updates = {field_name: employee_id}
-            if self.api_client:
-                try:
-                    self.api_client.update_crm_card(self.card_data['id'], updates)
-                except Exception as e:
-                    print(f"[WARNING] Ошибка обновления CRM карточки через API: {e}, fallback на локальную БД")
-                    self.db.update_crm_card(self.card_data['id'], updates)
-            else:
-                self.db.update_crm_card(self.card_data['id'], updates)
+            self.data.update_crm_card(self.card_data["id"], updates)
             # Обновляем локальные данные карточки
             self.card_data[field_name] = employee_id
             print(f"OK Обновлено поле {field_name} в CRM карточке")
@@ -9576,15 +9245,7 @@ class CardEditDialog(QDialog):
         
         if dialog.exec_() == QDialog.Accepted:
             # ИСПРАВЛЕНИЕ: Обновляем данные карточки (пробуем API, потом БД)
-            if self.api_client:
-                try:
-                    self.card_data = self.api_client.get_crm_card(self.card_data['id'])
-                    print("[API] Данные карточки обновлены через API")
-                except Exception as e:
-                    print(f"[WARN] Ошибка обновления через API: {e}, используем локальную БД")
-                    self.card_data = self.db.get_crm_card_data(self.card_data['id'])
-            else:
-                self.card_data = self.db.get_crm_card_data(self.card_data['id'])
+            self.card_data = self.data.get_crm_card(self.card_data['id'])
 
             # Обновляем только отображаемые данные исполнителей без полной перезагрузки
             self._loading_data = True  # Отключаем автосохранение
@@ -9745,14 +9406,7 @@ class CardEditDialog(QDialog):
         layout.setSpacing(15)
 
         # Загружаем выплаты из API или БД
-        if self.api_client:
-            try:
-                payments = self.api_client.get_payments_for_contract(self.card_data['contract_id'])
-            except Exception as e:
-                print(f"[WARNING] Ошибка загрузки оплат из API: {e}")
-                payments = self.db.get_payments_for_contract(self.card_data['contract_id'])
-        else:
-            payments = self.db.get_payments_for_contract(self.card_data['contract_id'])
+        payments = self.data.get_payments_for_contract(self.card_data['contract_id'])
 
         # Приоритеты ролей
         role_priority = {
@@ -9879,7 +9533,7 @@ class CardEditDialog(QDialog):
                         try:
                             emp = self.db.get_employee_by_id(emp_id)
                             employee_name = emp.get('full_name', 'Неизвестный') if emp else 'Неизвестный'
-                        except:
+                        except Exception:
                             employee_name = 'Неизвестный'
                     else:
                         employee_name = 'Неизвестный'
@@ -9895,7 +9549,7 @@ class CardEditDialog(QDialog):
                         try:
                             old_emp = self.db.get_employee_by_id(old_emp_id)
                             old_emp_name = old_emp.get('full_name', 'Неизвестный') if old_emp else 'Неизвестный'
-                        except:
+                        except Exception:
                             old_emp_name = 'Неизвестный'
                         name_label.setToolTip(f'Переназначено от: {old_emp_name}')
                     else:
@@ -10008,7 +9662,7 @@ class CardEditDialog(QDialog):
                                      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
                         month_text = f"{months_ru[date_obj.month - 1]} {date_obj.year}"
                         month_color = '#333333'
-                    except:
+                    except Exception:
                         month_text = report_month
                         month_color = '#333333'
 
@@ -10845,7 +10499,7 @@ class CardEditDialog(QDialog):
                 try:
                     if os.path.exists(file_info['preview_cache_path']):
                         os.remove(file_info['preview_cache_path'])
-                except:
+                except Exception:
                     pass
 
             # Добавляем запись в историю проекта
@@ -11181,7 +10835,7 @@ class CardEditDialog(QDialog):
                     try:
                         if os.path.exists(file_info['preview_cache_path']):
                             os.remove(file_info['preview_cache_path'])
-                    except:
+                    except Exception:
                         pass
 
         # Удаляем папку вариации с Яндекс.Диска
@@ -11662,8 +11316,9 @@ class ExecutorSelectionDialog(QDialog):
         self.card_id = card_id
         self.stage_name = stage_name
         self.project_type = project_type
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.db = self.data.db
+        self.api_client = self.data.api_client
         
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -12152,8 +11807,9 @@ class ProjectCompletionDialog(QDialog):
     def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.db = self.data.db
+        self.api_client = self.data.api_client
         
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -12402,7 +12058,8 @@ class CRMStatisticsDialog(QDialog):
         super().__init__(parent)
         self.project_type = project_type
         self.employee = employee
-        self.db = DatabaseManager()
+        self.data = getattr(parent, 'data', None) or DataAccess()
+        self.db = self.data.db
         
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -12772,8 +12429,8 @@ class CRMStatisticsDialog(QDialog):
     def load_executors(self):
         """Загрузка списка исполнителей"""
         try:
-            designers = self.db.get_employees_by_position('Дизайнер')
-            draftsmen = self.db.get_employees_by_position('Чертёжник')
+            designers = self.data.get_employees_by_position('Дизайнер')
+            draftsmen = self.data.get_employees_by_position('Чертёжник')
             
             all_executors = designers + draftsmen
             
@@ -15169,8 +14826,9 @@ class ReassignExecutorDialog(QDialog):
         self.executor_type = executor_type
         self.stage_name = stage_name
         self.real_stage_name = None  # ИСПРАВЛЕНИЕ 25.01.2026: Реальное имя стадии из БД
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.db = self.data.db
+        self.api_client = self.data.api_client
 
         # ИСПРАВЛЕНИЕ 28.01.2026: Получаем реальное имя исполнителя из БД/API
         real_executor_name = self._get_real_executor_name()
@@ -15785,7 +15443,7 @@ class ReassignExecutorDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', f'Не удалось переназначить исполнителя:\n{str(e)}', 'error').exec_()
             try:
                 self.db.close()
-            except:
+            except Exception:
                 pass
 
     def showEvent(self, event):
@@ -16147,8 +15805,9 @@ class SurveyDateDialog(QDialog):
     def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.db = self.data.db
+        self.api_client = self.data.api_client
 
         # Убираем стандартную рамку окна
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -16216,7 +15875,7 @@ class SurveyDateDialog(QDialog):
             try:
                 existing_date = datetime.strptime(result[0], '%Y-%m-%d')
                 self.survey_date.setDate(QDate(existing_date.year, existing_date.month, existing_date.day))
-            except:
+            except Exception:
                 self.survey_date.setDate(QDate.currentDate())
         else:
             self.survey_date.setDate(QDate.currentDate())
@@ -16285,10 +15944,7 @@ class SurveyDateDialog(QDialog):
         }
 
         try:
-            if self.api_client:
-                self.api_client.update_crm_card(self.card_id, updates)
-            else:
-                self.db.update_crm_card(self.card_id, updates)
+            self.data.update_crm_card(self.card_id, updates)
             self.accept()
         except Exception as e:
             from ui.custom_message_box import CustomMessageBox
@@ -16317,8 +15973,9 @@ class TechTaskDialog(QDialog):
     def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.db = self.data.db
+        self.api_client = self.data.api_client
         self.uploaded_file_link = None
 
         # Подключаем сигналы загрузки
@@ -16540,27 +16197,25 @@ class TechTaskDialog(QDialog):
         self.file_label_display.setText('Не загружен')
         self.uploaded_file_link = None
 
-        # Получаем contract_id из карточки
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (self.card_id,))
-        result = cursor.fetchone()
+        try:
+            # Получаем contract_id из карточки
+            card = self.data.get_crm_card(self.card_id)
+            if not card or not card.get('contract_id'):
+                return
 
-        if result and result['contract_id']:
-            contract_id = result['contract_id']
+            contract_id = card['contract_id']
             # Получаем tech_task_link и tech_task_file_name из договора
-            cursor.execute('SELECT tech_task_link, tech_task_file_name FROM contracts WHERE id = ?', (contract_id,))
-            contract_result = cursor.fetchone()
+            contract = self.data.get_contract(contract_id)
 
-            if contract_result and contract_result['tech_task_link']:
-                tech_task_link = contract_result['tech_task_link']
+            if contract and contract.get('tech_task_link'):
+                tech_task_link = contract['tech_task_link']
                 self.uploaded_file_link = tech_task_link
                 # Используем сохраненное имя файла, если оно есть
-                file_name = contract_result['tech_task_file_name'] if contract_result['tech_task_file_name'] else 'ТехЗадание.pdf'
+                file_name = contract.get('tech_task_file_name') or 'ТехЗадание.pdf'
                 truncated_name = self.truncate_filename(file_name)
                 self.file_label_display.setText(f'<a href="{tech_task_link}" title="{file_name}">{truncated_name}</a>')
-
-        conn.close()
+        except Exception as e:
+            print(f"[WARNING] Ошибка загрузки существующего файла ТЗ: {e}")
 
     def _get_contract_yandex_folder(self, contract_id):
         """Получение пути к папке договора на Яндекс.Диске"""
@@ -16568,16 +16223,8 @@ class TechTaskDialog(QDialog):
             return None
 
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                return contract.get('yandex_folder_path') if contract else None
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT yandex_folder_path FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                conn.close()
-                return result['yandex_folder_path'] if result else None
+            contract = self.data.get_contract(contract_id)
+            return contract.get('yandex_folder_path') if contract else None
         except Exception as e:
             print(f"[ERROR TechTaskDialog] Ошибка получения пути к папке договора: {e}")
             return None
@@ -16598,22 +16245,8 @@ class TechTaskDialog(QDialog):
 
         try:
             # Получаем contract_id из crm_cards
-            contract_id = None
-            if self.api_client:
-                try:
-                    card = self.api_client.get_crm_card(self.card_id)
-                    contract_id = card.get('contract_id') if card else None
-                except Exception as e:
-                    print(f"[API ERROR] Не удалось получить карточку через API: {e}")
-                    # Fallback на локальную БД
-
-            if not contract_id:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (self.card_id,))
-                result = cursor.fetchone()
-                conn.close()
-                contract_id = result['contract_id'] if result else None
+            card = self.data.get_crm_card(self.card_id)
+            contract_id = card.get('contract_id') if card else None
 
             if not contract_id:
                 CustomMessageBox(self, 'Ошибка', 'Договор не найден', 'error').exec_()
@@ -16727,34 +16360,13 @@ class TechTaskDialog(QDialog):
             return
 
         try:
-            # Обновляем через API в первую очередь
-            if self.api_client:
-                try:
-                    update_data = {
-                        'tech_task_link': public_link,
-                        'tech_task_yandex_path': yandex_path,
-                        'tech_task_file_name': file_name
-                    }
-                    self.api_client.update_contract(contract_id, update_data)
-                    print(f"[API] ТЗ обновлено через API для договора {contract_id}")
-                except Exception as e:
-                    print(f"[API ERROR] Не удалось обновить ТЗ через API: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Продолжаем с локальной БД
-
-            # Обновляем локальную БД (как fallback или дублирование)
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE contracts
-                SET tech_task_link = ?,
-                    tech_task_yandex_path = ?,
-                    tech_task_file_name = ?
-                WHERE id = ?
-            ''', (public_link, yandex_path, file_name, contract_id))
-            conn.commit()
-            conn.close()
+            update_data = {
+                'tech_task_link': public_link,
+                'tech_task_yandex_path': yandex_path,
+                'tech_task_file_name': file_name
+            }
+            self.data.update_contract(contract_id, update_data)
+            print(f"[OK] ТЗ обновлено для договора {contract_id}")
 
             self.uploaded_file_link = public_link
             truncated_name = self.truncate_filename(file_name)
@@ -16789,22 +16401,7 @@ class TechTaskDialog(QDialog):
         }
 
         try:
-            # Используем API если доступен
-            if self.api_client:
-                try:
-                    self.api_client.update_crm_card(self.card_id, updates)
-                    print(f"[API] Карточка обновлена через API (ТЗ дата)")
-                    self.accept()
-                    return
-                except Exception as e:
-                    print(f"[API ERROR] Не удалось обновить карточку через API: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Fallback на локальную БД
-                    print("[INFO] Пытаемся сохранить локально...")
-
-            # Fallback на локальную БД
-            self.db.update_crm_card(self.card_id, updates)
+            self.data.update_crm_card(self.card_id, updates)
             self.accept()
 
         except Exception as e:
@@ -16837,8 +16434,9 @@ class MeasurementDialog(QDialog):
         super().__init__(parent)
         self.card_id = card_id
         self.employee = employee
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.db = self.data.db
+        self.api_client = self.data.api_client
         self.uploaded_image_link = None
 
         # Подключаем сигналы к обработчикам
@@ -16981,16 +16579,8 @@ class MeasurementDialog(QDialog):
 
         self.surveyor_combo = CustomComboBox()
         self.surveyor_combo.setFixedHeight(28)
-        # Загружаем замерщиков через API или локальную БД
-        if self.api_client:
-            try:
-                all_employees = self.api_client.get_employees()
-                surveyors = [e for e in all_employees if e.get('position') == 'Замерщик']
-            except Exception as e:
-                print(f"[WARNING] Ошибка загрузки сотрудников через API: {e}")
-                surveyors = self.db.get_employees_by_position('Замерщик')
-        else:
-            surveyors = self.db.get_employees_by_position('Замерщик')
+        # Загружаем замерщиков
+        surveyors = self.data.get_employees_by_position('Замерщик')
         self.surveyor_combo.addItem('Не назначен', None)
         for surv in surveyors:
             self.surveyor_combo.addItem(surv['full_name'], surv['id'])
@@ -17079,74 +16669,38 @@ class MeasurementDialog(QDialog):
 
     def load_existing_measurement(self):
         """Загрузка существующих данных о замере из договора"""
-        # Получаем contract_id и surveyor_id из карточки
-        if self.api_client:
-            try:
-                card = self.api_client.get_crm_card(self.card_id)
-                if card and card.get('contract_id'):
-                    contract_id = card['contract_id']
-                    surveyor_id = card.get('surveyor_id')
-
-                    # Устанавливаем surveyor_id в ComboBox
-                    if surveyor_id:
-                        for i in range(self.surveyor_combo.count()):
-                            if self.surveyor_combo.itemData(i) == surveyor_id:
-                                self.surveyor_combo.setCurrentIndex(i)
-                                break
-
-                    # Получаем данные замера из договора
-                    contract = self.api_client.get_contract(contract_id)
-                    if contract:
-                        if contract.get('measurement_image_link'):
-                            measurement_link = contract['measurement_image_link']
-                            self.uploaded_image_link = measurement_link
-                            file_name = contract.get('measurement_file_name') or 'Замер'
-                            truncated_name = self.truncate_filename(file_name)
-                            self.file_label_display.setText(f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>')
-
-                        if contract.get('measurement_date'):
-                            measurement_date = QDate.fromString(contract['measurement_date'], 'yyyy-MM-dd')
-                            self.measurement_date.setDate(measurement_date)
+        try:
+            # Получаем contract_id и surveyor_id из карточки
+            card = self.data.get_crm_card(self.card_id)
+            if not card or not card.get('contract_id'):
                 return
-            except Exception as e:
-                print(f"[WARNING] Ошибка загрузки данных замера через API: {e}")
 
-        # Локальный режим
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('SELECT contract_id, surveyor_id FROM crm_cards WHERE id = ?', (self.card_id,))
-        result = cursor.fetchone()
-
-        if result and result['contract_id']:
-            contract_id = result['contract_id']
+            contract_id = card['contract_id']
+            surveyor_id = card.get('surveyor_id')
 
             # Устанавливаем surveyor_id в ComboBox
-            if result['surveyor_id']:
-                surveyor_id = result['surveyor_id']
-                # Находим индекс в ComboBox по surveyor_id
+            if surveyor_id:
                 for i in range(self.surveyor_combo.count()):
                     if self.surveyor_combo.itemData(i) == surveyor_id:
                         self.surveyor_combo.setCurrentIndex(i)
                         break
 
             # Получаем данные замера из договора
-            cursor.execute('SELECT measurement_image_link, measurement_file_name, measurement_date FROM contracts WHERE id = ?', (contract_id,))
-            contract_result = cursor.fetchone()
-
-            if contract_result:
-                if contract_result['measurement_image_link']:
-                    measurement_link = contract_result['measurement_image_link']
+            contract = self.data.get_contract(contract_id)
+            if contract:
+                if contract.get('measurement_image_link'):
+                    measurement_link = contract['measurement_image_link']
                     self.uploaded_image_link = measurement_link
-                    # Используем сохраненное имя файла, если оно есть
-                    file_name = contract_result['measurement_file_name'] if contract_result['measurement_file_name'] else 'Замер'
+                    file_name = contract.get('measurement_file_name') or 'Замер'
                     truncated_name = self.truncate_filename(file_name)
                     self.file_label_display.setText(f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>')
 
-                if contract_result['measurement_date']:
-                    measurement_date = QDate.fromString(contract_result['measurement_date'], 'yyyy-MM-dd')
+                if contract.get('measurement_date'):
+                    measurement_date = QDate.fromString(contract['measurement_date'], 'yyyy-MM-dd')
                     self.measurement_date.setDate(measurement_date)
 
-        conn.close()
+        except Exception as e:
+            print(f"[WARNING] Ошибка загрузки данных замера: {e}")
 
     def _get_contract_yandex_folder(self, contract_id):
         """Получение пути к папке договора на Яндекс.Диске"""
@@ -17154,16 +16708,8 @@ class MeasurementDialog(QDialog):
             return None
 
         try:
-            if self.api_client:
-                contract = self.api_client.get_contract(contract_id)
-                return contract.get('yandex_folder_path') if contract else None
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT yandex_folder_path FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                conn.close()
-                return result['yandex_folder_path'] if result else None
+            contract = self.data.get_contract(contract_id)
+            return contract.get('yandex_folder_path') if contract else None
         except Exception as e:
             print(f"[ERROR MeasurementDialog] Ошибка получения пути к папке договора: {e}")
             return None
@@ -17185,22 +16731,8 @@ class MeasurementDialog(QDialog):
 
         try:
             # Получаем contract_id из crm_cards
-            contract_id = None
-            if self.api_client:
-                try:
-                    card = self.api_client.get_crm_card(self.card_id)
-                    contract_id = card.get('contract_id') if card else None
-                except Exception as e:
-                    print(f"[API ERROR] Не удалось получить карточку через API: {e}")
-                    # Fallback на локальную БД
-
-            if not contract_id:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (self.card_id,))
-                result = cursor.fetchone()
-                conn.close()
-                contract_id = result['contract_id'] if result else None
+            card = self.data.get_crm_card(self.card_id)
+            contract_id = card.get('contract_id') if card else None
 
             if not contract_id:
                 CustomMessageBox(self, 'Ошибка', 'Договор не найден', 'error').exec_()
@@ -17351,34 +16883,13 @@ class MeasurementDialog(QDialog):
             return
 
         try:
-            # Обновляем через API в первую очередь
-            if self.api_client:
-                try:
-                    update_data = {
-                        'measurement_image_link': public_link,
-                        'measurement_yandex_path': yandex_path,
-                        'measurement_file_name': file_name
-                    }
-                    self.api_client.update_contract(contract_id, update_data)
-                    print(f"[API] Замер обновлен через API для договора {contract_id}")
-                except Exception as e:
-                    print(f"[API ERROR] Не удалось обновить замер через API: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Продолжаем с локальной БД
-
-            # Обновляем локальную БД (как fallback или дублирование)
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE contracts
-                SET measurement_image_link = ?,
-                    measurement_yandex_path = ?,
-                    measurement_file_name = ?
-                WHERE id = ?
-            ''', (public_link, yandex_path, file_name, contract_id))
-            conn.commit()
-            conn.close()
+            update_data = {
+                'measurement_image_link': public_link,
+                'measurement_yandex_path': yandex_path,
+                'measurement_file_name': file_name
+            }
+            self.data.update_contract(contract_id, update_data)
+            print(f"[OK] Замер обновлен для договора {contract_id}")
 
             self.uploaded_image_link = public_link
             truncated_name = self.truncate_filename(file_name)
@@ -17420,60 +16931,18 @@ class MeasurementDialog(QDialog):
 
         try:
             # Получаем contract_id из карточки
-            contract_id = None
-            if self.api_client:
-                try:
-                    card = self.api_client.get_crm_card(self.card_id)
-                    contract_id = card.get('contract_id') if card else None
-                except Exception as e:
-                    print(f"[API ERROR] Не удалось получить карточку через API: {e}")
-                    # Fallback на локальную БД
-
-            if not contract_id:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (self.card_id,))
-                result = cursor.fetchone()
-                contract_id = result['contract_id'] if result else None
-                conn.close()
+            card = self.data.get_crm_card(self.card_id)
+            contract_id = card.get('contract_id') if card else None
 
             if contract_id:
-                # Обновляем через API в первую очередь
-                if self.api_client:
-                    try:
-                        # Обновляем дату в contracts
-                        self.api_client.update_contract(contract_id, {'measurement_date': measurement_date})
-                        # Обновляем surveyor_id и survey_date в crm_cards
-                        self.api_client.update_crm_card(self.card_id, {
-                            'surveyor_id': surveyor_id,
-                            'survey_date': measurement_date
-                        })
-                        print(f"[API] Данные замера обновлены через API")
-                    except Exception as e:
-                        print(f"[API ERROR] Ошибка обновления данных через API: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        # Fallback на локальную БД
-
-                # Обновляем локальную БД (как fallback или дублирование)
-                conn = self.db.connect()
-                cursor = conn.cursor()
                 # Обновляем дату в contracts
-                cursor.execute('''
-                    UPDATE contracts
-                    SET measurement_date = ?
-                    WHERE id = ?
-                ''', (measurement_date, contract_id))
-
+                self.data.update_contract(contract_id, {'measurement_date': measurement_date})
                 # Обновляем surveyor_id и survey_date в crm_cards
-                cursor.execute('''
-                    UPDATE crm_cards
-                    SET surveyor_id = ?, survey_date = ?
-                    WHERE id = ?
-                ''', (surveyor_id, measurement_date, self.card_id))
-
-                conn.commit()
-                conn.close()
+                self.data.update_crm_card(self.card_id, {
+                    'surveyor_id': surveyor_id,
+                    'survey_date': measurement_date
+                })
+                print(f"[OK] Данные замера обновлены")
 
             # Обновляем данные в родительском окне
             parent = self.parent()
@@ -17482,39 +16951,15 @@ class MeasurementDialog(QDialog):
             if parent and hasattr(parent, 'employee') and parent.employee:
                 from datetime import datetime
                 description = f"Добавлены файлы в Замер"
-
-                # Используем API если доступен через родительский виджет
-                api_client = getattr(parent, 'api_client', None)
                 user_id = parent.employee.get('id')
 
-                if api_client:
-                    try:
-                        history_data = {
-                            'user_id': user_id,
-                            'action_type': 'file_upload',
-                            'entity_type': 'crm_card',
-                            'entity_id': self.card_id,
-                            'description': description
-                        }
-                        api_client.create_action_history(history_data)
-                        print(f"[API] История действий записана через API: file_upload")
-                    except Exception as e:
-                        print(f"[WARNING] Ошибка записи истории через API: {e}")
-                        self.db.add_action_history(
-                            user_id=user_id,
-                            action_type='file_upload',
-                            entity_type='crm_card',
-                            entity_id=self.card_id,
-                            description=description
-                        )
-                else:
-                    self.db.add_action_history(
-                        user_id=user_id,
-                        action_type='file_upload',
-                        entity_type='crm_card',
-                        entity_id=self.card_id,
-                        description=description
-                    )
+                self.data.add_action_history(
+                    user_id=user_id,
+                    action_type='file_upload',
+                    entity_type='crm_card',
+                    entity_id=self.card_id,
+                    description=description
+                )
                 # Обновляем историю в родительском окне
                 if hasattr(parent, 'reload_project_history'):
                     parent.reload_project_history()
@@ -17537,7 +16982,7 @@ class MeasurementDialog(QDialog):
                         parent.survey_date_label.setText(date_str)
                     if hasattr(parent, 'project_data_survey_date_label'):
                         parent.project_data_survey_date_label.setText(date_str)
-                except:
+                except Exception:
                     pass
 
             self.accept()
@@ -17547,172 +16992,6 @@ class MeasurementDialog(QDialog):
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить данные замера:\n{str(e)}', 'error').exec_()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not hasattr(self, '_centered'):
-            self._centered = True
-            self.center_on_screen()
-
-    def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 3 + screen.top()
-        self.move(x, y)
-
-
-class SurveyDateDialog(QDialog):
-    """Диалог установки даты замера"""
-    def __init__(self, parent, card_id, api_client=None):
-        super().__init__(parent)
-        self.card_id = card_id
-        self.db = DatabaseManager()
-        self.api_client = api_client
-
-        # Убираем стандартную рамку окна
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
-
-        self.init_ui()
-
-    def init_ui(self):
-        # Главный layout
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-
-        # Контейнер с рамкой
-        border_frame = QFrame()
-        border_frame.setObjectName("borderFrame")
-        border_frame.setStyleSheet("""
-            QFrame#borderFrame {
-                background-color: #FFFFFF;
-                border: 1px solid #E0E0E0;
-                border-radius: 10px;
-            }
-        """)
-
-        border_layout = QVBoxLayout()
-        border_layout.setContentsMargins(0, 0, 0, 0)
-        border_layout.setSpacing(0)
-
-        # Title bar
-        title_bar = CustomTitleBar(self, "Дата замера", simple_mode=True)
-        title_bar.setStyleSheet("""
-            CustomTitleBar {
-                background-color: #FFFFFF;
-                border-bottom: 1px solid #E0E0E0;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-            }
-        """)
-        border_layout.addWidget(title_bar)
-
-        # Content
-        content_widget = QWidget()
-        content_widget.setStyleSheet("background-color: #FFFFFF;")
-
-        layout = QVBoxLayout()
-        layout.setSpacing(12)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        # Дата замера
-        date_label = QLabel('Дата замера:')
-        layout.addWidget(date_label)
-
-        self.survey_date = CustomDateEdit()
-        self.survey_date.setCalendarPopup(True)
-
-        # Загружаем существующую дату или устанавливаем текущую
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute("SELECT survey_date FROM crm_cards WHERE id = ?", (self.card_id,))
-        result = cursor.fetchone()
-        self.db.close()
-
-        if result and result[0]:
-            from datetime import datetime
-            try:
-                existing_date = datetime.strptime(result[0], '%Y-%m-%d')
-                self.survey_date.setDate(QDate(existing_date.year, existing_date.month, existing_date.day))
-            except:
-                self.survey_date.setDate(QDate.currentDate())
-        else:
-            self.survey_date.setDate(QDate.currentDate())
-
-        self.survey_date.setDisplayFormat('dd.MM.yyyy')
-        from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
-        self.survey_date.setStyleSheet(CALENDAR_STYLE)
-        add_today_button_to_dateedit(self.survey_date)
-        layout.addWidget(self.survey_date)
-
-        # Кнопки
-        buttons_layout = QHBoxLayout()
-        buttons_layout.addStretch()
-
-        save_btn = QPushButton('Сохранить')
-        save_btn.clicked.connect(self.save)
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #16A085;
-                color: white;
-                padding: 10px 30px;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #138D75;
-            }
-        """)
-
-        cancel_btn = QPushButton('Отмена')
-        cancel_btn.clicked.connect(self.reject)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95A5A6;
-                color: white;
-                padding: 10px 30px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #7F8C8D;
-            }
-        """)
-
-        buttons_layout.addWidget(save_btn)
-        buttons_layout.addWidget(cancel_btn)
-
-        layout.addLayout(buttons_layout)
-
-        content_widget.setLayout(layout)
-        border_layout.addWidget(content_widget)
-
-        border_frame.setLayout(border_layout)
-        main_layout.addWidget(border_frame)
-        self.setLayout(main_layout)
-
-        # Размер окна
-        self.setFixedSize(400, 220)
-
-    def save(self):
-        """Сохранение даты замера"""
-        survey_date = self.survey_date.date().toString('yyyy-MM-dd')
-
-        # Обновляем карточку
-        updates = {
-            'survey_date': survey_date
-        }
-
-        try:
-            if self.api_client:
-                self.api_client.update_crm_card(self.card_id, updates)
-            else:
-                self.db.update_crm_card(self.card_id, updates)
-            self.accept()
-        except Exception as e:
-            from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить дату замера:\n{str(e)}', 'error').exec_()
 
     def showEvent(self, event):
         super().showEvent(event)

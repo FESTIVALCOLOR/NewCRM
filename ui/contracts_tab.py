@@ -10,6 +10,7 @@ from PyQt5.QtCore import Qt, QDate, QSize, pyqtSignal, QTimer
 from PyQt5.QtGui import QValidator, QDesktopServices, QCursor
 from PyQt5.QtCore import QUrl
 from database.db_manager import DatabaseManager
+from utils.data_access import DataAccess
 from config import PROJECT_TYPES, AGENTS, CITIES, YANDEX_DISK_TOKEN
 from utils.icon_loader import IconLoader
 from ui.custom_title_bar import CustomTitleBar  # ← ДОБАВЛЕНО
@@ -181,11 +182,10 @@ class ContractsTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
-        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
-        self.db = DatabaseManager()
+        self.data = DataAccess(api_client=api_client)
+        self.api_client = self.data.api_client  # Сохраняем для совместимости (проверки UI)
+        self.db = self.data.db  # Сохраняем для совместимости
         self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
-        # Получаем offline_manager от родителя (main_window)
-        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
         self.init_ui()
         # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
         QTimer.singleShot(0, self.load_contracts)
@@ -353,29 +353,16 @@ class ContractsTab(QWidget):
         print("[DB REFRESH] Начало обновления данных договоров...")
         self.contracts_table.setSortingEnabled(False)
 
-        # Загружаем договоры из API или локальной БД
-        if self.api_client and self.api_client.is_online:
-            # Многопользовательский режим - загружаем из API
-            try:
-                contracts = self.api_client.get_contracts()
-                print(f"[DB REFRESH] Загружено {len(contracts)} договоров из API")
-                # Также нам нужны клиенты для отображения имен
-                clients_dict = {}
-                try:
-                    clients = self.api_client.get_clients()
-                    clients_dict = {c['id']: c for c in clients}
-                except:
-                    pass
-            except Exception as e:
-                print(f"[WARN] API error, using local DB: {e}")
-                contracts = self.db.get_all_contracts()
-                print(f"[DB REFRESH] Загружено {len(contracts)} договоров из локальной БД (fallback)")
-                clients_dict = {}
-        else:
-            # Локальный режим - загружаем из локальной БД
-            contracts = self.db.get_all_contracts()
-            print(f"[DB REFRESH] Загружено {len(contracts)} договоров из локальной БД")
-            clients_dict = {}
+        # Загружаем договоры через DataAccess (API с fallback на локальную БД)
+        contracts = self.data.get_all_contracts()
+        print(f"[DB REFRESH] Загружено {len(contracts)} договоров")
+        # Загружаем клиентов для отображения имен
+        clients_dict = {}
+        try:
+            clients = self.data.get_all_clients()
+            clients_dict = {c['id']: c for c in clients}
+        except Exception:
+            pass
 
         self.contracts_table.setRowCount(len(contracts))
 
@@ -384,14 +371,12 @@ class ContractsTab(QWidget):
 
             # Получаем имя клиента
             client_id = contract.get('client_id')
-            if self.api_client and client_id in clients_dict:
+            if client_id in clients_dict:
                 client = clients_dict[client_id]
                 client_name = client['full_name'] if client.get('client_type') == 'Физическое лицо' else client.get('organization_name', 'Неизвестно')
-            elif not self.api_client:
-                client = self.db.get_client_by_id(client_id)
-                client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', 'Неизвестно') if client else 'Неизвестно')
             else:
-                client_name = 'Неизвестно'
+                client = self.data.get_client(client_id)
+                client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', 'Неизвестно') if client else 'Неизвестно')
 
             self.contracts_table.setItem(row, 0, QTableWidgetItem(contract['contract_number']))
 
@@ -574,7 +559,6 @@ class ContractsTab(QWidget):
 
                 # Удаляем папку на Яндекс.Диске (если есть)
                 yandex_folder_path = contract_data.get('yandex_folder_path')
-                yandex_delete_queued = False
                 if yandex_folder_path:
                     try:
                         from utils.yandex_disk import YandexDiskManager
@@ -584,40 +568,11 @@ class ContractsTab(QWidget):
                             print(f"[OK] Папка на Яндекс.Диске удалена: {yandex_folder_path}")
                         else:
                             print(f"[WARNING] Не удалось удалить папку на Яндекс.Диске: {yandex_folder_path}")
-                            # ИСПРАВЛЕНИЕ 01.02.2026: Добавляем в offline очередь
-                            if hasattr(self, 'offline_manager') and self.offline_manager:
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.DELETE, 'yandex_folder', contract_id,
-                                    {'path': yandex_folder_path}
-                                )
-                                yandex_delete_queued = True
                     except Exception as e:
                         print(f"[WARNING] Ошибка удаления папки на Яндекс.Диске: {e}")
 
-                if self.api_client:
-                    try:
-                        # Многопользовательский режим - удаляем через API
-                        self.api_client.delete_contract(contract_id)
-                        print(f"[API] Договор удален: ID={contract_id}")
-                    except Exception as api_error:
-                        print(f"[WARN] Ошибка API удаления договора: {api_error}, fallback на локальную БД")
-                        # ИСПРАВЛЕНИЕ 01.02.2026: Fallback на локальную БД
-                        crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
-                        self.db.delete_order(contract_id, crm_card_id)
-                        # Добавляем в offline очередь
-                        if hasattr(self, 'offline_manager') and self.offline_manager:
-                            from utils.offline_manager import OperationType
-                            self.offline_manager.queue_operation(
-                                OperationType.DELETE, 'contract', contract_id, {}
-                            )
-                            CustomMessageBox(self, 'Offline режим',
-                                'Договор удален локально.\nИзменения будут синхронизированы при восстановлении подключения.',
-                                'info').exec_()
-                else:
-                    # Локальный режим - удаляем из локальной БД
-                    crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
-                    self.db.delete_order(contract_id, crm_card_id)
+                # Удаляем договор через DataAccess (API с fallback на локальную БД)
+                self.data.delete_contract(contract_id)
 
                 CustomMessageBox(
                     self,
@@ -699,19 +654,15 @@ class ContractsTab(QWidget):
 
         self.contracts_table.setSortingEnabled(False)
 
-        # Загружаем данные через API или локальную БД
-        if self.api_client:
-            contracts = self.api_client.get_contracts(skip=0, limit=10000)
-            clients = self.api_client.get_clients(skip=0, limit=10000)
-            clients_dict = {c['id']: c for c in clients}
-        else:
-            contracts = self.db.get_all_contracts()
-            clients_dict = None
+        # Загружаем данные через DataAccess (API с fallback на локальную БД)
+        contracts = self.data.get_all_contracts()
+        clients = self.data.get_all_clients()
+        clients_dict = {c['id']: c for c in clients}
 
         def get_client(client_id):
-            if clients_dict:
+            if client_id in clients_dict:
                 return clients_dict.get(client_id)
-            return self.db.get_client_by_id(client_id)
+            return self.data.get_client(client_id)
 
         filtered_contracts = []
         for contract in contracts:
@@ -918,11 +869,9 @@ class ContractDialog(QDialog):
         super().__init__(parent)
         self.contract_data = contract_data
         self.view_only = view_only
-        self.db = DatabaseManager()
-        # Получаем api_client от родителя, если он есть
-        self.api_client = getattr(parent, 'api_client', None)
-        # Получаем offline_manager для работы в offline режиме
-        self.offline_manager = getattr(parent, 'offline_manager', None)
+        self.data = getattr(parent, 'data', DataAccess())
+        self.db = self.data.db
+        self.api_client = self.data.api_client
         self._uploading_files = 0  # Счётчик загружаемых файлов
 
         # Инициализация YandexDiskManager
@@ -1015,15 +964,8 @@ class ContractDialog(QDialog):
         # ИСПРАВЛЕНИЕ 07.02.2026: Отступы для текста в dropdown (#7)
         self.client_combo.lineEdit().setStyleSheet("padding-left: 8px; padding-right: 8px;")
 
-        # Загрузка клиентов из API или локальной БД
-        if self.api_client:
-            try:
-                self.all_clients = self.api_client.get_clients()
-            except Exception as e:
-                print(f"[WARNING] Ошибка загрузки клиентов из API: {e}")
-                self.all_clients = self.db.get_all_clients()
-        else:
-            self.all_clients = self.db.get_all_clients()
+        # Загрузка клиентов через DataAccess (API с fallback на локальную БД)
+        self.all_clients = self.data.get_all_clients()
         for client in self.all_clients:
             name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
             self.client_combo.addItem(f"{name} ({client['phone']})", client['id'])
@@ -1747,32 +1689,12 @@ class ContractDialog(QDialog):
 
     def fill_data(self):
         """Заполнение формы данными"""
-        # ИСПРАВЛЕНИЕ: Загружаем свежие данные из API (приоритет) или локальной БД
+        # Загружаем свежие данные через DataAccess (API с fallback на локальную БД)
         if self.contract_data and self.contract_data.get('id'):
-            if self.api_client:
-                try:
-                    fresh_data = self.api_client.get_contract(self.contract_data['id'])
-                    if fresh_data:
-                        self.contract_data = fresh_data
-                        print(f"[fill_data] Загружены свежие данные из API для контракта {self.contract_data['id']}")
-                except Exception as e:
-                    print(f"[WARNING] Ошибка загрузки контракта из API: {e}")
-                    # Fallback на локальную БД
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT * FROM contracts WHERE id = ?', (self.contract_data['id'],))
-                    fresh_data = cursor.fetchone()
-                    conn.close()
-                    if fresh_data:
-                        self.contract_data = dict(fresh_data)
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT * FROM contracts WHERE id = ?', (self.contract_data['id'],))
-                fresh_data = cursor.fetchone()
-                conn.close()
-                if fresh_data:
-                    self.contract_data = dict(fresh_data)
+            fresh_data = self.data.get_contract(self.contract_data['id'])
+            if fresh_data:
+                self.contract_data = fresh_data
+                print(f"[fill_data] Загружены свежие данные для контракта {self.contract_data['id']}")
 
         for i in range(self.client_combo.count()):
             if self.client_combo.itemData(i) == self.contract_data['client_id']:

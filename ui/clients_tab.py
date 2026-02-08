@@ -12,16 +12,16 @@ from ui.custom_message_box import CustomMessageBox
 from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.table_settings import TableSettings, ProportionalResizeTable
+from utils.data_access import DataAccess
 
 class ClientsTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
-        self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
-        self.db = DatabaseManager()
-        self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
-        # Получаем offline_manager от родителя (main_window)
-        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+        self.api_client = api_client
+        self.data = DataAccess(api_client=api_client)
+        self.db = self.data.db  # обратная совместимость для raw SQL
+        self.table_settings = TableSettings()
         self.init_ui()
         # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
         QTimer.singleShot(0, self.load_clients)
@@ -267,20 +267,8 @@ class ClientsTab(QWidget):
         try:
             self.clients_table.setSortingEnabled(False)
 
-            # Загружаем клиентов из API или локальной БД
-            if self.api_client and self.api_client.is_online:
-                # Многопользовательский режим - загружаем из API
-                try:
-                    clients = self.api_client.get_clients()
-                    print(f"[DB REFRESH] Загружено {len(clients)} клиентов из API")
-                except Exception as e:
-                    print(f"[WARN] API error, using local DB: {e}")
-                    clients = self.db.get_all_clients()
-                    print(f"[DB REFRESH] Загружено {len(clients)} клиентов из локальной БД (fallback)")
-            else:
-                # Локальный режим - загружаем из локальной БД
-                clients = self.db.get_all_clients()
-                print(f"[DB REFRESH] Загружено {len(clients)} клиентов из локальной БД")
+            clients = self.data.get_all_clients()
+            print(f"[DB REFRESH] Загружено {len(clients)} клиентов")
 
             self.clients_table.setRowCount(len(clients))
 
@@ -316,22 +304,12 @@ class ClientsTab(QWidget):
             self.load_clients()
     
     def delete_client(self, client_id):
-        """Удаление клиента - ИСПРАВЛЕНО 01.02.2026: добавлена проверка связей и fallback"""
+        """Удаление клиента"""
         from ui.custom_message_box import CustomQuestionBox
 
-        # ИСПРАВЛЕНИЕ 01.02.2026: Проверяем наличие связанных договоров
+        # Проверяем наличие связанных договоров
         try:
-            contracts_count = 0
-            if self.api_client:
-                try:
-                    contracts = self.api_client.get_contracts()
-                    contracts_count = sum(1 for c in contracts if c.get('client_id') == client_id)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API проверки договоров: {e}")
-                    contracts_count = self.db.get_contracts_count_by_client(client_id) if hasattr(self.db, 'get_contracts_count_by_client') else 0
-            else:
-                contracts_count = self.db.get_contracts_count_by_client(client_id) if hasattr(self.db, 'get_contracts_count_by_client') else 0
-
+            contracts_count = self.data.get_contracts_count_by_client(client_id)
             if contracts_count > 0:
                 CustomMessageBox(
                     self,
@@ -352,34 +330,11 @@ class ClientsTab(QWidget):
 
         if reply == QDialog.Accepted:
             try:
-                if self.api_client:
-                    try:
-                        # Многопользовательский режим - удаляем через API
-                        self.api_client.delete_client(client_id)
-                        print(f"[API] Клиент удален: ID={client_id}")
-                    except Exception as api_error:
-                        print(f"[WARN] Ошибка API удаления клиента: {api_error}, fallback на локальную БД")
-                        # ИСПРАВЛЕНИЕ 01.02.2026: Fallback на локальную БД
-                        self.db.delete_client(client_id)
-                        # Добавляем в offline очередь
-                        if hasattr(self, 'offline_manager') and self.offline_manager:
-                            from utils.offline_manager import OperationType
-                            self.offline_manager.queue_operation(
-                                OperationType.DELETE, 'client', client_id, {}
-                            )
-                            CustomMessageBox(self, 'Offline режим',
-                                'Клиент удален локально.\nИзменения будут синхронизированы при восстановлении подключения.',
-                                'info').exec_()
-                else:
-                    # Локальный режим - удаляем из локальной БД
-                    self.db.delete_client(client_id)
-
+                self.data.delete_client(client_id)
                 self.load_clients()
                 CustomMessageBox(self, 'Успех', 'Клиент удален', 'success').exec_()
             except Exception as e:
                 print(f"[ERROR] Ошибка удаления клиента: {e}")
-                import traceback
-                traceback.print_exc()
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить клиента: {e}', 'error').exec_()
 
     def show_context_menu(self, position):
@@ -440,11 +395,7 @@ class ClientsTab(QWidget):
         """Применение фильтров поиска"""
         self.clients_table.setSortingEnabled(False)
 
-        # Загружаем клиентов через API или локальную БД
-        if self.api_client:
-            clients = self.api_client.get_clients()
-        else:
-            clients = self.db.get_all_clients()
+        clients = self.data.get_all_clients()
 
         filtered_clients = []
         for client in clients:
@@ -499,11 +450,9 @@ class ClientDialog(QDialog):
         super().__init__(parent)
         self.client_data = client_data
         self.view_only = view_only
-        self.db = DatabaseManager()
-        # Получаем api_client от родителя, если он есть
-        self.api_client = getattr(parent, 'api_client', None)
-        # Получаем offline_manager для работы в offline режиме
-        self.offline_manager = getattr(parent, 'offline_manager', None)
+        self.data = getattr(parent, 'data', DataAccess())
+        self.db = self.data.db
+        self.api_client = self.data.api_client
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -1068,40 +1017,10 @@ class ClientDialog(QDialog):
             }
 
         try:
-            if self.api_client and self.api_client.is_online:
-                # Многопользовательский режим - сохраняем через API
-                if self.client_data:
-                    self.api_client.update_client(self.client_data['id'], client_data)
-                else:
-                    self.api_client.create_client(client_data)
-            elif self.api_client:
-                # Offline режим - сохраняем локально и добавляем в очередь
-                if self.client_data:
-                    self.db.update_client(self.client_data['id'], client_data)
-                    if self.offline_manager:
-                        from utils.offline_manager import OperationType
-                        self.offline_manager.queue_operation(
-                            OperationType.UPDATE, 'client', self.client_data['id'], client_data
-                        )
-                        CustomMessageBox(self, 'Offline режим',
-                            'Изменения сохранены локально.\nДанные будут синхронизированы при восстановлении подключения.', 'info').exec_()
-                else:
-                    new_id = self.db.add_client(client_data)
-                    if self.offline_manager:
-                        from utils.offline_manager import OperationType
-                        self.offline_manager.queue_operation(
-                            OperationType.CREATE, 'client', new_id, client_data
-                        )
-                        CustomMessageBox(self, 'Offline режим',
-                            'Клиент создан локально.\nДанные будут синхронизированы при восстановлении подключения.', 'info').exec_()
+            if self.client_data:
+                self.data.update_client(self.client_data['id'], client_data)
             else:
-                # Локальный режим - сохраняем в локальную БД
-                if self.client_data:
-                    self.db.update_client(self.client_data['id'], client_data)
-                else:
-                    self.db.add_client(client_data)
-
-            # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
+                self.data.create_client(client_data)
             self.accept()
         except Exception as e:
             CustomMessageBox(

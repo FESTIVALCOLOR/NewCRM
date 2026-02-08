@@ -94,14 +94,32 @@ class DataAccess(QObject):
     def get_all_clients(self) -> List[Dict]:
         """Получить всех клиентов"""
         if self.api_client:
-            return self.api_client.get_clients(skip=0, limit=10000)
+            try:
+                return self.api_client.get_clients(skip=0, limit=10000)
+            except Exception as e:
+                print(f"[DataAccess] API error get_all_clients, fallback: {e}")
         return self.db.get_all_clients()
 
     def get_client(self, client_id: int) -> Optional[Dict]:
         """Получить клиента по ID"""
         if self.api_client:
-            return self.api_client.get_client(client_id)
+            try:
+                return self.api_client.get_client(client_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_client, fallback: {e}")
         return self.db.get_client_by_id(client_id)
+
+    def get_contracts_count_by_client(self, client_id: int) -> int:
+        """Получить количество договоров клиента"""
+        if self.api_client:
+            try:
+                contracts = self.api_client.get_contracts()
+                return sum(1 for c in contracts if c.get('client_id') == client_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_contracts_count_by_client, fallback: {e}")
+        if hasattr(self.db, 'get_contracts_count_by_client'):
+            return self.db.get_contracts_count_by_client(client_id)
+        return 0
 
     def create_client(self, client_data: Dict) -> Optional[Dict]:
         """Создать клиента"""
@@ -179,13 +197,19 @@ class DataAccess(QObject):
     def get_all_contracts(self) -> List[Dict]:
         """Получить все договора"""
         if self.api_client:
-            return self.api_client.get_contracts(skip=0, limit=10000)
+            try:
+                return self.api_client.get_contracts(skip=0, limit=10000)
+            except Exception as e:
+                print(f"[DataAccess] API error get_all_contracts, fallback: {e}")
         return self.db.get_all_contracts()
 
     def get_contract(self, contract_id: int) -> Optional[Dict]:
         """Получить договор по ID"""
         if self.api_client:
-            return self.api_client.get_contract(contract_id)
+            try:
+                return self.api_client.get_contract(contract_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_contract, fallback: {e}")
         return self.db.get_contract_by_id(contract_id)
 
     def create_contract(self, contract_data: Dict) -> Optional[Dict]:
@@ -237,7 +261,10 @@ class DataAccess(QObject):
     def check_contract_number_exists(self, contract_number: str, exclude_id: int = None) -> bool:
         """Проверить существование номера договора"""
         if self.api_client:
-            return self.api_client.check_contract_number_exists(contract_number, exclude_id)
+            try:
+                return self.api_client.check_contract_number_exists(contract_number, exclude_id)
+            except Exception as e:
+                print(f"[DataAccess] API error check_contract_number_exists, fallback: {e}")
         return self.db.check_contract_number_exists(contract_number, exclude_id)
 
     # ==================== СОТРУДНИКИ ====================
@@ -245,59 +272,108 @@ class DataAccess(QObject):
     def get_all_employees(self) -> List[Dict]:
         """Получить всех сотрудников"""
         if self.api_client:
-            return self.api_client.get_employees(skip=0, limit=10000)
+            try:
+                return self.api_client.get_employees(skip=0, limit=10000)
+            except Exception as e:
+                print(f"[DataAccess] API error get_all_employees, fallback: {e}")
         return self.db.get_all_employees()
 
     def get_employees_by_position(self, position: str) -> List[Dict]:
         """Получить сотрудников по должности"""
         if self.api_client:
-            return self.api_client.get_employees_by_position(position)
+            try:
+                return self.api_client.get_employees_by_position(position)
+            except Exception as e:
+                print(f"[DataAccess] API error get_employees_by_position, fallback: {e}")
         return self.db.get_employees_by_position(position)
 
     def get_employee(self, employee_id: int) -> Optional[Dict]:
         """Получить сотрудника по ID"""
         if self.api_client:
-            return self.api_client.get_employee(employee_id)
+            try:
+                return self.api_client.get_employee(employee_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_employee, fallback: {e}")
         return self.db.get_employee_by_id(employee_id)
 
     def create_employee(self, employee_data: Dict) -> Optional[Dict]:
         """Создать сотрудника"""
-        if self.api_client:
-            return self.api_client.create_employee(employee_data)
         employee_id = self.db.add_employee(employee_data)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.create_employee(employee_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != employee_id:
+                        self._update_local_id('employees', employee_id, server_id)
+                    return result
+            except Exception as e:
+                print(f"[DataAccess] API error create_employee: {e}")
+                self._queue_operation('create', 'employee', employee_id, employee_data)
+        elif self.api_client:
+            self._queue_operation('create', 'employee', employee_id, employee_data)
+
         return {'id': employee_id, **employee_data} if employee_id else None
 
     def update_employee(self, employee_id: int, employee_data: Dict) -> bool:
         """Обновить сотрудника"""
-        if self.api_client:
-            result = self.api_client.update_employee(employee_id, employee_data)
-            return result is not None
-        return self.db.update_employee(employee_id, employee_data)
+        self.db.update_employee(employee_id, employee_data)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_employee(employee_id, employee_data)
+                return result is not None
+            except Exception as e:
+                print(f"[DataAccess] API error update_employee: {e}")
+                self._queue_operation('update', 'employee', employee_id, employee_data)
+        elif self.api_client:
+            self._queue_operation('update', 'employee', employee_id, employee_data)
+
+        return True
 
     def delete_employee(self, employee_id: int) -> bool:
         """Удалить сотрудника"""
-        if self.api_client:
-            return self.api_client.delete_employee(employee_id)
-        return self.db.delete_employee(employee_id)
+        self.db.delete_employee(employee_id)
+
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.delete_employee(employee_id)
+            except Exception as e:
+                print(f"[DataAccess] API error delete_employee: {e}")
+                self._queue_operation('delete', 'employee', employee_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'employee', employee_id, {})
+
+        return True
 
     # ==================== CRM КАРТОЧКИ ====================
 
     def get_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить CRM карточки по типу проекта"""
         if self.api_client:
-            return self.api_client.get_crm_cards(project_type)
+            try:
+                return self.api_client.get_crm_cards(project_type)
+            except Exception as e:
+                print(f"[DataAccess] API error get_crm_cards, fallback: {e}")
         return self.db.get_crm_cards_by_project_type(project_type)
 
     def get_crm_card(self, card_id: int) -> Optional[Dict]:
         """Получить CRM карточку по ID"""
         if self.api_client:
-            return self.api_client.get_crm_card(card_id)
+            try:
+                return self.api_client.get_crm_card(card_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_crm_card, fallback: {e}")
         return self.db.get_crm_card_data(card_id)
 
     def get_archived_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить архивные CRM карточки"""
         if self.api_client:
-            return self.api_client.get_crm_cards(project_type)  # API фильтрует сам
+            try:
+                return self.api_client.get_crm_cards(project_type)  # API фильтрует сам
+            except Exception as e:
+                print(f"[DataAccess] API error get_archived_crm_cards, fallback: {e}")
         return self.db.get_archived_crm_cards(project_type)
 
     def create_crm_card(self, card_data: Dict) -> Optional[Dict]:
@@ -350,19 +426,28 @@ class DataAccess(QObject):
     def get_supervision_cards_active(self) -> List[Dict]:
         """Получить активные карточки надзора"""
         if self.api_client:
-            return self.api_client.get_supervision_cards(status="active")
+            try:
+                return self.api_client.get_supervision_cards(status="active")
+            except Exception as e:
+                print(f"[DataAccess] API error get_supervision_cards_active, fallback: {e}")
         return self.db.get_supervision_cards_active()
 
     def get_supervision_cards_archived(self) -> List[Dict]:
         """Получить архивные карточки надзора"""
         if self.api_client:
-            return self.api_client.get_supervision_cards(status="archived")
+            try:
+                return self.api_client.get_supervision_cards(status="archived")
+            except Exception as e:
+                print(f"[DataAccess] API error get_supervision_cards_archived, fallback: {e}")
         return self.db.get_supervision_cards_archived()
 
     def get_supervision_card(self, card_id: int) -> Optional[Dict]:
         """Получить карточку надзора по ID"""
         if self.api_client:
-            return self.api_client.get_supervision_card(card_id)
+            try:
+                return self.api_client.get_supervision_card(card_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_supervision_card, fallback: {e}")
         return self.db.get_supervision_card_data(card_id)
 
     def create_supervision_card(self, card_data: Dict) -> Optional[Dict]:
@@ -401,7 +486,10 @@ class DataAccess(QObject):
     def get_payments_for_contract(self, contract_id: int) -> List[Dict]:
         """Получить платежи по договору"""
         if self.api_client:
-            return self.api_client.get_payments_for_contract(contract_id)
+            try:
+                return self.api_client.get_payments_for_contract(contract_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_payments_for_contract, fallback: {e}")
         return self.db.get_payments_for_contract(contract_id)
 
     def create_payment(self, payment_data: Dict) -> Optional[Dict]:
@@ -430,7 +518,10 @@ class DataAccess(QObject):
     def get_action_history(self, entity_type: str, entity_id: int) -> List[Dict]:
         """Получить историю действий"""
         if self.api_client:
-            return self.api_client.get_action_history(entity_type, entity_id)
+            try:
+                return self.api_client.get_action_history(entity_type, entity_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_action_history, fallback: {e}")
         return self.db.get_action_history(entity_type, entity_id)
 
     def add_action_history(self, user_id: int, action_type: str, entity_type: str,
@@ -453,7 +544,10 @@ class DataAccess(QObject):
     def get_supervision_history(self, card_id: int) -> List[Dict]:
         """Получить историю карточки надзора"""
         if self.api_client:
-            return self.api_client.get_supervision_history(card_id)
+            try:
+                return self.api_client.get_supervision_history(card_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_supervision_history, fallback: {e}")
         return self.db.get_supervision_history(card_id)
 
     def add_supervision_history(self, card_id: int, user_id: int, action_type: str,
@@ -474,13 +568,19 @@ class DataAccess(QObject):
     def get_rates(self, project_type: str = None, role: str = None) -> List[Dict]:
         """Получить ставки"""
         if self.api_client:
-            return self.api_client.get_rates(project_type, role)
+            try:
+                return self.api_client.get_rates(project_type, role)
+            except Exception as e:
+                print(f"[DataAccess] API error get_rates, fallback: {e}")
         return self.db.get_rates(project_type, role)
 
     def get_rate(self, rate_id: int) -> Optional[Dict]:
         """Получить ставку по ID"""
         if self.api_client:
-            return self.api_client.get_rate(rate_id)
+            try:
+                return self.api_client.get_rate(rate_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_rate, fallback: {e}")
         return self.db.get_rate_by_id(rate_id)
 
     def create_rate(self, rate_data: Dict) -> Optional[Dict]:
@@ -508,13 +608,19 @@ class DataAccess(QObject):
     def get_salaries(self, report_month: str = None, employee_id: int = None) -> List[Dict]:
         """Получить зарплаты"""
         if self.api_client:
-            return self.api_client.get_salaries(report_month, employee_id)
+            try:
+                return self.api_client.get_salaries(report_month, employee_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_salaries, fallback: {e}")
         return self.db.get_salaries(report_month, employee_id)
 
     def get_salary(self, salary_id: int) -> Optional[Dict]:
         """Получить зарплату по ID"""
         if self.api_client:
-            return self.api_client.get_salary(salary_id)
+            try:
+                return self.api_client.get_salary(salary_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_salary, fallback: {e}")
         return self.db.get_salary_by_id(salary_id)
 
     def create_salary(self, salary_data: Dict) -> Optional[Dict]:
@@ -556,7 +662,10 @@ class DataAccess(QObject):
     def get_stage_history(self, card_id: int) -> List[Dict]:
         """Получить историю стадий"""
         if self.api_client:
-            return self.api_client.get_stage_executors(card_id)
+            try:
+                return self.api_client.get_stage_executors(card_id)
+            except Exception as e:
+                print(f"[DataAccess] API error get_stage_history, fallback: {e}")
         return self.db.get_stage_history(card_id)
 
     def get_accepted_stages(self, card_id: int) -> List[Dict]:
@@ -587,7 +696,10 @@ class DataAccess(QObject):
     def get_contract_files(self, contract_id: int, stage: str = None) -> List[Dict]:
         """Получить файлы договора"""
         if self.api_client:
-            return self.api_client.get_contract_files(contract_id, stage)
+            try:
+                return self.api_client.get_contract_files(contract_id, stage)
+            except Exception as e:
+                print(f"[DataAccess] API error get_contract_files, fallback: {e}")
         return self.db.get_contract_files(contract_id, stage)
 
     def create_file_record(self, file_data: Dict) -> Optional[Dict]:
@@ -626,7 +738,10 @@ class DataAccess(QObject):
                                  quarter: int = None, project_type: str = None) -> Dict:
         """Получить статистику для дашборда"""
         if self.api_client:
-            return self.api_client.get_dashboard_statistics(year, month, quarter, project_type)
+            try:
+                return self.api_client.get_dashboard_statistics(year, month, quarter, project_type)
+            except Exception as e:
+                print(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
         return self.db.get_dashboard_statistics(year, month, quarter, project_type)
 
     def get_supervision_statistics(self, address: str = None, dan_id: int = None,

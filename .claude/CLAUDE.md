@@ -89,7 +89,7 @@ logo = QPixmap(resource_path('resources/logo.png'))
 
 ### 5. Docker пересборка после изменений сервера
 ```bash
-ssh root@147.45.154.193
+ssh timeweb
 cd /opt/interior_studio
 docker-compose down && docker-compose build --no-cache api && docker-compose up -d
 ```
@@ -106,15 +106,24 @@ API должен возвращать те же ключи, что и db_manager
 - **Автономный** (`MULTI_USER_MODE=False`): локальная SQLite БД
 - **Сетевой** (`MULTI_USER_MODE=True`): клиент-сервер через REST API
 
+### 9. Доступ к данным через DataAccess
+Все CRUD операции в UI через `self.data` (DataAccess), НЕ через `self.api_client`/`self.db` напрямую.
+`self.db` допустим ТОЛЬКО для raw SQL запросов без API-эквивалента.
+
 ```python
-# Паттерн offline в UI
-if self.api_client:
-    try:
-        data = self.api_client.get_something()
-    except Exception as e:
-        data = self.db.get_something()  # fallback
-else:
-    data = self.db.get_something()
+# Инициализация в __init__ таба:
+from utils.data_access import DataAccess
+self.data = DataAccess(api_client=api_client)
+self.db = self.data.db  # обратная совместимость для raw SQL
+
+# Использование (DataAccess сам делает API -> fallback DB):
+clients = self.data.get_all_clients()
+self.data.update_crm_card(card_id, updates)
+self.data.create_contract(contract_data)
+
+# В диалогах:
+self.data = getattr(parent, 'data', DataAccess())
+self.db = self.data.db
 ```
 
 ## Двухрежимная архитектура
@@ -123,21 +132,22 @@ else:
 ```
 LoginWindow -> APIClient.authenticate() -> (токен + сотрудник)
     -> MainWindow + SyncManager (QTimer каждые 5 сек)
-    -> Табы работают через APIClient (+ локальный кэш)
-    -> При изменении: PUT/POST в API, обновление кэша, emit сигнала
+    -> Табы работают через DataAccess (API + fallback на локальную БД)
+    -> При изменении: DataAccess -> API + offline очередь
 ```
 
 ### Автономный режим (Data Flow)
 ```
 LoginWindow -> DatabaseManager.verify_credentials() (SQLite)
     -> MainWindow (без SyncManager)
-    -> Табы работают напрямую с DatabaseManager
+    -> Табы работают через DataAccess (только локальная БД)
 ```
 
 ### Ключевые компоненты
 
 | Компонент | Файл | Строк | Назначение |
 |-----------|------|-------|-----------|
+| DataAccess | utils/data_access.py | 700+ | Унифицированный API/DB с fallback и offline очередью |
 | API Client | utils/api_client.py | 2300+ | REST клиент, retry/timeout/fallback, JWT |
 | Sync Manager | utils/sync_manager.py | - | QTimer синхронизация (5 сек), сигналы для UI |
 | CRM Kanban | ui/crm_tab.py | 17K+ | Drag & drop доски, этапы согласования |
@@ -147,6 +157,7 @@ LoginWindow -> DatabaseManager.verify_credentials() (SQLite)
 ## Сервер
 
 - **IP:** 147.45.154.193 | **API порт:** 8000
+- **SSH:** `ssh timeweb` (алиас в ~/.ssh/config, ключ ed25519)
 - **Путь:** /opt/interior_studio/
 - **Docker:** postgres (5432), api (8000), nginx (80/443)
 - **БД:** PostgreSQL, user=crm_user, db=interior_studio_crm
@@ -154,7 +165,7 @@ LoginWindow -> DatabaseManager.verify_credentials() (SQLite)
 
 ### Управление сервером
 ```bash
-ssh root@147.45.154.193
+ssh timeweb
 cd /opt/interior_studio
 
 # Логи API

@@ -18,6 +18,7 @@ from utils.resource_path import resource_path
 from utils.table_settings import ProportionalResizeTable, apply_no_focus_delegate, TableSettings
 from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
+from utils.data_access import DataAccess
 import os
 
 class SupervisionDraggableList(QListWidget):
@@ -79,9 +80,8 @@ class CRMSupervisionTab(QWidget):
         super().__init__(parent)
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
-        self.db = DatabaseManager()
-        # Получаем offline_manager от родителя (main_window)
-        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+        self.data = DataAccess(api_client=api_client)
+        self.db = self.data.db
 
         # Инициализация Yandex Disk
         try:
@@ -538,14 +538,7 @@ class CRMSupervisionTab(QWidget):
         """Загрузка данных для фильтров архива"""
         try:
             # Получаем все архивные карточки для заполнения фильтров
-            if self.api_client and self.api_client.is_online:
-                try:
-                    cards = self.api_client.get_supervision_cards(status='archived')
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки архива: {e}")
-                    cards = self.db.get_supervision_cards_archived()
-            else:
-                cards = self.db.get_supervision_cards_archived()
+            cards = self.data.get_supervision_cards_archived()
 
             # Собираем уникальные города
             cities = set()
@@ -586,14 +579,7 @@ class CRMSupervisionTab(QWidget):
             agent_filter = archive_widget.agent_combo.currentData()
 
             # Получаем все архивные карточки
-            if self.api_client and self.api_client.is_online:
-                try:
-                    cards = self.api_client.get_supervision_cards(status='archived')
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки архива: {e}")
-                    cards = self.db.get_supervision_cards_archived()
-            else:
-                cards = self.db.get_supervision_cards_archived()
+            cards = self.data.get_supervision_cards_archived()
 
             # Применяем фильтры
             filtered_cards = []
@@ -692,33 +678,13 @@ class CRMSupervisionTab(QWidget):
         """Загрузка активных карточек с fallback на локальную БД"""
         print("\n=== ЗАГРУЗКА АКТИВНЫХ КАРТОЧЕК НАДЗОРА ===")
 
-        cards = None
-        api_error = None
-
-        # Попытка загрузки через API (только если online)
-        if self.api_client and self.api_client.is_online:
-            try:
-                cards = self.api_client.get_supervision_cards(status="active")
-                print(f"[API] Получено: {len(cards)} карточек")
-            except Exception as e:
-                api_error = e
-                print(f"[API ERROR] {e}")
-                print("[FALLBACK] Переключение на локальную БД...")
-
-        # Fallback на локальную БД
-        if cards is None:
-            try:
-                cards = self.db.get_supervision_cards_active()
-                print(f"[DB] Получено: {len(cards)} карточек")
-
-                # Показываем уведомление об offline режиме
-                if api_error and not hasattr(self, '_offline_notification_shown'):
-                    self._offline_notification_shown = True
-                    self._show_offline_notification(api_error)
-            except Exception as db_error:
-                print(f"[DB ERROR] {db_error}")
-                self._show_critical_error(api_error, db_error)
-                return
+        try:
+            cards = self.data.get_supervision_cards_active()
+            print(f"Получено: {len(cards)} карточек")
+        except Exception as e:
+            print(f"[ERROR] {e}")
+            self._show_critical_error(e, None)
+            return
 
         for card in cards:
             print(f"  - Card ID={card.get('id')} | Contract={card.get('contract_id')} | "
@@ -759,27 +725,12 @@ class CRMSupervisionTab(QWidget):
         """Загрузка архивных карточек с fallback на локальную БД"""
         print("\n=== ЗАГРУЗКА АРХИВА НАДЗОРА ===")
 
-        cards = None
-        api_error = None
-
-        # Попытка загрузки через API (только если online)
-        if self.api_client and self.api_client.is_online:
-            try:
-                cards = self.api_client.get_supervision_cards(status="archived")
-                print(f"[API] Получено: {len(cards)} архивных карточек")
-            except Exception as e:
-                api_error = e
-                print(f"[API ERROR] {e}")
-                print("[FALLBACK] Переключение на локальную БД...")
-
-        # Fallback на локальную БД
-        if cards is None:
-            try:
-                cards = self.db.get_supervision_cards_archived()
-                print(f"[DB] Получено: {len(cards)} архивных карточек")
-            except Exception as db_error:
-                print(f"[DB ERROR] {db_error}")
-                cards = []  # Пустой архив при ошибке
+        try:
+            cards = self.data.get_supervision_cards_archived()
+            print(f"Получено: {len(cards)} архивных карточек")
+        except Exception as e:
+            print(f"[ERROR] {e}")
+            cards = []  # Пустой архив при ошибке
 
         archive_layout = self.archive_widget.archive_layout
 
@@ -838,22 +789,7 @@ class CRMSupervisionTab(QWidget):
 
     def _api_update_card_with_fallback(self, card_id: int, updates: dict):
         """Обновить карточку надзора с fallback на локальную БД и очередью offline"""
-        if self.api_client and self.api_client.is_online:
-            try:
-                self.api_client.update_supervision_card(card_id, updates)
-                return
-            except Exception as e:
-                print(f"[API ERROR] {e}, fallback на локальную БД")
-
-        # Fallback на локальную БД
-        self.db.update_supervision_card(card_id, updates)
-
-        # Добавляем в очередь offline операций
-        if self.api_client and self.offline_manager:
-            from utils.offline_manager import OperationType
-            self.offline_manager.queue_operation(
-                OperationType.UPDATE, 'supervision_card', card_id, updates
-            )
+        self.data.update_supervision_card(card_id, updates)
 
     def update_tab_counters(self):
         """Обновление счетчиков вкладок"""
@@ -897,33 +833,13 @@ class CRMSupervisionTab(QWidget):
 
             if to_column not in non_work_columns and self.employee['position'] not in ['ДАН']:
                 # Получаем данные об исполнителях
+                card_data = self.data.get_supervision_card(card_id)
                 executors_data = None
-                if self.api_client and self.api_client.is_online:
-                    try:
-                        card_data = self.api_client.get_supervision_card(card_id)
-                        if card_data:
-                            executors_data = {
-                                'dan_id': card_data.get('dan_id'),
-                                'senior_manager_id': card_data.get('senior_manager_id')
-                            }
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API получения исполнителей: {e}")
-
-                if executors_data is None:
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        SELECT dan_id, senior_manager_id
-                        FROM supervision_cards
-                        WHERE id = ?
-                    ''', (card_id,))
-                    row = cursor.fetchone()
-                    self.db.close()
-                    if row:
-                        executors_data = {
-                            'dan_id': row['dan_id'],
-                            'senior_manager_id': row['senior_manager_id']
-                        }
+                if card_data:
+                    executors_data = {
+                        'dan_id': card_data.get('dan_id'),
+                        'senior_manager_id': card_data.get('senior_manager_id')
+                    }
 
                 # Если исполнители не назначены - показываем диалог
                 if executors_data and not executors_data.get('dan_id') and not executors_data.get('senior_manager_id'):
@@ -941,32 +857,14 @@ class CRMSupervisionTab(QWidget):
             # ИСПРАВЛЕНИЕ: Проверка и автоматическое принятие работы при перемещении
             # "В ожидании" также исключаем - это стартовая колонка без рабочей стадии
             if self.employee['position'] not in ['ДАН'] and from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
-                # Получаем данные карточки через API или локальную БД
+                # Получаем данные карточки через DataAccess
+                card_data = self.data.get_supervision_card(card_id)
                 card_info = None
-                if self.api_client:
-                    try:
-                        card_data = self.api_client.get_supervision_card(card_id)
-                        if card_data:
-                            card_info = {
-                                'dan_completed': card_data.get('dan_completed', 0),
-                                'dan_name': card_data.get('dan_name', 'ДАН')
-                            }
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API: {e}")
-
-                if card_info is None:
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-
-                    cursor.execute('''
-                    SELECT sc.dan_completed, e.full_name as dan_name
-                    FROM supervision_cards sc
-                    LEFT JOIN employees e ON sc.dan_id = e.id
-                    WHERE sc.id = ?
-                    ''', (card_id,))
-
-                    card_info = cursor.fetchone()
-                    self.db.close()
+                if card_data:
+                    card_info = {
+                        'dan_completed': card_data.get('dan_completed', 0),
+                        'dan_name': card_data.get('dan_name', 'ДАН')
+                    }
 
                 if card_info:
                     dan_completed = card_info['dan_completed']
@@ -989,29 +887,12 @@ class CRMSupervisionTab(QWidget):
                         print(f"\n[AUTO ACCEPT] Автоматическое принятие стадии надзора '{from_column}'")
 
                         # Добавляем запись в историю о принятии
-                        if self.api_client:
-                            try:
-                                self.api_client.add_supervision_history(
-                                    card_id,
-                                    'accepted',
-                                    f"Стадия '{from_column}' автоматически принята при перемещении руководством. Исполнитель: {dan_name}",
-                                    self.employee['id']
-                                )
-                            except Exception as e:
-                                print(f"[WARN] Ошибка API add_supervision_history: {e}")
-                                self.db.add_supervision_history(
-                                    card_id,
-                                    'accepted',
-                                    f"Стадия '{from_column}' автоматически принята при перемещении руководством. Исполнитель: {dan_name}",
-                                    self.employee['id']
-                                )
-                        else:
-                            self.db.add_supervision_history(
-                                card_id,
-                                'accepted',
-                                f"Стадия '{from_column}' автоматически принята при перемещении руководством. Исполнитель: {dan_name}",
-                                self.employee['id']
-                            )
+                        self.data.add_supervision_history(
+                            card_id,
+                            self.employee['id'],
+                            'accepted',
+                            f"Стадия '{from_column}' автоматически принята при перемещении руководством. Исполнитель: {dan_name}"
+                        )
 
                         print(f"    Запись о принятии добавлена в историю")
 
@@ -1040,29 +921,15 @@ class CRMSupervisionTab(QWidget):
 
                             # Если оплат для этой стадии нет, создаем их
                             if not existing_payments:
-                                # Получаем назначенных исполнителей - приоритет API, fallback на локальную БД
+                                # Получаем назначенных исполнителей через DataAccess
+                                card_api_data = self.data.get_supervision_card(card_id)
                                 executors_row = None
-                                if self.api_client and self.api_client.is_online:
-                                    try:
-                                        card_api_data = self.api_client.get_supervision_card(card_id)
-                                        if card_api_data:
-                                            executors_row = {
-                                                'dan_id': card_api_data.get('dan_id'),
-                                                'senior_manager_id': card_api_data.get('senior_manager_id')
-                                            }
-                                            print(f"    [API] Получены исполнители: ДАН={executors_row['dan_id']}, СМП={executors_row['senior_manager_id']}")
-                                    except Exception as api_err:
-                                        print(f"    [WARN] Ошибка API получения исполнителей: {api_err}")
-
-                                # Fallback на локальную БД
-                                if not executors_row:
-                                    cursor.execute('''
-                                    SELECT dan_id, senior_manager_id
-                                    FROM supervision_cards
-                                    WHERE id = ?
-                                    ''', (card_id,))
-                                    executors_row = cursor.fetchone()
-                                    print(f"    [LOCAL] Получены исполнители из локальной БД")
+                                if card_api_data:
+                                    executors_row = {
+                                        'dan_id': card_api_data.get('dan_id'),
+                                        'senior_manager_id': card_api_data.get('senior_manager_id')
+                                    }
+                                    print(f"    Получены исполнители: ДАН={executors_row['dan_id']}, СМП={executors_row['senior_manager_id']}")
 
                                 if executors_row:
                                     # Создаем оплату для ДАН
@@ -1308,14 +1175,7 @@ class CRMSupervisionTab(QWidget):
             QMessageBox.warning(self, 'Ошибка', 'Укажите причину расторжения')
             return
 
-        if self.api_client:
-            try:
-                self.api_client.update_contract(contract_id, {'termination_reason': reason.strip()})
-            except Exception as e:
-                print(f"[WARN] API ошибка сохранения причины: {e}")
-                self.db.update_contract(contract_id, {'termination_reason': reason.strip()})
-        else:
-            self.db.update_contract(contract_id, {'termination_reason': reason.strip()})
+        self.data.update_contract(contract_id, {'termination_reason': reason.strip()})
         dialog.accept()
     
     def show_statistics(self):
@@ -2650,8 +2510,9 @@ class SupervisionCardEditDialog(QDialog):
         super().__init__(parent)
         self.card_data = card_data
         self.employee = employee
-        self.db = DatabaseManager()
-        self.api_client = api_client
+        self.data = getattr(parent, 'data', DataAccess(api_client=api_client))
+        self.db = self.data.db
+        self.api_client = self.data.api_client
 
         # Инициализация Yandex Disk
         try:

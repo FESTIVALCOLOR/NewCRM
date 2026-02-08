@@ -7,7 +7,7 @@ YANDEX_DISK_LINK = "https://disk.yandex.ru/d/SMKt9A7JGjzSEw"
 
 # Яндекс.Диск OAuth токен (получить на https://oauth.yandex.ru/)
 # ВАЖНО: Для работы требуются права: cloud_api:disk.app_folder или cloud_api:disk.write
-YANDEX_DISK_TOKEN = "y0__xCV5tYdGNWePCDo06nOFTDMzdSxCIZ53ao09-VXGweu_rQRNnvVPv8K"  # Установите токен через переменную окружения
+YANDEX_DISK_TOKEN = os.getenv('YANDEX_DISK_TOKEN', '')
 
 # Роли пользователей
 ROLES = {
