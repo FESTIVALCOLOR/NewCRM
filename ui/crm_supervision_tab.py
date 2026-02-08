@@ -683,61 +683,48 @@ class CRMSupervisionTab(QWidget):
             
     def load_active_cards(self):
         """Загрузка активных карточек с fallback на локальную БД"""
-        print("\n=== ЗАГРУЗКА АКТИВНЫХ КАРТОЧЕК НАДЗОРА ===")
-
         try:
             cards = self.data.get_supervision_cards_active()
-            print(f"Получено: {len(cards)} карточек")
         except Exception as e:
-            print(f"[ERROR] {e}")
+            print(f"[ERROR] Загрузка карточек надзора: {e}")
             self._show_critical_error(e, None)
             return
 
-        for card in cards:
-            print(f"  - Card ID={card.get('id')} | Contract={card.get('contract_id')} | "
-                  f"Колонка='{card.get('column_name')}' | Статус={card.get('status')}")
-
         if not hasattr(self.active_widget, 'columns'):
-            print(" Нет атрибута columns в active_widget")
             return
 
         columns_dict = self.active_widget.columns
 
-        # Очищаем колонки
+        # Отключаем отрисовку на время массовой загрузки
         for column in columns_dict.values():
+            column.cards_list.setUpdatesEnabled(False)
             column.clear_cards()
 
         # Добавляем карточки с учетом прав
+        is_dan = self.employee['position'] == 'ДАН'
+        dan_id = self.employee['id']
         for card_data in cards:
-            # Проверяем, должен ли видеть ДАН эту карточку
-            if self.employee['position'] == 'ДАН':
-                if card_data.get('dan_id') != self.employee['id']:
-                    print(f"  - Скрыта для ДАН: Card ID={card_data.get('id')}")
-                    continue
+            if is_dan and card_data.get('dan_id') != dan_id:
+                continue
 
             column_name = card_data.get('column_name', 'Новый заказ')
-
-            print(f"  + Добавление карточки ID={card_data.get('id')} в колонку '{column_name}'")
-
             if column_name in columns_dict:
-                columns_dict[column_name].add_card(card_data)
-            else:
-                print(f"  ! Колонка '{column_name}' не найдена!")
-                print(f"  Доступные колонки: {list(columns_dict.keys())}")
+                columns_dict[column_name].add_card(card_data, bulk=True)
+
+        # Пакетное обновление после загрузки
+        for column in columns_dict.values():
+            column.update_header_count()
+            column.cards_list.setUpdatesEnabled(True)
 
         self.update_tab_counters()
-        print("="*40 + "\n")
 
     def load_archive_cards(self):
         """Загрузка архивных карточек с fallback на локальную БД"""
-        print("\n=== ЗАГРУЗКА АРХИВА НАДЗОРА ===")
-
         try:
             cards = self.data.get_supervision_cards_archived()
-            print(f"Получено: {len(cards)} архивных карточек")
         except Exception as e:
-            print(f"[ERROR] {e}")
-            cards = []  # Пустой архив при ошибке
+            print(f"[ERROR] Загрузка архива надзора: {e}")
+            cards = []
 
         archive_layout = self.archive_widget.archive_layout
 
@@ -767,7 +754,6 @@ class CRMSupervisionTab(QWidget):
         archive_layout.addStretch(1)
 
         self.update_tab_counters()
-        print("="*40 + "\n")
 
     def _show_offline_notification(self, error=None):
         """Показать уведомление об offline режиме"""
@@ -1421,22 +1407,23 @@ class SupervisionColumn(QFrame):
         if self._is_collapsed and self.vertical_label:
             self.vertical_label.setText(f"{self.column_name} ({count})")
     
-    def add_card(self, card_data):
-        """Добавление карточки"""
+    def add_card(self, card_data, bulk=False):
+        """Добавление карточки. bulk=True пропускает update_header_count."""
         card_widget = SupervisionCard(card_data, self.employee, self.db, self.api_client)
-        
+
         recommended_size = card_widget.sizeHint()
         exact_height = recommended_size.height()
         card_widget.setMinimumHeight(exact_height)
-        
+
         item = QListWidgetItem()
         item.setData(Qt.UserRole, card_data.get('id'))
         item.setSizeHint(QSize(200, exact_height + 10))
-        
+
         self.cards_list.addItem(item)
         self.cards_list.setItemWidget(item, card_widget)
-        
-        self.update_header_count()
+
+        if not bulk:
+            self.update_header_count()
     
     def clear_cards(self):
         """Очистка карточек"""

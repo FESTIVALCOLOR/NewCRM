@@ -51,8 +51,6 @@ class DraggableListWidget(QListWidget):
             self.setDragEnabled(False)
         
         self.setSelectionMode(QListWidget.SingleSelection)
-        
-        print(f"[DraggableListWidget] Создан для колонки '{parent_column.column_name}', can_drag={can_drag}")
     
     def startDrag(self, supportedActions):
         """Начало перетаскивания"""
@@ -60,9 +58,8 @@ class DraggableListWidget(QListWidget):
             return
         
         item = self.currentItem()
-        if item:
-            card_id = item.data(Qt.UserRole)
-            print(f"\n[DRAG START] Карточка ID={card_id} из колонки '{self.parent_column.column_name}'")
+        if not item:
+            return
         
         super().startDrag(supportedActions)
     
@@ -78,32 +75,23 @@ class DraggableListWidget(QListWidget):
         print(f"             Источник: {type(source).__name__}")
         
         if not isinstance(source, DraggableListWidget):
-            print(f"   Источник не DraggableListWidget")
             event.ignore()
             return
-        
+
         item = source.currentItem()
         if not item:
-            print(f"   Нет текущего элемента")
             event.ignore()
             return
-        
+
         card_id = item.data(Qt.UserRole)
-        print(f"  ID карточки: {card_id}")
-        
+
         source_column = source.parent_column
         target_column = self.parent_column
-        
-        print(f"  Из колонки: '{source_column.column_name}'")
-        print(f"  В колонку: '{target_column.column_name}'")
-        
+
         if source_column == target_column:
-            print(f"  → Та же колонка, стандартное перемещение")
             super().dropEvent(event)
             event.accept()
             return
-        
-        print(f"  → Разные колонки, испускаем сигнал")
         
         source_column.card_moved.emit(
             card_id,
@@ -417,13 +405,10 @@ class CRMTab(QWidget):
                 
     def load_cards_for_type(self, project_type):
         """Загрузка карточек для конкретного типа проекта с fallback на локальную БД"""
-        print(f"\n=== ЗАГРУЗКА КАРТОЧЕК: {project_type} ===")
-
         cards = None
 
         try:
             cards = self.data.get_crm_cards(project_type)
-            print(f"[DataAccess] Получено: {len(cards) if cards else 0} карточек")
 
             if project_type == 'Индивидуальный':
                 board_widget = self.individual_widget
@@ -431,47 +416,36 @@ class CRMTab(QWidget):
                 board_widget = self.template_widget
 
             if not hasattr(board_widget, 'columns'):
-                print(f" Нет атрибута columns")
                 return
 
             columns_dict = board_widget.columns
 
-            print("Очистка колонок:")
+            # Отключаем отрисовку на время массовой загрузки
             for column in columns_dict.values():
+                column.cards_list.setUpdatesEnabled(False)
                 column.clear_cards()
 
             if cards:
-                print("Добавление карточек:")
                 for card_data in cards:
-                    # ========== ЗАЩИТА ОТ БИТЫХ ДАННЫХ ==========
                     try:
                         if not self.should_show_card_for_employee(card_data):
-                            print(f"  - Карточка ID={card_data.get('id')} скрыта")
                             continue
 
                         column_name = card_data.get('column_name')
                         if column_name and column_name in columns_dict:
-                            columns_dict[column_name].add_card(card_data)
-                        else:
-                            print(f"  ! Колонка '{column_name}' не найдена!")
+                            columns_dict[column_name].add_card(card_data, bulk=True)
 
                     except Exception as card_error:
-                        print(f"   ОШИБКА при обработке карточки ID={card_data.get('id')}: {card_error}")
-                        import traceback
-                        traceback.print_exc()
-                        # ПРОДОЛЖАЕМ загрузку остальных карточек
+                        print(f"ОШИБКА при обработке карточки ID={card_data.get('id')}: {card_error}")
                         continue
-                    # ============================================
 
-            print("\n+ Результат:")
-            for column_name, column in columns_dict.items():
-                count = column.cards_list.count()
-                if count > 0:
-                    print(f"  {column_name}: {count} карточек")
+            # Пакетное обновление после загрузки всех карточек
+            for column in columns_dict.values():
+                column.cards_list.updateGeometry()
+                column.update_header_count()
+                column.cards_list.setUpdatesEnabled(True)
 
             self.update_project_tab_counters()
-
-            print(f"{'='*40}\n")
 
         except Exception as e:
             print(f" КРИТИЧЕСКАЯ ОШИБКА: {e}")
@@ -509,7 +483,6 @@ class CRMTab(QWidget):
             
     def on_tab_changed(self, index):
         """Обработка переключения вкладок"""
-        print(f"\n▶ Переключение на вкладку: {index}")
         if index == 0:
             self.load_cards_for_type('Индивидуальный')
             if self.employee['position'] not in ['Дизайнер', 'Чертёжник']:
@@ -521,25 +494,12 @@ class CRMTab(QWidget):
     
     def on_card_moved(self, card_id, from_column, to_column, project_type):
         """Обработка перемещения карточки"""
-        print(f"\n{'='*60}")
-        print(f"[RELOAD] ОБРАБОТКА ПЕРЕМЕЩЕНИЯ КАРТОЧКИ")
-        print(f"   ID карточки: {card_id}")
-        print(f"   Из колонки: '{from_column}'")
-        print(f"   В колонку: '{to_column}'")
-        print(f"   Тип проекта: {project_type}")
-        print(f"{'='*60}")
-        
-        # ИСПРАВЛЕНИЕ 07.02.2026: Проверяем нужен ли выбор исполнителя ПЕРЕД перемещением (#14)
-        # Если нужен - показываем диалог, и только при подтверждении перемещаем
+        # Проверяем нужен ли выбор исполнителя ПЕРЕД перемещением
         if self.requires_executor_selection(to_column):
-            print(f"[DIALOG] Требуется выбор исполнителя для стадии '{to_column}'")
             dialog = ExecutorSelectionDialog(self, card_id, to_column, project_type, self.api_client)
             if dialog.exec_() != QDialog.Accepted:
-                print(f"[CANCEL] Пользователь отменил выбор исполнителя - карточка НЕ перемещается")
-                # Перезагружаем карточки чтобы вернуть в исходное положение
                 self.load_cards_for_type(project_type)
                 return
-            print(f"[OK] Исполнитель выбран - продолжаем перемещение")
 
         try:
             card_data = self.data.get_crm_card(card_id)
@@ -1179,18 +1139,13 @@ class CRMTab(QWidget):
     
     def load_archive_cards(self, project_type):
         """Загрузка архивных карточек"""
-        print(f"\n=== ЗАГРУЗКА АРХИВА: {project_type} ===")
-
         try:
-            # Проверяем, есть ли виджет архива (для замерщиков его нет)
             if project_type == 'Индивидуальный':
                 if not hasattr(self, 'individual_archive_widget'):
-                    print("  Архив недоступен для текущей роли")
                     return
                 archive_widget = self.individual_archive_widget
             else:
                 if not hasattr(self, 'template_archive_widget'):
-                    print("  Архив недоступен для текущей роли")
                     return
                 archive_widget = self.template_archive_widget
 
@@ -1198,11 +1153,9 @@ class CRMTab(QWidget):
                 try:
                     cards = self.api_client.get_archived_crm_cards(project_type)
                 except Exception as e:
-                    print(f"[WARN] API ошибка загрузки архива: {e}")
                     cards = self.db.get_archived_crm_cards(project_type)
             else:
                 cards = self.db.get_archived_crm_cards(project_type)
-            print(f"Получено: {len(cards) if cards else 0} архивных карточек")
 
             archive_layout = archive_widget.archive_layout
             while archive_layout.count():
@@ -1212,10 +1165,6 @@ class CRMTab(QWidget):
 
             if cards:
                 for card_data in cards:
-                    # ИСПРАВЛЕНИЕ: API возвращает contract_status, а не status
-                    card_status = card_data.get('contract_status') or card_data.get('status', 'N/A')
-                    print(f"  Добавление архивной карточки: ID={card_data.get('id')}, Статус={card_status}")
-                    # ИСПРАВЛЕНИЕ: Передаём api_client для синхронизации
                     archive_card = ArchiveCard(card_data, self.db, employee=self.employee, api_client=self.api_client)
                     archive_layout.addWidget(archive_card)
             else:
@@ -1224,14 +1173,10 @@ class CRMTab(QWidget):
                 empty_label.setAlignment(Qt.AlignCenter)
                 archive_layout.addWidget(empty_label)
 
-            # Примечание: FlowLayout не поддерживает addStretch, карточки автоматически располагаются
-
-            print(f"Архив загружен: {len(cards) if cards else 0} карточек\n")
-            
             self.update_project_tab_counters()
-            
+
         except Exception as e:
-            print(f" ОШИБКА загрузки архива: {e}")
+            print(f"ОШИБКА загрузки архива: {e}")
             import traceback
             traceback.print_exc()
 
@@ -1403,58 +1348,34 @@ class CRMTab(QWidget):
         employee_id = self.employee.get('id')
         column_name = card_data.get('column_name', '')
         project_type = card_data.get('project_type', '')
-        
-        print(f"\n  Проверка карточки ID={card_data.get('id')}:")
-        print(f"     Должность: {position} | ID сотрудника: {employee_id}")
-        print(f"     Колонка: '{column_name}' | Тип проекта: {project_type}")
-        
-        # ========== РУКОВОДИТЕЛЬ И СТАРШИЙ МЕНЕДЖЕР ВИДЯТ ВСЁ ==========
+
+        # Руководитель и старший менеджер видят всё
         if position in ['Руководитель студии', 'Старший менеджер проектов']:
-            print(f"     Руководящая роль - показываем")
             return True
-        
-        # ========== НАЗНАЧЕННЫЙ МЕНЕДЖЕР (ДЛЯ ВСЕХ СТАДИЙ) ==========
+
+        # Назначенный менеджер
         if position == 'Менеджер' or secondary_position == 'Менеджер':
-            assigned_manager_id = card_data.get('manager_id')
-            print(f"     Назначенный менеджер ID: {assigned_manager_id}")
-            if assigned_manager_id == employee_id:
-                print(f"     Назначен менеджером - показываем")
+            if card_data.get('manager_id') == employee_id:
                 return True
-        
-        # ========== НАЗНАЧЕННЫЙ ГАП ==========
-        # ИСПРАВЛЕНИЕ: ГАП видит ВСЕ карточки, на которые назначен (не только на определенных стадиях)
+
+        # Назначенный ГАП
         if position == 'ГАП' or secondary_position == 'ГАП':
-            assigned_gap_id = card_data.get('gap_id')
-            print(f"     Назначенный ГАП ID: {assigned_gap_id}")
-
-            if assigned_gap_id == employee_id:
-                print(f"     ГАП назначен на этот проект - показываем")
+            if card_data.get('gap_id') == employee_id:
                 return True
 
-        # ========== НАЗНАЧЕННЫЙ СДП ==========
-        # ИСПРАВЛЕНИЕ: СДП видит ВСЕ карточки, на которые назначен (не только на определенных стадиях)
+        # Назначенный СДП
         if position == 'СДП' or secondary_position == 'СДП':
-            assigned_sdp_id = card_data.get('sdp_id')
-            print(f"     Назначенный СДП ID: {assigned_sdp_id}")
-
-            if assigned_sdp_id == employee_id:
-                print(f"     СДП назначен на этот проект - показываем")
+            if card_data.get('sdp_id') == employee_id:
                 return True
-        
-        # ========== ДИЗАЙНЕР (СУЩЕСТВУЮЩАЯ ЛОГИКА) ==========
+
+        # Дизайнер
         if position == 'Дизайнер' or secondary_position == 'Дизайнер':
             if column_name == 'Стадия 2: концепция дизайна':
                 designer_name = card_data.get('designer_name')
                 designer_completed = card_data.get('designer_completed', 0)
-                
-                print(f"     Назначен дизайнер: {designer_name}")
-                print(f"     Работа завершена: {designer_completed == 1}")
-                
-                result = (designer_name == employee_name) and (designer_completed != 1)
-                print(f"     Результат: {'показываем' if result else 'скрываем'}")
-                return result
-        
-        # ========== ЧЕРТЁЖНИК (СУЩЕСТВУЮЩАЯ ЛОГИКА) ==========
+                return (designer_name == employee_name) and (designer_completed != 1)
+
+        # Чертёжник
         if position == 'Чертёжник' or secondary_position == 'Чертёжник':
             if project_type == 'Индивидуальный':
                 allowed_columns = ['Стадия 1: планировочные решения', 'Стадия 3: рабочие чертежи']
@@ -1464,33 +1385,14 @@ class CRMTab(QWidget):
             if column_name in allowed_columns:
                 draftsman_name = card_data.get('draftsman_name')
                 draftsman_completed = card_data.get('draftsman_completed', 0)
+                return (draftsman_name == employee_name) and (draftsman_completed != 1)
 
-                print(f"     Назначен чертёжник: {draftsman_name}")
-                print(f"     Работа завершена: {draftsman_completed == 1}")
-
-                result = (draftsman_name == employee_name) and (draftsman_completed != 1)
-                print(f"     Результат: {'показываем' if result else 'скрываем'}")
-                return result
-
-        # ========== ЗАМЕРЩИК ==========
+        # Замерщик
         if position == 'Замерщик' or secondary_position == 'Замерщик':
-            assigned_surveyor_id = card_data.get('surveyor_id')
-            print(f"     Назначенный замерщик ID: {assigned_surveyor_id}")
-
-            # Замерщик видит только карточки, где он назначен замерщиком И замер НЕ загружен
-            if assigned_surveyor_id == employee_id:
-                # Проверяем, загружен ли файл замера
+            if card_data.get('surveyor_id') == employee_id:
                 has_measurement = card_data.get('measurement_image_link') or card_data.get('survey_date')
-                print(f"     Замер загружен: {bool(has_measurement)}")
+                return not has_measurement
 
-                if not has_measurement:
-                    print(f"     Назначен замерщиком и замер НЕ загружен - показываем")
-                    return True
-                else:
-                    print(f"     Замер уже загружен - скрываем")
-                    return False
-
-        print(f"     Условия не выполнены - скрываем")
         return False
 
     def on_sync_update(self, updated_cards):
@@ -1739,38 +1641,34 @@ class CRMColumn(QFrame):
             short_name = self.column_name.split(':')[0].strip() if ':' in self.column_name else self.column_name
             self.vertical_label.setText(f"{short_name} ({count})")
     
-    def add_card(self, card_data):
-        """Добавление карточки в колонку"""
+    def add_card(self, card_data, bulk=False):
+        """Добавление карточки в колонку. bulk=True пропускает updateGeometry/update_header_count."""
         card_id = card_data.get('id')
-        print(f"  [ADD] Добавление в '{self.column_name}': ID={card_id}")
 
-        # ========== ЗАЩИТА ОТ КРАША ==========
         try:
             card_widget = CRMCard(card_data, self.can_edit, self.db, self.employee, api_client=self.api_client)
-            
+
             recommended_size = card_widget.sizeHint()
             exact_height = recommended_size.height()
-            
+
             card_widget.setMinimumHeight(exact_height)
-            
+
             item = QListWidgetItem()
             item.setData(Qt.UserRole, card_id)
             item.setSizeHint(QSize(200, exact_height + 10))
-            
+
             self.cards_list.addItem(item)
             self.cards_list.setItemWidget(item, card_widget)
-            
-            self.cards_list.updateGeometry()
-            self.update_header_count()
-            
-            print(f"       Карточка добавлена успешно (высота: {exact_height}px)")
-            
+
+            if not bulk:
+                self.cards_list.updateGeometry()
+                self.update_header_count()
+
         except Exception as e:
-            print(f"   ОШИБКА создания карточки ID={card_id}: {e}")
+            print(f"ОШИБКА создания карточки ID={card_id}: {e}")
             import traceback
             traceback.print_exc()
-            
-            # Создаем пустую заглушку, чтобы не ломать интерфейс
+
             try:
                 error_widget = QLabel(f" Ошибка загрузки\nкарточки ID={card_id}")
                 error_widget.setStyleSheet('''
@@ -1782,27 +1680,20 @@ class CRMColumn(QFrame):
                     color: #C0392B;
                 ''')
                 error_widget.setFixedHeight(80)
-                
+
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, card_id)
                 item.setSizeHint(QSize(200, 90))
-                
+
                 self.cards_list.addItem(item)
                 self.cards_list.setItemWidget(item, error_widget)
-                
-                print(f"       → Добавлена заглушка об ошибке")
             except Exception:
                 pass
-        # ====================================
             
     def clear_cards(self):
         """Очистка всех карточек"""
-        count = self.cards_list.count()
         self.cards_list.clear()
-        
         self.update_header_count()
-        
-        print(f"  [CLEAR] '{self.column_name}': было {count}, стало {self.cards_list.count()}")
 
 class CRMCard(QFrame):
     def __init__(self, card_data, can_edit, db, employee=None, api_client=None):

@@ -89,6 +89,9 @@ class PaymentStatusDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 class SalariesTab(QWidget):
+    _months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
     def __init__(self, employee, api_client=None, parent=None):
         super().__init__(parent)
         self.employee = employee
@@ -1563,11 +1566,10 @@ class SalariesTab(QWidget):
             report_month = payment.get('report_month', 'Не установлен')
             if report_month and report_month != 'Не установлен':
                 try:
-                    from datetime import datetime
-                    month_date = datetime.strptime(report_month, '%Y-%m')
-                    months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                                'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
-                    report_month = f"{months_ru[month_date.month - 1]} {month_date.year}"
+                    parts = report_month.split('-')
+                    if len(parts) == 2:
+                        month_idx = int(parts[1]) - 1
+                        report_month = f"{self._months_ru[month_idx]} {parts[0]}"
                 except Exception:
                     pass
             self.all_payments_table.setItem(row, 7, QTableWidgetItem(report_month))
@@ -2552,53 +2554,27 @@ class SalariesTab(QWidget):
 
     def apply_row_color(self, table, row, status, is_reassigned=False):
         """Применение цвета к строке в зависимости от статуса и переназначения"""
-        # Определяем цвет и индикатор переназначения
-        reassigned_indicator = ''
-
         if is_reassigned:
-            # Переназначенные строки - жёлтый фон со звёздочкой
             color = QColor('#FFF9C4')  # Яркий жёлтый для переназначенных
-            reassigned_indicator = ' *'
         elif status == 'to_pay':
-            color = QColor('#FFE4B5')  # Персиковый/оранжевый - ярче чем раньше
+            color = QColor('#FFE4B5')  # Персиковый/оранжевый
         elif status == 'paid':
             color = QColor('#D4EDDA')  # Светло-зеленый
         else:
             color = QColor('#FFFFFF')  # Белый
 
-        # КЛЮЧЕВОЕ РЕШЕНИЕ: Создаем QWidget для каждой обычной ячейки с фоном
-        from PyQt5.QtWidgets import QLabel
-        color_name = color.name()
-
+        last_col = table.columnCount() - 1
         for col in range(table.columnCount()):
             existing_widget = table.cellWidget(row, col)
-
-            if existing_widget and col == table.columnCount() - 1:
-                # Последний столбец - это уже виджет с кнопками, просто меняем его фон
-                existing_widget.setStyleSheet(f"background-color: {color_name};")
+            if existing_widget and col == last_col:
+                existing_widget.setStyleSheet(f"background-color: {color.name()};")
             else:
-                # Для остальных столбцов создаем QLabel с текстом и фоном
                 item = table.item(row, col)
                 if item:
-                    text = item.text()
-                    alignment = item.textAlignment()
-                else:
-                    text = ""
-                    alignment = int(Qt.AlignLeft | Qt.AlignVCenter)
-
-                # Добавляем звёздочку для переназначенных (в колонку Исполнитель - col == 2)
-                if is_reassigned and col == 2 and reassigned_indicator:
-                    text = text + reassigned_indicator
-
-                label = QLabel(text)
-                label.setStyleSheet(f"background-color: {color_name}; padding: 5px;")
-                label.setAlignment(Qt.Alignment(alignment))
-
-                # Добавляем tooltip для переназначенных строк (в колонку Исполнитель)
-                if is_reassigned and col == 2:
-                    label.setToolTip('Выплата переназначена другому исполнителю')
-
-                table.setCellWidget(row, col, label)
+                    item.setBackground(color)
+                    if is_reassigned and col == 2:
+                        item.setText(item.text() + ' *')
+                        item.setToolTip('Выплата переназначена другому исполнителю')
 
     def sync_status_with_crm(self, payment, status):
         """Синхронизация статуса с CRM"""
