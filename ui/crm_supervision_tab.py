@@ -90,10 +90,8 @@ class CRMSupervisionTab(QWidget):
             print(f"[WARNING] Не удалось инициализировать Yandex Disk: {e}")
             self.yandex_disk = None
 
+        self._data_loaded = False
         self.init_ui()
-        # ОПТИМИЗАЦИЯ: Первая загрузка из локальной БД (мгновенно)
-        self.data.prefer_local = True
-        QTimer.singleShot(0, self._initial_load)
     
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -669,10 +667,13 @@ class CRMSupervisionTab(QWidget):
             import traceback
             traceback.print_exc()
 
-    def _initial_load(self):
-        """Первая загрузка из локальной БД (мгновенно)"""
-        self.load_cards_for_current_tab()
-        self.data.prefer_local = False
+    def ensure_data_loaded(self):
+        """Ленивая загрузка: данные загружаются при первом показе таба"""
+        if not self._data_loaded:
+            self._data_loaded = True
+            self.data.prefer_local = True
+            self.load_cards_for_current_tab()
+            self.data.prefer_local = False
 
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей вкладки"""

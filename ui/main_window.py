@@ -1090,8 +1090,10 @@ class MainWindow(QMainWindow):
             # Переключаем дашборд
             self.switch_dashboard(dashboard_key)
 
-            # Обновляем данные вкладки
-            if hasattr(current_widget, 'load_all_statistics'):
+            # Ленивая загрузка данных при первом показе таба
+            if hasattr(current_widget, 'ensure_data_loaded'):
+                current_widget.ensure_data_loaded()
+            elif hasattr(current_widget, 'load_all_statistics'):
                 current_widget.load_all_statistics()
             elif hasattr(current_widget, 'refresh_current_tab'):
                 current_widget.refresh_current_tab()

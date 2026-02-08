@@ -180,9 +180,7 @@ class SalariesTab(QWidget):
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
         self.setLayout(layout)
-        # ОПТИМИЗАЦИЯ: Первая загрузка из локальной БД (мгновенно)
-        self.data.prefer_local = True
-        QTimer.singleShot(0, self._initial_load)
+        self._data_loaded = False
 
     def on_tab_changed(self, index):
         """Обработка переключения вкладок - загрузка данных для выбранной вкладки"""
@@ -1298,10 +1296,13 @@ class SalariesTab(QWidget):
         """Применение всех фильтров для таблицы всех выплат"""
         self.load_all_payments()
 
-    def _initial_load(self):
-        """Первая загрузка из локальной БД (мгновенно)"""
-        self.load_all_payments()
-        self.data.prefer_local = False
+    def ensure_data_loaded(self):
+        """Ленивая загрузка: данные загружаются при первом показе таба"""
+        if not self._data_loaded:
+            self._data_loaded = True
+            self.data.prefer_local = True
+            self.load_all_payments()
+            self.data.prefer_local = False
 
     def load_all_payments(self, force_reload=False):
         """Загрузка всех выплат с применением фильтров и кешированием"""

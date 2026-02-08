@@ -33,10 +33,8 @@ class EmployeesTab(QWidget):
         ]
         # ======================================
 
+        self._data_loaded = False
         self.init_ui()
-        # ОПТИМИЗАЦИЯ: Первая загрузка из локальной БД (мгновенно)
-        self.data.prefer_local = True
-        QTimer.singleShot(0, self._initial_load)
     
     def init_ui(self):
         layout = QVBoxLayout()
@@ -375,10 +373,13 @@ class EmployeesTab(QWidget):
         else:
             self.load_employees(department=department_key)
 
-    def _initial_load(self):
-        """Первая загрузка из локальной БД (мгновенно)"""
-        self.load_employees()
-        self.data.prefer_local = False
+    def ensure_data_loaded(self):
+        """Ленивая загрузка: данные загружаются при первом показе таба"""
+        if not self._data_loaded:
+            self._data_loaded = True
+            self.data.prefer_local = True
+            self.load_employees()
+            self.data.prefer_local = False
 
     def load_employees(self, department=None):
         """Загрузка списка сотрудников с фильтрацией по отделу"""

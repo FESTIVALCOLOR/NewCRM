@@ -18,8 +18,6 @@ class DashboardTab(QWidget):
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.init_ui()
-        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
-        QTimer.singleShot(0, self.load_statistics)
     
     def init_ui(self):
         main_layout = QVBoxLayout()

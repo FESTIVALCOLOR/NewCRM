@@ -30,9 +30,8 @@ class ReportsTab(QWidget):
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
+        self._data_loaded = False
         self.init_ui()
-        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
-        QTimer.singleShot(0, self.load_all_statistics)
 
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -446,6 +445,12 @@ class ReportsTab(QWidget):
         self.agent_type_combo.setCurrentText('Все')
         self.city_combo.setCurrentText('Все')
     
+    def ensure_data_loaded(self):
+        """Ленивая загрузка: данные загружаются при первом показе таба"""
+        if not self._data_loaded:
+            self._data_loaded = True
+            self.load_all_statistics()
+
     def load_all_statistics(self):
         """Загрузка всей статистики"""
         year_text = self.year_combo.currentText()
