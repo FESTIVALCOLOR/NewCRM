@@ -1478,40 +1478,39 @@ class SalariesTab(QWidget):
         self.employee_filter.blockSignals(False)
         self.position_filter.blockSignals(False)
 
-        # Применяем фильтры
+        # Применяем фильтры (кешируем значения фильтров перед циклом)
+        f_address = self.address_filter.currentData()
+        f_employee = self.employee_filter.currentData()
+        f_position = self.position_filter.currentData()
+        f_agent_type = self.agent_type_filter.currentData()
+        f_subtype = self.payment_subtype_filter.currentData()
+        f_project_type = self.project_type_filter.currentText()
+        f_status = self.status_filter.currentText()
+
         filtered_payments = []
         for payment in payments:
-            # Фильтр по адресу
-            if self.address_filter.currentData() and payment.get('address') != self.address_filter.currentData():
+            if f_address and payment.get('address') != f_address:
                 continue
-            # Фильтр по исполнителю
-            if self.employee_filter.currentData() and payment.get('employee_name') != self.employee_filter.currentData():
+            if f_employee and payment.get('employee_name') != f_employee:
                 continue
-            # Фильтр по должности
-            if self.position_filter.currentData() and payment.get('position') != self.position_filter.currentData():
+            if f_position and payment.get('position') != f_position:
                 continue
-            # Фильтр по типу агента (agent_type из договора: Петрович, Фестиваль и т.д.)
-            if self.agent_type_filter.currentData() and payment.get('agent_type') != self.agent_type_filter.currentData():
+            if f_agent_type and payment.get('agent_type') != f_agent_type:
                 continue
-            # Фильтр по типу выплаты (Аванс, Доплата, Полная оплата, Оклад)
-            payment_subtype_filter = self.payment_subtype_filter.currentData()
-            if payment_subtype_filter:
+            if f_subtype:
                 actual_subtype = payment.get('payment_subtype')
                 if payment['source'] == 'Оклад':
                     actual_subtype = 'Оклад'
-                if actual_subtype != payment_subtype_filter:
+                if actual_subtype != f_subtype:
                     continue
-            # Фильтр по типу проекта
-            if self.project_type_filter.currentText() != 'Все':
-                project_type = payment.get('project_type', '')
-                if self.project_type_filter.currentText() != project_type:
+            if f_project_type != 'Все':
+                if f_project_type != payment.get('project_type', ''):
                     continue
-            # Фильтр по статусу
-            if self.status_filter.currentText() != 'Все':
+            if f_status != 'Все':
                 status = payment.get('payment_status', '')
-                if self.status_filter.currentText() == 'К оплате' and status != 'to_pay':
+                if f_status == 'К оплате' and status != 'to_pay':
                     continue
-                if self.status_filter.currentText() == 'Оплачено' and status != 'paid':
+                if f_status == 'Оплачено' and status != 'paid':
                     continue
 
             filtered_payments.append(payment)
