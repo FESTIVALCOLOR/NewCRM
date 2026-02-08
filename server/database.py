@@ -70,7 +70,7 @@ class UserSession(Base):
     __tablename__ = "user_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
 
     session_token = Column(String, unique=True, nullable=False, index=True)
     refresh_token = Column(String, unique=True)
@@ -94,12 +94,12 @@ class UserPermission(Base):
     __tablename__ = "user_permissions"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
 
     permission_type = Column(String, nullable=False)  # 'tab_access', 'entity_edit', 'entity_delete', 'entity_create'
     target = Column(String, nullable=False)  # название вкладки или таблицы
 
-    granted_by = Column(Integer, ForeignKey("employees.id"))
+    granted_by = Column(Integer, ForeignKey("employees.id"), index=True)
     granted_date = Column(DateTime, default=datetime.utcnow)
 
     # Связи
@@ -111,8 +111,8 @@ class ActivityLog(Base):
     __tablename__ = "activity_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    session_id = Column(Integer, ForeignKey("user_sessions.id"))
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("user_sessions.id"), index=True)
 
     action_type = Column(String, nullable=False)  # 'login', 'logout', 'create', 'update', 'delete', 'view'
     entity_type = Column(String, nullable=False)  # 'client', 'contract', 'crm_card', etc.
@@ -133,8 +133,8 @@ class ConcurrentEdit(Base):
     entity_type = Column(String, nullable=False)
     entity_id = Column(Integer, nullable=False)
 
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    session_id = Column(Integer, ForeignKey("user_sessions.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("user_sessions.id"), nullable=False, index=True)
 
     locked_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime)  # Автоматическая разблокировка через 30 минут
@@ -145,7 +145,7 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
 
     notification_type = Column(String, nullable=False)  # 'task_assigned', 'deadline_warning', etc.
     title = Column(String, nullable=False)
@@ -188,7 +188,7 @@ class FileStorage(Base):
     last_sync_date = Column(DateTime)
 
     # Метаданные
-    uploaded_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    uploaded_by = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
     upload_date = Column(DateTime, default=datetime.utcnow)
     last_accessed = Column(DateTime)
     access_count = Column(Integer, default=0)
@@ -232,7 +232,7 @@ class Contract(Base):
     __tablename__ = "contracts"
 
     id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
 
     project_type = Column(String, nullable=False)
     agent_type = Column(String)
@@ -290,7 +290,7 @@ class CRMCard(Base):
     __tablename__ = "crm_cards"
 
     id = Column(Integer, primary_key=True, index=True)
-    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False, index=True)
 
     column_name = Column(String, nullable=False, default="Новый заказ")
     deadline = Column(String)
@@ -306,11 +306,11 @@ class CRMCard(Base):
     survey_date = Column(String)
 
     # Менеджеры
-    senior_manager_id = Column(Integer, ForeignKey("employees.id"))
-    sdp_id = Column(Integer, ForeignKey("employees.id"))  # Старший дизайнер-проектировщик
-    gap_id = Column(Integer, ForeignKey("employees.id"))  # Главный архитектор-проектировщик
-    manager_id = Column(Integer, ForeignKey("employees.id"))
-    surveyor_id = Column(Integer, ForeignKey("employees.id"))
+    senior_manager_id = Column(Integer, ForeignKey("employees.id"), index=True)
+    sdp_id = Column(Integer, ForeignKey("employees.id"), index=True)  # Старший дизайнер-проектировщик
+    gap_id = Column(Integer, ForeignKey("employees.id"), index=True)  # Главный архитектор-проектировщик
+    manager_id = Column(Integer, ForeignKey("employees.id"), index=True)
+    surveyor_id = Column(Integer, ForeignKey("employees.id"), index=True)
 
     order_position = Column(Integer, default=0)
 

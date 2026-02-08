@@ -1,11 +1,26 @@
 import requests
 import json
+import os
 import urllib.parse
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 class YandexDiskManager:
+    _instances = {}
+
+    MAX_FILE_SIZE_MB = 200  # Maximum allowed file size
+
+    @classmethod
+    def get_instance(cls, token=None):
+        """Get or create a singleton instance for the given token"""
+        if not token:
+            from config import YANDEX_DISK_TOKEN
+            token = YANDEX_DISK_TOKEN
+        if token not in cls._instances:
+            cls._instances[token] = cls(token)
+        return cls._instances[token]
+
     def __init__(self, token=None):
         self.token = token  # OAuth токен
         self.base_url = 'https://cloud-api.yandex.net/v1/disk'
@@ -26,15 +41,35 @@ class YandexDiskManager:
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
+
+    def _check_response(self, response, operation_name="operation"):
+        """Check API response status and raise appropriate errors"""
+        if response.status_code == 401:
+            raise Exception(f"Yandex Disk: token expired or invalid ({operation_name})")
+        if response.status_code == 403:
+            raise Exception(f"Yandex Disk: access forbidden ({operation_name})")
+        if response.status_code == 429:
+            raise Exception(f"Yandex Disk: rate limit exceeded ({operation_name})")
+        return response
     
     def upload_file(self, local_path, yandex_path):
         """Загрузка файла на Яндекс.Диск"""
+        # Validate file size
+        file_size = os.path.getsize(local_path)
+        file_size_mb = file_size / (1024 * 1024)
+        if file_size_mb > self.MAX_FILE_SIZE_MB:
+            raise Exception(f"File too large: {file_size_mb:.1f} MB (max {self.MAX_FILE_SIZE_MB} MB)")
+
+        # Dynamic timeout: at least 60s, add 2 seconds per MB
+        dynamic_timeout = max(60, int(file_size / (1024 * 1024)) * 2 + 60)
+
         # Получаем ссылку для загрузки
         url = f'{self.base_url}/resources/upload'
         params = {'path': yandex_path, 'overwrite': 'true'}
         headers = {'Authorization': f'OAuth {self.token}'}
 
         response = self.session.get(url, params=params, headers=headers, timeout=10)
+        self._check_response(response, "get_upload_link")
 
         if response.status_code != 200:
             raise Exception(f"Ошибка получения ссылки для загрузки: {response.status_code} - {response.text}")
@@ -45,10 +80,9 @@ class YandexDiskManager:
 
         upload_url = response_data['href']
 
-        # ИСПРАВЛЕНИЕ 25.01.2026: Увеличен таймаут до 600 сек для больших файлов (150-200 МБ)
         # Используем data= вместо files= для streaming upload (меньше памяти)
         with open(local_path, 'rb') as f:
-            upload_response = self.session.put(upload_url, data=f, timeout=600)
+            upload_response = self.session.put(upload_url, data=f, timeout=dynamic_timeout)
 
         if upload_response.status_code not in [200, 201, 202]:
             raise Exception(f"Ошибка загрузки файла: {upload_response.status_code}")
@@ -60,12 +94,24 @@ class YandexDiskManager:
         headers = {'Authorization': f'OAuth {self.token}'}
 
         response = self.session.get(url, params=params, headers=headers, timeout=10)
-        download_url = response.json()['href']
+        self._check_response(response, "get_download_link")
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get download link: {response.status_code}")
+
+        data = response.json()
+        download_url = data.get('href')
+        if not download_url:
+            raise Exception("No download URL in response")
 
         # Скачиваем файл
-        file_response = self.session.get(download_url, timeout=30)
+        file_response = self.session.get(download_url, timeout=60, stream=True)
+        if file_response.status_code != 200:
+            raise Exception(f"Download failed: {file_response.status_code}")
+
         with open(local_path, 'wb') as f:
-            f.write(file_response.content)
+            for chunk in file_response.iter_content(chunk_size=8192):
+                f.write(chunk)
 
     def get_public_link(self, yandex_path):
         """Получение публичной ссылки"""
@@ -77,7 +123,7 @@ class YandexDiskManager:
             publish_params = {'path': yandex_path}
 
             publish_response = self.session.put(publish_url, params=publish_params, headers=headers, timeout=10)
-            print(f"[DEBUG] Публикация: {publish_response.status_code}")
+            self._check_response(publish_response, "publish_file")
 
             # Успешная публикация или уже опубликован
             if publish_response.status_code in [200, 201, 409]:
@@ -86,31 +132,30 @@ class YandexDiskManager:
                 meta_params = {'path': yandex_path, 'fields': 'public_url,public_key'}
 
                 meta_response = self.session.get(meta_url, params=meta_params, headers=headers, timeout=10)
-                print(f"[DEBUG] Метаданные: {meta_response.status_code}")
+                self._check_response(meta_response, "get_public_metadata")
 
                 if meta_response.status_code == 200:
                     meta_data = meta_response.json()
-                    print(f"[DEBUG] Данные: {meta_data}")
 
                     # Извлекаем public_url
                     public_url = meta_data.get('public_url', '')
 
                     if public_url:
-                        print(f"[OK] Получена публичная ссылка: {public_url}")
+                        print(f"[YD] Получена публичная ссылка: {public_url}")
                         return public_url
 
                     # Если public_url нет, пробуем сформировать из public_key
                     public_key = meta_data.get('public_key', '')
                     if public_key:
                         public_url = f"https://disk.yandex.ru/i/{public_key}"
-                        print(f"[OK] Сформирована ссылка из public_key: {public_url}")
+                        print(f"[YD] Сформирована ссылка из public_key: {public_url}")
                         return public_url
 
                 else:
-                    print(f"[ERROR] Ошибка получения метаданных: {meta_response.text}")
+                    print(f"[ERROR] Ошибка получения метаданных: {meta_response.status_code}")
 
             else:
-                print(f"[ERROR] Ошибка публикации: {publish_response.status_code} - {publish_response.text}")
+                print(f"[ERROR] Ошибка публикации: {publish_response.status_code}")
 
             return ''
 
@@ -202,14 +247,15 @@ class YandexDiskManager:
 
         try:
             response = self.session.put(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "create_folder")
             if response.status_code == 201:
-                print(f"[OK] Папка создана: {folder_path}")
+                print(f"[YD] Папка создана: {folder_path}")
                 return True
             elif response.status_code == 409:
-                print(f"[INFO] Папка уже существует: {folder_path}")
+                print(f"[YD] Папка уже существует: {folder_path}")
                 return True
             else:
-                print(f"[ERROR] Ошибка создания папки {folder_path}: {response.status_code} - {response.text}")
+                print(f"[ERROR] Ошибка создания папки {folder_path}: {response.status_code}")
                 return False
         except Exception as e:
             print(f"[ERROR] Исключение при создании папки: {e}")
@@ -231,11 +277,12 @@ class YandexDiskManager:
 
         try:
             response = self.session.post(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "move_folder")
             if response.status_code in [201, 202]:
-                print(f"[OK] Папка перемещена: {from_path} -> {to_path}")
+                print(f"[YD] Папка перемещена: {from_path} -> {to_path}")
                 return True
             else:
-                print(f"[ERROR] Ошибка перемещения папки: {response.status_code} - {response.text}")
+                print(f"[ERROR] Ошибка перемещения папки: {response.status_code}")
                 return False
         except Exception as e:
             print(f"[ERROR] Исключение при перемещении папки: {e}")
@@ -253,14 +300,15 @@ class YandexDiskManager:
 
         try:
             response = self.session.delete(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "delete_folder")
             if response.status_code in [202, 204]:
-                print(f"[OK] Папка удалена: {folder_path}")
+                print(f"[YD] Папка удалена: {folder_path}")
                 return True
             elif response.status_code == 404:
-                print(f"[INFO] Папка не найдена (уже удалена?): {folder_path}")
+                print(f"[YD] Папка не найдена (уже удалена?): {folder_path}")
                 return True
             else:
-                print(f"[ERROR] Ошибка удаления папки: {response.status_code} - {response.text}")
+                print(f"[ERROR] Ошибка удаления папки: {response.status_code}")
                 return False
         except Exception as e:
             print(f"[ERROR] Исключение при удалении папки: {e}")
@@ -278,6 +326,7 @@ class YandexDiskManager:
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "file_exists")
             if response.status_code == 200:
                 return True
             elif response.status_code == 404:
@@ -301,14 +350,15 @@ class YandexDiskManager:
 
         try:
             response = self.session.delete(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "delete_file")
             if response.status_code in [202, 204]:
-                print(f"[OK] Файл удален: {file_path}")
+                print(f"[YD] Файл удален: {file_path}")
                 return True
             elif response.status_code == 404:
-                print(f"[INFO] Файл не найден (уже удален?): {file_path}")
+                print(f"[YD] Файл не найден (уже удален?): {file_path}")
                 return True
             else:
-                print(f"[ERROR] Ошибка удаления файла: {response.status_code} - {response.text}")
+                print(f"[ERROR] Ошибка удаления файла: {response.status_code}")
                 return False
         except Exception as e:
             print(f"[ERROR] Исключение при удалении файла: {e}")
@@ -325,6 +375,7 @@ class YandexDiskManager:
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "folder_exists")
             return response.status_code == 200
         except:
             return False
@@ -340,6 +391,7 @@ class YandexDiskManager:
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "get_folder_contents")
             if response.status_code == 200:
                 data = response.json()
                 return data.get('_embedded', {}).get('items', [])
@@ -363,6 +415,7 @@ class YandexDiskManager:
 
         try:
             response = self.session.post(url, params=params, headers=headers, timeout=10)
+            self._check_response(response, "copy_file")
             if response.status_code in [201, 202]:
                 return True
             else:

@@ -37,6 +37,7 @@ class DatabaseManager:
                 self.add_reassigned_field_to_payments()
                 self.add_submitted_date_to_stage_executors()
                 self.add_stage_field_to_payments()
+                self.create_performance_indexes()
                 _migrations_completed = True
 
     def run_migrations(self):
@@ -4025,6 +4026,36 @@ class DatabaseManager:
             print(f"[ERROR] Ошибка миграции полей payments: {e}")
             import traceback
             traceback.print_exc()
+
+    def create_performance_indexes(self):
+        """Миграция: создание индексов для ускорения запросов"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            indexes = [
+                "CREATE INDEX IF NOT EXISTS idx_contracts_client_id ON contracts(client_id)",
+                "CREATE INDEX IF NOT EXISTS idx_crm_cards_contract_id ON crm_cards(contract_id)",
+                "CREATE INDEX IF NOT EXISTS idx_crm_cards_column_name ON crm_cards(column_name)",
+                "CREATE INDEX IF NOT EXISTS idx_stage_executors_crm_card_id ON stage_executors(crm_card_id)",
+                "CREATE INDEX IF NOT EXISTS idx_stage_executors_executor_id ON stage_executors(executor_id)",
+                "CREATE INDEX IF NOT EXISTS idx_stage_executors_stage_name ON stage_executors(stage_name)",
+                "CREATE INDEX IF NOT EXISTS idx_payments_contract_id ON payments(contract_id)",
+                "CREATE INDEX IF NOT EXISTS idx_payments_employee_id ON payments(employee_id)",
+                "CREATE INDEX IF NOT EXISTS idx_payments_crm_card_id ON payments(crm_card_id)",
+                "CREATE INDEX IF NOT EXISTS idx_payments_supervision_card_id ON payments(supervision_card_id)",
+                "CREATE INDEX IF NOT EXISTS idx_supervision_cards_contract_id ON supervision_cards(contract_id)",
+                "CREATE INDEX IF NOT EXISTS idx_project_files_contract_id ON project_files(contract_id)",
+                "CREATE INDEX IF NOT EXISTS idx_salaries_employee_id ON salaries(employee_id)",
+            ]
+            for idx_sql in indexes:
+                try:
+                    cursor.execute(idx_sql)
+                except Exception:
+                    pass  # Table may not exist yet
+            conn.commit()
+            self.close()
+        except Exception as e:
+            print(f"[WARN] Index creation: {e}")
 
     def calculate_payment_amount(self, contract_id, employee_id, role, stage_name=None, supervision_card_id=None):
         """Расчет суммы оплаты на основе тарифов"""

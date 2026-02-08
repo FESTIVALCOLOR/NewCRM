@@ -1,88 +1,54 @@
 #!/bin/bash
-# Скрипт для развертывания через Git на сервере 147.45.154.193
+# Interior Studio CRM - Docker Deployment Script
+# Usage: ./deploy.sh [--no-backup]
 
-echo "======================================"
-echo "РАЗВЕРТЫВАНИЕ НА СЕРВЕР 147.45.154.193"
-echo "======================================"
+set -e
 
-SERVER="147.45.154.193"
-USER="root"
-PATH_ON_SERVER="/root/interior_studio"
+SERVER="timeweb"
+REMOTE_DIR="/opt/interior_studio"
+LOCAL_SERVER_DIR="server"
 
+echo "=== Interior Studio CRM Deployment ==="
 echo ""
-echo "📡 Подключение к серверу..."
 
-ssh $USER@$SERVER << 'ENDSSH'
-    echo "✓ Подключен к серверу"
-
-    # Переход в директорию проекта
-    cd /root/interior_studio || exit 1
-    echo "📁 Директория: $(pwd)"
-
-    # Получение последних изменений
-    echo ""
-    echo "📥 Получение обновлений из Git..."
-    git fetch origin
-
-    # Показать изменения
-    echo ""
-    echo "📋 Изменения которые будут применены:"
-    git log HEAD..origin/main --oneline
-
-    # Применить изменения
-    echo ""
-    echo "🔄 Применение изменений..."
-    git pull origin main
-
-    if [ $? -ne 0 ]; then
-        echo "❌ Ошибка при получении изменений"
+# Step 1: Syntax validation
+echo "[1/5] Validating Python syntax..."
+for f in server/*.py; do
+    python -m py_compile "$f" 2>/dev/null || {
+        echo "SYNTAX ERROR in $f"
         exit 1
-    fi
-    echo "✓ Изменения применены"
+    }
+done
+echo "  OK"
 
-    # Обновление зависимостей
+# Step 2: Backup (skip with --no-backup)
+if [ "$1" != "--no-backup" ]; then
+    echo "[2/5] Creating database backup..."
+    ssh $SERVER "cd $REMOTE_DIR && docker-compose exec -T postgres pg_dump -U crm_user interior_studio_crm > backups/backup_\$(date +%Y%m%d_%H%M%S).sql && echo 'Backup created'" || echo "  WARNING: Backup failed, continuing..."
+else
+    echo "[2/5] Skipping backup (--no-backup)"
+fi
+
+# Step 3: Copy server files
+echo "[3/5] Copying server files..."
+scp -r $LOCAL_SERVER_DIR/*.py $SERVER:$REMOTE_DIR/server/
+echo "  OK"
+
+# Step 4: Rebuild and restart Docker
+echo "[4/5] Rebuilding Docker container..."
+ssh $SERVER "cd $REMOTE_DIR && docker-compose down && docker-compose build --no-cache api && docker-compose up -d"
+echo "  Waiting 5 seconds for startup..."
+sleep 5
+
+# Step 5: Health check
+echo "[5/5] Health check..."
+HEALTH=$(ssh $SERVER "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/docs" 2>/dev/null)
+if [ "$HEALTH" = "200" ]; then
+    echo "  API is healthy (HTTP 200)"
     echo ""
-    echo "📚 Обновление зависимостей Python..."
-    python3 -m pip install -r requirements.txt --quiet
-    echo "✓ Зависимости обновлены"
-
-    # Миграции БД
-    echo ""
-    echo "🗄️ Применение миграций базы данных..."
-    python3 migrate_to_server.py
-    echo "✓ Миграции выполнены"
-
-    # Перезапуск сервера
-    echo ""
-    echo "🔄 Перезапуск сервера..."
-
-    # Остановка старого процесса
-    pkill -f "uvicorn server.main:app" || true
-    sleep 2
-    echo "✓ Старый процесс остановлен"
-
-    # Запуск нового процесса
-    nohup python3 -m uvicorn server.main:app --host 0.0.0.0 --port 8000 > /var/log/interior_studio.log 2>&1 &
-    sleep 3
-
-    # Проверка запуска
-    if pgrep -f "uvicorn server.main:app" > /dev/null; then
-        PID=$(pgrep -f "uvicorn server.main:app")
-        echo "✓ Сервер запущен (PID: $PID)"
-    else
-        echo "⚠️ Не удалось подтвердить запуск"
-        echo "   Проверьте логи: tail -f /var/log/interior_studio.log"
-    fi
-
-    echo ""
-    echo "======================================"
-    echo "✅ РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО"
-    echo "======================================"
-    echo "🌐 API: http://147.45.154.193:8000"
-    echo "📖 Docs: http://147.45.154.193:8000/docs"
-    echo "======================================"
-ENDSSH
-
-echo ""
-echo "Для просмотра логов используйте:"
-echo "ssh $USER@$SERVER 'tail -f /var/log/interior_studio.log'"
+    echo "=== Deployment successful ==="
+else
+    echo "  WARNING: API returned HTTP $HEALTH"
+    echo "  Check logs: ssh $SERVER 'cd $REMOTE_DIR && docker-compose logs --tail=50 api'"
+    exit 1
+fi

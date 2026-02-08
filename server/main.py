@@ -894,6 +894,19 @@ async def get_crm_cards(
             CRMCard.id
         ).all()
 
+        # Batch-load all stage executors for all cards to avoid N+1 queries
+        card_ids = [card.id for card in cards]
+        all_executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id.in_(card_ids)).all() if card_ids else []
+        executors_by_card = {}
+        for se in all_executors:
+            if se.crm_card_id not in executors_by_card:
+                executors_by_card[se.crm_card_id] = []
+            executors_by_card[se.crm_card_id].append(se)
+
+        # Batch-load executor Employee objects for all stage executors
+        executor_employee_ids = list(set(se.executor_id for se in all_executors if se.executor_id))
+        executor_employees_map = {e.id: e for e in db.query(Employee).filter(Employee.id.in_(executor_employee_ids)).all()} if executor_employee_ids else {}
+
         result = []
         for card in cards:
             contract = card.contract
@@ -904,21 +917,26 @@ async def get_crm_cards(
             surveyor_name = card.surveyor.full_name if card.surveyor else None
 
             # ИСПРАВЛЕНИЕ 06.02.2026: Добавлен поиск по '3д визуализация' для шаблонных проектов (#10)
-            designer_executor = db.query(StageExecutor).filter(
-                StageExecutor.crm_card_id == card.id,
-                or_(
-                    StageExecutor.stage_name.ilike('%концепция%'),
-                    StageExecutor.stage_name.ilike('%визуализация%')
-                )
-            ).order_by(StageExecutor.id.desc()).first()
+            # Use batch-loaded executors instead of per-card queries
+            card_executors = executors_by_card.get(card.id, [])
 
-            draftsman_executor = db.query(StageExecutor).filter(
-                StageExecutor.crm_card_id == card.id,
-                or_(
-                    StageExecutor.stage_name.ilike('%чертежи%'),
-                    StageExecutor.stage_name.ilike('%планировочные%')
-                )
-            ).order_by(StageExecutor.id.desc()).first()
+            # Find designer executor: stage_name contains 'концепция' or 'визуализация', latest by id
+            designer_candidates = [
+                e for e in card_executors
+                if 'концепция' in (e.stage_name or '').lower() or 'визуализация' in (e.stage_name or '').lower()
+            ]
+            designer_executor = max(designer_candidates, key=lambda e: e.id) if designer_candidates else None
+
+            # Find draftsman executor: stage_name contains 'чертежи' or 'планировочные', latest by id
+            draftsman_candidates = [
+                e for e in card_executors
+                if 'чертежи' in (e.stage_name or '').lower() or 'планировочные' in (e.stage_name or '').lower()
+            ]
+            draftsman_executor = max(draftsman_candidates, key=lambda e: e.id) if draftsman_candidates else None
+
+            # Get executor names from batch-loaded employees map
+            designer_employee = executor_employees_map.get(designer_executor.executor_id) if designer_executor else None
+            draftsman_employee = executor_employees_map.get(draftsman_executor.executor_id) if draftsman_executor else None
 
             card_data = {
                 'id': card.id,
@@ -958,10 +976,10 @@ async def get_crm_cards(
                 'measurement_file_name': contract.measurement_file_name,
                 'measurement_yandex_path': contract.measurement_yandex_path,
                 'measurement_date': str(contract.measurement_date) if contract.measurement_date else None,
-                'designer_name': designer_executor.executor.full_name if designer_executor else None,
+                'designer_name': designer_employee.full_name if designer_employee else None,
                 'designer_completed': designer_executor.completed if designer_executor else False,
                 'designer_deadline': str(designer_executor.deadline) if designer_executor and designer_executor.deadline else None,
-                'draftsman_name': draftsman_executor.executor.full_name if draftsman_executor else None,
+                'draftsman_name': draftsman_employee.full_name if draftsman_employee else None,
                 'draftsman_completed': draftsman_executor.completed if draftsman_executor else False,
                 'draftsman_deadline': str(draftsman_executor.deadline) if draftsman_executor and draftsman_executor.deadline else None,
                 'order_position': card.order_position,
@@ -2195,10 +2213,14 @@ async def get_all_payments_optimized(
 
         payments = query.all()
 
+        # Batch-load all contracts to avoid N+1 queries
+        contract_ids = list(set(p.contract_id for p in payments if p.contract_id))
+        contracts_list = db.query(Contract).filter(Contract.id.in_(contract_ids)).all() if contract_ids else []
+        contracts_map = {c.id: c for c in contracts_list}
+
         result = []
         for p in payments:
-            # Получаем данные договора
-            contract = db.query(Contract).filter(Contract.id == p.contract_id).first()
+            contract = contracts_map.get(p.contract_id)
 
             result.append({
                 'id': p.id,
@@ -2374,21 +2396,40 @@ async def get_all_payments(
 
         payments = payments_query.all()
 
+        # Batch-load all related entities to avoid N+1 queries
+        employee_ids = list(set(p.employee_id for p in payments if p.employee_id))
+        contract_ids = list(set(p.contract_id for p in payments if p.contract_id))
+        crm_card_ids = list(set(p.crm_card_id for p in payments if p.crm_card_id))
+        supervision_card_ids = list(set(p.supervision_card_id for p in payments if p.supervision_card_id))
+
+        employees_map = {e.id: e for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all()} if employee_ids else {}
+        contracts_map = {c.id: c for c in db.query(Contract).filter(Contract.id.in_(contract_ids)).all()} if contract_ids else {}
+        crm_cards_map = {c.id: c for c in db.query(CRMCard).filter(CRMCard.id.in_(crm_card_ids)).all()} if crm_card_ids else {}
+        supervision_cards_map = {c.id: c for c in db.query(SupervisionCard).filter(SupervisionCard.id.in_(supervision_card_ids)).all()} if supervision_card_ids else {}
+
+        # Also load contracts referenced by CRM cards and supervision cards
+        crm_contract_ids = list(set(c.contract_id for c in crm_cards_map.values() if c.contract_id))
+        sup_contract_ids = list(set(c.contract_id for c in supervision_cards_map.values() if c.contract_id))
+        extra_contract_ids = [cid for cid in crm_contract_ids + sup_contract_ids if cid not in contracts_map]
+        if extra_contract_ids:
+            extra_contracts = {c.id: c for c in db.query(Contract).filter(Contract.id.in_(extra_contract_ids)).all()}
+            contracts_map.update(extra_contracts)
+
         for p in payments:
-            employee = db.query(Employee).filter(Employee.id == p.employee_id).first()
+            employee = employees_map.get(p.employee_id)
 
             # Получаем данные контракта через CRM карточку или напрямую
             contract = None
             if p.crm_card_id:
-                crm_card = db.query(CRMCard).filter(CRMCard.id == p.crm_card_id).first()
+                crm_card = crm_cards_map.get(p.crm_card_id)
                 if crm_card:
-                    contract = db.query(Contract).filter(Contract.id == crm_card.contract_id).first()
+                    contract = contracts_map.get(crm_card.contract_id)
             elif p.supervision_card_id:
-                supervision_card = db.query(SupervisionCard).filter(SupervisionCard.id == p.supervision_card_id).first()
+                supervision_card = supervision_cards_map.get(p.supervision_card_id)
                 if supervision_card:
-                    contract = db.query(Contract).filter(Contract.id == supervision_card.contract_id).first()
+                    contract = contracts_map.get(supervision_card.contract_id)
             elif p.contract_id:
-                contract = db.query(Contract).filter(Contract.id == p.contract_id).first()
+                contract = contracts_map.get(p.contract_id)
 
             # Определяем source
             if p.crm_card_id:
@@ -2454,9 +2495,19 @@ async def get_all_payments(
 
             salaries = salaries_query.all()
 
+            # Batch-load employees and contracts for salaries to avoid N+1 queries
+            sal_employee_ids = list(set(s.employee_id for s in salaries if s.employee_id))
+            sal_contract_ids = list(set(s.contract_id for s in salaries if s.contract_id))
+            sal_employees_map = {e.id: e for e in db.query(Employee).filter(Employee.id.in_(sal_employee_ids)).all()} if sal_employee_ids else {}
+            # Reuse already loaded contracts and load any missing ones
+            missing_contract_ids = [cid for cid in sal_contract_ids if cid not in contracts_map]
+            if missing_contract_ids:
+                extra = {c.id: c for c in db.query(Contract).filter(Contract.id.in_(missing_contract_ids)).all()}
+                contracts_map.update(extra)
+
             for s in salaries:
-                employee = db.query(Employee).filter(Employee.id == s.employee_id).first()
-                contract = db.query(Contract).filter(Contract.id == s.contract_id).first() if s.contract_id else None
+                employee = sal_employees_map.get(s.employee_id)
+                contract = contracts_map.get(s.contract_id) if s.contract_id else None
 
                 result.append({
                     'id': s.id,
@@ -3134,29 +3185,48 @@ async def get_employee_statistics(
 ):
     """Получить статистику по сотрудникам"""
     try:
-        from sqlalchemy import func, extract
+        from sqlalchemy import func, extract, case
 
         employees = db.query(Employee).filter(Employee.status == 'активный').all()
+        emp_ids = [emp.id for emp in employees]
+
+        if not emp_ids:
+            return []
+
+        # Batch-load stage executor counts to avoid N+1 queries
+        stage_query = db.query(
+            StageExecutor.executor_id,
+            func.count(StageExecutor.id).label('total'),
+            func.count(case((StageExecutor.completed == True, 1))).label('completed')
+        ).filter(StageExecutor.executor_id.in_(emp_ids))
+
+        if year:
+            stage_query = stage_query.filter(extract('year', StageExecutor.assigned_date) == year)
+        if month:
+            stage_query = stage_query.filter(extract('month', StageExecutor.assigned_date) == month)
+
+        stage_counts = stage_query.group_by(StageExecutor.executor_id).all()
+        stage_map = {sc[0]: {'total': sc[1], 'completed': sc[2]} for sc in stage_counts}
+
+        # Batch-load salary totals to avoid N+1 queries
+        salary_query = db.query(
+            Salary.employee_id,
+            func.sum(Salary.amount).label('total')
+        ).filter(Salary.employee_id.in_(emp_ids))
+
+        if year and month:
+            report_month_str = f"{year}-{month:02d}"
+            salary_query = salary_query.filter(Salary.report_month == report_month_str)
+
+        salary_totals = salary_query.group_by(Salary.employee_id).all()
+        salary_map = {st[0]: float(st[1]) if st[1] else 0 for st in salary_totals}
 
         result = []
         for emp in employees:
-            # Подсчет назначений на этапы
-            stage_query = db.query(StageExecutor).filter(StageExecutor.executor_id == emp.id)
-            if year:
-                stage_query = stage_query.filter(extract('year', StageExecutor.assigned_date) == year)
-            if month:
-                stage_query = stage_query.filter(extract('month', StageExecutor.assigned_date) == month)
-
-            total_stages = stage_query.count()
-            completed_stages = stage_query.filter(StageExecutor.completed == True).count()
-
-            # Зарплаты
-            salary_query = db.query(Salary).filter(Salary.employee_id == emp.id)
-            if year and month:
-                report_month = f"{year}-{month:02d}"
-                salary_query = salary_query.filter(Salary.report_month == report_month)
-
-            total_salary = sum(s.amount or 0 for s in salary_query.all())
+            stage_data = stage_map.get(emp.id, {'total': 0, 'completed': 0})
+            total_stages = stage_data['total']
+            completed_stages = stage_data['completed']
+            total_salary = salary_map.get(emp.id, 0)
 
             result.append({
                 'id': emp.id,

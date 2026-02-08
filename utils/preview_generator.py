@@ -154,18 +154,53 @@ class PreviewGenerator:
         Returns:
             Путь к файлу кэша
         """
+        import hashlib
         # Используем постоянную директорию рядом с приложением
         # Получаем путь к директории скрипта (корень приложения)
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         cache_dir = os.path.join(app_dir, 'preview_cache')
         os.makedirs(cache_dir, exist_ok=True)
 
-        # Создаем уникальное имя файла превью
-        # Удаляем небезопасные символы из имени файла
-        safe_name = "".join(c for c in file_name if c.isalnum() or c in (' ', '.', '_', '-')).rstrip()
-        preview_name = f"{contract_id}_{stage}_{safe_name}.png"
+        # Use hash to handle any filename characters (including Cyrillic)
+        name_hash = hashlib.md5(file_name.encode('utf-8')).hexdigest()[:12]
+        # Keep extension for readability
+        _, ext = os.path.splitext(file_name)
+        preview_name = f"{contract_id}_{stage}_{name_hash}{ext or '.png'}"
 
         return os.path.join(cache_dir, preview_name)
+
+    @staticmethod
+    def cleanup_cache(max_size_mb=500, max_age_days=30):
+        """Clean up preview cache: remove old files and limit total size"""
+        import time
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cache_dir = os.path.join(app_dir, 'preview_cache')
+        if not os.path.exists(cache_dir):
+            return
+
+        now = time.time()
+        max_age_seconds = max_age_days * 86400
+        files = []
+
+        for f in os.listdir(cache_dir):
+            filepath = os.path.join(cache_dir, f)
+            if os.path.isfile(filepath):
+                stat = os.stat(filepath)
+                age = now - stat.st_mtime
+                if age > max_age_seconds:
+                    os.remove(filepath)
+                else:
+                    files.append((filepath, stat.st_size, stat.st_mtime))
+
+        # If still over size limit, remove oldest first
+        total_size = sum(f[1] for f in files)
+        max_size_bytes = max_size_mb * 1024 * 1024
+        if total_size > max_size_bytes:
+            files.sort(key=lambda x: x[2])  # oldest first
+            while total_size > max_size_bytes and files:
+                filepath, size, _ = files.pop(0)
+                os.remove(filepath)
+                total_size -= size
 
     @staticmethod
     def generate_preview_for_file(file_path, file_type):
