@@ -1,457 +1,457 @@
 # Interior Studio CRM
 
-**Version:** 1.0.0
-**Last updated:** 2026-02-08
-**Language:** Python (PyQt5 desktop client + FastAPI server)
+**Версия:** 1.0.0
+**Дата обновления:** 2026-02-08
+**Язык:** Python (десктоп-клиент PyQt5 + сервер FastAPI)
 
 ---
 
-## Project overview
+## Обзор проекта
 
-Interior Studio CRM is a desktop CRM application for an interior design studio. It has two operating modes:
-- **Local mode** (`MULTI_USER_MODE = False`): Standalone SQLite-based desktop app
-- **Multi-user mode** (`MULTI_USER_MODE = True`): Desktop client communicating with a FastAPI REST API backed by PostgreSQL
+Interior Studio CRM -- десктопное CRM-приложение для студии дизайна интерьеров. Два режима работы:
+- **Локальный режим** (`MULTI_USER_MODE = False`): автономное приложение с SQLite
+- **Многопользовательский режим** (`MULTI_USER_MODE = True`): десктоп-клиент взаимодействует с REST API на FastAPI, за которым стоит PostgreSQL
 
-The desktop client is built with PyQt5 and packaged into a Windows .exe via PyInstaller.
+Десктоп-клиент построен на PyQt5 и собирается в Windows .exe через PyInstaller.
 
 ---
 
-## Directory structure
+## Структура каталогов
 
 ```
 /home/user/NewCRM/
-|-- main.py                     # Entry point: QApplication, styles, DB init, login window
-|-- config.py                   # All configuration: paths, roles, API settings, FastAPI Settings class
-|-- InteriorStudio.spec         # PyInstaller build config
-|-- requirements.txt            # Desktop client dependencies (8 packages)
-|-- docker-compose.yml          # PostgreSQL + FastAPI + Nginx stack
-|-- .env.example                # Environment variable template
-|-- deploy_crm.sh / install.sh  # Server deployment scripts
+|-- main.py                     # Точка входа: QApplication, стили, инициализация БД, окно логина
+|-- config.py                   # Конфигурация: пути, роли, настройки API, класс FastAPI Settings
+|-- InteriorStudio.spec         # Конфигурация сборки PyInstaller
+|-- requirements.txt            # Зависимости десктоп-клиента (8 пакетов)
+|-- docker-compose.yml          # Стек PostgreSQL + FastAPI + Nginx
+|-- .env.example                # Шаблон переменных окружения
+|-- deploy_crm.sh / install.sh  # Скрипты развертывания сервера
 |
 |-- database/
-|   |-- __init__.py             # REQUIRED - makes this a Python package
-|   `-- db_manager.py           # DatabaseManager class (~3900 lines): all SQL, migrations, CRUD
+|   |-- __init__.py             # ОБЯЗАТЕЛЕН -- делает каталог Python-пакетом
+|   `-- db_manager.py           # Класс DatabaseManager (~3900 строк): SQL, миграции, CRUD
 |
-|-- ui/                         # PyQt5 UI modules (28 files, ~48000 lines total)
-|   |-- __init__.py             # REQUIRED - makes this a Python package
-|   |-- login_window.py         # Authentication window
-|   |-- main_window.py          # Main tabbed window, role-based tab visibility
-|   |-- clients_tab.py          # Client management CRUD
-|   |-- contracts_tab.py        # Contract lifecycle management
-|   |-- crm_tab.py              # Kanban board for projects (LARGEST file ~18700 lines)
-|   |-- crm_supervision_tab.py  # Author supervision workflow (~5500 lines)
-|   |-- dashboard_tab.py        # Statistics & KPIs
-|   |-- employees_tab.py        # Staff management
-|   |-- employee_reports_tab.py # Staff performance reports
-|   |-- reports_tab.py          # Statistical reports with PDF export
-|   |-- salaries_tab.py         # Payroll management
-|   |-- rates_dialog.py         # Rate configuration dialog
-|   |-- custom_title_bar.py     # Custom window title bar with logo
-|   |-- custom_combobox.py      # ComboBox with scroll fix
-|   |-- custom_dateedit.py      # Custom date picker
-|   |-- custom_message_box.py   # Branded message dialogs
-|   |-- file_gallery_widget.py  # Image gallery widget
-|   |-- file_list_widget.py     # File listing widget
-|   |-- file_preview_widget.py  # Document preview renderer
+|-- ui/                         # Модули интерфейса PyQt5 (28 файлов, ~48000 строк)
+|   |-- __init__.py             # ОБЯЗАТЕЛЕН -- делает каталог Python-пакетом
+|   |-- login_window.py         # Окно аутентификации
+|   |-- main_window.py          # Главное окно с вкладками, видимость по ролям
+|   |-- clients_tab.py          # Управление клиентами (CRUD)
+|   |-- contracts_tab.py        # Управление жизненным циклом договоров
+|   |-- crm_tab.py              # Канбан-доска проектов (САМЫЙ БОЛЬШОЙ файл ~18700 строк)
+|   |-- crm_supervision_tab.py  # Авторский надзор (~5500 строк)
+|   |-- dashboard_tab.py        # Статистика и KPI
+|   |-- employees_tab.py        # Управление сотрудниками
+|   |-- employee_reports_tab.py # Отчеты по сотрудникам
+|   |-- reports_tab.py          # Статистические отчеты с экспортом в PDF
+|   |-- salaries_tab.py         # Управление зарплатами
+|   |-- rates_dialog.py         # Диалог настройки ставок
+|   |-- custom_title_bar.py     # Кастомная панель заголовка с логотипом
+|   |-- custom_combobox.py      # ComboBox с исправлением прокрутки
+|   |-- custom_dateedit.py      # Кастомный выбор даты
+|   |-- custom_message_box.py   # Брендированные диалоги сообщений
+|   |-- file_gallery_widget.py  # Виджет галереи изображений
+|   |-- file_list_widget.py     # Виджет списка файлов
+|   |-- file_preview_widget.py  # Рендерер предпросмотра документов
 |   |-- variation_gallery_widget.py
-|   |-- flow_layout.py          # Custom flow layout manager
-|   `-- update_dialogs.py       # Auto-update UI dialogs
+|   |-- flow_layout.py          # Кастомный менеджер потокового лейаута
+|   `-- update_dialogs.py       # Диалоги автообновления
 |
-|-- utils/                      # Utility modules (21 files, ~10000 lines)
-|   |-- __init__.py             # REQUIRED - makes this a Python package
-|   |-- resource_path.py        # CRITICAL: resolves paths for both dev and PyInstaller exe
-|   |-- icon_loader.py          # SVG icon loading with caching
-|   |-- api_client.py           # REST API client with JWT auth, retry, timeout (~1600 lines)
-|   |-- yandex_disk.py          # Yandex Disk cloud storage integration
-|   |-- db_security.py          # Password hashing (bcrypt), encryption
-|   |-- password_utils.py       # Password hash/verify utilities
-|   |-- validators.py           # Email, phone, INN, OGRN, passport validation
-|   |-- date_utils.py           # Date formatting, period calculations
-|   |-- pdf_generator.py        # PDF generation with ReportLab
-|   |-- preview_generator.py    # Image/PDF thumbnail generation
-|   |-- logger.py               # Structured logging to file and console
-|   |-- update_manager.py       # Version checking via Yandex Disk
-|   |-- calendar_styles.py      # QCalendarWidget QSS styling
-|   |-- global_styles.py        # Global QSS stylesheet
-|   |-- custom_style.py         # Runtime style customization
-|   |-- table_settings.py       # Table column width/sort persistence
-|   |-- dialog_helpers.py       # Common dialog utilities
-|   |-- tooltip_fix.py          # Multi-line tooltip support
-|   |-- message_helper.py       # Message box display helpers
-|   |-- tab_helpers.py          # Tab switching helpers
-|   |-- migrate_passwords.py    # Password hash migration utility
-|   |-- add_indexes.py          # Database index creation
-|   `-- constants.py            # (empty, reserved)
+|-- utils/                      # Утилиты (21 файл, ~10000 строк)
+|   |-- __init__.py             # ОБЯЗАТЕЛЕН -- делает каталог Python-пакетом
+|   |-- resource_path.py        # КРИТИЧНО: определяет пути для dev и PyInstaller exe
+|   |-- icon_loader.py          # Загрузка SVG-иконок с кэшированием
+|   |-- api_client.py           # REST API клиент с JWT, retry, timeout (~1600 строк)
+|   |-- yandex_disk.py          # Интеграция с Яндекс.Диском
+|   |-- db_security.py          # Хеширование паролей (bcrypt), шифрование
+|   |-- password_utils.py       # Утилиты хеширования/проверки паролей
+|   |-- validators.py           # Валидация email, телефона, ИНН, ОГРН, паспорта
+|   |-- date_utils.py           # Форматирование дат, расчет периодов
+|   |-- pdf_generator.py        # Генерация PDF через ReportLab
+|   |-- preview_generator.py    # Генерация миниатюр изображений/PDF
+|   |-- logger.py               # Структурированное логирование в файл и консоль
+|   |-- update_manager.py       # Проверка версий через Яндекс.Диск
+|   |-- calendar_styles.py      # Стили QCalendarWidget (QSS)
+|   |-- global_styles.py        # Глобальные стили (QSS)
+|   |-- custom_style.py         # Кастомизация стилей в runtime
+|   |-- table_settings.py       # Сохранение ширины столбцов/сортировки
+|   |-- dialog_helpers.py       # Вспомогательные утилиты диалогов
+|   |-- tooltip_fix.py          # Поддержка многострочных подсказок
+|   |-- message_helper.py       # Хелперы отображения сообщений
+|   |-- tab_helpers.py          # Хелперы переключения вкладок
+|   |-- migrate_passwords.py    # Утилита миграции хешей паролей
+|   |-- add_indexes.py          # Создание индексов БД
+|   `-- constants.py            # (пустой, зарезервирован)
 |
-|-- server/                     # FastAPI backend for multi-user mode
+|-- server/                     # Бэкенд FastAPI для многопользовательского режима
 |   |-- __init__.py
-|   |-- main.py                 # FastAPI app with all routes (~3500 lines)
-|   |-- database.py             # SQLAlchemy ORM models (~600 lines)
-|   |-- schemas.py              # Pydantic v2 validation schemas (~500 lines)
-|   |-- auth.py                 # JWT authentication (~100 lines)
-|   |-- config.py               # Server-specific settings
-|   |-- yandex_disk_service.py  # Server-side Yandex Disk service
-|   |-- Dockerfile              # FastAPI container build
-|   |-- requirements.txt        # Server dependencies (12 packages)
+|   |-- main.py                 # Приложение FastAPI со всеми маршрутами (~3500 строк)
+|   |-- database.py             # SQLAlchemy ORM модели (~600 строк)
+|   |-- schemas.py              # Схемы валидации Pydantic v2 (~500 строк)
+|   |-- auth.py                 # JWT аутентификация (~100 строк)
+|   |-- config.py               # Серверные настройки
+|   |-- yandex_disk_service.py  # Серверный сервис Яндекс.Диска
+|   |-- Dockerfile              # Сборка контейнера FastAPI
+|   |-- requirements.txt        # Серверные зависимости (12 пакетов)
 |   `-- .env.example
 |
-|-- resources/                  # Static assets (bundled into exe via PyInstaller)
-|   |-- styles.qss              # Main QSS stylesheet
-|   |-- logo.png                # Application logo
-|   |-- icon.ico                # App icon (main)
-|   |-- icon32.ico .. icon256.ico  # Various icon sizes
-|   `-- icons/                  # 54 SVG icons for UI buttons
+|-- resources/                  # Статические ресурсы (встраиваются в exe через PyInstaller)
+|   |-- styles.qss              # Главный файл стилей QSS
+|   |-- logo.png                # Логотип приложения
+|   |-- icon.ico                # Иконка приложения (основная)
+|   |-- icon32.ico .. icon256.ico  # Иконки разных размеров
+|   `-- icons/                  # 54 SVG-иконки для кнопок интерфейса
 |       |-- add.svg, delete.svg, edit.svg, refresh.svg, save.svg
 |       |-- close.svg, minimize.svg, maximize.svg
-|       |-- arrow-*.svg, check-*.svg, calendar.svg, etc.
+|       |-- arrow-*.svg, check-*.svg, calendar.svg и др.
 |
 |-- nginx/
-|   `-- nginx.conf              # Reverse proxy config with SSL
+|   `-- nginx.conf              # Конфигурация обратного прокси с SSL
 |
-`-- Root-level scripts (migration/test utilities, not part of the app):
-    |-- add_*.py (12 files)     # DB migration scripts
-    |-- fix_*.py (8 files)      # Codebase fix scripts
-    |-- test_*.py (8 files)     # Test/check scripts
-    |-- check_*.py (5 files)    # Data integrity checks
-    |-- migrate_to_server.py    # Migration to multi-user mode
-    `-- generate_icons.py       # SVG icon generation
+`-- Скрипты в корне (утилиты миграции/тестирования, не часть приложения):
+    |-- add_*.py (12 файлов)    # Скрипты миграции БД
+    |-- fix_*.py (8 файлов)     # Скрипты исправлений кодовой базы
+    |-- test_*.py (8 файлов)    # Тестовые/проверочные скрипты
+    |-- check_*.py (5 файлов)   # Проверка целостности данных
+    |-- migrate_to_server.py    # Миграция в многопользовательский режим
+    `-- generate_icons.py       # Генерация SVG-иконок
 ```
 
 ---
 
-## Critical rules for AI assistants
+## Критические правила для ИИ-ассистентов
 
-### 1. `__init__.py` files are REQUIRED
+### 1. Файлы `__init__.py` ОБЯЗАТЕЛЬНЫ
 
-Every Python package directory (`database/`, `ui/`, `utils/`, `server/`) MUST have an `__init__.py` file. Without these, PyInstaller will not find the modules. They can be empty but must exist.
+Каждый каталог Python-пакета (`database/`, `ui/`, `utils/`, `server/`) ДОЛЖЕН содержать файл `__init__.py`. Без них PyInstaller не найдет модули. Файлы могут быть пустыми, но должны существовать.
 
-### 2. No emoji in UI code
+### 2. Запрет emoji в UI-коде
 
-NEVER use emoji characters in user-facing UI strings. Use plain text ("ВНИМАНИЕ", "УСПЕХ", "ОШИБКА") or SVG icons via `IconLoader`. Emoji are only acceptable in `print()` debug statements.
+НИКОГДА не используйте символы emoji в строках пользовательского интерфейса. Используйте обычный текст ("ВНИМАНИЕ", "УСПЕХ", "ОШИБКА") или SVG-иконки через `IconLoader`. Emoji допустимы ТОЛЬКО в `print()` для отладки.
 
 ```python
-# WRONG
+# НЕПРАВИЛЬНО
 label = QLabel('ВНИМАНИЕ')
 button = QPushButton('Готово')
 
-# RIGHT - plain text
+# ПРАВИЛЬНО -- обычный текст
 label = QLabel('ВНИМАНИЕ')
 button = QPushButton('Готово')
 
-# RIGHT - SVG icon
+# ПРАВИЛЬНО -- SVG-иконка
 from utils.icon_loader import IconLoader
 button = IconLoader.create_icon_button('check', 'Готово', icon_size=14)
 ```
 
-### 3. Always use `resource_path()` for static assets
+### 3. Всегда использовать `resource_path()` для статических ресурсов
 
-All paths to files in `resources/` MUST go through `resource_path()`. Direct paths like `'resources/logo.png'` break in the PyInstaller exe.
+Все пути к файлам в `resources/` ДОЛЖНЫ проходить через `resource_path()`. Прямые пути вроде `'resources/logo.png'` ломаются в PyInstaller exe.
 
 ```python
 from utils.resource_path import resource_path
 
-# Correct
+# Правильно
 logo = QPixmap(resource_path('resources/logo.png'))
 icon = QIcon(resource_path('resources/icons/edit.svg'))
 with open(resource_path('resources/styles.qss'), 'r') as f: ...
 
-# Incorrect - breaks in exe
+# Неправильно -- не работает в exe
 logo = QPixmap('resources/logo.png')
 ```
 
-Files that MUST import `resource_path`:
+Файлы, которые ДОЛЖНЫ импортировать `resource_path`:
 - `main.py`, `ui/login_window.py`, `ui/custom_title_bar.py`
 - `ui/crm_tab.py`, `ui/crm_supervision_tab.py`, `ui/reports_tab.py`
 - `utils/icon_loader.py`, `utils/calendar_styles.py`
 
-### 4. New modules must be registered in PyInstaller spec
+### 4. Новые модули нужно регистрировать в PyInstaller spec
 
-When adding a new Python module, add it to `hiddenimports` in `InteriorStudio.spec`:
+При добавлении нового Python-модуля его нужно добавить в `hiddenimports` в `InteriorStudio.spec`:
 
 ```python
 hiddenimports=[
     ...
-    'ui.new_module',      # Add new UI modules here
-    'utils.new_utility',  # Add new utility modules here
+    'ui.new_module',      # Новые UI-модули добавлять сюда
+    'utils.new_utility',  # Новые утилиты добавлять сюда
     ...
 ]
 ```
 
-### 5. Database is NOT bundled with the exe
+### 5. База данных НЕ встраивается в exe
 
-The SQLite database (`interior_studio.db`) lives beside the exe, not inside it. Only `resources/` goes into the exe via `datas` in the spec file.
+SQLite база данных (`interior_studio.db`) находится рядом с exe, не внутри него. Только `resources/` встраивается в exe через `datas` в spec-файле.
 
-### 6. Multi-user mode awareness
+### 6. Осведомленность о многопользовательском режиме
 
-The app has dual architecture. When `MULTI_USER_MODE = True` in `config.py`, the client uses `utils/api_client.py` to talk to the FastAPI server. When `False`, it uses `database/db_manager.py` directly with SQLite. Many tab modules check this flag to decide which data source to use.
+Приложение имеет двойную архитектуру. Когда `MULTI_USER_MODE = True` в `config.py`, клиент использует `utils/api_client.py` для связи с сервером FastAPI. Когда `False` -- использует `database/db_manager.py` напрямую с SQLite. Многие модули вкладок проверяют этот флаг для выбора источника данных.
 
 ---
 
-## Technology stack
+## Технологический стек
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Desktop GUI | PyQt5 | 5.15.9 |
-| Local database | SQLite | (stdlib) |
-| Server framework | FastAPI | 0.115.0 |
-| Server database | PostgreSQL | 15-alpine |
+| Уровень | Технология | Версия |
+|---------|-----------|--------|
+| Десктоп GUI | PyQt5 | 5.15.9 |
+| Локальная БД | SQLite | (stdlib) |
+| Серверный фреймворк | FastAPI | 0.115.0 |
+| Серверная БД | PostgreSQL | 15-alpine |
 | ORM | SQLAlchemy | 2.0.36 |
-| Validation | Pydantic | 2.10.3 |
-| Authentication | JWT (python-jose, HS256) | 3.3.0 |
-| Cloud storage | Yandex Disk API | custom client |
-| PDF generation | ReportLab | 4.0.7 |
-| Data analysis | Pandas | 2.1.4 |
-| Charts | Matplotlib | 3.8.2 |
-| HTTP client | Requests | 2.31.0 |
-| Packaging | PyInstaller | 6.3.0 |
-| PDF reading | PyMuPDF | 1.23.8 |
-| Containerization | Docker Compose | 3.8 |
-| Reverse proxy | Nginx | alpine |
+| Валидация | Pydantic | 2.10.3 |
+| Аутентификация | JWT (python-jose, HS256) | 3.3.0 |
+| Облачное хранилище | Яндекс.Диск API | собственный клиент |
+| Генерация PDF | ReportLab | 4.0.7 |
+| Анализ данных | Pandas | 2.1.4 |
+| Графики | Matplotlib | 3.8.2 |
+| HTTP-клиент | Requests | 2.31.0 |
+| Сборка exe | PyInstaller | 6.3.0 |
+| Чтение PDF | PyMuPDF | 1.23.8 |
+| Контейнеризация | Docker Compose | 3.8 |
+| Обратный прокси | Nginx | alpine |
 
 ---
 
-## Architecture
+## Архитектура
 
-### Application flow
+### Поток приложения
 
 ```
 main.py
-  -> QApplication init (High DPI, Fusion style, global styles)
-  -> DatabaseManager.initialize_database() (runs migrations)
+  -> Инициализация QApplication (High DPI, стиль Fusion, глобальные стили)
+  -> DatabaseManager.initialize_database() (запуск миграций)
   -> LoginWindow
-     -> auth via db_manager (local) or api_client (multi-user)
+     -> Аутентификация через db_manager (локально) или api_client (многопользовательский)
      -> MainWindow
-        -> Tab loading based on user role
-        -> Each tab uses db_manager or api_client
-        -> Icons via IconLoader
-        -> All resources via resource_path()
+        -> Загрузка вкладок в зависимости от роли пользователя
+        -> Каждая вкладка использует db_manager или api_client
+        -> Иконки через IconLoader
+        -> Все ресурсы через resource_path()
 ```
 
-### Dual-mode data access
+### Двухрежимный доступ к данным
 
 ```
 config.MULTI_USER_MODE = True:
-  Client (PyQt5) --HTTPS--> FastAPI (server/main.py) --SQLAlchemy--> PostgreSQL
-  Auth: JWT tokens, 30-min expiry (server), 24-hour (local Settings)
-  Retry: 3 attempts with 1s delay, 10s timeout
+  Клиент (PyQt5) --HTTPS--> FastAPI (server/main.py) --SQLAlchemy--> PostgreSQL
+  Аутентификация: JWT токены, срок действия 30 мин (сервер), 24 часа (локальные Settings)
+  Повтор: 3 попытки с задержкой 1 сек, таймаут 10 сек
 
 config.MULTI_USER_MODE = False:
-  Client (PyQt5) --direct--> SQLite (database/db_manager.py)
-  Auth: local password hash verification
+  Клиент (PyQt5) --напрямую--> SQLite (database/db_manager.py)
+  Аутентификация: локальная проверка хеша пароля
 ```
 
-### Server deployment stack
+### Стек развертывания сервера
 
 ```
 docker-compose.yml:
-  postgres (port 5432) -> crm_user / interior_studio_crm
-  api (port 8000) -> FastAPI with uvicorn
-  nginx (ports 80, 443) -> SSL termination, reverse proxy to api
+  postgres (порт 5432) -> crm_user / interior_studio_crm
+  api (порт 8000) -> FastAPI с uvicorn
+  nginx (порты 80, 443) -> SSL-терминация, обратный прокси к api
 ```
 
-Current server: `https://147.45.154.193` (Timeweb Cloud VPS)
+Текущий сервер: `https://147.45.154.193` (Timeweb Cloud VPS)
 
 ---
 
-## Role-based access control
+## Ролевая модель доступа
 
-9 roles defined in `config.py` with granular tab access:
+9 ролей определены в `config.py` с гранулярным доступом к вкладкам:
 
-| Role | Tabs | Can Edit | Can Assign |
-|------|------|----------|-----------|
-| Руководитель студии | All | Yes | All |
-| Старший менеджер проектов | All | Yes | Project/Executive depts |
-| СДП | CRM, Reports, Employees | Yes | No |
-| ГАП | CRM, Reports, Employees | Yes | No |
-| Менеджер | CRM, Employees | Yes | No |
-| Дизайнер | CRM | Yes (own projects) | No |
-| Чертёжник | CRM | Yes (own projects) | No |
-| ДАН | CRM Supervision | Yes (own projects) | No |
-| Замерщик | CRM | Read-only | No |
-
----
-
-## Database schema (17 local tables)
-
-Key tables in `database/db_manager.py`:
-
-- **employees** - Users/staff with auth, roles, positions, status
-- **clients** - Client records (individuals and organizations)
-- **contracts** - Contract lifecycle (amounts, dates, files, status)
-- **crm_cards** - Kanban cards for project management workflow
-- **stage_executors** - Per-stage executor assignments for CRM cards
-- **crm_supervision** / **supervision_cards** - Author supervision workflow
-- **salaries** - Payroll records per contract/employee/stage
-- **payments** - Payment tracking system
-- **rates** - Rate configuration per position/stage/payment type
-- **project_files** - File metadata (Yandex Disk integration)
-- **action_history** - Audit trail of user actions
-- **agents** - Agent reference table (ФЕСТИВАЛЬ, ПЕТРОВИЧ)
-- **approval_stage_deadlines** - Approval workflow timing
-- **manager_stage_acceptance** - Manager sign-off tracking
-- **surveys** - Survey/measurement records
-
-Server adds multi-user tables in `server/database.py`:
-- **UserSession** - Token and activity tracking
-- **UserPermission** - Granular access control
-- **ActivityLog** - Server-side audit trail
-- **ConcurrentEdit** - Optimistic locking for multi-user edits
-- **Notification** - System notifications
-
-Migrations run automatically in `DatabaseManager.initialize_database()`.
+| Роль | Вкладки | Редактирование | Назначение |
+|------|---------|----------------|-----------|
+| Руководитель студии | Все | Да | Все |
+| Старший менеджер проектов | Все | Да | Проектный/Исполнительный отделы |
+| СДП | СРМ, Отчеты, Сотрудники | Да | Нет |
+| ГАП | СРМ, Отчеты, Сотрудники | Да | Нет |
+| Менеджер | СРМ, Сотрудники | Да | Нет |
+| Дизайнер | СРМ | Да (свои проекты) | Нет |
+| Чертёжник | СРМ | Да (свои проекты) | Нет |
+| ДАН | СРМ надзора | Да (свои проекты) | Нет |
+| Замерщик | СРМ | Только чтение | Нет |
 
 ---
 
-## API integration status
+## Схема базы данных (17 локальных таблиц)
 
-| Module | API Integration | Notes |
-|--------|----------------|-------|
-| Dashboard | 100% | Statistics endpoints |
-| Clients | 100% | Full CRUD |
-| Employees | 100% | Full CRUD |
-| Contracts | ~70% | Missing file upload integration |
-| CRM | 0% (prepared) | Routes exist, client not wired |
-| CRM Supervision | 0% (prepared) | Routes exist, client not wired |
-| Reports | 0% | Not started |
-| Salaries | 0% | Not started |
-| Employee Reports | 0% | Not started |
+Основные таблицы в `database/db_manager.py`:
 
-`utils/api_client.py` (`APIClient` class) handles all REST communication with JWT auth, retry logic (3 attempts), and 10-second timeouts.
+- **employees** -- Пользователи/сотрудники: аутентификация, роли, должности, статус
+- **clients** -- Записи клиентов (физические лица и организации)
+- **contracts** -- Жизненный цикл договоров (суммы, даты, файлы, статус)
+- **crm_cards** -- Канбан-карточки для управления проектами
+- **stage_executors** -- Назначение исполнителей по этапам для CRM-карточек
+- **crm_supervision** / **supervision_cards** -- Авторский надзор
+- **salaries** -- Записи зарплат по договору/сотруднику/этапу
+- **payments** -- Система учета платежей
+- **rates** -- Конфигурация ставок по должности/этапу/типу оплаты
+- **project_files** -- Метаданные файлов (интеграция с Яндекс.Диском)
+- **action_history** -- Аудит-журнал действий пользователей
+- **agents** -- Справочная таблица агентов (ФЕСТИВАЛЬ, ПЕТРОВИЧ)
+- **approval_stage_deadlines** -- Тайминг процесса согласования
+- **manager_stage_acceptance** -- Подтверждение приемки менеджером
+- **surveys** -- Записи замеров/обследований
 
----
+Сервер добавляет многопользовательские таблицы в `server/database.py`:
+- **UserSession** -- Отслеживание токенов и активности
+- **UserPermission** -- Гранулярный контроль доступа
+- **ActivityLog** -- Серверный аудит-журнал
+- **ConcurrentEdit** -- Оптимистичная блокировка для многопользовательских правок
+- **Notification** -- Системные уведомления
 
-## Key modules reference
-
-### `database/db_manager.py` (~3900 lines)
-Central database access layer. Contains:
-- `DatabaseManager` class with all CRUD operations
-- `initialize_database()` - creates tables and runs migrations
-- All SQL queries for every entity type
-- Migration methods that add columns/tables as needed
-
-### `ui/crm_tab.py` (~18700 lines)
-Largest file. Implements the Kanban-style CRM board with:
-- Drag-and-drop card movement between columns
-- Stage executor assignment
-- Approval workflows
-- File attachments (Yandex Disk)
-- PDF generation for contracts
-
-### `utils/api_client.py` (~1600 lines)
-REST client with methods for every API endpoint:
-- `login()`, `get_employees()`, `create_client()`, etc.
-- JWT token management (auto-refresh)
-- Custom exception hierarchy: `APIError`, `APITimeoutError`, `APIConnectionError`, `APIAuthError`, `APIResponseError`
-
-### `server/main.py` (~3500 lines)
-FastAPI application with 50+ endpoints covering all entity types. Uses SQLAlchemy ORM models from `server/database.py` and Pydantic schemas from `server/schemas.py`.
+Миграции запускаются автоматически в `DatabaseManager.initialize_database()`.
 
 ---
 
-## Configuration (`config.py`)
+## Статус интеграции с API
 
-Key settings:
+| Модуль | Интеграция с API | Примечания |
+|--------|-----------------|-----------|
+| Дашборд | 100% | Эндпоинты статистики |
+| Клиенты | 100% | Полный CRUD |
+| Сотрудники | 100% | Полный CRUD |
+| Договора | ~70% | Не хватает интеграции загрузки файлов |
+| СРМ | 0% (подготовлено) | Маршруты есть, клиент не подключен |
+| СРМ надзора | 0% (подготовлено) | Маршруты есть, клиент не подключен |
+| Отчеты | 0% | Не начато |
+| Зарплаты | 0% | Не начато |
+| Отчеты по сотрудникам | 0% | Не начато |
+
+`utils/api_client.py` (класс `APIClient`) обеспечивает всю REST-коммуникацию с JWT-аутентификацией, логикой повторных попыток (3 попытки) и таймаутом 10 секунд.
+
+---
+
+## Справочник ключевых модулей
+
+### `database/db_manager.py` (~3900 строк)
+Центральный слой доступа к данным. Содержит:
+- Класс `DatabaseManager` со всеми CRUD-операциями
+- `initialize_database()` -- создание таблиц и запуск миграций
+- Все SQL-запросы для каждого типа сущностей
+- Методы миграций для добавления столбцов/таблиц
+
+### `ui/crm_tab.py` (~18700 строк)
+Самый большой файл. Реализует CRM-доску в стиле канбан:
+- Перетаскивание карточек между колонками (drag-and-drop)
+- Назначение исполнителей по этапам
+- Процессы согласования
+- Вложение файлов (Яндекс.Диск)
+- Генерация PDF для договоров
+
+### `utils/api_client.py` (~1600 строк)
+REST-клиент с методами для каждого API-эндпоинта:
+- `login()`, `get_employees()`, `create_client()` и др.
+- Управление JWT-токенами (автообновление)
+- Иерархия исключений: `APIError`, `APITimeoutError`, `APIConnectionError`, `APIAuthError`, `APIResponseError`
+
+### `server/main.py` (~3500 строк)
+Приложение FastAPI с 50+ эндпоинтами для всех типов сущностей. Использует SQLAlchemy ORM модели из `server/database.py` и Pydantic-схемы из `server/schemas.py`.
+
+---
+
+## Конфигурация (`config.py`)
+
+Основные настройки:
 
 ```python
-# Paths
+# Пути
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, 'interior_studio.db')
 
-# Versioning
+# Версионирование
 APP_VERSION = "1.0.0"
 APP_NAME = "Interior Studio CRM"
 
-# Multi-user
+# Многопользовательский режим
 MULTI_USER_MODE = True
 API_BASE_URL = "https://147.45.154.193"
-SYNC_INTERVAL = 5  # seconds
+SYNC_INTERVAL = 5  # секунды
 
-# Updates
+# Обновления
 UPDATE_CHECK_ENABLED = True
 UPDATE_YANDEX_PUBLIC_KEY = "SmxiWfUUEt8oEA"
 
-# Domain constants
+# Доменные константы
 PROJECT_TYPES = ['Индивидуальный', 'Шаблонный']
 AGENTS = ['ФЕСТИВАЛЬ', 'ПЕТРОВИЧ']
 CITIES = ['СПБ', 'МСК', 'ВН']
 PROJECT_STATUSES = ['СДАН', 'АВТОРСКИЙ НАДЗОР', 'РАСТОРГНУТ']
 
-# FastAPI Settings class (used by server)
+# Класс FastAPI Settings (используется сервером)
 # secret_key, algorithm (HS256), access_token_expire_minutes (1440)
 ```
 
 ---
 
-## Development commands
+## Команды для разработки
 
 ```bash
-# Run desktop app (development)
+# Запуск десктоп-приложения (разработка)
 python main.py
 
-# Run database migrations
+# Запуск миграций БД
 python -c "from database.db_manager import DatabaseManager; db = DatabaseManager(); db.initialize_database(); print('OK')"
 
-# Verify module imports
+# Проверка импорта модулей
 python -c "from ui.login_window import LoginWindow; print('OK')"
 python -c "from utils.icon_loader import IconLoader; print('OK')"
 
-# Start FastAPI server locally
+# Запуск сервера FastAPI локально
 cd server && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# Build Windows exe (on Windows)
+# Сборка Windows exe (на Windows)
 pyinstaller InteriorStudio.spec --clean --noconfirm
 cp interior_studio.db dist/interior_studio.db
 
-# Docker deployment
+# Развертывание через Docker
 docker-compose up -d --build
 
-# Check server health
+# Проверка здоровья сервера
 curl -k https://147.45.154.193/health
 ```
 
 ---
 
-## PyInstaller spec rules
+## Правила PyInstaller spec
 
-The `InteriorStudio.spec` file controls exe building:
+Файл `InteriorStudio.spec` управляет сборкой exe:
 
-- **datas**: Only `('resources', 'resources')` -- static assets only
-- **hiddenimports**: All Python modules from `ui/`, `database/`, `utils/`
-- **console=False**: GUI application, no console window
+- **datas**: Только `('resources', 'resources')` -- только статические ресурсы
+- **hiddenimports**: Все Python-модули из `ui/`, `database/`, `utils/`
+- **console=False**: GUI-приложение, без окна консоли
 - **icon**: `resources/icon.ico`
-- Do NOT add `database/`, `ui/`, `utils/` to `datas` -- they are Python modules, not data files
+- НЕ добавлять `database/`, `ui/`, `utils/` в `datas` -- это Python-модули, а не данные
 
 ---
 
-## Common issues and solutions
+## Типичные проблемы и решения
 
-| Problem | Cause | Fix |
-|---------|-------|-----|
-| `No module named 'ui.xxx'` | Missing `__init__.py` | Create empty `__init__.py` in the package dir |
-| `no such column: cc.xxx` | Outdated DB in dist/ | Run app via Python to trigger migrations, copy DB |
-| Resources missing in exe | Not using `resource_path()` | Wrap all resource paths with `resource_path()` |
-| Icons not showing | Direct paths in IconLoader | Use `resource_path()` in icon loading code |
-| App icon missing from taskbar | Not set in `main.py` | `app.setWindowIcon(QIcon(resource_path('resources/icon.ico')))` |
-| `Permission denied` during build | exe is running | Kill `InteriorStudio.exe` process first |
-| API connection errors | Server unreachable or SSL | Check `API_BASE_URL`, SSL cert, server status |
-| Pydantic import errors | v1 vs v2 | Use `pydantic-settings` for `BaseSettings` (v2) |
-
----
-
-## Pre-build checklist
-
-- [ ] All `__init__.py` files exist (database, ui, utils, server)
-- [ ] All resource paths use `resource_path()`
-- [ ] New modules added to `hiddenimports` in spec
-- [ ] Version updated in `config.py` if releasing
-- [ ] Database migrations run without errors
-- [ ] App launches successfully via `python main.py`
+| Проблема | Причина | Решение |
+|----------|---------|---------|
+| `No module named 'ui.xxx'` | Отсутствует `__init__.py` | Создать пустой `__init__.py` в каталоге пакета |
+| `no such column: cc.xxx` | Устаревшая БД в dist/ | Запустить приложение через Python для миграций, скопировать БД |
+| Ресурсы не загружаются в exe | Не используется `resource_path()` | Обернуть все пути к ресурсам в `resource_path()` |
+| Иконки не отображаются | Прямые пути в IconLoader | Использовать `resource_path()` в коде загрузки иконок |
+| Иконка не в панели задач | Не установлена в `main.py` | `app.setWindowIcon(QIcon(resource_path('resources/icon.ico')))` |
+| `Permission denied` при сборке | exe-файл запущен | Завершить процесс `InteriorStudio.exe` |
+| Ошибки подключения к API | Сервер недоступен или SSL | Проверить `API_BASE_URL`, SSL-сертификат, статус сервера |
+| Ошибки импорта Pydantic | v1 vs v2 | Использовать `pydantic-settings` для `BaseSettings` (v2) |
 
 ---
 
-## Dependencies
+## Чеклист перед сборкой
 
-### Desktop client (`requirements.txt`)
+- [ ] Все файлы `__init__.py` на месте (database, ui, utils, server)
+- [ ] Все пути к ресурсам используют `resource_path()`
+- [ ] Новые модули добавлены в `hiddenimports` в spec-файле
+- [ ] Версия обновлена в `config.py` (при выпуске релиза)
+- [ ] Миграции БД выполняются без ошибок
+- [ ] Приложение запускается через `python main.py`
+
+---
+
+## Зависимости
+
+### Десктоп-клиент (`requirements.txt`)
 ```
 PyQt5==5.15.9
 PyQt5-tools==5.15.9.3.3
@@ -463,7 +463,7 @@ pyinstaller==6.3.0
 PyMuPDF==1.23.8
 ```
 
-### Server (`server/requirements.txt`)
+### Сервер (`server/requirements.txt`)
 ```
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
@@ -481,24 +481,24 @@ alembic==1.14.0
 
 ---
 
-## Update system
+## Система обновлений
 
-Files: `config.py` (version constants), `utils/update_manager.py`, `ui/update_dialogs.py`
+Файлы: `config.py` (константы версий), `utils/update_manager.py`, `ui/update_dialogs.py`
 
-Process: bump `APP_VERSION` in `config.py` -> build exe -> upload to Yandex Disk -> update `version.json` -> clients auto-detect update.
-
----
-
-## File storage (Yandex Disk)
-
-Cloud file storage is handled by `utils/yandex_disk.py` (client-side) and `server/yandex_disk_service.py` (server-side). Used for:
-- Contract PDF uploads
-- Technical task documents
-- Survey data
-- Database backups
-
-Token is configured in `config.py` as `YANDEX_DISK_TOKEN`.
+Процесс: обновить `APP_VERSION` в `config.py` -> собрать exe -> загрузить на Яндекс.Диск -> обновить `version.json` -> клиенты автоматически обнаружат обновление.
 
 ---
 
-**Status:** Desktop app works, exe builds correctly, server deployed on Timeweb Cloud. API integration ~40% complete (Dashboard, Clients, Employees done; Contracts partial; CRM/Reports/Salaries pending).
+## Файловое хранилище (Яндекс.Диск)
+
+Облачное хранение файлов обеспечивается модулями `utils/yandex_disk.py` (клиентская сторона) и `server/yandex_disk_service.py` (серверная сторона). Используется для:
+- Загрузки PDF договоров
+- Документов технических заданий
+- Данных замеров
+- Резервных копий базы данных
+
+Токен настраивается в `config.py` как `YANDEX_DISK_TOKEN`.
+
+---
+
+**Статус:** Десктоп-приложение работает, exe собирается корректно, сервер развернут на Timeweb Cloud. Интеграция с API ~40% завершена (Дашборд, Клиенты, Сотрудники готовы; Договора частично; СРМ/Отчеты/Зарплаты в ожидании).
