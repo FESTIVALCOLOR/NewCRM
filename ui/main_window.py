@@ -86,11 +86,13 @@ class MainWindow(QMainWindow):
         # Устанавливаем event filter для перехвата событий мыши от всех дочерних виджетов
         QApplication.instance().installEventFilter(self)
 
-        # Запускаем sync_manager после инициализации UI
+        # Отложенный запуск синхронизации (2 сек), чтобы не блокировать первый показ данных
+        QTimer.singleShot(2000, self._start_background_sync)
+
+    def _start_background_sync(self):
+        """Отложенный запуск синхронизации после первого показа данных"""
         if self.sync_manager:
             self.sync_manager.start()
-
-        # Запускаем мониторинг offline-режима
         if self.offline_manager:
             self.offline_manager.start_monitoring()
 

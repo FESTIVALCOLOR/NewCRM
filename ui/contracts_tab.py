@@ -187,8 +187,9 @@ class ContractsTab(QWidget):
         self.db = self.data.db  # Сохраняем для совместимости
         self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
         self.init_ui()
-        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
-        QTimer.singleShot(0, self.load_contracts)
+        # ОПТИМИЗАЦИЯ: Первая загрузка из локальной БД (мгновенно)
+        self.data.prefer_local = True
+        QTimer.singleShot(0, self._initial_load)
         
     def init_ui(self):
         layout = QVBoxLayout()
@@ -347,6 +348,11 @@ class ContractsTab(QWidget):
         layout.addWidget(self.contracts_table)
         
         self.setLayout(layout)
+
+    def _initial_load(self):
+        """Первая загрузка из локальной БД (мгновенно)"""
+        self.load_contracts()
+        self.data.prefer_local = False
 
     def load_contracts(self):
         """Загрузка списка договоров"""

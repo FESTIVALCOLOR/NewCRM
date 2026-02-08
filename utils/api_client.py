@@ -52,7 +52,7 @@ class APIClient:
     # Константы для настройки запросов
     DEFAULT_TIMEOUT = 10  # секунд для обычных запросов
     WRITE_TIMEOUT = 15  # секунд для операций записи (POST, PUT, PATCH, DELETE)
-    FIRST_REQUEST_TIMEOUT = 20  # секунд для первого запроса (TCP cold start)
+    FIRST_REQUEST_TIMEOUT = 10  # секунд для первого запроса (TCP cold start)
     MAX_RETRIES = 2  # 2 попытки для надежности
     RETRY_DELAY = 0.5  # секунд между попытками
     # ИСПРАВЛЕНИЕ 04.02.2026: Кеш offline 10 сек

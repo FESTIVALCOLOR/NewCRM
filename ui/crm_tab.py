@@ -124,8 +124,9 @@ class CRMTab(QWidget):
         self.db = self.data.db
 
         self.init_ui()
-        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
-        QTimer.singleShot(0, self.load_cards_for_current_tab)
+        # ОПТИМИЗАЦИЯ: Первая загрузка из локальной БД (мгновенно)
+        self.data.prefer_local = True
+        QTimer.singleShot(0, self._initial_load)
    
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -396,6 +397,11 @@ class CRMTab(QWidget):
         
         return widget
     
+    def _initial_load(self):
+        """Первая загрузка из локальной БД (мгновенно)"""
+        self.load_cards_for_current_tab()
+        self.data.prefer_local = False
+
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей активной вкладки"""
         current_index = self.project_tabs.currentIndex()

@@ -40,6 +40,9 @@ class DataAccess(QObject):
         self.api_client = api_client
         self.db = db or DatabaseManager()
         self._is_online = api_client is not None
+        # Флаг: при True чтение идёт из локальной БД (мгновенно),
+        # API используется только для записи. Устанавливается при первом показе табов.
+        self.prefer_local = False
 
         # Подключаем сигналы OfflineManager если доступен
         om = get_offline_manager()
@@ -89,11 +92,16 @@ class DataAccess(QObject):
         if om:
             om.force_sync()
 
+    def _should_use_api(self) -> bool:
+        """Проверяет, нужно ли обращаться к API для чтения.
+        Если prefer_local=True, читаем из локальной БД (мгновенно)."""
+        return self.api_client is not None and not self.prefer_local
+
     # ==================== КЛИЕНТЫ ====================
 
     def get_all_clients(self) -> List[Dict]:
         """Получить всех клиентов"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_clients(skip=0, limit=10000)
             except Exception as e:
@@ -102,7 +110,7 @@ class DataAccess(QObject):
 
     def get_client(self, client_id: int) -> Optional[Dict]:
         """Получить клиента по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_client(client_id)
             except Exception as e:
@@ -111,7 +119,7 @@ class DataAccess(QObject):
 
     def get_contracts_count_by_client(self, client_id: int) -> int:
         """Получить количество договоров клиента"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 contracts = self.api_client.get_contracts()
                 return sum(1 for c in contracts if c.get('client_id') == client_id)
@@ -196,7 +204,7 @@ class DataAccess(QObject):
 
     def get_all_contracts(self) -> List[Dict]:
         """Получить все договора"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_contracts(skip=0, limit=10000)
             except Exception as e:
@@ -205,7 +213,7 @@ class DataAccess(QObject):
 
     def get_contract(self, contract_id: int) -> Optional[Dict]:
         """Получить договор по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_contract(contract_id)
             except Exception as e:
@@ -260,7 +268,7 @@ class DataAccess(QObject):
 
     def check_contract_number_exists(self, contract_number: str, exclude_id: int = None) -> bool:
         """Проверить существование номера договора"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.check_contract_number_exists(contract_number, exclude_id)
             except Exception as e:
@@ -271,7 +279,7 @@ class DataAccess(QObject):
 
     def get_all_employees(self) -> List[Dict]:
         """Получить всех сотрудников"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_employees(skip=0, limit=10000)
             except Exception as e:
@@ -280,7 +288,7 @@ class DataAccess(QObject):
 
     def get_employees_by_position(self, position: str) -> List[Dict]:
         """Получить сотрудников по должности"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_employees_by_position(position)
             except Exception as e:
@@ -289,7 +297,7 @@ class DataAccess(QObject):
 
     def get_employee(self, employee_id: int) -> Optional[Dict]:
         """Получить сотрудника по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_employee(employee_id)
             except Exception as e:
@@ -351,7 +359,7 @@ class DataAccess(QObject):
 
     def get_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить CRM карточки по типу проекта"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_crm_cards(project_type)
             except Exception as e:
@@ -360,7 +368,7 @@ class DataAccess(QObject):
 
     def get_crm_card(self, card_id: int) -> Optional[Dict]:
         """Получить CRM карточку по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_crm_card(card_id)
             except Exception as e:
@@ -369,7 +377,7 @@ class DataAccess(QObject):
 
     def get_archived_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить архивные CRM карточки"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_crm_cards(project_type)  # API фильтрует сам
             except Exception as e:
@@ -416,7 +424,7 @@ class DataAccess(QObject):
 
     def get_contract_id_by_crm_card(self, card_id: int) -> Optional[int]:
         """Получить ID договора по ID CRM карточки"""
-        if self.api_client:
+        if self._should_use_api():
             card = self.api_client.get_crm_card(card_id)
             return card.get('contract_id') if card else None
         return self.db.get_contract_id_by_crm_card(card_id)
@@ -425,7 +433,7 @@ class DataAccess(QObject):
 
     def get_supervision_cards_active(self) -> List[Dict]:
         """Получить активные карточки надзора"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_supervision_cards(status="active")
             except Exception as e:
@@ -434,7 +442,7 @@ class DataAccess(QObject):
 
     def get_supervision_cards_archived(self) -> List[Dict]:
         """Получить архивные карточки надзора"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_supervision_cards(status="archived")
             except Exception as e:
@@ -443,7 +451,7 @@ class DataAccess(QObject):
 
     def get_supervision_card(self, card_id: int) -> Optional[Dict]:
         """Получить карточку надзора по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_supervision_card(card_id)
             except Exception as e:
@@ -485,7 +493,7 @@ class DataAccess(QObject):
 
     def get_payments_for_contract(self, contract_id: int) -> List[Dict]:
         """Получить платежи по договору"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_payments_for_contract(contract_id)
             except Exception as e:
@@ -517,7 +525,7 @@ class DataAccess(QObject):
 
     def get_action_history(self, entity_type: str, entity_id: int) -> List[Dict]:
         """Получить историю действий"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_action_history(entity_type, entity_id)
             except Exception as e:
@@ -543,7 +551,7 @@ class DataAccess(QObject):
 
     def get_supervision_history(self, card_id: int) -> List[Dict]:
         """Получить историю карточки надзора"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_supervision_history(card_id)
             except Exception as e:
@@ -567,7 +575,7 @@ class DataAccess(QObject):
 
     def get_rates(self, project_type: str = None, role: str = None) -> List[Dict]:
         """Получить ставки"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_rates(project_type, role)
             except Exception as e:
@@ -576,7 +584,7 @@ class DataAccess(QObject):
 
     def get_rate(self, rate_id: int) -> Optional[Dict]:
         """Получить ставку по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_rate(rate_id)
             except Exception as e:
@@ -607,7 +615,7 @@ class DataAccess(QObject):
 
     def get_salaries(self, report_month: str = None, employee_id: int = None) -> List[Dict]:
         """Получить зарплаты"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_salaries(report_month, employee_id)
             except Exception as e:
@@ -616,7 +624,7 @@ class DataAccess(QObject):
 
     def get_salary(self, salary_id: int) -> Optional[Dict]:
         """Получить зарплату по ID"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_salary(salary_id)
             except Exception as e:
@@ -661,7 +669,7 @@ class DataAccess(QObject):
 
     def get_stage_history(self, card_id: int) -> List[Dict]:
         """Получить историю стадий"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_stage_executors(card_id)
             except Exception as e:
@@ -695,7 +703,7 @@ class DataAccess(QObject):
 
     def get_contract_files(self, contract_id: int, stage: str = None) -> List[Dict]:
         """Получить файлы договора"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_contract_files(contract_id, stage)
             except Exception as e:
@@ -737,7 +745,7 @@ class DataAccess(QObject):
     def get_dashboard_statistics(self, year: int = None, month: int = None,
                                  quarter: int = None, project_type: str = None) -> Dict:
         """Получить статистику для дашборда"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_dashboard_statistics(year, month, quarter, project_type)
             except Exception as e:
