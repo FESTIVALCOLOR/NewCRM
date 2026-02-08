@@ -9,7 +9,7 @@ venv/
 ENV/
 env/
 
-# Базы данных (НЕ загружаем на GitHub!)
+# Базы данных
 *.db
 *.db-journal
 *.sqlite
@@ -45,12 +45,19 @@ desktop.ini
 nul
 *.tmp
 *.bak
+*.backup
 *.backup_*
 
-# Server environment (не загружаем токены!)
+# Токены и секреты
+token.txt
+config_local.py
+secrets.py
 server/.env
 .env
 
-# Конфиденциально
-config_local.py
-secrets.py
+# Тестовые скриншоты (генерируются автоматически)
+tests/visual/auto_captures/
+tests/visual/test_results/
+
+# Тестовые логи
+tests/logs/

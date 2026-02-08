@@ -1,60 +1,4 @@
 {
-  "model": "opus",
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Review edit arguments: $ARGUMENTS\n\nCheck these Interior Studio CRM rules:\n1. If file is in ui/ directory: Check new_string for emoji (Unicode above U+2600 like icons/symbols). Emoji are BANNED in UI code.\n2. If file is in server/ directory: Output '[DEPLOY] Docker rebuild required: docker-compose down && docker-compose build --no-cache api && docker-compose up -d'\n3. If new_string loads resources (QPixmap/QIcon/open with file path) WITHOUT resource_path(): Flag as '[RULE] Must use resource_path() for all resources'\n4. If new_string has FramelessWindowHint with border != 1px: Flag as '[RULE] Border must be 1px for FramelessWindowHint dialogs'\n\nRespond ONLY with violations found, or 'OK' if clean. Be very brief.",
-            "model": "claude-haiku-4-5-20251001",
-            "statusMessage": "Validating project rules...",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "A file was written: $ARGUMENTS\n\nCheck Interior Studio CRM rules:\n1. If file is in ui/ directory: Check for emoji characters (BANNED in UI)\n2. If file is in server/ directory: Output '[DEPLOY] Docker rebuild required after server changes'\n3. If file loads resources without resource_path(): Flag it\n4. If file has __init__.py missing in database/, ui/, or utils/: Flag it\n\nRespond ONLY with violations or 'OK'. Be brief.",
-            "model": "claude-haiku-4-5-20251001",
-            "statusMessage": "Validating written file...",
-            "timeout": 15
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "A bash command will run: $ARGUMENTS\n\nCheck ONLY if this is a git commit command. If yes:\n- Verify the commit message does NOT contain emoji\n- Output '[PRE-COMMIT] Ensure py_compile passed for modified .py files'\nFor all other commands: respond 'OK'.\nBe brief.",
-            "model": "claude-haiku-4-5-20251001",
-            "statusMessage": "Checking command...",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "agent",
-            "prompt": "You are a compatibility checker for Interior Studio CRM.\n\nCheck if any server files (server/main.py, server/schemas.py, server/database.py) were modified in this session.\n\nIf server files were modified:\n1. Read server/main.py and find all @app.get/@app.post/@app.put/@app.patch/@app.delete endpoints\n2. Read utils/api_client.py and verify each endpoint has a matching method\n3. Check that response field names in server match what the UI expects\n4. Output any mismatches found\n\nIf no server files were modified, output 'OK - no server changes'.\n\nBe concise. Only report actual mismatches.",
-            "model": "claude-haiku-4-5-20251001",
-            "statusMessage": "Checking server-client compatibility...",
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(python:*)",
@@ -92,9 +36,78 @@
       "Bash(sqlite3:*)",
       "Bash(start python:*)",
       "Bash(sshpass:*)",
-      "WebFetch(domain:www.anthropic.com)"
+      "WebFetch(domain:www.anthropic.com)",
+      "Bash(find:*)",
+      "Bash(xargs:*)",
+      "Bash(sort:*)",
+      "Bash(git -C:*)",
+      "Bash(for f in \"analyze_codebase.py\" \"create_cards_for_contracts.py\" \"deploy.sh\" \"deploy_to_server.py\" \"find_db_without_api.py\" \"pytest.ini\" \"run.bat\" \"start_claude.bat\" \"start_claude.ps1\" \"disable_mcp.bat\" \"disable_mcp.ps1\" \"disable_mcp_settings.ps1\" \"update_vscode_settings.bat\" \"temp_calendar_class.txt\" \"test_api_sync.py\" \"test_full_system.py\" \"interior_studio.service\")",
+      "Bash(do if [ -f \"c:/+CRM+/interior_studio/$f\" ])",
+      "Bash(then echo \"EXISTS: $f\")",
+      "Bash(else echo \"GONE:   $f\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(for f in \"ui/crm_supervision_tab.py.backup\" \"ui/crm_tab.py.backup\" \"ui/custom_title_bar.py.backup\" \"ui/dashboard_tab.py.backup\" \"ui/employee_reports_tab.py.backup\" \"ui/employees_tab.py.backup\" \"ui/login_window.py.backup\" \"ui/rates_dialog.py.backup\" \"ui/reports_tab.py.backup\" \"ui/salaries_tab.py.backup\" \"database/db_manager.py.backup\" \"utils/db_security.py.backup\" \"utils/icon_loader.py.backup\" \"utils/logger.py.backup\" \"utils/password_utils.py.backup\")",
+      "Bash(for f in \"ui/dashboard_widget.py\" \"ui/dashboards.py\" \"utils/calendar_helpers.py\" \"utils/data_access.py\" \"utils/db_sync.py\" \"utils/offline_manager.py\" \"utils/sync_manager.py\" \"utils/unified_styles.py\")",
+      "Bash(# Count root-level one-off/migration/fix scripts wc -l \"\"c:/+CRM+/interior_studio/add_\"\"*.py \"\"c:/+CRM+/interior_studio/fix_\"\"*.py \"\"c:/+CRM+/interior_studio/check_\"\"*.py \"\"c:/+CRM+/interior_studio/server_\"\"*.py \"\"c:/+CRM+/interior_studio/remove_\"\"*.py \"\"c:/+CRM+/interior_studio/replace_\"\"*.py \"\"c:/+CRM+/interior_studio/generate_\"\"*.py \"\"c:/+CRM+/interior_studio/create_\"\"*.py \"\"c:/+CRM+/interior_studio/migrate_\"\"*.py \"\"c:/+CRM+/interior_studio/quick_\"\"*.py \"\"c:/+CRM+/interior_studio/analyze_\"\"*.py)",
+      "Bash(# Check if these root-level scripts are tracked by git git -C \"\"c:/+CRM+/interior_studio\"\" ls-files -- \"\"add_*.py\"\" \"\"fix_*.py\"\" \"\"check_*.py\"\" \"\"server_*.py\"\" \"\"remove_*.py\"\" \"\"replace_*.py\"\" \"\"generate_*.py\"\" \"\"create_*.py\"\" \"\"migrate_*.py\"\" \"\"quick_*.py\"\" \"\"analyze_*.py\"\" \"\"test_*.py\"\")"
     ],
     "deny": [],
     "ask": []
+  },
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Review edit arguments: $ARGUMENTS\n\nCheck these Interior Studio CRM rules:\n1. If file is in ui/ directory: Check new_string for emoji (Unicode above U+2600 like icons/symbols). Emoji are BANNED in UI code.\n2. If file is in server/ directory: Output '[DEPLOY] Docker rebuild required: docker-compose down && docker-compose build --no-cache api && docker-compose up -d'\n3. If new_string loads resources (QPixmap/QIcon/open with file path) WITHOUT resource_path(): Flag as '[RULE] Must use resource_path() for all resources'\n4. If new_string has FramelessWindowHint with border != 1px: Flag as '[RULE] Border must be 1px for FramelessWindowHint dialogs'\n\nRespond ONLY with violations found, or 'OK' if clean. Be very brief.",
+            "timeout": 15,
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Validating project rules..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A file was written: $ARGUMENTS\n\nCheck Interior Studio CRM rules:\n1. If file is in ui/ directory: Check for emoji characters (BANNED in UI)\n2. If file is in server/ directory: Output '[DEPLOY] Docker rebuild required after server changes'\n3. If file loads resources without resource_path(): Flag it\n4. If file has __init__.py missing in database/, ui/, or utils/: Flag it\n\nRespond ONLY with violations or 'OK'. Be brief.",
+            "timeout": 15,
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Validating written file..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A bash command will run: $ARGUMENTS\n\nCheck ONLY if this is a git commit command. If yes:\n- Verify the commit message does NOT contain emoji\n- Output '[PRE-COMMIT] Ensure py_compile passed for modified .py files'\nFor all other commands: respond 'OK'.\nBe brief.",
+            "timeout": 10,
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Checking command..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "agent",
+            "timeout": 30,
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Checking server-client compatibility..."
+          }
+        ]
+      }
+    ]
   }
 }
