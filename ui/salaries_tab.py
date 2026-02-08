@@ -2555,26 +2555,37 @@ class SalariesTab(QWidget):
     def apply_row_color(self, table, row, status, is_reassigned=False):
         """Применение цвета к строке в зависимости от статуса и переназначения"""
         if is_reassigned:
-            color = QColor('#FFF9C4')  # Яркий жёлтый для переназначенных
+            color_name = '#FFF9C4'
         elif status == 'to_pay':
-            color = QColor('#FFE4B5')  # Персиковый/оранжевый
+            color_name = '#FFE4B5'
         elif status == 'paid':
-            color = QColor('#D4EDDA')  # Светло-зеленый
+            color_name = '#D4EDDA'
         else:
-            color = QColor('#FFFFFF')  # Белый
+            return  # Белый фон - по умолчанию, ничего не делаем
 
+        # Qt stylesheet перекрывает setBackground(), поэтому используем QLabel
+        style = f"background-color: {color_name}; padding: 5px;"
         last_col = table.columnCount() - 1
         for col in range(table.columnCount()):
             existing_widget = table.cellWidget(row, col)
             if existing_widget and col == last_col:
-                existing_widget.setStyleSheet(f"background-color: {color.name()};")
+                existing_widget.setStyleSheet(f"background-color: {color_name};")
             else:
                 item = table.item(row, col)
-                if item:
-                    item.setBackground(color)
-                    if is_reassigned and col == 2:
-                        item.setText(item.text() + ' *')
-                        item.setToolTip('Выплата переназначена другому исполнителю')
+                text = item.text() if item else ""
+                alignment = item.textAlignment() if item else int(Qt.AlignLeft | Qt.AlignVCenter)
+
+                if is_reassigned and col == 2:
+                    text = text + ' *'
+
+                label = QLabel(text)
+                label.setStyleSheet(style)
+                label.setAlignment(Qt.Alignment(alignment))
+
+                if is_reassigned and col == 2:
+                    label.setToolTip('Выплата переназначена другому исполнителю')
+
+                table.setCellWidget(row, col, label)
 
     def sync_status_with_crm(self, payment, status):
         """Синхронизация статуса с CRM"""
