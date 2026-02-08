@@ -4,6 +4,7 @@
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -15,7 +16,8 @@ class Settings(BaseSettings):
     # JWT
     secret_key: str = "your-secret-key-change-this"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 1440  # 24 часа
+    refresh_token_expire_days: int = 7  # 7 дней
 
     # Яндекс.Диск
     yandex_disk_token: str = ""
@@ -24,7 +26,6 @@ class Settings(BaseSettings):
     app_name: str = "Interior Studio CRM API"
     app_version: str = "1.0.0"
     debug: bool = False
-    allowed_origins: list = ["http://localhost:3000"]
 
     # Файлы
     max_file_size_mb: int = 50

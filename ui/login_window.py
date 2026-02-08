@@ -531,6 +531,11 @@ class LoginWindow(QWidget):
             log_auth_attempt(login, success=True)
             app_logger.info(f"Успешный OFFLINE вход: {employee.get('full_name')} (роль: {employee.get('role')})")
 
+            # ИСПРАВЛЕНИЕ: Устанавливаем offline режим в api_client
+            # чтобы предотвратить ненужные API запросы при загрузке UI
+            if self.api_client:
+                self.api_client.set_offline_mode(True)
+
             # Показываем предупреждение об offline-режиме
             CustomMessageBox(
                 self,

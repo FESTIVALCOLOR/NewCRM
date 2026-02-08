@@ -15,6 +15,7 @@ from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
 from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
+from utils.table_settings import ProportionalResizeTable
 
 class EmployeesTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
@@ -137,48 +138,56 @@ class EmployeesTab(QWidget):
         layout.addLayout(filter_layout)
         # =============================================================
 
-        # Таблица сотрудников
-        self.employees_table = QTableWidget()
+        # Таблица сотрудников - используем ProportionalResizeTable для растягивания + ручного изменения
+        self.employees_table = ProportionalResizeTable()
         self.employees_table.setStyleSheet("""
             QTableWidget {
-                background-color: #FFFFFF;
+                background-color: #fafafa;
                 border: 1px solid #d9d9d9;
                 border-radius: 8px;
             }
-            QTableCornerButton::section {
+            QTableWidget QTableCornerButton::section {
+                background-color: #fafafa;
+                border: none;
+            }
+            QTableWidget QHeaderView {
+                background-color: #fafafa;
+            }
+            QTableWidget QHeaderView::section {
                 background-color: #fafafa;
                 border: none;
                 border-bottom: 1px solid #e6e6e6;
                 border-right: 1px solid #f0f0f0;
-                border-top-left-radius: 8px;
+                padding: 4px;
+            }
+            QTableWidget QHeaderView::section:last {
+                border-top-right-radius: 7px;
+            }
+            QTableWidget::item {
+                background-color: #FFFFFF;
+            }
+            QTableWidget QScrollBar {
+                background-color: #FFFFFF;
             }
         """)
-        self.employees_table.setColumnCount(8)  # ← Было 7, стало 8
+        self.employees_table.setColumnCount(8)
         self.employees_table.setHorizontalHeaderLabels([
-            ' ID ', ' ФИО ', ' Должность ', ' Телефон ', ' Email ', 
-            ' Дата рождения ', ' Статус ', ' Действия '  # ← ИЗМЕНЕНО
+            ' ID ', ' ФИО ', ' Должность ', ' Телефон ', ' Email ',
+            ' Дата рождения ', ' Статус ', ' Действия '
         ])
 
         # ========== СКРЫВАЕМ КОЛОНКУ ID ==========
         self.employees_table.setColumnHidden(0, True)
         # =========================================
 
-        header = self.employees_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        self.employees_table.setColumnWidth(0, 50)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Interactive)
-        self.employees_table.setColumnWidth(2, 200)
-        header.setSectionResizeMode(3, QHeaderView.Interactive)
-        self.employees_table.setColumnWidth(3, 150)
-        header.setSectionResizeMode(4, QHeaderView.Interactive)
-        self.employees_table.setColumnWidth(4, 220)
-        header.setSectionResizeMode(5, QHeaderView.Interactive)  # ← Дата рождения
-        self.employees_table.setColumnWidth(5, 140)
-        header.setSectionResizeMode(6, QHeaderView.Interactive)  # ← Статус
-        self.employees_table.setColumnWidth(6, 100)
-        header.setSectionResizeMode(7, QHeaderView.Fixed)  # ← Действия
-        self.employees_table.setColumnWidth(7, 100)
+        # Настройка пропорционального изменения размера:
+        # - Колонки 0-6 растягиваются пропорционально И можно менять вручную
+        # - Колонка 7 (Действия) фиксирована 110px
+        self.employees_table.setup_proportional_resize(
+            column_ratios=[0.05, 0.22, 0.18, 0.14, 0.18, 0.13, 0.10],  # Пропорции для колонок 0-6
+            fixed_columns={7: 110},  # Действия = 110px фиксированно
+            min_width=50
+        )
 
         # Запрещаем изменение высоты строк
         self.employees_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)

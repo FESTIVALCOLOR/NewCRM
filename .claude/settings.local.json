@@ -1,112 +1,98 @@
 {
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Review edit arguments: $ARGUMENTS\n\nCheck these Interior Studio CRM rules:\n1. If file is in ui/ directory: Check new_string for emoji (Unicode above U+2600 like icons/symbols). Emoji are BANNED in UI code.\n2. If file is in server/ directory: Output '[DEPLOY] Docker rebuild required: docker-compose down && docker-compose build --no-cache api && docker-compose up -d'\n3. If new_string loads resources (QPixmap/QIcon/open with file path) WITHOUT resource_path(): Flag as '[RULE] Must use resource_path() for all resources'\n4. If new_string has FramelessWindowHint with border != 1px: Flag as '[RULE] Border must be 1px for FramelessWindowHint dialogs'\n\nRespond ONLY with violations found, or 'OK' if clean. Be very brief.",
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Validating project rules...",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A file was written: $ARGUMENTS\n\nCheck Interior Studio CRM rules:\n1. If file is in ui/ directory: Check for emoji characters (BANNED in UI)\n2. If file is in server/ directory: Output '[DEPLOY] Docker rebuild required after server changes'\n3. If file loads resources without resource_path(): Flag it\n4. If file has __init__.py missing in database/, ui/, or utils/: Flag it\n\nRespond ONLY with violations or 'OK'. Be brief.",
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Validating written file...",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A bash command will run: $ARGUMENTS\n\nCheck ONLY if this is a git commit command. If yes:\n- Verify the commit message does NOT contain emoji\n- Output '[PRE-COMMIT] Ensure py_compile passed for modified .py files'\nFor all other commands: respond 'OK'.\nBe brief.",
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Checking command...",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are a compatibility checker for Interior Studio CRM.\n\nCheck if any server files (server/main.py, server/schemas.py, server/database.py) were modified in this session.\n\nIf server files were modified:\n1. Read server/main.py and find all @app.get/@app.post/@app.put/@app.patch/@app.delete endpoints\n2. Read utils/api_client.py and verify each endpoint has a matching method\n3. Check that response field names in server match what the UI expects\n4. Output any mismatches found\n\nIf no server files were modified, output 'OK - no server changes'.\n\nBe concise. Only report actual mismatches.",
+            "model": "claude-haiku-4-5-20251001",
+            "statusMessage": "Checking server-client compatibility...",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
-      "Bash(python main.py:*)",
       "Bash(python:*)",
-      "Bash(git checkout:*)",
-      "Bash(del fix_tooltip.py restore_tooltip.py)",
-      "Bash(sqlite3:*)",
-      "Bash(start python main.py:*)",
-      "Bash(dir:*)",
-      "Bash(timeout /t 3)",
-      "Bash(taskkill:*)",
-      "Bash(timeout:*)",
-      "Bash(awk:*)",
-      "Bash(pip install:*)",
-      "Bash(.venvScriptspip.exe install PyQt5==5.15.9 requests==2.31.0 pymupdf)",
-      "Bash(.venv/Scripts/pip.exe install:*)",
-      "Bash(cat:*)",
       "Bash(python3:*)",
-      "Bash(find:*)",
-      "Bash(.venv/Scripts/python.exe main.py)",
-      "Bash(ping:*)",
+      "Bash(python -m py_compile:*)",
       "Bash(.venv/Scripts/python.exe:*)",
-      "Bash(grep:*)",
-      "Bash(xxd:*)",
-      "Bash(powershell -Command \"Get-Content ''d:\\\\New CRM\\\\interior_studio\\\\ui\\\\main_window.py'' | Measure-Object -Line | Select-Object -ExpandProperty Lines\")",
-      "Bash(.venvScriptspython.exe main.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" main.py)",
-      "Bash(\".venv\\\\Scripts\\\\pip.exe\" show pyinstaller)",
-      "Bash(del \"d:\\\\New CRM\\\\interior_studio\\\\build.spec\")",
-      "Bash(\".venv\\\\Scripts\\\\pip.exe\" install pyinstaller)",
-      "Bash(\".venv\\\\Scripts\\\\pyinstaller.exe\" InteriorStudio.spec --clean --noconfirm)",
-      "Bash(powershell -Command \"\\(Get-Item ''d:\\\\New CRM\\\\interior_studio\\\\dist\\\\InteriorStudio.exe''\\).Length / 1MB | ForEach-Object {[math]::Round\\($_ 2\\)}\")",
-      "Bash(\".venv\\\\Scripts\\\\pip.exe\" install Pillow)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" create_icon.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from database.db_manager import DatabaseManager; db = DatabaseManager\\(\\); print\\(''Migrations completed''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_resource_paths.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from ui.login_window import LoginWindow; print\\(''OK''\\)\")",
-      "Bash(for file in ui/*.py)",
-      "Bash(do python3 -m py_compile \"$file\")",
-      "Bash(echo:*)",
-      "Bash(done)",
-      "Bash(for:*)",
-      "Bash(do sed -i '/^from utils\\\\.resource_path import resource_path$/d' \"$file\")",
-      "Bash(\".venv\\\\Scripts\\\\pyinstaller.exe\" InteriorStudio.spec --noconfirm)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.icon_loader import IconLoader; icon = IconLoader.load\\(''edit''\\); print\\(''Icon loaded:'', not icon.isNull\\(\\)\\)\")",
-      "Bash(ls:*)",
-      "Bash(.venvScriptspython.exe fix_center_dialogs.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_center_dialogs.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_center_dialogs2.py)",
-      "Bash(del fix_center_dialogs.py fix_center_dialogs2.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" remove_emoji.py)",
+      "Bash(.venv/Scripts/pip.exe:*)",
+      "Bash(.venvScriptspython.exe:*)",
+      "Bash(.venvScriptspip.exe:*)",
+      "Bash(\".venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(\".venv\\\\Scripts\\\\pip.exe\":*)",
+      "Bash(\".venv\\\\Scripts\\\\pyinstaller.exe\":*)",
+      "Bash(\".venv\\\\\\\\Scripts\\\\\\\\python.exe\":*)",
+      "Bash(\"d:\\\\New CRM\\\\interior_studio\\\\.venv\\\\Scripts\\\\python.exe\":*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(.venvScriptspython.exe -c \"from ui.login_window import LoginWindow; print\\(''OK''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\":*)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); print\\(''API Client OK''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.get\\(''https://147.45.154.193'', verify=False, timeout=10\\); print\\(r.json\\(\\)\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import urllib3; urllib3.disable_warnings\\(\\); client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''Успешный вход!''\\); print\\(f\"\"ID: {result[''employee_id'']}\"\"\\); print\\(f\"\"Имя: {result[''full_name'']}\"\"\\); print\\(f\"\"Роль: {result[''role'']}\"\"\\); print\\(f\"\"Токен: {result[''access_token''][:20]}...\"\"\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"\nimport re\n\n# Читаем файл\nwith open\\(''utils/api_client.py'', ''r'', encoding=''utf-8''\\) as f:\n    content = f.read\\(\\)\n\n# Заменяем все requests.get, requests.post, requests.put без verify\n# Паттерн: requests.XXX\\(...\\) где нет verify=\npatterns = [\n    \\(r''\\(requests\\\\.get\\\\\\([^\\)]+\\)\\(\\\\\\)\\)'', r''\\\\1, verify=self.verify_ssl\\\\2''\\),\n    \\(r''\\(requests\\\\.post\\\\\\([^\\)]+\\)\\(\\\\\\)\\)'', r''\\\\1, verify=self.verify_ssl\\\\2''\\),\n    \\(r''\\(requests\\\\.put\\\\\\([^\\)]+\\)\\(\\\\\\)\\)'', r''\\\\1, verify=self.verify_ssl\\\\2''\\),\n]\n\nfor pattern, replacement in patterns:\n    # Заменяем только если еще нет verify=\n    content = re.sub\\(pattern, lambda m: m.group\\(0\\) if ''verify='' in m.group\\(0\\) else replacement.replace\\(r''\\\\1'', m.group\\(1\\)\\).replace\\(r''\\\\2'', m.group\\(2\\)\\), content\\)\n\n# Записываем обратно\nwith open\\(''utils/api_client.py'', ''w'', encoding=''utf-8''\\) as f:\n    f.write\\(content\\)\n\nprint\\(''Обновлено''\\)\n\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''Успешный вход!''\\); print\\(f''ID: {result[\"\"employee_id\"\"]}''\\); print\\(f''Имя: {result[\"\"full_name\"\"]}''\\); print\\(f''Роль: {result[\"\"role\"\"]}''\\); print\\(f''Токен: {result[\"\"access_token\"\"][:30]}...''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.post\\(''https://147.45.154.193/api/auth/login'', data={''username'': ''admin'', ''password'': ''admin123''}, verify=False\\); print\\(f''Status: {r.status_code}''\\); print\\(f''Content-Type: {r.headers.get\\(\"\"Content-Type\"\"\\)}''\\); print\\(f''Response: {r.text[:500]}''\\)\")",
+      "Bash(git checkout:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git fetch:*)",
       "Bash(ssh:*)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''Login OK''\\); print\\(f''ID: {result[\"\"employee_id\"\"]}''\\); print\\(f''Name: {result[\"\"full_name\"\"]}''\\); print\\(f''Role: {result[\"\"role\"\"]}''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import time; time.sleep\\(3\\); client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''SUCCESS!''\\); print\\(f''ID: {result[\"\"employee_id\"\"]}''\\); print\\(f''Name: {result[\"\"full_name\"\"]}''\\); print\\(f''Role: {result[\"\"role\"\"]}''\\); print\\(f''Token: {result[\"\"access_token\"\"][:30]}...''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import time; time.sleep\\(5\\); client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''SUCCESS''\\); print\\(''ID:'', result[''employee_id'']\\); print\\(''Name:'', result[''full_name'']\\); print\\(''Role:'', result[''role'']\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.get\\(''https://147.45.154.193'', verify=False, timeout=10\\); print\\(''Status:'', r.status_code\\); print\\(''Response:'', r.json\\(\\)\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.post\\(''https://147.45.154.193/api/auth/login'', data={''username'': ''admin'', ''password'': ''admin123''}, verify=False\\); print\\(''Status:'', r.status_code\\); print\\(''Text:'', r.text[:200]\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.post\\(''https://147.45.154.193/api/auth/login'', data={''username'': ''admin'', ''password'': ''admin123''}, verify=False\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''SUCCESS''\\); print\\(''ID:'', result[''employee_id'']\\); print\\(''Name:'', result[''full_name'']\\); print\\(''Role:'', result[''role'']\\); print\\(''Token:'', result[''access_token''][:30] + ''...''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.post\\(''https://147.45.154.193/api/auth/login'', data={''username'': ''admin'', ''password'': ''admin123''}, verify=False\\); print\\(''Status:'', r.status_code\\); print\\(''Headers:'', dict\\(r.headers\\)\\); print\\(''Text:'', r.text[:500]\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''=== SUCCESS ===''\\); print\\(f''ID: {result[\"\"employee_id\"\"]}''\\); print\\(f''Name: {result[\"\"full_name\"\"]}''\\); print\\(f''Role: {result[\"\"role\"\"]}''\\); print\\(f''Token: {result[\"\"access_token\"\"][:40]}...''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"print\\(''\\\\U0001f510''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import requests; import urllib3; urllib3.disable_warnings\\(\\); r = requests.post\\(''https://147.45.154.193/api/auth/login'', data={''username'': ''admin'', ''password'': ''wrong''}, verify=False\\); print\\(''Status:'', r.status_code\\); import sys; sys.stdout.buffer.write\\(b''Text: ''\\); sys.stdout.buffer.write\\(r.text.encode\\(''utf-8''\\)\\); sys.stdout.buffer.write\\(b''\\\\n''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c:*)",
-      "Bash(powershell -Command \"Get-Content ''d:\\\\New CRM\\\\interior_studio\\\\ui\\\\main_window.py'' -Encoding UTF8 | Select-String -Pattern ''1f510'' -Context 2,2\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''Token:'', result[''access_token''][:50] + ''...''\\); employees = client.get_employees\\(\\); print\\(f''Сотрудников на сервере: {len\\(employees\\)}''\\); print\\(''Данные:'', employees\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" migrate_to_server.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import sqlite3; conn = sqlite3.connect\\(''interior_studio.db''\\); cursor = conn.cursor\\(\\); cursor.execute\\(''PRAGMA table_info\\(employees\\)''\\); print\\(''\\\\n''.join\\([f''{row[1]} \\({row[2]}\\)'' for row in cursor.fetchall\\(\\)]\\)\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import sqlite3; conn = sqlite3.connect\\(''interior_studio.db''\\); cursor = conn.cursor\\(\\); cursor.execute\\(''PRAGMA table_info\\(clients\\)''\\); print\\(''\\\\n''.join\\([f''{row[1]} \\({row[2]}\\)'' for row in cursor.fetchall\\(\\)]\\)\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import sqlite3; conn = sqlite3.connect\\(''interior_studio.db''\\); cursor = conn.cursor\\(\\); cursor.execute\\(''PRAGMA table_info\\(contracts\\)''\\); print\\(''\\\\n''.join\\([f''{row[1]} \\({row[2]}\\)'' for row in cursor.fetchall\\(\\)]\\)\\)\")",
       "Bash(scp:*)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; client = APIClient\\(''https://147.45.154.193''\\); result = client.login\\(''admin'', ''admin123''\\); print\\(''Login OK''\\); print\\(f''Token: {result[\"\"access_token\"\"][:50]}...''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" check_employees.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" test_api.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import jwt; print\\(''JWT lib:'', jwt.__version__\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\pip.exe\" install PyJWT)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" check_token.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" test_direct_api.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import sys; sys.stdout.reconfigure\\(encoding=''utf-8''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" test_api_utf8.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import urllib3; urllib3.disable_warnings\\(\\); c = APIClient\\(''https://147.45.154.193''\\); r = c.login\\(''admin'', ''admin123''\\); print\\(''Token:'', r[''access_token''][:80]\\); import jwt; dec = jwt.decode\\(r[''access_token''], options={''verify_signature'': False}\\); print\\(''Decoded:'', dec\\)\")",
-      "Bash(powershell -Command \"Get-Content ''ui/main_window.py'' -Encoding UTF8 | Select-Object -Index 812\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" test_data_loading.py)",
-      "Bash(powershell -Command \"Get-Content ''ui/main_window.py'' -Encoding UTF8 | Select-Object -Index 811,814,817,820,823,826,829,832\")",
-      "Bash(iconv:*)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_tabs_names.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"with open\\(''ui/main_window.py'', ''r'', encoding=''utf-8''\\) as f: lines = f.readlines\\(\\); print\\(''''.join\\(lines[810:835]\\)\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_tabs_by_lines.py)",
-      "Bash(do echo \"=== Checking $file ===\")",
-      "Bash(do echo \"=== $file ===\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" check_file_corruption.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" fix_all_tabs.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" test_new_routes.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import sys; sys.stdout.reconfigure\\(encoding=''utf-8''\\); c = APIClient\\(''https://147.45.154.193''\\); r = c.login\\(''admin'', ''admin123''\\); print\\(''[OK] Login successful''\\); emps = c.get_employees\\(\\); print\\(f''[OK] Employees: {len\\(emps\\)}''\\); clients = c.get_clients\\(\\); print\\(f''[OK] Clients: {len\\(clients\\)}''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import sys; sys.stdout.reconfigure\\(encoding=''utf-8''\\); c = APIClient\\(''https://147.45.154.193''\\); r = c.login\\(''admin'', ''admin123''\\); emps = c.get_employees\\(\\); emp = emps[0]; print\\(f''Testing employee: {emp[\"\"full_name\"\"]} \\(ID: {emp[\"\"id\"\"]}\\)''\\); dept = emp.get\\(''department'', ''Другое''\\); new_dept = ''TEST'' if dept != ''TEST'' else ''Другое''; updated = c.update_employee\\(emp[''id''], {''department'': new_dept}\\); print\\(f''[OK] Updated: {dept} -> {updated[\"\"department\"\"]}''\\); c.update_employee\\(emp[''id''], {''department'': dept}\\); print\\(''[OK] Restored back''\\)\")",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" quick_test_update.py)",
-      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"from utils.api_client import APIClient; import sys; sys.stdout.reconfigure\\(encoding=''utf-8''\\); c = APIClient\\(''https://147.45.154.193''\\); r = c.login\\(''admin'', ''admin123''\\); print\\(f''User ID: {r[\"\"employee_id\"\"]}''\\); print\\(f''Full name: {r[\"\"full_name\"\"]}''\\); print\\(f''Role: {r[\"\"role\"\"]}''\\)\")"
+      "Bash(curl:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(del:*)",
+      "Bash(findstr:*)",
+      "Bash(ping:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(bash:*)",
+      "Bash(echo:*)",
+      "Bash(sqlite3:*)",
+      "Bash(start python:*)",
+      "Bash(sshpass:*)",
+      "WebFetch(domain:www.anthropic.com)"
     ],
     "deny": [],
     "ask": []

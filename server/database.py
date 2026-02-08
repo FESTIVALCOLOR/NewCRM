@@ -254,12 +254,24 @@ class Contract(Base):
 
     contract_file_link = Column(String)
     tech_task_link = Column(String)
+    tech_task_yandex_path = Column(String)
+    tech_task_file_name = Column(String)
+
+    # Поля для файлов замера
+    measurement_image_link = Column(String)
+    measurement_file_name = Column(String)
+    measurement_yandex_path = Column(String)
+    measurement_date = Column(String)
 
     status = Column(String, default="Новый заказ")
     status_changed_date = Column(String)
     termination_reason = Column(Text)
 
     yandex_folder_path = Column(String)
+
+    # Поля для референсов и фотофиксации (25.01.2026)
+    references_yandex_path = Column(String)
+    photo_documentation_yandex_path = Column(String)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -521,6 +533,22 @@ class ActionHistory(Base):
 
     description = Column(Text)
     action_date = Column(DateTime, default=datetime.utcnow)
+
+
+class ApprovalStageDeadline(Base):
+    """Дедлайны стадий согласования"""
+    __tablename__ = "approval_stage_deadlines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id"), nullable=False)
+
+    stage_name = Column(String, nullable=False)
+    deadline = Column(String, nullable=False)  # DATE as string for compatibility
+
+    is_completed = Column(Boolean, default=False)
+    completed_date = Column(DateTime)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 def init_db():

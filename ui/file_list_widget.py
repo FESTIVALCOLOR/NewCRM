@@ -24,7 +24,7 @@ class FileListItemWidget(QWidget):
 
     def init_ui(self):
         layout = QHBoxLayout()
-        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setContentsMargins(8, 2, 4, 2)
         layout.setSpacing(8)
         layout.setAlignment(Qt.AlignVCenter)  # Вертикальное выравнивание
 
@@ -38,8 +38,9 @@ class FileListItemWidget(QWidget):
                     color: white;
                     font-size: 9px;
                     font-weight: bold;
-                    padding: 2px 4px;
-                    border-radius: 2px;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    border: none;
                 }
             """)
             icon_label.setToolTip("PDF")
@@ -51,8 +52,9 @@ class FileListItemWidget(QWidget):
                     color: white;
                     font-size: 9px;
                     font-weight: bold;
-                    padding: 2px 4px;
-                    border-radius: 2px;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    border: none;
                 }
             """)
             icon_label.setToolTip("Excel")
@@ -64,35 +66,37 @@ class FileListItemWidget(QWidget):
                     color: white;
                     font-size: 9px;
                     font-weight: bold;
-                    padding: 2px 4px;
-                    border-radius: 2px;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    border: none;
                 }
             """)
 
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFixedSize(40, 20)  # Увеличен размер для лучшей видимости
+        icon_label.setFixedHeight(20)
         layout.addWidget(icon_label, 0, Qt.AlignVCenter)
 
         # Имя файла (кликабельное)
         name_label = QLabel(f'<a href="{self.public_link}">{self.file_name}</a>')
         name_label.setOpenExternalLinks(True)
         name_label.setCursor(QCursor(Qt.PointingHandCursor))
-        name_label.setStyleSheet("QLabel { color: #3498DB; font-size: 10px; }")
-        name_label.setFixedHeight(28)  # Фиксированная высота для выравнивания
+        name_label.setStyleSheet("QLabel { color: #ffd93c; font-size: 10px; border: none; }")
         layout.addWidget(name_label, 1, Qt.AlignVCenter)
 
         # Кнопка удаления (только если есть право на удаление)
         if self.can_delete:
-            delete_btn = QPushButton('X')
+            delete_btn = IconLoader.create_icon_button('delete-red', '', 'Удалить файл', icon_size=12)
             delete_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: transparent;
+                    background-color: #FFFFFF;
                     color: #E74C3C;
                     border: 1px solid #E74C3C;
-                    border-radius: 3px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    padding: 0px 4px;
+                    border-radius: 6px;
+                    padding: 0px;
+                    min-height: 24px;
+                    max-height: 24px;
+                    min-width: 24px;
+                    max-width: 24px;
                 }
                 QPushButton:hover {
                     background-color: #FFE5E5;
@@ -100,21 +104,21 @@ class FileListItemWidget(QWidget):
                     border: 1px solid #C0392B;
                 }
             """)
-            delete_btn.setFixedSize(28, 28)
-            delete_btn.setToolTip('Удалить файл')
+            delete_btn.setFixedSize(24, 24)
             delete_btn.setCursor(QCursor(Qt.PointingHandCursor))
             delete_btn.clicked.connect(lambda: self.delete_requested.emit(self.file_id))
             layout.addWidget(delete_btn, 0, Qt.AlignVCenter)
 
         self.setLayout(layout)
+        self.setMinimumHeight(28)
+        self.setMaximumHeight(28)
         self.setStyleSheet("""
-            QWidget {
+            FileListItemWidget {
                 background-color: #F8F9FA;
                 border: 1px solid #E0E0E0;
-                border-radius: 3px;
-                min-height: 28px;
+                border-radius: 6px;
             }
-            QWidget:hover {
+            FileListItemWidget:hover {
                 background-color: #E9ECEF;
             }
         """)
@@ -157,9 +161,11 @@ class FileListWidget(QWidget):
                 QPushButton {
                     background-color: #95a5a6;
                     color: white;
-                    padding: 5px 10px;
-                    border-radius: 3px;
+                    padding: 0px 12px;
+                    border-radius: 6px;
                     font-size: 10px;
+                    min-height: 28px;
+                    max-height: 28px;
                 }
                 QPushButton:hover { background-color: #7f8c8d; }
             """)
@@ -174,7 +180,8 @@ class FileListWidget(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
         self.scroll_area.setMinimumHeight(50)
-        self.scroll_area.setMaximumHeight(200)
+        # ИСПРАВЛЕНИЕ 25.01.2026: Убрано ограничение максимальной высоты
+        # Высота будет динамически рассчитываться в методе _update_height()
 
         self.files_container = QWidget()
         self.files_layout = QVBoxLayout()
@@ -230,6 +237,20 @@ class FileListWidget(QWidget):
             self.file_items.append(item)
 
         self.files_layout.addStretch()
+
+        # ИСПРАВЛЕНИЕ 25.01.2026: Динамическая высота в зависимости от количества файлов
+        self._update_height()
+
+    def _update_height(self):
+        """Динамический расчет высоты в зависимости от количества файлов"""
+        file_count = len(self.file_items)
+        if file_count == 0:
+            # Минимальная высота для пустого списка
+            self.scroll_area.setFixedHeight(50)
+        else:
+            # 31px на каждый файл (28px высота + 3px spacing) + отступы, максимум 400px
+            calculated_height = min(31 * file_count + 5, 400)
+            self.scroll_area.setFixedHeight(calculated_height)
 
     def clear_files(self):
         """Очистка списка файлов"""

@@ -1,0 +1,21 @@
+[Unit]
+Description=Interior Studio CRM API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/interior_studio
+Environment="PATH=/usr/bin:/usr/local/bin"
+ExecStart=/usr/bin/python3 -m uvicorn server.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/interior_studio.log
+StandardError=append:/var/log/interior_studio_error.log
+
+# Настройки безопасности
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

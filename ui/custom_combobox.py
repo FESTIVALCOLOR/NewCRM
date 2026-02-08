@@ -17,23 +17,7 @@ class CustomComboBox(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
-
-        # Формируем путь к иконке arrow-down-circle.svg (как в calendar_styles.py)
-        icons_path = resource_path('resources/icons').replace('\\', '/')
-        arrow_icon_path = f"{icons_path}/arrow-down-circle.svg"
-
-        # Устанавливаем стиль с иконкой через url() (работает в dev и exe с resource_path)
-        self.setStyleSheet(f"""
-            QComboBox::drop-down {{
-                border: none;
-                width: 24px;
-            }}
-            QComboBox::down-arrow {{
-                image: url({arrow_icon_path});
-                width: 14px;
-                height: 14px;
-            }}
-        """)
+        # Не переопределяем стили - используем unified_styles.py
 
     def wheelEvent(self, event):
         """

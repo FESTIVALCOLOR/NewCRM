@@ -15,9 +15,9 @@ from utils.icon_loader import IconLoader
 from ui.custom_title_bar import CustomTitleBar  # ← ДОБАВЛЕНО
 from ui.custom_message_box import CustomMessageBox, CustomQuestionBox  # ← ДОБАВЛЕНО
 from ui.custom_combobox import CustomComboBox
-from utils.calendar_styles import CALENDAR_STYLE, add_today_button_to_dateedit
+from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.yandex_disk import YandexDiskManager
-from utils.table_settings import TableSettings  # ← ДОБАВЛЕНО
+from utils.table_settings import TableSettings, ProportionalResizeTable
 import json
 import os
 import threading
@@ -33,8 +33,9 @@ class FormattedMoneyInput(QLineEdit):
         
         self.setStyleSheet('''
             QLineEdit {
-                padding: 5px;
-                padding-right: 30px;
+                padding: 2px 8px;
+                min-height: 24px;
+                max-height: 24px;
             }
         ''')
     
@@ -82,8 +83,9 @@ class FormattedAreaInput(QLineEdit):
         
         self.setStyleSheet('''
             QLineEdit {
-                padding: 5px;
-                padding-right: 35px;
+                padding: 2px 8px;
+                min-height: 24px;
+                max-height: 24px;
             }
         ''')
     
@@ -133,8 +135,9 @@ class FormattedPeriodInput(QLineEdit):
         
         self.setStyleSheet('''
             QLineEdit {
-                padding: 5px;
-                padding-right: 35px;
+                padding: 2px 8px;
+                min-height: 24px;
+                max-height: 24px;
             }
         ''')
     
@@ -181,93 +184,131 @@ class ContractsTab(QWidget):
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
+        # Получаем offline_manager от родителя (main_window)
+        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
         self.init_ui()
-        self.load_contracts()
+        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
+        QTimer.singleShot(0, self.load_contracts)
         
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setSpacing(5)
-        layout.setContentsMargins(5, 5, 5, 5)
-        
+        layout.setContentsMargins(0, 5, 0, 5)
+
         # Заголовок и кнопки
         header_layout = QHBoxLayout()
-        title = QLabel(' Управление договорами ')
-        title.setStyleSheet('font-size: 14px; font-weight: bold; color: #333333; padding: 5px;')
+        header_layout.setContentsMargins(0, 0, 0, 0)  # Убираем внутренние отступы
+        title = QLabel('Управление договорами')
+        title.setStyleSheet('font-size: 13px; font-weight: bold; color: #333333;')
         header_layout.addWidget(title)
         header_layout.addStretch()
-        
+
         # ========== КНОПКА ПОИСКА (SVG) ==========
-        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск договоров', icon_size=16)
+        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск договоров', icon_size=12)
         search_btn.clicked.connect(self.open_search)
         search_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: #333;
-                background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
-                margin-right: 10px;
             }
             QPushButton:hover {
-                background-color: #E8F4F8;
-                border-color: #3498DB;
+                background-color: #fafafa;
+                border-color: #c0c0c0;
             }
         ''')
         header_layout.addWidget(search_btn)
         # =========================================
 
         # ========== КНОПКА СБРОСА ФИЛЬТРОВ (SVG) ==========
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить фильтры', 'Сбросить фильтры и показать все договоры', icon_size=16)
+        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры', icon_size=12)
         reset_btn.clicked.connect(self.reset_filters)
         reset_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: #333;
-                background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
-                margin-right: 10px;
             }
             QPushButton:hover {
-                background-color: #FFF3E0;
-                border-color: #FF9800;
+                background-color: #fafafa;
+                border-color: #c0c0c0;
             }
         ''')
         header_layout.addWidget(reset_btn)
         # ================================================
 
-        # ========== КНОПКА ДОБАВЛЕНИЯ (SVG) ==========
-        add_btn = IconLoader.create_icon_button('add', 'Добавить договор', 'Создать новый договор', icon_size=16)
-        add_btn.clicked.connect(self.add_contract)
-        add_btn.setStyleSheet('''
+        # ========== КНОПКА ОБНОВЛЕНИЯ ДАННЫХ ==========
+        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить БД', 'Обновить данные с сервера', icon_size=12)
+        refresh_btn.clicked.connect(self.load_contracts)
+        refresh_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: white;
-                background-color: #27AE60;
-                border: none;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background-color: #e3f2fd;
+                border-color: #2196F3;
+            }
+        ''')
+        header_layout.addWidget(refresh_btn)
+        # ================================================
+
+        # ========== КНОПКА ДОБАВЛЕНИЯ (SVG) ==========
+        add_btn = IconLoader.create_icon_button('add', 'Добавить', 'Создать новый договор', icon_size=12)
+        add_btn.clicked.connect(self.add_contract)
+        add_btn.setStyleSheet('''
+            QPushButton {
+                padding: 2px 8px;
+                font-weight: 600;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffd93c;
+                border: 1px solid #e6c236;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #ffdb4d;
+                border-color: #d9b530;
             }
         ''')
         header_layout.addWidget(add_btn)
         # =============================================
-        
+
         layout.addLayout(header_layout)
-        
-        # Таблица договоров
-        self.contracts_table = QTableWidget()
+
+        # Таблица договоров - используем ProportionalResizeTable для растягивания + ручного изменения
+        self.contracts_table = ProportionalResizeTable()
         self.contracts_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
             }
             QTableCornerButton::section {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                background-color: #fafafa;
+                border: none;
+                border-bottom: 1px solid #e6e6e6;
+                border-right: 1px solid #f0f0f0;
+                border-top-left-radius: 8px;
+            }
+            QHeaderView::section:first {
+                border-top-left-radius: 8px;
+            }
+            QHeaderView::section:last {
+                border-top-right-radius: 8px;
             }
         """)
         self.contracts_table.setColumnCount(11)
@@ -275,35 +316,24 @@ class ContractsTab(QWidget):
             ' № ', ' Дата ', ' Адрес объекта ', ' S, м2 ', ' Город ',
             'Тип агента', 'Тип проекта', 'Сумма', 'Клиент', 'Статус', 'Действия'
         ])
-        
-        header = self.contracts_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        self.contracts_table.setColumnWidth(0, 30)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(1, 80)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(3, 80)
-        header.setSectionResizeMode(4, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(4, 80)
-        header.setSectionResizeMode(5, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(5, 100)
-        header.setSectionResizeMode(6, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(6, 130)
-        header.setSectionResizeMode(7, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(7, 90)
-        header.setSectionResizeMode(8, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(8, 210)
-        header.setSectionResizeMode(9, QHeaderView.Interactive)
-        self.contracts_table.setColumnWidth(9, 100)
-        header.setSectionResizeMode(10, QHeaderView.Fixed)
-        self.contracts_table.setColumnWidth(10, 110)
-        header.setMinimumSectionSize(60)
-        
+
+        # Настройка пропорционального изменения размера:
+        # - Колонки 0-9 растягиваются пропорционально И можно менять вручную
+        # - Колонка 10 (Действия) фиксирована 110px
+        self.contracts_table.setup_proportional_resize(
+            column_ratios=[0.06, 0.08, 0.18, 0.06, 0.10, 0.10, 0.10, 0.10, 0.12, 0.10],  # Пропорции для колонок 0-9
+            fixed_columns={10: 110},  # Действия = 110px фиксированно
+            min_width=50
+        )
+
+        # Запрещаем изменение высоты строк
+        self.contracts_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.contracts_table.verticalHeader().setDefaultSectionSize(34)
+
         self.contracts_table.setSortingEnabled(True)
         # Разрешаем выделение отдельных ячеек для копирования
         self.contracts_table.setSelectionMode(QTableWidget.ExtendedSelection)
-        self.contracts_table.setSelectionBehavior(QTableWidget.SelectItems)
+        self.contracts_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.contracts_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.contracts_table.setAlternatingRowColors(True)
 
@@ -320,28 +350,37 @@ class ContractsTab(QWidget):
 
     def load_contracts(self):
         """Загрузка списка договоров"""
+        print("[DB REFRESH] Начало обновления данных договоров...")
         self.contracts_table.setSortingEnabled(False)
 
         # Загружаем договоры из API или локальной БД
-        if self.api_client:
+        if self.api_client and self.api_client.is_online:
             # Многопользовательский режим - загружаем из API
-            contracts = self.api_client.get_contracts()
-            # Также нам нужны клиенты для отображения имен
-            clients_dict = {}
             try:
-                clients = self.api_client.get_clients()
-                clients_dict = {c['id']: c for c in clients}
-            except:
-                pass
+                contracts = self.api_client.get_contracts()
+                print(f"[DB REFRESH] Загружено {len(contracts)} договоров из API")
+                # Также нам нужны клиенты для отображения имен
+                clients_dict = {}
+                try:
+                    clients = self.api_client.get_clients()
+                    clients_dict = {c['id']: c for c in clients}
+                except:
+                    pass
+            except Exception as e:
+                print(f"[WARN] API error, using local DB: {e}")
+                contracts = self.db.get_all_contracts()
+                print(f"[DB REFRESH] Загружено {len(contracts)} договоров из локальной БД (fallback)")
+                clients_dict = {}
         else:
             # Локальный режим - загружаем из локальной БД
             contracts = self.db.get_all_contracts()
+            print(f"[DB REFRESH] Загружено {len(contracts)} договоров из локальной БД")
             clients_dict = {}
 
         self.contracts_table.setRowCount(len(contracts))
 
         for row, contract in enumerate(contracts):
-            self.contracts_table.setRowHeight(row, 30)
+            self.contracts_table.setRowHeight(row, 34)
 
             # Получаем имя клиента
             client_id = contract.get('client_id')
@@ -417,18 +456,19 @@ class ContractsTab(QWidget):
             # ========== КНОПКИ ДЕЙСТВИЙ (SVG) ==========
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
-            actions_layout.setContentsMargins(0, 0, 0, 0)
-            actions_layout.setSpacing(4)
+            actions_layout.setContentsMargins(2, 0, 2, 0)
+            actions_layout.setSpacing(1)
 
             # Иконка комментария (желтый восклицательный знак)
             if contract.get('comments') and contract['comments'].strip():
-                comment_btn = IconLoader.create_icon_button('warning', '', f"Комментарий: {contract['comments']}", icon_size=14)
-                comment_btn.setFixedSize(24, 24)
+                comment_btn = IconLoader.create_icon_button('warning', '', f"Комментарий: {contract['comments']}", icon_size=12)
+                comment_btn.setFixedSize(20, 20)
                 comment_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #FFF9C4;
                         border: 1px solid #FFD54F;
-                        border-radius: 3px;
+                        border-radius: 4px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #FFE082;
@@ -437,27 +477,29 @@ class ContractsTab(QWidget):
                 comment_btn.setEnabled(False)  # Только для отображения
                 actions_layout.addWidget(comment_btn)
 
-            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=14)
-            view_btn.setFixedSize(24, 24)
+            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=12)
+            view_btn.setFixedSize(20, 20)
             view_btn.setStyleSheet('''
                 QPushButton {
-                    background-color: #F8F9FA;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 3px;
+                    background-color: #f5f5f5;
+                    border: 1px solid #d9d9d9;
+                    border-radius: 4px;
+                    padding: 0px;
                 }
                 QPushButton:hover {
-                    background-color: #E8F4F8;
+                    background-color: #d9d9d9;
                 }
             ''')
             view_btn.clicked.connect(lambda checked, c=contract: self.view_contract(c))
 
-            edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=14)
-            edit_btn.setFixedSize(24, 24)
+            edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
+            edit_btn.setFixedSize(20, 20)
             edit_btn.setStyleSheet('''
                 QPushButton {
                     background-color: #d4e4bc;
                     border: 1px solid #c0d4a8;
-                    border-radius: 3px;
+                    border-radius: 4px;
+                    padding: 0px;
                 }
                 QPushButton:hover {
                     background-color: #c0d4a8;
@@ -469,13 +511,14 @@ class ContractsTab(QWidget):
             actions_layout.addWidget(edit_btn)
 
             if self.employee.get('position') in ['Руководитель студии', 'Старший менеджер проектов']:
-                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=14)
-                delete_btn.setFixedSize(24, 24)
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=12)
+                delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #FFE6E6;
                         border: 1px solid #FFCCCC;
-                        border-radius: 3px;
+                        border-radius: 4px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #E74C3C;
@@ -514,8 +557,7 @@ class ContractsTab(QWidget):
             self.load_contracts()
 
     def delete_contract(self, contract_data):
-        """Удаление договора"""
-        # ========== ЗАМЕНИЛИ QMessageBox ==========
+        """Удаление договора - ИСПРАВЛЕНО 01.02.2026: добавлен fallback и offline поддержка"""
         reply = CustomQuestionBox(
             self,
             'Подтверждение удаления',
@@ -530,25 +572,64 @@ class ContractsTab(QWidget):
             try:
                 contract_id = contract_data['id']
 
+                # Удаляем папку на Яндекс.Диске (если есть)
+                yandex_folder_path = contract_data.get('yandex_folder_path')
+                yandex_delete_queued = False
+                if yandex_folder_path:
+                    try:
+                        from utils.yandex_disk import YandexDiskManager
+                        from config import YANDEX_DISK_TOKEN
+                        yandex_disk = YandexDiskManager(YANDEX_DISK_TOKEN)
+                        if yandex_disk.delete_folder(yandex_folder_path):
+                            print(f"[OK] Папка на Яндекс.Диске удалена: {yandex_folder_path}")
+                        else:
+                            print(f"[WARNING] Не удалось удалить папку на Яндекс.Диске: {yandex_folder_path}")
+                            # ИСПРАВЛЕНИЕ 01.02.2026: Добавляем в offline очередь
+                            if hasattr(self, 'offline_manager') and self.offline_manager:
+                                from utils.offline_manager import OperationType
+                                self.offline_manager.queue_operation(
+                                    OperationType.DELETE, 'yandex_folder', contract_id,
+                                    {'path': yandex_folder_path}
+                                )
+                                yandex_delete_queued = True
+                    except Exception as e:
+                        print(f"[WARNING] Ошибка удаления папки на Яндекс.Диске: {e}")
+
                 if self.api_client:
-                    # Многопользовательский режим - удаляем через API
-                    self.api_client.delete_contract(contract_id)
+                    try:
+                        # Многопользовательский режим - удаляем через API
+                        self.api_client.delete_contract(contract_id)
+                        print(f"[API] Договор удален: ID={contract_id}")
+                    except Exception as api_error:
+                        print(f"[WARN] Ошибка API удаления договора: {api_error}, fallback на локальную БД")
+                        # ИСПРАВЛЕНИЕ 01.02.2026: Fallback на локальную БД
+                        crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
+                        self.db.delete_order(contract_id, crm_card_id)
+                        # Добавляем в offline очередь
+                        if hasattr(self, 'offline_manager') and self.offline_manager:
+                            from utils.offline_manager import OperationType
+                            self.offline_manager.queue_operation(
+                                OperationType.DELETE, 'contract', contract_id, {}
+                            )
+                            CustomMessageBox(self, 'Offline режим',
+                                'Договор удален локально.\nИзменения будут синхронизированы при восстановлении подключения.',
+                                'info').exec_()
                 else:
                     # Локальный режим - удаляем из локальной БД
                     crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
                     self.db.delete_order(contract_id, crm_card_id)
-                
+
                 CustomMessageBox(
-                    self, 
-                    'Успех', 
+                    self,
+                    'Успех',
                     'Договор успешно удален из системы',
                     'success'
                 ).exec_()
-                
+
                 self.load_contracts()
-                
+
             except Exception as e:
-                print(f" Ошибка удаления договора: {e}")
+                print(f"[ERROR] Ошибка удаления договора: {e}")
                 import traceback
                 traceback.print_exc()
                 CustomMessageBox(
@@ -611,59 +692,68 @@ class ContractsTab(QWidget):
     def reset_filters(self):
         """Сброс всех фильтров и перезагрузка всех договоров"""
         self.load_contracts()
-        CustomMessageBox(
-            self,
-            'Сброс фильтров',
-            'Фильтры сброшены, показаны все договоры',
-            'success'
-        ).exec_()
 
     def apply_search(self, params):
         """Применение фильтров поиска"""
         from PyQt5.QtCore import QDate
-        
+
         self.contracts_table.setSortingEnabled(False)
-        
-        contracts = self.db.get_all_contracts()
-        
+
+        # Загружаем данные через API или локальную БД
+        if self.api_client:
+            contracts = self.api_client.get_contracts(skip=0, limit=10000)
+            clients = self.api_client.get_clients(skip=0, limit=10000)
+            clients_dict = {c['id']: c for c in clients}
+        else:
+            contracts = self.db.get_all_contracts()
+            clients_dict = None
+
+        def get_client(client_id):
+            if clients_dict:
+                return clients_dict.get(client_id)
+            return self.db.get_client_by_id(client_id)
+
         filtered_contracts = []
         for contract in contracts:
             if params.get('contract_number'):
                 if params['contract_number'].lower() not in contract.get('contract_number', '').lower():
                     continue
-            
+
             if params.get('address'):
                 if params['address'].lower() not in contract.get('address', '').lower():
                     continue
-            
+
             if params.get('client_name'):
-                client = self.db.get_client_by_id(contract['client_id'])
-                client_name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
-                if params['client_name'].lower() not in client_name.lower():
+                client = get_client(contract['client_id'])
+                if client:
+                    client_name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
+                    if params['client_name'].lower() not in client_name.lower():
+                        continue
+                else:
                     continue
-            
+
             if params.get('date_from'):
                 contract_date = QDate.fromString(contract.get('contract_date', ''), 'yyyy-MM-dd')
                 if contract_date < params['date_from']:
                     continue
-            
+
             if params.get('date_to'):
                 contract_date = QDate.fromString(contract.get('contract_date', ''), 'yyyy-MM-dd')
                 if contract_date > params['date_to']:
                     continue
-            
+
             filtered_contracts.append(contract)
-        
+
         self.contracts_table.setRowCount(len(filtered_contracts))
-        
+
         for row, contract in enumerate(filtered_contracts):
-            self.contracts_table.setRowHeight(row, 30)
-            
-            client = self.db.get_client_by_id(contract['client_id'])
-            client_name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
-            
+            self.contracts_table.setRowHeight(row, 32)
+
+            client = get_client(contract['client_id'])
+            client_name = client['full_name'] if client and client['client_type'] == 'Физическое лицо' else (client['organization_name'] if client else '')
+
             self.contracts_table.setItem(row, 0, QTableWidgetItem(contract['contract_number']))
-            
+
             date_str = contract.get('contract_date', '')
             if date_str:
                 try:
@@ -673,7 +763,7 @@ class ContractsTab(QWidget):
                     formatted_date = date_str
             else:
                 formatted_date = ''
-            
+
             self.contracts_table.setItem(row, 1, QTableWidgetItem(formatted_date))
             self.contracts_table.setItem(row, 2, QTableWidgetItem(contract.get('address', '')))
             self.contracts_table.setItem(row, 3, QTableWidgetItem(str(contract.get('area', 0))))
@@ -686,6 +776,7 @@ class ContractsTab(QWidget):
             from PyQt5.QtGui import QColor, QBrush
 
             if agent_type:
+                # Цвета агентов хранятся только локально
                 agent_color = self.db.get_agent_color(agent_type)
                 if agent_color:
                     # Устанавливаем цветной фон
@@ -721,21 +812,22 @@ class ContractsTab(QWidget):
                     status_item.setToolTip(f"Причина: {contract['termination_reason']}")
             
             self.contracts_table.setItem(row, 9, status_item)
-            
+
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
-            actions_layout.setContentsMargins(0, 0, 0, 0)
-            actions_layout.setSpacing(4)
+            actions_layout.setContentsMargins(2, 0, 2, 0)
+            actions_layout.setSpacing(2)
 
             # Иконка комментария (желтый восклицательный знак)
             if contract.get('comments') and contract['comments'].strip():
-                comment_btn = IconLoader.create_icon_button('warning', '', f"Комментарий: {contract['comments']}", icon_size=14)
-                comment_btn.setFixedSize(24, 24)
+                comment_btn = IconLoader.create_icon_button('warning', '', f"Комментарий: {contract['comments']}", icon_size=12)
+                comment_btn.setFixedSize(20, 20)
                 comment_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #FFF9C4;
                         border: 1px solid #FFD54F;
-                        border-radius: 3px;
+                        border-radius: 4px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #FFE082;
@@ -744,27 +836,29 @@ class ContractsTab(QWidget):
                 comment_btn.setEnabled(False)  # Только для отображения
                 actions_layout.addWidget(comment_btn)
 
-            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=14)
-            view_btn.setFixedSize(24, 24)
+            view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=12)
+            view_btn.setFixedSize(20, 20)
             view_btn.setStyleSheet('''
                 QPushButton {
-                    background-color: #F8F9FA;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 3px;
+                    background-color: #f5f5f5;
+                    border: 1px solid #d9d9d9;
+                    border-radius: 4px;
+                    padding: 0px;
                 }
                 QPushButton:hover {
-                    background-color: #E8F4F8;
+                    background-color: #d9d9d9;
                 }
             ''')
             view_btn.clicked.connect(lambda checked, c=contract: self.view_contract(c))
 
-            edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=14)
-            edit_btn.setFixedSize(24, 24)
+            edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
+            edit_btn.setFixedSize(20, 20)
             edit_btn.setStyleSheet('''
                 QPushButton {
                     background-color: #d4e4bc;
                     border: 1px solid #c0d4a8;
-                    border-radius: 3px;
+                    border-radius: 4px;
+                    padding: 0px;
                 }
                 QPushButton:hover {
                     background-color: #c0d4a8;
@@ -776,13 +870,14 @@ class ContractsTab(QWidget):
             actions_layout.addWidget(edit_btn)
 
             if self.employee.get('position') in ['Руководитель студии', 'Старший менеджер проектов']:
-                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=14)
-                delete_btn.setFixedSize(24, 24)
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=12)
+                delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #FFE6E6;
                         border: 1px solid #FFCCCC;
-                        border-radius: 3px;
+                        border-radius: 4px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #E74C3C;
@@ -793,9 +888,23 @@ class ContractsTab(QWidget):
 
             actions_widget.setLayout(actions_layout)
             self.contracts_table.setCellWidget(row, 10, actions_widget)
-        
+
         self.contracts_table.setSortingEnabled(True)
-                    
+
+    def on_sync_update(self, updated_contracts):
+        """
+        Обработчик обновления данных от SyncManager.
+        Вызывается при изменении договоров другими пользователями.
+        """
+        try:
+            print(f"[SYNC] Получено обновление договоров: {len(updated_contracts)} записей")
+            # Перезагружаем таблицу договоров
+            self.load_contracts()
+        except Exception as e:
+            print(f"[ERROR] Ошибка синхронизации договоров: {e}")
+            import traceback
+            traceback.print_exc()
+
 
 class ContractDialog(QDialog):
     # Сигналы для межпоточного взаимодействия при загрузке файлов
@@ -812,7 +921,16 @@ class ContractDialog(QDialog):
         self.db = DatabaseManager()
         # Получаем api_client от родителя, если он есть
         self.api_client = getattr(parent, 'api_client', None)
+        # Получаем offline_manager для работы в offline режиме
+        self.offline_manager = getattr(parent, 'offline_manager', None)
         self._uploading_files = 0  # Счётчик загружаемых файлов
+
+        # Инициализация YandexDiskManager
+        try:
+            self.yandex_disk = YandexDiskManager(YANDEX_DISK_TOKEN)
+        except Exception as e:
+            print(f"[WARNING] Не удалось инициализировать YandexDiskManager: {e}")
+            self.yandex_disk = None
 
         # Подключаем сигналы к обработчикам
         self.contract_file_upload_completed.connect(self._on_contract_file_uploaded)
@@ -832,27 +950,27 @@ class ContractDialog(QDialog):
     
     def init_ui(self):
         title = 'Просмотр договора' if self.view_only else ('Добавление договора' if not self.contract_data else 'Редактирование договора')
-        
+
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
         title_bar = CustomTitleBar(self, title, simple_mode=True)
         title_bar.setStyleSheet("""
@@ -871,21 +989,19 @@ class ContractDialog(QDialog):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: #FFFFFF;
-                border: none;
-                border-bottom-left-radius: 10px;
-                border-bottom-right-radius: 10px;
-            }
-        """)
+
         
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
-        content_widget.setStyleSheet("background-color: #FFFFFF;")
-        
+        content_widget.setStyleSheet("""
+            QWidget#dialogContent {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)        
         layout = QVBoxLayout()
-        layout.setSpacing(12)
+        layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
         
         # Выбор клиента
@@ -896,8 +1012,18 @@ class ContractDialog(QDialog):
         self.client_combo = CustomComboBox()
         self.client_combo.setEditable(True)
         self.client_combo.setInsertPolicy(QComboBox.NoInsert)
+        # ИСПРАВЛЕНИЕ 07.02.2026: Отступы для текста в dropdown (#7)
+        self.client_combo.lineEdit().setStyleSheet("padding-left: 8px; padding-right: 8px;")
 
-        self.all_clients = self.db.get_all_clients()
+        # Загрузка клиентов из API или локальной БД
+        if self.api_client:
+            try:
+                self.all_clients = self.api_client.get_clients()
+            except Exception as e:
+                print(f"[WARNING] Ошибка загрузки клиентов из API: {e}")
+                self.all_clients = self.db.get_all_clients()
+        else:
+            self.all_clients = self.db.get_all_clients()
         for client in self.all_clients:
             name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
             self.client_combo.addItem(f"{name} ({client['phone']})", client['id'])
@@ -908,6 +1034,24 @@ class ContractDialog(QDialog):
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
         self.client_combo.setCompleter(completer)
+
+        # ИСПРАВЛЕНИЕ 06.02.2026: Белый фон для dropdown списка автодополнения
+        completer.popup().setStyleSheet("""
+            QAbstractItemView {
+                background-color: #ffffff;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                padding: 4px;
+                selection-background-color: #fff4d9;
+            }
+            QAbstractItemView::item {
+                padding: 6px 8px;
+                min-height: 28px;
+            }
+            QAbstractItemView::item:hover {
+                background-color: #fafafa;
+            }
+        """)
 
         self.client_combo.lineEdit().setPlaceholderText('Начните вводить имя клиента...')
 
@@ -931,9 +1075,10 @@ class ContractDialog(QDialog):
         self.agent_combo = CustomComboBox()
         self.reload_agents()
         agent_layout.addWidget(self.agent_combo)
-        add_agent_btn = QPushButton('⚙')
-        add_agent_btn.setMaximumWidth(30)
-        add_agent_btn.setStyleSheet('padding: 12px 2px; font-size: 14px;')
+        add_agent_btn = IconLoader.create_icon_button('settings2', '', 'Добавить', icon_size=14)
+        add_agent_btn.setMaximumWidth(28)
+        add_agent_btn.setFixedHeight(28)
+        add_agent_btn.setStyleSheet('padding: 0px 0px; font-size: 14px;')
         add_agent_btn.setToolTip('Управление агентами')
         add_agent_btn.clicked.connect(self.add_agent)
         agent_layout.addWidget(add_agent_btn)
@@ -943,9 +1088,10 @@ class ContractDialog(QDialog):
         self.city_combo = CustomComboBox()
         self.city_combo.addItems(CITIES)
         city_layout.addWidget(self.city_combo)
-        add_city_btn = QPushButton('⚙')
-        add_city_btn.setMaximumWidth(30)
-        add_city_btn.setStyleSheet('padding: 12px 2px; font-size: 14px;')
+        add_city_btn = IconLoader.create_icon_button('settings2', '', 'Добавить', icon_size=14)
+        add_city_btn.setMaximumWidth(28)
+        add_city_btn.setFixedHeight(28)
+        add_city_btn.setStyleSheet('padding: 0px 0px; font-size: 14px;')
         add_city_btn.setToolTip('Управление городами')
         add_city_btn.clicked.connect(self.add_city)
         city_layout.addWidget(add_city_btn)
@@ -960,11 +1106,12 @@ class ContractDialog(QDialog):
         add_today_button_to_dateedit(self.contract_date)
         self.contract_date.setDate(QDate.currentDate())
         self.contract_date.setDisplayFormat('dd.MM.yyyy')
-        self.contract_date.setStyleSheet(CALENDAR_STYLE)  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
+
         main_layout_form.addRow('Дата заключения:', self.contract_date)
-        
+
         self.address = QLineEdit()
         self.address.setPlaceholderText('г. Москва, ул. Ленина, д.1')
+
         main_layout_form.addRow('Адрес объекта:', self.address)
 
         self.area = FormattedAreaInput()
@@ -1001,14 +1148,14 @@ class ContractDialog(QDialog):
         self.contract_file_label.setStyleSheet('''
             QLabel {
                 background-color: #F8F9FA;
-                padding: 8px 12px;
+                padding: 5px 12px;
                 border: 1px solid #E0E0E0;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 11px;
-                max-width: 400px;
+                min-height: 16px;
             }
             QLabel a {
-                color: #3498DB;
+                color: #ffd93c;
                 text-decoration: none;
             }
             QLabel a:hover {
@@ -1017,7 +1164,7 @@ class ContractDialog(QDialog):
             }
         ''')
         self.contract_file_label.setWordWrap(False)
-        self.contract_file_label.setMaximumWidth(420)
+        self.contract_file_label.setFixedHeight(28)
         self.contract_file_label.setOpenExternalLinks(True)
         self.contract_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         # Обрезаем длинный текст с многоточием
@@ -1028,20 +1175,20 @@ class ContractDialog(QDialog):
         self.contract_file_label.mousePressEvent = lambda e: self.open_contract_file()
         self.contract_file_path = None  # Хранение пути к файлу
 
-        self.contract_upload_btn = QPushButton('Загрузить PDF')
-        self.contract_upload_btn.setFixedWidth(120)
+        self.contract_upload_btn = IconLoader.create_icon_button('download', '', 'Загрузить PDF', icon_size=14)
+        self.contract_upload_btn.setFixedSize(28, 28)
         self.contract_upload_btn.clicked.connect(lambda: self.upload_contract_file('individual'))
         self.contract_upload_btn.setStyleSheet('''
             QPushButton {
-                background-color: #3498DB;
-                color: white;
+                background-color: #ffd93c;
+                color: #333333;
                 border: none;
-                padding: 12px 12px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 11px;
+                padding: 0px 4px; 
             }
             QPushButton:hover {
-                background-color: #2980B9;
+                background-color: #f0c929;
             }
             QPushButton:disabled {
                 background-color: #BDC3C7;
@@ -1051,14 +1198,16 @@ class ContractDialog(QDialog):
 
         # Кнопка удаления файла договора
         self.contract_file_delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить файл', icon_size=14)
-        self.contract_file_delete_btn.setFixedSize(36, 36)
+        self.contract_file_delete_btn.setFixedSize(28, 28)
+        self.contract_file_delete_btn.setToolTip('Удалить файл')
         self.contract_file_delete_btn.clicked.connect(self.delete_contract_file)
         self.contract_file_delete_btn.setStyleSheet('''
             QPushButton {
                 background-color: #E74C3C;
                 color: white;
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
+                padding: 0px 4px; 
             }
             QPushButton:hover {
                 background-color: #C0392B;
@@ -1067,8 +1216,8 @@ class ContractDialog(QDialog):
         self.contract_file_delete_btn.setVisible(False)  # Скрыта по умолчанию
 
         contract_file_layout.addWidget(self.contract_file_label, 1)
-        contract_file_layout.addWidget(self.contract_upload_btn)
-        contract_file_layout.addWidget(self.contract_file_delete_btn)
+        contract_file_layout.addWidget(self.contract_upload_btn, 0)
+        contract_file_layout.addWidget(self.contract_file_delete_btn, 0)
         individual_layout.addRow('Файл договора:', contract_file_layout)
 
         self.individual_group.setLayout(individual_layout)
@@ -1090,14 +1239,14 @@ class ContractDialog(QDialog):
         self.template_contract_file_label.setStyleSheet('''
             QLabel {
                 background-color: #F8F9FA;
-                padding: 8px 12px;
+                padding: 5px 12px;
                 border: 1px solid #E0E0E0;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 11px;
-                max-width: 400px;
+                min-height: 16px;
             }
             QLabel a {
-                color: #3498DB;
+                color: #ffd93c;
                 text-decoration: none;
             }
             QLabel a:hover {
@@ -1106,7 +1255,7 @@ class ContractDialog(QDialog):
             }
         ''')
         self.template_contract_file_label.setWordWrap(False)
-        self.template_contract_file_label.setMaximumWidth(420)
+        self.template_contract_file_label.setFixedHeight(28)
         self.template_contract_file_label.setOpenExternalLinks(True)
         self.template_contract_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.template_contract_file_label.setTextFormat(Qt.RichText)
@@ -1115,20 +1264,20 @@ class ContractDialog(QDialog):
         self.template_contract_file_label.mousePressEvent = lambda e: self.open_contract_file()
         self.template_contract_file_path = None
 
-        self.template_contract_upload_btn = QPushButton('Загрузить PDF')
-        self.template_contract_upload_btn.setFixedWidth(120)
+        self.template_contract_upload_btn = IconLoader.create_icon_button('download', '', 'Загрузить PDF', icon_size=14)
+        self.template_contract_upload_btn.setFixedSize(28, 28)
         self.template_contract_upload_btn.clicked.connect(lambda: self.upload_contract_file('template'))
         self.template_contract_upload_btn.setStyleSheet('''
             QPushButton {
-                background-color: #3498DB;
-                color: white;
+                background-color: #ffd93c;
+                color: #333333;
                 border: none;
-                padding: 12px 12px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 11px;
+                padding: 0px 4px; 
             }
             QPushButton:hover {
-                background-color: #2980B9;
+                background-color: #f0c929;
             }
             QPushButton:disabled {
                 background-color: #BDC3C7;
@@ -1138,14 +1287,16 @@ class ContractDialog(QDialog):
 
         # Кнопка удаления файла договора (шаблонный)
         self.template_contract_file_delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить файл', icon_size=14)
-        self.template_contract_file_delete_btn.setFixedSize(36, 36)
+        self.template_contract_file_delete_btn.setFixedSize(28, 28)
+        self.template_contract_file_delete_btn.setToolTip('Удалить файл')
         self.template_contract_file_delete_btn.clicked.connect(self.delete_contract_file)
         self.template_contract_file_delete_btn.setStyleSheet('''
             QPushButton {
                 background-color: #E74C3C;
                 color: white;
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
+                padding: 0px 4px; 
             }
             QPushButton:hover {
                 background-color: #C0392B;
@@ -1154,15 +1305,15 @@ class ContractDialog(QDialog):
         self.template_contract_file_delete_btn.setVisible(False)  # Скрыта по умолчанию
 
         template_contract_file_layout.addWidget(self.template_contract_file_label, 1)
-        template_contract_file_layout.addWidget(self.template_contract_upload_btn)
-        template_contract_file_layout.addWidget(self.template_contract_file_delete_btn)
+        template_contract_file_layout.addWidget(self.template_contract_upload_btn, 0)
+        template_contract_file_layout.addWidget(self.template_contract_file_delete_btn, 0)
         template_layout.addRow('Файл договора:', template_contract_file_layout)
 
         self.template_group.setLayout(template_layout)
         layout.addWidget(self.template_group)
 
         # Дополнительно
-        common_group = QGroupBox('Дополнительно')
+        common_group = QGroupBox('ТЗ и Комментарий')
         common_layout = QFormLayout()
         common_layout.setSpacing(8)
 
@@ -1174,14 +1325,14 @@ class ContractDialog(QDialog):
         self.tech_task_file_label.setStyleSheet('''
             QLabel {
                 background-color: #F8F9FA;
-                padding: 8px 12px;
+                padding: 5px 12px;
                 border: 1px solid #E0E0E0;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 11px;
-                max-width: 400px;
+                min-height: 16px;
             }
             QLabel a {
-                color: #3498DB;
+                color: #ffd93c;
                 text-decoration: none;
             }
             QLabel a:hover {
@@ -1190,7 +1341,7 @@ class ContractDialog(QDialog):
             }
         ''')
         self.tech_task_file_label.setWordWrap(False)
-        self.tech_task_file_label.setMaximumWidth(420)
+        self.tech_task_file_label.setFixedHeight(28)
         self.tech_task_file_label.setOpenExternalLinks(True)
         self.tech_task_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.tech_task_file_label.setTextFormat(Qt.RichText)
@@ -1199,20 +1350,20 @@ class ContractDialog(QDialog):
         self.tech_task_file_label.mousePressEvent = lambda e: self.open_tech_task_file()
         self.tech_task_file_path = None
 
-        self.tech_task_upload_btn = QPushButton('Загрузить PDF')
-        self.tech_task_upload_btn.setFixedWidth(120)
+        self.tech_task_upload_btn = IconLoader.create_icon_button('download', '', 'Загрузить PDF', icon_size=14)
+        self.tech_task_upload_btn.setFixedSize(28, 28)
         self.tech_task_upload_btn.clicked.connect(self.upload_tech_task_file)
         self.tech_task_upload_btn.setStyleSheet('''
             QPushButton {
-                background-color: #3498DB;
-                color: white;
+                background-color: #ffd93c;
+                color: #333333;
                 border: none;
-                padding: 12px 12px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 11px;
+                padding: 0px 4px; 
             }
             QPushButton:hover {
-                background-color: #2980B9;
+                background-color: #f0c929;
             }
             QPushButton:disabled {
                 background-color: #BDC3C7;
@@ -1222,14 +1373,16 @@ class ContractDialog(QDialog):
 
         # Кнопка удаления файла тех.задания
         self.tech_task_file_delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить файл', icon_size=14)
-        self.tech_task_file_delete_btn.setFixedSize(36, 36)
+        self.tech_task_file_delete_btn.setFixedSize(28, 28)
+        self.tech_task_file_delete_btn.setToolTip('Удалить файл')
         self.tech_task_file_delete_btn.clicked.connect(self.delete_tech_task_file_contracts)
         self.tech_task_file_delete_btn.setStyleSheet('''
             QPushButton {
                 background-color: #E74C3C;
                 color: white;
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
+                padding: 0px 4px; 
             }
             QPushButton:hover {
                 background-color: #C0392B;
@@ -1238,14 +1391,19 @@ class ContractDialog(QDialog):
         self.tech_task_file_delete_btn.setVisible(False)  # Скрыта по умолчанию
 
         tech_task_file_layout.addWidget(self.tech_task_file_label, 1)
-        tech_task_file_layout.addWidget(self.tech_task_upload_btn)
-        tech_task_file_layout.addWidget(self.tech_task_file_delete_btn)
+        tech_task_file_layout.addWidget(self.tech_task_upload_btn, 0)
+        tech_task_file_layout.addWidget(self.tech_task_file_delete_btn, 0)
         common_layout.addRow('Файл тех.задания:', tech_task_file_layout)
 
         self.comments = QTextEdit()
         self.comments.setPlaceholderText('Введите комментарий...')
-        self.comments.setMinimumHeight(80)
-        self.comments.setMaximumHeight(120)
+        self.comments.setStyleSheet('''
+            QTextEdit {
+                padding: 2px 8px;
+                min-height: 50px;
+                max-height: 50px;
+            }
+        ''')
         common_layout.addRow('Комментарий:', self.comments)
 
         common_group.setLayout(common_layout)
@@ -1257,26 +1415,45 @@ class ContractDialog(QDialog):
             buttons_layout.addStretch()
 
             self.save_btn = QPushButton('Сохранить')
+            self.save_btn.setFixedHeight(36)
             self.save_btn.clicked.connect(self.save_contract)
             self.save_btn.setStyleSheet("""
                 QPushButton {
-                    padding: 10px 30px;
+                    background-color: #ffd93c;
+                    color: #333333;
+                    padding: 0px 30px;
                     font-weight: bold;
+                    border-radius: 4px;
+                    border: none;
+                    max-height: 36px;
+                    min-height: 36px;
                 }
+                QPushButton:hover { background-color: #f0c929; }
+                QPushButton:pressed { background-color: #e0b919; }
                 QPushButton:disabled {
-                    background-color: #CCCCCC;
+                    background-color: #d9d9d9;
                     color: #666666;
                 }
             """)
 
             self.cancel_btn = QPushButton('Отмена')
+            self.cancel_btn.setFixedHeight(36)
             self.cancel_btn.clicked.connect(self.reject)
             self.cancel_btn.setStyleSheet("""
                 QPushButton {
-                    padding: 10px 30px;
+                    background-color: #E0E0E0;
+                    color: #333333;
+                    padding: 0px 30px;
+                    border-radius: 4px;
+                    border: none;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
                 }
+                QPushButton:hover { background-color: #D0D0D0; }
+                QPushButton:pressed { background-color: #C0C0C0; }
                 QPushButton:disabled {
-                    background-color: #CCCCCC;
+                    background-color: #d9d9d9;
                     color: #666666;
                 }
             """)
@@ -1288,8 +1465,22 @@ class ContractDialog(QDialog):
         else:
             # ========== РЕЖИМ ПРОСМОТРА ==========
             close_btn = QPushButton('Закрыть')
+            close_btn.setFixedHeight(36)
             close_btn.clicked.connect(self.reject)
-            close_btn.setStyleSheet('padding: 10px 30px; font-weight: bold;')
+            close_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E0E0E0;
+                    color: #333333;
+                    padding: 0px 30px;
+                    border-radius: 4px;
+                    border: none;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #D0D0D0; }
+                QPushButton:pressed { background-color: #C0C0C0; }
+            """)
             layout.addWidget(close_btn)
             # =====================================
         
@@ -1314,24 +1505,41 @@ class ContractDialog(QDialog):
             # Отключаем QTextEdit
             for child in self.findChildren(QTextEdit):
                 child.setReadOnly(True)
-                child.setStyleSheet('QTextEdit { background-color: #F0F0F0; }')  # Серый фон
+                child.setStyleSheet('QTextEdit { background-color: #F0F0F0; padding: 2px 8px; min-height: 50px; max-height: 50px; }')  # Серый фон
 
             # БЛОКИРУЕМ QComboBox (запрещаем открытие списка)
             for child in self.findChildren((QComboBox, CustomComboBox)):
                 child.setEnabled(False)
-                child.setStyleSheet('QComboBox:disabled { background-color: #F0F0F0; color: #666666; }')  # Серый фон
+                child.setStyleSheet('QComboBox:disabled { background-color: #F0F0F0; }')  # Серый фон
 
             # БЛОКИРУЕМ QDateEdit (запрещаем открытие календаря)
             for child in self.findChildren((QDateEdit, CustomDateEdit)):
                 child.setEnabled(False)
-                child.setStyleSheet('QDateEdit:disabled { background-color: #F0F0F0; color: #666666; }')  # Серый фон
+                child.setStyleSheet('QDateEdit:disabled { background-color: #F0F0F0; color: }')  # Серый фон
 
             # СКРЫВАЕМ кнопки загрузки, удаления файлов и настроек (агент/город)
+            # Список кнопок, которые должны быть скрыты в режиме просмотра
+            managed_delete_buttons = [
+                self.contract_file_delete_btn,
+                self.template_contract_file_delete_btn,
+                self.tech_task_file_delete_btn
+            ]
+
             for button in self.findChildren(QPushButton):
                 button_text = button.text()
                 button_tooltip = button.toolTip()
-                # Скрываем кнопки с текстом "Загрузить", "Удалить" или иконкой шестеренки
-                if 'Загрузить' in button_text or 'Удалить' in button_text or button_text == '⚙' or 'Управление' in button_tooltip:
+                tooltip_lower = button_tooltip.strip().lower()
+
+                # Если это одна из кнопок удаления — скрываем БЕЗ УСЛОВИЙ
+                if button in managed_delete_buttons and 'удалить файл' in tooltip_lower:
+                    button.setVisible(False)  # Принудительно скрываем
+                    continue  # Не даём другим правилам её трогать
+
+                # Остальные кнопки — по общим правилам
+                if ('загрузить pdf' in tooltip_lower or
+                    'удалить файл' in tooltip_lower or
+                    button_text == 'Добавить' or
+                    'управление' in button_tooltip.lower()):
                     button.setVisible(False)
         # ==========================================================
 
@@ -1439,7 +1647,7 @@ class ContractDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -1456,7 +1664,7 @@ class ContractDialog(QDialog):
         content = QWidget()
         content.setStyleSheet("background-color: #FFFFFF;")
         content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(20, 20, 20, 20)
+        content_layout.setContentsMargins(20, 20, 20, 10)
         content_layout.setSpacing(15)
 
         # Поле ввода
@@ -1468,13 +1676,15 @@ class ContractDialog(QDialog):
         city_input.setPlaceholderText('Введите название города...')
         city_input.setStyleSheet("""
             QLineEdit {
-                padding: 8px;
-                border: 1px solid #CCCCCC;
-                border-radius: 4px;
+                padding: 6px 8px;
+                border: 1px solid #d9d9d9;
+                border-radius: 6px;
                 font-size: 12px;
+                max-height: 28px;
+                min-height: 28px;
             }
             QLineEdit:focus {
-                border: 1px solid #3498DB;
+                border: 1px solid #ffd93c;
             }
         """)
         content_layout.addWidget(city_input)
@@ -1484,31 +1694,38 @@ class ContractDialog(QDialog):
         buttons_layout.addStretch()
 
         save_btn = QPushButton('Добавить')
+        save_btn.setFixedHeight(36)
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3498DB;
-                color: white;
-                padding: 8px 20px;
-                border-radius: 4px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #2980B9;
-            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
         save_btn.clicked.connect(dialog.accept)
 
         cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(36)
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: #DDDDDD;
-                color: #333;
-                padding: 8px 20px;
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
                 border-radius: 4px;
+                border: none;
+                font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #CCCCCC;
-            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
         cancel_btn.clicked.connect(dialog.reject)
 
@@ -1527,19 +1744,35 @@ class ContractDialog(QDialog):
             if text:
                 self.city_combo.addItem(text)
                 self.city_combo.setCurrentText(text)
-    
+
     def fill_data(self):
         """Заполнение формы данными"""
-        # Загружаем свежие данные из БД, чтобы гарантировать актуальность информации о файлах
+        # ИСПРАВЛЕНИЕ: Загружаем свежие данные из API (приоритет) или локальной БД
         if self.contract_data and self.contract_data.get('id'):
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM contracts WHERE id = ?', (self.contract_data['id'],))
-            fresh_data = cursor.fetchone()
-            conn.close()
-            if fresh_data:
-                # Обновляем contract_data свежими данными из БД
-                self.contract_data = dict(fresh_data)
+            if self.api_client:
+                try:
+                    fresh_data = self.api_client.get_contract(self.contract_data['id'])
+                    if fresh_data:
+                        self.contract_data = fresh_data
+                        print(f"[fill_data] Загружены свежие данные из API для контракта {self.contract_data['id']}")
+                except Exception as e:
+                    print(f"[WARNING] Ошибка загрузки контракта из API: {e}")
+                    # Fallback на локальную БД
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT * FROM contracts WHERE id = ?', (self.contract_data['id'],))
+                    fresh_data = cursor.fetchone()
+                    conn.close()
+                    if fresh_data:
+                        self.contract_data = dict(fresh_data)
+            else:
+                conn = self.db.connect()
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM contracts WHERE id = ?', (self.contract_data['id'],))
+                fresh_data = cursor.fetchone()
+                conn.close()
+                if fresh_data:
+                    self.contract_data = dict(fresh_data)
 
         for i in range(self.client_combo.count()):
             if self.client_combo.itemData(i) == self.contract_data['client_id']:
@@ -1575,7 +1808,7 @@ class ContractDialog(QDialog):
             html_link = f'<a href="{contract_file_link}" title="{file_name}">{truncated_name}</a>'
             self.contract_file_label.setText(html_link)
             # Показываем кнопку удаления
-            self.contract_file_delete_btn.setVisible(True)
+            self.contract_file_delete_btn.setVisible(not self.view_only)
             self.contract_upload_btn.setEnabled(False)  # Деактивируем кнопку загрузки
         else:
             self.contract_file_label.setText('Не загружен')
@@ -1594,7 +1827,7 @@ class ContractDialog(QDialog):
             html_link = f'<a href="{template_file_link}" title="{file_name}">{truncated_name}</a>'
             self.template_contract_file_label.setText(html_link)
             # Показываем кнопку удаления
-            self.template_contract_file_delete_btn.setVisible(True)
+            self.template_contract_file_delete_btn.setVisible(not self.view_only)
             self.template_contract_upload_btn.setEnabled(False)  # Деактивируем кнопку загрузки
         else:
             self.template_contract_file_label.setText('Не загружен')
@@ -1613,7 +1846,7 @@ class ContractDialog(QDialog):
             html_link = f'<a href="{tech_task_link}" title="{file_name}">{truncated_name}</a>'
             self.tech_task_file_label.setText(html_link)
             # Показываем кнопку удаления
-            self.tech_task_file_delete_btn.setVisible(True)
+            self.tech_task_file_delete_btn.setVisible(not self.view_only)
             self.tech_task_upload_btn.setEnabled(False)  # Деактивируем кнопку загрузки
         else:
             self.tech_task_file_label.setText('Не загружен')
@@ -1658,57 +1891,53 @@ class ContractDialog(QDialog):
 
                 # Проверяем файл договора (индивидуальный)
                 if result['contract_file_yandex_path']:
-                    print(f"[DEBUG] Проверяем файл договора: {result['contract_file_yandex_path']}")
                     if not yd.file_exists(result['contract_file_yandex_path']):
                         print(f"[INFO] Файл договора не найден на Яндекс.Диске, удаляем из БД")
                         update_data['contract_file_link'] = ''
                         update_data['contract_file_yandex_path'] = ''
                         update_data['contract_file_name'] = ''
                         needs_update = True
-                    else:
-                        print(f"[DEBUG] Файл договора найден на Яндекс.Диске")
 
                 # Проверяем файл договора (шаблонный)
                 if result['template_contract_file_yandex_path']:
-                    print(f"[DEBUG] Проверяем файл шаблонного договора: {result['template_contract_file_yandex_path']}")
                     if not yd.file_exists(result['template_contract_file_yandex_path']):
                         print(f"[INFO] Файл шаблонного договора не найден на Яндекс.Диске, удаляем из БД")
                         update_data['template_contract_file_link'] = ''
                         update_data['template_contract_file_yandex_path'] = ''
                         update_data['template_contract_file_name'] = ''
                         needs_update = True
-                    else:
-                        print(f"[DEBUG] Файл шаблонного договора найден на Яндекс.Диске")
 
                 # Проверяем тех.задание
                 if result['tech_task_yandex_path']:
-                    print(f"[DEBUG] Проверяем файл ТЗ: {result['tech_task_yandex_path']}")
                     if not yd.file_exists(result['tech_task_yandex_path']):
                         print(f"[INFO] Файл ТЗ не найден на Яндекс.Диске, удаляем из БД")
                         update_data['tech_task_link'] = ''
                         update_data['tech_task_yandex_path'] = ''
                         update_data['tech_task_file_name'] = ''
                         needs_update = True
-                    else:
-                        print(f"[DEBUG] Файл ТЗ найден на Яндекс.Диске")
 
                 # Проверяем замер
                 if result['measurement_yandex_path']:
-                    print(f"[DEBUG] Проверяем файл замера: {result['measurement_yandex_path']}")
                     if not yd.file_exists(result['measurement_yandex_path']):
                         print(f"[INFO] Файл замера не найден на Яндекс.Диске, удаляем из БД")
                         update_data['measurement_image_link'] = ''
                         update_data['measurement_yandex_path'] = ''
                         update_data['measurement_file_name'] = ''
                         needs_update = True
-                    else:
-                        print(f"[DEBUG] Файл замера найден на Яндекс.Диске")
 
                 # Обновляем БД если нужно
                 if needs_update:
-                    for key, value in update_data.items():
-                        cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
-                    conn.commit()
+                    if self.api_client:
+                        # Используем API для обновления
+                        try:
+                            self.api_client.update_contract(contract_id, update_data)
+                        except Exception as e:
+                            print(f"[ERROR] Не удалось обновить через API: {e}")
+                    else:
+                        # Локальный режим - используем прямой SQL
+                        for key, value in update_data.items():
+                            cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
+                        conn.commit()
 
                     # Отправляем сигнал для обновления UI в главном потоке
                     self.files_verification_completed.emit()
@@ -1759,9 +1988,6 @@ class ContractDialog(QDialog):
                 needs_update = False
                 update_data = {}
                 project_type = result['project_type'] if result['project_type'] else 'Индивидуальный'
-
-                print(f"[DEBUG SYNC] Начинаем синхронизацию файлов для договора {contract_id}")
-                print(f"[DEBUG SYNC] Папка на Яндекс.Диске: {yandex_folder_path}")
 
                 # Определяем какие файлы искать в зависимости от типа проекта
                 file_mappings = []
@@ -1822,16 +2048,13 @@ class ContractDialog(QDialog):
                 # Сканируем каждую подпапку
                 for mapping in file_mappings:
                     subfolder_path = f"{yandex_folder_path}/{mapping['subfolder']}"
-                    print(f"[DEBUG SYNC] Проверяем папку: {subfolder_path}")
 
                     # Проверяем существование подпапки
                     if not yd.folder_exists(subfolder_path):
-                        print(f"[DEBUG SYNC] Папка не существует: {subfolder_path}")
                         continue
 
                     # Получаем список файлов в подпапке
                     items = yd.get_folder_contents(subfolder_path)
-                    print(f"[DEBUG SYNC] Найдено файлов в папке: {len(items)}")
 
                     # Ищем файлы с нужными ключевыми словами
                     for item in items:
@@ -1841,8 +2064,6 @@ class ContractDialog(QDialog):
                         file_name = item.get('name')
                         if not file_name:
                             continue
-
-                        print(f"[DEBUG SYNC] Проверяем файл: {file_name}")
 
                         # Получаем расширение файла
                         file_name_lower = file_name.lower()
@@ -1854,7 +2075,6 @@ class ContractDialog(QDialog):
 
                         # Проверяем расширение
                         if not file_extension:
-                            print(f"[DEBUG SYNC] Файл '{file_name}' имеет неподходящее расширение")
                             continue
 
                         # Проверяем, содержит ли имя файла одно из ключевых слов
@@ -1888,15 +2108,21 @@ class ContractDialog(QDialog):
                                 needs_update = True
                                 print(f"[OK SYNC] Файл '{file_name}' добавлен в очередь для синхронизации")
                                 break  # Нашли файл, переходим к следующей подпапке
-                        else:
-                            print(f"[DEBUG SYNC] Файл '{file_name}' не содержит ключевых слов: {mapping['keywords']}")
 
                 # Обновляем БД если нашли новые файлы
                 if needs_update:
                     print(f"[INFO SYNC] Обновляем БД: {update_data}")
-                    for key, value in update_data.items():
-                        cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
-                    conn.commit()
+                    if self.api_client:
+                        # Используем API для обновления
+                        try:
+                            self.api_client.update_contract(contract_id, update_data)
+                        except Exception as e:
+                            print(f"[ERROR] Не удалось обновить через API: {e}")
+                    else:
+                        # Локальный режим - используем прямой SQL
+                        for key, value in update_data.items():
+                            cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
+                        conn.commit()
                     print(f"[OK SYNC] Синхронизация завершена! Добавлено полей: {len(update_data)}")
 
                     # Отправляем сигнал для обновления UI в главном потоке
@@ -1917,27 +2143,26 @@ class ContractDialog(QDialog):
 
     def refresh_file_labels(self):
         """Обновление меток файлов после проверки"""
-        print(f"[DEBUG REFRESH] refresh_file_labels() вызвана")
         if not self.contract_data:
-            print(f"[DEBUG REFRESH] contract_data отсутствует, выход")
             return
 
         contract_id = self.contract_data['id']
-        print(f"[DEBUG REFRESH] Перезагружаем данные для договора {contract_id}")
 
-        # Перезагружаем данные из БД
-        contract_data = self.db.get_contract_by_id(contract_id)
+        # Перезагружаем данные из БД или API
+        if self.api_client:
+            try:
+                contract_data = self.api_client.get_contract(contract_id)
+            except Exception as e:
+                print(f"[WARN] Ошибка загрузки контракта из API: {e}")
+                contract_data = self.db.get_contract_by_id(contract_id)
+        else:
+            contract_data = self.db.get_contract_by_id(contract_id)
         if contract_data:
-            print(f"[DEBUG REFRESH] Получены данные из БД:")
-            print(f"  - tech_task_link: {contract_data.get('tech_task_link', 'None')}")
-            print(f"  - tech_task_file_name: {contract_data.get('tech_task_file_name', 'None')}")
-            print(f"  - contract_file_link: {contract_data.get('contract_file_link', 'None')}")
 
             self.contract_data = contract_data
 
             # Обновляем файл договора (индивидуальный)
             if not contract_data.get('contract_file_link'):
-                print(f"[DEBUG REFRESH] Файл договора отсутствует, устанавливаем 'Не загружен'")
                 self.contract_file_label.setText('Не загружен')
                 self.contract_file_delete_btn.setVisible(False)
                 self.contract_upload_btn.setEnabled(True)  # Активируем кнопку загрузки
@@ -1945,7 +2170,6 @@ class ContractDialog(QDialog):
                 file_name = contract_data.get('contract_file_name', 'Договор.pdf')
                 truncated_name = self.truncate_filename(file_name)
                 html_link = f'<a href="{contract_data["contract_file_link"]}" title="{file_name}">{truncated_name}</a>'
-                print(f"[DEBUG REFRESH] Устанавливаем файл договора: {file_name}")
                 self.contract_file_label.setText(html_link)
                 self.contract_file_delete_btn.setVisible(True)
                 self.contract_upload_btn.setEnabled(False)  # Деактивируем кнопку загрузки
@@ -1965,7 +2189,6 @@ class ContractDialog(QDialog):
 
             # Обновляем тех.задание
             if not contract_data.get('tech_task_link'):
-                print(f"[DEBUG REFRESH] ТЗ отсутствует, устанавливаем 'Не загружен'")
                 self.tech_task_file_label.setText('Не загружен')
                 self.tech_task_file_delete_btn.setVisible(False)
                 self.tech_task_upload_btn.setEnabled(True)  # Активируем кнопку загрузки
@@ -1973,14 +2196,9 @@ class ContractDialog(QDialog):
                 file_name = contract_data.get('tech_task_file_name', 'ТехЗадание.pdf')
                 truncated_name = self.truncate_filename(file_name)
                 html_link = f'<a href="{contract_data["tech_task_link"]}" title="{file_name}">{truncated_name}</a>'
-                print(f"[DEBUG REFRESH] Устанавливаем ТЗ: {file_name}")
                 self.tech_task_file_label.setText(html_link)
                 self.tech_task_file_delete_btn.setVisible(True)
                 self.tech_task_upload_btn.setEnabled(False)  # Деактивируем кнопку загрузки
-
-            print(f"[DEBUG REFRESH] Обновление UI завершено")
-        else:
-            print(f"[DEBUG REFRESH] Не удалось получить данные из БД для договора {contract_id}")
 
     def upload_contract_file(self, project_type):
         """Загрузка файла договора на Яндекс.Диск"""
@@ -2024,7 +2242,7 @@ class ContractDialog(QDialog):
         progress.setStyleSheet("""
             QProgressDialog {
                 background-color: white;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
             QLabel {
@@ -2035,8 +2253,8 @@ class ContractDialog(QDialog):
                 max-width: 380px;
             }
             QProgressBar {
-                border: 1px solid #CCCCCC;
-                border-radius: 3px;
+                border: 1px solid #d9d9d9;
+                border-radius: 6px;
                 text-align: center;
                 background-color: #F0F0F0;
                 height: 20px;
@@ -2053,7 +2271,7 @@ class ContractDialog(QDialog):
                 color: white;
                 border: none;
                 padding: 8px 16px;
-                border-radius: 4px;
+                border-radius: 6px;
                 min-width: 80px;
             }
             QPushButton:hover {
@@ -2089,7 +2307,6 @@ class ContractDialog(QDialog):
                     file_name,
                     progress_callback=update_progress
                 )
-                print(f"[DEBUG] upload_thread (contract_file): result={result}")
 
                 if result:
                     progress.setValue(3)
@@ -2097,26 +2314,22 @@ class ContractDialog(QDialog):
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
                     # Отправляем сигнал в главный поток с полными данными
-                    print(f"[DEBUG] Отправляем сигнал contract_file_upload_completed...")
                     self.contract_file_upload_completed.emit(
                         result['public_link'],
                         result['yandex_path'],
                         result['file_name'],
                         project_type
                     )
-                    print(f"[DEBUG] Сигнал contract_file_upload_completed отправлен")
                 else:
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    print(f"[DEBUG] result пустой, отправляем ошибку")
                     self.contract_file_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
 
             except Exception as e:
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                print(f"[DEBUG] Исключение в upload_thread: {e}")
                 import traceback
                 traceback.print_exc()
                 self.contract_file_upload_error.emit(str(e))
@@ -2126,7 +2339,6 @@ class ContractDialog(QDialog):
 
     def _on_contract_file_uploaded(self, public_link, yandex_path, file_name, project_type):
         """Обработчик успешной загрузки файла договора"""
-        print(f"[DEBUG] _on_contract_file_uploaded вызван: public_link={public_link}, file_name={file_name}, project_type={project_type}")
 
         if public_link:
             # Сохраняем в атрибуты
@@ -2139,33 +2351,50 @@ class ContractDialog(QDialog):
             if self.contract_data and self.contract_data.get('id'):
                 contract_id = self.contract_data['id']
 
-                conn = self.db.connect()
-                cursor = conn.cursor()
-
-                if project_type == 'individual':
-                    # Сохраняем файл договора для индивидуального проекта
-                    cursor.execute('''
-                        UPDATE contracts
-                        SET contract_file_link = ?,
-                            contract_file_yandex_path = ?,
-                            contract_file_name = ?
-                        WHERE id = ?
-                    ''', (public_link, yandex_path, file_name, contract_id))
+                if self.api_client:
+                    # Многопользовательский режим - обновляем через API
+                    try:
+                        if project_type == 'individual':
+                            update_data = {
+                                'contract_file_link': public_link,
+                                'contract_file_yandex_path': yandex_path,
+                                'contract_file_name': file_name
+                            }
+                        else:
+                            update_data = {
+                                'template_contract_file_link': public_link,
+                                'template_contract_file_yandex_path': yandex_path,
+                                'template_contract_file_name': file_name
+                            }
+                        self.api_client.update_contract(contract_id, update_data)
+                        self.contract_data = self.api_client.get_contract(contract_id)
+                    except Exception as e:
+                        print(f"[WARNING] Ошибка обновления contract через API: {e}")
                 else:
-                    # Сохраняем файл договора для шаблонного проекта
-                    cursor.execute('''
-                        UPDATE contracts
-                        SET template_contract_file_link = ?,
-                            template_contract_file_yandex_path = ?,
-                            template_contract_file_name = ?
-                        WHERE id = ?
-                    ''', (public_link, yandex_path, file_name, contract_id))
+                    # Локальный режим - обновляем локальную БД
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
 
-                conn.commit()
-                conn.close()
+                    if project_type == 'individual':
+                        cursor.execute('''
+                            UPDATE contracts
+                            SET contract_file_link = ?,
+                                contract_file_yandex_path = ?,
+                                contract_file_name = ?
+                            WHERE id = ?
+                        ''', (public_link, yandex_path, file_name, contract_id))
+                    else:
+                        cursor.execute('''
+                            UPDATE contracts
+                            SET template_contract_file_link = ?,
+                                template_contract_file_yandex_path = ?,
+                                template_contract_file_name = ?
+                            WHERE id = ?
+                        ''', (public_link, yandex_path, file_name, contract_id))
 
-                # Обновляем contract_data из БД
-                self.contract_data = self.db.get_contract_by_id(contract_id)
+                    conn.commit()
+                    conn.close()
+                    self.contract_data = self.db.get_contract_by_id(contract_id)
 
             # Обновляем лейблы с HTML ссылкой (обрезаем длинное имя)
             truncated_name = self.truncate_filename(file_name)
@@ -2235,7 +2464,7 @@ class ContractDialog(QDialog):
         progress.setStyleSheet("""
             QProgressDialog {
                 background-color: white;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
             QLabel {
@@ -2246,8 +2475,8 @@ class ContractDialog(QDialog):
                 max-width: 380px;
             }
             QProgressBar {
-                border: 1px solid #CCCCCC;
-                border-radius: 3px;
+                border: 1px solid #d9d9d9;
+                border-radius: 6px;
                 text-align: center;
                 background-color: #F0F0F0;
                 height: 20px;
@@ -2264,7 +2493,7 @@ class ContractDialog(QDialog):
                 color: white;
                 border: none;
                 padding: 8px 16px;
-                border-radius: 4px;
+                border-radius: 6px;
                 min-width: 80px;
             }
             QPushButton:hover {
@@ -2300,7 +2529,6 @@ class ContractDialog(QDialog):
                     file_name,
                     progress_callback=update_progress
                 )
-                print(f"[DEBUG] upload_thread (tech_task): result={result}")
 
                 if result:
                     progress.setValue(3)
@@ -2308,25 +2536,21 @@ class ContractDialog(QDialog):
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
                     # Отправляем сигнал в главный поток с полными данными
-                    print(f"[DEBUG] Отправляем сигнал tech_task_upload_completed...")
                     self.tech_task_upload_completed.emit(
                         result['public_link'],
                         result['yandex_path'],
                         result['file_name']
                     )
-                    print(f"[DEBUG] Сигнал tech_task_upload_completed отправлен")
                 else:
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    print(f"[DEBUG] result пустой, отправляем ошибку")
                     self.tech_task_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
 
             except Exception as e:
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                print(f"[DEBUG] Исключение в upload_thread (tech_task): {e}")
                 import traceback
                 traceback.print_exc()
                 self.tech_task_upload_error.emit(str(e))
@@ -2336,7 +2560,6 @@ class ContractDialog(QDialog):
 
     def _on_tech_task_file_uploaded(self, public_link, yandex_path, file_name):
         """Обработчик успешной загрузки файла тех.задания"""
-        print(f"[DEBUG] _on_tech_task_file_uploaded вызван: public_link={public_link}, file_name={file_name}")
 
         if public_link:
             # Сохраняем в атрибуты
@@ -2348,20 +2571,32 @@ class ContractDialog(QDialog):
             if self.contract_data and self.contract_data.get('id'):
                 contract_id = self.contract_data['id']
 
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE contracts
-                    SET tech_task_link = ?,
-                        tech_task_yandex_path = ?,
-                        tech_task_file_name = ?
-                    WHERE id = ?
-                ''', (public_link, yandex_path, file_name, contract_id))
-                conn.commit()
-                conn.close()
-
-                # Обновляем contract_data из БД
-                self.contract_data = self.db.get_contract_by_id(contract_id)
+                if self.api_client:
+                    # Многопользовательский режим - обновляем через API
+                    try:
+                        update_data = {
+                            'tech_task_link': public_link,
+                            'tech_task_yandex_path': yandex_path,
+                            'tech_task_file_name': file_name
+                        }
+                        self.api_client.update_contract(contract_id, update_data)
+                        self.contract_data = self.api_client.get_contract(contract_id)
+                    except Exception as e:
+                        print(f"[WARNING] Ошибка обновления contract через API: {e}")
+                else:
+                    # Локальный режим - обновляем локальную БД
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        UPDATE contracts
+                        SET tech_task_link = ?,
+                            tech_task_yandex_path = ?,
+                            tech_task_file_name = ?
+                        WHERE id = ?
+                    ''', (public_link, yandex_path, file_name, contract_id))
+                    conn.commit()
+                    conn.close()
+                    self.contract_data = self.db.get_contract_by_id(contract_id)
 
             # Обновляем лейбл с HTML ссылкой (обрезаем длинное имя)
             truncated_name = self.truncate_filename(file_name)
@@ -2425,25 +2660,39 @@ class ContractDialog(QDialog):
         contract_id = self.contract_data['id']
 
         # Получаем путь к файлу на Яндекс.Диске перед удалением из БД
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('SELECT contract_file_yandex_path, template_contract_file_yandex_path FROM contracts WHERE id = ?', (contract_id,))
-        result = cursor.fetchone()
-        conn.close()
-
-        contract_yandex_path = result['contract_file_yandex_path'] if result else None
-        template_yandex_path = result['template_contract_file_yandex_path'] if result else None
-
-        # Обновляем БД
+        contract_yandex_path = None
+        template_yandex_path = None
         try:
-            self.db.update_contract(contract_id, {
-                'contract_file_link': '',
-                'contract_file_yandex_path': '',
-                'contract_file_name': '',
-                'template_contract_file_link': '',
-                'template_contract_file_yandex_path': '',
-                'template_contract_file_name': ''
-            })
+            if self.api_client:
+                contract = self.api_client.get_contract(contract_id)
+                if contract:
+                    contract_yandex_path = contract.get('contract_file_yandex_path')
+                    template_yandex_path = contract.get('template_contract_file_yandex_path')
+            else:
+                conn = self.db.connect()
+                cursor = conn.cursor()
+                cursor.execute('SELECT contract_file_yandex_path, template_contract_file_yandex_path FROM contracts WHERE id = ?', (contract_id,))
+                result = cursor.fetchone()
+                conn.close()
+                contract_yandex_path = result['contract_file_yandex_path'] if result else None
+                template_yandex_path = result['template_contract_file_yandex_path'] if result else None
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения пути к файлам: {e}")
+
+        # Обновляем БД/API
+        update_data = {
+            'contract_file_link': '',
+            'contract_file_yandex_path': '',
+            'contract_file_name': '',
+            'template_contract_file_link': '',
+            'template_contract_file_yandex_path': '',
+            'template_contract_file_name': ''
+        }
+        try:
+            if self.api_client:
+                self.api_client.update_contract(contract_id, update_data)
+            else:
+                self.db.update_contract(contract_id, update_data)
 
             # Удаляем файлы с Яндекс.Диска
             if contract_yandex_path:
@@ -2502,13 +2751,17 @@ class ContractDialog(QDialog):
         # Получаем путь к файлу на Яндекс.Диске перед удалением из БД
         yandex_path = self.tech_task_yandex_path if hasattr(self, 'tech_task_yandex_path') else None
 
-        # Обновляем БД
+        # Обновляем БД/API
+        update_data = {
+            'tech_task_link': '',
+            'tech_task_yandex_path': '',
+            'tech_task_file_name': ''
+        }
         try:
-            self.db.update_contract(contract_id, {
-                'tech_task_link': '',
-                'tech_task_yandex_path': '',
-                'tech_task_file_name': ''
-            })
+            if self.api_client:
+                self.api_client.update_contract(contract_id, update_data)
+            else:
+                self.db.update_contract(contract_id, update_data)
 
             # Удаляем файл с Яндекс.Диска
             if yandex_path:
@@ -2567,22 +2820,30 @@ class ContractDialog(QDialog):
             # ========== ЗАМЕНИЛИ QMessageBox ==========
             CustomMessageBox(self, 'Ошибка', 'Укажите номер договора', 'warning').exec_()
             return
-        
+
         contract_number = self.contract_number.text().strip()
-        
-        if not self.contract_data:
-            existing = self.db.check_contract_number_exists(contract_number)
-            if existing:
-                # ========== ЗАМЕНИЛИ QMessageBox ==========
-                CustomMessageBox(
-                    self, 
-                    'Ошибка', 
-                    f'Договор с номером "{contract_number}" уже существует!\n\n'
-                    f'Пожалуйста, укажите другой номер.',
-                    'error'
-                ).exec_()
-                return
-        
+
+        # Получаем ID текущего договора для исключения из проверки
+        current_contract_id = self.contract_data.get('id') if self.contract_data else None
+
+        # Проверяем существование договора с таким номером
+        # Для нового договора - просто проверяем наличие номера
+        # Для редактирования - проверяем с исключением текущего договора
+        if self.api_client:
+            existing = self.api_client.check_contract_number_exists(contract_number, exclude_id=current_contract_id)
+        else:
+            existing = self.db.check_contract_number_exists(contract_number, exclude_id=current_contract_id)
+        if existing:
+            # ========== ЗАМЕНИЛИ QMessageBox ==========
+            CustomMessageBox(
+                self,
+                'Ошибка',
+                f'Договор с номером "{contract_number}" уже существует!\n\n'
+                f'Пожалуйста, укажите другой номер.',
+                'error'
+            ).exec_()
+            return
+
         project_type = self.project_type.currentText()
 
         # Определяем откуда брать contract_period и contract_file_link
@@ -2622,27 +2883,170 @@ class ContractDialog(QDialog):
         try:
             if self.contract_data:
                 # Обновление существующего договора
-                if self.api_client:
+                old_contract = self.contract_data
+
+                # Проверяем, изменились ли данные, влияющие на путь к папке
+                old_city = old_contract.get('city', '')
+                old_address = old_contract.get('address', '')
+                old_area = old_contract.get('area', 0)
+                old_agent_type = old_contract.get('agent_type', '')
+                old_project_type = old_contract.get('project_type', '')
+
+                new_city = self.city_combo.currentText()
+                new_address = self.address.text().strip()
+                new_area = self.area.value()
+                new_agent_type = self.agent_combo.currentText()
+                new_project_type = self.project_type.currentText()
+
+                folder_changed = (
+                    old_city != new_city or
+                    old_address != new_address or
+                    old_area != new_area or
+                    old_agent_type != new_agent_type or
+                    old_project_type != new_project_type
+                )
+
+                # Обновляем договор в БД
+                if self.api_client and self.api_client.is_online:
                     # API режим
                     self.api_client.update_contract(self.contract_data['id'], contract_data)
+                elif self.api_client:
+                    # Offline режим - сохраняем локально и добавляем в очередь
+                    self.db.update_contract(self.contract_data['id'], contract_data)
+                    if self.offline_manager:
+                        from utils.offline_manager import OperationType
+                        self.offline_manager.queue_operation(
+                            OperationType.UPDATE, 'contract', self.contract_data['id'], contract_data
+                        )
+                        CustomMessageBox(self, 'Offline режим',
+                            'Изменения сохранены локально.\nДанные будут синхронизированы при восстановлении подключения.', 'info').exec_()
                 else:
                     # Локальный режим
                     self.db.update_contract(self.contract_data['id'], contract_data)
+
+                # Переименование папки на Яндекс.Диске при изменении данных
+                old_folder_path = old_contract.get('yandex_folder_path', '')
+                if folder_changed and old_folder_path and self.yandex_disk:
+                    try:
+                        # Строим новый путь к папке
+                        new_folder_path = self.yandex_disk.build_contract_folder_path(
+                            agent_type=new_agent_type,
+                            project_type=new_project_type,
+                            city=new_city,
+                            address=new_address,
+                            area=new_area
+                        )
+
+                        # Перемещаем папку (переименовываем)
+                        if self.yandex_disk.move_folder(old_folder_path, new_folder_path):
+                            # Обновляем путь в БД
+                            if self.api_client:
+                                self.api_client.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                            else:
+                                self.db.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                            print(f"[OK] Папка переименована: {old_folder_path} -> {new_folder_path}")
+                        else:
+                            # Яндекс.Диск недоступен - добавляем в offline очередь
+                            print(f"[WARNING] Не удалось переименовать папку на Яндекс.Диске, добавляем в очередь")
+                            if self.offline_manager:
+                                from utils.offline_manager import OperationType
+                                self.offline_manager.queue_operation(
+                                    OperationType.UPDATE,
+                                    'yandex_folder',
+                                    self.contract_data['id'],
+                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
+                                )
+                                # Сохраняем новый путь локально (будет актуален после синхронизации)
+                                self.db.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                    except Exception as e:
+                        print(f"[WARNING] Ошибка переименования папки: {e}")
+                        # При ошибке тоже добавляем в очередь
+                        if self.offline_manager and old_folder_path:
+                            try:
+                                new_folder_path = self.yandex_disk.build_contract_folder_path(
+                                    agent_type=new_agent_type,
+                                    project_type=new_project_type,
+                                    city=new_city,
+                                    address=new_address,
+                                    area=new_area
+                                )
+                                from utils.offline_manager import OperationType
+                                self.offline_manager.queue_operation(
+                                    OperationType.UPDATE,
+                                    'yandex_folder',
+                                    self.contract_data['id'],
+                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
+                                )
+                                self.db.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                                print(f"[QUEUE] Переименование папки добавлено в очередь: {old_folder_path} -> {new_folder_path}")
+                            except Exception as queue_error:
+                                print(f"[ERROR] Не удалось добавить в очередь: {queue_error}")
             else:
                 # Создание нового договора
-                if self.api_client:
+                new_contract_id = None
+                if self.api_client and self.api_client.is_online:
                     # API режим
-                    self.api_client.create_contract(contract_data)
+                    result = self.api_client.create_contract(contract_data)
+                    new_contract_id = result.get('id')
+                elif self.api_client:
+                    # Offline режим - сохраняем локально и добавляем в очередь
+                    self.db.add_contract(contract_data)
+                    new_contract_id = self.db.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                    if self.offline_manager:
+                        from utils.offline_manager import OperationType
+                        self.offline_manager.queue_operation(
+                            OperationType.CREATE, 'contract', new_contract_id, contract_data
+                        )
+                        CustomMessageBox(self, 'Offline режим',
+                            'Договор создан локально.\nДанные будут синхронизированы при восстановлении подключения.', 'info').exec_()
                 else:
                     # Локальный режим
                     self.db.add_contract(contract_data)
+                    # Получить ID последнего добавленного договора
+                    new_contract_id = self.db.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+                # ПРИМЕЧАНИЕ: CRM карточка создается автоматически:
+                # - В локальном режиме: db_manager.add_contract() вызывает _create_crm_card()
+                # - В API режиме: сервер создает карточку при создании договора
+
+                # Создание папки на Яндекс.Диске для нового договора
+                if new_contract_id and self.yandex_disk:
+                    try:
+                        # Получаем данные для создания папки
+                        agent_type = self.agent_combo.currentText()
+                        project_type = self.project_type.currentText()
+                        city = self.city_combo.currentText()
+                        address = self.address.text().strip()
+                        area = self.area.value()
+
+                        # Создаем структуру папок
+                        folder_path = self.yandex_disk.create_contract_folder_structure(
+                            agent_type=agent_type,
+                            project_type=project_type,
+                            city=city,
+                            address=address,
+                            area=area
+                        )
+
+                        # Обновить путь к папке в договоре
+                        if folder_path:
+                            if self.api_client:
+                                self.api_client.update_contract(new_contract_id, {'yandex_folder_path': folder_path})
+                            else:
+                                self.db.update_contract(new_contract_id, {'yandex_folder_path': folder_path})
+
+                            print(f"[OK] Папка на Яндекс.Диске создана: {folder_path}")
+                        else:
+                            print(f"[WARNING] Папка на Яндекс.Диске не была создана")
+                    except Exception as e:
+                        print(f"[WARNING] Не удалось создать папку на Яндекс.Диске: {e}")
 
             # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
             self.accept()
 
         except Exception as e:
             error_msg = str(e)
-            if 'UNIQUE constraint failed' in error_msg:
+            if 'UNIQUE constraint failed' in error_msg or 'уже существует' in error_msg:
                 # ========== ЗАМЕНИЛИ QMessageBox ==========
                 CustomMessageBox(
                     self,
@@ -2695,7 +3099,7 @@ class ContractSearchDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -2731,17 +3135,25 @@ class ContractSearchDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         
         form_layout = QFormLayout()
-        
+
+        input_style = """
+            QLineEdit {
+            }
+        """
+
         self.contract_number_input = QLineEdit()
         self.contract_number_input.setPlaceholderText('№001-2024')
+        self.contract_number_input.setStyleSheet(input_style)
         form_layout.addRow('Номер договора:', self.contract_number_input)
-        
+
         self.address_input = QLineEdit()
         self.address_input.setPlaceholderText('Адрес объекта')
+        self.address_input.setStyleSheet(input_style)
         form_layout.addRow('Адрес объекта:', self.address_input)
-        
+
         self.client_name_input = QLineEdit()
         self.client_name_input.setPlaceholderText('ФИО или название организации')
+        self.client_name_input.setStyleSheet(input_style)
         form_layout.addRow('Клиент:', self.client_name_input)
 
         # Чекбокс для включения поиска по дате
@@ -2752,12 +3164,17 @@ class ContractSearchDialog(QDialog):
         date_group = QGroupBox('Период дат')
         date_layout = QHBoxLayout()
 
+        date_style = CALENDAR_STYLE + """
+            QDateEdit {
+            }
+        """
+
         self.date_from = CustomDateEdit()
         self.date_from.setCalendarPopup(True)
         add_today_button_to_dateedit(self.date_from)
         self.date_from.setDate(QDate.currentDate().addYears(-1))
         self.date_from.setDisplayFormat('dd.MM.yyyy')
-        self.date_from.setStyleSheet(CALENDAR_STYLE)
+        self.date_from.setStyleSheet(date_style)
         self.date_from.setEnabled(False)  # По умолчанию отключено
 
         self.date_to = CustomDateEdit()
@@ -2765,7 +3182,7 @@ class ContractSearchDialog(QDialog):
         add_today_button_to_dateedit(self.date_to)
         self.date_to.setDate(QDate.currentDate())
         self.date_to.setDisplayFormat('dd.MM.yyyy')
-        self.date_to.setStyleSheet(CALENDAR_STYLE)
+        self.date_to.setStyleSheet(date_style)
         self.date_to.setEnabled(False)  # По умолчанию отключено
 
         # Подключаем чекбокс к включению/выключению полей дат
@@ -2786,27 +3203,58 @@ class ContractSearchDialog(QDialog):
         buttons_layout = QHBoxLayout()
         
         search_btn = IconLoader.create_icon_button('search2', 'Найти', 'Выполнить поиск', icon_size=16)
+        search_btn.setFixedHeight(36)
         search_btn.clicked.connect(self.accept)
         search_btn.setStyleSheet('''
             QPushButton {
-                padding: 10px 30px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
-                background-color: #3498DB;
-                color: white;
-                border-radius: 5px;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #2980B9;
-            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         ''')
-        
+
         reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры', icon_size=16)
+        reset_btn.setFixedHeight(36)
         reset_btn.clicked.connect(self.reset_filters)
-        reset_btn.setStyleSheet('padding: 10px 30px;')
-        
+        reset_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                border: none;
+                font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
+        ''')
+
         cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(36)
         cancel_btn.clicked.connect(self.reject)
-        cancel_btn.setStyleSheet('padding: 10px 30px;')
+        cancel_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                border: none;
+                font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
+        ''')
         
         buttons_layout.addWidget(search_btn)
         buttons_layout.addWidget(reset_btn)
@@ -2830,16 +3278,11 @@ class ContractSearchDialog(QDialog):
         self.client_name_input.clear()
         self.date_from.setDate(QDate.currentDate().addYears(-1))
         self.date_to.setDate(QDate.currentDate())
-        
+
         self.parent().load_contracts()
-        
-        # ========== ЗАМЕНИЛИ QMessageBox ==========
-        CustomMessageBox(
-            self, 
-            'Сброс', 
-            'Фильтры сброшены, показаны все договоры', 
-            'success'
-        ).exec_()
+
+        # Закрываем диалог после сброса (без отдельного сообщения)
+        self.reject()
     
     def get_search_params(self):
         """Получение параметров поиска"""
@@ -2890,7 +3333,7 @@ class AgentDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -2929,7 +3372,7 @@ class AgentDialog(QDialog):
                 QFrame {{
                     background-color: {agent['color']};
                     border: 2px solid {agent['color']};
-                    border-radius: 4px;
+                    border-radius: 6px;
                     padding: 8px;
                     margin: 4px 0;
                 }}
@@ -2950,7 +3393,7 @@ class AgentDialog(QDialog):
                     background-color: white;
                     color: #333;
                     padding: 4px 12px;
-                    border-radius: 3px;
+                    border-radius: 6px;
                     font-size: 10px;
                 }
                 QPushButton:hover { background-color: #F0F0F0; }
@@ -2980,8 +3423,8 @@ class AgentDialog(QDialog):
         color_layout = QHBoxLayout()
         self.color_preview = QLabel()
         self.color_preview.setFixedSize(40, 25)
-        self.color_preview.setStyleSheet('background-color: #3498DB; border: 1px solid #CCC; border-radius: 3px;')
-        self.selected_color = '#3498DB'
+        self.color_preview.setStyleSheet('background-color: #ffd93c; border: 1px solid #d9d9d9; border-radius: 6px;')
+        self.selected_color = '#ffd93c'
         color_layout.addWidget(self.color_preview)
 
         choose_color_btn = QPushButton('Выбрать цвет')
@@ -2993,30 +3436,40 @@ class AgentDialog(QDialog):
 
         layout.addLayout(form_layout)
 
-        add_btn = QPushButton('✓ Добавить агента')
+        add_btn = QPushButton('Добавить агента')
+        add_btn.setFixedHeight(36)
         add_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27AE60;
-                color: white;
-                padding: 12px;
-                border-radius: 4px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover { background-color: #229954; }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
         add_btn.clicked.connect(self.add_new_agent)
         layout.addWidget(add_btn)
 
         close_btn = QPushButton('Закрыть')
+        close_btn.setFixedHeight(36)
         close_btn.setStyleSheet("""
             QPushButton {
-                background-color: #95A5A6;
-                color: white;
-                padding: 12px;
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
                 border-radius: 4px;
+                border: none;
                 font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover { background-color: #7F8C8D; }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
@@ -3036,7 +3489,7 @@ class AgentDialog(QDialog):
         color = QColorDialog.getColor()
         if color.isValid():
             self.selected_color = color.name()
-            self.color_preview.setStyleSheet(f'background-color: {self.selected_color}; border: 1px solid #CCC; border-radius: 3px;')
+            self.color_preview.setStyleSheet(f'background-color: {self.selected_color}; border: 1px solid #CCC; border-radius: 6px;')
 
     def add_new_agent(self):
         """Добавление нового агента"""

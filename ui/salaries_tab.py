@@ -13,16 +13,20 @@ from ui.custom_combobox import CustomComboBox
 from utils.icon_loader import IconLoader
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit, ICONS_PATH
 from utils.offline_manager import OperationType
+from utils.table_settings import ProportionalResizeTable
 
 
 class CollapsibleBox(QWidget):
     """Сворачиваемый виджет для фильтров"""
     def __init__(self, title="Фильтры", parent=None):
         super().__init__(parent)
+        self._title = title
 
-        self.toggle_button = QPushButton(title)
+        self.toggle_button = QPushButton(f"  {title}")
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(False)  # По умолчанию свернуто
+        self.toggle_button.setIcon(IconLoader.load('arrow-down-circle'))
+        self.toggle_button.setIconSize(QSize(14, 14))
         self.toggle_button.setStyleSheet("""
             QPushButton {
                 text-align: left;
@@ -53,10 +57,10 @@ class CollapsibleBox(QWidget):
         """Обработка сворачивания/разворачивания"""
         checked = self.toggle_button.isChecked()
         if checked:
-            self.toggle_button.setText("▼ " + self.toggle_button.text().replace("▶ ", "").replace("▼ ", ""))
+            self.toggle_button.setIcon(IconLoader.load('arrow-up-circle'))
             self.content_area.setMaximumHeight(16777215)  # Максимальная высота
         else:
-            self.toggle_button.setText("▶ " + self.toggle_button.text().replace("▶ ", "").replace("▼ ", ""))
+            self.toggle_button.setIcon(IconLoader.load('arrow-down-circle'))
             self.content_area.setMaximumHeight(0)
 
     def setContentLayout(self, layout):
@@ -65,8 +69,6 @@ class CollapsibleBox(QWidget):
         if old_layout:
             QWidget().setLayout(old_layout)
         self.content_area.setLayout(layout)
-        # Устанавливаем начальный текст со стрелкой
-        self.toggle_button.setText("▶ " + self.toggle_button.text().replace("▶ ", "").replace("▼ ", ""))
 
 
 class PaymentStatusDelegate(QStyledItemDelegate):
@@ -94,7 +96,19 @@ class SalariesTab(QWidget):
         self.db = DatabaseManager()
         # Получаем offline_manager от родителя (main_window)
         self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
+
+        # Кеширование данных для быстрой фильтрации
+        self._all_payments_cache = None  # Кеш всех выплат
+        self._cache_year = None  # Год для которого загружен кеш
+        self._payment_type_cache = {}  # Кеш данных по типам: {'Оклады': [], 'Индивидуальные проекты': [], ...}
+
         self.init_ui()
+
+    def invalidate_cache(self):
+        """Инвалидация кеша данных - вызывать при изменении выплат"""
+        self._all_payments_cache = None
+        self._cache_year = None
+        self._payment_type_cache = {}
     
     def init_ui(self):
         layout = QVBoxLayout()
@@ -163,9 +177,35 @@ class SalariesTab(QWidget):
         
         layout.addWidget(self.tabs)
 
+        # Подключаем загрузку данных при переключении вкладок
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+
         self.setLayout(layout)
         # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
         QTimer.singleShot(0, self.load_all_payments)
+
+    def on_tab_changed(self, index):
+        """Обработка переключения вкладок - загрузка данных для выбранной вкладки"""
+        tab_names = ['Все выплаты', 'Индивидуальные проекты', 'Шаблонные проекты', 'Оклады', 'Авторский надзор']
+        if index == 0:
+            # Все выплаты - уже загружены
+            pass
+        elif 0 < index < len(tab_names):
+            payment_type = tab_names[index]
+            self.load_payment_type_data(payment_type)
+
+        # Обновляем дашборд в main_window при переключении внутренней вкладки
+        main_window = self.window()
+        if main_window and hasattr(main_window, 'switch_dashboard'):
+            salaries_dashboard_map = {
+                0: 'Зарплаты (Все)',
+                1: 'Зарплаты (Индивидуальные)',
+                2: 'Зарплаты (Шаблонные)',
+                3: 'Зарплаты (Оклады)',
+                4: 'Зарплаты (Надзор)'
+            }
+            dashboard_key = salaries_dashboard_map.get(index, 'Зарплаты (Все)')
+            main_window.switch_dashboard(dashboard_key)
     
     def create_all_payments_tab(self):
         """Вкладка всех выплат"""
@@ -182,7 +222,8 @@ class SalariesTab(QWidget):
 
         self.period_filter = CustomComboBox()
         self.period_filter.addItems(['Месяц', 'Квартал', 'Год', 'Все'])
-        self.period_filter.setCurrentIndex(0)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Для вкладки "Все выплаты" фильтр по умолчанию = "Все"
+        self.period_filter.setCurrentIndex(3)  # 'Все'
         self.period_filter.currentTextChanged.connect(self.on_period_filter_changed)
         row1_layout.addWidget(self.period_filter)
 
@@ -243,8 +284,20 @@ class SalariesTab(QWidget):
         row3_layout.addWidget(QLabel('Тип агента:'))
         self.agent_type_filter = CustomComboBox()
         self.agent_type_filter.addItem('Все', None)
+        self.agent_type_filter.addItem('Фестиваль', 'Фестиваль')
+        self.agent_type_filter.addItem('Петрович', 'Петрович')
         self.agent_type_filter.currentIndexChanged.connect(self.apply_all_payments_filters)
         row3_layout.addWidget(self.agent_type_filter)
+
+        row3_layout.addWidget(QLabel('Тип выплаты:'))
+        self.payment_subtype_filter = CustomComboBox()
+        self.payment_subtype_filter.addItem('Все', None)
+        self.payment_subtype_filter.addItem('Аванс', 'Аванс')
+        self.payment_subtype_filter.addItem('Доплата', 'Доплата')
+        self.payment_subtype_filter.addItem('Полная оплата', 'Полная оплата')
+        self.payment_subtype_filter.addItem('Оклад', 'Оклад')
+        self.payment_subtype_filter.currentIndexChanged.connect(self.apply_all_payments_filters)
+        row3_layout.addWidget(self.payment_subtype_filter)
 
         row3_layout.addWidget(QLabel('Тип проекта:'))
         self.project_type_filter = CustomComboBox()
@@ -262,11 +315,32 @@ class SalariesTab(QWidget):
         row3_layout.addStretch()
         filters_main_layout.addLayout(row3_layout)
 
+        # Кнопка сброса фильтров
+        reset_layout = QHBoxLayout()
+        self.all_reset_btn = QPushButton('Сбросить фильтры')
+        self.all_reset_btn.setIcon(IconLoader.load('refresh-black'))
+        self.all_reset_btn.setIconSize(QSize(14, 14))
+        self.all_reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F5F5F5;
+                color: #333;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 11px;
+                border: 1px solid #DDD;
+            }
+            QPushButton:hover { background-color: #E8E8E8; }
+        """)
+        self.all_reset_btn.clicked.connect(self.reset_all_payments_filters)
+        reset_layout.addWidget(self.all_reset_btn)
+        reset_layout.addStretch()
+        filters_main_layout.addLayout(reset_layout)
+
         collapsible.setContentLayout(filters_main_layout)
         layout.addWidget(collapsible)
         
-        # Таблица
-        self.all_payments_table = QTableWidget()
+        # Таблица - используем ProportionalResizeTable для растягивания + ручного изменения
+        self.all_payments_table = ProportionalResizeTable()
         # ВАЖНО: НЕ устанавливаем background-color для QTableWidget,
         # чтобы цвета ячеек работали корректно
         self.all_payments_table.setStyleSheet("""
@@ -287,9 +361,19 @@ class SalariesTab(QWidget):
             'Тип проекта', 'Тип агента', 'Исполнитель', 'Должность', 'Сумма к выплате',
             'Тип выплаты', 'Адрес договора', 'Отчетный месяц', 'Действия'
         ])
-        self.all_payments_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # Настройка пропорционального изменения размера:
+        # - Колонки 0-7 растягиваются пропорционально И можно менять вручную
+        # - Колонка 8 (Действия) фиксирована 110px
+        self.all_payments_table.setup_proportional_resize(
+            column_ratios=[0.10, 0.10, 0.14, 0.11, 0.11, 0.10, 0.17, 0.12],  # Пропорции для колонок 0-7
+            fixed_columns={8: 120},  # Действия = 120px (добавлена кнопка редактирования)
+            min_width=50
+        )
         # НЕ используем setAlternatingRowColors, чтобы можно было окрашивать строки вручную
         self.all_payments_table.setAlternatingRowColors(False)
+        # Отключаем выделение строк мышкой
+        self.all_payments_table.setSelectionMode(QTableWidget.NoSelection)
         # Устанавливаем делегат для окраски строк
         self.all_payments_table.setItemDelegate(PaymentStatusDelegate())
         # Включаем сортировку по столбцам
@@ -355,11 +439,12 @@ class SalariesTab(QWidget):
         year_filter.setRange(2020, 2040)
         year_filter.setValue(QDate.currentDate().year())
         year_filter.setMinimumWidth(80)
-        year_filter.setFixedHeight(42)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Высота 28px вместо 42px (#8)
+        year_filter.setFixedHeight(28)
         year_filter.setStyleSheet(f"""
             QSpinBox {{
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-radius: 4px;
                 padding-left: 8px;
                 padding-right: 8px;
@@ -390,7 +475,7 @@ class SalariesTab(QWidget):
                 width: 14px;
                 height: 14px;
             }}
-        """)        
+        """)
         row1_layout.addWidget(year_filter)
 
         # Квартал
@@ -437,7 +522,9 @@ class SalariesTab(QWidget):
             row2_layout.addWidget(QLabel('Тип проекта:'))
             project_type_filter = CustomComboBox()
             project_type_filter.addItem('Все', None)
-            project_type_filter.addItems(['Индивидуальный', 'Шаблонный', 'Авторский надзор'])
+            project_type_filter.addItem('Индивидуальный', 'Индивидуальный')
+            project_type_filter.addItem('Шаблонный', 'Шаблонный')
+            project_type_filter.addItem('Авторский надзор', 'Авторский надзор')
             project_type_filter.setMinimumWidth(150)
             row2_layout.addWidget(project_type_filter)
 
@@ -456,13 +543,35 @@ class SalariesTab(QWidget):
 
             row3_layout.addWidget(QLabel('Статус оплаты:'))
             status_filter = CustomComboBox()
-            status_filter.addItem('Все', None)
-            status_filter.addItems(['К оплате', 'Оплачено', 'Частично оплачено'])
+            status_filter.addItems(['Все', 'К оплате', 'Оплачено'])
             status_filter.setMinimumWidth(150)
             row3_layout.addWidget(status_filter)
 
             row3_layout.addStretch()
             filters_layout.addLayout(row3_layout)
+
+        # Кнопка сброса фильтров
+        reset_layout = QHBoxLayout()
+        reset_btn = QPushButton('Сбросить фильтры')
+        reset_btn.setIcon(IconLoader.load('refresh-black'))
+        reset_btn.setIconSize(QSize(14, 14))
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F5F5F5;
+                color: #333;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 11px;
+                border: 1px solid #DDD;
+            }
+            QPushButton:hover { background-color: #E8E8E8; }
+        """)
+        reset_layout.addWidget(reset_btn)
+        reset_layout.addStretch()
+        filters_layout.addLayout(reset_layout)
+
+        # Сохраняем ссылку на кнопку для подключения
+        widget.reset_btn = reset_btn
 
         # Устанавливаем содержимое фильтров
         filters_box.setContentLayout(filters_layout)
@@ -506,8 +615,11 @@ class SalariesTab(QWidget):
         else:
             project_type_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
 
-        # Таблица
-        table = QTableWidget()
+        # Подключаем кнопку сброса
+        reset_btn.clicked.connect(lambda: self.reset_payment_type_filters(widget, payment_type))
+
+        # Таблица - используем ProportionalResizeTable для растягивания + ручного изменения
+        table = ProportionalResizeTable()
         # ВАЖНО: НЕ устанавливаем background-color для QTableWidget,
         # чтобы цвета ячеек работали корректно
         table.setStyleSheet("""
@@ -529,7 +641,7 @@ class SalariesTab(QWidget):
         # Устанавливаем делегат для окраски строк
         table.setItemDelegate(PaymentStatusDelegate())
 
-        # Настройка колонок
+        # Настройка колонок с пропорциональным изменением размера
         if payment_type == 'Индивидуальные проекты':
             table.setColumnCount(12)
             table.setHorizontalHeaderLabels([
@@ -537,23 +649,13 @@ class SalariesTab(QWidget):
                 'Стадия', 'Исполнитель', 'Должность', 'Сумма (₽)',
                 'Тип выплаты', 'Отчетный месяц', 'Действия'
             ])
-            # Адаптивная ширина столбцов
-            header = table.horizontalHeader()
-            header.setSectionResizeMode(QHeaderView.Interactive)
-            header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # №
-            header.setSectionResizeMode(1, QHeaderView.Stretch)           # Адрес - растягивается
-            header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Площадь
-            header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Город
-            header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Тип агента
-            header.setSectionResizeMode(5, QHeaderView.Stretch)           # Стадия - растягивается
-            header.setSectionResizeMode(6, QHeaderView.Stretch)           # Исполнитель - растягивается
-            header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Должность
-            header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Сумма
-            header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Тип выплаты
-            header.setSectionResizeMode(10, QHeaderView.ResizeToContents) # Отчетный месяц
-            header.setSectionResizeMode(11, QHeaderView.Fixed)            # Действия
-            table.setColumnWidth(11, 150)  # Фиксированная ширина для кнопок действий
-        
+            # Пропорциональное растягивание: 11 пропорциональных + 1 фиксированная (Действия)
+            table.setup_proportional_resize(
+                column_ratios=[0.04, 0.15, 0.05, 0.07, 0.08, 0.12, 0.12, 0.10, 0.08, 0.08, 0.08],
+                fixed_columns={11: 120},
+                min_width=40
+            )
+
         elif payment_type == 'Шаблонные проекты':
             table.setColumnCount(12)
             table.setHorizontalHeaderLabels([
@@ -561,22 +663,12 @@ class SalariesTab(QWidget):
                 'Стадия', 'Исполнитель', 'Должность', 'Сумма (₽)',
                 'Тип выплаты', 'Отчетный месяц', 'Действия'
             ])
-            # Адаптивная ширина столбцов
-            header = table.horizontalHeader()
-            header.setSectionResizeMode(QHeaderView.Interactive)
-            header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # №
-            header.setSectionResizeMode(1, QHeaderView.Stretch)           # Адрес
-            header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Площадь
-            header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Город
-            header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Тип агента
-            header.setSectionResizeMode(5, QHeaderView.Stretch)           # Стадия
-            header.setSectionResizeMode(6, QHeaderView.Stretch)           # Исполнитель
-            header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Должность
-            header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Сумма
-            header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Тип выплаты
-            header.setSectionResizeMode(10, QHeaderView.ResizeToContents) # Отчетный месяц
-            header.setSectionResizeMode(11, QHeaderView.Fixed)            # Действия
-            table.setColumnWidth(11, 150)
+            # Пропорциональное растягивание
+            table.setup_proportional_resize(
+                column_ratios=[0.04, 0.15, 0.05, 0.07, 0.08, 0.12, 0.12, 0.10, 0.08, 0.08, 0.08],
+                fixed_columns={11: 120},
+                min_width=40
+            )
 
         elif payment_type == 'Авторский надзор':
             table.setColumnCount(12)
@@ -585,33 +677,30 @@ class SalariesTab(QWidget):
                 'Стадия', 'Исполнитель', 'Должность', 'Сумма (₽)',
                 'Тип выплаты', 'Отчетный месяц', 'Действия'
             ])
-            # Адаптивная ширина столбцов
-            header = table.horizontalHeader()
-            header.setSectionResizeMode(QHeaderView.Interactive)
-            header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # №
-            header.setSectionResizeMode(1, QHeaderView.Stretch)           # Адрес
-            header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Площадь
-            header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Город
-            header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Тип агента
-            header.setSectionResizeMode(5, QHeaderView.Stretch)           # Стадия
-            header.setSectionResizeMode(6, QHeaderView.Stretch)           # Исполнитель
-            header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Должность
-            header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Сумма
-            header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Тип выплаты
-            header.setSectionResizeMode(10, QHeaderView.ResizeToContents) # Отчетный месяц
-            header.setSectionResizeMode(11, QHeaderView.Fixed)            # Действия
-            table.setColumnWidth(11, 150)
-        
-        elif payment_type == 'Оклады':
-            table.setColumnCount(5)
-            table.setHorizontalHeaderLabels([
-                'Исполнитель', 'Тип проекта', 'Сумма оклада', 'Отчетный месяц', 'Действия'
-            ])
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        else:
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            # Пропорциональное растягивание
+            table.setup_proportional_resize(
+                column_ratios=[0.04, 0.15, 0.05, 0.07, 0.08, 0.12, 0.12, 0.10, 0.08, 0.08, 0.08],
+                fixed_columns={11: 120},
+                min_width=40
+            )
 
-        table.setSelectionBehavior(QTableWidget.SelectRows)
+        elif payment_type == 'Оклады':
+            table.setColumnCount(6)
+            table.setHorizontalHeaderLabels([
+                'Исполнитель', 'Тип проекта', 'Сумма оклада', 'Отчетный месяц', 'Комментарий', 'Действия'
+            ])
+            # ИСПРАВЛЕНИЕ 07.02.2026: Увеличена ширина столбца действий для 4 кнопок (#5)
+            # Пропорциональное растягивание: 5 пропорциональных + 1 фиксированная (Действия)
+            table.setup_proportional_resize(
+                column_ratios=[0.25, 0.15, 0.15, 0.15, 0.20],
+                fixed_columns={5: 120},  # Было 70, теперь 120 для 4 кнопок
+                min_width=50
+            )
+        else:
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+
+        # Убираем выделение строк мышкой - используются кнопки действий
+        table.setSelectionMode(QTableWidget.NoSelection)
         # Включаем сортировку по столбцам
         table.setSortingEnabled(True)
 
@@ -682,39 +771,47 @@ class SalariesTab(QWidget):
         """Создание виджета с кнопками действий для таблицы 'Все выплаты'"""
         widget = QWidget()
         layout = QHBoxLayout()
-        layout.setContentsMargins(5, 2, 5, 2)
-        layout.setSpacing(5)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(2)
 
         current_status = payment.get('payment_status')
 
-        # Кнопка "К оплате" (иконка денег)
+        # Кнопка "К оплате" (иконка тега)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Используем черную иконку для неактивного состояния
         to_pay_btn = QPushButton()
-        to_pay_btn.setIcon(IconLoader.load('tag'))
-        to_pay_btn.setIconSize(QSize(14, 14))
         if current_status == 'to_pay':
+            to_pay_btn.setIcon(IconLoader.load('tag'))  # Белая иконка на оранжевом фоне
             to_pay_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #F39C12;
                     color: white;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
+                    min-height: 0px;
+                    max-height: 26px;
+                    min-width: 0px;
+                    max-width: 26px;
                 }
                 QPushButton:hover { background-color: #E67E22; }
             """)
         else:
+            to_pay_btn.setIcon(IconLoader.load('tag-black'))  # Черная иконка на сером фоне
             to_pay_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #F5F5F5;
                     color: #333;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
                     border: 1px solid #DDD;
+                    min-height: 0px;
+                    max-height: 26px;
+                    min-width: 0px;
+                    max-width: 26px;
                 }
                 QPushButton:hover { background-color: #E8E8E8; }
             """)
+        to_pay_btn.setIconSize(QSize(12, 12))
+        to_pay_btn.setFixedSize(26, 26)
         to_pay_btn.setToolTip('Отметить к оплате')
         to_pay_btn.clicked.connect(lambda: self.set_payment_status(payment, 'to_pay', table, row, is_salary))
         layout.addWidget(to_pay_btn)
@@ -722,16 +819,19 @@ class SalariesTab(QWidget):
         # Кнопка "Оплачено" (иконка галочки)
         paid_btn = QPushButton()
         paid_btn.setIcon(IconLoader.load('money'))
-        paid_btn.setIconSize(QSize(14, 14))
+        paid_btn.setIconSize(QSize(12, 12))
+        paid_btn.setFixedSize(26, 26)
         if current_status == 'paid':
             paid_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #27AE60;
                     color: white;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
+                    min-height: 0px;
+                    max-height: 26px;
+                    min-width: 0px;
+                    max-width: 26px;
                 }
                 QPushButton:hover { background-color: #229954; }
             """)
@@ -740,10 +840,13 @@ class SalariesTab(QWidget):
                 QPushButton {
                     background-color: #F5F5F5;
                     color: #333;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
                     border: 1px solid #DDD;
+                    min-height: 0px;
+                    max-height: 26px;
+                    min-width: 0px;
+                    max-width: 26px;
                 }
                 QPushButton:hover { background-color: #E8E8E8; }
             """)
@@ -751,18 +854,44 @@ class SalariesTab(QWidget):
         paid_btn.clicked.connect(lambda: self.set_payment_status(payment, 'paid', table, row, is_salary))
         layout.addWidget(paid_btn)
 
+        # Кнопка редактирования
+        edit_btn = QPushButton()
+        edit_btn.setIcon(IconLoader.load('edit'))
+        edit_btn.setIconSize(QSize(12, 12))
+        edit_btn.setFixedSize(26, 26)
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498DB;
+                color: white;
+                padding: 0px;
+                border-radius: 4px;
+                min-height: 0px;
+                max-height: 26px;
+                min-width: 0px;
+                max-width: 26px;
+            }
+            QPushButton:hover { background-color: #2980B9; }
+        """)
+        edit_btn.setToolTip('Редактировать выплату')
+        edit_btn.clicked.connect(lambda checked, p=payment, s=is_salary: self.edit_payment_from_all(p, s))
+        layout.addWidget(edit_btn)
+
         # Кнопка удаления (только для руководителей)
         if self.employee['position'] in ['Руководитель студии', 'Старший менеджер проектов']:
             delete_btn = QPushButton()
             delete_btn.setIcon(IconLoader.load('delete2'))
-            delete_btn.setIconSize(QSize(14, 14))
+            delete_btn.setIconSize(QSize(12, 12))
+            delete_btn.setFixedSize(26, 26)
             delete_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #E74C3C;
                     color: white;
-                    padding: 4px 8px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
+                    min-height: 0px;
+                    max-height: 26px;
+                    min-width: 0px;
+                    max-width: 26px;
                 }
                 QPushButton:hover { background-color: #C0392B; }
             """)
@@ -779,36 +908,41 @@ class SalariesTab(QWidget):
         """Кнопки действий для выплат CRM"""
         widget = QWidget()
         layout = QHBoxLayout()
-        layout.setContentsMargins(5, 0, 5, 0)
-        layout.setSpacing(3)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(2)
 
-        # Кнопка "К оплате" (иконка денег)
+        # Кнопка "К оплате" (иконка тега)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Черная иконка для неактивного состояния
         to_pay_btn = QPushButton()
-        to_pay_btn.setIcon(IconLoader.load('tag'))
-        to_pay_btn.setIconSize(QSize(14, 14))
         current_status = payment.get('payment_status')
         if current_status == 'to_pay':
+            to_pay_btn.setIcon(IconLoader.load('tag'))  # Белая иконка
             to_pay_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #F39C12;
                     color: white;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
+                QPushButton:hover { background-color: #E67E22; }
             """)
         else:
+            to_pay_btn.setIcon(IconLoader.load('tag-black'))  # Черная иконка
             to_pay_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ECF0F1;
                     color: #7F8C8D;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
                 QPushButton:hover { background-color: #F39C12; color: white; }
             """)
+        to_pay_btn.setIconSize(QSize(12, 12))
+        to_pay_btn.setFixedSize(26, 26)
         to_pay_btn.setToolTip('Отметить к оплате')
         to_pay_btn.clicked.connect(
             lambda: self.set_payment_status(payment, 'to_pay', table, row)
@@ -818,26 +952,29 @@ class SalariesTab(QWidget):
         # Кнопка "Оплачено" (иконка галочки)
         paid_btn = QPushButton()
         paid_btn.setIcon(IconLoader.load('money'))
-        paid_btn.setIconSize(QSize(14, 14))
+        paid_btn.setIconSize(QSize(12, 12))
+        paid_btn.setFixedSize(26, 26)
         if current_status == 'paid':
             paid_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #27AE60;
                     color: white;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
+                QPushButton:hover { background-color: #229954; }
             """)
         else:
             paid_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ECF0F1;
                     color: #7F8C8D;
-                    padding: 6px 10px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
                 QPushButton:hover { background-color: #27AE60; color: white; }
             """)
@@ -850,16 +987,18 @@ class SalariesTab(QWidget):
         # Кнопка "Изменить"
         edit_btn = QPushButton()
         edit_btn.setIcon(IconLoader.load('edit2'))
-        edit_btn.setIconSize(QSize(14, 14))
+        edit_btn.setIconSize(QSize(12, 12))
+        edit_btn.setFixedSize(26, 26)
         edit_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffd93c;
                 color: white;
-                padding: 4px 8px;
+                padding: 0px;
                 border-radius: 4px;
-                font-size: 11px;
+                min-height: 0px; max-height: 26px;
+                min-width: 0px; max-width: 26px;
             }
-            QPushButton:hover { background-color: #2980B9; }
+            QPushButton:hover { background-color: #f0c929; }
         """)
         edit_btn.setToolTip('Изменить выплату')
         edit_btn.clicked.connect(
@@ -870,14 +1009,16 @@ class SalariesTab(QWidget):
         # Кнопка "Удалить"
         delete_btn = QPushButton()
         delete_btn.setIcon(IconLoader.load('delete2'))
-        delete_btn.setIconSize(QSize(14, 14))
+        delete_btn.setIconSize(QSize(12, 12))
+        delete_btn.setFixedSize(26, 26)
         delete_btn.setStyleSheet("""
             QPushButton {
                 background-color: #E74C3C;
                 color: white;
-                padding: 4px 8px;
+                padding: 0px;
                 border-radius: 4px;
-                font-size: 11px;
+                min-height: 0px; max-height: 26px;
+                min-width: 0px; max-width: 26px;
             }
             QPushButton:hover { background-color: #C0392B; }
         """)
@@ -935,7 +1076,8 @@ class SalariesTab(QWidget):
                     'success'
                 ).exec_()
 
-                # Обновляем таблицы
+                # Обновляем таблицы (принудительная перезагрузка т.к. данные изменились)
+                self.invalidate_cache()
                 self.load_all_payments()
 
         except Exception as e:
@@ -968,53 +1110,73 @@ class SalariesTab(QWidget):
         conn.commit()
         self.db.close()
 
-    def delete_crm_payment(self, payment, payment_type):
-        """Удаление выплаты CRM - удаляет из payments и обновляет CRM"""
-        # Подтверждение удаления
-        reply = CustomQuestionBox(
-            self,
-            'Подтверждение удаления',
-            f'Вы уверены, что хотите удалить выплату?\n\n'
-            f'Исполнитель: {payment.get("employee_name")}\n'
-            f'Сумма: {payment.get("final_amount", 0):,.2f} ₽\n\n'
-            f' Это действие нельзя отменить!'
-        ).exec_()
+    def edit_payment_from_all(self, payment, is_salary):
+        """Редактирование выплаты из таблицы 'Все выплаты'"""
+        # Преобразуем данные для диалога
+        payment_data = {
+            'id': payment['id'],
+            'employee_name': payment.get('employee_name', '-'),
+            'payment_type': payment.get('payment_subtype', 'Полная оплата'),
+            'final_amount': payment.get('amount', 0),
+            'report_month': payment.get('report_month', ''),
+            'source': payment.get('source', 'CRM')
+        }
 
-        if reply == QDialog.Accepted:
-            try:
-                # Удаляем запись из базы данных
-                conn = self.db.connect()
-                cursor = conn.cursor()
+        try:
+            dialog = EditPaymentDialog(self, payment_data, api_client=self.api_client)
+            if dialog.exec_() == QDialog.Accepted:
+                new_data = dialog.get_payment_data()
 
-                cursor.execute('DELETE FROM payments WHERE id = ?', (payment['id'],))
+                if is_salary:
+                    # Обновляем оклад
+                    if self.api_client and self.api_client.is_online:
+                        try:
+                            self.api_client.update_salary(payment['id'], {
+                                'amount': new_data['amount'],
+                                'report_month': new_data['report_month']
+                            })
+                        except Exception as e:
+                            print(f"[WARN] Ошибка API обновления оклада: {e}")
+                            self.db.update_salary(payment['id'], new_data['amount'], new_data['report_month'])
+                    else:
+                        self.db.update_salary(payment['id'], new_data['amount'], new_data['report_month'])
+                else:
+                    # Обновляем CRM выплату
+                    # ИСПРАВЛЕНИЕ 07.02.2026: Сбрасываем флаг reassigned при редактировании (#6)
+                    update_data = {
+                        'final_amount': new_data['amount'],
+                        'payment_type': new_data['payment_type'],
+                        'report_month': new_data['report_month'],
+                        'reassigned': False  # Сбрасываем флаг переназначения
+                    }
+                    if self.api_client and self.api_client.is_online:
+                        try:
+                            self.api_client.update_payment(payment['id'], update_data)
+                        except Exception as e:
+                            print(f"[WARN] Ошибка API обновления выплаты: {e}")
+                            self._update_payment_locally(payment['id'], new_data)
+                    else:
+                        self._update_payment_locally(payment['id'], new_data)
 
-                conn.commit()
-                self.db.close()
-
-                print(f"Выплата удалена: {payment.get('employee_name')} (ID: {payment['id']})")
-
-                # Показываем сообщение об успехе
-                CustomMessageBox(
-                    self,
-                    'Успех',
-                    f'Выплата успешно удалена',
-                    'success'
-                ).exec_()
-
-                # Обновляем таблицы
+                # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
+                self.invalidate_cache()
                 self.load_all_payments()
 
-            except Exception as e:
-                print(f" Ошибка удаления выплаты: {e}")
-                import traceback
-                traceback.print_exc()
+        except Exception as e:
+            print(f"Ошибка редактирования выплаты: {e}")
+            import traceback
+            traceback.print_exc()
+            CustomMessageBox(self, 'Ошибка', f'Не удалось обновить выплату:\n{str(e)}', 'error').exec_()
 
-                CustomMessageBox(
-                    self,
-                    'Ошибка',
-                    f'Не удалось удалить выплату:\n{str(e)}',
-                    'error'
-                ).exec_()
+    def delete_crm_payment(self, payment, payment_type):
+        """Удаление выплаты CRM - ИСПРАВЛЕНО 01.02.2026: теперь использует универсальный метод с API"""
+        # Делегируем универсальному методу который поддерживает API и offline
+        self.delete_payment_universal(
+            payment_id=payment['id'],
+            source='CRM',
+            role=payment.get('role', payment_type),
+            employee_name=payment.get('employee_name', 'Неизвестно')
+        )
 
     def mark_as_paid(self, payment_id):
         """Отметка выплаты как оплаченной"""
@@ -1028,7 +1190,8 @@ class SalariesTab(QWidget):
             else:
                 self.db.mark_payment_as_paid(payment_id, self.employee['id'])
             
-            # Перезагружаем таблицу
+            # Перезагружаем таблицу (инвалидируем кеш т.к. статус изменился)
+            self.invalidate_cache()
             self.load_all_payments()
             
             # Подсвечиваем строку зеленым
@@ -1041,9 +1204,9 @@ class SalariesTab(QWidget):
                         item = table.item(row, col)
                         if item:
                             item.setBackground(QColor('#D5F4E6'))  # Бледно-зеленый
-            
-            CustomMessageBox(self, 'Успех', 'Выплата отмечена как оплаченная', 'success').exec_()
-            
+
+            # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
+
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Не удалось отметить: {e}', 'error').exec_()
 
@@ -1091,7 +1254,8 @@ class SalariesTab(QWidget):
                     'success'
                 ).exec_()
 
-                # Обновляем таблицы
+                # Обновляем таблицы (инвалидируем кеш т.к. данные удалены)
+                self.invalidate_cache()
                 self.load_all_payments()
 
             except Exception as e:
@@ -1122,13 +1286,15 @@ class SalariesTab(QWidget):
     def _queue_payment_delete(self, payment_id: int, source: str):
         """Добавление операции удаления платежа в очередь для синхронизации"""
         if self.offline_manager:
+            # ИСПРАВЛЕНО: Используем правильный entity_type в зависимости от source
+            entity_type = 'salary' if source == 'Оклад' else 'payment'
             self.offline_manager.queue_operation(
                 OperationType.DELETE,
-                'payment',
+                entity_type,
                 payment_id,
                 {'source': source}
             )
-            print(f"[QUEUE] Удаление платежа добавлено в очередь: ID={payment_id}, Source={source}")
+            print(f"[QUEUE] Удаление {entity_type} добавлено в очередь: ID={payment_id}, Source={source}")
 
     def on_period_filter_changed(self):
         """Обработка изменения типа периода"""
@@ -1138,88 +1304,193 @@ class SalariesTab(QWidget):
         self.month_filter.setVisible(period == 'Месяц')
         self.apply_all_payments_filters()
 
+    def reset_all_payments_filters(self):
+        """Сброс всех фильтров вкладки Все выплаты"""
+        # Блокируем сигналы
+        self.period_filter.blockSignals(True)
+        self.year_filter.blockSignals(True)
+        self.month_filter.blockSignals(True)
+        self.quarter_filter.blockSignals(True)
+        self.address_filter.blockSignals(True)
+        self.employee_filter.blockSignals(True)
+        self.position_filter.blockSignals(True)
+        self.agent_type_filter.blockSignals(True)
+        self.payment_subtype_filter.blockSignals(True)
+        self.project_type_filter.blockSignals(True)
+        self.status_filter.blockSignals(True)
+
+        # Сбрасываем на "Все"
+        self.period_filter.setCurrentText('Все')
+        self.year_filter.setCurrentText(str(QDate.currentDate().year()))
+        self.month_filter.setCurrentIndex(QDate.currentDate().month() - 1)
+        self.quarter_filter.setCurrentIndex((QDate.currentDate().month() - 1) // 3)
+        self.address_filter.setCurrentIndex(0)
+        self.employee_filter.setCurrentIndex(0)
+        self.position_filter.setCurrentIndex(0)
+        self.agent_type_filter.setCurrentIndex(0)
+        self.payment_subtype_filter.setCurrentIndex(0)
+        self.project_type_filter.setCurrentIndex(0)
+        self.status_filter.setCurrentIndex(0)
+
+        # Скрываем/показываем элементы
+        self.year_filter.hide()
+        self.month_filter.hide()
+        self.quarter_filter.hide()
+
+        # Разблокируем сигналы
+        self.period_filter.blockSignals(False)
+        self.year_filter.blockSignals(False)
+        self.month_filter.blockSignals(False)
+        self.quarter_filter.blockSignals(False)
+        self.address_filter.blockSignals(False)
+        self.employee_filter.blockSignals(False)
+        self.position_filter.blockSignals(False)
+        self.agent_type_filter.blockSignals(False)
+        self.payment_subtype_filter.blockSignals(False)
+        self.project_type_filter.blockSignals(False)
+        self.status_filter.blockSignals(False)
+
+        # Перезагружаем данные
+        self.load_all_payments()
+
     def apply_all_payments_filters(self):
         """Применение всех фильтров для таблицы всех выплат"""
         self.load_all_payments()
 
-    def load_all_payments(self):
-        """Загрузка всех выплат с применением фильтров"""
+    def load_all_payments(self, force_reload=False):
+        """Загрузка всех выплат с применением фильтров и кешированием"""
         period = self.period_filter.currentText()
         year = int(self.year_filter.currentText())
 
         # Отключаем сортировку перед загрузкой данных
         self.all_payments_table.setSortingEnabled(False)
 
-        # Получаем данные в зависимости от выбранного периода
-        if period == 'Месяц':
-            month = self.month_filter.currentIndex() + 1
+        # Проверяем кеш - если год тот же и не требуется принудительная перезагрузка
+        need_reload = (
+            force_reload or
+            self._all_payments_cache is None or
+            self._cache_year != year or
+            period == 'Все'  # Для "Все" всегда загружаем заново
+        )
+
+        if need_reload:
+            # ИСПРАВЛЕНО 06.02.2026: include_null_month=True для включения платежей "В работе"
+            # Загружаем данные за весь год (один запрос вместо 12)
             if self.api_client and self.api_client.is_online:
                 try:
-                    payments = self.api_client.get_all_payments(month, year)
+                    # Получаем все выплаты за год одним запросом, включая NULL report_month
+                    all_payments = self.api_client.get_year_payments(year, include_null_month=True)
                 except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки выплат: {e}")
-                    payments = self.db.get_all_payments(month, year)
+                    print(f"[WARN] Ошибка API загрузки годовых выплат: {e}")
+                    all_payments = self.db.get_year_payments(year)
             else:
-                payments = self.db.get_all_payments(month, year)
-        elif period == 'Квартал':
-            quarter = self.quarter_filter.currentIndex() + 1
-            # Получаем все выплаты за квартал
-            all_payments = []
-            for month in range((quarter - 1) * 3 + 1, quarter * 3 + 1):
-                if self.api_client and self.api_client.is_online:
-                    try:
-                        all_payments.extend(self.api_client.get_all_payments(month, year))
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API загрузки выплат: {e}")
-                        all_payments.extend(self.db.get_all_payments(month, year))
-                else:
-                    all_payments.extend(self.db.get_all_payments(month, year))
-            payments = all_payments
-        elif period == 'Год':
-            # Получаем все выплаты за год
-            all_payments = []
-            for month in range(1, 13):
-                if self.api_client and self.api_client.is_online:
-                    try:
-                        all_payments.extend(self.api_client.get_all_payments(month, year))
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API загрузки выплат: {e}")
-                        all_payments.extend(self.db.get_all_payments(month, year))
-                else:
-                    all_payments.extend(self.db.get_all_payments(month, year))
-            payments = all_payments
-        else:  # 'Все'
-            # Получаем все выплаты за все время
-            all_payments = []
-            for y in range(2020, 2031):
-                for month in range(1, 13):
+                all_payments = self.db.get_year_payments(year)
+
+            # Сохраняем в кеш
+            self._all_payments_cache = all_payments
+            self._cache_year = year
+
+            # Для периода "Все" загружаем дополнительные годы
+            # ИСПРАВЛЕНО 06.02.2026: Дедупликация по ID чтобы NULL платежи не дублировались
+            if period == 'Все':
+                all_payments = []
+                seen_ids = set()  # Множество для отслеживания уже добавленных платежей
+                for y in range(2020, 2031):
                     if self.api_client and self.api_client.is_online:
                         try:
-                            all_payments.extend(self.api_client.get_all_payments(month, y))
+                            year_payments = self.api_client.get_year_payments(y, include_null_month=True)
                         except Exception as e:
-                            print(f"[WARN] Ошибка API загрузки выплат: {e}")
-                            all_payments.extend(self.db.get_all_payments(month, y))
+                            year_payments = self.db.get_year_payments(y)
                     else:
-                        all_payments.extend(self.db.get_all_payments(month, y))
-            payments = all_payments
+                        year_payments = self.db.get_year_payments(y)
 
+                    # Дедупликация: добавляем только уникальные платежи
+                    for p in year_payments:
+                        # Уникальный ключ: (id, source) - source различает payments и salaries
+                        pid = (p.get('id'), p.get('source', 'CRM'))
+                        if pid not in seen_ids:
+                            all_payments.append(p)
+                            seen_ids.add(pid)
+
+                payments = all_payments
+            else:
+                payments = list(self._all_payments_cache)  # Копия кеша
+        else:
+            # Используем кеш
+            payments = list(self._all_payments_cache)
+
+        # Фильтруем данные по периоду (уже в памяти - быстро)
+        if period == 'Месяц':
+            month = self.month_filter.currentIndex() + 1
+            payments = [p for p in payments if self._payment_matches_month(p, month, year)]
+        elif period == 'Квартал':
+            quarter = self.quarter_filter.currentIndex() + 1
+            start_month = (quarter - 1) * 3 + 1
+            end_month = quarter * 3
+            payments = [p for p in payments if self._payment_matches_quarter(p, start_month, end_month, year)]
+        elif period == 'Год':
+            payments = [p for p in payments if self._payment_matches_year(p, year)]
+        # Для 'Все' - показываем всё
+
+        # Продолжаем отрисовку
+        year = int(self.year_filter.currentText())
+        self._render_all_payments(payments, year)
+
+    def _payment_matches_month(self, payment, month, year):
+        """Проверка соответствия платежа месяцу"""
+        report_month = payment.get('report_month', '')
+        if report_month:
+            try:
+                parts = report_month.split('-')
+                if len(parts) == 2:
+                    return int(parts[0]) == year and int(parts[1]) == month
+            except:
+                pass
+        return False
+
+    def _payment_matches_quarter(self, payment, start_month, end_month, year):
+        """Проверка соответствия платежа кварталу"""
+        report_month = payment.get('report_month', '')
+        if report_month:
+            try:
+                parts = report_month.split('-')
+                if len(parts) == 2:
+                    p_year = int(parts[0])
+                    p_month = int(parts[1])
+                    return p_year == year and start_month <= p_month <= end_month
+            except:
+                pass
+        return False
+
+    def _payment_matches_year(self, payment, year):
+        """Проверка соответствия платежа году"""
+        report_month = payment.get('report_month', '')
+        if report_month:
+            try:
+                parts = report_month.split('-')
+                if len(parts) >= 1:
+                    return int(parts[0]) == year
+            except:
+                pass
+        return False
+
+    def _render_all_payments(self, payments, year):
+        """Отрисовка таблицы всех выплат с отфильтрованными данными"""
         # Загружаем уникальные значения для фильтров
         addresses = sorted(set(p.get('address', '') for p in payments if p.get('address')))
         employees = sorted(set(p.get('employee_name', '') for p in payments if p.get('employee_name')))
         positions = sorted(set(p.get('position', '') for p in payments if p.get('position')))
-        agent_types = sorted(set(p.get('payment_type', '') for p in payments if p.get('payment_type')))
+        # agent_types теперь фиксированные (Фестиваль, Петрович) - не загружаем динамически
 
         # Обновляем комбобоксы фильтров (сохраняя текущие выборы если возможно)
         current_address = self.address_filter.currentData()
         current_employee = self.employee_filter.currentData()
         current_position = self.position_filter.currentData()
-        current_agent = self.agent_type_filter.currentData()
 
         # Блокируем сигналы чтобы избежать рекурсии
         self.address_filter.blockSignals(True)
         self.employee_filter.blockSignals(True)
         self.position_filter.blockSignals(True)
-        self.agent_type_filter.blockSignals(True)
 
         self.address_filter.clear()
         self.address_filter.addItem('Все', None)
@@ -1248,20 +1519,12 @@ class SalariesTab(QWidget):
             if index >= 0:
                 self.position_filter.setCurrentIndex(index)
 
-        self.agent_type_filter.clear()
-        self.agent_type_filter.addItem('Все', None)
-        for agent in agent_types:
-            self.agent_type_filter.addItem(agent, agent)
-        if current_agent:
-            index = self.agent_type_filter.findData(current_agent)
-            if index >= 0:
-                self.agent_type_filter.setCurrentIndex(index)
+        # agent_type_filter и payment_subtype_filter имеют фиксированные значения - не обновляем
 
         # Разблокируем сигналы
         self.address_filter.blockSignals(False)
         self.employee_filter.blockSignals(False)
         self.position_filter.blockSignals(False)
-        self.agent_type_filter.blockSignals(False)
 
         # Применяем фильтры
         filtered_payments = []
@@ -1275,9 +1538,17 @@ class SalariesTab(QWidget):
             # Фильтр по должности
             if self.position_filter.currentData() and payment.get('position') != self.position_filter.currentData():
                 continue
-            # Фильтр по типу агента
-            if self.agent_type_filter.currentData() and payment.get('payment_type') != self.agent_type_filter.currentData():
+            # Фильтр по типу агента (agent_type из договора: Петрович, Фестиваль и т.д.)
+            if self.agent_type_filter.currentData() and payment.get('agent_type') != self.agent_type_filter.currentData():
                 continue
+            # Фильтр по типу выплаты (Аванс, Доплата, Полная оплата, Оклад)
+            payment_subtype_filter = self.payment_subtype_filter.currentData()
+            if payment_subtype_filter:
+                actual_subtype = payment.get('payment_subtype')
+                if payment['source'] == 'Оклад':
+                    actual_subtype = 'Оклад'
+                if actual_subtype != payment_subtype_filter:
+                    continue
             # Фильтр по типу проекта
             if self.project_type_filter.currentText() != 'Все':
                 project_type = payment.get('project_type', '')
@@ -1295,11 +1566,15 @@ class SalariesTab(QWidget):
 
         payments = filtered_payments
 
+        # Оптимизация: отключаем обновление виджета во время заполнения
+        self.all_payments_table.setUpdatesEnabled(False)
+        # ИСПРАВЛЕНИЕ 07.02.2026: Очищаем таблицу перед заполнением (#6)
+        # Это удаляет старые cellWidget и сбрасывает подсветку переназначения
+        self.all_payments_table.setRowCount(0)
         self.all_payments_table.setRowCount(len(payments))
-        
+
         total_month = 0
-        total_year = 0
-        
+
         for row, payment in enumerate(payments):
             # Тип проекта
             project_type = payment.get('project_type', '-')
@@ -1308,8 +1583,7 @@ class SalariesTab(QWidget):
             self.all_payments_table.setItem(row, 0, QTableWidgetItem(project_type))
 
             # Тип агента (из договора: Петрович, Фестиваль и т.д.)
-            # payment_type в SQL запросе теперь содержит c.agent_type из договора
-            agent_type = payment.get('payment_type', '-')
+            agent_type = payment.get('agent_type', '-')
             if not agent_type:
                 agent_type = '-'
             self.all_payments_table.setItem(row, 1, QTableWidgetItem(agent_type))
@@ -1354,36 +1628,32 @@ class SalariesTab(QWidget):
             actions_widget = self.create_all_payments_actions(payment, is_salary, self.all_payments_table, row)
             self.all_payments_table.setCellWidget(row, 8, actions_widget)
 
-            # Применяем цвет строки в зависимости от статуса
+            # Применяем цвет строки в зависимости от статуса и переназначения
             status = payment.get('payment_status')
-            self.apply_row_color(self.all_payments_table, row, status)
+            is_reassigned = payment.get('reassigned', False)
+            self.apply_row_color(self.all_payments_table, row, status, is_reassigned)
 
             total_month += payment['amount']
 
-        # Получаем итого за год
-        if self.api_client:
-            try:
-                year_payments = self.api_client.get_year_payments(year)
-            except Exception as e:
-                print(f"[WARN] Ошибка API загрузки годовых выплат: {e}")
-                year_payments = self.db.get_year_payments(year)
+        # Используем кеш для итогов за год (избегаем повторных запросов к API)
+        if self._all_payments_cache:
+            total_year = sum(p['amount'] for p in self._all_payments_cache if self._payment_matches_year(p, year))
         else:
-            year_payments = self.db.get_year_payments(year)
-        total_year = sum(p['amount'] for p in year_payments)
-        
+            total_year = total_month  # Если кеша нет, используем текущую сумму
+
+        # Подсчёт перераспределённых платежей
+        reassigned_count = sum(1 for p in payments if p.get('reassigned', False))
+        reassigned_text = f'  |  Перераспределено: {reassigned_count}' if reassigned_count > 0 else ''
+
         self.totals_label.setText(
-            f'Итого за месяц: {total_month:,.2f} ₽  |  '
-            f'Итого за год: {total_year:,.2f} ₽'
+            f'Итого за период: {total_month:,.2f} ₽  |  '
+            f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
         )
 
+        # Оптимизация: включаем обновление виджета после заполнения
+        self.all_payments_table.setUpdatesEnabled(True)
         # Включаем сортировку после загрузки данных
         self.all_payments_table.setSortingEnabled(True)
-
-        # Загружаем данные по типам
-        self.load_payment_type_data('Индивидуальные проекты')
-        self.load_payment_type_data('Шаблонные проекты')
-        self.load_payment_type_data('Оклады')
-        self.load_payment_type_data('Авторский надзор')
 
     def _get_payments_by_type_from_db(self, payment_type, project_type_filter):
         """Получение выплат по типу из локальной БД"""
@@ -1571,6 +1841,8 @@ class SalariesTab(QWidget):
 
                 parent_widget.employee_filter.blockSignals(False)
 
+                # ИСПРАВЛЕНИЕ 07.02.2026: Очищаем таблицу перед заполнением (#6)
+                table.setRowCount(0)
                 table.setRowCount(len(data))
                 
                 for row, item in enumerate(data):
@@ -1578,7 +1850,7 @@ class SalariesTab(QWidget):
                     
                     # Заполнение в зависимости от типа
                     if payment_type == 'Оклады':
-                        # Для окладов: Исполнитель, Тип проекта, Сумма оклада, Отчетный месяц, Действия
+                        # Для окладов: Исполнитель, Тип проекта, Сумма оклада, Отчетный месяц, Комментарий, Действия
                         table.setItem(row, col, QTableWidgetItem(item['employee_name']))
                         col += 1
                         table.setItem(row, col, QTableWidgetItem(item.get('project_type', 'Индивидуальный')))
@@ -1602,12 +1874,22 @@ class SalariesTab(QWidget):
                         table.setItem(row, col, QTableWidgetItem(report_month))
                         col += 1
 
+                        # Комментарий с подсказкой
+                        comment = item.get('comments', '') or ''
+                        # Обрезаем для отображения, если слишком длинный
+                        display_comment = comment[:30] + '...' if len(comment) > 30 else comment
+                        comment_item = QTableWidgetItem(display_comment)
+                        comment_item.setToolTip(comment)  # Полный текст в подсказке
+                        table.setItem(row, col, comment_item)
+                        col += 1
+
                         # Кнопки действий
                         actions_widget = self.create_salary_payment_actions(item, payment_type, table, row)
                         table.setCellWidget(row, col, actions_widget)
 
-                        # Применяем цвет строки в зависимости от статуса
-                        self.apply_row_color(table, row, item.get('payment_status'))
+                        # Применяем цвет строки в зависимости от статуса и переназначения
+                        is_reassigned = item.get('reassigned', False)
+                        self.apply_row_color(table, row, item.get('payment_status'), is_reassigned)
 
                         continue  # Переходим к следующей строке, не обрабатываем дальше
 
@@ -1679,8 +1961,9 @@ class SalariesTab(QWidget):
                     actions_widget = self.create_crm_payment_actions(item, payment_type, table, row)
                     table.setCellWidget(row, col, actions_widget)
 
-                    # Применяем цвет строки в зависимости от статуса
-                    self.apply_row_color(table, row, item.get('payment_status'))
+                    # Применяем цвет строки в зависимости от статуса и переназначения
+                    is_reassigned = item.get('reassigned', False)
+                    self.apply_row_color(table, row, item.get('payment_status'), is_reassigned)
 
                 # Подсчитываем итоги
                 from datetime import datetime
@@ -1767,8 +2050,11 @@ class SalariesTab(QWidget):
 
                 if report_month_item:
                     report_month_text = report_month_item.text()
-                    # Преобразуем "Ноябрь 2025" обратно в месяц и год
-                    if report_month_text and report_month_text != 'Не установлен':
+                    # Если период выбран (не "Все") и отчетный месяц не установлен - скрываем строку
+                    if not report_month_text or report_month_text == 'Не установлен' or report_month_text == '-':
+                        show_row = False
+                    else:
+                        # Преобразуем "Ноябрь 2025" обратно в месяц и год
                         try:
                             months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                                         'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
@@ -1789,7 +2075,10 @@ class SalariesTab(QWidget):
                                     if year_value != year:
                                         show_row = False
                         except:
-                            pass
+                            show_row = False  # Если не удалось распарсить - скрываем
+                else:
+                    # Если элемент отчетного месяца отсутствует - скрываем при выбранном периоде
+                    show_row = False
 
             # Фильтр по исполнителю
             if employee_filter and show_row:
@@ -1826,8 +2115,10 @@ class SalariesTab(QWidget):
                     # Получаем статус из UserRole (установлен делегатом)
                     status_item = table.item(row, 0)
                     if status_item:
-                        row_status = status_item.data(Qt.UserRole)
-                        if row_status != status_filter:
+                        row_status = status_item.data(Qt.UserRole)  # 'to_pay' или 'paid'
+                        # Маппинг UI статусов на внутренние значения
+                        expected_status = 'to_pay' if status_filter == 'К оплате' else 'paid'
+                        if row_status != expected_status:
                             show_row = False
             else:
                 # Фильтр по типу проекта для окладов
@@ -1838,37 +2129,135 @@ class SalariesTab(QWidget):
 
             table.setRowHidden(row, not show_row)
 
-    def reset_payment_type_filters(self, payment_type):
-        """Сброс фильтров вкладки типа оплаты"""
-        # Получаем виджет вкладки
-        if payment_type == 'Индивидуальные проекты':
-            parent_widget = self.individual_tab
-        elif payment_type == 'Шаблонные проекты':
-            parent_widget = self.template_tab
-        elif payment_type == 'Оклады':
-            parent_widget = self.salary_tab
-        else:
-            parent_widget = self.supervision_tab
+        # Пересчитываем итоги только для видимых строк
+        self._recalculate_totals(table, parent_widget, payment_type)
 
-        # Сбрасываем все фильтры
-        parent_widget.period_filter.setCurrentIndex(0)  # Месяц
+    def _recalculate_totals(self, table, parent_widget, payment_type):
+        """Пересчёт итогов на основе видимых строк таблицы"""
+        from datetime import datetime
+
+        # Получаем текущий месяц и год из фильтров
+        current_month = parent_widget.month_filter.currentIndex() + 1
+        current_year = parent_widget.year_filter.value()
+        current_month_str = f'{current_year}-{current_month:02d}'
+
+        total_month = 0.0
+        total_year = 0.0
+
+        # Определяем индексы столбцов в зависимости от типа
+        if payment_type == 'Оклады':
+            amount_col = 2  # Сумма оклада
+            report_month_col = 3  # Отчетный месяц
+        else:
+            amount_col = 8  # Сумма
+            report_month_col = 10  # Отчетный месяц
+
+        months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+        for row in range(table.rowCount()):
+            # Пропускаем скрытые строки
+            if table.isRowHidden(row):
+                continue
+
+            # Получаем сумму
+            amount_item = table.item(row, amount_col)
+            if not amount_item:
+                continue
+
+            amount_text = amount_item.text().replace(' ', '').replace(',', '').replace('₽', '').strip()
+            try:
+                amount = float(amount_text)
+            except ValueError:
+                continue
+
+            # Получаем отчетный месяц
+            report_month_item = table.item(row, report_month_col)
+            if not report_month_item:
+                continue
+
+            report_month_text = report_month_item.text()
+            if not report_month_text or report_month_text == 'Не установлен' or report_month_text == '-':
+                continue
+
+            # Парсим "Ноябрь 2025" -> месяц и год
+            try:
+                parts = report_month_text.split()
+                if len(parts) >= 2:
+                    month_name = parts[0]
+                    year_value = int(parts[1])
+                    month_value = months_ru.index(month_name) + 1
+
+                    # Подсчет за текущий месяц
+                    if month_value == current_month and year_value == current_year:
+                        total_month += amount
+
+                    # Подсчет за весь год
+                    if year_value == current_year:
+                        total_year += amount
+            except (ValueError, IndexError):
+                continue
+
+        # Обновляем метку итогов
+        totals_label = parent_widget.findChild(QLabel, f'totals_{payment_type}')
+        if totals_label:
+            totals_label.setText(
+                f'Итого за месяц: {total_month:,.2f} ₽  |  '
+                f'Итого за год: {total_year:,.2f} ₽'
+            )
+
+    def reset_payment_type_filters(self, parent_widget, payment_type):
+        """Сброс фильтров вкладки типа оплаты"""
+        # Блокируем сигналы чтобы избежать множественной перезагрузки
+        parent_widget.period_filter.blockSignals(True)
+        parent_widget.month_filter.blockSignals(True)
+        parent_widget.year_filter.blockSignals(True)
+        parent_widget.employee_filter.blockSignals(True)
+
+        # Сбрасываем все фильтры на "Все"
+        parent_widget.period_filter.setCurrentText('Все')
         parent_widget.month_filter.setCurrentIndex(QDate.currentDate().month() - 1)
         parent_widget.year_filter.setValue(QDate.currentDate().year())
         parent_widget.employee_filter.setCurrentIndex(0)  # Все
 
         if payment_type != 'Оклады':
+            parent_widget.address_filter.blockSignals(True)
+            parent_widget.position_filter.blockSignals(True)
+            parent_widget.agent_type_filter.blockSignals(True)
+            parent_widget.status_filter.blockSignals(True)
+
             parent_widget.address_filter.setCurrentIndex(0)
             parent_widget.position_filter.setCurrentIndex(0)
             parent_widget.agent_type_filter.setCurrentIndex(0)
             parent_widget.status_filter.setCurrentIndex(0)
+
+            parent_widget.address_filter.blockSignals(False)
+            parent_widget.position_filter.blockSignals(False)
+            parent_widget.agent_type_filter.blockSignals(False)
+            parent_widget.status_filter.blockSignals(False)
         else:
+            parent_widget.project_type_filter.blockSignals(True)
             parent_widget.project_type_filter.setCurrentIndex(0)
+            parent_widget.project_type_filter.blockSignals(False)
+
+        # Разблокируем сигналы
+        parent_widget.period_filter.blockSignals(False)
+        parent_widget.month_filter.blockSignals(False)
+        parent_widget.year_filter.blockSignals(False)
+        parent_widget.employee_filter.blockSignals(False)
+
+        # Скрываем/показываем фильтры в зависимости от периода
+        parent_widget.month_filter.hide()
+        parent_widget.year_filter.hide()
+        parent_widget.quarter_filter.hide()
 
         # Показываем все строки
         table = parent_widget.findChild(QTableWidget, f'table_{payment_type}')
         if table:
             for row in range(table.rowCount()):
                 table.setRowHidden(row, False)
+            # Пересчитываем итоги для всех видимых строк
+            self._recalculate_totals(table, parent_widget, payment_type)
 
     def fill_individual_row(self, table, row, data):
         """Заполнение строки индивидуального проекта"""
@@ -1959,20 +2348,55 @@ class SalariesTab(QWidget):
         """Добавление выплаты оклада"""
         dialog = PaymentDialog(self, payment_type='Оклады', api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
+            self.invalidate_cache()
             self.load_all_payments()
 
     def add_payment(self, payment_type):
         """Добавление выплаты"""
         dialog = PaymentDialog(self, payment_type=payment_type, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
+            self.invalidate_cache()
             self.load_all_payments()
-    
+
     def edit_payment(self, payment_data, payment_type):
         """Редактирование выплаты"""
         dialog = PaymentDialog(self, payment_data=payment_data, payment_type=payment_type, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
+            self.invalidate_cache()
             self.load_all_payments()
-    
+
+    def edit_salary_payment(self, payment_data):
+        """Редактирование оклада"""
+        dialog = PaymentDialog(self, payment_data=payment_data, payment_type='Оклады', api_client=self.api_client)
+        if dialog.exec_() == QDialog.Accepted:
+            self.invalidate_cache()
+            self.load_all_payments()
+            self.load_payment_type_data('Оклады')
+
+    def delete_salary_payment(self, payment):
+        """Удаление оклада (#5)"""
+        reply = QMessageBox.question(
+            self,
+            'Подтверждение',
+            f"Удалить оклад сотрудника {payment.get('employee_name', '')}?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            salary_id = payment.get('id')
+            if self.api_client and self.api_client.is_online:
+                try:
+                    self.api_client.delete_salary(salary_id)
+                    print(f"[API] Оклад ID={salary_id} удален")
+                except Exception as e:
+                    print(f"[WARN] API ошибка delete_salary: {e}")
+                    self.db.delete_salary(salary_id)
+            else:
+                self.db.delete_salary(salary_id)
+            self.invalidate_cache()
+            self.load_all_payments()
+            self.load_payment_type_data('Оклады')
+
     def delete_payment(self, payment_id):
         """Удаление выплаты"""
         reply = QMessageBox.question(
@@ -1991,37 +2415,45 @@ class SalariesTab(QWidget):
                     self.db.delete_payment(payment_id)
             else:
                 self.db.delete_payment(payment_id)
+            self.invalidate_cache()
             self.load_all_payments()
 
     def create_salary_payment_actions(self, payment, payment_type, table, row):
         """Кнопки действий для окладов с новым дизайном"""
         widget = QWidget()
         layout = QHBoxLayout()
-        layout.setContentsMargins(5, 0, 5, 0)
-        layout.setSpacing(3)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(2)
 
         # Кнопка "К оплате"
-        to_pay_btn = QPushButton('К оплате')
+        to_pay_btn = QPushButton()
+        to_pay_btn.setIconSize(QSize(12, 12))
+        to_pay_btn.setFixedSize(26, 26)
         current_status = payment.get('payment_status')
+        # ИСПРАВЛЕНИЕ 07.02.2026: Правильная иконка в зависимости от статуса (#4)
         if current_status == 'to_pay':
+            to_pay_btn.setIcon(IconLoader.load('tag'))  # Белая иконка на оранжевом фоне
             to_pay_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #F39C12;
                     color: white;
-                    padding: 4px 8px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
+                QPushButton:hover { background-color: #E67E22; }
             """)
         else:
+            to_pay_btn.setIcon(IconLoader.load('tag-black'))  # Черная иконка на сером фоне
             to_pay_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ECF0F1;
                     color: #7F8C8D;
-                    padding: 4px 8px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
                 QPushButton:hover { background-color: #F39C12; color: white; }
             """)
@@ -2032,26 +2464,31 @@ class SalariesTab(QWidget):
         layout.addWidget(to_pay_btn)
 
         # Кнопка "Оплачено"
-        paid_btn = QPushButton('Оплачено')
+        paid_btn = QPushButton()
+        paid_btn.setIcon(IconLoader.load('money'))
+        paid_btn.setIconSize(QSize(12, 12))
+        paid_btn.setFixedSize(26, 26)
         if current_status == 'paid':
             paid_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #27AE60;
                     color: white;
-                    padding: 4px 8px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
+                QPushButton:hover { background-color: #229954; }
             """)
         else:
             paid_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ECF0F1;
                     color: #7F8C8D;
-                    padding: 4px 8px;
+                    padding: 0px;
                     border-radius: 4px;
-                    font-size: 10px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
                 }
                 QPushButton:hover { background-color: #27AE60; color: white; }
             """)
@@ -2060,6 +2497,46 @@ class SalariesTab(QWidget):
             lambda: self.set_payment_status(payment, 'paid', table, row, is_salary=True)
         )
         layout.addWidget(paid_btn)
+
+        # Кнопка редактирования
+        edit_btn = QPushButton()
+        edit_btn.setIcon(IconLoader.load('edit'))
+        edit_btn.setIconSize(QSize(12, 12))
+        edit_btn.setFixedSize(26, 26)
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498DB;
+                color: white;
+                padding: 0px;
+                border-radius: 4px;
+                min-height: 0px; max-height: 26px;
+                min-width: 0px; max-width: 26px;
+            }
+            QPushButton:hover { background-color: #2980B9; }
+        """)
+        edit_btn.setToolTip('Редактировать')
+        edit_btn.clicked.connect(lambda: self.edit_salary_payment(payment))
+        layout.addWidget(edit_btn)
+
+        # ИСПРАВЛЕНИЕ 07.02.2026: Добавлена кнопка "Удалить" для окладов (#5)
+        delete_btn = QPushButton()
+        delete_btn.setIcon(IconLoader.load('delete2'))
+        delete_btn.setIconSize(QSize(12, 12))
+        delete_btn.setFixedSize(26, 26)
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E74C3C;
+                color: white;
+                padding: 0px;
+                border-radius: 4px;
+                min-height: 0px; max-height: 26px;
+                min-width: 0px; max-width: 26px;
+            }
+            QPushButton:hover { background-color: #C0392B; }
+        """)
+        delete_btn.setToolTip('Удалить оклад')
+        delete_btn.clicked.connect(lambda: self.delete_salary_payment(payment))
+        layout.addWidget(delete_btn)
 
         widget.setLayout(layout)
         return widget
@@ -2078,32 +2555,42 @@ class SalariesTab(QWidget):
                 new_status = status
                 print(f"[OK] Установка статуса '{status}' для ID={payment['id']}")
 
+            # ИСПРАВЛЕНИЕ 06.02.2026: При установке статуса 'to_pay' или 'paid'
+            # устанавливаем report_month = текущий месяц если он NULL
+            update_data = {'payment_status': new_status}
+            current_report_month = payment.get('report_month')
+            if new_status in ('to_pay', 'paid') and not current_report_month:
+                from datetime import datetime
+                update_data['report_month'] = datetime.now().strftime('%Y-%m')
+                print(f"[OK] Установлен report_month={update_data['report_month']} для ID={payment['id']}")
+
             # ИСПРАВЛЕНО: Используем API если доступен
             if self.api_client and self.api_client.is_online:
                 try:
                     if is_salary:
-                        self.api_client.update_salary(payment['id'], {'payment_status': new_status})
+                        self.api_client.update_salary(payment['id'], update_data)
                     else:
-                        self.api_client.update_payment(payment['id'], {'payment_status': new_status})
+                        self.api_client.update_payment(payment['id'], update_data)
                     print(f"[API] Статус обновлен: ID={payment['id']}, status={new_status}")
                 except Exception as e:
                     print(f"[WARN] Ошибка API обновления статуса: {e}, fallback на локальную БД")
-                    self._update_status_locally(payment['id'], new_status, is_salary)
+                    self._update_status_locally(payment['id'], update_data, is_salary)
             elif self.api_client:
                 # Offline режим
-                self._update_status_locally(payment['id'], new_status, is_salary)
+                self._update_status_locally(payment['id'], update_data, is_salary)
                 if self.offline_manager:
                     from utils.offline_manager import OperationType
                     entity_type = 'salary' if is_salary else 'payment'
                     self.offline_manager.queue_operation(
                         OperationType.UPDATE, entity_type, payment['id'],
-                        {'payment_status': new_status}
+                        update_data
                     )
             else:
                 # Локальный режим без API
-                self._update_status_locally(payment['id'], new_status, is_salary)
+                self._update_status_locally(payment['id'], update_data, is_salary)
 
-            # Обновляем все таблицы для синхронизации
+            # Обновляем все таблицы для синхронизации (инвалидируем кеш т.к. статус изменился)
+            self.invalidate_cache()
             self.load_all_payments()
             self.load_payment_type_data('Оклады')
             self.load_payment_type_data('Индивидуальные проекты')
@@ -2114,28 +2601,49 @@ class SalariesTab(QWidget):
             if not is_salary:
                 self.sync_status_with_crm(payment, new_status)
 
+            # ИСПРАВЛЕНО 05.02.2026: Обновляем дашборд после изменения статуса
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'refresh_current_dashboard'):
+                main_window.refresh_current_dashboard()
+
         except Exception as e:
             print(f"[ERROR] Ошибка установки статуса: {e}")
             import traceback
             traceback.print_exc()
 
-    def _update_status_locally(self, payment_id: int, new_status, is_salary: bool):
-        """Обновление статуса в локальной БД"""
+    def _update_status_locally(self, payment_id: int, update_data: dict, is_salary: bool):
+        """Обновление статуса и report_month в локальной БД"""
         conn = self.db.connect()
         cursor = conn.cursor()
         table_name = 'salaries' if is_salary else 'payments'
+
+        # Формируем SET часть запроса динамически
+        set_parts = []
+        values = []
+        for key, value in update_data.items():
+            set_parts.append(f'{key} = ?')
+            values.append(value)
+        values.append(payment_id)
+
         cursor.execute(f'''
         UPDATE {table_name}
-        SET payment_status = ?
+        SET {', '.join(set_parts)}
         WHERE id = ?
-        ''', (new_status, payment_id))
+        ''', values)
         conn.commit()
         self.db.close()
 
-    def apply_row_color(self, table, row, status):
-        """Применение цвета к строке в зависимости от статуса"""
-        if status == 'to_pay':
-            color = QColor('#FFF3CD')  # Светло-желтый
+    def apply_row_color(self, table, row, status, is_reassigned=False):
+        """Применение цвета к строке в зависимости от статуса и переназначения"""
+        # Определяем цвет и индикатор переназначения
+        reassigned_indicator = ''
+
+        if is_reassigned:
+            # Переназначенные строки - жёлтый фон со звёздочкой
+            color = QColor('#FFF9C4')  # Яркий жёлтый для переназначенных
+            reassigned_indicator = ' *'
+        elif status == 'to_pay':
+            color = QColor('#FFE4B5')  # Персиковый/оранжевый - ярче чем раньше
         elif status == 'paid':
             color = QColor('#D4EDDA')  # Светло-зеленый
         else:
@@ -2161,9 +2669,17 @@ class SalariesTab(QWidget):
                     text = ""
                     alignment = int(Qt.AlignLeft | Qt.AlignVCenter)
 
+                # Добавляем звёздочку для переназначенных (в колонку Исполнитель - col == 2)
+                if is_reassigned and col == 2 and reassigned_indicator:
+                    text = text + reassigned_indicator
+
                 label = QLabel(text)
                 label.setStyleSheet(f"background-color: {color_name}; padding: 5px;")
                 label.setAlignment(Qt.Alignment(alignment))
+
+                # Добавляем tooltip для переназначенных строк (в колонку Исполнитель)
+                if is_reassigned and col == 2:
+                    label.setToolTip('Выплата переназначена другому исполнителю')
 
                 table.setCellWidget(row, col, label)
 
@@ -2209,7 +2725,7 @@ class PaymentDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-radius: 10px;
             }
         """)
@@ -2273,12 +2789,25 @@ class PaymentDialog(QDialog):
             self.amount.setSuffix(' ₽')
             form_layout.addRow('Сумма оклада:', self.amount)
 
-            # Месяц
+            # Месяц и Год
+            month_year_layout = QHBoxLayout()
             self.month_combo = CustomComboBox()
             months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                       'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
             self.month_combo.addItems(months)
-            form_layout.addRow('Отчетный месяц:', self.month_combo)
+            self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
+            month_year_layout.addWidget(self.month_combo)
+
+            self.year_spin = QSpinBox()
+            self.year_spin.setRange(2020, 2040)
+            self.year_spin.setValue(QDate.currentDate().year())
+            self.year_spin.setFixedWidth(80)
+            month_year_layout.addWidget(self.year_spin)
+            month_year_layout.addStretch()
+
+            month_year_widget = QWidget()
+            month_year_widget.setLayout(month_year_layout)
+            form_layout.addRow('Отчетный месяц:', month_year_widget)
         else:
             # Договор
             self.contract_combo = CustomComboBox()
@@ -2323,9 +2852,10 @@ class PaymentDialog(QDialog):
             self.advance.setSuffix(' ₽')
             form_layout.addRow('Предоплата:', self.advance)
         
-        # Комментарий
+        # Комментарий (увеличенная высота)
         self.comments = QTextEdit()
-        self.comments.setMaximumHeight(80)
+        self.comments.setMinimumHeight(120)
+        self.comments.setMaximumHeight(150)
         form_layout.addRow('Комментарий:', self.comments)
         
         layout.addLayout(form_layout)
@@ -2402,7 +2932,8 @@ class PaymentDialog(QDialog):
             payment_data['advance_payment'] = self.advance.value()
         else:
             month_index = self.month_combo.currentIndex() + 1
-            payment_data['report_month'] = f"{QDate.currentDate().year()}-{month_index:02d}"
+            year = self.year_spin.value()
+            payment_data['report_month'] = f"{year}-{month_index:02d}"
             payment_data['project_type'] = self.project_type_combo.currentText()
         
         if self.payment_data:
@@ -2424,8 +2955,7 @@ class PaymentDialog(QDialog):
             else:
                 self.db.add_salary(payment_data)
         
-        # ========== ЗАМЕНИЛИ QMessageBox ==========
-        CustomMessageBox(self, 'Успех', 'Выплата сохранена', 'success').exec_()
+        # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
         self.accept()
     
     def showEvent(self, event):
@@ -2442,42 +2972,85 @@ class PaymentDialog(QDialog):
 
 
 class EditPaymentDialog(QDialog):
-    """Диалог редактирования выплаты"""
+    """Диалог редактирования выплаты с кастомным title bar"""
     def __init__(self, parent, payment_data, api_client=None):
         super().__init__(parent)
         self.payment_data = payment_data
         self.api_client = api_client
+        self._drag_pos = None
         self.init_ui()
 
     def init_ui(self):
         """Инициализация интерфейса"""
-        self.setWindowTitle('Редактирование выплаты')
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        # Убираем стандартный заголовок окна
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
         main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Контейнер с рамкой
+        # Контейнер с рамкой 1px
         border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
         border_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
                 border-radius: 10px;
             }
         """)
 
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        # Кастомный title bar
+        title_bar = QWidget()
+        title_bar.setFixedHeight(45)
+        title_bar.setStyleSheet("""
+            QWidget {
+                background-color: #FAFAFA;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                border-bottom: 1px solid #E0E0E0;
+            }
+        """)
+        title_bar_layout = QHBoxLayout()
+        title_bar_layout.setContentsMargins(15, 0, 10, 0)
+
+        title_label = QLabel('Редактирование выплаты')
+        title_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #333;')
+        title_bar_layout.addWidget(title_label)
+        title_bar_layout.addStretch()
+
+        # Кнопка закрытия
+        close_btn = QPushButton()
+        close_btn.setIcon(IconLoader.load('x'))
+        close_btn.setIconSize(QSize(16, 16))
+        close_btn.setFixedSize(30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #E0E0E0; }
+        """)
+        close_btn.clicked.connect(self.reject)
+        title_bar_layout.addWidget(close_btn)
+
+        title_bar.setLayout(title_bar_layout)
+        title_bar.mousePressEvent = self._title_bar_mouse_press
+        title_bar.mouseMoveEvent = self._title_bar_mouse_move
+
+        border_layout.addWidget(title_bar)
 
         # Контент
         content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: white; border-radius: 0px;")
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(30, 20, 30, 30)
         layout.setSpacing(20)
-
-        # Заголовок
-        title = QLabel('Изменение выплаты')
-        title.setStyleSheet('font-size: 18px; font-weight: bold; padding: 10px;')
-        layout.addWidget(title)
 
         # Форма
         form_layout = QFormLayout()
@@ -2485,6 +3058,7 @@ class EditPaymentDialog(QDialog):
 
         # Исполнитель (только для отображения)
         self.employee_label = QLabel(self.payment_data.get('employee_name', '-'))
+        self.employee_label.setStyleSheet('font-size: 13px;')
         form_layout.addRow('Исполнитель:', self.employee_label)
 
         # Тип выплаты
@@ -2496,36 +3070,123 @@ class EditPaymentDialog(QDialog):
             self.payment_type_combo.setCurrentIndex(index)
         form_layout.addRow('Тип выплаты:', self.payment_type_combo)
 
-        # Сумма
+        # Сумма с корректными стрелками
         self.amount_spin = QDoubleSpinBox()
         self.amount_spin.setRange(0, 10000000)
         self.amount_spin.setValue(self.payment_data.get('final_amount', 0))
         self.amount_spin.setSuffix(' ₽')
-        self.amount_spin.setStyleSheet('padding: 5px; font-size: 13px;')
+        self.amount_spin.setFixedHeight(38)
+        self.amount_spin.setStyleSheet(f"""
+            QDoubleSpinBox {{
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                padding-left: 8px;
+                padding-right: 8px;
+                color: #333333;
+                font-size: 13px;
+            }}
+            QDoubleSpinBox:hover {{
+                border-color: #ffd93c;
+            }}
+            QDoubleSpinBox::up-button,
+            QDoubleSpinBox::down-button {{
+                background-color: #F8F9FA;
+                border: none;
+                width: 20px;
+                border-radius: 4px;
+            }}
+            QDoubleSpinBox::up-button:hover,
+            QDoubleSpinBox::down-button:hover {{
+                background-color: #f5f5f5;
+            }}
+            QDoubleSpinBox::up-arrow {{
+                image: url({ICONS_PATH}/arrow-up-circle.svg);
+                width: 14px;
+                height: 14px;
+            }}
+            QDoubleSpinBox::down-arrow {{
+                image: url({ICONS_PATH}/arrow-down-circle.svg);
+                width: 14px;
+                height: 14px;
+            }}
+        """)
         form_layout.addRow('Сумма:', self.amount_spin)
 
-        # Отчетный месяц
+        # Отчетный месяц с выбором года
+        month_year_widget = QWidget()
+        month_year_layout = QHBoxLayout()
+        month_year_layout.setContentsMargins(0, 0, 0, 0)
+        month_year_layout.setSpacing(10)
+
         self.month_combo = CustomComboBox()
         months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
         self.month_combo.addItems(months)
+        self.month_combo.setMinimumWidth(130)
+        month_year_layout.addWidget(self.month_combo)
 
-        # Устанавливаем текущий месяц
+        # Выбор года
+        self.year_spin = QSpinBox()
+        self.year_spin.setRange(2020, 2040)
+        self.year_spin.setFixedHeight(38)
+        self.year_spin.setMinimumWidth(80)
+        self.year_spin.setStyleSheet(f"""
+            QSpinBox {{
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                padding-left: 8px;
+                padding-right: 8px;
+                color: #333333;
+                font-size: 13px;
+            }}
+            QSpinBox:hover {{
+                border-color: #ffd93c;
+            }}
+            QSpinBox::up-button,
+            QSpinBox::down-button {{
+                background-color: #F8F9FA;
+                border: none;
+                width: 20px;
+                border-radius: 4px;
+            }}
+            QSpinBox::up-button:hover,
+            QSpinBox::down-button:hover {{
+                background-color: #f5f5f5;
+            }}
+            QSpinBox::up-arrow {{
+                image: url({ICONS_PATH}/arrow-up-circle.svg);
+                width: 14px;
+                height: 14px;
+            }}
+            QSpinBox::down-arrow {{
+                image: url({ICONS_PATH}/arrow-down-circle.svg);
+                width: 14px;
+                height: 14px;
+            }}
+        """)
+        month_year_layout.addWidget(self.year_spin)
+        month_year_layout.addStretch()
+
+        month_year_widget.setLayout(month_year_layout)
+
+        # Устанавливаем текущий месяц и год
         report_month = self.payment_data.get('report_month', '')
         if report_month:
             try:
                 from datetime import datetime
                 month_date = datetime.strptime(report_month, '%Y-%m')
                 self.month_combo.setCurrentIndex(month_date.month - 1)
-                self.year_value = month_date.year
+                self.year_spin.setValue(month_date.year)
             except:
                 self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
-                self.year_value = QDate.currentDate().year()
+                self.year_spin.setValue(QDate.currentDate().year())
         else:
             self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
-            self.year_value = QDate.currentDate().year()
+            self.year_spin.setValue(QDate.currentDate().year())
 
-        form_layout.addRow('Отчетный месяц:', self.month_combo)
+        form_layout.addRow('Отчетный месяц:', month_year_widget)
 
         layout.addLayout(form_layout)
 
@@ -2582,10 +3243,27 @@ class EditPaymentDialog(QDialog):
 
         self.setMinimumWidth(500)
 
+        # Центрируем диалог относительно родителя
+        from utils.dialog_helpers import center_dialog_on_parent
+        center_dialog_on_parent(self)
+
+    def _title_bar_mouse_press(self, event):
+        """Обработка нажатия мыши на title bar"""
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def _title_bar_mouse_move(self, event):
+        """Обработка перемещения мыши для перетаскивания окна"""
+        if event.buttons() == Qt.LeftButton and self._drag_pos:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+
     def get_payment_data(self):
         """Получение данных выплаты"""
         month = self.month_combo.currentIndex() + 1
-        report_month = f"{self.year_value}-{month:02d}"
+        year = self.year_spin.value()
+        report_month = f"{year}-{month:02d}"
 
         return {
             'amount': self.amount_spin.value(),

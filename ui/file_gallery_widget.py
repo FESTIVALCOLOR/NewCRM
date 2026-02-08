@@ -49,9 +49,11 @@ class FileGalleryWidget(QWidget):
                 QPushButton {
                     background-color: #95a5a6;
                     color: white;
-                    padding: 5px 10px;
-                    border-radius: 3px;
+                    padding: 0px 12px;
+                    border-radius: 6px;
                     font-size: 10px;
+                    min-height: 28px;
+                    max-height: 28px;
                 }
                 QPushButton:hover {
                     background-color: #7f8c8d;

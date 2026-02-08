@@ -42,7 +42,7 @@ class MainWindow(QMainWindow):
         self.init_ui()
 
         # ==========     ==========
-        from utils.calendar_styles import CALENDAR_STYLE
+        from utils.calendar_helpers import CALENDAR_STYLE
 
         #        
         current_style = self.styleSheet()

@@ -52,9 +52,11 @@ class VariationGalleryWidget(QWidget):
                 QPushButton {
                     background-color: #95a5a6;
                     color: white;
-                    padding: 5px 10px;
-                    border-radius: 3px;
+                    padding: 0px 12px;
+                    border-radius: 6px;
                     font-size: 10px;
+                    min-height: 28px;
+                    max-height: 28px;
                 }
                 QPushButton:hover {
                     background-color: #7f8c8d;
@@ -70,7 +72,7 @@ class VariationGalleryWidget(QWidget):
             folder_icon = IconLoader.load('folder.svg')
             if folder_icon and not folder_icon.isNull():
                 add_variation_btn.setIcon(folder_icon)
-                add_variation_btn.setIconSize(QSize(16, 16))
+                add_variation_btn.setIconSize(QSize(14, 14))
             else:
                 # Fallback на текст если иконка не найдена
                 add_variation_btn.setText("+")
@@ -79,8 +81,12 @@ class VariationGalleryWidget(QWidget):
                 QPushButton {
                     background-color: #95a5a6;
                     color: white;
-                    border-radius: 3px;
-                    padding: 2px;
+                    border-radius: 6px;
+                    padding: 0px;
+                    min-height: 28px;
+                    max-height: 28px;
+                    min-width: 28px;
+                    max-width: 28px;
                 }
                 QPushButton:hover {
                     background-color: #7f8c8d;
@@ -92,26 +98,25 @@ class VariationGalleryWidget(QWidget):
             add_variation_btn.clicked.connect(self.on_add_variation_clicked)
             header_layout.addWidget(add_variation_btn)
 
-            # Кнопка "Удалить папку" (красный X, как в других местах)
-            delete_variation_btn = QPushButton("X")
+            # Кнопка "Удалить папку" (красная с иконкой корзины, как у Референсов)
+            delete_variation_btn = IconLoader.create_icon_button('delete', '', 'Удалить папку (текущую вариацию)', icon_size=14)
             delete_variation_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: transparent;
-                    color: #E74C3C;
-                    border: 1px solid #E74C3C;
-                    border-radius: 3px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    padding: 4px 4px;
+                    background-color: #E74C3C;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 0px;
+                    min-height: 28px;
+                    max-height: 28px;
+                    min-width: 28px;
+                    max-width: 28px;
                 }
                 QPushButton:hover {
-                    background-color: #FFE5E5;
-                    color: #C0392B;
-                    border: 1px solid #C0392B;
+                    background-color: #C0392B;
                 }
             """)
             delete_variation_btn.setFixedSize(28, 28)
-            delete_variation_btn.setToolTip('Удалить папку (текущую вариацию)')
             delete_variation_btn.setCursor(QCursor(Qt.PointingHandCursor))
             delete_variation_btn.clicked.connect(self.on_delete_variation_clicked)
             header_layout.addWidget(delete_variation_btn)
@@ -124,7 +129,7 @@ class VariationGalleryWidget(QWidget):
         self.tab_widget.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #E0E0E0;
-                border-radius: 3px;
+                border-radius: 6px;
                 background: white;
             }
             QTabBar::tab {
@@ -142,7 +147,7 @@ class VariationGalleryWidget(QWidget):
                 border-bottom: 1px solid white;
             }
             QTabBar::tab:hover {
-                background-color: #E8F4F8;
+                background-color: #ffffff;
             }
         """)
         layout.addWidget(self.tab_widget)

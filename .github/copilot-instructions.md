@@ -1,40 +1,94 @@
 # Инструкции для AI-агентов: Interior Studio CRM
 
+⚠️ **КРИТИЧЕСКОЕ ПОНИМАНИЕ**: Этот проект поддерживает ДВУХРЕЖИМНУЮ АРХИТЕКТУРУ. Все функции должны работать как в локальном режиме (SQLite), так и в API режиме (клиент-сервер). Всегда проверяйте оба режима при изменении функциональности!
+
 ## Обзор проекта
 
-**Interior Studio** — это полнофункциональная CRM-система для управления студией интерьеров на PyQt5 с SQLite БД.
+**Interior Studio** — многопользовательская CRM система на PyQt5 + FastAPI, управляющая интерьерной студией. **КРИТИЧНО**: проект работает в двух режимах:
+- **Автономный** (`MULTI_USER_MODE=False`): локальная SQLite БД
+- **Сетевой** (`MULTI_USER_MODE=True`): клиент-серверное взаимодействие через REST API
 
 ### Основные модули
-- **`ui/`** — GUI слой (9 табов + окно входа)
-- **`database/`** — ORM, миграции, управление данными
-- **`utils/`** — PDF, иконки, валидация, стили, интеграция с Yandex Disk
-- **`config.py`** — конфигурация ролей, позиций, типов проектов
+- **`ui/`** — PyQt5 GUI (10+ табов, frameless окна, SVG иконки)
+- **`database/`** — SQLite менеджер + миграции on-the-fly (4398 строк db_manager.py)
+- **`utils/`** — APIClient, SyncManager (real-time синхронизация), PDF, Yandex Disk
+- **`server/`** — FastAPI сервер (не включается в exe) для многопользовательского режима
+- **`config.py`** — переключатель режимов, роли, позиции, API URL
 
-## Архитектура
+## Критическая архитектура
 
-### Структура приложения
+### Двухрежимная работа
+```python
+# config.py
+MULTI_USER_MODE = True  # False = локальная БД, True = API сервер
+API_BASE_URL = "http://147.45.154.193:8000"  # Продакшн сервер
+SYNC_INTERVAL = 5  # Секунды между проверками изменений
 ```
-main.py (инициализация) 
-  → DatabaseManager (SQLite, миграции)
-  → LoginWindow (аутентификация по БД)
-  → MainWindow (9 табов, разграничение прав по роли)
+
+### Data Flow в сетевом режиме
+```
+LoginWindow → APIClient.authenticate() → (успех: токен + сотрудник)
+           ↓
+MainWindow + SyncManager (QTimer каждые 5 сек)
+           ↓
+Табы работают через APIClient (+ локальный кэш в utils/cache_manager.py)
+           ↓
+При изменении: PUT/POST в API, обновление кэша, emit сигнала в MainWindow
 ```
 
-### Data Flow
-1. **Аутентификация**: LoginWindow проверяет учетные данные в БД `employees` таблице
-2. **Авторизация**: В MainWindow загружаются только допустимые для роли табы (см. `config.ROLES`)
-3. **CRUD**: Каждый таб работает с DatabaseManager через прямые SQL-запросы в db_manager.py
+### Data Flow в локальном режиме
+```
+LoginWindow → DatabaseManager.verify_credentials() (прямая SQLite проверка)
+           ↓
+MainWindow (без SyncManager)
+           ↓
+Табы работают напрямую с DatabaseManager (SQL-запросы)
+```
 
 ### Ключевые компоненты
 
 | Компонент | Файл | Назначение |
 |-----------|------|-----------|
-| **CRM Kanban** | `ui/crm_tab.py` (5753 строк) | Drag & drop доски с 4+ колонками, система статусов согласования |
-| **Авторский надзор** | `ui/crm_supervision_tab.py` | CRM надзора, история, сроки согласования |
-| **Отчеты** | `ui/reports_tab.py` | PDF экспорт через ReportLab |
-| **DB Manager** | `database/db_manager.py` (3265 строк) | SQLite, миграции на лету, методы CRUD |
+| **API Client** | `utils/api_client.py` (2320 строк) | REST клиент с retry/timeout/fallback логикой + JWT токены |
+| **Sync Manager** | `utils/sync_manager.py` | QTimer-based синхронизация (5 сек), сигналы для UI обновлений |
+| **CRM Kanban** | `ui/crm_tab.py` | Drag & drop доски, drag → APIClient.update_card() → сигнал → UI |
+| **DB Manager** | `database/db_manager.py` (4398 строк) | SQLite + 50+ миграций on-the-fly, нижний уровень доступа |
+| **Отчеты** | `ui/reports_tab.py` | PDF экспорт, экспорт на Yandex Disk |
 
 ## Разработка
+
+### Критические правила PyInstaller
+⚠️ **ВСЕ папки с Python-модулями должны содержать `__init__.py`:**
+- `database/__init__.py` (даже пустой!)
+- `ui/__init__.py`
+- `utils/__init__.py`
+
+Без этих файлов PyInstaller НЕ найдет модули при сборке exe!
+
+### Критические ограничения UI
+- ⚠️ **НИКОГДА не используйте emoji в интерфейсе**: ❌ `QLabel('⚠️ ВНИМАНИЕ')` — используйте Unicode символы или иконки из SVG
+- ✅ **Frameless окна везде**: `self.setWindowFlags(Qt.FramelessWindowHint)` обязателен
+- ✅ **CustomTitleBar обязателен**: вместо стандартной рамки окна
+- ✅ **UTF-8 кодировка**: `# -*- coding: utf-8 -*-` в начале каждого файла
+
+### Двухрежимная разработка
+
+**Локальный режим** (разработка):
+```python
+# config.py: MULTI_USER_MODE = False
+# Работает с SQLite напрямую
+db = DatabaseManager()
+employees = db.get_employees()
+```
+
+**API режим** (с сервером):
+```python
+# config.py: MULTI_USER_MODE = True
+# LoginWindow → APIClient.authenticate() + токен
+# Табы используют api_client.get_employees() через SyncManager
+```
+
+**КРИТИЧЕСКИ ВАЖНО**: При разработке нового таба ВСЕГДА проверяйте оба режима!
 
 ### Роли пользователей (`config.ROLES`)
 - **Руководитель студии** — полный доступ
@@ -154,9 +208,17 @@ pyinstaller InteriorStudio.spec
 
 ### Добавление нового таба
 1. Создайте `ui/new_tab.py` наследуя `QWidget`
-2. Добавьте класс в `ui/main_window.py` imports и instantiate в `init_ui()`
-3. Зарегистрируйте в `config.ROLES` для нужных ролей в `tabs[]`
-4. Используйте `self.db = DatabaseManager()` для работы с данными
+2. **ВАЖНО**: Поддержите оба режима (локальный + API):
+   ```python
+   from config import MULTI_USER_MODE
+   if MULTI_USER_MODE:
+       data = self.api_client.get_data()  # Через API
+   else:
+       data = self.db.get_data()  # Прямая БД
+   ```
+3. Добавьте класс в `ui/main_window.py` imports и instantiate в `init_ui()`
+4. Зарегистрируйте в `config.ROLES` для нужных ролей в `tabs[]`
+5. Используйте `self.db = DatabaseManager()` ДА, даже при MULTI_USER_MODE=True (fallback)
 
 ### Добавление новой таблицы БД
 1. Создайте миграцию в `database/db_manager.py`:
@@ -170,6 +232,7 @@ def create_new_table_migration(self):
 ```
 2. Вызовите в `__init__()` DatabaseManager
 3. Создайте CRUD методы в DatabaseManager
+4. **Если используется API**: добавьте эндпоинты в `server/server_crm_routes.py`
 
 ### Добавление колонки к существующей таблице
 ```python
@@ -635,6 +698,37 @@ PAYMENT_TYPES = [
 
 3. **Миграции в `__init__` DatabaseManager**: все миграции должны быть вызваны при инициализации
 
+### Особенности API режима (MULTI_USER_MODE=True)
+
+**SyncManager синхронизирует данные через WebSocket-подобный механизм:**
+
+```python
+# utils/sync_manager.py запускает QTimer каждые SYNC_INTERVAL
+self.sync_timer = QTimer()
+self.sync_timer.timeout.connect(self._sync)
+self.sync_timer.start(5000)  # Каждые 5 секунд
+
+# Сигналы, на которые подписываются табы:
+online_users_updated.emit(user_count)  # Обновление числа онлайн
+connection_status_changed.emit(is_online)  # Статус соединения
+```
+
+**Перехват изменений данных:**
+- APIClient отправляет PUT/POST запросы к серверу
+- Локальный кэш обновляется сразу (optimistic update)
+- SyncManager каждые 5 сек синхронизирует с сервером
+- При конфликте — данные сервера приоритетнее (CRDT логика)
+
+**Обработка потери интернета:**
+```python
+# APIClient автоматически retry-ит:
+MAX_RETRIES = 3
+RETRY_DELAY = 1  # секунда между попытками
+DEFAULT_TIMEOUT = 10  # таймаут запроса
+```
+
+При отключении сервера местные изменения сохраняются в кэш, синхронизируются при восстановлении.
+
 ### Паттерны в PDF/Reports коде
 1. **Автоориентация**: альбомная если колонок > 6, иначе книжная
 2. **Русский шрифт**: регистрируется при инициализации PDFGenerator
@@ -642,7 +736,9 @@ PAYMENT_TYPES = [
 
 ## Ссылки в коде
 
-- Конфигурация: `config.py` (ROLES, POSITIONS, PROJECT_TYPES)
+- Конфигурация: `config.py` (ROLES, POSITIONS, PROJECT_TYPES, MULTI_USER_MODE, API_BASE_URL)
 - Стили: `resources/styles.qss`, `utils/global_styles.py`
 - Иконки: `resources/icons/` (SVG файлы)
 - База данных: `interior_studio.db` (SQLite, путь в config.DATABASE_PATH)
+- Синхронизация: `utils/sync_manager.py` (для API режима)
+- API клиент: `utils/api_client.py` (retry/timeout логика)

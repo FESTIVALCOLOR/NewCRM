@@ -6,10 +6,15 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
                              QMessageBox, QWidget, QFormLayout, QFrame)
 from PyQt5.QtCore import Qt
 from database.db_manager import DatabaseManager
+from utils.table_settings import apply_no_focus_delegate
+from utils.resource_path import resource_path
 from config import CITIES
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
 from ui.custom_combobox import CustomComboBox
+
+# Путь к иконкам для стилей
+ICONS_PATH = resource_path('resources/icons').replace('\\', '/')
 
 class RatesDialog(QDialog):
     """Диалог управления тарифами (только для Руководителя студии)"""
@@ -78,50 +83,74 @@ class RatesDialog(QDialog):
         tabs = QTabWidget()
 
         # Стили для таблиц и полей ввода
-        tabs.setStyleSheet("""
+        tabs.setStyleSheet(f"""
             /* Таблицы */
-            QTableWidget {
+            QTableWidget {{
                 background-color: #FFFFFF;
                 border: 1px solid #d9d9d9;
                 border-radius: 8px;
                 gridline-color: #e0e0e0;
-            }
-            QTableWidget::item {
+            }}
+            QTableWidget::item {{
                 padding: 4px;
-            }
-            QHeaderView::section {
+            }}
+            QHeaderView::section {{
                 background-color: #f5f5f5;
                 padding: 8px;
                 border: none;
                 border-bottom: 1px solid #d9d9d9;
                 font-weight: bold;
-            }
+            }}
 
-            /* Поля ввода цен (QDoubleSpinBox) */
-            QDoubleSpinBox {
-                padding: 6px 8px;
-                max-height: 28px;
-                min-height: 28px;
+            /* Поля ввода цен (QDoubleSpinBox) - высота 32px для соответствия строкам */
+            QDoubleSpinBox {{
+                padding: 4px 6px;
+                padding-right: 24px;
+                max-height: 32px;
+                min-height: 32px;
                 border: 1px solid #d9d9d9;
-                border-radius: 4px;
+                border-radius: 3px;
                 background-color: #FFFFFF;
-            }
-            QDoubleSpinBox:hover {
+                font-size: 11px;
+            }}
+            QDoubleSpinBox:hover {{
                 border-color: #c0c0c0;
-            }
-            QDoubleSpinBox:focus {
+            }}
+            QDoubleSpinBox:focus {{
                 border-color: #ffd93c;
-            }
+            }}
 
-            /* Кнопки стрелок в QDoubleSpinBox */
-            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-                width: 16px;
+            /* Кнопки стрелок с иконками */
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+                width: 20px;
                 border: none;
-                background-color: transparent;
-            }
-            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {
-                background-color: #f0f0f0;
-            }
+                background-color: #F8F9FA;
+                border-radius: 4px;
+            }}
+            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {{
+                background-color: #f5f5f5;
+            }}
+            QDoubleSpinBox::up-arrow {{
+                image: url({ICONS_PATH}/arrow-up-circle.svg);
+                width: 14px;
+                height: 14px;
+            }}
+            QDoubleSpinBox::down-arrow {{
+                image: url({ICONS_PATH}/arrow-down-circle.svg);
+                width: 14px;
+                height: 14px;
+            }}
+
+            /* Выпадающие списки (QComboBox) - высота 32px */
+            QComboBox {{
+                max-height: 32px;
+                min-height: 32px;
+                padding: 4px 8px;
+                border: 1px solid #d9d9d9;
+                border-radius: 3px;
+                background-color: #FFFFFF;
+                font-size: 11px;
+            }}
         """)
         
         # 1. Индивидуальные проекты
@@ -182,12 +211,13 @@ class RatesDialog(QDialog):
         
         table = QTableWidget()
         table.setObjectName('individual_rates_table')
+        apply_no_focus_delegate(table)
         table.setColumnCount(4)
         table.setHorizontalHeaderLabels(['Должность', 'Стадия', 'Цена за м² (₽)', 'Действия'])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
-        # ========== УВЕЛИЧЕННАЯ ВЫСОТА СТРОК ==========
-        table.verticalHeader().setDefaultSectionSize(36)  # Стандартная высота строк
+        # ========== ВЫСОТА СТРОК - соответствует высоте QDoubleSpinBox и кнопок ==========
+        table.verticalHeader().setDefaultSectionSize(36)  # Высота строк = 32px
         # ==============================================
         
         roles_stages = [
@@ -218,31 +248,31 @@ class RatesDialog(QDialog):
             # ========== ЦЕНА БЕЗ АВТОСОХРАНЕНИЯ ==========
             price_spin = QDoubleSpinBox()
             price_spin.setRange(0, 100000)
-            price_spin.setDecimals(2)
+            price_spin.setDecimals(0)
             price_spin.setSuffix(' ₽')
             # ← УБРАЛИ valueChanged.connect()
             table.setCellWidget(row, 2, price_spin)
             # =============================================
             
             # ========== КНОПКА "СОХРАНИТЬ" (КОМПАКТНАЯ) ==========
-            save_btn = QPushButton(' Сохранить ')
+            save_btn = QPushButton('Сохранить')
             save_btn.setFixedHeight(28)
             save_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffd93c;
                     color: #333333;
-                    padding: 0px 8px;
+                    padding: 0px 6px;
                     border-radius: 3px;
-                    font-size: 11px;
+                    font-size: 10px;
                     font-weight: bold;
-                    max-height: 28px;
-                    min-height: 28px;
+                    max-height: 20px;
+                    min-height: 20px;
                 }
                 QPushButton:hover { background-color: #f0c929; }
                 QPushButton:pressed { background-color: #e0b919; }
             """)
             save_btn.clicked.connect(
-                lambda checked, r=role, s=stage, p=price_spin: 
+                lambda checked, r=role, s=stage, p=price_spin:
                     self.save_individual_rate(r, p.value(), s)
             )
             table.setCellWidget(row, 3, save_btn)
@@ -271,7 +301,8 @@ class RatesDialog(QDialog):
         role_layout.addWidget(QLabel('Выберите должность:'))
         
         self.template_role_combo = CustomComboBox()
-        self.template_role_combo.addItems(['Дизайнер', 'Чертёжник', 'ГАП'])
+        # ИСПРАВЛЕНИЕ 06.02.2026: Добавлены СМП и Менеджер для шаблонных проектов (#17)
+        self.template_role_combo.addItems(['Дизайнер', 'Чертёжник', 'ГАП', 'Старший менеджер проектов', 'Менеджер', 'СДП'])
         self.template_role_combo.currentTextChanged.connect(self.load_template_ranges)
         role_layout.addWidget(self.template_role_combo)
         
@@ -281,6 +312,7 @@ class RatesDialog(QDialog):
         # Таблица диапазонов
         table = QTableWidget()
         table.setObjectName('template_rates_table')
+        apply_no_focus_delegate(table)
         table.setColumnCount(4)
         table.setHorizontalHeaderLabels([
             'Площадь от (м²)', 'Площадь до (м²)', 'Стоимость (₽)', 'Действия'
@@ -316,6 +348,7 @@ class RatesDialog(QDialog):
         
         table = QTableWidget()
         table.setObjectName('supervision_rates_table')
+        apply_no_focus_delegate(table)
         table.setColumnCount(4)
         table.setHorizontalHeaderLabels(['Стадия', 'Исполнитель (₽/м²)', 'Старший менеджер (₽/м²)', 'Действия'])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -347,40 +380,46 @@ class RatesDialog(QDialog):
             # Цена для исполнителя
             executor_spin = QDoubleSpinBox()
             executor_spin.setRange(0, 10000)
+            executor_spin.setDecimals(0)
             executor_spin.setSuffix(' ₽/м²')
             table.setCellWidget(row, 1, executor_spin)
-            
+
             # Цена для старшего менеджера
             manager_spin = QDoubleSpinBox()
             manager_spin.setRange(0, 10000)
+            manager_spin.setDecimals(0)
             manager_spin.setSuffix(' ₽/м²')
             table.setCellWidget(row, 2, manager_spin)
             
-            # ========== КОМПАКТНАЯ КНОПКА ==========
-            save_btn = QPushButton(' Сохранить ')
+            # ========== КОМПАКТНАЯ КНОПКА (ЖЁЛТАЯ) ==========
+            save_btn = QPushButton('Сохранить')
+            save_btn.setFixedHeight(28)
             save_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #27AE60;
-                    color: white;
-                    padding: 5px 8px;
+                    background-color: #ffd93c;
+                    color: #333333;
+                    padding: 0px 6px;
                     border-radius: 3px;
-                    font-size: 12px;
+                    font-size: 10px;
                     font-weight: bold;
+                    max-height: 28px;
+                    min-height: 28px;
                 }
-                QPushButton:hover { background-color: #229954; }
+                QPushButton:hover { background-color: #f0c929; }
+                QPushButton:pressed { background-color: #e0b919; }
             """)
             save_btn.clicked.connect(
-                lambda checked, s=stage, e=executor_spin, m=manager_spin: 
+                lambda checked, s=stage, e=executor_spin, m=manager_spin:
                     self.save_supervision_rate(s, e.value(), m.value())
             )
             table.setCellWidget(row, 3, save_btn)
             # ========================================
-        
+
         layout.addWidget(table)
-        
+
         widget.setLayout(layout)
         return widget
-    
+
     def create_surveyor_rates_tab(self):
         """Тарифы замерщика по городам"""
         widget = QWidget()
@@ -392,6 +431,7 @@ class RatesDialog(QDialog):
         
         table = QTableWidget()
         table.setObjectName('surveyor_rates_table')
+        apply_no_focus_delegate(table)
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(['Город', 'Стоимость замера (₽)', 'Действия'])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -407,31 +447,36 @@ class RatesDialog(QDialog):
             
             price_spin = QDoubleSpinBox()
             price_spin.setRange(0, 50000)
+            price_spin.setDecimals(0)
             price_spin.setSuffix(' ₽')
             table.setCellWidget(row, 1, price_spin)
             
-            # ========== КОМПАКТНАЯ КНОПКА ==========
-            save_btn = QPushButton(' Сохранить ')
+            # ========== КОМПАКТНАЯ КНОПКА (ЖЁЛТАЯ) ==========
+            save_btn = QPushButton('Сохранить')
+            save_btn.setFixedHeight(28)
             save_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #27AE60;
-                    color: white;
-                    padding: 5px 8px;
+                    background-color: #ffd93c;
+                    color: #333333;
+                    padding: 0px 6px;
                     border-radius: 3px;
-                    font-size: 12px;
+                    font-size: 10px;
                     font-weight: bold;
+                    max-height: 28px;
+                    min-height: 28px;
                 }
-                QPushButton:hover { background-color: #229954; }
+                QPushButton:hover { background-color: #f0c929; }
+                QPushButton:pressed { background-color: #e0b919; }
             """)
             save_btn.clicked.connect(
-                lambda checked, c=city, p=price_spin: 
+                lambda checked, c=city, p=price_spin:
                     self.save_surveyor_rate(c, p.value())
             )
             table.setCellWidget(row, 2, save_btn)
             # ========================================
-        
+
         layout.addWidget(table)
-        
+
         widget.setLayout(layout)
         return widget
 
@@ -497,30 +542,39 @@ class RatesDialog(QDialog):
             print(f"   Итого загружено: {surveyor_count} тарифов")
 
             # === 3. АВТОРСКИЙ НАДЗОР ===
+            # ИСПРАВЛЕНО 06.02.2026: Загрузка по role + rate_per_m2 вместо executor_rate/manager_rate
             print("\n3⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА из API:")
+            table_supervision = self.findChild(QTableWidget, 'supervision_rates_table')
             supervision_count = 0
 
-            for rate in rates_data:
-                if rate.get('project_type') == 'Авторский надзор':
-                    executor_rate = rate.get('executor_rate')
-                    manager_rate = rate.get('manager_rate')
+            if table_supervision:
+                for rate in rates_data:
+                    if rate.get('project_type') == 'Авторский надзор':
+                        role = rate.get('role')
+                        stage_name = rate.get('stage_name')
+                        rate_value = rate.get('rate_per_m2', 0)
 
-                    if executor_rate:
-                        spin = self.findChild(QDoubleSpinBox, 'supervision_executor_rate')
-                        if spin:
-                            spin.blockSignals(True)
-                            spin.setValue(float(executor_rate))
-                            spin.blockSignals(False)
-                            supervision_count += 1
+                        if not stage_name or not rate_value:
+                            continue
 
-                    if manager_rate:
-                        spin = self.findChild(QDoubleSpinBox, 'supervision_manager_rate')
-                        if spin:
-                            spin.blockSignals(True)
-                            spin.setValue(float(manager_rate))
-                            spin.blockSignals(False)
-                            supervision_count += 1
-                    break
+                        # Найти строку таблицы по названию стадии
+                        for row in range(table_supervision.rowCount()):
+                            stage_item = table_supervision.item(row, 0)
+                            if stage_item and stage_item.text() == stage_name:
+                                # Колонка зависит от роли: 1=ДАН, 2=СМП
+                                if role == 'ДАН':
+                                    spin = table_supervision.cellWidget(row, 1)
+                                elif role == 'Старший менеджер проектов':
+                                    spin = table_supervision.cellWidget(row, 2)
+                                else:
+                                    continue
+
+                                if spin:
+                                    spin.blockSignals(True)
+                                    spin.setValue(float(rate_value))
+                                    spin.blockSignals(False)
+                                    supervision_count += 1
+                                break
 
             print(f"   Итого загружено: {supervision_count} значений")
 
@@ -593,7 +647,7 @@ class RatesDialog(QDialog):
                             spin.blockSignals(False)
                             
                             stage_text = f" ({stage})" if stage else ""
-                            print(f"   {role}{stage_text}: {rate['rate_per_m2']:.2f} ₽/м²")
+                            print(f"   {role}{stage_text}: {rate['rate_per_m2']:.0f} ₽/м²")
                             loaded_count += 1
                 
                 print(f"   Итого загружено: {loaded_count} тарифов")
@@ -626,7 +680,7 @@ class RatesDialog(QDialog):
                             spin.setValue(rate['surveyor_price'])
                             spin.blockSignals(False)
                             
-                            print(f"   {city}: {rate['surveyor_price']:.2f} ₽")
+                            print(f"   {city}: {rate['surveyor_price']:.0f} ₽")
                             loaded_count += 1
                 
                 print(f"   Итого загружено: {loaded_count} тарифов")
@@ -681,7 +735,7 @@ class RatesDialog(QDialog):
                     if rate_dan or rate_manager:
                         dan_price = rate_dan['rate_per_m2'] if rate_dan else 0
                         mgr_price = rate_manager['rate_per_m2'] if rate_manager else 0
-                        print(f"   {stage}: ДАН={dan_price:.2f}, Менеджер={mgr_price:.2f} ₽/м²")
+                        print(f"   {stage}: ДАН={dan_price:.0f}, Менеджер={mgr_price:.0f} ₽/м²")
                 
                 print(f"   Итого загружено: {loaded_count} значений")
             
@@ -762,39 +816,46 @@ class RatesDialog(QDialog):
                     # Площадь от
                     from_spin = QDoubleSpinBox()
                     from_spin.setRange(0, 10000)
+                    from_spin.setDecimals(0)
                     from_spin.setValue(rate['area_from'] or 0)
                     from_spin.setSuffix(' м²')
                     table.setCellWidget(row, 0, from_spin)
-                    
+
                     # Площадь до
                     to_spin = QDoubleSpinBox()
                     to_spin.setRange(0, 10000)
+                    to_spin.setDecimals(0)
                     to_spin.setValue(rate['area_to'] or 0)
                     to_spin.setSuffix(' м²')
                     table.setCellWidget(row, 1, to_spin)
-                    
+
                     # Стоимость
                     price_spin = QDoubleSpinBox()
                     price_spin.setRange(0, 10000000)
+                    price_spin.setDecimals(0)
                     price_spin.setValue(rate['fixed_price'] or 0)
                     price_spin.setSuffix(' ₽')
                     table.setCellWidget(row, 2, price_spin)
                     
-                    # ========== КОМПАКТНАЯ КНОПКА ==========
-                    save_btn = QPushButton(' Сохранить ')
+                    # ========== КОМПАКТНАЯ КНОПКА (ЖЁЛТАЯ) ==========
+                    save_btn = QPushButton('Сохранить')
+                    save_btn.setFixedHeight(28)
                     save_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #27AE60;
-                            color: white;
-                            padding: 5px 8px;
+                            background-color: #ffd93c;
+                            color: #333333;
+                            padding: 0px 6px;
                             border-radius: 3px;
-                            font-size: 12px;
+                            font-size: 10px;
                             font-weight: bold;
+                            max-height: 28px;
+                            min-height: 28px;
                         }
-                        QPushButton:hover { background-color: #229954; }
+                        QPushButton:hover { background-color: #f0c929; }
+                        QPushButton:pressed { background-color: #e0b919; }
                     """)
                     save_btn.clicked.connect(
-                        lambda checked, r=role, f=from_spin, t=to_spin, p=price_spin: 
+                        lambda checked, r=role, f=from_spin, t=to_spin, p=price_spin:
                             self.save_template_range(r, f.value(), t.value(), p.value())
                     )
                     table.setCellWidget(row, 3, save_btn)
@@ -814,36 +875,43 @@ class RatesDialog(QDialog):
                 for row, (from_val, to_val, price) in enumerate(default_ranges):
                     from_spin = QDoubleSpinBox()
                     from_spin.setRange(0, 10000)
+                    from_spin.setDecimals(0)
                     from_spin.setValue(from_val)
                     from_spin.setSuffix(' м²')
                     table.setCellWidget(row, 0, from_spin)
-                    
+
                     to_spin = QDoubleSpinBox()
                     to_spin.setRange(0, 10000)
+                    to_spin.setDecimals(0)
                     to_spin.setValue(to_val)
                     to_spin.setSuffix(' м²')
                     table.setCellWidget(row, 1, to_spin)
-                    
+
                     price_spin = QDoubleSpinBox()
                     price_spin.setRange(0, 10000000)
+                    price_spin.setDecimals(0)
                     price_spin.setValue(price)
                     price_spin.setSuffix(' ₽')
                     table.setCellWidget(row, 2, price_spin)
                     
-                    save_btn = QPushButton('Сохр.')
+                    save_btn = QPushButton('Сохранить')
+                    save_btn.setFixedHeight(28)
                     save_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #27AE60;
-                            color: white;
-                            padding: 5px 8px;
+                            background-color: #ffd93c;
+                            color: #333333;
+                            padding: 0px 6px;
                             border-radius: 3px;
                             font-size: 10px;
                             font-weight: bold;
+                            max-height: 28px;
+                            min-height: 28px;
                         }
-                        QPushButton:hover { background-color: #229954; }
+                        QPushButton:hover { background-color: #f0c929; }
+                        QPushButton:pressed { background-color: #e0b919; }
                     """)
                     save_btn.clicked.connect(
-                        lambda checked, r=role, f=from_spin, t=to_spin, p=price_spin: 
+                        lambda checked, r=role, f=from_spin, t=to_spin, p=price_spin:
                             self.save_template_range(r, f.value(), t.value(), p.value())
                     )
                     table.setCellWidget(row, 3, save_btn)
@@ -870,18 +938,21 @@ class RatesDialog(QDialog):
             # Площадь от
             from_spin = QDoubleSpinBox()
             from_spin.setRange(0, 10000)
+            from_spin.setDecimals(0)
             from_spin.setSuffix(' м²')
             table.setCellWidget(row, 0, from_spin)
-            
+
             # Площадь до
             to_spin = QDoubleSpinBox()
             to_spin.setRange(0, 10000)
+            to_spin.setDecimals(0)
             to_spin.setSuffix(' м²')
             table.setCellWidget(row, 1, to_spin)
-            
+
             # Стоимость
             price_spin = QDoubleSpinBox()
             price_spin.setRange(0, 10000000)
+            price_spin.setDecimals(0)
             price_spin.setSuffix(' ₽')
             table.setCellWidget(row, 2, price_spin)
             
@@ -905,13 +976,13 @@ class RatesDialog(QDialog):
             if self.api_client:
                 try:
                     self.api_client.save_template_rate(role, area_from, area_to, price)
-                    print(f"[API] Сохранен диапазон: {role} {area_from}-{area_to} м² = {price:.2f} рублей")
+                    print(f"[API] Сохранен диапазон: {role} {area_from}-{area_to} м² = {price:.0f} рублей")
                     CustomMessageBox(
                         self,
                         'Успех',
                         f'Тариф сохранен:\n\n'
                         f'{role}\n'
-                        f'{area_from:.0f} - {area_to:.0f} м² = {price:,.2f} рублей',
+                        f'{area_from:.0f} - {area_to:.0f} м² = {price:,.0f} рублей',
                         'success'
                     ).exec_()
                     return
@@ -940,7 +1011,7 @@ class RatesDialog(QDialog):
                 WHERE id = ?
                 ''', (price, existing['id']))
                 
-                print(f"Обновлен диапазон: {role} {area_from}-{area_to} м² = {price:.2f} ₽")
+                print(f"Обновлен диапазон: {role} {area_from}-{area_to} м² = {price:.0f} ₽")
             else:
                 # Создаем новый
                 cursor.execute('''
@@ -949,7 +1020,7 @@ class RatesDialog(QDialog):
                 VALUES ('Шаблонный', ?, ?, ?, ?)
                 ''', (role, area_from, area_to, price))
                 
-                print(f"Создан диапазон: {role} {area_from}-{area_to} м² = {price:.2f} ₽")
+                print(f"Создан диапазон: {role} {area_from}-{area_to} м² = {price:.0f} ₽")
             
             conn.commit()
             self.db.close()
@@ -959,7 +1030,7 @@ class RatesDialog(QDialog):
                 'Успех', 
                 f'Тариф сохранен:\n\n'
                 f'{role}\n'
-                f'{area_from:.0f} - {area_to:.0f} м² = {price:,.2f} ₽',
+                f'{area_from:.0f} - {area_to:.0f} м² = {price:,.0f} ₽',
                 'success'
             ).exec_()
             
@@ -1035,8 +1106,8 @@ class RatesDialog(QDialog):
                         self,
                         'Успех',
                         f'Тарифы для стадии "{stage_name}" сохранены:\n\n'
-                        f'ДАН: {executor_rate:.2f} руб/м²\n'
-                        f'Старший менеджер: {manager_rate:.2f} руб/м²',
+                        f'ДАН: {executor_rate:.0f} руб/м²\n'
+                        f'Старший менеджер: {manager_rate:.0f} руб/м²',
                         'success'
                     ).exec_()
                     return
@@ -1097,8 +1168,8 @@ class RatesDialog(QDialog):
                 self, 
                 'Успех', 
                 f'Тарифы для стадии "{stage_name}" сохранены:\n\n'
-                f'ДАН: {executor_rate:.2f} ₽/м²\n'
-                f'Старший менеджер: {manager_rate:.2f} ₽/м²',
+                f'ДАН: {executor_rate:.0f} ₽/м²\n'
+                f'Старший менеджер: {manager_rate:.0f} ₽/м²',
                 'success'
             ).exec_()
             
@@ -1114,7 +1185,7 @@ class RatesDialog(QDialog):
             print(f"\n[SAVE] Сохранение тарифа:")
             print(f"   Роль: {role}")
             print(f"   Стадия: {stage_name}")
-            print(f"   Цена: {rate_per_m2:.2f} руб/м²")
+            print(f"   Цена: {rate_per_m2:.0f} руб/м²")
 
             if self.api_client:
                 try:
@@ -1123,7 +1194,7 @@ class RatesDialog(QDialog):
                     CustomMessageBox(
                         self,
                         'Успех',
-                        f'Тариф для {role} сохранен: {rate_per_m2:.2f} руб/м²{stage_display}',
+                        f'Тариф для {role} сохранен: {rate_per_m2:.0f} руб/м²{stage_display}',
                         'success'
                     ).exec_()
                     return
@@ -1160,7 +1231,7 @@ class RatesDialog(QDialog):
                 ''', (rate_per_m2, existing['id']))
                 
                 stage_text = f" ({stage_name})" if stage_name else ""
-                print(f"   Обновлен тариф ID={existing['id']}: {role}{stage_text} = {rate_per_m2:.2f} ₽/м²")
+                print(f"   Обновлен тариф ID={existing['id']}: {role}{stage_text} = {rate_per_m2:.0f} ₽/м²")
             else:
                 # Создаем новый
                 cursor.execute('''
@@ -1171,7 +1242,7 @@ class RatesDialog(QDialog):
                 
                 new_id = cursor.lastrowid
                 stage_text = f" ({stage_name})" if stage_name else ""
-                print(f"   Создан тариф ID={new_id}: {role}{stage_text} = {rate_per_m2:.2f} ₽/м²")
+                print(f"   Создан тариф ID={new_id}: {role}{stage_text} = {rate_per_m2:.0f} ₽/м²")
             
             conn.commit()
             
@@ -1190,7 +1261,7 @@ class RatesDialog(QDialog):
             saved = cursor.fetchone()
             
             if saved:
-                print(f"   ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.2f})")
+                print(f"   ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.0f})")
             else:
                 print(f"   [WARN] ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
             # =========================================
@@ -1201,7 +1272,7 @@ class RatesDialog(QDialog):
             CustomMessageBox(
                 self,
                 'Успех',
-                f'Тариф для {role} сохранен: {rate_per_m2:.2f} ₽/м²{stage_display}',
+                f'Тариф для {role} сохранен: {rate_per_m2:.0f} ₽/м²{stage_display}',
                 'success'
             ).exec_()
 
@@ -1321,15 +1392,16 @@ class RatesDialog(QDialog):
             print(f"[ERROR] Ошибка в _offer_recalculate_payments: {e}")
 
     def save_surveyor_rate(self, city, price):
-        """Сохранение тарифа замерщика"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Сохранение тарифа замерщика с проверкой is_online"""
         try:
-            if self.api_client:
+            if self.api_client and self.api_client.is_online:
                 try:
                     self.api_client.save_surveyor_rate(city, price)
+                    print(f"[API] Тариф замерщика сохранён: {city} = {price}")
                     CustomMessageBox(
                         self,
                         'Успех',
-                        f'Тариф замера в городе {city}: {price:.2f} рублей',
+                        f'Тариф замера в городе {city}: {price:.0f} рублей',
                         'success'
                     ).exec_()
                     return
@@ -1355,7 +1427,7 @@ class RatesDialog(QDialog):
                 WHERE id = ?
                 ''', (price, existing['id']))
                 
-                print(f"Обновлен тариф замера: {city} = {price:.2f} ₽")
+                print(f"Обновлен тариф замера: {city} = {price:.0f} ₽")
             else:
                 # ========== ИСПРАВЛЕНИЕ: УКАЗЫВАЕМ project_type = NULL ==========
                 cursor.execute('''
@@ -1365,7 +1437,7 @@ class RatesDialog(QDialog):
                 ''', (city, price))
                 # ================================================================
                 
-                print(f"Создан тариф замера: {city} = {price:.2f} ₽")
+                print(f"Создан тариф замера: {city} = {price:.0f} ₽")
             
             conn.commit()
             self.db.close()
@@ -1373,7 +1445,7 @@ class RatesDialog(QDialog):
             CustomMessageBox(
                 self, 
                 'Успех', 
-                f'Тариф замера в городе {city}: {price:.2f} ₽',
+                f'Тариф замера в городе {city}: {price:.0f} ₽',
                 'success'
             ).exec_()
             

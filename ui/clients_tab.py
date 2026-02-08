@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-
                              QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QLabel, QMessageBox, QGroupBox,
-                             QHeaderView, QDateEdit, QFrame, QTextEdit, QSpinBox, QMenu, QApplication)  # ← ДОБАВЛЕНО QMenu, QApplication
+                             QHeaderView, QDateEdit, QFrame, QTextEdit, QSpinBox, QMenu, QApplication)
 from ui.custom_dateedit import CustomDateEdit
-from PyQt5.QtCore import Qt, QDate, QSize
+from PyQt5.QtCore import Qt, QDate, QSize, QTimer
 from database.db_manager import DatabaseManager
 from utils.icon_loader import IconLoader
-from ui.custom_title_bar import CustomTitleBar  # ← ДОБАВЛЕНО
-from ui.custom_message_box import CustomMessageBox  # ← ДОБАВЛЕНО
+from ui.custom_title_bar import CustomTitleBar
+from ui.custom_message_box import CustomMessageBox
 from ui.custom_combobox import CustomComboBox
-from utils.calendar_styles import CALENDAR_STYLE, add_today_button_to_dateedit
-from utils.table_settings import TableSettings  # ← ДОБАВЛЕНО 
+from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
+from utils.table_settings import TableSettings, ProportionalResizeTable
 
 class ClientsTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
@@ -21,54 +20,58 @@ class ClientsTab(QWidget):
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.table_settings = TableSettings()  # ← ДОБАВЛЕНО
+        # Получаем offline_manager от родителя (main_window)
+        self.offline_manager = getattr(parent, 'offline_manager', None) if parent else None
         self.init_ui()
-        self.load_clients()
+        # ОПТИМИЗАЦИЯ: Отложенная загрузка данных для ускорения запуска
+        QTimer.singleShot(0, self.load_clients)
     
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setSpacing(5)
-        layout.setContentsMargins(5, 5, 5, 5)
-        
+        layout.setContentsMargins(0, 5, 0, 5)
+
         # Заголовок и кнопки
         header_layout = QHBoxLayout()
-        title = QLabel(' Управление клиентами ')
-        title.setStyleSheet('font-size: 14px; font-weight: bold; color: #333333; padding: 5px;')
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        title = QLabel('Управление клиентами')
+        title.setStyleSheet('font-size: 13px; font-weight: bold; color: #333333;')
         header_layout.addWidget(title)
         header_layout.addStretch()
-        
+
         # ========== КНОПКА ПОИСКА (SVG) ==========
-        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск клиентов', icon_size=16)
+        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск клиентов', icon_size=12)
         search_btn.clicked.connect(self.open_search)
         search_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: #333;
-                background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
-                margin-right: 10px;
             }
             QPushButton:hover {
-                background-color: #E8F4F8;
-                border-color: #3498DB;
+                background-color: #f5f5f5;
+                border-color: #ffd93c;
             }
         ''')
         header_layout.addWidget(search_btn)
         # =========================================
 
         # ========== КНОПКА СБРОСА ФИЛЬТРОВ (SVG) ==========
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить фильтры', 'Сбросить фильтры и показать всех клиентов', icon_size=16)
+        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры и показать всех клиентов', icon_size=12)
         reset_btn.clicked.connect(self.reset_filters)
         reset_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: #333;
-                background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
-                margin-right: 10px;
             }
             QPushButton:hover {
                 background-color: #FFF3E0;
@@ -78,20 +81,43 @@ class ClientsTab(QWidget):
         header_layout.addWidget(reset_btn)
         # ================================================
 
-        # ========== КНОПКА ДОБАВЛЕНИЯ (SVG) ==========
-        add_btn = IconLoader.create_icon_button('add', 'Добавить клиента', 'Добавить нового клиента', icon_size=16)
-        add_btn.clicked.connect(self.add_client)
-        add_btn.setStyleSheet('''
+        # ========== КНОПКА ОБНОВЛЕНИЯ ДАННЫХ ==========
+        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить БД', 'Обновить данные с сервера', icon_size=12)
+        refresh_btn.clicked.connect(self.load_clients)
+        refresh_btn.setStyleSheet('''
             QPushButton {
-                padding: 8px 16px;
+                padding: 2px 8px;
                 font-weight: 500;
-                color: white;
-                background-color: #27AE60;
-                border: none;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background-color: #e3f2fd;
+                border-color: #2196F3;
+            }
+        ''')
+        header_layout.addWidget(refresh_btn)
+        # ================================================
+        
+        # ========== КНОПКА ДОБАВЛЕНИЯ (SVG) ==========
+        add_btn = IconLoader.create_icon_button('add', 'Добавить клиента', 'Добавить нового клиента', icon_size=12)
+        add_btn.clicked.connect(self.add_client)
+        add_btn.setStyleSheet('''
+            QPushButton {
+                padding: 2px 8px;
+                font-weight: 600;
+                font-size: 11px;
+                color: #000000;
+                background-color: #ffd93c;
+                border: 1px solid #e6c236;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #ffdb4d;
+                border-color: #d9b530;
             }
         ''')
         header_layout.addWidget(add_btn)
@@ -99,42 +125,50 @@ class ClientsTab(QWidget):
         
         layout.addLayout(header_layout)
         
-        # Таблица клиентов
-        self.clients_table = QTableWidget()
+        # Таблица клиентов - используем ProportionalResizeTable для растягивания + ручного изменения
+        self.clients_table = ProportionalResizeTable()
         self.clients_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
             }
             QTableCornerButton::section {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                background-color: #fafafa;
+                border: none;
+                border-bottom: 1px solid #e6e6e6;
+                border-right: 1px solid #f0f0f0;
+                border-top-left-radius: 8px;
+            }
+            QHeaderView::section:first {
+                border-top-left-radius: 8px;
+            }
+            QHeaderView::section:last {
+                border-top-right-radius: 8px;
             }
         """)
         self.clients_table.setColumnCount(7)
         self.clients_table.setHorizontalHeaderLabels([
             ' ID ', ' Тип ', ' ФИО/Название ', ' Телефон ', ' Email ', ' ИНН ', ' Действия '
         ])
-        
-        header = self.clients_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        self.clients_table.setColumnWidth(0, 30)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        self.clients_table.setColumnWidth(1, 150)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.Interactive)
-        self.clients_table.setColumnWidth(3, 150)
-        header.setSectionResizeMode(4, QHeaderView.Interactive)
-        self.clients_table.setColumnWidth(4, 220)
-        header.setSectionResizeMode(5, QHeaderView.Interactive)
-        self.clients_table.setColumnWidth(5, 120)
-        header.setSectionResizeMode(6, QHeaderView.Fixed)
-        self.clients_table.setColumnWidth(6, 100)
-        header.setMinimumSectionSize(80)
-        
+
+        # Настройка пропорционального изменения размера:
+        # - Колонки 0-5 растягиваются пропорционально И можно менять вручную
+        # - Колонка 6 (Действия) фиксирована 110px
+        self.clients_table.setup_proportional_resize(
+            column_ratios=[0.08, 0.12, 0.25, 0.18, 0.20, 0.17],  # Пропорции для колонок 0-5
+            fixed_columns={6: 110},  # Действия = 110px фиксированно
+            min_width=50
+        )
+
+        # Запрещаем изменение высоты строк
+        self.clients_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.clients_table.verticalHeader().setDefaultSectionSize(34)
+
         self.clients_table.setSortingEnabled(True)
         # Разрешаем выделение отдельных ячеек для копирования
         self.clients_table.setSelectionMode(QTableWidget.ExtendedSelection)
-        self.clients_table.setSelectionBehavior(QTableWidget.SelectItems)
+        self.clients_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.clients_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.clients_table.setAlternatingRowColors(True)
 
@@ -154,32 +188,34 @@ class ClientsTab(QWidget):
         actions_widget = QWidget()
         actions_layout = QHBoxLayout()
         actions_layout.setContentsMargins(2, 0, 2, 0)
-        actions_layout.setSpacing(5)
+        actions_layout.setSpacing(1)
 
         # Кнопка Просмотр
-        view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=14)
-        view_btn.setFixedSize(24, 24)
+        view_btn = IconLoader.create_icon_button('view', '', 'Просмотр', icon_size=12)
+        view_btn.setFixedSize(20, 20)
         view_btn.setStyleSheet('''
             QPushButton {
                 background-color: #F8F9FA;
                 border: 1px solid #E0E0E0;
-                border-radius: 3px;
+                border-radius: 4px;
+                padding: 0px;
             }
             QPushButton:hover {
-                background-color: #E8F4F8;
+                background-color: #f5f5f5;
             }
         ''')
         view_btn.clicked.connect(lambda: self.view_client(client))
         actions_layout.addWidget(view_btn)
 
         # Кнопка Редактировать
-        edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=14)
-        edit_btn.setFixedSize(24, 24)
+        edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
+        edit_btn.setFixedSize(20, 20)
         edit_btn.setStyleSheet('''
             QPushButton {
                 background-color: #FFF3E0;
                 border: 1px solid #FFE0B2;
-                border-radius: 3px;
+                border-radius: 4px;
+                padding: 0px;
             }
             QPushButton:hover {
                 background-color: #FF9800;
@@ -189,13 +225,14 @@ class ClientsTab(QWidget):
         actions_layout.addWidget(edit_btn)
 
         # Кнопка Удалить
-        delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=14)
-        delete_btn.setFixedSize(24, 24)
+        delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
+        delete_btn.setFixedSize(20, 20)
         delete_btn.setStyleSheet('''
             QPushButton {
                 background-color: #FFE6E6;
                 border: 1px solid #FFCCCC;
-                border-radius: 3px;
+                border-radius: 4px;
+                padding: 0px;
             }
             QPushButton:hover {
                 background-color: #E74C3C;
@@ -210,7 +247,7 @@ class ClientsTab(QWidget):
 
     def populate_table_row(self, row, client):
         """Заполнение строки таблицы данными клиента"""
-        self.clients_table.setRowHeight(row, 30)
+        self.clients_table.setRowHeight(row, 34)
         self.clients_table.setItem(row, 0, QTableWidgetItem(str(client['id'])))
         self.clients_table.setItem(row, 1, QTableWidgetItem(client['client_type']))
         
@@ -226,16 +263,24 @@ class ClientsTab(QWidget):
             
     def load_clients(self):
         """Загрузка списка клиентов"""
+        print("[DB REFRESH] Начало обновления данных клиентов...")
         try:
             self.clients_table.setSortingEnabled(False)
 
             # Загружаем клиентов из API или локальной БД
-            if self.api_client:
+            if self.api_client and self.api_client.is_online:
                 # Многопользовательский режим - загружаем из API
-                clients = self.api_client.get_clients()
+                try:
+                    clients = self.api_client.get_clients()
+                    print(f"[DB REFRESH] Загружено {len(clients)} клиентов из API")
+                except Exception as e:
+                    print(f"[WARN] API error, using local DB: {e}")
+                    clients = self.db.get_all_clients()
+                    print(f"[DB REFRESH] Загружено {len(clients)} клиентов из локальной БД (fallback)")
             else:
                 # Локальный режим - загружаем из локальной БД
                 clients = self.db.get_all_clients()
+                print(f"[DB REFRESH] Загружено {len(clients)} клиентов из локальной БД")
 
             self.clients_table.setRowCount(len(clients))
 
@@ -271,9 +316,33 @@ class ClientsTab(QWidget):
             self.load_clients()
     
     def delete_client(self, client_id):
-        """Удаление клиента"""
-        # ========== ИСПОЛЬЗУЕМ CustomMessageBox ==========
+        """Удаление клиента - ИСПРАВЛЕНО 01.02.2026: добавлена проверка связей и fallback"""
         from ui.custom_message_box import CustomQuestionBox
+
+        # ИСПРАВЛЕНИЕ 01.02.2026: Проверяем наличие связанных договоров
+        try:
+            contracts_count = 0
+            if self.api_client:
+                try:
+                    contracts = self.api_client.get_contracts()
+                    contracts_count = sum(1 for c in contracts if c.get('client_id') == client_id)
+                except Exception as e:
+                    print(f"[WARN] Ошибка API проверки договоров: {e}")
+                    contracts_count = self.db.get_contracts_count_by_client(client_id) if hasattr(self.db, 'get_contracts_count_by_client') else 0
+            else:
+                contracts_count = self.db.get_contracts_count_by_client(client_id) if hasattr(self.db, 'get_contracts_count_by_client') else 0
+
+            if contracts_count > 0:
+                CustomMessageBox(
+                    self,
+                    'Невозможно удалить',
+                    f'У клиента есть {contracts_count} связанных договоров.\n'
+                    f'Сначала удалите или переназначьте договоры.',
+                    'error'
+                ).exec_()
+                return
+        except Exception as e:
+            print(f"[WARN] Ошибка проверки связанных договоров: {e}")
 
         reply = CustomQuestionBox(
             self,
@@ -284,8 +353,23 @@ class ClientsTab(QWidget):
         if reply == QDialog.Accepted:
             try:
                 if self.api_client:
-                    # Многопользовательский режим - удаляем через API
-                    self.api_client.delete_client(client_id)
+                    try:
+                        # Многопользовательский режим - удаляем через API
+                        self.api_client.delete_client(client_id)
+                        print(f"[API] Клиент удален: ID={client_id}")
+                    except Exception as api_error:
+                        print(f"[WARN] Ошибка API удаления клиента: {api_error}, fallback на локальную БД")
+                        # ИСПРАВЛЕНИЕ 01.02.2026: Fallback на локальную БД
+                        self.db.delete_client(client_id)
+                        # Добавляем в offline очередь
+                        if hasattr(self, 'offline_manager') and self.offline_manager:
+                            from utils.offline_manager import OperationType
+                            self.offline_manager.queue_operation(
+                                OperationType.DELETE, 'client', client_id, {}
+                            )
+                            CustomMessageBox(self, 'Offline режим',
+                                'Клиент удален локально.\nИзменения будут синхронизированы при восстановлении подключения.',
+                                'info').exec_()
                 else:
                     # Локальный режим - удаляем из локальной БД
                     self.db.delete_client(client_id)
@@ -293,6 +377,9 @@ class ClientsTab(QWidget):
                 self.load_clients()
                 CustomMessageBox(self, 'Успех', 'Клиент удален', 'success').exec_()
             except Exception as e:
+                print(f"[ERROR] Ошибка удаления клиента: {e}")
+                import traceback
+                traceback.print_exc()
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить клиента: {e}', 'error').exec_()
 
     def show_context_menu(self, position):
@@ -348,19 +435,17 @@ class ClientsTab(QWidget):
     def reset_filters(self):
         """Сброс всех фильтров и перезагрузка всех клиентов"""
         self.load_clients()
-        CustomMessageBox(
-            self,
-            'Сброс фильтров',
-            'Фильтры сброшены, показаны все клиенты',
-            'success'
-        ).exec_()
 
     def apply_search(self, params):
         """Применение фильтров поиска"""
         self.clients_table.setSortingEnabled(False)
-        
-        clients = self.db.get_all_clients()
-        
+
+        # Загружаем клиентов через API или локальную БД
+        if self.api_client:
+            clients = self.api_client.get_clients()
+        else:
+            clients = self.db.get_all_clients()
+
         filtered_clients = []
         for client in clients:
             if params.get('name'):
@@ -395,6 +480,20 @@ class ClientsTab(QWidget):
             'info'
         ).exec_()
 
+    def on_sync_update(self, updated_clients):
+        """
+        Обработчик обновления данных от SyncManager.
+        Вызывается при изменении клиентов другими пользователями.
+        """
+        try:
+            print(f"[SYNC] Получено обновление клиентов: {len(updated_clients)} записей")
+            # Перезагружаем таблицу клиентов
+            self.load_clients()
+        except Exception as e:
+            print(f"[ERROR] Ошибка синхронизации клиентов: {e}")
+            import traceback
+            traceback.print_exc()
+
 class ClientDialog(QDialog):
     def __init__(self, parent, client_data=None, view_only=False):
         super().__init__(parent)
@@ -403,6 +502,8 @@ class ClientDialog(QDialog):
         self.db = DatabaseManager()
         # Получаем api_client от родителя, если он есть
         self.api_client = getattr(parent, 'api_client', None)
+        # Получаем offline_manager для работы в offline режиме
+        self.offline_manager = getattr(parent, 'offline_manager', None)
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -430,7 +531,7 @@ class ClientDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -483,15 +584,16 @@ class ClientDialog(QDialog):
         
         self.full_name = QLineEdit()
         self.full_name.setPlaceholderText('Иванов Иван Иванович')
+
         individual_layout.addRow('ФИО*:', self.full_name)
-        
+
         self.phone = QLineEdit()
         self.phone.setPlaceholderText('+7 (999) 123-45-67')
         # ИСПРАВЛЕНИЕ: Убираем InputMask, используем кастомное форматирование
         # ИСПРАВЛЕНИЕ: Тонкий курсор через CSS
         self.phone.setStyleSheet("""
             QLineEdit {
-                caret-width: 1px;  /* Тонкий курсор */
+                caret-width: 1px;
             }
         """)
         # Не устанавливаем начальное значение, чтобы сохранить placeholder
@@ -501,6 +603,7 @@ class ClientDialog(QDialog):
         
         self.email = QLineEdit()
         self.email.setPlaceholderText('example@mail.com')
+
         individual_layout.addRow('Email:', self.email)
         
         passport_layout = QHBoxLayout()
@@ -509,7 +612,7 @@ class ClientDialog(QDialog):
         self.passport_series.setPlaceholderText('0000')
         self.passport_series.setMaxLength(4)
         self.passport_series.textChanged.connect(lambda: self.format_digits_only(self.passport_series))
-        
+
         self.passport_number = QLineEdit()
         self.passport_number.setPlaceholderText('000 000')
         self.passport_number.setMaxLength(7)
@@ -523,7 +626,13 @@ class ClientDialog(QDialog):
         
         self.passport_issued_by = QTextEdit()
         self.passport_issued_by.setPlaceholderText('МВД России по г. Москва')
-        self.passport_issued_by.setMaximumHeight(60)
+        self.passport_issued_by.setStyleSheet('''
+            QTextEdit {
+                padding: 2px 8px;
+                min-height: 50px;
+                max-height: 50px;
+            }
+        ''')        
         individual_layout.addRow('Кем выдан:', self.passport_issued_by)
         
         self.passport_issued_date = CustomDateEdit()
@@ -531,12 +640,18 @@ class ClientDialog(QDialog):
         add_today_button_to_dateedit(self.passport_issued_date)
         self.passport_issued_date.setDate(QDate.currentDate())
         self.passport_issued_date.setDisplayFormat('dd.MM.yyyy')
-        self.passport_issued_date.setStyleSheet(CALENDAR_STYLE)
+
         individual_layout.addRow('Дата выдачи:', self.passport_issued_date)
         
         self.registration_address = QTextEdit()
         self.registration_address.setPlaceholderText('г. Москва, ул. Ленина, д.10, кв.5')
-        self.registration_address.setMaximumHeight(60)
+        self.registration_address.setStyleSheet('''
+            QTextEdit {
+                padding: 2px 8px;
+                min-height: 50px;
+                max-height: 50px;
+            }
+        ''') 
         individual_layout.addRow('Адрес прописки:', self.registration_address)
         
         self.individual_group.setLayout(individual_layout)
@@ -552,23 +667,33 @@ class ClientDialog(QDialog):
         
         self.org_name = QLineEdit()
         self.org_name.setPlaceholderText('ООО "Название"')
+
         legal_layout.addRow('Название*:', self.org_name)
-        
+
         self.inn = QLineEdit()
         self.inn.setPlaceholderText('1234567890')
+
         legal_layout.addRow('ИНН:', self.inn)
-        
+
         self.ogrn = QLineEdit()
+
         legal_layout.addRow('ОГРН:', self.ogrn)
         
         self.account_details = QTextEdit()
         self.account_details.setPlaceholderText('Р/С: 40702810..., БИК: 044525225, Банк: ПАО Сбербанк')
-        self.account_details.setMaximumHeight(60)
+        self.account_details.setStyleSheet('''
+            QTextEdit {
+                padding: 2px 8px;
+                min-height: 100px;
+                max-height: 100px;
+            }
+        ''')
         legal_layout.addRow('Реквизиты счета:', self.account_details)
         
         self.responsible_person = QLineEdit()
+
         legal_layout.addRow('Ответственное лицо:', self.responsible_person)
-        
+
         self.org_phone = QLineEdit()
         self.org_phone.setPlaceholderText('+7 (999) 123-45-67')
         # ИСПРАВЛЕНИЕ: Убираем InputMask, используем кастомное форматирование
@@ -576,7 +701,7 @@ class ClientDialog(QDialog):
         # ИСПРАВЛЕНИЕ: Тонкий курсор через CSS
         self.org_phone.setStyleSheet("""
             QLineEdit {
-                caret-width: 1px;  /* Тонкий курсор */
+                caret-width: 1px;
             }
         """)
         # Не устанавливаем начальное значение, чтобы сохранить placeholder
@@ -585,6 +710,7 @@ class ClientDialog(QDialog):
         legal_layout.addRow('Телефон*:', self.org_phone)
         
         self.org_email = QLineEdit()
+
         legal_layout.addRow('Email:', self.org_email)
         
         self.legal_group.setLayout(legal_layout)
@@ -596,12 +722,40 @@ class ClientDialog(QDialog):
             buttons_layout.addStretch()
 
             save_btn = QPushButton('Сохранить')
+            save_btn.setFixedHeight(36)
             save_btn.clicked.connect(self.save_client)
-            save_btn.setStyleSheet('padding: 10px 30px; font-weight: bold;')
+            save_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffd93c;
+                    color: #333333;
+                    padding: 0px 30px;
+                    font-weight: bold;
+                    border-radius: 4px;
+                    border: none;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #f0c929; }
+                QPushButton:pressed { background-color: #e0b919; }
+            """)
 
             cancel_btn = QPushButton('Отмена')
+            cancel_btn.setFixedHeight(36)
             cancel_btn.clicked.connect(self.reject)
-            cancel_btn.setStyleSheet('padding: 10px 30px;')
+            cancel_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E0E0E0;
+                    color: #333333;
+                    padding: 0px 30px;
+                    border-radius: 4px;
+                    border: none;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #D0D0D0; }
+                QPushButton:pressed { background-color: #C0C0C0; }
+            """)
 
             buttons_layout.addWidget(save_btn)
             buttons_layout.addWidget(cancel_btn)
@@ -610,8 +764,22 @@ class ClientDialog(QDialog):
         else:
             # ========== РЕЖИМ ПРОСМОТРА ==========
             close_btn = QPushButton('Закрыть')
+            close_btn.setFixedHeight(36)
             close_btn.clicked.connect(self.reject)
-            close_btn.setStyleSheet('padding: 10px 30px; font-weight: bold;')
+            close_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E0E0E0;
+                    color: #333333;
+                    padding: 0px 30px;
+                    border-radius: 4px;
+                    border: none;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #D0D0D0; }
+                QPushButton:pressed { background-color: #C0C0C0; }
+            """)
             layout.addWidget(close_btn)
             # =====================================
         
@@ -632,17 +800,17 @@ class ClientDialog(QDialog):
             # Отключаем QTextEdit
             for child in self.findChildren(QTextEdit):
                 child.setReadOnly(True)
-                child.setStyleSheet('QTextEdit { background-color: #F0F0F0; }')  # Серый фон
+                child.setStyleSheet('QTextEdit { background-color: #F0F0F0; padding: 2px 8px; min-height: 50px; max-height: 50px; }')  # Серый фон
 
             # БЛОКИРУЕМ QComboBox (запрещаем открытие списка)
             for child in self.findChildren((QComboBox, CustomComboBox)):
                 child.setEnabled(False)
-                child.setStyleSheet('QComboBox:disabled { background-color: #F0F0F0; color: #666666; }')  # Серый фон
+                child.setStyleSheet('QComboBox:disabled { background-color: #F0F0F0; }')  # Серый фон
 
             # БЛОКИРУЕМ QDateEdit (запрещаем открытие календаря)
             for child in self.findChildren((QDateEdit, CustomDateEdit)):
                 child.setEnabled(False)
-                child.setStyleSheet('QDateEdit:disabled { background-color: #F0F0F0; color: #666666; }')  # Серый фон
+                child.setStyleSheet('QDateEdit:disabled { background-color: #F0F0F0; }')  # Серый фон
         # ==========================================================
 
         self.on_type_changed('Физическое лицо')
@@ -900,12 +1068,32 @@ class ClientDialog(QDialog):
             }
 
         try:
-            if self.api_client:
+            if self.api_client and self.api_client.is_online:
                 # Многопользовательский режим - сохраняем через API
                 if self.client_data:
                     self.api_client.update_client(self.client_data['id'], client_data)
                 else:
                     self.api_client.create_client(client_data)
+            elif self.api_client:
+                # Offline режим - сохраняем локально и добавляем в очередь
+                if self.client_data:
+                    self.db.update_client(self.client_data['id'], client_data)
+                    if self.offline_manager:
+                        from utils.offline_manager import OperationType
+                        self.offline_manager.queue_operation(
+                            OperationType.UPDATE, 'client', self.client_data['id'], client_data
+                        )
+                        CustomMessageBox(self, 'Offline режим',
+                            'Изменения сохранены локально.\nДанные будут синхронизированы при восстановлении подключения.', 'info').exec_()
+                else:
+                    new_id = self.db.add_client(client_data)
+                    if self.offline_manager:
+                        from utils.offline_manager import OperationType
+                        self.offline_manager.queue_operation(
+                            OperationType.CREATE, 'client', new_id, client_data
+                        )
+                        CustomMessageBox(self, 'Offline режим',
+                            'Клиент создан локально.\nДанные будут синхронизированы при восстановлении подключения.', 'info').exec_()
             else:
                 # Локальный режим - сохраняем в локальную БД
                 if self.client_data:
@@ -951,22 +1139,22 @@ class ClientSearchDialog(QDialog):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
         title_bar = CustomTitleBar(self, 'Поиск клиентов', simple_mode=True)
         title_bar.setStyleSheet("""
@@ -994,15 +1182,22 @@ class ClientSearchDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         
         form_layout = QFormLayout()
-        
+
+        # Стили для полей ввода (уменьшаем высоту на 30%)
+        input_style = """
+            QLineEdit {
+            }
+        """
+
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText('Введите имя или название организации')
+        self.name_input.setStyleSheet(input_style)
         form_layout.addRow('Имя/Название:', self.name_input)
-        
+
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText('+7 (999) 123-45-67')
         # Тонкий курсор через CSS
-        self.phone_input.setStyleSheet("""
+        self.phone_input.setStyleSheet(input_style + """
             QLineEdit {
                 caret-width: 1px;
             }
@@ -1014,39 +1209,72 @@ class ClientSearchDialog(QDialog):
         
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText('example@mail.com')
+        self.email_input.setStyleSheet(input_style)
         form_layout.addRow('Email:', self.email_input)
-        
+
         self.inn_input = QLineEdit()
         self.inn_input.setPlaceholderText('1234567890')
+        self.inn_input.setStyleSheet(input_style)
         form_layout.addRow('ИНН:', self.inn_input)
         
         layout.addLayout(form_layout)
         
         # ========== КНОПКИ (SVG) ==========
         buttons_layout = QHBoxLayout()
-        
+
         search_btn = IconLoader.create_icon_button('search2', 'Найти', 'Выполнить поиск', icon_size=16)
+        search_btn.setFixedHeight(36)
         search_btn.clicked.connect(self.accept)
         search_btn.setStyleSheet('''
             QPushButton {
-                padding: 10px 30px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
-                background-color: #3498DB;
-                color: white;
-                border-radius: 5px;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover {
-                background-color: #2980B9;
-            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         ''')
-        
+
         reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры', icon_size=16)
+        reset_btn.setFixedHeight(36)
         reset_btn.clicked.connect(self.reset_filters)
-        reset_btn.setStyleSheet('padding: 10px 30px;')
-        
+        reset_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                border: none;
+                font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
+        ''')
+
         cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(36)
         cancel_btn.clicked.connect(self.reject)
-        cancel_btn.setStyleSheet('padding: 10px 30px;')
+        cancel_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                border: none;
+                font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
+        ''')
         
         buttons_layout.addWidget(search_btn)
         buttons_layout.addWidget(reset_btn)
@@ -1069,16 +1297,11 @@ class ClientSearchDialog(QDialog):
         self.phone_input.clear()
         self.email_input.clear()
         self.inn_input.clear()
-        
+
         self.parent().load_clients()
-        
-        # ========== ЗАМЕНИЛИ QMessageBox ==========
-        CustomMessageBox(
-            self, 
-            'Сброс', 
-            'Фильтры сброшены, показаны все клиенты', 
-            'success'
-        ).exec_()
+
+        # Закрываем диалог после сброса (без отдельного сообщения)
+        self.reject()
     
     def get_search_params(self):
         """Получение параметров поиска"""

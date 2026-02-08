@@ -36,6 +36,7 @@ class DatabaseManager:
                 self.create_payments_system_tables()
                 self.add_reassigned_field_to_payments()
                 self.add_submitted_date_to_stage_executors()
+                self.add_stage_field_to_payments()
                 _migrations_completed = True
 
     def run_migrations(self):
@@ -765,6 +766,7 @@ class DatabaseManager:
         cursor = conn.cursor()
 
         # Если изменяется статус на Сдан/Расторгнут/Авторский надзор, сохраняем дату
+        need_supervision_card = False  # Флаг для создания карточки надзора
         if 'status' in updates:
             new_status = updates['status']
             if new_status in ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']:
@@ -776,6 +778,10 @@ class DatabaseManager:
                     updates['status_changed_date'] = datetime.now().strftime('%Y-%m-%d')
                     print(f"[INFO] Установлена дата закрытия договора: {updates['status_changed_date']}")
 
+                # ИСПРАВЛЕНИЕ BUG #2: Автоматическое создание карточки надзора
+                if new_status == 'АВТОРСКИЙ НАДЗОР':
+                    need_supervision_card = True
+
         # Формируем SQL запрос динамически
         set_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
         values = list(updates.values())
@@ -785,6 +791,28 @@ class DatabaseManager:
 
         cursor.execute(query, values)
         conn.commit()
+
+        # ========== ИСПРАВЛЕНИЕ BUG #2: Автосоздание карточки надзора ==========
+        if need_supervision_card:
+            try:
+                # Проверяем, существует ли уже карточка надзора для этого договора
+                cursor.execute('SELECT id FROM supervision_cards WHERE contract_id = ?', (contract_id,))
+                existing_supervision = cursor.fetchone()
+
+                if not existing_supervision:
+                    # Создаём карточку надзора
+                    cursor.execute('''
+                    INSERT INTO supervision_cards (contract_id, column_name, created_at)
+                    VALUES (?, 'Новый заказ', datetime('now'))
+                    ''', (contract_id,))
+                    conn.commit()
+                    supervision_card_id = cursor.lastrowid
+                    print(f"[OK] BUG #2 FIX: Автоматически создана карточка надзора ID={supervision_card_id} для договора {contract_id}")
+                else:
+                    print(f"[INFO] Карточка надзора для договора {contract_id} уже существует (ID={existing_supervision['id']})")
+            except Exception as e:
+                print(f"[WARN] Ошибка автосоздания карточки надзора: {e}")
+        # ===================================================================
 
         # ========== АВТОМАТИЧЕСКИЙ ПЕРЕСЧЕТ ДЕДЛАЙНА ==========
         # Если изменяются contract_date или contract_period, пересчитываем дедлайн карточки
@@ -1484,7 +1512,7 @@ class DatabaseManager:
     def get_crm_cards_by_project_type(self, project_type):
         """Получение карточек по типу проекта (ТОЛЬКО АКТИВНЫЕ, исключая архив)"""
         print(f"\n[DB] ════════════════════════════════════════")
-        print(f"[DB] 📋 Запрос: Активные карточки типа '{project_type}'")
+        print(f"[DB] Запрос: Активные карточки типа '{project_type}'")
         
         conn = self.connect()
         cursor = conn.cursor()
@@ -1894,25 +1922,101 @@ class DatabaseManager:
         return payments
     
     def get_year_payments(self, year):
-        """Получение выплат за год из всех источников"""
+        """Получение выплат за год из всех источников с полными данными"""
         conn = self.connect()
         cursor = conn.cursor()
 
-        # Объединяем выплаты из payments (CRM) и salaries (оклады)
+        # Выплаты из CRM (payments) с данными контрактов
         cursor.execute('''
         SELECT
-            p.final_amount as amount
+            p.id,
+            p.contract_id,
+            p.crm_card_id,
+            p.supervision_card_id,
+            p.employee_id,
+            e.full_name as employee_name,
+            e.position,
+            p.role,
+            p.stage_name,
+            p.final_amount as amount,
+            p.payment_type as payment_subtype,
+            'CRM' as source,
+            p.report_month,
+            p.payment_status,
+            p.reassigned,
+            c.project_type,
+            c.agent_type,
+            c.address,
+            c.contract_number,
+            c.area,
+            c.city
         FROM payments p
+        LEFT JOIN employees e ON p.employee_id = e.id
+        LEFT JOIN crm_cards cc ON p.crm_card_id = cc.id
+        LEFT JOIN contracts c ON cc.contract_id = c.id
         WHERE p.report_month LIKE ?
-        AND (p.crm_card_id IS NOT NULL OR p.supervision_card_id IS NOT NULL)
+        AND p.crm_card_id IS NOT NULL
 
         UNION ALL
 
         SELECT
-            s.amount
+            p.id,
+            p.contract_id,
+            p.crm_card_id,
+            p.supervision_card_id,
+            p.employee_id,
+            e.full_name as employee_name,
+            e.position,
+            p.role,
+            p.stage_name,
+            p.final_amount as amount,
+            p.payment_type as payment_subtype,
+            'CRM Надзор' as source,
+            p.report_month,
+            p.payment_status,
+            p.reassigned,
+            c.project_type,
+            c.agent_type,
+            c.address,
+            c.contract_number,
+            c.area,
+            c.city
+        FROM payments p
+        LEFT JOIN employees e ON p.employee_id = e.id
+        LEFT JOIN supervision_cards sc ON p.supervision_card_id = sc.id
+        LEFT JOIN contracts c ON sc.contract_id = c.id
+        WHERE p.report_month LIKE ?
+        AND p.supervision_card_id IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+            s.id,
+            s.contract_id,
+            NULL as crm_card_id,
+            NULL as supervision_card_id,
+            s.employee_id,
+            e.full_name as employee_name,
+            e.position,
+            s.payment_type as role,
+            s.stage_name,
+            s.amount,
+            'Оклад' as payment_subtype,
+            'Оклад' as source,
+            s.report_month,
+            s.payment_status,
+            0 as reassigned,
+            s.project_type,
+            c.agent_type,
+            c.address,
+            c.contract_number,
+            c.area,
+            c.city
         FROM salaries s
+        LEFT JOIN employees e ON s.employee_id = e.id
+        LEFT JOIN contracts c ON s.contract_id = c.id
         WHERE s.report_month LIKE ?
-        ''', (f'{year}%', f'{year}%'))
+        ''', (f'{year}%', f'{year}%', f'{year}%'))
 
         payments = [dict(row) for row in cursor.fetchall()]
         self.close()
@@ -1975,14 +2079,23 @@ class DatabaseManager:
         self.close()
     
     def delete_payment(self, payment_id):
-        """Удаление выплаты"""
+        """Удаление выплаты из таблицы payments"""
         conn = self.connect()
         cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM salaries WHERE id = ?', (payment_id,))
+
+        cursor.execute('DELETE FROM payments WHERE id = ?', (payment_id,))
         conn.commit()
         self.close()
-    
+
+    def delete_salary(self, salary_id):
+        """Удаление оклада из таблицы salaries (#5)"""
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM salaries WHERE id = ?', (salary_id,))
+        conn.commit()
+        self.close()
+
     def get_employee_report_data(self, project_type, period, year, quarter, month):
         """Получение данных для отчета по сотрудникам"""
         conn = self.connect()
@@ -2342,7 +2455,7 @@ class DatabaseManager:
             conn = self.connect()
             cursor = conn.cursor()
 
-            print(f"\n🗑️ УДАЛЕНИЕ ЗАКАЗА:")
+            print(f"\n[DELETE] УДАЛЕНИЕ ЗАКАЗА:")
             print(f"   Contract ID: {contract_id}")
             print(f"   CRM Card ID: {crm_card_id}")
 
@@ -2408,7 +2521,7 @@ class DatabaseManager:
             conn = self.connect()
             cursor = conn.cursor()
 
-            print(f"\n🗑️ УДАЛЕНИЕ ЗАКАЗА НАДЗОРА:")
+            print(f"\n[DELETE] УДАЛЕНИЕ ЗАКАЗА НАДЗОРА:")
             print(f"   Contract ID: {contract_id}")
             print(f"   Supervision Card ID: {supervision_card_id}")
 
@@ -3090,27 +3203,55 @@ class DatabaseManager:
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            
+
             cursor.execute('''
             SELECT cc.*,
-                   (SELECT se.completed 
+                   -- ИСПРАВЛЕНИЕ 26.01.2026: Добавлены имена исполнителей для диалога переназначения
+                   (SELECT e.full_name
                     FROM stage_executors se
-                    WHERE se.crm_card_id = cc.id 
+                    JOIN employees e ON se.executor_id = e.id
+                    WHERE se.crm_card_id = cc.id
+                      AND se.stage_name LIKE '%концепция%'
+                    ORDER BY se.id DESC LIMIT 1) as designer_name,
+
+                   (SELECT e.full_name
+                    FROM stage_executors se
+                    JOIN employees e ON se.executor_id = e.id
+                    WHERE se.crm_card_id = cc.id
+                      AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
+                    ORDER BY se.id DESC LIMIT 1) as draftsman_name,
+
+                   (SELECT se.completed
+                    FROM stage_executors se
+                    WHERE se.crm_card_id = cc.id
                       AND se.stage_name LIKE '%концепция%'
                     ORDER BY se.id DESC LIMIT 1) as designer_completed,
-                   
-                   (SELECT se.completed 
+
+                   (SELECT se.completed
                     FROM stage_executors se
-                    WHERE se.crm_card_id = cc.id 
+                    WHERE se.crm_card_id = cc.id
                       AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
-                    ORDER BY se.id DESC LIMIT 1) as draftsman_completed
+                    ORDER BY se.id DESC LIMIT 1) as draftsman_completed,
+
+                   -- Дедлайны исполнителей
+                   (SELECT se.deadline
+                    FROM stage_executors se
+                    WHERE se.crm_card_id = cc.id
+                      AND se.stage_name LIKE '%концепция%'
+                    ORDER BY se.id DESC LIMIT 1) as designer_deadline,
+
+                   (SELECT se.deadline
+                    FROM stage_executors se
+                    WHERE se.crm_card_id = cc.id
+                      AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
+                    ORDER BY se.id DESC LIMIT 1) as draftsman_deadline
             FROM crm_cards cc
             WHERE cc.id = ?
             ''', (card_id,))
-            
+
             row = cursor.fetchone()
             self.close()
-            
+
             return dict(row) if row else None
 
         except Exception as e:
@@ -3184,7 +3325,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             print(f"\n{'='*60}")
-            print(f"📊 GET_PROJECT_STATISTICS вызван:")
+            print(f"[STATS] GET_PROJECT_STATISTICS вызван:")
             print(f"   project_type={project_type}")
             print(f"   year={year}, quarter={quarter}, month={month}")
             print(f"   agent_type={agent_type}, city={city}")
@@ -3338,7 +3479,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             print(f"\n{'='*60}")
-            print(f"📊 GET_SUPERVISION_STATISTICS вызван:")
+            print(f"[STATS] GET_SUPERVISION_STATISTICS вызван:")
             print(f"   year={year}, quarter={quarter}, month={month}")
             print(f"   agent_type={agent_type}, city={city}")
             
@@ -3847,6 +3988,41 @@ class DatabaseManager:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции submitted_date: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def add_stage_field_to_payments(self):
+        """Миграция: добавление полей для синхронизации в payments"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Проверяем, какие поля уже есть
+            cursor.execute("PRAGMA table_info(payments)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            # Список полей для добавления
+            fields_to_add = {
+                'stage': 'TEXT',
+                'base_amount': 'REAL',
+                'bonus_amount': 'REAL',
+                'penalty_amount': 'REAL',
+                'status': 'TEXT',
+                'payment_date': 'TIMESTAMP'
+            }
+
+            for field_name, field_type in fields_to_add.items():
+                if field_name not in columns:
+                    print(f"[>] Выполняется миграция: добавление {field_name} в payments...")
+                    cursor.execute(f"ALTER TABLE payments ADD COLUMN {field_name} {field_type}")
+                    conn.commit()
+                    print(f"[OK] Поле {field_name} добавлено")
+                else:
+                    print(f"[OK] Поле {field_name} уже существует")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции полей payments: {e}")
             import traceback
             traceback.print_exc()
 
@@ -4931,7 +5107,7 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT COALESCE(SUM(final_amount), 0)
                 FROM payments
-                WHERE payment_status = 'Оплачено'
+                WHERE payment_status = 'paid'
             """)
             total_paid = cursor.fetchone()[0]
 
@@ -4940,7 +5116,7 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(final_amount), 0)
                     FROM payments
-                    WHERE payment_status = 'Оплачено'
+                    WHERE payment_status = 'paid'
                     AND report_month LIKE ?
                 """, (f'{year}-%',))
                 paid_by_year = cursor.fetchone()[0]
@@ -4952,7 +5128,7 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(final_amount), 0)
                     FROM payments
-                    WHERE payment_status = 'Оплачено'
+                    WHERE payment_status = 'paid'
                     AND report_month = ?
                 """, (f'{year}-{month:02d}',))
                 paid_by_month = cursor.fetchone()[0]
@@ -4965,7 +5141,7 @@ class DatabaseManager:
                     SELECT COALESCE(SUM(p.final_amount), 0)
                     FROM payments p
                     JOIN contracts c ON p.contract_id = c.id
-                    WHERE p.payment_status = 'Оплачено'
+                    WHERE p.payment_status = 'paid'
                     AND p.report_month LIKE ?
                     AND c.project_type = 'Индивидуальный'
                 """, (f'{year}-%',))
@@ -4979,7 +5155,7 @@ class DatabaseManager:
                     SELECT COALESCE(SUM(p.final_amount), 0)
                     FROM payments p
                     JOIN contracts c ON p.contract_id = c.id
-                    WHERE p.payment_status = 'Оплачено'
+                    WHERE p.payment_status = 'paid'
                     AND p.report_month LIKE ?
                     AND c.project_type = 'Шаблонный'
                 """, (f'{year}-%',))
@@ -4993,7 +5169,7 @@ class DatabaseManager:
                     SELECT COALESCE(SUM(p.final_amount), 0)
                     FROM payments p
                     JOIN contracts c ON p.contract_id = c.id
-                    WHERE p.payment_status = 'Оплачено'
+                    WHERE p.payment_status = 'paid'
                     AND p.report_month LIKE ?
                     AND c.status = 'АВТОРСКИЙ НАДЗОР'
                 """, (f'{year}-%',))
@@ -5024,6 +5200,638 @@ class DatabaseManager:
                 'template_by_year': 0,
                 'supervision_by_year': 0
             }
+
+    def get_salaries_payment_type_stats(self, payment_type, year=None, month=None, agent_type=None):
+        """Статистика для дашборда вкладок зарплат по типу выплат
+
+        Args:
+            payment_type: Тип вкладки ('all', 'individual', 'template', 'salary', 'supervision')
+            year: Год для фильтрации
+            month: Месяц для фильтрации (1-12)
+            agent_type: Тип агента для фильтрации
+
+        Returns:
+            dict: {
+                'total_paid': float,
+                'paid_by_year': float,
+                'paid_by_month': float,
+                'payments_count': int,
+                'to_pay_amount': float,
+                'by_agent': float
+            }
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Условие фильтрации по типу
+            type_condition = ""
+            join_clause = ""
+
+            if payment_type == 'individual':
+                join_clause = "JOIN contracts c ON p.contract_id = c.id"
+                type_condition = "AND c.project_type = 'Индивидуальный'"
+            elif payment_type == 'template':
+                join_clause = "JOIN contracts c ON p.contract_id = c.id"
+                type_condition = "AND c.project_type = 'Шаблонный'"
+            elif payment_type == 'supervision':
+                join_clause = "JOIN contracts c ON p.contract_id = c.id"
+                type_condition = "AND c.status = 'АВТОРСКИЙ НАДЗОР'"
+            elif payment_type == 'salary':
+                # Оклады - отдельная таблица salaries
+                pass
+
+            # Для окладов используем таблицу salaries
+            if payment_type == 'salary':
+                # ВАЖНО: таблица salaries не имеет поля status
+                # Оклады считаются всегда выплаченными
+
+                # Всего выплачено (все оклады)
+                cursor.execute("""
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM salaries
+                """)
+                total_paid = cursor.fetchone()[0]
+
+                # За год
+                if year:
+                    cursor.execute("""
+                        SELECT COALESCE(SUM(amount), 0)
+                        FROM salaries
+                        WHERE report_month LIKE ?
+                    """, (f'{year}-%',))
+                    paid_by_year = cursor.fetchone()[0]
+                else:
+                    paid_by_year = 0
+
+                # За месяц
+                if year and month:
+                    cursor.execute("""
+                        SELECT COALESCE(SUM(amount), 0)
+                        FROM salaries
+                        WHERE report_month = ?
+                    """, (f'{year}-{month:02d}',))
+                    paid_by_month = cursor.fetchone()[0]
+                else:
+                    paid_by_month = 0
+
+                # Количество выплат (все оклады)
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM salaries
+                """)
+                payments_count = cursor.fetchone()[0]
+
+                # К оплате - для окладов всегда 0 (нет статуса)
+                to_pay_amount = 0
+
+                # По агенту - для окладов не применимо
+                by_agent = 0
+
+            else:
+                # Для payments таблицы
+                # Всего выплачено
+                cursor.execute(f"""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    {join_clause}
+                    WHERE p.payment_status = 'paid'
+                    {type_condition}
+                """)
+                total_paid = cursor.fetchone()[0]
+
+                # За год
+                if year:
+                    cursor.execute(f"""
+                        SELECT COALESCE(SUM(p.final_amount), 0)
+                        FROM payments p
+                        {join_clause}
+                        WHERE p.payment_status = 'paid'
+                        AND p.report_month LIKE ?
+                        {type_condition}
+                    """, (f'{year}-%',))
+                    paid_by_year = cursor.fetchone()[0]
+                else:
+                    paid_by_year = 0
+
+                # За месяц
+                if year and month:
+                    cursor.execute(f"""
+                        SELECT COALESCE(SUM(p.final_amount), 0)
+                        FROM payments p
+                        {join_clause}
+                        WHERE p.payment_status = 'paid'
+                        AND p.report_month = ?
+                        {type_condition}
+                    """, (f'{year}-{month:02d}',))
+                    paid_by_month = cursor.fetchone()[0]
+                else:
+                    paid_by_month = 0
+
+                # Количество выплат (только paid)
+                cursor.execute(f"""
+                    SELECT COUNT(*)
+                    FROM payments p
+                    {join_clause}
+                    WHERE p.payment_status = 'paid'
+                    {type_condition}
+                """)
+                payments_count = cursor.fetchone()[0]
+
+                # К оплате
+                cursor.execute(f"""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    {join_clause}
+                    WHERE p.payment_status = 'to_pay'
+                    {type_condition}
+                """)
+                to_pay_amount = cursor.fetchone()[0]
+
+                # По агенту
+                if agent_type:
+                    if payment_type in ('individual', 'template', 'supervision'):
+                        cursor.execute(f"""
+                            SELECT COALESCE(SUM(p.final_amount), 0)
+                            FROM payments p
+                            {join_clause}
+                            WHERE p.payment_status = 'paid'
+                            AND c.agent_type = ?
+                            {type_condition}
+                        """, (agent_type,))
+                    else:
+                        # all - нужен join
+                        cursor.execute("""
+                            SELECT COALESCE(SUM(p.final_amount), 0)
+                            FROM payments p
+                            JOIN contracts c ON p.contract_id = c.id
+                            WHERE p.payment_status = 'paid'
+                            AND c.agent_type = ?
+                        """, (agent_type,))
+                    by_agent = cursor.fetchone()[0]
+                else:
+                    by_agent = 0
+
+            self.close()
+
+            return {
+                'total_paid': total_paid or 0,
+                'paid_by_year': paid_by_year or 0,
+                'paid_by_month': paid_by_month or 0,
+                'payments_count': payments_count or 0,
+                'to_pay_amount': to_pay_amount or 0,
+                'by_agent': by_agent or 0
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики по типу {payment_type}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'total_paid': 0,
+                'paid_by_year': 0,
+                'paid_by_month': 0,
+                'payments_count': 0,
+                'to_pay_amount': 0,
+                'by_agent': 0
+            }
+
+    def get_salaries_all_payments_stats(self, year=None, month=None):
+        """Статистика для дашборда 'Все выплаты'
+        Возвращает: total_paid, paid_by_year, paid_by_month, individual_by_year, template_by_year, supervision_by_year
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Всего выплачено
+            cursor.execute("""
+                SELECT COALESCE(SUM(final_amount), 0)
+                FROM payments
+                WHERE payment_status = 'paid'
+            """)
+            total_paid = cursor.fetchone()[0]
+
+            # За год
+            paid_by_year = 0
+            individual_by_year = 0
+            template_by_year = 0
+            supervision_by_year = 0
+
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(final_amount), 0)
+                    FROM payments
+                    WHERE payment_status = 'paid'
+                    AND report_month LIKE ?
+                """, (f'{year}-%',))
+                paid_by_year = cursor.fetchone()[0]
+
+                # Индивидуальные за год
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND p.report_month LIKE ?
+                    AND c.project_type = 'Индивидуальный'
+                """, (f'{year}-%',))
+                individual_by_year = cursor.fetchone()[0]
+
+                # Шаблонные за год
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND p.report_month LIKE ?
+                    AND c.project_type = 'Шаблонный'
+                """, (f'{year}-%',))
+                template_by_year = cursor.fetchone()[0]
+
+                # Авторский надзор за год
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND p.report_month LIKE ?
+                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                """, (f'{year}-%',))
+                supervision_by_year = cursor.fetchone()[0]
+
+            # За месяц
+            paid_by_month = 0
+            if year and month:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(final_amount), 0)
+                    FROM payments
+                    WHERE payment_status = 'paid'
+                    AND report_month = ?
+                """, (f'{year}-{month:02d}',))
+                paid_by_month = cursor.fetchone()[0]
+
+            self.close()
+
+            return {
+                'total_paid': total_paid or 0,
+                'paid_by_year': paid_by_year or 0,
+                'paid_by_month': paid_by_month or 0,
+                'individual_by_year': individual_by_year or 0,
+                'template_by_year': template_by_year or 0,
+                'supervision_by_year': supervision_by_year or 0
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики 'Все выплаты': {e}")
+            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
+                    'individual_by_year': 0, 'template_by_year': 0, 'supervision_by_year': 0}
+
+    def get_salaries_individual_stats(self, year=None, month=None, agent_type=None):
+        """Статистика для дашборда 'Индивидуальные'
+        Возвращает: total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Всего выплачено
+            cursor.execute("""
+                SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*), COALESCE(AVG(p.final_amount), 0)
+                FROM payments p
+                JOIN contracts c ON p.contract_id = c.id
+                WHERE p.payment_status = 'paid'
+                AND c.project_type = 'Индивидуальный'
+            """)
+            row = cursor.fetchone()
+            total_paid = row[0]
+            total_count = row[1]
+            avg_payment = row[2]
+
+            # За год
+            paid_by_year = 0
+            payments_count = 0
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.project_type = 'Индивидуальный'
+                    AND p.report_month LIKE ?
+                """, (f'{year}-%',))
+                row = cursor.fetchone()
+                paid_by_year = row[0]
+                payments_count = row[1]
+
+            # За месяц
+            paid_by_month = 0
+            if year and month:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.project_type = 'Индивидуальный'
+                    AND p.report_month = ?
+                """, (f'{year}-{month:02d}',))
+                paid_by_month = cursor.fetchone()[0]
+
+            # По агенту
+            by_agent = 0
+            if agent_type:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.project_type = 'Индивидуальный'
+                    AND c.agent_type = ?
+                """, (agent_type,))
+                by_agent = cursor.fetchone()[0]
+
+            self.close()
+
+            return {
+                'total_paid': total_paid or 0,
+                'paid_by_year': paid_by_year or 0,
+                'paid_by_month': paid_by_month or 0,
+                'by_agent': by_agent or 0,
+                'avg_payment': avg_payment or 0,
+                'payments_count': payments_count or 0
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики 'Индивидуальные': {e}")
+            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
+                    'by_agent': 0, 'avg_payment': 0, 'payments_count': 0}
+
+    def get_salaries_template_stats(self, year=None, month=None, agent_type=None):
+        """Статистика для дашборда 'Шаблонные'
+        Возвращает: total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Всего выплачено
+            cursor.execute("""
+                SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*), COALESCE(AVG(p.final_amount), 0)
+                FROM payments p
+                JOIN contracts c ON p.contract_id = c.id
+                WHERE p.payment_status = 'paid'
+                AND c.project_type = 'Шаблонный'
+            """)
+            row = cursor.fetchone()
+            total_paid = row[0]
+            total_count = row[1]
+            avg_payment = row[2]
+
+            # За год
+            paid_by_year = 0
+            payments_count = 0
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.project_type = 'Шаблонный'
+                    AND p.report_month LIKE ?
+                """, (f'{year}-%',))
+                row = cursor.fetchone()
+                paid_by_year = row[0]
+                payments_count = row[1]
+
+            # За месяц
+            paid_by_month = 0
+            if year and month:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.project_type = 'Шаблонный'
+                    AND p.report_month = ?
+                """, (f'{year}-{month:02d}',))
+                paid_by_month = cursor.fetchone()[0]
+
+            # По агенту
+            by_agent = 0
+            if agent_type:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.project_type = 'Шаблонный'
+                    AND c.agent_type = ?
+                """, (agent_type,))
+                by_agent = cursor.fetchone()[0]
+
+            self.close()
+
+            return {
+                'total_paid': total_paid or 0,
+                'paid_by_year': paid_by_year or 0,
+                'paid_by_month': paid_by_month or 0,
+                'by_agent': by_agent or 0,
+                'avg_payment': avg_payment or 0,
+                'payments_count': payments_count or 0
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики 'Шаблонные': {e}")
+            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
+                    'by_agent': 0, 'avg_payment': 0, 'payments_count': 0}
+
+    def get_salaries_salary_stats(self, year=None, month=None, project_type=None):
+        """Статистика для дашборда 'Оклады'
+        Возвращает: total_paid, paid_by_year, paid_by_month, by_project_type, avg_salary, employees_count
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Всего выплачено и средний оклад
+            cursor.execute("""
+                SELECT COALESCE(SUM(amount), 0), COALESCE(AVG(amount), 0)
+                FROM salaries
+            """)
+            row = cursor.fetchone()
+            total_paid = row[0]
+            avg_salary = row[1]
+
+            # За год и кол-во уникальных сотрудников
+            paid_by_year = 0
+            employees_count = 0
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(amount), 0), COUNT(DISTINCT employee_id)
+                    FROM salaries
+                    WHERE report_month LIKE ?
+                """, (f'{year}-%',))
+                row = cursor.fetchone()
+                paid_by_year = row[0]
+                employees_count = row[1]
+
+            # За месяц
+            paid_by_month = 0
+            if year and month:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM salaries
+                    WHERE report_month = ?
+                """, (f'{year}-{month:02d}',))
+                paid_by_month = cursor.fetchone()[0]
+
+            # По типу проекта
+            by_project_type = 0
+            if project_type:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM salaries
+                    WHERE project_type = ?
+                """, (project_type,))
+                by_project_type = cursor.fetchone()[0]
+
+            self.close()
+
+            return {
+                'total_paid': total_paid or 0,
+                'paid_by_year': paid_by_year or 0,
+                'paid_by_month': paid_by_month or 0,
+                'by_project_type': by_project_type or 0,
+                'avg_salary': avg_salary or 0,
+                'employees_count': employees_count or 0
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики 'Оклады': {e}")
+            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
+                    'by_project_type': 0, 'avg_salary': 0, 'employees_count': 0}
+
+    def get_salaries_supervision_stats(self, year=None, month=None, agent_type=None):
+        """Статистика для дашборда 'Авторский надзор'
+        Возвращает: total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Всего выплачено
+            cursor.execute("""
+                SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*), COALESCE(AVG(p.final_amount), 0)
+                FROM payments p
+                JOIN contracts c ON p.contract_id = c.id
+                WHERE p.payment_status = 'paid'
+                AND c.status = 'АВТОРСКИЙ НАДЗОР'
+            """)
+            row = cursor.fetchone()
+            total_paid = row[0]
+            total_count = row[1]
+            avg_payment = row[2]
+
+            # За год
+            paid_by_year = 0
+            payments_count = 0
+            if year:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                    AND p.report_month LIKE ?
+                """, (f'{year}-%',))
+                row = cursor.fetchone()
+                paid_by_year = row[0]
+                payments_count = row[1]
+
+            # За месяц
+            paid_by_month = 0
+            if year and month:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                    AND p.report_month = ?
+                """, (f'{year}-{month:02d}',))
+                paid_by_month = cursor.fetchone()[0]
+
+            # По агенту
+            by_agent = 0
+            if agent_type:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(p.final_amount), 0)
+                    FROM payments p
+                    JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid'
+                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                    AND c.agent_type = ?
+                """, (agent_type,))
+                by_agent = cursor.fetchone()[0]
+
+            self.close()
+
+            return {
+                'total_paid': total_paid or 0,
+                'paid_by_year': paid_by_year or 0,
+                'paid_by_month': paid_by_month or 0,
+                'by_agent': by_agent or 0,
+                'avg_payment': avg_payment or 0,
+                'payments_count': payments_count or 0
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения статистики 'Авторский надзор': {e}")
+            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
+                    'by_agent': 0, 'avg_payment': 0, 'payments_count': 0}
+
+    def get_contract_years(self):
+        """Получить список всех годов из договоров (для фильтров дашборда)
+
+        Returns:
+            list: Список годов в обратном порядке (от нового к старому),
+                  включая текущий год и следующий год
+        """
+        try:
+            from datetime import datetime
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Получаем все уникальные годы из дат договоров
+            cursor.execute("""
+                SELECT DISTINCT strftime('%Y', contract_date) as year
+                FROM contracts
+                WHERE contract_date IS NOT NULL AND contract_date != ''
+                ORDER BY year DESC
+            """)
+
+            db_years = [int(row[0]) for row in cursor.fetchall() if row[0]]
+            self.close()
+
+            # Добавляем текущий год и следующий год (если их нет)
+            current_year = datetime.now().year
+            next_year = current_year + 1
+
+            all_years = set(db_years)
+            all_years.add(current_year)
+            all_years.add(next_year)
+
+            # Сортируем в обратном порядке (от нового к старому)
+            years_list = sorted(all_years, reverse=True)
+
+            return years_list
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения годов договоров: {e}")
+            # Возвращаем fallback - 10 лет назад до следующего года
+            from datetime import datetime
+            current_year = datetime.now().year
+            return list(range(current_year + 1, current_year - 10, -1))
 
     def get_agent_types(self):
         """Получить список всех типов агентов из договоров

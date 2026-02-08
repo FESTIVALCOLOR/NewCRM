@@ -97,10 +97,14 @@ class FilePreviewWidget(QWidget):
                     background-color: #FFFFFF;
                     color: #E74C3C;
                     border: 1px solid #E74C3C;
-                    border-radius: 2px;
+                    border-radius: 3px;
                     font-size: 10px;
                     font-weight: bold;
-                    padding: 2px 2px;
+                    padding: 0px;
+                    min-height: 20px;
+                    max-height: 20px;
+                    min-width: 20px;
+                    max-width: 20px;
                 }
                 QPushButton:hover {
                     background-color: #FFE5E5;
@@ -108,11 +112,11 @@ class FilePreviewWidget(QWidget):
                     border: 1px solid #C0392B;
                 }
             """)
-            self.delete_btn.setFixedSize(22, 22)
+            self.delete_btn.setFixedSize(20, 20)
             self.delete_btn.setToolTip('Удалить файл')
             self.delete_btn.setCursor(QCursor(Qt.PointingHandCursor))
             self.delete_btn.clicked.connect(lambda: self.delete_requested.emit(self.file_id))
-            self.delete_btn.move(96, 2)  # Позиция в правом верхнем углу (120 - 22 - 2)
+            self.delete_btn.move(98, 2)  # Позиция в правом верхнем углу (120 - 20 - 2)
             self.delete_btn.hide()  # Скрываем по умолчанию
 
             # Обработчики событий для показа/скрытия кнопки при наведении

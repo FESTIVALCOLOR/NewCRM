@@ -1,8 +1,9 @@
-PyQt5==5.15.9
-PyQt5-tools==5.15.9.3.3
-reportlab==4.0.7
-matplotlib==3.8.2
-pandas==2.1.4
-requests==2.31.0
-pyinstaller==6.3.0
-PyMuPDF==1.23.8
+PyQt5==5.15.11
+reportlab==4.4.9
+matplotlib==3.10.8
+pandas==3.0.0
+requests==2.32.5
+pyinstaller==6.18.0
+PyMuPDF==1.26.7
+pydantic==2.12.5
+pydantic-settings==2.12.0

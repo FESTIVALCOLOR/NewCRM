@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+import ctypes
 from PyQt5.QtWidgets import QApplication, QComboBox
-from PyQt5.QtCore import Qt, QObject, QEvent
+from PyQt5.QtCore import Qt, QObject, QEvent, QSize
 from PyQt5.QtGui import QIcon
 from ui.login_window import LoginWindow
 from database.db_manager import DatabaseManager
@@ -47,11 +48,31 @@ def main():
             QApplication.setAttribute(Qt.AA_UseDesktopOpenGL, True)
         # ==============================================
 
+        # ========== ИСПРАВЛЕНИЕ ИКОНКИ В ПАНЕЛИ ЗАДАЧ WINDOWS ==========
+        # Устанавливаем App User Model ID для корректного отображения иконки в панели задач
+        if sys.platform == 'win32':
+            try:
+                myappid = 'interiorstudio.crm.app.1.0'  # Уникальный ID приложения
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+                app_logger.info("Установлен App User Model ID для Windows")
+            except Exception as e:
+                app_logger.warning(f"Не удалось установить App User Model ID: {e}")
+        # ================================================================
+
         # Инициализация приложения
         app = QApplication(sys.argv)
 
         # Устанавливаем иконку приложения
-        app_icon = QIcon(resource_path('resources/icon.ico'))
+        # ИСПРАВЛЕНИЕ 07.02.2026: Добавляем несколько размеров для корректного отображения в панели задач
+        app_icon = QIcon()
+        # Добавляем разные размеры иконки (от малого к большому)
+        for size in [32, 48, 64, 128, 256]:
+            icon_path = resource_path(f'resources/icon{size}.ico')
+            if os.path.exists(icon_path):
+                app_icon.addFile(icon_path, QSize(size, size))
+        # Fallback на основную иконку если отдельных нет
+        if app_icon.isNull():
+            app_icon = QIcon(resource_path('resources/icon.ico'))
         app.setWindowIcon(app_icon)
 
         # Устанавливаем глобальный фильтр событий для всех QComboBox
@@ -112,19 +133,8 @@ def main():
         print("="*60 + "\n")
         # ===================================
     
-        # ========== ПРИМЕНЕНИЕ ГЛОБАЛЬНЫХ СТИЛЕЙ ==========
-        base_styles = ""
-        try:
-            styles_path = resource_path('resources/styles.qss')
-            with open(styles_path, 'r', encoding='utf-8') as f:
-                base_styles = f.read()
-            app_logger.info(f"Стили загружены из {styles_path}")
-        except FileNotFoundError:
-            print(f"[WARN] Файл resources/styles.qss не найден")
-            app_logger.warning(f"Файл resources/styles.qss не найден")
-
-        from utils.calendar_styles import CALENDAR_STYLE
-        from utils.global_styles import GLOBAL_STYLE
+        # ========== ПРИМЕНЕНИЕ ЕДИНЫХ СТИЛЕЙ ==========
+        from utils.unified_styles import get_unified_stylesheet
 
         # Добавляем принудительный стиль для QToolTip в самом конце
         tooltip_override = """
@@ -137,9 +147,9 @@ def main():
             font-size: 12px;
         }
         """
-        combined_styles = base_styles + "\n" + CALENDAR_STYLE + "\n" + GLOBAL_STYLE + "\n" + tooltip_override
+        combined_styles = get_unified_stylesheet() + "\n" + tooltip_override
         app.setStyleSheet(combined_styles)
-        app_logger.info("Глобальные стили применены")
+        app_logger.info("Единые стили (unified_styles.py) применены")
         # ==================================================
 
         # Инициализация базы данных

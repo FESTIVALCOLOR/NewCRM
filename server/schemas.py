@@ -56,6 +56,8 @@ class EmployeeUpdate(BaseModel):
     department: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None
+    login: Optional[str] = None
+    password: Optional[str] = None
 
 
 class EmployeeResponse(EmployeeBase):
@@ -143,10 +145,20 @@ class ContractBase(BaseModel):
     comments: Optional[str] = None
     contract_file_link: Optional[str] = None
     tech_task_link: Optional[str] = None
+    tech_task_yandex_path: Optional[str] = None
+    tech_task_file_name: Optional[str] = None
+    # Поля для файлов замера
+    measurement_image_link: Optional[str] = None
+    measurement_file_name: Optional[str] = None
+    measurement_yandex_path: Optional[str] = None
+    measurement_date: Optional[str] = None
     status: str = "Новый заказ"
     status_changed_date: Optional[str] = None
     termination_reason: Optional[str] = None
     yandex_folder_path: Optional[str] = None
+    # Поля для референсов и фотофиксации (25.01.2026)
+    references_yandex_path: Optional[str] = None
+    photo_documentation_yandex_path: Optional[str] = None
 
 
 class ContractCreate(ContractBase):
@@ -170,10 +182,20 @@ class ContractUpdate(BaseModel):
     comments: Optional[str] = None
     contract_file_link: Optional[str] = None
     tech_task_link: Optional[str] = None
+    tech_task_yandex_path: Optional[str] = None
+    tech_task_file_name: Optional[str] = None
+    # Поля для файлов замера
+    measurement_image_link: Optional[str] = None
+    measurement_file_name: Optional[str] = None
+    measurement_yandex_path: Optional[str] = None
+    measurement_date: Optional[str] = None
     status: Optional[str] = None
     status_changed_date: Optional[str] = None
     termination_reason: Optional[str] = None
     yandex_folder_path: Optional[str] = None
+    # Поля для референсов и фотофиксации (25.01.2026)
+    references_yandex_path: Optional[str] = None
+    photo_documentation_yandex_path: Optional[str] = None
 
 
 class ContractResponse(ContractBase):
@@ -289,6 +311,8 @@ class StageExecutorCreate(BaseModel):
 
 
 class StageExecutorUpdate(BaseModel):
+    executor_id: Optional[int] = None
+    deadline: Optional[str] = None
     completed: Optional[bool] = None
     completed_date: Optional[datetime] = None
     submitted_date: Optional[datetime] = None
@@ -357,6 +381,13 @@ class SupervisionPauseRequest(BaseModel):
     pause_reason: str
 
 
+# ИСПРАВЛЕНИЕ 06.02.2026: Добавлена схема для создания записи истории (#22)
+class SupervisionHistoryCreate(BaseModel):
+    entry_type: str
+    message: str
+    created_by: Optional[int] = None
+
+
 class SupervisionHistoryResponse(BaseModel):
     id: int
     supervision_card_id: int
@@ -380,13 +411,15 @@ class PaymentBase(BaseModel):
     employee_id: int
     role: str
     stage_name: Optional[str] = None
-    calculated_amount: float
+    calculated_amount: Optional[float] = 0.0
     manual_amount: Optional[float] = None
-    final_amount: float
+    final_amount: Optional[float] = 0.0
     is_manual: bool = False
     payment_type: Optional[str] = None
     report_month: Optional[str] = None
     payment_status: Optional[str] = None
+    reassigned: Optional[bool] = False  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
+    old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
 
 
 class PaymentCreate(PaymentBase):
@@ -403,6 +436,8 @@ class PaymentUpdate(BaseModel):
     is_paid: Optional[bool] = None
     paid_date: Optional[datetime] = None
     paid_by: Optional[int] = None
+    reassigned: Optional[bool] = None  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
+    old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
 
 
 class PaymentResponse(PaymentBase):
@@ -460,8 +495,8 @@ class RateUpdate(BaseModel):
 
 class RateResponse(RateBase):
     id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -595,3 +630,13 @@ class SurveyorRateRequest(BaseModel):
     """Схема для сохранения тарифа замерщика"""
     city: str
     price: float
+
+
+class ContractFilesUpdate(BaseModel):
+    """Схема для обновления файлов договора (замер, референсы, фотофиксация)"""
+    measurement_image_link: Optional[str] = None
+    measurement_file_name: Optional[str] = None
+    measurement_yandex_path: Optional[str] = None
+    measurement_date: Optional[str] = None
+    contract_file_link: Optional[str] = None
+    tech_task_link: Optional[str] = None

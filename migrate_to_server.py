@@ -18,6 +18,8 @@ class DataMigrator:
             'employees': {'total': 0, 'migrated': 0, 'errors': 0},
             'clients': {'total': 0, 'migrated': 0, 'errors': 0},
             'contracts': {'total': 0, 'migrated': 0, 'errors': 0},
+            'crm_cards': {'total': 0, 'migrated': 0, 'errors': 0},
+            'supervision_cards': {'total': 0, 'migrated': 0, 'errors': 0},
         }
 
     def connect_sqlite(self):
@@ -255,6 +257,115 @@ class DataMigrator:
 
         print(f"\nContracts: {self.stats['contracts']['migrated']}/{self.stats['contracts']['total']} migrated")
 
+    def migrate_crm_cards(self):
+        """Миграция CRM карточек"""
+        print("\n" + "="*60)
+        print("MIGRATING CRM CARDS")
+        print("="*60)
+
+        # Получить все CRM карточки из SQLite
+        self.cursor.execute("""
+            SELECT id, contract_id, column_name, deadline, tags, is_approved,
+                   senior_manager_id, sdp_id, gap_id, manager_id, surveyor_id,
+                   approval_deadline, approval_stages, project_data_link,
+                   tech_task_file, tech_task_date, survey_date, order_position
+            FROM crm_cards
+        """)
+
+        cards = self.cursor.fetchall()
+        self.stats['crm_cards']['total'] = len(cards)
+
+        print(f"Found CRM cards: {len(cards)}")
+
+        for card in cards:
+            try:
+                # Подготовка данных
+                card_data = {
+                    'contract_id': card['contract_id'],
+                    'column_name': card['column_name'] or 'Новый заказ',
+                    'deadline': card['deadline'],
+                    'tags': card['tags'],
+                    'is_approved': bool(card['is_approved']),
+                    'senior_manager_id': card['senior_manager_id'],
+                    'sdp_id': card['sdp_id'],
+                    'gap_id': card['gap_id'],
+                    'manager_id': card['manager_id'],
+                    'surveyor_id': card['surveyor_id'],
+                    'approval_deadline': card['approval_deadline'],
+                    'approval_stages': card['approval_stages'],
+                    'project_data_link': card['project_data_link'],
+                    'tech_task_file': card['tech_task_file'],
+                    'tech_task_date': card['tech_task_date'],
+                    'survey_date': card['survey_date'],
+                    'order_position': card['order_position'] or 0
+                }
+
+                # Отправка на сервер
+                result = self.api_client.create_crm_card(card_data)
+
+                self.stats['crm_cards']['migrated'] += 1
+                print(f"  [OK] CRM Card for contract #{card['contract_id']} (ID: {card['id']} -> {result['id']})")
+
+            except Exception as e:
+                self.stats['crm_cards']['errors'] += 1
+                error_msg = str(e)
+                if "уже существует" in error_msg or "already exists" in error_msg:
+                    print(f"  [SKIP] CRM Card for contract #{card['contract_id']}: already exists")
+                else:
+                    print(f"  [ERROR] CRM Card for contract #{card['contract_id']}: {e}")
+
+        print(f"\nCRM Cards: {self.stats['crm_cards']['migrated']}/{self.stats['crm_cards']['total']} migrated")
+
+    def migrate_supervision_cards(self):
+        """Миграция карточек авторского надзора"""
+        print("\n" + "="*60)
+        print("MIGRATING SUPERVISION CARDS")
+        print("="*60)
+
+        # Получить все карточки надзора из SQLite
+        self.cursor.execute("""
+            SELECT id, contract_id, column_name, deadline, tags,
+                   senior_manager_id, dan_id, dan_completed,
+                   is_paused, pause_reason, paused_at
+            FROM supervision_cards
+        """)
+
+        cards = self.cursor.fetchall()
+        self.stats['supervision_cards']['total'] = len(cards)
+
+        print(f"Found Supervision cards: {len(cards)}")
+
+        for card in cards:
+            try:
+                # Подготовка данных
+                card_data = {
+                    'contract_id': card['contract_id'],
+                    'column_name': card['column_name'] or 'Новый заказ',
+                    'deadline': card['deadline'],
+                    'tags': card['tags'],
+                    'senior_manager_id': card['senior_manager_id'],
+                    'dan_id': card['dan_id'],
+                    'dan_completed': bool(card['dan_completed']),
+                    'is_paused': bool(card['is_paused']),
+                    'pause_reason': card['pause_reason']
+                }
+
+                # Отправка на сервер
+                result = self.api_client.create_supervision_card(card_data)
+
+                self.stats['supervision_cards']['migrated'] += 1
+                print(f"  [OK] Supervision Card for contract #{card['contract_id']} (ID: {card['id']} -> {result['id']})")
+
+            except Exception as e:
+                self.stats['supervision_cards']['errors'] += 1
+                error_msg = str(e)
+                if "уже существует" in error_msg or "already exists" in error_msg:
+                    print(f"  [SKIP] Supervision Card for contract #{card['contract_id']}: already exists")
+                else:
+                    print(f"  [ERROR] Supervision Card for contract #{card['contract_id']}: {e}")
+
+        print(f"\nSupervision Cards: {self.stats['supervision_cards']['migrated']}/{self.stats['supervision_cards']['total']} migrated")
+
     def print_summary(self):
         """Вывести итоговую статистику"""
         print("\n" + "="*60)
@@ -298,6 +409,8 @@ class DataMigrator:
             self.migrate_employees()
             self.migrate_clients()
             self.migrate_contracts()
+            self.migrate_crm_cards()
+            self.migrate_supervision_cards()
 
             # Итоги
             self.print_summary()
@@ -330,12 +443,7 @@ def main():
     print(f"  SQLite database: {SQLITE_PATH}")
     print(f"  API server: {API_BASE_URL}")
     print(f"  Admin login: {ADMIN_LOGIN}")
-
-    # Подтверждение
-    response = input("\nStart migration? (yes/no): ")
-    if response.lower() != 'yes':
-        print("Migration cancelled.")
-        return
+    print(f"\nStarting migration automatically...")
 
     # Создание мигратора
     migrator = DataMigrator(

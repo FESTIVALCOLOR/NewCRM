@@ -3,7 +3,7 @@ import os
 # Пути
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, 'interior_studio.db')
-YANDEX_DISK_LINK = "https://disk.yandex.ru/d/wxS_YmhYfjl-FQ"
+YANDEX_DISK_LINK = "https://disk.yandex.ru/d/SMKt9A7JGjzSEw"
 
 # Яндекс.Диск OAuth токен (получить на https://oauth.yandex.ru/)
 # ВАЖНО: Для работы требуются права: cloud_api:disk.app_folder или cloud_api:disk.write
@@ -105,7 +105,7 @@ UPDATE_CHECK_URL = "https://cloud-api.yandex.net/v1/disk/public/resources"
 MULTI_USER_MODE = True
 
 # URL API сервера (замените на ваш сервер)
-API_BASE_URL = "https://147.45.154.193"
+API_BASE_URL = "http://147.45.154.193:8000"
 
 # Интервал синхронизации с сервером (секунды)
 SYNC_INTERVAL = 5

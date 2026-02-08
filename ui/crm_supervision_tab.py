@@ -15,6 +15,7 @@ from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit, ICONS_PATH
 from utils.resource_path import resource_path
+from utils.table_settings import ProportionalResizeTable, apply_no_focus_delegate, TableSettings
 from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 import os
@@ -229,9 +230,12 @@ class CRMSupervisionTab(QWidget):
             column.card_moved.connect(self.on_card_moved)
             columns_dict[column_name] = column
             columns_layout.addWidget(column)
-        
+
+        # ИСПРАВЛЕНИЕ 07.02.2026: Выравнивание по левому краю при сворачивании (#19)
+        columns_layout.addStretch()
+
         widget.columns = columns_dict
-        
+
         columns_widget.setLayout(columns_layout)
         scroll.setWidget(columns_widget)
         
@@ -464,6 +468,17 @@ class CRMSupervisionTab(QWidget):
             self.apply_archive_filters()
 
         apply_btn.clicked.connect(apply_filters)
+
+        # ИСПРАВЛЕНИЕ 07.02.2026: Автоприменение фильтров при изменении (НОВОЕ 3)
+        # Все фильтры автоматически применяются при изменении значения
+        period_combo.currentTextChanged.connect(apply_filters)
+        year_spin.valueChanged.connect(apply_filters)
+        quarter_combo.currentIndexChanged.connect(apply_filters)
+        month_combo.currentIndexChanged.connect(apply_filters)
+        date_criterion_combo.currentIndexChanged.connect(apply_filters)
+        city_combo.currentIndexChanged.connect(apply_filters)
+        agent_combo.currentIndexChanged.connect(apply_filters)
+        address_input.textChanged.connect(apply_filters)
 
         # Обработчик сброса фильтров
         def reset_filters():
@@ -876,8 +891,56 @@ class CRMSupervisionTab(QWidget):
         print(f"   Из: '{from_column}' → В: '{to_column}'")
 
         try:
+            # ========== ПРОВЕРКА НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ ==========
+            # При перемещении на рабочую стадию проверяем, назначены ли исполнители
+            non_work_columns = ['Новый заказ', 'В ожидании', 'Выполненный проект']
+
+            if to_column not in non_work_columns and self.employee['position'] not in ['ДАН']:
+                # Получаем данные об исполнителях
+                executors_data = None
+                if self.api_client and self.api_client.is_online:
+                    try:
+                        card_data = self.api_client.get_supervision_card(card_id)
+                        if card_data:
+                            executors_data = {
+                                'dan_id': card_data.get('dan_id'),
+                                'senior_manager_id': card_data.get('senior_manager_id')
+                            }
+                    except Exception as e:
+                        print(f"[WARN] Ошибка API получения исполнителей: {e}")
+
+                if executors_data is None:
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT dan_id, senior_manager_id
+                        FROM supervision_cards
+                        WHERE id = ?
+                    ''', (card_id,))
+                    row = cursor.fetchone()
+                    self.db.close()
+                    if row:
+                        executors_data = {
+                            'dan_id': row['dan_id'],
+                            'senior_manager_id': row['senior_manager_id']
+                        }
+
+                # Если исполнители не назначены - показываем диалог
+                if executors_data and not executors_data.get('dan_id') and not executors_data.get('senior_manager_id'):
+                    print(f"   ! Исполнители не назначены, показываем диалог назначения")
+                    dialog = AssignExecutorsDialog(self, card_id, to_column, api_client=self.api_client)
+                    if dialog.exec_() != QDialog.Accepted:
+                        # Пользователь отменил - возвращаем карточку обратно
+                        print(f"   ! Назначение отменено, карточка остается в '{from_column}'")
+                        self.load_cards_for_current_tab()
+                        return
+                    print(f"   + Исполнители назначены: ДАН={dialog.assigned_dan_id}, СМП={dialog.assigned_smp_id}")
+
+            # ========== КОНЕЦ ПРОВЕРКИ НАЗНАЧЕНИЯ ==========
+
             # ИСПРАВЛЕНИЕ: Проверка и автоматическое принятие работы при перемещении
-            if self.employee['position'] not in ['ДАН'] and from_column not in ['Новый заказ', 'Выполненный проект']:
+            # "В ожидании" также исключаем - это стартовая колонка без рабочей стадии
+            if self.employee['position'] not in ['ДАН'] and from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
                 # Получаем данные карточки через API или локальную БД
                 card_info = None
                 if self.api_client:
@@ -977,18 +1040,53 @@ class CRMSupervisionTab(QWidget):
 
                             # Если оплат для этой стадии нет, создаем их
                             if not existing_payments:
-                                # Получаем назначенных исполнителей
-                                cursor.execute('''
-                                SELECT dan_id, senior_manager_id
-                                FROM supervision_cards
-                                WHERE id = ?
-                                ''', (card_id,))
+                                # Получаем назначенных исполнителей - приоритет API, fallback на локальную БД
+                                executors_row = None
+                                if self.api_client and self.api_client.is_online:
+                                    try:
+                                        card_api_data = self.api_client.get_supervision_card(card_id)
+                                        if card_api_data:
+                                            executors_row = {
+                                                'dan_id': card_api_data.get('dan_id'),
+                                                'senior_manager_id': card_api_data.get('senior_manager_id')
+                                            }
+                                            print(f"    [API] Получены исполнители: ДАН={executors_row['dan_id']}, СМП={executors_row['senior_manager_id']}")
+                                    except Exception as api_err:
+                                        print(f"    [WARN] Ошибка API получения исполнителей: {api_err}")
 
-                                executors_row = cursor.fetchone()
+                                # Fallback на локальную БД
+                                if not executors_row:
+                                    cursor.execute('''
+                                    SELECT dan_id, senior_manager_id
+                                    FROM supervision_cards
+                                    WHERE id = ?
+                                    ''', (card_id,))
+                                    executors_row = cursor.fetchone()
+                                    print(f"    [LOCAL] Получены исполнители из локальной БД")
 
                                 if executors_row:
                                     # Создаем оплату для ДАН
                                     if executors_row['dan_id']:
+                                        # ИСПРАВЛЕНО 06.02.2026: Рассчитываем сумму перед созданием платежа
+                                        dan_amount = 0
+                                        if self.api_client:
+                                            try:
+                                                dan_amount = self.api_client.calculate_payment_amount(
+                                                    contract_id, executors_row['dan_id'], 'ДАН',
+                                                    stage_name=from_column, supervision_card_id=card_id
+                                                )
+                                            except Exception as e:
+                                                print(f"    [WARN] Ошибка расчёта суммы ДАН: {e}")
+                                                dan_amount = self.db.calculate_payment_amount(
+                                                    contract_id, executors_row['dan_id'], 'ДАН',
+                                                    stage_name=from_column, supervision_card_id=card_id
+                                                )
+                                        else:
+                                            dan_amount = self.db.calculate_payment_amount(
+                                                contract_id, executors_row['dan_id'], 'ДАН',
+                                                stage_name=from_column, supervision_card_id=card_id
+                                            )
+
                                         if self.api_client:
                                             try:
                                                 payment_data = {
@@ -996,12 +1094,14 @@ class CRMSupervisionTab(QWidget):
                                                     'employee_id': executors_row['dan_id'],
                                                     'role': 'ДАН',
                                                     'stage_name': from_column,
+                                                    'calculated_amount': dan_amount,
+                                                    'final_amount': dan_amount,
                                                     'payment_type': 'Полная оплата',
                                                     'report_month': current_month,
                                                     'supervision_card_id': card_id
                                                 }
                                                 result = self.api_client.create_payment(payment_data)
-                                                print(f"    Создана оплата для ДАН через API по стадии '{from_column}'")
+                                                print(f"    Создана оплата для ДАН через API по стадии '{from_column}': {dan_amount} руб")
                                             except Exception as e:
                                                 print(f"    [WARNING] Ошибка создания оплаты ДАН через API: {e}")
                                                 self.db.close()
@@ -1034,6 +1134,26 @@ class CRMSupervisionTab(QWidget):
 
                                     # Создаем оплату для Старшего менеджера
                                     if executors_row['senior_manager_id']:
+                                        # ИСПРАВЛЕНО 06.02.2026: Рассчитываем сумму перед созданием платежа
+                                        smp_amount = 0
+                                        if self.api_client:
+                                            try:
+                                                smp_amount = self.api_client.calculate_payment_amount(
+                                                    contract_id, executors_row['senior_manager_id'], 'Старший менеджер проектов',
+                                                    stage_name=from_column, supervision_card_id=card_id
+                                                )
+                                            except Exception as e:
+                                                print(f"    [WARN] Ошибка расчёта суммы СМП: {e}")
+                                                smp_amount = self.db.calculate_payment_amount(
+                                                    contract_id, executors_row['senior_manager_id'], 'Старший менеджер проектов',
+                                                    stage_name=from_column, supervision_card_id=card_id
+                                                )
+                                        else:
+                                            smp_amount = self.db.calculate_payment_amount(
+                                                contract_id, executors_row['senior_manager_id'], 'Старший менеджер проектов',
+                                                stage_name=from_column, supervision_card_id=card_id
+                                            )
+
                                         if self.api_client:
                                             try:
                                                 payment_data = {
@@ -1041,12 +1161,14 @@ class CRMSupervisionTab(QWidget):
                                                     'employee_id': executors_row['senior_manager_id'],
                                                     'role': 'Старший менеджер проектов',
                                                     'stage_name': from_column,
+                                                    'calculated_amount': smp_amount,
+                                                    'final_amount': smp_amount,
                                                     'payment_type': 'Полная оплата',
                                                     'report_month': current_month,
                                                     'supervision_card_id': card_id
                                                 }
                                                 result = self.api_client.create_payment(payment_data)
-                                                print(f"    Создана оплата для СМП через API по стадии '{from_column}'")
+                                                print(f"    Создана оплата для СМП через API по стадии '{from_column}': {smp_amount} руб")
                                             except Exception as e:
                                                 print(f"    [WARNING] Ошибка создания оплаты СМП через API: {e}")
                                                 self.db.close()
@@ -1223,6 +1345,52 @@ class CRMSupervisionTab(QWidget):
             import traceback
             traceback.print_exc()
 
+
+# ИСПРАВЛЕНИЕ 07.02.2026: Класс для вертикального текста в свёрнутых колонках (#19)
+class VerticalLabelSupervision(QWidget):
+    """Виджет с вертикальным текстом для свёрнутых колонок надзора"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._text = ""
+        self.setMinimumWidth(40)
+        self.setMaximumWidth(40)
+
+    def setText(self, text):
+        self._text = text
+        self.update()
+
+    def text(self):
+        return self._text
+
+    def paintEvent(self, event):
+        from PyQt5.QtGui import QPainter, QFont
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Фон (оранжевый как у заголовка надзора)
+        painter.fillRect(self.rect(), QColor('#FFE5CC'))
+
+        # Настройка шрифта
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(10)
+        painter.setFont(font)
+        painter.setPen(QColor('#333333'))
+
+        # Поворот на 90 градусов (текст снизу вверх)
+        painter.translate(self.width() / 2 + 5, self.height() - 10)
+        painter.rotate(-90)
+
+        # Рисуем текст
+        painter.drawText(0, 0, self._text)
+
+        painter.end()
+
+    def sizeHint(self):
+        return QSize(40, 200)
+
+
 class SupervisionColumn(QFrame):
     """Колонка для карточек надзора"""
     card_moved = pyqtSignal(int, str, str)
@@ -1233,12 +1401,24 @@ class SupervisionColumn(QFrame):
         self.employee = employee
         self.db = db
         self.api_client = api_client
+        self.header_label = None
+        # ИСПРАВЛЕНИЕ 07.02.2026: Добавлено сворачивание колонок с сохранением состояния (#19)
+        self._is_collapsed = False
+        self._original_min_width = 340
+        self._original_max_width = 360
+        self._collapsed_width = 50
+        self.vertical_label = None
+        # Настройки для сохранения состояния
+        self._settings = TableSettings()
+        self._board_name = "crm_supervision"
         self.init_ui()
-    
+        # Загружаем сохранённое состояние
+        self._apply_initial_collapse_state()
+
     def init_ui(self):
         self.setFrameShape(QFrame.StyledPanel)
-        self.setMinimumWidth(340)
-        self.setMaximumWidth(360)
+        self.setMinimumWidth(self._original_min_width)
+        self.setMaximumWidth(self._original_max_width)
         self.setStyleSheet("""
             SupervisionColumn {
                 background-color: #F5F5F5;
@@ -1246,12 +1426,17 @@ class SupervisionColumn(QFrame):
                 border-radius: 5px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(5)
         layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Заголовок
+
+        # ИСПРАВЛЕНИЕ 07.02.2026: Заголовок с кнопкой сворачивания (#19)
+        header_container = QWidget()
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(5)
+
         self.header_label = QLabel()
         self.header_label.setStyleSheet("""
             font-weight: bold;
@@ -1262,7 +1447,24 @@ class SupervisionColumn(QFrame):
         """)
         self.header_label.setWordWrap(True)
         self.update_header_count()
-        layout.addWidget(self.header_label)
+        header_layout.addWidget(self.header_label, 1)
+
+        # Кнопка сворачивания - используем иконку стрелки как у фильтров
+        self.collapse_btn = IconLoader.create_icon_button('arrow-left-circle', '', 'Свернуть колонку', icon_size=14)
+        self.collapse_btn.setFixedSize(20, 20)
+        self.collapse_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #FFD4A8; }
+        """)
+        self.collapse_btn.clicked.connect(self.toggle_collapse)
+        header_layout.addWidget(self.collapse_btn)
+
+        header_container.setLayout(header_layout)
+        layout.addWidget(header_container)
         
         # Список карточек
         can_drag = self.employee['position'] not in ['ДАН']
@@ -1285,14 +1487,72 @@ class SupervisionColumn(QFrame):
         layout.addWidget(self.cards_list, 1)
         self.setLayout(layout)
     
+    # ИСПРАВЛЕНИЕ 07.02.2026: Применение начального состояния сворачивания (#19)
+    def _apply_initial_collapse_state(self):
+        """Применить начальное состояние сворачивания (из настроек)"""
+        saved_state = self._settings.get_column_collapsed_state(
+            self._board_name, self.column_name, default=None
+        )
+        if saved_state:
+            self._collapse_column()
+
+    def _collapse_column(self):
+        """Свернуть колонку (без сохранения состояния)"""
+        self._is_collapsed = True
+        self.cards_list.hide()
+        self.header_label.hide()
+        self.collapse_btn.setIcon(IconLoader.load('arrow-right-circle'))
+        self.collapse_btn.setToolTip('Развернуть колонку')
+        self.setMinimumWidth(self._collapsed_width)
+        self.setMaximumWidth(self._collapsed_width)
+
+        if self.vertical_label is None:
+            self.vertical_label = VerticalLabelSupervision()
+            self.layout().insertWidget(1, self.vertical_label, 1)
+
+        count = self.cards_list.count() if hasattr(self, 'cards_list') else 0
+        short_name = self.column_name
+        self.vertical_label.setText(f"{short_name} ({count})")
+        self.vertical_label.show()
+
+    def _expand_column(self):
+        """Развернуть колонку (без сохранения состояния)"""
+        self._is_collapsed = False
+        self.cards_list.show()
+        self.header_label.show()
+        self.collapse_btn.setIcon(IconLoader.load('arrow-left-circle'))
+        self.collapse_btn.setToolTip('Свернуть колонку')
+        self.setMinimumWidth(self._original_min_width)
+        self.setMaximumWidth(self._original_max_width)
+
+        if self.vertical_label:
+            self.vertical_label.hide()
+
+    # ИСПРАВЛЕНИЕ 07.02.2026: Метод сворачивания колонки с сохранением (#19)
+    def toggle_collapse(self):
+        """Переключение состояния сворачивания колонки"""
+        if self._is_collapsed:
+            self._expand_column()
+        else:
+            self._collapse_column()
+
+        # Сохраняем новое состояние
+        self._settings.save_column_collapsed_state(
+            self._board_name, self.column_name, self._is_collapsed
+        )
+
     def update_header_count(self):
         """Обновление счетчика"""
         count = self.cards_list.count() if hasattr(self, 'cards_list') else 0
-        
+
         if count == 0:
             self.header_label.setText(self.column_name)
         else:
             self.header_label.setText(f"{self.column_name} ({count})")
+
+        # Также обновляем вертикальный лейбл если колонка свёрнута
+        if self._is_collapsed and self.vertical_label:
+            self.vertical_label.setText(f"{self.column_name} ({count})")
     
     def add_card(self, card_data):
         """Добавление карточки"""
@@ -1341,6 +1601,7 @@ class SupervisionCard(QFrame):
                 }
             """)
         else:
+            # ИСПРАВЛЕНИЕ 06.02.2026: Стили как в основном CRM (#21)
             self.setStyleSheet("""
                 SupervisionCard {
                     background-color: white;
@@ -1348,8 +1609,8 @@ class SupervisionCard(QFrame):
                     border-radius: 8px;
                 }
                 SupervisionCard:hover {
-                    border: 2px solid #d9d9d9;
-                    background-color: #fafafa;
+                    border: 2px solid #909090;
+                    background-color: #f5f5f5;
                 }
             """)
         
@@ -1534,14 +1795,16 @@ class SupervisionCard(QFrame):
                 QPushButton {
                     background-color: #95A5A6;
                     color: white;
-                    padding: 6px 12px;
-                    border-radius: 4px;
+                    padding: 0px 10px;
+                    border-radius: 6px;
                     font-size: 10px;
                     font-weight: bold;
+                    min-height: 28px;
+                    max-height: 28px;
                 }
                 QPushButton:hover { background-color: #7F8C8D; }
             """)
-            add_note_btn.setFixedHeight(32)
+            add_note_btn.setFixedHeight(28)
             add_note_btn.clicked.connect(self.add_project_note)
             layout.addWidget(add_note_btn, 0)
             
@@ -1552,10 +1815,12 @@ class SupervisionCard(QFrame):
                     QPushButton {
                         background-color: #27AE60;
                         color: white;
-                        padding: 8px 12px;
-                        border-radius: 4px;
-                        font-size: 11px;
+                        padding: 0px 10px;
+                        border-radius: 6px;
+                        font-size: 10px;
                         font-weight: bold;
+                        min-height: 28px;
+                        max-height: 28px;
                     }
                     QPushButton:hover { background-color: #229954; }
                 """)
@@ -1566,32 +1831,36 @@ class SupervisionCard(QFrame):
                     QPushButton {
                         background-color: #F39C12;
                         color: white;
-                        padding: 8px 12px;
-                        border-radius: 4px;
-                        font-size: 11px;
+                        padding: 0px 10px;
+                        border-radius: 6px;
+                        font-size: 10px;
                         font-weight: bold;
+                        min-height: 28px;
+                        max-height: 28px;
                     }
                     QPushButton:hover { background-color: #E67E22; }
                 """)
                 pause_btn.clicked.connect(self.pause_card)
             
-            pause_btn.setFixedHeight(38)
+            pause_btn.setFixedHeight(28)
             layout.addWidget(pause_btn, 0)
-            
+
             # ========== 3. РЕДАКТИРОВАНИЕ (SVG) ==========
             edit_btn = IconLoader.create_icon_button('edit', 'Редактирование', 'Редактировать карточку', icon_size=12)
             edit_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #4A90E2;
                     color: white;
-                    padding: 8px 12px;
-                    border-radius: 4px;
-                    font-size: 11px;
+                    padding: 0px 10px;
+                    border-radius: 6px;
+                    font-size: 10px;
                     font-weight: bold;
+                    min-height: 28px;
+                    max-height: 28px;
                 }
                 QPushButton:hover { background-color: #357ABD; }
             """)
-            edit_btn.setFixedHeight(38)
+            edit_btn.setFixedHeight(28)
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
             
@@ -1605,14 +1874,16 @@ class SupervisionCard(QFrame):
                 QPushButton {
                     background-color: #95A5A6;
                     color: white;
-                    padding: 6px 12px;
-                    border-radius: 4px;
+                    padding: 0px 10px;
+                    border-radius: 6px;
                     font-size: 10px;
                     font-weight: bold;
+                    min-height: 28px;
+                    max-height: 28px;
                 }
                 QPushButton:hover { background-color: #7F8C8D; }
             """)
-            add_note_btn.setFixedHeight(32)
+            add_note_btn.setFixedHeight(28)
             add_note_btn.clicked.connect(self.add_project_note)
             layout.addWidget(add_note_btn, 0)
             
@@ -1623,14 +1894,16 @@ class SupervisionCard(QFrame):
                     QPushButton {
                         background-color: #27AE60;
                         color: white;
-                        padding: 8px 12px;
-                        border-radius: 4px;
-                        font-size: 11px;
+                        padding: 0px 10px;
+                        border-radius: 6px;
+                        font-size: 10px;
                         font-weight: bold;
+                        min-height: 28px;
+                        max-height: 28px;
                     }
                     QPushButton:hover { background-color: #229954; }
                 """)
-                submit_btn.setFixedHeight(38)
+                submit_btn.setFixedHeight(28)
                 submit_btn.clicked.connect(self.submit_work)
                 layout.addWidget(submit_btn, 0)
             else:
@@ -1688,22 +1961,24 @@ class SupervisionCard(QFrame):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Кнопка-заголовок
+        # Кнопка-заголовок - ИСПРАВЛЕНИЕ 07.02.2026: Стили как в основном CRM (#21)
         self.team_toggle_btn = QPushButton(f"Команда ({len(team_members)})  ▶")
         self.team_toggle_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F8F9FA;
                 border: 1px solid #E0E0E0;
                 border-radius: 4px;
-                padding: 5px;
+                padding: 3px 5px;
                 text-align: left;
-                font-size: 9px;
+                font-size: 10px;
                 font-weight: bold;
                 color: #555;
+                max-height: 20px;
+                min-height: 20px;
             }
             QPushButton:hover { background-color: #E8E9EA; }
         """)
-        self.team_toggle_btn.setFixedHeight(30)
+        self.team_toggle_btn.setFixedHeight(20)
         self.team_toggle_btn.clicked.connect(self.toggle_team)
         main_layout.addWidget(self.team_toggle_btn)
         
@@ -1721,13 +1996,13 @@ class SupervisionCard(QFrame):
         """)
         
         team_layout = QVBoxLayout()
-        team_layout.setSpacing(2)
-        team_layout.setContentsMargins(3, 3, 3, 3)
-        
+        team_layout.setSpacing(4)
+        team_layout.setContentsMargins(8, 6, 8, 6)
+
         for role, name in team_members:
             label = QLabel(f"{role}: {name}")
-            label.setStyleSheet('font-size: 10px; color: #444;')
-            label.setWordWrap(True)  
+            label.setStyleSheet('font-size: 10px; color: #444; padding: 2px 4px;')
+            label.setWordWrap(True)
             label.setMinimumHeight(26)
             team_layout.addWidget(label)
         
@@ -2427,7 +2702,7 @@ class SupervisionCardEditDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-top-left-radius: 10px;
                 border-top-right-radius: 10px;
             }
@@ -2499,7 +2774,33 @@ class SupervisionCardEditDialog(QDialog):
             self.dan.addItem('Не назначен', None)
             for dan in dans:
                 self.dan.addItem(dan['full_name'], dan['id'])
-            form_layout.addRow('ДАН:', self.dan)
+
+            # ИСПРАВЛЕНИЕ 28.01.2026: Добавляем кнопку переназначения ДАН
+            dan_row = QHBoxLayout()
+            dan_row.addWidget(self.dan)
+
+            reassign_dan_btn = IconLoader.create_icon_button(
+                'refresh-black',
+                'Переназначить',
+                'Выбрать другого ДАН',
+                icon_size=12
+            )
+            reassign_dan_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E0E0E0;
+                    color: #333;
+                    padding: 4px 8px;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 10px;
+                }
+                QPushButton:hover { background-color: #BDBDBD; }
+            """)
+            reassign_dan_btn.clicked.connect(self.reassign_dan)
+            dan_row.addWidget(reassign_dan_btn)
+            dan_row.addStretch()
+
+            form_layout.addRow('ДАН:', dan_row)
 
             # ========== НОВОЕ: ПОДКЛЮЧЕНИЕ АВТОМАТИЧЕСКОГО СОЗДАНИЯ ВЫПЛАТ ==========
             # Подключаем обработчики изменения сотрудников для автоматического
@@ -2810,21 +3111,63 @@ class SupervisionCardEditDialog(QDialog):
 
     def create_payments_widget(self):
         """ИСПРАВЛЕНИЕ: Создание виджета оплат НАДЗОРА"""
+        # ИСПРАВЛЕНИЕ 06.02.2026: Добавлены стили как в основном CRM (#25)
+        GROUP_BOX_STYLE = """
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 10px;
+                background-color: #FAFAFA;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+                color: #2C3E50;
+            }
+        """
+
+        TABLE_STYLE = """
+            QTableWidget {
+                background-color: #FFFFFF;
+                border: none;
+                gridline-color: #e0e0e0;
+            }
+            QTableWidget::item {
+                padding: 4px;
+            }
+            QTableWidget::item:selected {
+                background-color: #FFFFFF;
+                color: #333333;
+            }
+            QHeaderView::section {
+                background-color: #f5f5f5;
+                padding: 6px;
+                border: none;
+                border-bottom: 1px solid #d9d9d9;
+                font-weight: bold;
+                font-size: 10px;
+            }
+        """
+
         widget = QWidget()
         layout = QVBoxLayout()
+        layout.setSpacing(15)
 
         contract_id = self.card_data.get('contract_id')
 
-        header = QLabel('Оплаты надзора по проекту')
-        header.setStyleSheet('font-size: 13px; font-weight: bold; margin-bottom: 10px;')
-        layout.addWidget(header)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
+        payments_group = QGroupBox("Оплаты надзора")
+        payments_group.setStyleSheet(GROUP_BOX_STYLE)
+        payments_layout = QVBoxLayout()
 
-        # Таблица оплат
+        # Таблица оплат - используем ProportionalResizeTable
         from PyQt5.QtWidgets import QTableWidget, QHeaderView, QTableWidgetItem, QHBoxLayout
-        table = QTableWidget()
-        # ВАЖНО: НЕ устанавливаем background-color для QTableWidget,
-        # чтобы цвета ячеек работали корректно
-        table.setStyleSheet("""
+        table = ProportionalResizeTable()
+        # ИСПРАВЛЕНИЕ 06.02.2026: Применяем TABLE_STYLE
+        table.setStyleSheet(TABLE_STYLE + """
             QTableCornerButton::section {
                 background-color: #F5F5F5;
                 border: 1px solid #E0E0E0;
@@ -2846,6 +3189,31 @@ class SupervisionCardEditDialog(QDialog):
                     payments = self.db.get_payments_for_supervision(contract_id)
             else:
                 payments = self.db.get_payments_for_supervision(contract_id)
+
+            # ИСПРАВЛЕНИЕ 30.01.2026: Сортировка платежей надзора
+            # Приоритет по ролям: СМП -> ДАН -> остальные
+            role_priority = {
+                'Старший менеджер проектов': 1,
+                'СМП': 1,
+                'ДАН': 2,
+            }
+            payment_type_priority = {
+                'Аванс': 1,
+                'Доплата': 2,
+                'Полная оплата': 3,
+            }
+
+            def payment_sort_key(p):
+                role = p.get('role', '')
+                ptype = p.get('payment_type', '')
+                payment_id = p.get('id', 0)
+                return (
+                    role_priority.get(role, 99),
+                    payment_type_priority.get(ptype, 99),
+                    payment_id  # Стабильная сортировка по ID
+                )
+
+            payments = sorted(payments, key=payment_sort_key)
             table.setRowCount(len(payments))
 
             for row, payment in enumerate(payments):
@@ -2940,15 +3308,19 @@ class SupervisionCardEditDialog(QDialog):
                     adjust_layout.setContentsMargins(0, 0, 0, 0)
 
                     adjust_btn = QPushButton('Изменить')
+                    adjust_btn.setFixedHeight(26)
                     adjust_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #FF9800;
-                            color: white;
-                            padding: 5px 10px;
+                            background-color: #ffd93c;
+                            color: #333333;
+                            padding: 2px 8px;
                             border-radius: 4px;
                             font-size: 10px;
+                            font-weight: bold;
+                            min-height: 26px;
+                            max-height: 26px;
                         }
-                        QPushButton:hover { background-color: #F57C00; }
+                        QPushButton:hover { background-color: #e6c435; }
                     """)
                     adjust_btn.clicked.connect(
                         lambda checked, p_id=payment['id']: self.adjust_payment_amount(p_id)
@@ -2963,14 +3335,18 @@ class SupervisionCardEditDialog(QDialog):
                     delete_layout = QHBoxLayout()
                     delete_layout.setContentsMargins(0, 0, 0, 0)
 
-                    delete_btn = QPushButton('[DELETE] Удалить')
+                    delete_btn = QPushButton('Удалить')
+                    delete_btn.setFixedHeight(26)
                     delete_btn.setStyleSheet("""
                         QPushButton {
                             background-color: #E74C3C;
                             color: white;
-                            padding: 5px 10px;
+                            padding: 2px 8px;
                             border-radius: 4px;
                             font-size: 10px;
+                            font-weight: bold;
+                            min-height: 26px;
+                            max-height: 26px;
                         }
                         QPushButton:hover { background-color: #C0392B; }
                     """)
@@ -2982,21 +3358,14 @@ class SupervisionCardEditDialog(QDialog):
                     delete_widget.setLayout(delete_layout)
                     table.setCellWidget(row, 9, delete_widget)
 
-        # Настройка столбцов
-        header = table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setMinimumSectionSize(150)
-        header.resizeSection(1, 200)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(7, QHeaderView.Stretch)
-        header.resizeSection(7, 150)
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Действия
+        # Настройка пропорционального изменения размера колонок
+        # Колонки: Должность, ФИО, Стадия, Тип выплаты, Выплата, Аванс, Доплата, Отчетный месяц, фиксированные: Корректировка, Действия
+        # Пропорции для 8 колонок: 0.10, 0.17, 0.12, 0.10, 0.09, 0.08, 0.08, 0.12
+        table.setup_proportional_resize(
+            column_ratios=[0.10, 0.17, 0.12, 0.10, 0.09, 0.08, 0.08, 0.12],
+            fixed_columns={8: 90, 9: 120},  # Корректировка и Действия - фиксированные
+            min_width=50
+        )
 
         # НЕ используем setAlternatingRowColors, чтобы можно было окрашивать строки вручную
         table.setAlternatingRowColors(False)
@@ -3024,7 +3393,7 @@ class SupervisionCardEditDialog(QDialog):
         table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         table.verticalHeader().setDefaultSectionSize(32)
 
-        layout.addWidget(table)
+        payments_layout.addWidget(table)
 
         # Итого
         if contract_id:
@@ -3042,15 +3411,21 @@ class SupervisionCardEditDialog(QDialog):
                 font-size: 14px;
                 padding: 10px;
                 background-color: #f5f5f5;
+                border-radius: 5px;
                 margin-top: 10px;
             ''')
-            layout.addWidget(total_label)
+            payments_layout.addWidget(total_label)
+
+        # ИСПРАВЛЕНИЕ 06.02.2026: Закрываем GroupBox
+        payments_group.setLayout(payments_layout)
+        layout.addWidget(payments_group)
+        layout.addStretch()
 
         widget.setLayout(layout)
         return widget
 
     def delete_payment(self, payment_id, role, employee_name):
-        """Удаление записи об оплате"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Удаление записи об оплате с API синхронизацией"""
         # Подтверждение удаления
         reply = CustomQuestionBox(
             self,
@@ -3058,24 +3433,22 @@ class SupervisionCardEditDialog(QDialog):
             f'Вы уверены, что хотите удалить оплату?\n\n'
             f'Должность: {role}\n'
             f'ФИО: {employee_name}\n\n'
-            f' Это действие нельзя отменить!'
+            f'Это действие нельзя отменить!'
         ).exec_()
 
         if reply == QDialog.Accepted:
             try:
-                # Удаляем запись из базы данных
-                conn = self.db.connect()
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                DELETE FROM payments
-                WHERE id = ?
-                ''', (payment_id,))
-
-                conn.commit()
-                self.db.close()
-
-                print(f"Оплата удалена: {role} - {employee_name} (ID: {payment_id})")
+                # ИСПРАВЛЕНИЕ: Сначала пробуем API, потом локальную БД
+                if self.api_client and self.api_client.is_online:
+                    try:
+                        self.api_client.delete_payment(payment_id)
+                        print(f"[API] Оплата удалена: {role} - {employee_name} (ID: {payment_id})")
+                    except Exception as api_error:
+                        print(f"[WARN] Ошибка API удаления: {api_error}, fallback на локальную БД")
+                        self._delete_payment_locally(payment_id)
+                else:
+                    self._delete_payment_locally(payment_id)
+                    print(f"[LOCAL] Оплата удалена: {role} - {employee_name} (ID: {payment_id})")
 
                 # Показываем сообщение об успехе
                 CustomMessageBox(
@@ -3089,7 +3462,7 @@ class SupervisionCardEditDialog(QDialog):
                 self.refresh_payment_tab()
 
             except Exception as e:
-                print(f" Ошибка удаления оплаты: {e}")
+                print(f"Ошибка удаления оплаты: {e}")
                 import traceback
                 traceback.print_exc()
 
@@ -3100,29 +3473,48 @@ class SupervisionCardEditDialog(QDialog):
                     'error'
                 ).exec_()
 
+    def _delete_payment_locally(self, payment_id):
+        """Вспомогательный метод для удаления платежа локально"""
+        conn = self.db.connect()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM payments WHERE id = ?', (payment_id,))
+        conn.commit()
+        self.db.close()
+
     def adjust_payment_amount(self, payment_id):
-        """Диалог корректировки суммы оплаты и отчетного месяца"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Диалог корректировки с API синхронизацией"""
         from PyQt5.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QDoubleSpinBox, QComboBox, QFrame
         from PyQt5.QtCore import Qt, QDate
         from ui.custom_title_bar import CustomTitleBar
 
-        # Получаем текущие данные оплаты
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('''
-        SELECT p.*, e.full_name as employee_name
-        FROM payments p
-        JOIN employees e ON p.employee_id = e.id
-        WHERE p.id = ?
-        ''', (payment_id,))
-        payment_row = cursor.fetchone()
-        self.db.close()
+        # ИСПРАВЛЕНИЕ: Сначала пробуем API, потом локальную БД
+        payment = None
+        if self.api_client and self.api_client.is_online:
+            try:
+                payment = self.api_client.get_payment(payment_id)
+                print(f"[API] Загружены данные платежа {payment_id}")
+            except Exception as api_error:
+                print(f"[WARN] Ошибка API загрузки платежа: {api_error}, fallback на локальную БД")
 
-        if not payment_row:
+        if not payment:
+            # Fallback на локальную БД
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+            SELECT p.*, e.full_name as employee_name
+            FROM payments p
+            JOIN employees e ON p.employee_id = e.id
+            WHERE p.id = ?
+            ''', (payment_id,))
+            payment_row = cursor.fetchone()
+            self.db.close()
+            if not payment_row:
+                return
+            payment = dict(payment_row)
+            print(f"[LOCAL] Загружены данные платежа {payment_id}")
+
+        if not payment:
             return
-
-        # Конвертируем sqlite3.Row в dict для удобства работы
-        payment = dict(payment_row)
 
         current_report_month = payment.get('report_month', '')
         current_amount = payment.get('manual_amount') if payment.get('is_manual') else payment.get('final_amount', 0)
@@ -3319,40 +3711,48 @@ class SupervisionCardEditDialog(QDialog):
         dialog.exec_()
 
     def save_manual_amount(self, payment_id, amount, month, year, dialog):
-        """Сохранение ручной суммы и отчетного месяца"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Сохранение ручной суммы с API синхронизацией"""
         # Формируем отчетный месяц в формате YYYY-MM
         report_month = f"{year}-{month:02d}"
 
-        # Обновляем сумму
-        if self.api_client:
+        # ИСПРАВЛЕНИЕ: Проверяем is_online для корректной работы offline режима
+        if self.api_client and self.api_client.is_online:
             try:
-                self.api_client.update_payment_manual(payment_id, amount, report_month)
+                # Сбрасываем reassigned при редактировании
+                self.api_client.update_payment(payment_id, {
+                    'manual_amount': amount,
+                    'final_amount': amount,
+                    'is_manual': True,
+                    'report_month': report_month,
+                    'reassigned': False  # Сбрасываем флаг переназначения
+                })
+                print(f"[API] Платёж {payment_id} обновлён через API")
             except Exception as e:
-                print(f"[WARN] API ошибка update_payment_manual: {e}")
-                self.db.update_payment_manual(payment_id, amount)
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                UPDATE payments
-                SET report_month = ?
-                WHERE id = ?
-                ''', (report_month, payment_id))
-                conn.commit()
-                self.db.close()
+                print(f"[WARN] API ошибка update_payment_manual: {e}, fallback на локальную БД")
+                self._save_payment_locally(payment_id, amount, report_month)
         else:
-            self.db.update_payment_manual(payment_id, amount)
-            # Обновляем отчетный месяц
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
+            self._save_payment_locally(payment_id, amount, report_month)
+            print(f"[LOCAL] Платёж {payment_id} обновлён локально")
+
+        # Завершаем сохранение - обновляем UI
+        self._finish_save_manual_amount(payment_id, amount, report_month, dialog)
+
+    def _save_payment_locally(self, payment_id, amount, report_month):
+        """Вспомогательный метод для сохранения платежа локально"""
+        self.db.update_payment_manual(payment_id, amount)
+        conn = self.db.connect()
+        cursor = conn.cursor()
+        cursor.execute('''
             UPDATE payments
             SET report_month = ?
             WHERE id = ?
-            ''', (report_month, payment_id))
-            conn.commit()
-            self.db.close()
+        ''', (report_month, payment_id))
+        conn.commit()
+        self.db.close()
 
-        print(f"Оплата обновлена: ID={payment_id}, сумма={amount} ₽, месяц={report_month}")
+    def _finish_save_manual_amount(self, payment_id, amount, report_month, dialog):
+        """Завершение сохранения ручной суммы - обновление UI"""
+        print(f"Оплата обновлена: ID={payment_id}, сумма={amount}, месяц={report_month}")
 
         # Закрываем диалог
         dialog.accept()
@@ -3403,12 +3803,32 @@ class SupervisionCardEditDialog(QDialog):
 
     def create_project_info_widget(self):
         """ИСПРАВЛЕНИЕ: Создание виджета информации о проекте с согласованиями"""
-        widget = QWidget()
-        layout = QVBoxLayout()
+        # ИСПРАВЛЕНИЕ 06.02.2026: Добавлены стили как в основном CRM (#22, #24)
+        GROUP_BOX_STYLE = """
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 10px;
+                background-color: #FAFAFA;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+                color: #2C3E50;
+            }
+        """
 
-        header = QLabel('Информация о проекте')
-        header.setStyleSheet('font-size: 13px; font-weight: bold; margin-bottom: 10px;')
-        layout.addWidget(header)
+        widget = QWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(15)
+
+        # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
+        info_group = QGroupBox("Информация о проекте")
+        info_group.setStyleSheet(GROUP_BOX_STYLE)
+        layout = QVBoxLayout()
 
         # ========== НОВОЕ: ПРИНЯТЫЕ СТАДИИ НАДЗОРА ==========
         # Показываем стадии надзора, которые были приняты менеджером
@@ -3649,7 +4069,11 @@ class SupervisionCardEditDialog(QDialog):
 
         layout.addWidget(scroll, 1)
 
-        widget.setLayout(layout)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Закрываем GroupBox
+        info_group.setLayout(layout)
+        main_layout.addWidget(info_group)
+
+        widget.setLayout(main_layout)
         return widget
 
     def create_stage_info_widget(self, stage):
@@ -3740,36 +4164,59 @@ class SupervisionCardEditDialog(QDialog):
 
     def create_files_widget(self):
         """Создание виджета файлов надзора"""
-        widget = QWidget()
-        layout = QVBoxLayout()
+        # ИСПРАВЛЕНИЕ 06.02.2026: Добавлены стили как в основном CRM (#23)
+        GROUP_BOX_STYLE = """
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 10px;
+                background-color: #FAFAFA;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+                color: #2C3E50;
+            }
+        """
 
-        header = QLabel('Файлы авторского надзора')
-        header.setStyleSheet('font-size: 13px; font-weight: bold; margin-bottom: 10px;')
-        layout.addWidget(header)
+        widget = QWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(15)
+
+        # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
+        files_group = QGroupBox("Файлы авторского надзора")
+        files_group.setStyleSheet(GROUP_BOX_STYLE)
+        layout = QVBoxLayout()
 
         # Кнопки управления файлами
         buttons_layout = QHBoxLayout()
 
+        # ИСПРАВЛЕНИЕ 06.02.2026: Стандартные размеры кнопок (#24)
         upload_btn = IconLoader.create_icon_button('upload', 'Загрузить файл', 'Загрузить файл на Яндекс.Диск', icon_size=12)
+        upload_btn.setFixedHeight(28)
         upload_btn.setStyleSheet('''
             QPushButton {
                 background-color: #ffd93c;
-                color: white;
-                padding: 8px 16px;
+                color: #333333;
+                padding: 4px 12px;
                 border-radius: 4px;
                 font-weight: bold;
             }
-            QPushButton:hover { background-color: #2980B9; }
+            QPushButton:hover { background-color: #e6c435; }
         ''')
         upload_btn.clicked.connect(self.upload_supervision_file)
         buttons_layout.addWidget(upload_btn)
 
         refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', 'Обновить список файлов', icon_size=12)
+        refresh_btn.setFixedHeight(28)
         refresh_btn.setStyleSheet('''
             QPushButton {
                 background-color: #27AE60;
                 color: white;
-                padding: 8px 16px;
+                padding: 4px 12px;
                 border-radius: 4px;
             }
             QPushButton:hover { background-color: #219A52; }
@@ -3782,6 +4229,7 @@ class SupervisionCardEditDialog(QDialog):
 
         # Таблица файлов
         self.files_table = QTableWidget()
+        apply_no_focus_delegate(self.files_table)  # Убираем пунктирную рамку фокуса
         self.files_table.setColumnCount(4)
         self.files_table.setHorizontalHeaderLabels(['Название файла', 'Тип', 'Дата загрузки', 'Действия'])
         self.files_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3800,7 +4248,12 @@ class SupervisionCardEditDialog(QDialog):
         # Загружаем список файлов
         self.load_supervision_files()
 
-        widget.setLayout(layout)
+        # ИСПРАВЛЕНИЕ 06.02.2026: Закрываем GroupBox
+        files_group.setLayout(layout)
+        main_layout.addWidget(files_group)
+        main_layout.addStretch()
+
+        widget.setLayout(main_layout)
         return widget
 
     def load_supervision_files(self):
@@ -3825,7 +4278,8 @@ class SupervisionCardEditDialog(QDialog):
                                 'file_type': f.get('file_type'),
                                 'yandex_path': f.get('yandex_path'),
                                 'public_link': f.get('public_link'),
-                                'created_at': f.get('created_at')
+                                # ИСПРАВЛЕНИЕ 06.02.2026: API возвращает upload_date, не created_at (#23)
+                                'created_at': f.get('upload_date') or f.get('created_at')
                             }
                             for f in api_files
                         ]
@@ -3837,14 +4291,27 @@ class SupervisionCardEditDialog(QDialog):
             if not files:
                 conn = self.db.connect()
                 cursor = conn.cursor()
+                # В SQLite столбец называется upload_date, не created_at
                 cursor.execute('''
-                    SELECT id, file_name, file_type, yandex_path, public_link, created_at
+                    SELECT id, file_name, file_type, yandex_path, public_link, upload_date as created_at
                     FROM project_files
                     WHERE contract_id = ? AND stage = 'supervision'
-                    ORDER BY created_at DESC
+                    ORDER BY upload_date DESC
                 ''', (contract_id,))
-                files = cursor.fetchall()
+                rows = cursor.fetchall()
                 self.db.close()
+                # Конвертируем в список словарей для унификации с API
+                files = [
+                    {
+                        'id': r[0],
+                        'file_name': r[1],
+                        'file_type': r[2],
+                        'yandex_path': r[3],
+                        'public_link': r[4],
+                        'created_at': r[5]
+                    }
+                    for r in rows
+                ]
 
             self.files_table.setRowCount(len(files))
 
@@ -3871,8 +4338,9 @@ class SupervisionCardEditDialog(QDialog):
                 actions_layout.setSpacing(4)
 
                 # Кнопка открыть
+                # ИСПРАВЛЕНИЕ 06.02.2026: Заменили 'link' на 'eye' (иконка link не существует) (#23)
                 if file_data['public_link']:
-                    open_btn = IconLoader.create_icon_button('link', '', 'Открыть файл', icon_size=12)
+                    open_btn = IconLoader.create_icon_button('eye', '', 'Открыть файл', icon_size=12)
                     open_btn.setFixedSize(28, 28)
                     open_btn.clicked.connect(lambda checked, link=file_data['public_link']: self.open_file_link(link))
                     actions_layout.addWidget(open_btn)
@@ -3892,7 +4360,7 @@ class SupervisionCardEditDialog(QDialog):
             print(f"[ERROR] Ошибка загрузки файлов надзора: {e}")
 
     def upload_supervision_file(self):
-        """Загрузка файла надзора на Яндекс.Диск"""
+        """Загрузка файла надзора на Яндекс.Диск с выбором стадии и даты"""
         if not self.yandex_disk:
             CustomMessageBox(self, 'Ошибка', 'Yandex Disk не инициализирован', 'error').exec_()
             return
@@ -3909,21 +4377,68 @@ class SupervisionCardEditDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', 'Папка договора на Яндекс.Диске не найдена', 'error').exec_()
             return
 
-        # Диалог выбора файла
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            'Выберите файл для загрузки',
-            '',
-            'Все файлы (*);;Изображения (*.png *.jpg *.jpeg);;PDF (*.pdf);;Документы (*.doc *.docx)'
-        )
+        # Список стадий надзора для выбора
+        stages = [
+            'Стадия 1: Закупка керамогранита',
+            'Стадия 2: Закупка сантехники',
+            'Стадия 3: Закупка оборудования',
+            'Стадия 4: Закупка дверей и окон',
+            'Стадия 5: Закупка настенных материалов',
+            'Стадия 6: Закупка напольных материалов',
+            'Стадия 7: Лепного декора',
+            'Стадия 8: Освещения',
+            'Стадия 9: бытовой техники',
+            'Стадия 10: Закупка заказной мебели',
+            'Стадия 11: Закупка фабричной мебели',
+            'Стадия 12: Закупка декора'
+        ]
 
-        if not file_path:
+        # ИСПРАВЛЕНИЕ 07.02.2026: Открываем кастомный диалог загрузки файла (#23)
+        dialog = SupervisionFileUploadDialog(self, self.card_data, stages, self.api_client)
+        if dialog.exec_() != QDialog.Accepted:
             return
 
-        # Прогресс загрузки
+        # Получаем данные из диалога
+        result = dialog.get_result()
+        if not result:
+            return
+
+        file_path = result['file_path']
+        stage = result['stage']
+        date = result['date']
+        file_name = result['file_name']
+
+        # Прогресс загрузки с кастомным стилем
         progress = QProgressDialog('Загрузка файла...', 'Отмена', 0, 100, self)
         progress.setWindowTitle('Загрузка на Яндекс.Диск')
         progress.setWindowModality(Qt.WindowModal)
+        progress.setStyleSheet("""
+            QProgressDialog {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+            }
+            QProgressBar {
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                text-align: center;
+                background-color: #F5F5F5;
+            }
+            QProgressBar::chunk {
+                background-color: #ffd93c;
+                border-radius: 3px;
+            }
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 5px 15px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #BDBDBD;
+            }
+        """)
         progress.show()
 
         try:
@@ -3931,30 +4446,33 @@ class SupervisionCardEditDialog(QDialog):
             supervision_folder = f"{contract_folder}/Авторский надзор"
             self.yandex_disk.create_folder(supervision_folder)
 
+            # Создаем подпапку для стадии
+            stage_folder = f"{supervision_folder}/{stage}"
+            self.yandex_disk.create_folder(stage_folder)
+
             progress.setValue(30)
 
-            # Загружаем файл
-            file_name = os.path.basename(file_path)
-            yandex_path = f"{supervision_folder}/{file_name}"
+            # Загружаем файл в папку стадии
+            yandex_path = f"{stage_folder}/{file_name}"
 
             # Загрузка
-            result = self.yandex_disk.upload_file(file_path, yandex_path)
+            result_upload = self.yandex_disk.upload_file(file_path, yandex_path)
 
             progress.setValue(70)
 
-            if result:
+            if result_upload:
                 # Получаем публичную ссылку
                 public_link = self.yandex_disk.get_public_link(yandex_path)
 
                 progress.setValue(80)
 
-                # Сохраняем в БД (локально)
+                # Сохраняем в БД (локально) с указанием стадии
                 conn = self.db.connect()
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO project_files (contract_id, stage, file_type, yandex_path, public_link, file_name, created_at)
-                    VALUES (?, 'supervision', 'Файл надзора', ?, ?, ?, datetime('now'))
-                ''', (contract_id, yandex_path, public_link, file_name))
+                    INSERT INTO project_files (contract_id, stage, file_type, yandex_path, public_link, file_name, upload_date)
+                    VALUES (?, ?, 'Файл надзора', ?, ?, ?, datetime('now'))
+                ''', (contract_id, stage, yandex_path, public_link, file_name))
                 local_file_id = cursor.lastrowid
                 conn.commit()
                 self.db.close()
@@ -3966,7 +4484,7 @@ class SupervisionCardEditDialog(QDialog):
                     try:
                         server_id = self.api_client.add_project_file(
                             contract_id=contract_id,
-                            stage='supervision',
+                            stage=stage,
                             file_type='Файл надзора',
                             public_link=public_link or '',
                             yandex_path=yandex_path,
@@ -3982,11 +4500,11 @@ class SupervisionCardEditDialog(QDialog):
                 progress.setValue(100)
                 progress.close()
 
-                CustomMessageBox(self, 'Успех', f'Файл "{file_name}" успешно загружен', 'success').exec_()
+                CustomMessageBox(self, 'Успех', f'Файл "{file_name}" успешно загружен\nСтадия: {stage}\nДата: {date}', 'success').exec_()
 
-                # Добавляем запись в историю проекта
+                # Добавляем запись в историю проекта (#23: запись в историю с указанием стадии и даты)
                 if self.employee:
-                    description = f"Добавлен файл надзора: {file_name}"
+                    description = f"Добавлен файл надзора: {file_name} (Стадия: {stage}, Дата: {date})"
                     self._add_action_history('file_upload', description)
 
                 # Обновляем список
@@ -4052,6 +4570,43 @@ class SupervisionCardEditDialog(QDialog):
         """Обновление списка файлов"""
         self.load_supervision_files()
 
+    def _add_action_history(self, action_type: str, description: str, entity_type: str = 'supervision_card', entity_id: int = None):
+        """ИСПРАВЛЕНИЕ 06.02.2026: Добавление метода записи истории действий (#22)"""
+        if entity_id is None:
+            entity_id = self.card_data['id']
+
+        user_id = self.employee.get('id') if self.employee else None
+
+        if self.api_client:
+            try:
+                history_data = {
+                    'user_id': user_id,
+                    'action_type': action_type,
+                    'entity_type': entity_type,
+                    'entity_id': entity_id,
+                    'description': description
+                }
+                self.api_client.create_action_history(history_data)
+                print(f"[API] История действий надзора записана: {action_type}")
+            except Exception as e:
+                print(f"[WARNING] Ошибка записи истории надзора через API: {e}")
+                # Fallback на локальную БД
+                self.db.add_action_history(
+                    user_id=user_id,
+                    action_type=action_type,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    description=description
+                )
+        else:
+            self.db.add_action_history(
+                user_id=user_id,
+                action_type=action_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                description=description
+            )
+
     def open_file_link(self, link):
         """Открытие ссылки на файл"""
         if link:
@@ -4094,7 +4649,7 @@ class SupervisionCardEditDialog(QDialog):
         self.tags.textChanged.connect(self.auto_save_field)
 
     def auto_save_field(self):
-        """ИСПРАВЛЕНИЕ: Автоматическое сохранение при изменении полей"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Автоматическое сохранение с API синхронизацией"""
         if self._loading_data:
             return  # Не сохраняем во время загрузки данных
 
@@ -4107,23 +4662,28 @@ class SupervisionCardEditDialog(QDialog):
                 'tags': self.tags.text().strip()
             }
 
-            self.db.update_supervision_card(self.card_data['id'], updates)
+            # ИСПРАВЛЕНИЕ: Сначала пробуем API, потом локальную БД
+            if self.api_client and self.api_client.is_online:
+                try:
+                    self.api_client.update_supervision_card(self.card_data['id'], updates)
+                    print("[API] Данные карточки надзора автоматически сохранены через API")
+                except Exception as api_error:
+                    print(f"[WARN] Ошибка API автосохранения: {api_error}, fallback на локальную БД")
+                    self.db.update_supervision_card(self.card_data['id'], updates)
+            else:
+                self.db.update_supervision_card(self.card_data['id'], updates)
+                print("[LOCAL] Данные карточки надзора сохранены локально")
 
             # Обновляем данные карточки
             self.card_data.update(updates)
 
-            # ИСПРАВЛЕНИЕ: Не обновляем вкладки при автосохранении, чтобы не закрывать диалог
-            # Обновление будет только при явном сохранении кнопкой "Сохранить"
-
-            print("Данные автоматически сохранены")
-
         except Exception as e:
-            print(f" Ошибка автосохранения: {e}")
+            print(f"Ошибка автосохранения: {e}")
             import traceback
             traceback.print_exc()
 
     def save_changes(self):
-        """Сохранение изменений (только для менеджеров)"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Сохранение изменений с API синхронизацией"""
         if self.employee['position'] == 'ДАН':
             return
 
@@ -4134,7 +4694,17 @@ class SupervisionCardEditDialog(QDialog):
             'tags': self.tags.text().strip()
         }
 
-        self.db.update_supervision_card(self.card_data['id'], updates)
+        # ИСПРАВЛЕНИЕ: Сначала пробуем API, потом локальную БД
+        if self.api_client and self.api_client.is_online:
+            try:
+                self.api_client.update_supervision_card(self.card_data['id'], updates)
+                print("[API] Изменения карточки надзора сохранены через API")
+            except Exception as api_error:
+                print(f"[WARN] Ошибка API сохранения: {api_error}, fallback на локальную БД")
+                self.db.update_supervision_card(self.card_data['id'], updates)
+        else:
+            self.db.update_supervision_card(self.card_data['id'], updates)
+            print("[LOCAL] Изменения карточки надзора сохранены локально")
 
         # ИСПРАВЛЕНИЕ: Обновляем вкладки после сохранения
         self.refresh_payments_tab()
@@ -4151,8 +4721,24 @@ class SupervisionCardEditDialog(QDialog):
         # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
         self.accept()
 
+    def reassign_dan(self):
+        """ИСПРАВЛЕНИЕ 28.01.2026: Переназначить исполнителя ДАН"""
+        current_dan_name = self.dan.currentText()
+
+        dialog = SupervisionReassignDANDialog(
+            self,
+            self.card_data['id'],
+            current_dan_name,
+            api_client=self.api_client
+        )
+
+        if dialog.exec_() == QDialog.Accepted:
+            # Обновляем отображение после переназначения
+            self.load_data()
+            print("[INFO] ДАН успешно переназначен, данные обновлены")
+
     def on_employee_changed(self, combo_box, role_name):
-        """НОВОЕ: Автоматическое создание/обновление выплаты при выборе сотрудника"""
+        """ИСПРАВЛЕНИЕ 30.01.2026: Автоматическое создание/обновление выплаты с API синхронизацией"""
         # Пропускаем, если данные загружаются
         if self._loading_data:
             return
@@ -4166,7 +4752,7 @@ class SupervisionCardEditDialog(QDialog):
 
         print(f"\n[EMPLOYEE_CHANGED] Роль: {role_name}, Employee ID: {employee_id}")
 
-        # Сначала обновляем информацию о сотруднике в БД
+        # Сначала обновляем информацию о сотруднике через API/БД
         role_to_field = {
             'Старший менеджер проектов': 'senior_manager_id',
             'ДАН': 'dan_id'
@@ -4175,30 +4761,98 @@ class SupervisionCardEditDialog(QDialog):
         field_name = role_to_field.get(role_name)
         if field_name:
             updates = {field_name: employee_id}
-            self.db.update_supervision_card(self.card_data['id'], updates)
-            print(f"Обновлено поле {field_name} в карточке авторского надзора")
+            # ИСПРАВЛЕНИЕ: Сначала API, потом локальная БД
+            if self.api_client and self.api_client.is_online:
+                try:
+                    self.api_client.update_supervision_card(self.card_data['id'], updates)
+                    print(f"[API] Обновлено поле {field_name} в карточке авторского надзора")
+                except Exception as api_error:
+                    print(f"[WARN] Ошибка API: {api_error}, fallback на локальную БД")
+                    self.db.update_supervision_card(self.card_data['id'], updates)
+            else:
+                self.db.update_supervision_card(self.card_data['id'], updates)
+                print(f"[LOCAL] Обновлено поле {field_name} в карточке авторского надзора")
 
         try:
-            conn = self.db.connect()
-            cursor = conn.cursor()
+            # ИСПРАВЛЕНИЕ: Удаляем оплаты через API если доступно
+            if self.api_client and self.api_client.is_online:
+                try:
+                    # Получаем платежи для удаления
+                    payments = self.api_client.get_payments_by_supervision_card(self.card_data['id'])
+                    deleted_count = 0
+                    for payment in payments:
+                        if payment.get('role') == role_name:
+                            self.api_client.delete_payment(payment['id'])
+                            deleted_count += 1
+                    if deleted_count > 0:
+                        print(f"[API] Удалено {deleted_count} старых оплат надзора для роли {role_name}")
+                except Exception as api_error:
+                    print(f"[WARN] Ошибка API удаления платежей: {api_error}, fallback на локальную БД")
+                    self._delete_payments_locally(role_name)
+            else:
+                self._delete_payments_locally(role_name)
 
-            # ИСПРАВЛЕНИЕ: Удаляем только оплаты надзора для этой роли (с supervision_card_id)
-            cursor.execute('''
-            DELETE FROM payments
-            WHERE supervision_card_id = ? AND role = ?
-            ''', (self.card_data['id'], role_name))
-
-            deleted_count = cursor.rowcount
-            if deleted_count > 0:
-                print(f"Удалено {deleted_count} старых оплат надзора для роли {role_name}")
-
-            conn.commit()
-            self.db.close()
-
-            # ИСПРАВЛЕНИЕ: НЕ создаем оплату при назначении исполнителя
-            # Оплаты будут создаваться автоматически при перемещении карточки на стадии
+            # ИСПРАВЛЕНО 06.02.2026: Создаем платеж при назначении исполнителя (как в CRM)
             if employee_id:
-                print(f"[INFO] Оплаты будут создаваться автоматически при прохождении стадий надзора")
+                # Проверяем, нет ли уже платежа для этой роли
+                existing_payments = []
+                if self.api_client and self.api_client.is_online:
+                    try:
+                        existing_payments = self.api_client.get_payments_by_supervision_card(self.card_data['id'])
+                        existing_payments = [p for p in existing_payments if p.get('role') == role_name and not p.get('reassigned')]
+                    except Exception as e:
+                        print(f"[WARN] Ошибка проверки существующих платежей: {e}")
+
+                if existing_payments:
+                    print(f"[INFO] Платеж для роли {role_name} уже существует, пропускаем создание")
+                else:
+                    # Рассчитываем сумму через API или локальную БД
+                    if self.api_client and self.api_client.is_online:
+                        try:
+                            result = self.api_client.calculate_payment_amount(
+                                contract_id, employee_id, role_name,
+                                stage_name=None, supervision_card_id=self.card_data['id']
+                            )
+                            calculated_amount = float(result) if result else 0
+                            print(f"[API] Рассчитана сумма для {role_name}: {calculated_amount:.2f} руб")
+                        except Exception as e:
+                            print(f"[WARN] Ошибка API расчета: {e}, fallback на локальную БД")
+                            calculated_amount = self.db.calculate_payment_amount(
+                                contract_id, employee_id, role_name,
+                                stage_name=None, supervision_card_id=self.card_data['id']
+                            )
+                    else:
+                        calculated_amount = self.db.calculate_payment_amount(
+                            contract_id, employee_id, role_name,
+                            stage_name=None, supervision_card_id=self.card_data['id']
+                        )
+
+                    if calculated_amount == 0:
+                        print(f"[WARN] Тариф для {role_name} = 0 или не установлен. Создаем оплату с нулевой суммой")
+
+                    # Создаем платеж
+                    from PyQt5.QtCore import QDate
+                    payment_data = {
+                        'contract_id': contract_id,
+                        'supervision_card_id': self.card_data['id'],
+                        'employee_id': employee_id,
+                        'role': role_name,
+                        'stage_name': None,
+                        'calculated_amount': calculated_amount,
+                        'final_amount': calculated_amount,
+                        'payment_type': 'Полная оплата',
+                        'report_month': None  # В работе - без месяца
+                    }
+
+                    if self.api_client and self.api_client.is_online:
+                        try:
+                            result = self.api_client.create_payment(payment_data)
+                            print(f"[API] Создан платеж для {role_name}: {calculated_amount:.2f} руб")
+                        except Exception as e:
+                            print(f"[WARN] Ошибка API создания платежа: {e}, fallback на локальную БД")
+                            self._create_payment_locally(payment_data)
+                    else:
+                        self._create_payment_locally(payment_data)
             else:
                 print(f"[INFO] Сотрудник не назначен, выплаты удалены")
 
@@ -4208,6 +4862,54 @@ class SupervisionCardEditDialog(QDialog):
 
         except Exception as e:
             print(f"[ERROR] Ошибка при обновлении выплат: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _delete_payments_locally(self, role_name):
+        """Вспомогательный метод для удаления платежей локально"""
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM payments
+                WHERE supervision_card_id = ? AND role = ?
+            ''', (self.card_data['id'], role_name))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            self.db.close()
+            if deleted_count > 0:
+                print(f"[LOCAL] Удалено {deleted_count} старых оплат надзора для роли {role_name}")
+        except Exception as e:
+            print(f"[ERROR] Ошибка локального удаления платежей: {e}")
+
+    def _create_payment_locally(self, payment_data):
+        """ДОБАВЛЕНО 06.02.2026: Вспомогательный метод для создания платежа локально"""
+        try:
+            from datetime import datetime
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO payments (
+                    contract_id, supervision_card_id, employee_id, role, stage_name,
+                    calculated_amount, final_amount, payment_type, report_month, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                payment_data.get('contract_id'),
+                payment_data.get('supervision_card_id'),
+                payment_data.get('employee_id'),
+                payment_data.get('role'),
+                payment_data.get('stage_name'),
+                payment_data.get('calculated_amount', 0),
+                payment_data.get('final_amount', 0),
+                payment_data.get('payment_type', 'Полная оплата'),
+                payment_data.get('report_month'),
+                datetime.now().isoformat()
+            ))
+            conn.commit()
+            self.db.close()
+            print(f"[LOCAL] Создан платеж для {payment_data.get('role')}: {payment_data.get('final_amount', 0):.2f} руб")
+        except Exception as e:
+            print(f"[ERROR] Ошибка локального создания платежа: {e}")
             import traceback
             traceback.print_exc()
 
@@ -4441,6 +5143,7 @@ class SupervisionStatisticsDialog(QDialog):
         
         # Таблица
         self.stats_table = QTableWidget()
+        apply_no_focus_delegate(self.stats_table)  # Убираем пунктирную рамку фокуса
         self.stats_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
@@ -5690,3 +6393,876 @@ class SupervisionStageDeadlineDialog(QDialog):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
         center_dialog_on_parent(self)
+
+
+# ИСПРАВЛЕНИЕ 28.01.2026: Диалог переназначения ДАН
+
+
+class SupervisionReassignDANDialog(QDialog):
+    """ИСПРАВЛЕНИЕ 28.01.2026: Диалог переназначения ДАН для надзора"""
+
+    def __init__(self, parent, card_id, current_dan_name, api_client=None):
+        super().__init__(parent)
+        self.card_id = card_id
+        self.current_dan_name = current_dan_name
+        self.db = DatabaseManager()
+        self.api_client = api_client
+
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        self.init_ui()
+
+    def init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(self, 'Переназначить ДАН', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        content_widget = QWidget()
+        content_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        info_label = QLabel('Переназначение исполнителя ДАН:')
+        info_label.setStyleSheet('font-size: 13px; font-weight: bold;')
+        info_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(info_label)
+
+        current_frame = QFrame()
+        current_frame.setStyleSheet("""
+            QFrame {
+                background-color: #FFF3CD;
+                border: none;
+                border-radius: 4px;
+                padding: 8px;
+            }
+        """)
+        current_layout = QVBoxLayout()
+        current_layout.setContentsMargins(0, 0, 0, 0)
+
+        current_label = QLabel(f"Текущий ДАН: <b>{self.current_dan_name}</b>")
+        current_label.setStyleSheet('font-size: 11px; color: #333;')
+        current_label.setAlignment(Qt.AlignCenter)
+        current_layout.addWidget(current_label)
+
+        current_frame.setLayout(current_layout)
+        layout.addWidget(current_frame)
+
+        form_layout = QFormLayout()
+        self.dan_combo = CustomComboBox()
+
+        if self.api_client:
+            try:
+                all_employees = self.api_client.get_employees()
+                dans = [e for e in all_employees if e.get('position') == 'ДАН']
+            except Exception as e:
+                print(f"[API ERROR] Ошибка получения сотрудников: {e}")
+                dans = self.db.get_employees_by_position('ДАН')
+        else:
+            dans = self.db.get_employees_by_position('ДАН')
+
+        if not dans:
+            CustomMessageBox(self, 'Внимание', 'Нет доступных сотрудников с должностью "ДАН"', 'warning').exec_()
+            self.reject()
+            return
+
+        for dan in dans:
+            self.dan_combo.addItem(dan['full_name'], dan['id'])
+
+        try:
+            if self.api_client:
+                card_data = self.api_client.get_supervision_card(self.card_id)
+                current_dan_id = card_data.get('dan_id')
+            else:
+                card_data = self.db.get_supervision_card_by_id(self.card_id)
+                current_dan_id = card_data.get('dan_id')
+
+            if current_dan_id:
+                for i in range(self.dan_combo.count()):
+                    if self.dan_combo.itemData(i) == current_dan_id:
+                        self.dan_combo.setCurrentIndex(i)
+                        break
+        except Exception as e:
+            print(f"[WARNING] Не удалось получить ID текущего ДАН: {e}")
+
+        form_layout.addRow('Новый ДАН:', self.dan_combo)
+        layout.addLayout(form_layout)
+
+        hint = QLabel('Исполнитель будет изменен БЕЗ перемещения карточки')
+        hint.setWordWrap(True)
+        hint.setStyleSheet('color: #FF9800; font-size: 10px; font-style: italic; font-weight: bold;')
+        layout.addWidget(hint)
+
+        save_btn = QPushButton('Переназначить')
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                padding: 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #F57C00; }
+        """)
+        save_btn.clicked.connect(self.save_reassignment)
+        layout.addWidget(save_btn)
+
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #95A5A6;
+                color: white;
+                padding: 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #7F8C8D; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
+
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+        border_frame.setLayout(border_layout)
+
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
+
+        self.setFixedWidth(450)
+
+    def save_reassignment(self):
+        """Сохранение нового назначения ДАН"""
+        new_dan_id = self.dan_combo.currentData()
+
+        if not new_dan_id:
+            CustomMessageBox(self, 'Ошибка', 'Выберите ДАН', 'warning').exec_()
+            return
+
+        try:
+            # ИСПРАВЛЕНИЕ 29.01.2026: Получаем старого ДАН и contract_id для переназначения платежей
+            old_dan_id = None
+            contract_id = None
+
+            if self.api_client:
+                try:
+                    card_data = self.api_client.get_supervision_card(self.card_id)
+                    if card_data:
+                        old_dan_id = card_data.get('dan_id')
+                        contract_id = card_data.get('contract_id')
+                        print(f"[DEBUG] Старый ДАН: {old_dan_id}, contract_id: {contract_id}")
+                except Exception as e:
+                    print(f"[WARN] Ошибка получения данных карточки: {e}")
+
+            # Если не получили через API - пробуем локально
+            if old_dan_id is None:
+                card_data = self.db.get_supervision_card_data(self.card_id)
+                if card_data:
+                    old_dan_id = card_data.get('dan_id')
+                    contract_id = card_data.get('contract_id')
+
+            if self.api_client:
+                try:
+                    update_data = {'dan_id': new_dan_id}
+                    self.api_client.update_supervision_card(self.card_id, update_data)
+                    print(f"[API] ДАН переназначен через API")
+
+                    # ИСПРАВЛЕНИЕ 29.01.2026: Переназначение платежей
+                    if contract_id and old_dan_id and new_dan_id != old_dan_id:
+                        self._reassign_dan_payments(contract_id, old_dan_id, new_dan_id)
+
+                    CustomMessageBox(self, 'Успех', 'ДАН успешно переназначен', 'success').exec_()
+                    self.accept()
+                    return
+                except Exception as e:
+                    print(f"[API ERROR] Ошибка переназначения через API: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print("[INFO] Пытаемся сохранить локально...")
+
+            self.db.update_supervision_card(self.card_id, {'dan_id': new_dan_id})
+            print(f"[DB] ДАН переназначен: dan_id={new_dan_id}")
+
+            CustomMessageBox(self, 'Успех', 'ДАН успешно переназначен', 'success').exec_()
+            self.accept()
+
+        except Exception as e:
+            print(f"[ERROR] Критическая ошибка переназначения: {e}")
+            import traceback
+            traceback.print_exc()
+            CustomMessageBox(self, 'Ошибка', f'Не удалось переназначить ДАН:\n{str(e)}', 'error').exec_()
+
+    def _reassign_dan_payments(self, contract_id, old_dan_id, new_dan_id):
+        """ИСПРАВЛЕНИЕ 29.01.2026: Переназначение платежей ДАН"""
+        try:
+            from datetime import datetime
+            current_month = datetime.now().strftime('%Y-%m')
+            role = 'ДАН'
+
+            # Получаем все платежи для этого контракта
+            try:
+                all_payments = self.api_client.get_payments_for_contract(contract_id)
+            except Exception as e:
+                print(f"[WARN] Ошибка получения платежей через API: {e}")
+                all_payments = []
+
+            # Ищем платежи для старого ДАН
+            old_payments = []
+            print(f"[DEBUG] Поиск платежей ДАН: role='{role}', old_dan_id={old_dan_id}")
+            print(f"[DEBUG] Всего платежей для контракта: {len(all_payments)}")
+
+            for payment in all_payments:
+                # ИСПРАВЛЕНИЕ 30.01.2026: Пропускаем уже переназначенные платежи
+                # чтобы избежать дублирования при повторном переназначении
+                if payment.get('reassigned'):
+                    print(f"[DEBUG] Пропускаем уже переназначенный платеж ДАН ID={payment.get('id')}")
+                    continue
+
+                payment_role = payment.get('role') or ''
+                payment_employee_id = payment.get('employee_id')
+
+                if payment_role == role and payment_employee_id == old_dan_id:
+                    old_payments.append(payment)
+                    print(f"[DEBUG] НАЙДЕН платеж ID={payment.get('id')}, тип={payment.get('payment_type')}")
+
+            print(f"[DEBUG] Найдено платежей ДАН для переназначения: {len(old_payments)}")
+
+            if old_payments:
+                for old_payment in old_payments:
+                    old_payment_id = old_payment.get('id')
+                    payment_type = old_payment.get('payment_type', 'Неизвестно')
+
+                    # 1. Помечаем старую запись как переназначенную
+                    try:
+                        self.api_client.update_payment(old_payment_id, {
+                            'reassigned': True,
+                            'report_month': current_month
+                        })
+                        print(f"[API] Старый платеж ДАН {old_payment_id} ({payment_type}) помечен как переназначенный")
+                    except Exception as e:
+                        print(f"[WARN] Ошибка обновления старого платежа ДАН через API: {e}")
+
+                    # 2. Создаем новую запись для нового ДАН
+                    # ИСПРАВЛЕНИЕ 30.01.2026: reassigned=False для НОВЫХ платежей
+                    new_payment_data = {
+                        'contract_id': contract_id,
+                        'supervision_card_id': self.card_id,
+                        'employee_id': new_dan_id,
+                        'role': role,
+                        'stage_name': old_payment.get('stage_name'),
+                        'calculated_amount': old_payment.get('calculated_amount', 0),
+                        'manual_amount': old_payment.get('manual_amount'),
+                        'final_amount': old_payment.get('final_amount', 0),
+                        'is_manual': old_payment.get('is_manual', 0),
+                        'payment_type': payment_type,
+                        'report_month': current_month,
+                        'reassigned': False,
+                        'old_employee_id': old_dan_id
+                    }
+
+                    try:
+                        self.api_client.create_payment(new_payment_data)
+                        print(f"[API] Создан новый платеж ДАН ({payment_type}) для исполнителя {new_dan_id}")
+                    except Exception as e:
+                        print(f"[WARN] Ошибка создания нового платежа ДАН через API: {e}")
+            else:
+                # Если старых платежей нет - создаём новые для нового ДАН
+                print(f"[INFO] Платежи для старого ДАН не найдены, создаём новые")
+
+                # Рассчитываем сумму для новых платежей
+                try:
+                    full_amount = 0
+
+                    # Пробуем через API
+                    if self.api_client:
+                        try:
+                            print(f"[DEBUG] Вызов calculate_payment_amount для ДАН: contract_id={contract_id}, employee_id={new_dan_id}, role={role}")
+                            result = self.api_client.calculate_payment_amount(contract_id, new_dan_id, role)
+                            print(f"[DEBUG] Результат API calculate_payment_amount ДАН: {result}")
+                            full_amount = float(result) if result else 0
+                        except Exception as e:
+                            print(f"[WARN] Ошибка API расчёта суммы ДАН: {e}")
+
+                    # Если API вернул 0 или ошибку - пробуем локальную БД
+                    if full_amount == 0:
+                        try:
+                            full_amount = self.db.calculate_payment_amount(contract_id, new_dan_id, role)
+                            print(f"[DEBUG] Результат локальной БД calculate_payment_amount ДАН: {full_amount}")
+                        except Exception as e:
+                            print(f"[WARN] Ошибка локальной БД расчёта суммы ДАН: {e}")
+
+                    print(f"[DEBUG] Итоговая рассчитанная сумма для ДАН: {full_amount}")
+
+                    if full_amount == 0:
+                        print(f"[WARN] Тариф для роли 'ДАН' не найден или равен 0. Проверьте настройки тарифов!")
+
+                    # Создаём полную оплату для ДАН
+                    # ИСПРАВЛЕНИЕ 30.01.2026: reassigned=False для НОВЫХ платежей
+                    payment_data = {
+                        'contract_id': contract_id,
+                        'supervision_card_id': self.card_id,
+                        'employee_id': new_dan_id,
+                        'role': role,
+                        'stage_name': None,
+                        'calculated_amount': full_amount,
+                        'final_amount': full_amount,
+                        'payment_type': 'Полная оплата',
+                        'report_month': current_month,
+                        'reassigned': False,
+                        'old_employee_id': old_dan_id
+                    }
+
+                    try:
+                        self.api_client.create_payment(payment_data)
+                        print(f"[API] Создан новый платеж ДАН (Полная оплата) для исполнителя {new_dan_id}: {full_amount:.2f}")
+                    except Exception as e:
+                        print(f"[WARN] Ошибка создания платежа ДАН через API: {e}")
+
+                except Exception as e:
+                    print(f"[ERROR] Ошибка создания новых платежей ДАН: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка переназначения платежей ДАН: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not hasattr(self, '_centered'):
+            self._centered = True
+            self.center_on_screen()
+
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 2 + screen.top()
+        self.move(x, y)
+
+
+class AssignExecutorsDialog(QDialog):
+    """Диалог назначения исполнителей (ДАН и СМП) при перемещении карточки на рабочую стадию"""
+
+    def __init__(self, parent, card_id, stage_name, api_client=None):
+        super().__init__(parent)
+        self.card_id = card_id
+        self.stage_name = stage_name
+        self.db = DatabaseManager()
+        self.api_client = api_client
+        self.assigned_dan_id = None
+        self.assigned_smp_id = None
+
+        # Убираем стандартную рамку
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        self.init_ui()
+
+    def init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Контейнер с рамкой
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        # Кастомный title bar
+        title_bar = CustomTitleBar(self, 'Назначение исполнителей', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        # Контент
+        content_widget = QWidget()
+        content_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Заголовок
+        title = QLabel('Для перемещения на рабочую стадию необходимо назначить исполнителей')
+        title.setStyleSheet('font-size: 12px; color: #333;')
+        title.setWordWrap(True)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Название стадии
+        stage_label = QLabel(f'Стадия: "{self.stage_name}"')
+        stage_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #FF9800;')
+        stage_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(stage_label)
+
+        # Форма назначения
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignRight)
+
+        # Старший менеджер проектов
+        self.smp_combo = CustomComboBox()
+        self._load_managers()
+        form_layout.addRow('Старший менеджер:', self.smp_combo)
+
+        # ДАН
+        self.dan_combo = CustomComboBox()
+        self._load_dans()
+        form_layout.addRow('ДАН:', self.dan_combo)
+
+        layout.addLayout(form_layout)
+
+        # Подсказка
+        hint = QLabel('После назначения исполнителей карточка будет перемещена на стадию')
+        hint.setWordWrap(True)
+        hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic; margin-top: 10px;')
+        hint.setAlignment(Qt.AlignCenter)
+        layout.addWidget(hint)
+
+        # Кнопки
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+
+        save_btn = QPushButton('Назначить и продолжить')
+        save_btn.setFixedHeight(36)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 20px;
+                font-weight: bold;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
+        """)
+        save_btn.clicked.connect(self.save_and_continue)
+        buttons_layout.addWidget(save_btn)
+
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 20px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover { background-color: #BDBDBD; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+
+        layout.addLayout(buttons_layout)
+
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
+
+        self.setMinimumWidth(450)
+
+    def _load_managers(self):
+        """Загрузка списка старших менеджеров"""
+        managers = []
+        if self.api_client and self.api_client.is_online:
+            try:
+                managers = self.api_client.get_employees_by_position('Старший менеджер проектов')
+            except Exception as e:
+                print(f"[WARN] API ошибка загрузки СМП: {e}")
+                managers = self.db.get_employees_by_position('Старший менеджер проектов')
+        else:
+            managers = self.db.get_employees_by_position('Старший менеджер проектов')
+
+        self.smp_combo.addItem('Не назначен', None)
+        for manager in managers:
+            self.smp_combo.addItem(manager['full_name'], manager['id'])
+
+    def _load_dans(self):
+        """Загрузка списка ДАН"""
+        dans = []
+        if self.api_client and self.api_client.is_online:
+            try:
+                dans = self.api_client.get_employees_by_position('ДАН')
+            except Exception as e:
+                print(f"[WARN] API ошибка загрузки ДАН: {e}")
+                dans = self.db.get_employees_by_position('ДАН')
+        else:
+            dans = self.db.get_employees_by_position('ДАН')
+
+        self.dan_combo.addItem('Не назначен', None)
+        for dan in dans:
+            self.dan_combo.addItem(dan['full_name'], dan['id'])
+
+    def save_and_continue(self):
+        """Сохранение назначенных исполнителей"""
+        self.assigned_dan_id = self.dan_combo.currentData()
+        self.assigned_smp_id = self.smp_combo.currentData()
+
+        # Проверяем, что хотя бы один исполнитель назначен
+        if not self.assigned_dan_id and not self.assigned_smp_id:
+            QMessageBox.warning(
+                self,
+                'Внимание',
+                'Необходимо назначить хотя бы одного исполнителя (ДАН или Старшего менеджера)'
+            )
+            return
+
+        # Сохраняем в БД
+        updates = {}
+        if self.assigned_dan_id:
+            updates['dan_id'] = self.assigned_dan_id
+        if self.assigned_smp_id:
+            updates['senior_manager_id'] = self.assigned_smp_id
+
+        if updates:
+            if self.api_client and self.api_client.is_online:
+                try:
+                    self.api_client.update_supervision_card(self.card_id, updates)
+                    print(f"[API] Назначены исполнители для карточки {self.card_id}: {updates}")
+                except Exception as e:
+                    print(f"[WARN] API ошибка назначения исполнителей: {e}")
+                    self.db.update_supervision_card(self.card_id, updates)
+            else:
+                self.db.update_supervision_card(self.card_id, updates)
+                print(f"[LOCAL] Назначены исполнители для карточки {self.card_id}: {updates}")
+
+        self.accept()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not hasattr(self, '_centered'):
+            self._centered = True
+            self.center_on_screen()
+
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 2 + screen.top()
+        self.move(x, y)
+
+
+class SupervisionFileUploadDialog(QDialog):
+    """Диалог загрузки файла для карточки авторского надзора с выбором стадии и даты"""
+
+    def __init__(self, parent, card_data, stages, api_client=None):
+        super().__init__(parent)
+        self.card_data = card_data
+        self.stages = stages  # Список стадий для выбора
+        self.api_client = api_client
+        self.db = DatabaseManager()
+        self.selected_file_path = None
+        self.result_data = None  # Для передачи данных родителю
+
+        # Убираем стандартную рамку
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        self.init_ui()
+
+    def init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Контейнер с рамкой
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        # Кастомный title bar
+        title_bar = CustomTitleBar(self, 'Загрузка файла', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        # Контент
+        content_widget = QWidget()
+        content_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Информация о проекте
+        project_info = self.card_data.get('address', '') or self.card_data.get('contract_number', 'Без адреса')
+        info_label = QLabel(f'Проект: {project_info}')
+        info_label.setStyleSheet('font-size: 12px; font-weight: bold; color: #333;')
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        # Форма
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignRight)
+
+        # Выбор файла
+        file_widget = QWidget()
+        file_layout = QHBoxLayout()
+        file_layout.setContentsMargins(0, 0, 0, 0)
+        file_layout.setSpacing(8)
+
+        self.file_label = QLabel('Файл не выбран')
+        self.file_label.setStyleSheet('''
+            QLabel {
+                color: #666;
+                font-size: 12px;
+                padding: 4px 8px;
+                background-color: #F5F5F5;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+        ''')
+        self.file_label.setMinimumWidth(200)
+        file_layout.addWidget(self.file_label, 1)
+
+        browse_btn = QPushButton('Обзор...')
+        browse_btn.setFixedHeight(28)
+        browse_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 12px;
+                border-radius: 4px;
+                border: none;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #BDBDBD; }
+        """)
+        browse_btn.clicked.connect(self.browse_file)
+        file_layout.addWidget(browse_btn)
+
+        file_widget.setLayout(file_layout)
+        form_layout.addRow('Файл:', file_widget)
+
+        # Выбор стадии
+        self.stage_combo = CustomComboBox()
+        self.stage_combo.setFixedHeight(28)
+        self.stage_combo.addItem('-- Выберите стадию --', None)
+        for stage in self.stages:
+            self.stage_combo.addItem(stage, stage)
+        form_layout.addRow('Стадия:', self.stage_combo)
+
+        # Выбор даты
+        self.date_edit = CustomDateEdit()
+        self.date_edit.setFixedHeight(28)
+        self.date_edit.setDate(QDate.currentDate())
+        form_layout.addRow('Дата:', self.date_edit)
+
+        layout.addLayout(form_layout)
+
+        # Подсказка
+        hint = QLabel('После загрузки файл будет привязан к выбранной стадии и добавлен в историю проекта')
+        hint.setWordWrap(True)
+        hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic; margin-top: 10px;')
+        hint.setAlignment(Qt.AlignCenter)
+        layout.addWidget(hint)
+
+        # Кнопки
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+
+        self.upload_btn = QPushButton('Загрузить')
+        self.upload_btn.setFixedHeight(28)
+        self.upload_btn.setEnabled(False)  # Изначально неактивна
+        self.upload_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 20px;
+                font-weight: bold;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover { background-color: #e6c435; }
+            QPushButton:pressed { background-color: #d4b42e; }
+            QPushButton:disabled {
+                background-color: #E0E0E0;
+                color: #999;
+            }
+        """)
+        self.upload_btn.clicked.connect(self.upload_file)
+        buttons_layout.addWidget(self.upload_btn)
+
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 20px;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover { background-color: #BDBDBD; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+
+        layout.addLayout(buttons_layout)
+
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
+
+        self.setFixedWidth(420)
+
+    def browse_file(self):
+        """Открыть диалог выбора файла"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            'Выберите файл',
+            '',
+            'Все файлы (*.*);;Изображения (*.png *.jpg *.jpeg);;PDF (*.pdf);;Документы (*.doc *.docx)'
+        )
+        if file_path:
+            self.selected_file_path = file_path
+            # Показываем только имя файла
+            file_name = os.path.basename(file_path)
+            self.file_label.setText(file_name)
+            self.file_label.setStyleSheet('''
+                QLabel {
+                    color: #333;
+                    font-size: 12px;
+                    padding: 4px 8px;
+                    background-color: #E8F5E9;
+                    border: 1px solid #81C784;
+                    border-radius: 4px;
+                    min-height: 20px;
+                }
+            ''')
+            self.update_upload_button()
+
+    def update_upload_button(self):
+        """Обновить состояние кнопки загрузки"""
+        has_file = self.selected_file_path is not None
+        has_stage = self.stage_combo.currentData() is not None
+        self.upload_btn.setEnabled(has_file and has_stage)
+
+    def upload_file(self):
+        """Подготовить данные и закрыть диалог"""
+        if not self.selected_file_path:
+            return
+
+        stage = self.stage_combo.currentData()
+        if not stage:
+            return
+
+        date = self.date_edit.date().toString('dd.MM.yyyy')
+
+        # Сохраняем данные для передачи родителю
+        self.result_data = {
+            'file_path': self.selected_file_path,
+            'stage': stage,
+            'date': date,
+            'file_name': os.path.basename(self.selected_file_path)
+        }
+
+        self.accept()
+
+    def get_result(self):
+        """Получить результат диалога"""
+        return self.result_data
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Подключаем сигнал изменения стадии
+        self.stage_combo.currentIndexChanged.connect(self.update_upload_button)
+        if not hasattr(self, '_centered'):
+            self._centered = True
+            self.center_on_screen()
+
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 2 + screen.top()
+        self.move(x, y)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-0;840B>@K 4;O ?@>25@:8 2E>4=KE 40==KE
+Валидаторы для проверки входных данных
 """
 
 import re
@@ -9,32 +9,32 @@ from typing import Union, Optional
 
 
 class ValidationError(Exception):
-    """A:;NG5=85 4;O >H81>: 20;840F88"""
+    """Исключение для ошибок валидации"""
     pass
 
 
 def validate_phone(phone: str) -> bool:
     """
-    @>25@O5B D>@<0B B5;5D>=0
+    Проверяет формат телефона
 
     Args:
-        phone: ><5@ B5;5D>=0
+        phone: Номер телефона
 
     Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
+        True если формат правильный
 
     Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        ValidationError: Если формат неверный
     """
     if not phone:
-        raise ValidationError(""5;5D>= =5 <>65B 1KBL ?CABK<")
+        raise ValidationError("Телефон не может быть пустым")
 
-    # $>@<0B: +7 (XXX) XXX-XX-XX
+    # Формат: +7 (XXX) XXX-XX-XX
     pattern = r'^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$'
 
     if not re.match(pattern, phone):
         raise ValidationError(
-            "525@=K9 D>@<0B B5;5D>=0. 68405BAO: +7 (XXX) XXX-XX-XX"
+            "Неверный формат телефона. Ожидается: +7 (XXX) XXX-XX-XX"
         )
 
     return True
@@ -42,361 +42,233 @@ def validate_phone(phone: str) -> bool:
 
 def validate_email(email: str) -> bool:
     """
-    @>25@O5B D>@<0B email
+    Проверяет формат email
 
     Args:
-        email: Email 04@5A
+        email: Адрес электронной почты
 
     Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
+        True если формат правильный
 
     Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        ValidationError: Если формат неверный
     """
     if not email:
-        return True  # Email =5>1O70B5;L=>5 ?>;5
+        return True  # Email необязателен
 
-    # 07>20O ?@>25@:0 email
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
     if not re.match(pattern, email):
-        raise ValidationError("525@=K9 D>@<0B email")
+        raise ValidationError("Неверный формат email")
 
     return True
 
 
-def validate_amount(amount: Union[float, int, str], allow_zero: bool = True) -> bool:
+def validate_date(date_str: str, format_str: str = "%d.%m.%Y") -> bool:
     """
-    @>25@O5B 45=56=CN AC<<C
+    Проверяет формат даты
 
     Args:
-        amount: !C<<0
-        allow_zero:  07@5H8BL =C;52>5 7=0G5=85
+        date_str: Строка с датой
+        format_str: Формат даты
 
     Returns:
-        True 5A;8 7=0G5=85 :>@@5:B=>5
+        True если формат правильный
 
     Raises:
-        ValidationError: A;8 7=0G5=85 =5:>@@5:B=>5
-    """
-    try:
-        amount_float = float(amount) if isinstance(amount, str) else amount
-    except (ValueError, TypeError):
-        raise ValidationError("!C<<0 4>;6=0 1KBL G8A;><")
-
-    if amount_float < 0:
-        raise ValidationError("!C<<0 =5 <>65B 1KBL >B@8F0B5;L=>9")
-
-    if not allow_zero and amount_float == 0:
-        raise ValidationError("!C<<0 =5 <>65B 1KBL =C;52>9")
-
-    return True
-
-
-def validate_date(date_str: str, allow_empty: bool = True) -> bool:
-    """
-    @>25@O5B D>@<0B 40BK
-
-    Args:
-        date_str: 0B0 2 D>@<0B5 DD.MM.YYYY
-        allow_empty:  07@5H8BL ?CAB>5 7=0G5=85
-
-    Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
-
-    Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        ValidationError: Если формат неверный
     """
     if not date_str:
-        if allow_empty:
-            return True
-        raise ValidationError("0B0 =5 <>65B 1KBL ?CAB>9")
+        return True  # Дата может быть необязательной
 
     try:
-        datetime.strptime(date_str, '%d.%m.%Y')
+        datetime.strptime(date_str, format_str)
         return True
     except ValueError:
-        raise ValidationError("525@=K9 D>@<0B 40BK. 68405BAO: ..")
+        raise ValidationError(f"Неверный формат даты. Ожидается: {format_str}")
+
+
+def validate_required(value: any, field_name: str) -> bool:
+    """
+    Проверяет что поле заполнено
+
+    Args:
+        value: Значение поля
+        field_name: Название поля для сообщения об ошибке
+
+    Returns:
+        True если поле заполнено
+
+    Raises:
+        ValidationError: Если поле пустое
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValidationError(f"Поле '{field_name}' обязательно для заполнения")
+
+    return True
+
+
+def validate_positive_number(value: Union[int, float], field_name: str) -> bool:
+    """
+    Проверяет что число положительное
+
+    Args:
+        value: Число для проверки
+        field_name: Название поля
+
+    Returns:
+        True если число положительное
+
+    Raises:
+        ValidationError: Если число не положительное
+    """
+    if value is None:
+        return True
+
+    if not isinstance(value, (int, float)):
+        raise ValidationError(f"Поле '{field_name}' должно быть числом")
+
+    if value < 0:
+        raise ValidationError(f"Поле '{field_name}' должно быть положительным числом")
+
+    return True
 
 
 def validate_inn(inn: str) -> bool:
     """
-    @>25@O5B  (10 8;8 12 F8D@)
+    Проверяет формат ИНН
 
     Args:
-        inn: 
+        inn: ИНН
 
     Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
+        True если формат правильный
 
     Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        ValidationError: Если формат неверный
     """
     if not inn:
-        return True  #  =5>1O70B5;L=>5 ?>;5
+        return True  # ИНН необязателен
 
+    # ИНН юр. лица: 10 цифр, ИНН физ. лица: 12 цифр
     if not re.match(r'^\d{10}$|^\d{12}$', inn):
-        raise ValidationError(" 4>;65= A>45@60BL 10 8;8 12 F8D@")
+        raise ValidationError("ИНН должен содержать 10 или 12 цифр")
 
     return True
 
 
-def validate_ogrn(ogrn: str) -> bool:
+def validate_passport(passport: str) -> bool:
     """
-    @>25@O5B   (13 8;8 15 F8D@)
+    Проверяет формат паспорта
 
     Args:
-        ogrn:  
+        passport: Серия и номер паспорта
 
     Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
+        True если формат правильный
 
     Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        ValidationError: Если формат неверный
     """
-    if not ogrn:
-        return True  #   =5>1O70B5;L=>5 ?>;5
+    if not passport:
+        return True  # Паспорт необязателен
 
-    if not re.match(r'^\d{13}$|^\d{15}$', ogrn):
-        raise ValidationError("  4>;65= A>45@60BL 13 8;8 15 F8D@")
+    # Формат: XXXX XXXXXX (4 цифры серия, 6 цифр номер)
+    if not re.match(r'^\d{4} \d{6}$', passport):
+        raise ValidationError("Неверный формат паспорта. Ожидается: XXXX XXXXXX")
 
     return True
 
 
-def validate_passport(series: str, number: str) -> bool:
+def validate_contract_number(number: str) -> bool:
     """
-    @>25@O5B A5@8N 8 =><5@ ?0A?>@B0
+    Проверяет формат номера договора
 
     Args:
-        series: !5@8O ?0A?>@B0 (4 F8D@K)
-        number: ><5@ ?0A?>@B0 (6 F8D@)
+        number: Номер договора
 
     Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
+        True если формат правильный
 
     Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        ValidationError: Если формат неверный
     """
-    if not series and not number:
-        return True  # 0A?>@B =5>1O70B5;L=>5 ?>;5
+    if not number:
+        raise ValidationError("Номер договора обязателен")
 
-    if series and not re.match(r'^\d{4}$', series):
-        raise ValidationError("!5@8O ?0A?>@B0 4>;6=0 A>45@60BL 4 F8D@K")
-
-    if number and not re.match(r'^\d{6}$', number):
-        raise ValidationError("><5@ ?0A?>@B0 4>;65= A>45@60BL 6 F8D@")
+    # Формат: XX/XXXX (номер/год)
+    if not re.match(r'^\d+/\d{4}$', number):
+        raise ValidationError("Неверный формат номера договора. Ожидается: XX/XXXX")
 
     return True
 
 
-def validate_contract_number(contract_number: str) -> bool:
+def sanitize_string(value: str) -> str:
     """
-    @>25@O5B =><5@ 4>3>2>@0
+    Очищает строку от опасных символов
 
     Args:
-        contract_number: ><5@ 4>3>2>@0
+        value: Исходная строка
 
     Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
-
-    Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
+        Очищенная строка
     """
-    if not contract_number:
-        raise ValidationError("><5@ 4>3>2>@0 =5 <>65B 1KBL ?CABK<")
+    if not value:
+        return value
 
-    if len(contract_number) > 50:
-        raise ValidationError("><5@ 4>3>2>@0 A;8H:>< 4;8==K9 (<0:A8<C< 50 A8<2>;>2)")
+    # Удаляем HTML теги
+    value = re.sub(r'<[^>]+>', '', value)
 
-    return True
+    # Экранируем специальные символы SQL
+    value = value.replace("'", "''")
+
+    return value.strip()
 
 
-def validate_text_length(text: str, max_length: int, field_name: str = ">;5") -> bool:
+def format_phone(phone: str) -> str:
     """
-    @>25@O5B 4;8=C B5:AB>2>3> ?>;O
+    Форматирует номер телефона в стандартный вид
 
     Args:
-        text: "5:AB
-        max_length: 0:A8<0;L=0O 4;8=0
-        field_name: 0720=85 ?>;O 4;O A>>1I5=8O >1 >H81:5
+        phone: Исходный номер
 
     Returns:
-        True 5A;8 4;8=0 :>@@5:B=0O
-
-    Raises:
-        ValidationError: A;8 B5:AB A;8H:>< 4;8==K9
+        Отформатированный номер
     """
-    if text and len(text) > max_length:
-        raise ValidationError(
-            f"{field_name} A;8H:>< 4;8==>5 (<0:A8<C< {max_length} A8<2>;>2)"
-        )
+    if not phone:
+        return phone
 
-    return True
+    # Оставляем только цифры
+    digits = re.sub(r'\D', '', phone)
+
+    # Если начинается с 8, меняем на 7
+    if digits.startswith('8') and len(digits) == 11:
+        digits = '7' + digits[1:]
+
+    # Форматируем
+    if len(digits) == 11 and digits.startswith('7'):
+        return f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
+
+    return phone
 
 
-def sanitize_sql_identifier(identifier: str) -> str:
+def format_passport(passport: str) -> str:
     """
-    G8I05B 8<O 4;O 8A?>;L7>20=8O 2 SQL (70I8B0 >B 8=J5:F89)
+    Форматирует номер паспорта
 
     Args:
-        identifier: <O ?>;O/B01;8FK
+        passport: Исходный номер
 
     Returns:
-        G8I5==>5 8<O
-
-    Raises:
-        ValidationError: A;8 8<O A>45@68B =54>?CAB8<K5 A8<2>;K
+        Отформатированный номер
     """
-    #  07@5H5=K B>;L:> 1C:2K, F8D@K 8 ?>4GQ@:820=85
-    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', identifier):
-        raise ValidationError(
-            f"54>?CAB8<>5 8<O '{identifier}'. "
-            " 07@5H5=K B>;L:> 1C:2K ;0B8=8FK, F8D@K 8 ?>4GQ@:820=85"
-        )
+    if not passport:
+        return passport
 
-    return identifier
+    # Оставляем только цифры
+    digits = re.sub(r'\D', '', passport)
 
+    if len(digits) == 10:
+        return f"{digits[:4]} {digits[4:]}"
 
-def validate_area(area: Union[float, int, str]) -> bool:
-    """
-    @>25@O5B ?;>I04L
-
-    Args:
-        area: ;>I04L 2 :2.<
-
-    Returns:
-        True 5A;8 7=0G5=85 :>@@5:B=>5
-
-    Raises:
-        ValidationError: A;8 7=0G5=85 =5:>@@5:B=>5
-    """
-    try:
-        area_float = float(area) if isinstance(area, str) else area
-    except (ValueError, TypeError):
-        raise ValidationError(";>I04L 4>;6=0 1KBL G8A;><")
-
-    if area_float <= 0:
-        raise ValidationError(";>I04L 4>;6=0 1KBL 1>;LH5 =C;O")
-
-    if area_float > 100000:  # 0I8B0 >B A;CG09=KE >?5G0B>:
-        raise ValidationError(";>I04L A;8H:>< 1>;LH0O (<0:A8<C< 100000 :2.<)")
-
-    return True
-
-
-def validate_login(login: str) -> bool:
-    """
-    @>25@O5B ;>38=
-
-    Args:
-        login: >38= ?>;L7>20B5;O
-
-    Returns:
-        True 5A;8 D>@<0B ?@028;L=K9
-
-    Raises:
-        ValidationError: A;8 D>@<0B =525@=K9
-    """
-    if not login:
-        raise ValidationError(">38= =5 <>65B 1KBL ?CABK<")
-
-    if len(login) < 3:
-        raise ValidationError(">38= 4>;65= A>45@60BL <8=8<C< 3 A8<2>;0")
-
-    if len(login) > 50:
-        raise ValidationError(">38= A;8H:>< 4;8==K9 (<0:A8<C< 50 A8<2>;>2)")
-
-    #  07@5H5=K 1C:2K, F8D@K, B>G:8, 45D8AK, ?>4GQ@:820=8O
-    if not re.match(r'^[a-zA-Z0-9._-]+$', login):
-        raise ValidationError(
-            ">38= <>65B A>45@60BL B>;L:> 1C:2K, F8D@K 8 A8<2>;K: . _ -"
-        )
-
-    return True
-
-
-def validate_password_strength(password: str) -> bool:
-    """
-    @>25@O5B =04Q6=>ABL ?0@>;O
-
-    Args:
-        password: 0@>;L
-
-    Returns:
-        True 5A;8 ?0@>;L =04Q6=K9
-
-    Raises:
-        ValidationError: A;8 ?0@>;L A;01K9
-    """
-    if not password:
-        raise ValidationError("0@>;L =5 <>65B 1KBL ?CABK<")
-
-    if len(password) < 6:
-        raise ValidationError("0@>;L 4>;65= A>45@60BL <8=8<C< 6 A8<2>;>2")
-
-    #  5:><5=40F88 4;O =04Q6=>AB8 (>?F8>=0;L=>)
-    has_digit = bool(re.search(r'\d', password))
-    has_letter = bool(re.search(r'[a-zA-Z0-O-/]', password))
-
-    if not (has_digit and has_letter):
-        # -B> ?@54C?@5645=85, => @07@5H05< B0:>9 ?0@>;L
-        print("�  5:><5=40F8O: 8A?>;L7C9B5 1C:2K 8 F8D@K 4;O 1>;LH59 =04Q6=>AB8")
-
-    return True
-
-
-# "5AB8@>20=85 20;840B>@>2
-if __name__ == '__main__':
-    print("=== "5AB <>4C;O validators ===\n")
-
-    # "5AB B5;5D>=>2
-    print("1. @>25@:0 B5;5D>=>2:")
-    try:
-        validate_phone("+7 (999) 123-45-67")
-        print("   >@@5:B=K9 B5;5D>=")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    try:
-        validate_phone("89991234567")
-        print("   5:>@@5:B=K9 B5;5D>=")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    # "5AB email
-    print("\n2. @>25@:0 email:")
-    try:
-        validate_email("user@example.com")
-        print("   >@@5:B=K9 email")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    # "5AB AC<<
-    print("\n3. @>25@:0 AC<<:")
-    try:
-        validate_amount(1000.50)
-        print("   >@@5:B=0O AC<<0")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    try:
-        validate_amount(-100)
-        print("   B@8F0B5;L=0O AC<<0")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    # "5AB 40BK
-    print("\n4. @>25@:0 40B:")
-    try:
-        validate_date("31.12.2024")
-        print("   >@@5:B=0O 40B0")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    try:
-        validate_date("2024-12-31")
-        print("   5:>@@5:B=0O 40B0")
-    except ValidationError as e:
-        print(f"   {e}")
-
-    print("\n=== A5 B5ABK 7025@H5=K ===")
+    return passport

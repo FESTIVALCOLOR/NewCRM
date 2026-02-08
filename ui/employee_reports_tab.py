@@ -10,6 +10,7 @@ from database.db_manager import DatabaseManager
 from utils.pdf_generator import PDFGenerator
 from utils.icon_loader import IconLoader  # ← ДОБАВЛЕНО
 from utils.calendar_helpers import ICONS_PATH
+from utils.table_settings import apply_no_focus_delegate
 from datetime import datetime
 
 class EmployeeReportsTab(QWidget):
@@ -187,6 +188,7 @@ class EmployeeReportsTab(QWidget):
         completed_layout = QVBoxLayout()
         
         completed_table = QTableWidget()
+        apply_no_focus_delegate(completed_table)  # Убираем пунктирную рамку фокуса
         completed_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
@@ -220,6 +222,7 @@ class EmployeeReportsTab(QWidget):
         salary_layout = QVBoxLayout()
         
         salary_table = QTableWidget()
+        apply_no_focus_delegate(salary_table)  # Убираем пунктирную рамку фокуса
         salary_table.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;

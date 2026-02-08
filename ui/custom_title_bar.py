@@ -155,7 +155,24 @@ class CustomTitleBar(QWidget):
         if not self.simple_mode:
             if self.parent_window.isMaximized():
                 self.parent_window.showNormal()
+                # Сбрасываем snap состояние в MainWindow для корректной работы resize
+                if hasattr(self.parent_window, 'is_snapped'):
+                    self.parent_window.is_snapped = False
+                    self.parent_window.snap_position = None
+                    self.parent_window.restore_geometry = None
+                # Восстанавливаем минимальные размеры (абсолютный минимум)
+                if hasattr(self.parent_window, 'setMinimumSize'):
+                    self.parent_window.setMinimumSize(800, 600)
+                # Сбрасываем флаги resize
+                if hasattr(self.parent_window, 'resizing'):
+                    self.parent_window.resizing = False
+                    self.parent_window.resize_edge = None
+                # Сбрасываем курсор
+                self.parent_window.setCursor(Qt.ArrowCursor)
             else:
+                # Сохраняем геометрию перед maximize
+                if hasattr(self.parent_window, 'restore_geometry'):
+                    self.parent_window.restore_geometry = self.parent_window.geometry()
                 self.parent_window.showMaximized()
     
     # ========== ДОБАВЛЕНА ПРОВЕРКА ЗОНЫ RESIZE ==========
@@ -222,6 +239,8 @@ class CustomTitleBar(QWidget):
             if hasattr(self.parent_window, 'apply_snap'):
                 self.parent_window.apply_snap()
             self.start_pos = None
+            # Сбрасываем курсор на стандартный
+            self.parent_window.setCursor(Qt.ArrowCursor)
             event.accept()
     
     def mouseDoubleClickEvent(self, event):

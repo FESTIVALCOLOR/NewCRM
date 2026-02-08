@@ -13,6 +13,10 @@ class CustomDateEdit(QDateEdit):
     Аналогично CustomComboBox - предотвращает случайное изменение даты.
     """
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Не переопределяем стили - используем unified_styles.py
+
     def wheelEvent(self, event):
         """Обработка события колеса мыши"""
         # Разрешаем прокрутку только если календарь открыт

@@ -13,6 +13,6 @@ def apply_tooltip_palette(widget):
         widget: QWidget или QDialog, к которому нужно применить палитру
     """
     palette = widget.palette()
-    palette.setColor(QPalette.ToolTipBase, QColor('#F5F5F5'))
+    palette.setColor(QPalette.ToolTipBase, QColor('#f5f5f5'))
     palette.setColor(QPalette.ToolTipText, QColor('#333333'))
     widget.setPalette(palette)

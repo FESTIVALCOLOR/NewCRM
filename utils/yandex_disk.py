@@ -45,11 +45,12 @@ class YandexDiskManager:
 
         upload_url = response_data['href']
 
-        # Загружаем файл
+        # ИСПРАВЛЕНИЕ 25.01.2026: Увеличен таймаут до 600 сек для больших файлов (150-200 МБ)
+        # Используем data= вместо files= для streaming upload (меньше памяти)
         with open(local_path, 'rb') as f:
-            upload_response = self.session.put(upload_url, files={'file': f}, timeout=30)
+            upload_response = self.session.put(upload_url, data=f, timeout=600)
 
-        if upload_response.status_code not in [200, 201]:
+        if upload_response.status_code not in [200, 201, 202]:
             raise Exception(f"Ошибка загрузки файла: {upload_response.status_code}")
 
     def download_file(self, yandex_path, local_path):

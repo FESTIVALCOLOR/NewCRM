@@ -39,6 +39,7 @@ a = Analysis(
         'ui.flow_layout',
         'ui.rates_dialog',
         'ui.update_dialogs',
+        'ui.dashboards',
         'database',
         'database.db_manager',
         'utils',
@@ -51,6 +52,12 @@ a = Analysis(
         'utils.db_security',
         'utils.update_manager',
         'utils.icon_loader',
+        'utils.api_client',
+        'utils.sync_manager',
+        'utils.offline_manager',
+        'utils.data_access',
+        'utils.db_sync',
+        'utils.calendar_helpers',
     ],
     hookspath=[],
     hooksconfig={},
@@ -83,5 +90,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='resources/icon.ico',  # Иконка приложения
+    icon='resources/icon256.ico',  # Иконка приложения (высокое разрешение 256x256)
 )
