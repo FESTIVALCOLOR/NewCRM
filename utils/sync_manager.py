@@ -28,6 +28,7 @@ class SyncManager(QObject):
     employees_updated = pyqtSignal(list)
     crm_cards_updated = pyqtSignal(list)
     supervision_cards_updated = pyqtSignal(list)
+    files_updated = pyqtSignal(list)  # list of updated file dicts
 
     # Сигналы для concurrent editing
     record_locked = pyqtSignal(str, int, str)  # (entity_type, entity_id, locked_by_user)
@@ -167,6 +168,19 @@ class SyncManager(QObject):
             if employees:
                 self.employees_updated.emit(employees)
                 self.data_updated.emit('employees', employees)
+
+            # Синхронизация файлов (отдельный endpoint)
+            try:
+                since_str = self.last_sync_timestamp.isoformat() if self.last_sync_timestamp else None
+                if since_str:
+                    updated_files = self.api_client.get_updated_files(since_str)
+                    if updated_files:
+                        self.files_updated.emit(updated_files)
+                        self.data_updated.emit('project_files', updated_files)
+                        # Сохраняем в локальную БД
+                        self._save_files_locally(updated_files)
+            except Exception:
+                pass  # Ошибка sync файлов не критична
 
         except Exception as e:
             # Обновляем статус соединения
@@ -389,6 +403,31 @@ class SyncManager(QObject):
             entity_types: Список типов ('clients', 'contracts', 'employees')
         """
         self._sync_entity_types = entity_types
+
+    def _save_files_locally(self, files: list):
+        """Сохранить обновлённые файлы в локальную БД"""
+        try:
+            from database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            conn = db.connect()
+            cursor = conn.cursor()
+            for f in files:
+                file_id = f.get('id')
+                cursor.execute('SELECT id FROM project_files WHERE id = ?', (file_id,))
+                if not cursor.fetchone():
+                    db.add_contract_file({
+                        'contract_id': f.get('contract_id'),
+                        'stage': f.get('stage'),
+                        'file_type': f.get('file_type'),
+                        'public_link': f.get('public_link'),
+                        'yandex_path': f.get('yandex_path'),
+                        'file_name': f.get('file_name'),
+                        'upload_date': f.get('upload_date'),
+                        'variation': f.get('variation', 1)
+                    })
+            db.close()
+        except Exception as e:
+            print(f"[SyncManager] Ошибка сохранения файлов локально: {e}")
 
     def force_sync(self):
         """Принудительно запустить синхронизацию"""

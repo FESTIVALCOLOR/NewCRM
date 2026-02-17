@@ -54,6 +54,7 @@ config_local.py
 secrets.py
 server/.env
 .env
+.offline_hmac_key
 
 # Тестовые скриншоты (генерируются автоматически)
 tests/visual/auto_captures/

@@ -2,8 +2,10 @@
 """
 Вспомогательные функции и классы для работы с календарем
 """
+from datetime import datetime, timedelta
 from PyQt5.QtWidgets import QDateEdit, QPushButton, QVBoxLayout, QWidget, QCalendarWidget
-from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtCore import QDate, Qt, QRectF
+from PyQt5.QtGui import QPalette, QColor, QPainter, QFont
 from utils.resource_path import resource_path
 
 # ========== ОПРЕДЕЛЯЕМ ПУТЬ К ИКОНКАМ ==========
@@ -24,13 +26,30 @@ class CustomCalendarWidget(QCalendarWidget):
         self.button_container = None
         # Увеличиваем минимальную высоту для размещения всех чисел + кнопки
         self.setMinimumHeight(340)
+        # Принудительно белый фон для popup календаря
+        self.setAutoFillBackground(True)
+        pal = self.palette()
+        pal.setColor(QPalette.Window, QColor('#ffffff'))
+        pal.setColor(QPalette.Base, QColor('#ffffff'))
+        self.setPalette(pal)
 
     def showEvent(self, event):
         """Добавляем кнопку при первом показе календаря"""
         super().showEvent(event)
 
+        # Пропускаем инициализацию если окно ещё не видимо пользователю
+        # (setCalendarWidget вызывает showEvent во время конструирования диалога)
+        if not self.window().isVisible():
+            return
+
+        # Всегда открываем на текущем месяце/годе
+        today = QDate.currentDate()
+        self.setCurrentPage(today.year(), today.month())
+
         if self.today_button is None:
             self.setup_today_button()
+        elif self.button_container:
+            self.position_button_container()
 
     def setup_today_button(self):
         """Добавление кнопки 'Сегодня' внизу календаря"""
@@ -92,11 +111,73 @@ class CustomCalendarWidget(QCalendarWidget):
         super().resizeEvent(event)
         self.position_button_container()
 
+    def paintCell(self, painter, rect, date):
+        """Кастомная отрисовка ячеек — красный круг для выбранной даты"""
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        is_selected = (date == self.selectedDate())
+        is_current_month = (date.month() == self.monthShown()
+                            and date.year() == self.yearShown())
+        is_weekend = date.dayOfWeek() in (6, 7)
+
+        # Белый фон ячейки
+        painter.fillRect(rect, QColor('#ffffff'))
+
+        if is_selected:
+            # Красный круг
+            size = min(rect.width(), rect.height()) - 6
+            cx = rect.center().x()
+            cy = rect.center().y()
+            circle = QRectF(cx - size / 2, cy - size / 2, size, size)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor('#E74C3C'))
+            painter.drawEllipse(circle)
+            # Белый жирный текст
+            painter.setPen(QColor('#FFFFFF'))
+            font = painter.font()
+            font.setBold(True)
+            painter.setFont(font)
+        else:
+            font = painter.font()
+            font.setBold(False)
+            painter.setFont(font)
+            if is_current_month:
+                if is_weekend:
+                    painter.setPen(QColor('#E74C3C'))
+                else:
+                    painter.setPen(QColor('#333333'))
+            else:
+                painter.setPen(QColor('#c0c0c0'))
+
+        painter.drawText(rect, Qt.AlignCenter, str(date.day()))
+        painter.restore()
+
     def go_to_today(self):
         """Переход на сегодняшнюю дату"""
         today = QDate.currentDate()
         self.setSelectedDate(today)
         self.setCurrentPage(today.year(), today.month())
+
+
+def add_working_days(start_date_str, working_days):
+    """Добавляет рабочие дни (Пн-Пт) к дате.
+    start_date_str: 'YYYY-MM-DD'
+    working_days: int
+    Возвращает: 'YYYY-MM-DD'
+    """
+    if not start_date_str or working_days <= 0:
+        return start_date_str or ''
+    try:
+        current = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return start_date_str or ''
+    added = 0
+    while added < working_days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            added += 1
+    return current.strftime('%Y-%m-%d')
 
 
 def add_today_button_to_dateedit(date_edit):

@@ -10,10 +10,29 @@ services:
       POSTGRES_USER: crm_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: interior_studio_crm
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "wal_buffers=8MB"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # PostgreSQL доступен только внутри Docker сети (не открыт наружу)
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U crm_user"]
       interval: 10s
@@ -37,7 +56,7 @@ services:
       # JWT
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
 
       # Яндекс.Диск
       YANDEX_DISK_TOKEN: ${YANDEX_DISK_TOKEN}
@@ -48,7 +67,7 @@ services:
       DEBUG: false
 
       # CORS
-      ALLOWED_ORIGINS: http://localhost:3000,https://your-domain.com
+      ALLOWED_ORIGINS: https://crm.festivalcolor.ru,http://localhost:3000
 
       # Файлы
       MAX_FILE_SIZE_MB: 50
@@ -58,7 +77,7 @@ services:
       - uploads_data:/app/uploads
       - previews_data:/app/previews
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

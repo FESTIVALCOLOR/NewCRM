@@ -20,7 +20,7 @@ def get_unified_stylesheet():
 /* ===== YANDEX DISK STYLE - Interior Studio CRM ===== */
 
 * {{
-    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Manrope', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     font-size: 13px;
 }}
 
@@ -84,14 +84,13 @@ QPushButton[primary="true"]:pressed {{
     background-color: #e6c236;
 }}
 
-/* ===== TOOLTIP ===== */
+/* ===== TOOLTIP (скрыт — заменён на BubbleToolTip) ===== */
 QToolTip {{
-    background-color: #ffffff;
-    font-size: 12px;
-    color: #000000;
-    border: 1px solid #d9d9d9;
-    border-radius: 4px;
-    padding: 6px 8px;
+    background-color: transparent;
+    color: transparent;
+    border: none;
+    padding: 0px;
+    font-size: 1px;
 }}
 
 /* ===== ПОЛЯ ВВОДА (28px height) ===== */
@@ -203,6 +202,14 @@ QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
 }}
 
 /* ===== ВЫПАДАЮЩИЕ СПИСКИ (28px height) ===== */
+/* Убрать рамку QLineEdit внутри editable QComboBox — рамка QComboBox достаточна */
+QComboBox QLineEdit {{
+    border: none;
+    background: transparent;
+    padding: 0px;
+    margin: 0px;
+}}
+
 QComboBox {{
     border: 1px solid #d9d9d9;
     padding: 2px 12px;
@@ -236,14 +243,13 @@ QComboBox::down-arrow {{
 }}
 
 QComboBox QAbstractItemView {{
-    border: none;
+    border: 1px solid #d9d9d9;
     background-color: #ffffff;
     selection-background-color: #fff4d9;
     selection-color: #000000;
     outline: none;
     border-radius: 6px;
-    padding: 6px;
-    margin: 6px;
+    padding: 4px;
 }}
 
 QComboBox QAbstractItemView::item {{
@@ -329,6 +335,7 @@ QCalendarWidget {{
 }}
 
 QCalendarWidget QWidget {{
+    background-color: #ffffff;
     alternate-background-color: #fafafa;
 }}
 
@@ -407,8 +414,8 @@ QCalendarWidget QSpinBox {{
     padding: 6px;
     min-height: 26px;
     max-height: 26px;
-    min-width: 50px;
-    max-width: 50px;
+    min-width: 65px;
+    max-width: 65px;
 }}
 
 QCalendarWidget QSpinBox:hover {{
@@ -450,67 +457,58 @@ QCalendarWidget QSpinBox::down-arrow {{
 QCalendarWidget QWidget QAbstractItemView:enabled {{
     font-size: 12px;
     color: #000000;
-    background-color: #e0e0e0;
-    selection-background-color: #FF0000;
-    selection-color: #FFFFFF;
+    background-color: #ffffff;
     font-weight: bold;
 }}
 
 QCalendarWidget QTableView {{
     background-color: #ffffff;
     gridline-color: transparent;
-    selection-background-color: #FF0000;
-    border-radius: 10px;
     outline: none;
+    /* selection стили не нужны — paintCell рисует красный круг */
+    selection-background-color: transparent;
+    selection-color: transparent;
 }}
 
 /* Заголовки дней недели (Пн, Вт, Ср...) */
 QCalendarWidget QTableView QHeaderView {{
-    background-color: #e0e0e0;
-    font-weight: bold;
+    background-color: #ffffff;
 }}
 
 QCalendarWidget QTableView QHeaderView::section {{
     background-color: transparent;
-    color: #FF0000;;
+    color: #999999;
     border: none;
-    padding: 2px;
+    padding: 4px 2px;
     font-size: 11px;
-    border-radius: 10px;
-    font-weight: bold;
+    font-weight: 600;
 }}
 
-/* Ячейки с датами */
+/* Ячейки: прозрачные — paintCell рисует всё */
 QCalendarWidget QTableView::item {{
     padding: 2px;
-    border-radius: 4px;
+    background-color: transparent;
+    border: none;
 }}
 
 QCalendarWidget QTableView::item:hover {{
-    background-color: #fafafa;
-    border-radius: 4px;
+    background-color: #f5f5f5;
+    border-radius: 14px;
 }}
 
-/* Выбранная дата - КРАСНЫЙ КРУГ с белым текстом */
 QCalendarWidget QTableView::item:selected {{
-    background-color: #ffffff;
-    color: #000000;
-    font-weight: bold;
-    border-radius: 10px;
+    background-color: transparent;
 }}
 
 QCalendarWidget QTableView::item:focus {{
-    background-color: #FF0000;
-    color: #FFFFFF;
-    border: 2px solid #CC0000;
-    border-radius: 10px;
+    background-color: transparent;
+    border: none;
 }}
 
-/* Сегодняшняя дата */
+/* paintCell рисует выбранную дату — CSS не вмешивается */
 QCalendarWidget QTableView::item:selected:focus {{
-    background-color: #FF0000;
-    color: #FFFFFF;
-    border-radius: 10px;
+    background-color: transparent;
+    border: none;
 }}
 
 /* Кнопка "Сегодня" */
@@ -591,7 +589,7 @@ QHeaderView::section {{
     border-bottom: 1px solid #e6e6e6;
     border-right: 1px solid #f0f0f0;
     padding: 4px 8px;
-    font-weight: 600;
+    font-weight: 700;
     color: #000000;
 }}
 
@@ -601,50 +599,49 @@ QHeaderView::section:hover {{
 
 /* ===== ВКЛАДКИ ===== */
 QTabWidget::pane {{
-    border: 1px solid #d9d9d9;
+    border: none;
+    border-top: 1px solid #E0E0E0;
     background-color: #ffffff;
-    border-radius: 8px;
 }}
 
 QTabBar::tab {{
     background-color: transparent;
     border: none;
     border-bottom: 2px solid transparent;
-    padding: 10px 20px;
-    margin-right: 2px;
+    padding: 8px 16px;
+    margin-right: 0px;
     color: #808080;
     font-weight: 500;
 }}
 
 QTabBar::tab:hover {{
-    color: #000000;
-    border-bottom: 2px solid #d9d9d9;
+    color: #E74C3C;
+    border-bottom: 2px solid transparent;
 }}
 
 QTabBar::tab:selected {{
     color: #000000;
     border-bottom: 2px solid #ffd93c;
-    font-weight: 600;
+    font-weight: 700;
 }}
 
-/* ===== SCROLLBAR (Яндекс стиль) ===== */
+/* ===== SCROLLBAR (pill-shape, без стрелок) ===== */
 QScrollBar:vertical {{
-    background: #fafafa;
+    background: transparent;
     width: 12px;
-    margin: 0px;
+    margin: 4px 0px;
     border: none;
 }}
 
 QScrollBar::handle:vertical {{
     background-color: #d9d9d9;
     min-height: 30px;
-    border-radius: 6px;
-    margin: 2px;
+    border-radius: 4px;
+    margin: 0px 2px;
 }}
 
 QScrollBar::handle:vertical:hover {{
     background-color: #ffd93c;
-    border-radius: 6px;
 }}
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
@@ -658,22 +655,21 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
 }}
 
 QScrollBar:horizontal {{
-    background: #fafafa;
+    background: transparent;
     height: 12px;
-    margin: 0px;
+    margin: 0px 4px;
     border: none;
 }}
 
 QScrollBar::handle:horizontal {{
     background-color: #d9d9d9;
     min-width: 30px;
-    border-radius: 6px;
-    margin: 2px;
+    border-radius: 4px;
+    margin: 2px 0px;
 }}
 
 QScrollBar::handle:horizontal:hover {{
     background-color: #ffd93c;
-    border-radius: 6px;
 }}
 
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
@@ -684,6 +680,12 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
 
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
     background: none;
+}}
+
+/* Угол между скроллбарами — прозрачный */
+QAbstractScrollArea::corner {{
+    background: transparent;
+    border: none;
 }}
 
 /* ===== CHECKBOX ===== */
@@ -819,7 +821,8 @@ QGroupBox::title {{
     subcontrol-position: top left;
     padding: 3 10px;
     color: #000000;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 14px;
 }}
 
 /* ===== LABEL ===== */

@@ -2,9 +2,22 @@
 import sys
 import os
 import ctypes
-from PyQt5.QtWidgets import QApplication, QComboBox
+
+# Принудительная UTF-8 кодировка для вывода (Windows charmap fix)
+# PyInstaller windowed (console=False) может иметь stdout=None
+for _stream_name in ('stdout', 'stderr'):
+    _stream = getattr(sys, _stream_name, None)
+    if _stream is None:
+        # PyInstaller windowed: перенаправляем в devnull чтобы print() не падал
+        setattr(sys, _stream_name, open(os.devnull, 'w', encoding='utf-8'))
+    elif hasattr(_stream, 'reconfigure'):
+        try:
+            _stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+from PyQt5.QtWidgets import QApplication, QComboBox, QMenu, QWidget
 from PyQt5.QtCore import Qt, QObject, QEvent, QSize
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QFont, QFontDatabase
 from ui.login_window import LoginWindow
 from database.db_manager import DatabaseManager
 
@@ -17,20 +30,84 @@ from utils.resource_path import resource_path
 # ==============================================================
 
 
-class ComboBoxEventFilter(QObject):
+class PopupStyleFilter(QObject):
     """
-    Глобальный фильтр событий для всех QComboBox.
-    Отключает изменение значения при прокрутке колесиком мыши,
-    если ComboBox не в фокусе.
+    Глобальный фильтр событий:
+    1. Отключает прокрутку QComboBox без фокуса
+    2. Скруглённые углы через DWM API (Windows 11+)
+    3. Лёгкая нативная тень DWM вместо тёмной CS_DROPSHADOW
     """
 
     def eventFilter(self, obj, event):
-        if isinstance(obj, QComboBox) and event.type() == QEvent.Wheel:
-            # Если ComboBox не в фокусе, игнорируем событие колесика
+        if not isinstance(obj, QWidget):
+            return False
+
+        etype = event.type()
+
+        # Отключение прокрутки QComboBox без фокуса
+        if isinstance(obj, QComboBox) and etype == QEvent.Wheel:
             if not obj.hasFocus():
                 event.ignore()
                 return True
-        return super().eventFilter(obj, event)
+
+        # Подготовка popup QComboBox: убрать тень ДО показа
+        if isinstance(obj, QComboBox) and etype == QEvent.MouseButtonPress:
+            self._remove_combo_shadow(obj)
+
+        # Все popup окна: DWM скругление + удаление тёмной тени
+        # ВАЖНО: используем WindowType_Mask для точного сравнения типа окна,
+        # т.к. Qt.Popup (0x09) включает бит Qt.Window (0x01) и простая
+        # проверка flags & Qt.Popup сработает на ЛЮБОЕ окно (Dialog, ToolTip и т.д.)
+        if etype == QEvent.Show and isinstance(obj, QWidget) and obj.isWindow():
+            wtype = int(obj.windowFlags()) & int(Qt.WindowType_Mask)
+            if wtype == int(Qt.Popup):
+                self._style_popup(obj)
+
+        return False
+
+    def _remove_combo_shadow(self, combo):
+        """Убрать CS_DROPSHADOW у popup QComboBox до его показа"""
+        try:
+            view = combo.view()
+            if not view:
+                return
+            popup = view.window()
+            if not popup or popup is combo.window():
+                return
+            if not popup.property('_shadow_removed'):
+                popup.setProperty('_shadow_removed', True)
+                popup.setWindowFlag(Qt.NoDropShadowWindowHint, True)
+        except Exception:
+            pass
+
+    def _style_popup(self, widget):
+        """Скруглённые углы (DWM) + лёгкая тень для popup"""
+        # Удалить тёмную тень CS_DROPSHADOW (один раз на виджет)
+        if not widget.property('_shadow_removed'):
+            widget.setProperty('_shadow_removed', True)
+            try:
+                geo = widget.geometry()
+                widget.setWindowFlag(Qt.NoDropShadowWindowHint, True)
+                widget.setGeometry(geo)
+                widget.show()
+            except Exception:
+                pass
+        # DWM скруглённые углы (каждый Show — HWND мог смениться)
+        self._apply_dwm_corners(widget)
+
+    @staticmethod
+    def _apply_dwm_corners(widget):
+        """Скруглённые углы через DWM API (Windows 11+)"""
+        if sys.platform != 'win32':
+            return
+        try:
+            hwnd = int(widget.winId())
+            # DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2
+            value = ctypes.c_int(2)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 33, ctypes.byref(value), ctypes.sizeof(value))
+        except Exception:
+            pass
 
 def main():
     try:
@@ -75,10 +152,30 @@ def main():
             app_icon = QIcon(resource_path('resources/icon.ico'))
         app.setWindowIcon(app_icon)
 
-        # Устанавливаем глобальный фильтр событий для всех QComboBox
-        combo_filter = ComboBoxEventFilter(app)
-        app.installEventFilter(combo_filter)
-        app_logger.info("Установлен глобальный фильтр для QComboBox (отключение прокрутки без фокуса)")
+        # Глобальный фильтр: QComboBox прокрутка + popup скругления + тень
+        popup_filter = PopupStyleFilter(app)
+        app.installEventFilter(popup_filter)
+        app_logger.info("Установлен глобальный фильтр PopupStyleFilter")
+
+        # Monkeypatch QMenu: убрать тёмную системную тень
+        _orig_menu_popup = QMenu.popup
+        _orig_menu_exec = QMenu.exec_
+
+        def _menu_popup_no_shadow(self, *args, **kwargs):
+            if not self.property('_shadow_removed'):
+                self.setProperty('_shadow_removed', True)
+                self.setWindowFlag(Qt.NoDropShadowWindowHint, True)
+            return _orig_menu_popup(self, *args, **kwargs)
+
+        def _menu_exec_no_shadow(self, *args, **kwargs):
+            if not self.property('_shadow_removed'):
+                self.setProperty('_shadow_removed', True)
+                self.setWindowFlag(Qt.NoDropShadowWindowHint, True)
+            return _orig_menu_exec(self, *args, **kwargs)
+
+        QMenu.popup = _menu_popup_no_shadow
+        QMenu.exec_ = _menu_exec_no_shadow
+        app_logger.info("QMenu monkeypatch: NoDropShadowWindowHint")
 
         # Применяем стандартный стиль Fusion
         app.setStyle('Fusion')
@@ -86,8 +183,8 @@ def main():
         # Устанавливаем палитру для tooltip
         from PyQt5.QtGui import QPalette, QColor
         palette = app.palette()
-        palette.setColor(QPalette.ToolTipBase, QColor(245, 245, 245))
-        palette.setColor(QPalette.ToolTipText, QColor(51, 51, 51))
+        palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 255))
+        palette.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
         app.setPalette(palette)
 
         app_logger.info("Qt Application инициализировано")
@@ -133,22 +230,57 @@ def main():
         print("="*60 + "\n")
         # ===================================
     
+        # ========== ЗАГРУЗКА ШРИФТА MANROPE ==========
+        fonts_dir = resource_path('resources/fonts')
+        manrope_loaded = False
+        if os.path.exists(fonts_dir):
+            for font_file in ['Manrope-Regular.ttf', 'Manrope-Medium.ttf',
+                               'Manrope-SemiBold.ttf', 'Manrope-Bold.ttf',
+                               'Manrope-ExtraBold.ttf']:
+                font_path = os.path.join(fonts_dir, font_file)
+                if os.path.exists(font_path):
+                    font_id = QFontDatabase.addApplicationFont(font_path)
+                    if font_id >= 0:
+                        manrope_loaded = True
+                        app_logger.debug(f"Шрифт загружен: {font_file}")
+                    else:
+                        app_logger.warning(f"Не удалось загрузить шрифт: {font_file}")
+
+        if manrope_loaded:
+            app_logger.info("Шрифт Manrope успешно загружен")
+        else:
+            app_logger.warning("Шрифт Manrope не найден, используется системный шрифт")
+        # ==================================================
+
         # ========== ПРИМЕНЕНИЕ ЕДИНЫХ СТИЛЕЙ ==========
         from utils.unified_styles import get_unified_stylesheet
 
-        # Добавляем принудительный стиль для QToolTip в самом конце
+        # Скрываем стандартный QToolTip (заменён на BubbleToolTip)
         tooltip_override = """
         QToolTip {
-            background-color: rgb(245, 245, 245);
-            color: rgb(51, 51, 51);
-            border: 1px solid rgb(204, 204, 204);
-            border-radius: 4px;
-            padding: 5px;
-            font-size: 12px;
+            background-color: transparent;
+            color: transparent;
+            border: none;
+            padding: 0px;
+            font-size: 1px;
         }
         """
         combined_styles = get_unified_stylesheet() + "\n" + tooltip_override
         app.setStyleSheet(combined_styles)
+
+        # Глобальная палитра для QToolTip (fallback)
+        from PyQt5.QtGui import QPalette, QColor
+        palette = app.palette()
+        palette.setColor(QPalette.ToolTipBase, QColor('#FFFFFF'))
+        palette.setColor(QPalette.ToolTipText, QColor('#000000'))
+        app.setPalette(palette)
+
+        # Устанавливаем кастомный tooltip-облачко с хвостиком
+        from ui.bubble_tooltip import ToolTipFilter
+        tooltip_filter = ToolTipFilter(app)
+        app.installEventFilter(tooltip_filter)
+        app_logger.info("BubbleToolTip (облачко с хвостиком) установлен")
+
         app_logger.info("Единые стили (unified_styles.py) применены")
         # ==================================================
 
@@ -161,6 +293,7 @@ def main():
         # Запуск окна входа
         app_logger.info("Запуск окна входа в систему")
         login_window = LoginWindow()
+
         login_window.show()
 
         app_logger.info("Приложение запущено успешно")

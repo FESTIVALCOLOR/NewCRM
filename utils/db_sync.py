@@ -464,6 +464,16 @@ class DatabaseSynchronizer:
                                 measurement_date = ?,
                                 contract_file_link = ?,
                                 tech_task_link = ?,
+                                tech_task_file_name = ?,
+                                tech_task_yandex_path = ?,
+                                contract_file_name = ?,
+                                contract_file_yandex_path = ?,
+                                template_contract_file_link = ?,
+                                template_contract_file_name = ?,
+                                template_contract_file_yandex_path = ?,
+                                yandex_folder_path = ?,
+                                references_yandex_path = ?,
+                                photo_documentation_yandex_path = ?,
                                 updated_at = ?
                             WHERE id = ?
                         """, (
@@ -489,6 +499,16 @@ class DatabaseSynchronizer:
                             contract.get('measurement_date'),
                             contract.get('contract_file_link'),
                             contract.get('tech_task_link'),
+                            contract.get('tech_task_file_name'),
+                            contract.get('tech_task_yandex_path'),
+                            contract.get('contract_file_name'),
+                            contract.get('contract_file_yandex_path'),
+                            contract.get('template_contract_file_link'),
+                            contract.get('template_contract_file_name'),
+                            contract.get('template_contract_file_yandex_path'),
+                            contract.get('yandex_folder_path'),
+                            contract.get('references_yandex_path'),
+                            contract.get('photo_documentation_yandex_path'),
                             datetime.now().isoformat(),
                             contract['id']
                         ))
@@ -503,8 +523,13 @@ class DatabaseSynchronizer:
                                 termination_reason, measurement_image_link,
                                 measurement_file_name, measurement_yandex_path,
                                 measurement_date, contract_file_link, tech_task_link,
+                                tech_task_file_name, tech_task_yandex_path,
+                                contract_file_name, contract_file_yandex_path,
+                                template_contract_file_link, template_contract_file_name,
+                                template_contract_file_yandex_path, yandex_folder_path,
+                                references_yandex_path, photo_documentation_yandex_path,
                                 created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             contract['id'],
                             contract.get('client_id'),
@@ -529,6 +554,16 @@ class DatabaseSynchronizer:
                             contract.get('measurement_date'),
                             contract.get('contract_file_link'),
                             contract.get('tech_task_link'),
+                            contract.get('tech_task_file_name'),
+                            contract.get('tech_task_yandex_path'),
+                            contract.get('contract_file_name'),
+                            contract.get('contract_file_yandex_path'),
+                            contract.get('template_contract_file_link'),
+                            contract.get('template_contract_file_name'),
+                            contract.get('template_contract_file_yandex_path'),
+                            contract.get('yandex_folder_path'),
+                            contract.get('references_yandex_path'),
+                            contract.get('photo_documentation_yandex_path'),
                             datetime.now().isoformat(),
                             datetime.now().isoformat()
                         ))
@@ -1034,17 +1069,60 @@ class DatabaseSynchronizer:
             conn = self.db.connect()
             cursor = conn.cursor()
 
-            # Получаем ID всех файлов с сервера
+            # Получаем ID и yandex_path всех файлов с сервера
             server_ids = set(f['id'] for f in server_files)
+            server_paths = set()
+            for f in server_files:
+                yp = f.get('yandex_path', '')
+                if yp:
+                    server_paths.add(yp)
+                    # Добавляем вариант с/без disk: префикса
+                    if yp.startswith('disk:'):
+                        server_paths.add(yp[5:])
+                    else:
+                        server_paths.add('disk:' + yp)
 
-            # Удаляем файлы, которых нет на сервере
-            cursor.execute("SELECT id FROM project_files")
-            local_ids = set(row[0] for row in cursor.fetchall())
+            # Двусторонняя синхронизация: проверяем локальные файлы, которых нет на сервере
+            cursor.execute("SELECT id, contract_id, stage, file_type, public_link, yandex_path, file_name, variation FROM project_files")
+            local_rows = cursor.fetchall()
+            local_ids = set(row[0] for row in local_rows)
             ids_to_delete = local_ids - server_ids
+
             if ids_to_delete:
-                cursor.execute(f"DELETE FROM project_files WHERE id IN ({','.join('?' * len(ids_to_delete))})",
-                              tuple(ids_to_delete))
-                app_logger.info(f"[SYNC] Удалено {len(ids_to_delete)} устаревших файлов")
+                # Пробуем отправить локальные файлы на сервер (если они есть на ЯД и НЕ дубликаты)
+                local_only = [r for r in local_rows if r[0] in ids_to_delete]
+                pushed_ids = set()
+                for row in local_only:
+                    file_id, contract_id, stage, file_type, public_link, yandex_path, file_name, variation = row
+                    if yandex_path:
+                        # Пропускаем если файл с таким путём уже есть на сервере (дубликат с другим ID)
+                        if yandex_path in server_paths:
+                            pushed_ids.add(file_id)  # Считаем как "обработано" — удалим локальную копию
+                            app_logger.info(f"[SYNC] Файл {file_id} уже есть на сервере (по пути), удаляем локально")
+                            continue
+                        try:
+                            # Пушим запись на сервер
+                            self.api.create_file_record({
+                                'contract_id': contract_id,
+                                'stage': stage,
+                                'file_type': file_type,
+                                'public_link': public_link,
+                                'yandex_path': yandex_path,
+                                'file_name': file_name,
+                                'variation': variation or 1
+                            })
+                            pushed_ids.add(file_id)
+                            app_logger.info(f"[SYNC] Файл {file_id} отправлен на сервер")
+                        except Exception as e:
+                            # Если 409/500 от дубликата — считаем обработанным
+                            pushed_ids.add(file_id)
+                            app_logger.info(f"[SYNC] Файл {file_id}: {e}")
+
+                # Удаляем локальные файлы с устаревшими ID (сервер — источник правды)
+                if ids_to_delete:
+                    cursor.execute(f"DELETE FROM project_files WHERE id IN ({','.join('?' * len(ids_to_delete))})",
+                                  tuple(ids_to_delete))
+                    app_logger.info(f"[SYNC] Удалено {len(ids_to_delete)} устаревших локальных файлов")
 
             synced_count = 0
 

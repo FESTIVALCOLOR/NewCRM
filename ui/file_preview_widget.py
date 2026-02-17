@@ -15,12 +15,13 @@ class FilePreviewWidget(QWidget):
     delete_requested = pyqtSignal(int)  # file_id
     preview_clicked = pyqtSignal(str)  # public_link
 
-    def __init__(self, file_id, file_name, file_type, public_link, preview_pixmap=None, can_delete=True, parent=None):
+    def __init__(self, file_id, file_name, file_type, public_link, preview_pixmap=None, can_delete=True, yandex_path='', parent=None):
         super().__init__(parent)
         self.file_id = file_id
         self.file_name = file_name
         self.file_type = file_type
         self.public_link = public_link
+        self.yandex_path = yandex_path
         self.preview_pixmap = preview_pixmap
         self.can_delete = can_delete
 

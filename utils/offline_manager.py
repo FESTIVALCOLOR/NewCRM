@@ -8,10 +8,44 @@ import json
 import sqlite3
 import threading
 import time
+import hmac
+import hashlib
+import os
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Callable
 from enum import Enum
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+
+# Ключ для HMAC подписи offline-операций (генерируется при первом запуске)
+_HMAC_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.offline_hmac_key')
+
+
+def _get_hmac_key() -> bytes:
+    """Получить или сгенерировать HMAC ключ для подписи offline-операций"""
+    if os.path.exists(_HMAC_KEY_FILE):
+        with open(_HMAC_KEY_FILE, 'rb') as f:
+            return f.read()
+    # Генерируем новый ключ
+    key = os.urandom(32)
+    try:
+        with open(_HMAC_KEY_FILE, 'wb') as f:
+            f.write(key)
+    except OSError:
+        pass  # Если не удалось сохранить, используем в памяти
+    return key
+
+
+def _sign_operation(data_json: str, operation_type: str, entity_type: str) -> str:
+    """Подписать операцию HMAC-SHA256"""
+    key = _get_hmac_key()
+    message = f"{operation_type}:{entity_type}:{data_json}".encode('utf-8')
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def _verify_operation_signature(data_json: str, operation_type: str, entity_type: str, signature: str) -> bool:
+    """Проверить подпись операции"""
+    expected = _sign_operation(data_json, operation_type, entity_type)
+    return hmac.compare_digest(expected, signature)
 
 
 class ConnectionStatus(Enum):
@@ -113,9 +147,16 @@ class OfflineManager(QObject):
                 synced_at TEXT,
                 error_message TEXT,
                 retry_count INTEGER DEFAULT 0,
-                server_entity_id INTEGER
+                server_entity_id INTEGER,
+                signature TEXT
             )
         """)
+
+        # Миграция: добавить колонку signature если её нет
+        try:
+            cursor.execute("ALTER TABLE offline_operations_queue ADD COLUMN signature TEXT")
+        except sqlite3.OperationalError:
+            pass  # Колонка уже существует
 
         # Индексы для быстрого поиска
         cursor.execute("""
@@ -239,17 +280,22 @@ class OfflineManager(QObject):
         conn = self._get_connection()
         cursor = conn.cursor()
 
+        data_json = json.dumps(data, ensure_ascii=False, default=str)
+        # Подписываем операцию HMAC для защиты от tampering
+        signature = _sign_operation(data_json, operation_type.value, entity_type)
+
         cursor.execute("""
             INSERT INTO offline_operations_queue
-            (operation_type, entity_type, entity_id, data, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (operation_type, entity_type, entity_id, data, status, created_at, signature)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             operation_type.value,
             entity_type,
             entity_id,
-            json.dumps(data, ensure_ascii=False, default=str),
+            data_json,
             OperationStatus.PENDING.value,
-            datetime.now().isoformat()
+            datetime.now().isoformat(),
+            signature
         ))
 
         operation_id = cursor.lastrowid
@@ -291,12 +337,22 @@ class OfflineManager(QObject):
 
         operations = []
         for row in cursor.fetchall():
+            data_json = row['data']
+            signature = row['signature'] if 'signature' in row.keys() else None
+
+            # Проверяем HMAC подпись для защиты от tampering
+            if signature and not _verify_operation_signature(
+                data_json, row['operation_type'], row['entity_type'], signature
+            ):
+                print(f"[OFFLINE] ВНИМАНИЕ: Операция #{row['id']} имеет невалидную подпись! Пропускаем.")
+                continue
+
             operations.append({
                 'id': row['id'],
                 'operation_type': row['operation_type'],
                 'entity_type': row['entity_type'],
                 'entity_id': row['entity_id'],
-                'data': json.loads(row['data']),
+                'data': json.loads(data_json),
                 'status': row['status'],
                 'created_at': row['created_at'],
                 'retry_count': row['retry_count']
@@ -307,9 +363,12 @@ class OfflineManager(QObject):
 
     def _start_sync(self):
         """Запустить синхронизацию отложенных операций"""
-        if self._is_syncing:
-            print("[OFFLINE] Синхронизация уже выполняется")
-            return
+        # Проверяем флаг ДО создания потока (fix race condition)
+        with self._sync_lock:
+            if self._is_syncing:
+                print("[OFFLINE] Синхронизация уже выполняется")
+                return
+            self._is_syncing = True
 
         # Запускаем в отдельном потоке
         sync_thread = threading.Thread(target=self._sync_pending_operations)
@@ -318,10 +377,6 @@ class OfflineManager(QObject):
 
     def _sync_pending_operations(self):
         """Синхронизировать отложенные операции с сервером"""
-        with self._sync_lock:
-            if self._is_syncing:
-                return
-            self._is_syncing = True
 
         try:
             self.status = ConnectionStatus.SYNCING
@@ -454,6 +509,8 @@ class OfflineManager(QObject):
                 return self._sync_payment_operation(op_type, entity_id, data)
             elif entity_type == 'yandex_folder':
                 return self._sync_yandex_folder_operation(op_type, entity_id, data)
+            elif entity_type == 'project_file':
+                return self._sync_project_file_operation(op_type, entity_id, data)
             else:
                 return {'success': False, 'error': f'Unknown entity type: {entity_type}'}
 
@@ -620,6 +677,23 @@ class OfflineManager(QObject):
         except Exception as e:
             print(f"[YANDEX] Ошибка синхронизации: {e}")
             return {'success': False, 'error': str(e)}
+
+    def _sync_project_file_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции с файлом проекта"""
+        if op_type == OperationType.CREATE.value:
+            result = self.api_client.create_file_record(data)
+            if result:
+                return {'success': True, 'server_id': result.get('id')}
+            return {'success': False, 'error': 'Failed to create file record'}
+
+        elif op_type == OperationType.DELETE.value:
+            try:
+                self.api_client.delete_file_record(entity_id)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for project_file'}
 
     def _update_operation_status(self, operation_id: int, status: OperationStatus,
                                  error_message: str = None, server_entity_id: int = None):

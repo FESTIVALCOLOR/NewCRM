@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # JWT
     secret_key: str = "your-secret-key-change-this"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 1440  # 24 часа
+    access_token_expire_minutes: int = 60  # 60 минут (auto-refresh на клиенте)
     refresh_token_expire_days: int = 7  # 7 дней
 
     # Яндекс.Диск
@@ -44,8 +44,16 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Получить настройки (кэшированные)"""
+    import os
     settings = Settings()
-    if "change-this" in settings.secret_key or "change_in_production" in settings.secret_key:
+    # В production (Docker) SECRET_KEY ОБЯЗАТЕЛЕН
+    if os.getenv("DATABASE_URL", "").startswith("postgresql"):
+        if "change-this" in settings.secret_key or settings.secret_key == "your-secret-key-change-this":
+            raise RuntimeError(
+                "CRITICAL: SECRET_KEY не задан! "
+                "Установите переменную окружения SECRET_KEY (openssl rand -hex 32)"
+            )
+    elif "change-this" in settings.secret_key:
         import logging
-        logging.warning("SECURITY WARNING: JWT secret_key is using default value! Set SECRET_KEY in .env")
+        logging.warning("SECURITY WARNING: JWT secret_key использует значение по умолчанию! Установите SECRET_KEY в .env")
     return settings

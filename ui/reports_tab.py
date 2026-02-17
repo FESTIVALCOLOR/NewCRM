@@ -9,6 +9,7 @@ from PyQt5.QtPrintSupport import QPrinter
 from ui.custom_combobox import CustomComboBox
 import os
 from database.db_manager import DatabaseManager
+from ui.chart_widget import FunnelBarChart, ExecutorLoadChart, ProjectTypePieChart
 from utils.icon_loader import IconLoader
 from utils.resource_path import resource_path
 from datetime import datetime
@@ -46,19 +47,9 @@ class ReportsTab(QWidget):
         header_layout.addWidget(header)
         header_layout.addStretch()
 
-        # Кнопка экспорта
-        export_all_btn = IconLoader.create_icon_button('export', 'Экспорт в PDF', icon_size=12)
-        export_all_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E74C3C;
-                color: white;
-                padding: 2px 8px;
-                font-size: 11px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #C0392B; }
-        """)
+        export_all_btn = IconLoader.create_action_button(
+            'export', 'Экспорт в PDF',
+            bg_color='#E74C3C', hover_color='#C0392B', icon_color='#ffffff')
         export_all_btn.clicked.connect(self.export_full_report)
         header_layout.addWidget(export_all_btn)
         
@@ -239,11 +230,90 @@ class ReportsTab(QWidget):
         # Вкладка 3: Авторский надзор
         supervision_tab = self.create_supervision_statistics_tab()
         self.tabs.addTab(supervision_tab, '  Авторский надзор  ')
-        
+
+        # Вкладка 4: Аналитика (графики)
+        analytics_tab = self._create_analytics_tab()
+        self.tabs.addTab(analytics_tab, '  Аналитика  ')
+
         main_layout.addWidget(self.tabs, 1)
-        
+
         self.setLayout(main_layout)
     
+    def _create_analytics_tab(self):
+        """Вкладка аналитики с графиками: воронка, нагрузка, типы проектов"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: white; }")
+
+        content = QWidget()
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # Заголовок
+        title = QLabel("Аналитика проектов")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2C3E50;")
+        layout.addWidget(title)
+
+        # Ряд 1: Типы проектов + Воронка
+        row1 = QHBoxLayout()
+        row1.setSpacing(15)
+
+        self.pie_chart = ProjectTypePieChart()
+        self.pie_chart.setMinimumHeight(320)
+        self.pie_chart.setStyleSheet("background: #FAFAFA; border: 1px solid #E0E0E0; border-radius: 8px;")
+        row1.addWidget(self.pie_chart)
+
+        self.funnel_chart = FunnelBarChart()
+        self.funnel_chart.setMinimumHeight(320)
+        self.funnel_chart.setStyleSheet("background: #FAFAFA; border: 1px solid #E0E0E0; border-radius: 8px;")
+        row1.addWidget(self.funnel_chart)
+
+        layout.addLayout(row1)
+
+        # Ряд 2: Нагрузка исполнителей
+        self.executor_chart = ExecutorLoadChart()
+        self.executor_chart.setMinimumHeight(320)
+        self.executor_chart.setStyleSheet("background: #FAFAFA; border: 1px solid #E0E0E0; border-radius: 8px;")
+        layout.addWidget(self.executor_chart)
+
+        layout.addStretch()
+
+        content.setLayout(layout)
+        scroll.setWidget(content)
+        return scroll
+
+    def _load_analytics_charts(self):
+        """Загрузка данных для графиков аналитики"""
+        try:
+            # Типы проектов (из текущей статистики)
+            if self.api_client and getattr(self.api_client, 'is_online', False):
+                try:
+                    contracts = self.api_client.get_contracts(limit=1000)
+                except Exception:
+                    contracts = self.db.get_all_contracts()
+            else:
+                contracts = self.db.get_all_contracts()
+
+            individual = sum(1 for c in contracts if c.get('project_type') == 'Индивидуальный')
+            template = sum(1 for c in contracts if c.get('project_type') == 'Шаблонный')
+            supervision = sum(1 for c in contracts if c.get('supervision'))
+            self.pie_chart.set_data(individual, template, supervision)
+
+            # Воронка
+            funnel_data = self.db.get_funnel_statistics()
+            funnel = funnel_data.get("funnel", {})
+            if funnel:
+                self.funnel_chart.set_data(funnel)
+
+            # Нагрузка исполнителей
+            executors = self.db.get_executor_load()
+            if executors:
+                self.executor_chart.set_data(executors)
+
+        except Exception as e:
+            print(f"Ошибка загрузки графиков аналитики: {e}")
+
     def create_statistics_tab(self, project_type):
         """Создание вкладки статистики для типа проекта"""
         scroll = QScrollArea()
@@ -468,6 +538,7 @@ class ReportsTab(QWidget):
         self.load_project_statistics('Индивидуальный', year, quarter, month, agent_type, city)
         self.load_project_statistics('Шаблонный', year, quarter, month, agent_type, city)
         self.load_supervision_statistics(year, quarter, month, agent_type, city)
+        self._load_analytics_charts()
     
     def load_project_statistics(self, project_type, year, quarter, month, agent_type, city):
         """Загрузка статистики для типа проекта"""

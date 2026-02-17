@@ -38,89 +38,23 @@ class ClientsTab(QWidget):
         header_layout.addWidget(title)
         header_layout.addStretch()
 
-        # ========== КНОПКА ПОИСКА (SVG) ==========
-        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск клиентов', icon_size=12)
+        search_btn = IconLoader.create_action_button('search', 'Поиск клиентов')
         search_btn.clicked.connect(self.open_search)
-        search_btn.setStyleSheet('''
-            QPushButton {
-                padding: 2px 8px;
-                font-weight: 500;
-                font-size: 11px;
-                color: #000000;
-                background-color: #ffffff;
-                border: 1px solid #d9d9d9;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #f5f5f5;
-                border-color: #ffd93c;
-            }
-        ''')
         header_layout.addWidget(search_btn)
-        # =========================================
 
-        # ========== КНОПКА СБРОСА ФИЛЬТРОВ (SVG) ==========
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить', 'Сбросить фильтры и показать всех клиентов', icon_size=12)
+        reset_btn = IconLoader.create_action_button('x-circle', 'Сбросить фильтры')
         reset_btn.clicked.connect(self.reset_filters)
-        reset_btn.setStyleSheet('''
-            QPushButton {
-                padding: 2px 8px;
-                font-weight: 500;
-                font-size: 11px;
-                color: #000000;
-                background-color: #ffffff;
-                border: 1px solid #d9d9d9;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #FFF3E0;
-                border-color: #FF9800;
-            }
-        ''')
         header_layout.addWidget(reset_btn)
-        # ================================================
 
-        # ========== КНОПКА ОБНОВЛЕНИЯ ДАННЫХ ==========
-        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить БД', 'Обновить данные с сервера', icon_size=12)
+        refresh_btn = IconLoader.create_action_button('refresh', 'Обновить данные с сервера')
         refresh_btn.clicked.connect(self.load_clients)
-        refresh_btn.setStyleSheet('''
-            QPushButton {
-                padding: 2px 8px;
-                font-weight: 500;
-                font-size: 11px;
-                color: #000000;
-                background-color: #ffffff;
-                border: 1px solid #d9d9d9;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #e3f2fd;
-                border-color: #2196F3;
-            }
-        ''')
         header_layout.addWidget(refresh_btn)
-        # ================================================
-        
-        # ========== КНОПКА ДОБАВЛЕНИЯ (SVG) ==========
-        add_btn = IconLoader.create_icon_button('add', 'Добавить клиента', 'Добавить нового клиента', icon_size=12)
+
+        add_btn = IconLoader.create_action_button(
+            'add', 'Добавить нового клиента',
+            bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
         add_btn.clicked.connect(self.add_client)
-        add_btn.setStyleSheet('''
-            QPushButton {
-                padding: 2px 8px;
-                font-weight: 600;
-                font-size: 11px;
-                color: #000000;
-                background-color: #ffd93c;
-                border: 1px solid #e6c236;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #ffdb4d;
-                border-color: #d9b530;
-            }
-        ''')
         header_layout.addWidget(add_btn)
-        # =============================================
         
         layout.addLayout(header_layout)
         
@@ -293,11 +227,19 @@ class ClientsTab(QWidget):
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Не удалось загрузить клиентов: {e}', 'error').exec_()
         
+    def _refresh_dashboard(self):
+        """Обновить дашборд после изменения данных"""
+        mw = self.window()
+        if hasattr(mw, 'refresh_current_dashboard'):
+            mw.refresh_current_dashboard()
+
     def add_client(self):
         """Открытие диалога добавления клиента"""
         dialog = ClientDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
+        result = dialog.exec_()
+        if result == QDialog.Accepted:
             self.load_clients()
+            self._refresh_dashboard()
 
     def view_client(self, client_data):
         """Просмотр информации о клиенте"""
@@ -309,6 +251,7 @@ class ClientsTab(QWidget):
         dialog = ClientDialog(self, client_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_clients()
+            self._refresh_dashboard()
     
     def delete_client(self, client_id):
         """Удаление клиента"""
@@ -339,6 +282,7 @@ class ClientsTab(QWidget):
             try:
                 self.data.delete_client(client_id)
                 self.load_clients()
+                self._refresh_dashboard()
                 CustomMessageBox(self, 'Успех', 'Клиент удален', 'success').exec_()
             except Exception as e:
                 print(f"[ERROR] Ошибка удаления клиента: {e}")

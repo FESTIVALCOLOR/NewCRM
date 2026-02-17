@@ -27,10 +27,10 @@ class EmployeesTab(QWidget):
         self.db = self.data.db
 
         # ========== ОПРЕДЕЛЯЕМ ПРАВА ==========
-        self.can_edit = employee['position'] in [
-            'Руководитель студии',
-            'Старший менеджер проектов'
-        ]
+        _pos = employee.get('position', '')
+        _sec = employee.get('secondary_position', '')
+        self.can_edit = _pos in ['Руководитель студии', 'Старший менеджер проектов'] or \
+                        _sec in ['Руководитель студии', 'Старший менеджер проектов']
         # ======================================
 
         self._data_loaded = False
@@ -48,46 +48,15 @@ class EmployeesTab(QWidget):
         header_layout.addWidget(title)
         header_layout.addStretch()
 
-        # ========== КНОПКА ПОИСКА ==========
-        search_btn = IconLoader.create_icon_button('search', 'Поиск', 'Поиск сотрудников', icon_size=12)
+        search_btn = IconLoader.create_action_button('search', 'Поиск сотрудников')
         search_btn.clicked.connect(self.open_search)
-        search_btn.setStyleSheet('''
-            QPushButton {
-                padding: 2px 8px;
-                font-weight: 500;
-                font-size: 11px;
-                color: #000000;
-                background-color: #ffffff;
-                border: 1px solid #d9d9d9;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #f5f5f5;
-                border-color: #ffd93c;
-            }
-        ''')
         header_layout.addWidget(search_btn)
-        # ===================================
 
-        # Кнопка добавления
         if self.can_edit:
-            add_btn = IconLoader.create_icon_button('add', 'Добавить сотрудника', icon_size=12)
+            add_btn = IconLoader.create_action_button(
+                'add', 'Добавить сотрудника',
+                bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
             add_btn.clicked.connect(self.add_employee)
-            add_btn.setStyleSheet('''
-                QPushButton {
-                    padding: 2px 8px;
-                    font-weight: 600;
-                    font-size: 11px;
-                    color: #000000;
-                    background-color: #ffd93c;
-                    border: 1px solid #e6c236;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #ffdb4d;
-                    border-color: #d9b530;
-                }
-            ''')
             header_layout.addWidget(add_btn)
 
         layout.addLayout(header_layout)
@@ -503,11 +472,18 @@ class EmployeesTab(QWidget):
             
         self.employees_table.setSortingEnabled(True)
 
+    def _refresh_dashboard(self):
+        """Обновить дашборд после изменения данных"""
+        mw = self.window()
+        if hasattr(mw, 'refresh_current_dashboard'):
+            mw.refresh_current_dashboard()
+
     def add_employee(self):
         """Открытие диалога добавления сотрудника"""
         dialog = EmployeeDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self.load_employees()
+            self._refresh_dashboard()
             
     def view_employee(self, employee_data):
         """Просмотр информации о сотруднике"""
@@ -518,9 +494,11 @@ class EmployeesTab(QWidget):
         """Редактирование сотрудника"""
         
         # ========== ПРОВЕРКА ПРАВ ==========
-        if self.employee['position'] == 'Старший менеджер проектов':
+        _cur_pos = self.employee.get('position', '')
+        _cur_sec = self.employee.get('secondary_position', '')
+        if _cur_pos == 'Старший менеджер проектов' or _cur_sec == 'Старший менеджер проектов':
             admin_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
-            if employee_data['position'] in admin_positions:
+            if employee_data.get('position', '') in admin_positions:
                 CustomMessageBox(
                     self, 
                     'Доступ запрещен', 
@@ -534,13 +512,14 @@ class EmployeesTab(QWidget):
         dialog = EmployeeDialog(self, employee_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_employees()
+            self._refresh_dashboard()
 
     def delete_employee(self, employee_data):
         """Удаление сотрудника"""
         from ui.custom_message_box import CustomQuestionBox
 
         # Только Руководитель студии может удалять сотрудников
-        if self.employee['position'] != 'Руководитель студии':
+        if self.employee.get('position', '') != 'Руководитель студии' and self.employee.get('secondary_position', '') != 'Руководитель студии':
             CustomMessageBox(
                 self,
                 'Ошибка',
@@ -577,6 +556,7 @@ class EmployeesTab(QWidget):
                 ).exec_()
 
                 self.load_employees()
+                self._refresh_dashboard()
 
             except Exception as e:
                 CustomMessageBox(
@@ -787,22 +767,32 @@ class EmployeeDialog(QDialog):
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
         
+        # Кнопка "Права доступа" (только при редактировании, только для Руководителя)
+        if self.employee_data and not self.view_only:
+            current_role = self.current_user.get('role', '') if isinstance(self.current_user, dict) else getattr(self.current_user, 'role', '')
+            current_pos = self.current_user.get('position', '') if isinstance(self.current_user, dict) else getattr(self.current_user, 'position', '')
+            if current_role in ('admin', 'director') or current_pos == 'Руководитель студии':
+                perm_btn = QPushButton('Права доступа...')
+                perm_btn.setStyleSheet('padding: 8px 20px; color: #1565C0;')
+                perm_btn.clicked.connect(self._open_permissions_dialog)
+                layout.addWidget(perm_btn)
+
         # Кнопки
         if not self.view_only:
             buttons_layout = QHBoxLayout()
             buttons_layout.addStretch()
-            
+
             save_btn = QPushButton('Сохранить')
             save_btn.clicked.connect(self.save_employee)
             save_btn.setStyleSheet('padding: 10px 30px; font-weight: bold;')
-            
+
             cancel_btn = QPushButton('Отмена')
             cancel_btn.clicked.connect(self.reject)
             cancel_btn.setStyleSheet('padding: 10px 30px;')
-            
+
             buttons_layout.addWidget(save_btn)
             buttons_layout.addWidget(cancel_btn)
-            
+
             layout.addLayout(buttons_layout)
         else:
             # ========== РЕЖИМ ПРОСМОТРА ==========
@@ -916,6 +906,13 @@ class EmployeeDialog(QDialog):
         if not line_edit.text().strip():
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
+
+    def _open_permissions_dialog(self):
+        """Открыть диалог управления правами доступа"""
+        if not self.employee_data or not self.api_client:
+            return
+        dlg = PermissionsDialog(self, self.employee_data, self.api_client)
+        dlg.exec_()
 
     def fill_data(self):
         """Заполнение формы данными сотрудника"""
@@ -1308,12 +1305,12 @@ class EmployeeSearchDialog(QDialog):
         return {
             'name': self.name_input.text().strip(),
             'position': self.position_combo.currentData() or '',
-            'status': self.status_combo.currentData() or '', 
+            'status': self.status_combo.currentData() or '',
             'phone': self.phone_input.text().strip(),
             'email': self.email_input.text().strip(),
             'login': self.login_input.text().strip()
         }
-    
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
@@ -1325,3 +1322,199 @@ class EmployeeSearchDialog(QDialog):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
         center_dialog_on_parent(self)
+
+
+class PermissionsDialog(QDialog):
+    """Диалог управления правами доступа сотрудника"""
+
+    PERMISSION_GROUPS = {
+        'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
+        'Клиенты': ['clients.delete'],
+        'Договоры': ['contracts.delete'],
+        'CRM': [
+            'crm_cards.update', 'crm_cards.move', 'crm_cards.delete',
+            'crm_cards.assign_executor', 'crm_cards.delete_executor',
+            'crm_cards.reset_stages', 'crm_cards.reset_approval',
+            'crm_cards.complete_approval', 'crm_cards.reset_designer',
+            'crm_cards.reset_draftsman',
+        ],
+        'Надзор': [
+            'supervision.update', 'supervision.move', 'supervision.pause_resume',
+            'supervision.reset_stages', 'supervision.complete_stage',
+            'supervision.delete_order',
+        ],
+        'Платежи': ['payments.delete'],
+        'Зарплаты': ['salaries.delete'],
+        'Агенты': ['agents.create'],
+    }
+
+    def __init__(self, parent, employee_data, api_client):
+        super().__init__(parent)
+        self.employee_data = employee_data
+        self.api_client = api_client
+        self.checkboxes = {}
+        self.definitions = {}
+
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMinimumWidth(550)
+
+        self._init_ui()
+        self._load_data()
+
+    def _init_ui(self):
+        emp_name = self.employee_data.get('full_name', '')
+        title = f'Права доступа: {emp_name}'
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: none;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(self, title, simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        content_widget = QWidget()
+        content_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+
+        content_layout = QVBoxLayout()
+        content_layout.setSpacing(10)
+        content_layout.setContentsMargins(20, 15, 20, 15)
+
+        self.info_label = QLabel('')
+        self.info_label.setStyleSheet('color: #757575; font-size: 12px;')
+        content_layout.addWidget(self.info_label)
+
+        from PyQt5.QtWidgets import QScrollArea
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(400)
+        scroll.setStyleSheet('QScrollArea { border: none; }')
+
+        scroll_content = QWidget()
+        groups_layout = QVBoxLayout()
+        groups_layout.setSpacing(8)
+
+        for group_name, perm_names in self.PERMISSION_GROUPS.items():
+            group_box = QGroupBox(group_name)
+            group_layout = QVBoxLayout()
+            group_layout.setSpacing(4)
+
+            for perm_name in perm_names:
+                cb = QCheckBox(perm_name)
+                cb.setProperty('perm_name', perm_name)
+                self.checkboxes[perm_name] = cb
+                group_layout.addWidget(cb)
+
+            group_box.setLayout(group_layout)
+            groups_layout.addWidget(group_box)
+
+        scroll_content.setLayout(groups_layout)
+        scroll.setWidget(scroll_content)
+        content_layout.addWidget(scroll)
+
+        buttons_layout = QHBoxLayout()
+
+        reset_btn = QPushButton('По умолчанию')
+        reset_btn.setStyleSheet('padding: 8px 20px;')
+        reset_btn.clicked.connect(self._reset_to_defaults)
+        buttons_layout.addWidget(reset_btn)
+
+        buttons_layout.addStretch()
+
+        save_btn = QPushButton('Сохранить')
+        save_btn.setStyleSheet('padding: 8px 20px; font-weight: bold;')
+        save_btn.clicked.connect(self._save_permissions)
+        buttons_layout.addWidget(save_btn)
+
+        cancel_btn = QPushButton('Закрыть')
+        cancel_btn.setStyleSheet('padding: 8px 20px;')
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+
+        content_layout.addLayout(buttons_layout)
+
+        content_widget.setLayout(content_layout)
+        border_layout.addWidget(content_widget)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
+
+    def _load_data(self):
+        """Загрузить определения прав и текущие права сотрудника"""
+        try:
+            defs = self.api_client.get_permission_definitions()
+            if isinstance(defs, list):
+                self.definitions = {d['name']: d['description'] for d in defs}
+
+            for perm_name, cb in self.checkboxes.items():
+                desc = self.definitions.get(perm_name, perm_name)
+                cb.setText(desc)
+
+            emp_id = self.employee_data.get('id')
+            result = self.api_client.get_employee_permissions(emp_id)
+            if isinstance(result, dict):
+                current_perms = result.get('permissions', [])
+                is_superuser = result.get('is_superuser', False)
+
+                if is_superuser:
+                    self.info_label.setText('Системный пользователь — все права включены, изменение невозможно')
+                    for cb in self.checkboxes.values():
+                        cb.setChecked(True)
+                        cb.setEnabled(False)
+                else:
+                    self.info_label.setText(f'Роль: {self.employee_data.get("position", "")}')
+                    for perm_name, cb in self.checkboxes.items():
+                        cb.setChecked(perm_name in current_perms)
+
+        except Exception as e:
+            self.info_label.setText(f'Ошибка загрузки: {str(e)}')
+
+    def _save_permissions(self):
+        """Сохранить выбранные права"""
+        try:
+            emp_id = self.employee_data.get('id')
+            selected = [name for name, cb in self.checkboxes.items() if cb.isChecked()]
+            result = self.api_client.set_employee_permissions(emp_id, selected)
+            if result:
+                CustomMessageBox(self, 'Успешно', 'Права доступа сохранены', 'info').exec_()
+                self.accept()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {str(e)}', 'warning').exec_()
+
+    def _reset_to_defaults(self):
+        """Сбросить права до дефолтных по роли"""
+        try:
+            emp_id = self.employee_data.get('id')
+            self.api_client.reset_employee_permissions(emp_id)
+            self._load_data()
+            CustomMessageBox(self, 'Успешно', 'Права сброшены по умолчанию', 'info').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Не удалось сбросить: {str(e)}', 'warning').exec_()

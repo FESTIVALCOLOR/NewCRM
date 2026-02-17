@@ -12,12 +12,13 @@ class FileListItemWidget(QWidget):
     delete_requested = pyqtSignal(int)  # file_id
     file_clicked = pyqtSignal(str)  # public_link
 
-    def __init__(self, file_id, file_name, file_type, public_link, can_delete=True, parent=None):
+    def __init__(self, file_id, file_name, file_type, public_link, can_delete=True, yandex_path='', parent=None):
         super().__init__(parent)
         self.file_id = file_id
         self.file_name = file_name
         self.file_type = file_type
         self.public_link = public_link
+        self.yandex_path = yandex_path
         self.can_delete = can_delete
 
         self.init_ui()
@@ -76,10 +77,13 @@ class FileListItemWidget(QWidget):
         icon_label.setFixedHeight(20)
         layout.addWidget(icon_label, 0, Qt.AlignVCenter)
 
-        # Имя файла (кликабельное)
-        name_label = QLabel(f'<a href="{self.public_link}">{self.file_name}</a>')
-        name_label.setOpenExternalLinks(True)
-        name_label.setCursor(QCursor(Qt.PointingHandCursor))
+        # Имя файла (кликабельное если есть ссылка)
+        if self.public_link:
+            name_label = QLabel(f'<a href="{self.public_link}">{self.file_name}</a>')
+            name_label.setOpenExternalLinks(True)
+            name_label.setCursor(QCursor(Qt.PointingHandCursor))
+        else:
+            name_label = QLabel(self.file_name or 'Без названия')
         name_label.setStyleSheet("QLabel { color: #ffd93c; font-size: 10px; border: none; }")
         layout.addWidget(name_label, 1, Qt.AlignVCenter)
 
@@ -146,7 +150,8 @@ class FileListWidget(QWidget):
         main_layout.setSpacing(5)
 
         # Заголовок и кнопка загрузки
-        header_layout = QHBoxLayout()
+        self.header_layout = QHBoxLayout()
+        header_layout = self.header_layout
 
         title_label = QLabel(self.title)
         title_label.setStyleSheet("font-weight: bold; font-size: 11px; color: #2C3E50;")
@@ -228,8 +233,9 @@ class FileListWidget(QWidget):
                 file_id=file_data['id'],
                 file_name=file_data['file_name'],
                 file_type=file_data['file_type'],
-                public_link=file_data['public_link'],
-                can_delete=self.can_delete
+                public_link=file_data.get('public_link', ''),
+                can_delete=self.can_delete,
+                yandex_path=file_data.get('yandex_path', '')
             )
             item.delete_requested.connect(lambda fid, s=self.stage: self.delete_requested.emit(fid, s))
 

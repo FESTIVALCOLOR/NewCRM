@@ -10,7 +10,7 @@ from database.db_manager import DatabaseManager
 from ui.main_window import MainWindow
 from ui.custom_message_box import CustomMessageBox
 from utils.resource_path import resource_path
-from config import MULTI_USER_MODE, API_BASE_URL
+from config import MULTI_USER_MODE, API_BASE_URL, API_VERIFY_SSL
 from utils.password_utils import verify_password
 
 # ========== ЛОГИРОВАНИЕ ==========
@@ -22,7 +22,6 @@ if MULTI_USER_MODE:
     from utils.api_client import APIClient, APIConnectionError, APITimeoutError
     from utils.db_sync import sync_on_login
 # ================================
-
 
 class SyncProgressDialog(QDialog):
     """Кастомный диалог прогресса синхронизации"""
@@ -192,7 +191,7 @@ class LoginWindow(QWidget):
         # Инициализация API клиента если включен многопользовательский режим
         if MULTI_USER_MODE:
             try:
-                self.api_client = APIClient(API_BASE_URL)
+                self.api_client = APIClient(API_BASE_URL, verify_ssl=API_VERIFY_SSL)
                 app_logger.info(f"API клиент инициализирован: {API_BASE_URL}")
             except Exception as e:
                 app_logger.error(f"Ошибка инициализации API клиента: {e}")
@@ -202,7 +201,12 @@ class LoginWindow(QWidget):
     def init_ui(self):
         self.setWindowTitle('Festival Color - Вход')
         self.setFixedSize(400, 580)
-        
+
+        # Явная установка иконки для панели задач Windows (frameless окна теряют иконку)
+        from PyQt5.QtWidgets import QApplication
+        if QApplication.instance():
+            self.setWindowIcon(QApplication.instance().windowIcon())
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)  # Для border-radius
@@ -290,7 +294,7 @@ class LoginWindow(QWidget):
         # Заголовок
         title = QLabel('Вход в систему')
         title.setAlignment(Qt.AlignCenter)
-        title_font = QFont('Arial', 20, QFont.Bold)
+        title_font = QFont('Manrope', 20, QFont.Bold)
         title.setFont(title_font)
         title.setStyleSheet('color: #333333; font-size: 20px; margin-bottom: 0px; background-color: transparent;')
         content_layout.addWidget(title)
@@ -391,11 +395,13 @@ class LoginWindow(QWidget):
                 result = self.api_client.login(login, password)
 
                 # Формируем данные пользователя
+                position = result.get('position', '') or result.get('role', '')
                 self.current_employee = {
                     'id': result['employee_id'],
                     'full_name': result['full_name'],
-                    'role': result['role'],
-                    'position': result.get('position', result['role']),
+                    'role': result.get('role', ''),
+                    'position': position,
+                    'secondary_position': result.get('secondary_position', ''),
                     'department': result.get('department', ''),
                     'login': login,
                     'api_mode': True,  # Флаг что работаем через API
@@ -435,18 +441,23 @@ class LoginWindow(QWidget):
 
             except Exception as e:
                 log_auth_attempt(login, success=False)
-                app_logger.error(f"Ошибка API входа: {e}")
+                # Логируем только тип ошибки, НЕ полный traceback (безопасность)
+                app_logger.error(f"Ошибка API входа для '{login}': {type(e).__name__}")
 
-                error_msg = str(e)
-                if "Не удалось войти" in error_msg or "401" in error_msg:
+                error_str = str(e)
+                if "429" in error_str or "Слишком много попыток" in error_str:
+                    error_msg = "Слишком много попыток входа.\nПовторите через 15 минут."
+                elif "401" in error_str or "Требуется авторизация" in error_str:
                     error_msg = "Неверный логин или пароль!"
-                elif "ConnectionError" in error_msg or "Timeout" in error_msg:
-                    # Дополнительная проверка на ошибки соединения
+                elif "ConnectionError" in error_str or "Timeout" in error_str or "Offline" in error_str:
                     app_logger.info(f"Попытка offline-аутентификации после ошибки: {login}")
                     offline_result = self._try_offline_login(login, password)
                     if offline_result:
                         return
-                    error_msg = f"Ошибка подключения к серверу.\nOffline-вход недоступен для этого пользователя."
+                    error_msg = "Ошибка подключения к серверу.\nOffline-вход недоступен для этого пользователя."
+                else:
+                    # Обобщённое сообщение — НЕ раскрываем внутренние детали
+                    error_msg = "Ошибка входа. Попробуйте позже."
 
                 CustomMessageBox(
                     self,
@@ -522,6 +533,7 @@ class LoginWindow(QWidget):
                 'full_name': employee.get('full_name', login),
                 'role': employee.get('role', 'user'),
                 'position': employee.get('position', ''),
+                'secondary_position': employee.get('secondary_position', ''),
                 'department': employee.get('department', ''),
                 'login': login,
                 'api_mode': True,  # Всё ещё в многопользовательском режиме

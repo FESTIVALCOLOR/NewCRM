@@ -20,6 +20,23 @@ from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 from utils.data_access import DataAccess
 import os
+import threading
+
+# Маппинг названия стадии надзора -> stage_code (для связи файлов с timeline)
+SUPERVISION_STAGE_MAPPING = {
+    'Стадия 1: Закупка керамогранита': 'STAGE_1_CERAMIC',
+    'Стадия 2: Закупка сантехники': 'STAGE_2_PLUMBING',
+    'Стадия 3: Закупка оборудования': 'STAGE_3_EQUIPMENT',
+    'Стадия 4: Закупка дверей и окон': 'STAGE_4_DOORS',
+    'Стадия 5: Закупка настенных материалов': 'STAGE_5_WALL',
+    'Стадия 6: Закупка напольных материалов': 'STAGE_6_FLOOR',
+    'Стадия 7: Лепной декор': 'STAGE_7_STUCCO',
+    'Стадия 8: Освещение': 'STAGE_8_LIGHTING',
+    'Стадия 9: Бытовая техника': 'STAGE_9_APPLIANCES',
+    'Стадия 10: Закупка заказной мебели': 'STAGE_10_CUSTOM_FURNITURE',
+    'Стадия 11: Закупка фабричной мебели': 'STAGE_11_FACTORY_FURNITURE',
+    'Стадия 12: Закупка декора': 'STAGE_12_DECOR',
+}
 
 class SupervisionDraggableList(QListWidget):
     """Draggable список для надзора"""
@@ -90,6 +107,11 @@ class CRMSupervisionTab(QWidget):
             print(f"[WARNING] Не удалось инициализировать Yandex Disk: {e}")
             self.yandex_disk = None
 
+        # Учитываем secondary_position для роли ДАН
+        _pos = employee.get('position', '') if employee else ''
+        _sec = employee.get('secondary_position', '') if employee else ''
+        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
+
         self._data_loaded = False
         self.init_ui()
     
@@ -105,48 +127,14 @@ class CRMSupervisionTab(QWidget):
         header_layout.addWidget(header)
         header_layout.addStretch(1)
 
-        # ========== КНОПКА ОБНОВЛЕНИЯ ДАННЫХ ==========
-        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', 'Обновить данные с сервера', icon_size=12)
+        refresh_btn = IconLoader.create_action_button('refresh', 'Обновить данные с сервера')
         refresh_btn.clicked.connect(self.refresh_current_tab)
-        refresh_btn.setStyleSheet('''
-            QPushButton {
-                padding: 2px 8px;
-                font-weight: 500;
-                font-size: 11px;
-                color: #000000;
-                background-color: #ffffff;
-                border: 1px solid #d9d9d9;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #e3f2fd;
-                border-color: #2196F3;
-            }
-        ''')
         header_layout.addWidget(refresh_btn)
-        # ================================================
 
-        # ========== КНОПКА СТАТИСТИКИ (SVG) ==========
-        if self.employee['position'] not in ['ДАН']:
-            stats_btn = IconLoader.create_icon_button('stats', 'Статистика CRM', 'Показать статистику надзора', icon_size=12)
-            stats_btn.setStyleSheet("""
-                QPushButton {
-                    padding: 2px 8px;
-                    font-weight: 500;
-                    font-size: 11px;
-                    color: #000000;
-                    background-color: #ffffff;
-                    border: 1px solid #d9d9d9;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #fafafa;
-                    border-color: #c0c0c0;
-                }
-            """)
+        if not self.is_dan_role:
+            stats_btn = IconLoader.create_action_button('stats', 'Показать статистику надзора')
             stats_btn.clicked.connect(self.show_statistics)
             header_layout.addWidget(stats_btn)
-        # =============================================
         
         main_layout.addLayout(header_layout)
         
@@ -178,7 +166,7 @@ class CRMSupervisionTab(QWidget):
         self.tabs.addTab(self.active_widget, 'Активные проекты (0)')
         
         # Архив (только для менеджеров)
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             self.archive_widget = self.create_archive_board()
             self.tabs.addTab(self.archive_widget, 'Архив (0)')
         
@@ -650,7 +638,7 @@ class CRMSupervisionTab(QWidget):
             if filtered_cards:
                 for card_data in filtered_cards:
                     from ui.crm_tab import ArchiveCard
-                    archive_card = ArchiveCard(card_data, self.db, card_type='supervision')
+                    archive_card = ArchiveCard(card_data, self.db, card_type='supervision', employee=self.employee, api_client=self.api_client)
                     archive_layout.addWidget(archive_card)
             else:
                 empty_label = QLabel('Нет карточек, соответствующих фильтрам')
@@ -678,7 +666,7 @@ class CRMSupervisionTab(QWidget):
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей вкладки"""
         self.load_active_cards()
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             self.load_archive_cards()
             
     def load_active_cards(self):
@@ -701,7 +689,7 @@ class CRMSupervisionTab(QWidget):
             column.clear_cards()
 
         # Добавляем карточки с учетом прав
-        is_dan = self.employee['position'] == 'ДАН'
+        is_dan = self.is_dan_role
         dan_id = self.employee['id']
         for card_data in cards:
             if is_dan and card_data.get('dan_id') != dan_id:
@@ -739,11 +727,11 @@ class CRMSupervisionTab(QWidget):
             from ui.crm_tab import ArchiveCard
             for card_data in cards:
                 # Для ДАН показываем только свои
-                if self.employee['position'] == 'ДАН':
+                if self.is_dan_role:
                     if card_data.get('dan_id') != self.employee['id']:
                         continue
 
-                archive_card = ArchiveCard(card_data, self.db, card_type='supervision')
+                archive_card = ArchiveCard(card_data, self.db, card_type='supervision', employee=self.employee, api_client=self.api_client)
                 archive_layout.addWidget(archive_card)
         else:
             empty_label = QLabel('Архив пуст')
@@ -795,7 +783,7 @@ class CRMSupervisionTab(QWidget):
         self.tabs.setTabText(0, f'Активные проекты ({active_count})')
         
         # Подсчет архива
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             archive_count = 0
             if hasattr(self.archive_widget, 'archive_layout'):
                 layout = self.archive_widget.archive_layout
@@ -824,7 +812,7 @@ class CRMSupervisionTab(QWidget):
             # При перемещении на рабочую стадию проверяем, назначены ли исполнители
             non_work_columns = ['Новый заказ', 'В ожидании', 'Выполненный проект']
 
-            if to_column not in non_work_columns and self.employee['position'] not in ['ДАН']:
+            if to_column not in non_work_columns and not self.is_dan_role:
                 # Получаем данные об исполнителях
                 card_data = self.data.get_supervision_card(card_id)
                 executors_data = None
@@ -834,13 +822,19 @@ class CRMSupervisionTab(QWidget):
                         'senior_manager_id': card_data.get('senior_manager_id')
                     }
 
-                # Если исполнители не назначены - показываем диалог
-                if executors_data and not executors_data.get('dan_id') and not executors_data.get('senior_manager_id'):
-                    print(f"   ! Исполнители не назначены, показываем диалог назначения")
+                # Если хотя бы один исполнитель не назначен - показываем диалог
+                if executors_data and (not executors_data.get('dan_id') or not executors_data.get('senior_manager_id')):
+                    print(f"   ! Исполнитель не назначен (ДАН={executors_data.get('dan_id')}, СМП={executors_data.get('senior_manager_id')}), показываем диалог назначения")
                     dialog = AssignExecutorsDialog(self, card_id, to_column, api_client=self.api_client)
                     if dialog.exec_() != QDialog.Accepted:
-                        # Пользователь отменил - возвращаем карточку обратно
-                        print(f"   ! Назначение отменено, карточка остается в '{from_column}'")
+                        # Пользователь отменил - отменяем перемещение и перезагружаем карточки
+                        print(f"   ! Назначение отменено, отмена перемещения. Карточка остается в '{from_column}'")
+                        self.load_cards_for_current_tab()
+                        return
+                    # Перепроверяем: были ли исполнители реально назначены после диалога
+                    updated_card = self.data.get_supervision_card(card_id)
+                    if updated_card and (not updated_card.get('dan_id') or not updated_card.get('senior_manager_id')):
+                        print(f"   ! После диалога исполнители всё ещё не назначены, отмена перемещения")
                         self.load_cards_for_current_tab()
                         return
                     print(f"   + Исполнители назначены: ДАН={dialog.assigned_dan_id}, СМП={dialog.assigned_smp_id}")
@@ -849,7 +843,7 @@ class CRMSupervisionTab(QWidget):
 
             # ИСПРАВЛЕНИЕ: Проверка и автоматическое принятие работы при перемещении
             # "В ожидании" также исключаем - это стартовая колонка без рабочей стадии
-            if self.employee['position'] not in ['ДАН'] and from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+            if not self.is_dan_role and from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
                 # Получаем данные карточки через DataAccess
                 card_data = self.data.get_supervision_card(card_id)
                 card_info = None
@@ -876,7 +870,7 @@ class CRMSupervisionTab(QWidget):
                         return
 
                     # Если ДАН НЕ сдал работу, но руководство перемещает - автоматически принимаем
-                    if dan_completed == 0 and self.employee['position'] in ['Руководитель студии', 'Старший менеджер проектов']:
+                    if dan_completed == 0 and (self.employee.get('position', '') in ['Руководитель студии', 'Старший менеджер проектов'] or self.employee.get('secondary_position', '') in ['Руководитель студии', 'Старший менеджер проектов']):
                         print(f"\n[AUTO ACCEPT] Автоматическое принятие стадии надзора '{from_column}'")
 
                         # Добавляем запись в историю о принятии
@@ -1108,7 +1102,7 @@ class CRMSupervisionTab(QWidget):
                 print(f"   + Отметка о сдаче сброшена")
                 
             # Запрос дедлайна при перемещении (только для менеджеров)
-            if self.employee['position'] not in ['ДАН']:
+            if not self.is_dan_role:
                 skip_deadline_columns = ['Новый заказ', 'Выполненный проект']
                 
                 if to_column not in skip_deadline_columns and from_column != to_column:
@@ -1184,6 +1178,11 @@ class CRMSupervisionTab(QWidget):
         elif current_index == 1:
             self.load_archive_cards()
 
+        # Обновляем дашборд
+        mw = self.window()
+        if hasattr(mw, 'refresh_current_dashboard'):
+            mw.refresh_current_dashboard()
+
     def on_sync_update(self, updated_cards):
         """
         Обработчик обновления данных от SyncManager.
@@ -1254,6 +1253,9 @@ class SupervisionColumn(QFrame):
         self.employee = employee
         self.db = db
         self.api_client = api_client
+        _pos = employee.get('position', '') if employee else ''
+        _sec = employee.get('secondary_position', '') if employee else ''
+        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
         self.header_label = None
         # ИСПРАВЛЕНИЕ 07.02.2026: Добавлено сворачивание колонок с сохранением состояния (#19)
         self._is_collapsed = False
@@ -1320,7 +1322,7 @@ class SupervisionColumn(QFrame):
         layout.addWidget(header_container)
         
         # Список карточек
-        can_drag = self.employee['position'] not in ['ДАН']
+        can_drag = not self.is_dan_role
         self.cards_list = SupervisionDraggableList(self, can_drag)
         self.cards_list.setStyleSheet("""
             QListWidget {
@@ -1439,12 +1441,15 @@ class SupervisionCard(QFrame):
         self.employee = employee
         self.db = db
         self.api_client = api_client
+        _pos = employee.get('position', '') if employee else ''
+        _sec = employee.get('secondary_position', '') if employee else ''
+        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
         self.init_ui()
-    
+
     def init_ui(self):
         self.setFrameShape(QFrame.Box)
         self.setLineWidth(1)
-        
+
         # Если приостановлена - подсветка
         if self.card_data.get('is_paused'):
             self.setStyleSheet("""
@@ -1603,7 +1608,7 @@ class SupervisionCard(QFrame):
             layout.addWidget(tags_label, 0)
         
         # Индикатор "РАБОТА СДАНА" (для менеджеров)
-        if self.employee['position'] not in ['ДАН'] and self.card_data.get('dan_completed'):
+        if not self.is_dan_role and self.card_data.get('dan_completed'):
             work_done_label = QLabel(
                 f"Работа сдана: {self.card_data.get('dan_name', 'ДАН')}\n"
                 f"Требуется согласование и перемещение на следующую стадию"
@@ -1642,7 +1647,7 @@ class SupervisionCard(QFrame):
         buttons_added = False
         
         # ДЛЯ МЕНЕДЖЕРОВ
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             # ========== 1. ДОБАВИТЬ ЗАПИСЬ (SVG) ==========
             add_note_btn = IconLoader.create_icon_button('note', 'Добавить запись', 'Добавить запись в историю', icon_size=12)
             add_note_btn.setStyleSheet("""
@@ -1926,7 +1931,7 @@ class SupervisionCard(QFrame):
         else:
             height += 35
         
-        if self.employee['position'] not in ['ДАН'] and self.card_data.get('dan_completed'):
+        if not self.is_dan_role and self.card_data.get('dan_completed'):
             height += 55
             height += 38
         
@@ -1941,7 +1946,7 @@ class SupervisionCard(QFrame):
         
         buttons_count = 1
         
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             buttons_count += 1
             buttons_count += 1
         else:
@@ -1961,12 +1966,11 @@ class SupervisionCard(QFrame):
         if dialog.exec_() == QDialog.Accepted:
             reason = dialog.reason_text.toPlainText().strip()
             if reason:
-                if self.api_client:
+                if self.api_client and self.api_client.is_online:
                     try:
                         self.api_client.pause_supervision_card(
                             self.card_data['id'],
-                            reason,
-                            self.employee['id']
+                            reason
                         )
                     except Exception as e:
                         print(f"[WARN] API ошибка pause_card: {e}")
@@ -2500,6 +2504,12 @@ class PauseDialog(QDialog):
 class SupervisionCardEditDialog(QDialog):
     """Диалог редактирования/просмотра карточки надзора"""
 
+    # Сигналы для потокобезопасной загрузки файлов
+    supervision_upload_completed = pyqtSignal(str, str, str, str, str, int)  # file_name, stage, date, public_link, yandex_path, contract_id
+    supervision_upload_error = pyqtSignal(str)  # error_msg
+    _reload_files_signal = pyqtSignal()  # потокобезопасный сигнал для перезагрузки списка файлов
+    _sync_ended = pyqtSignal()  # Сигнал завершения фоновой синхронизации
+
     def __init__(self, parent, card_data, employee, api_client=None):
         super().__init__(parent)
         self.card_data = card_data
@@ -2507,6 +2517,9 @@ class SupervisionCardEditDialog(QDialog):
         self.data = getattr(parent, 'data', DataAccess(api_client=api_client))
         self.db = self.data.db
         self.api_client = self.data.api_client
+        _pos = employee.get('position', '') if employee else ''
+        _sec = employee.get('secondary_position', '') if employee else ''
+        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
 
         # Инициализация Yandex Disk
         try:
@@ -2518,14 +2531,33 @@ class SupervisionCardEditDialog(QDialog):
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
+        self.setAttribute(Qt.WA_Hover, True)
+
+        # Переменные для изменения размера окна
+        self.resizing = False
+        self.resize_edge = None
+        self.resize_start_pos = None
+        self.resize_start_geometry = None
+        self.resize_margin = 8
 
         self._loading_data = False
+
+        # Синхронизация (до init_ui, т.к. init_ui вызывает load_supervision_files -> validate)
+        self._active_sync_count = 0
+        self._sync_ended.connect(self._on_sync_ended)
+
         self.init_ui()
         self.load_data()
 
         # ИСПРАВЛЕНИЕ: Подключаем автосохранение после загрузки данных
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             self.connect_autosave_signals()
+
+        # Подключаем сигналы загрузки файлов
+        self.supervision_upload_completed.connect(self._on_supervision_upload_completed)
+        self.supervision_upload_error.connect(self._on_supervision_upload_error)
+        self._reload_files_signal.connect(lambda: self.load_supervision_files(validate=False))
 
     def _get_contract_yandex_folder(self, contract_id):
         """Получение пути к папке договора на Яндекс.Диске"""
@@ -2544,7 +2576,7 @@ class SupervisionCardEditDialog(QDialog):
             return None
 
     def init_ui(self):
-        title = 'История проекта' if self.employee['position'] == 'ДАН' else 'Редактирование карточки надзора'
+        title = 'История проекта' if self.is_dan_role else 'Редактирование карточки надзора'
 
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
@@ -2593,11 +2625,17 @@ class SupervisionCardEditDialog(QDialog):
 
         # Вкладки
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::tab-bar {
+                left: 20px;
+            }
+        """)
 
         # ВКЛАДКА 1: РЕДАКТИРОВАНИЕ (только для менеджеров)
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             edit_widget = QWidget()
             edit_layout = QVBoxLayout()
+            edit_layout.setContentsMargins(20, 15, 20, 20)
 
             form_layout = QFormLayout()
 
@@ -2668,11 +2706,63 @@ class SupervisionCardEditDialog(QDialog):
             )
             # =========================================================================
 
+            # Дата начала надзора
+            start_date_row = QHBoxLayout()
+            start_date_row.setSpacing(8)
+
+            self.start_date_edit = CustomDateEdit()
+            self.start_date_edit.setCalendarPopup(True)
+            self.start_date_edit.setDisplayFormat('dd.MM.yyyy')
+            self.start_date_edit.setDate(QDate.currentDate())
+            add_today_button_to_dateedit(self.start_date_edit)
+            start_date_row.addWidget(self.start_date_edit)
+
+            edit_start_btn = QPushButton('Изменить дату')
+            edit_start_btn.setFixedHeight(28)
+            edit_start_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E0E0E0; color: #333333;
+                    padding: 0px 10px; border-radius: 4px; border: none;
+                    font-size: 10px; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #D0D0D0; }
+            """)
+            edit_start_btn.clicked.connect(self._on_start_date_manual_change)
+            start_date_row.addWidget(edit_start_btn)
+
+            # Кнопка приостановить / возобновить
+            if self.card_data.get('is_paused'):
+                self.pause_btn = QPushButton('Возобновить')
+                self.pause_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #27AE60; color: white;
+                        padding: 0px 10px; border-radius: 4px; border: none;
+                        font-size: 10px; font-weight: bold; min-height: 28px;
+                    }
+                    QPushButton:hover { background-color: #229954; }
+                """)
+                self.pause_btn.clicked.connect(self._resume_from_edit_tab)
+            else:
+                self.pause_btn = QPushButton('Приостановить')
+                self.pause_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #F39C12; color: white;
+                        padding: 0px 10px; border-radius: 4px; border: none;
+                        font-size: 10px; font-weight: bold; min-height: 28px;
+                    }
+                    QPushButton:hover { background-color: #E67E22; }
+                """)
+                self.pause_btn.clicked.connect(self._pause_from_edit_tab)
+            self.pause_btn.setFixedHeight(28)
+            start_date_row.addWidget(self.pause_btn)
+
+            form_layout.addRow('Дата начала:', start_date_row)
+
             # Дедлайн
             self.deadline = CustomDateEdit()
             self.deadline.setCalendarPopup(True)
-            add_today_button_to_dateedit(self.deadline)
             self.deadline.setDate(QDate.currentDate())
+            add_today_button_to_dateedit(self.deadline)
             form_layout.addRow('Дедлайн:', self.deadline)
 
             # Теги
@@ -2686,29 +2776,35 @@ class SupervisionCardEditDialog(QDialog):
 
             self.tabs.addTab(edit_widget, 'Редактирование')
 
-        # ВКЛАДКА 2: ОПЛАТЫ НАДЗОРА (для ВСЕХ)
-        payments_widget = self.create_payments_widget()
-        self.payments_tab_index = self.tabs.addTab(payments_widget, 'Оплаты надзора')
+        # ВКЛАДКИ: Отложенное создание тяжёлых вкладок (после showEvent)
+        # Лёгкие placeholder'ы — реальные виджеты создаются в _init_deferred_tabs()
+        self.sv_timeline_widget = None
+        self._timeline_placeholder = QWidget()
+        self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
 
-        # ВКЛАДКА 3: ИНФОРМАЦИЯ О ПРОЕКТЕ (для ВСЕХ)
-        info_widget = self.create_project_info_widget()
-        self.project_info_tab_index = self.tabs.addTab(info_widget, 'Информация о проекте')
+        self._payments_placeholder = QWidget()
+        self.payments_tab_index = self.tabs.addTab(self._payments_placeholder, 'Оплаты надзора')
 
-        # ВКЛАДКА 4: ФАЙЛЫ НАДЗОРА (для ВСЕХ)
-        files_widget = self.create_files_widget()
-        self.files_tab_index = self.tabs.addTab(files_widget, 'Файлы надзора')
+        self._info_placeholder = QWidget()
+        self.project_info_tab_index = self.tabs.addTab(self._info_placeholder, 'Информация о проекте')
 
-        # История проекта теперь интегрирована в "Информация о проекте"
-        # history_widget = self.create_history_widget()
-        # self.tabs.addTab(history_widget, 'История проекта')
+        # Надпись синхронизации
+        self.sync_label = QLabel('Синхронизация...')
+        self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
+        self.sync_label.setVisible(False)
+
+        self._files_placeholder = QWidget()
+        self.files_tab_index = self.tabs.addTab(self._files_placeholder, 'Файлы надзора')
+
+        self._deferred_tabs_ready = False
 
         layout.addWidget(self.tabs, 1)
-        
+
         # Кнопки
         buttons_layout = QHBoxLayout()
 
-        # НОВОЕ: Кнопка удаления заказа (только для руководителей)
-        if self.employee['position'] in ['Руководитель студии', 'Старший менеджер проектов']:
+        # Кнопка удаления заказа (только для Руководителя студии)
+        if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
             delete_btn = IconLoader.create_icon_button('delete', 'Удалить заказ', 'Полностью удалить заказ', icon_size=12)
             delete_btn.setStyleSheet("""
                 QPushButton {
@@ -2723,9 +2819,10 @@ class SupervisionCardEditDialog(QDialog):
             delete_btn.clicked.connect(self.delete_order)
             buttons_layout.addWidget(delete_btn)
 
+        buttons_layout.addWidget(self.sync_label)
         buttons_layout.addStretch()
 
-        if self.employee['position'] not in ['ДАН']:
+        if not self.is_dan_role:
             save_btn = QPushButton('Сохранить')
             save_btn.setStyleSheet('padding: 10px 20px; font-weight: bold;')
             save_btn.clicked.connect(self.save_changes)
@@ -2752,11 +2849,11 @@ class SupervisionCardEditDialog(QDialog):
         # 90% от высоты экрана
         target_height = int(available_screen.height() * 0.90)
 
-        # Ширина: 
-        target_width = 950
+        # Ширина: фиксированная 1200px
+        target_width = 1200
 
-        self.setMinimumWidth(950)
-        self.setMinimumHeight(target_height)
+        self.setMinimumWidth(1100)
+        self.setFixedHeight(target_height)
         self.resize(target_width, target_height)
         # =======================================================
     
@@ -3010,6 +3107,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
         layout.setSpacing(15)
+        layout.setContentsMargins(20, 15, 20, 20)
 
         contract_id = self.card_data.get('contract_id')
 
@@ -3028,10 +3126,10 @@ class SupervisionCardEditDialog(QDialog):
                 border: 1px solid #E0E0E0;
             }
         """)
-        table.setColumnCount(10)  # ИСПРАВЛЕНИЕ: Увеличено с 9 до 10 (добавлен столбец удаления)
+        table.setColumnCount(9)
         table.setHorizontalHeaderLabels([
             'Должность', 'ФИО', 'Стадия', 'Тип выплаты',
-            'Выплата', 'Аванс', 'Доплата', 'Отчетный месяц', 'Корректировка', 'Действия'
+            'Выплата', 'Аванс', 'Доплата', 'Отчетный месяц', 'Действия'
         ])
 
         # ИСПРАВЛЕНИЕ: Получаем ТОЛЬКО оплаты надзора
@@ -3074,8 +3172,11 @@ class SupervisionCardEditDialog(QDialog):
             for row, payment in enumerate(payments):
                 # Определяем цвет строки в зависимости от статуса оплаты
                 from PyQt5.QtGui import QColor
+                is_reassigned = payment.get('reassigned', False)
                 payment_status = payment.get('payment_status')
-                if payment_status == 'to_pay':
+                if is_reassigned:
+                    row_color = QColor('#FFF9C4')  # Светло-желтый для переназначения
+                elif payment_status == 'to_pay':
                     row_color = QColor('#FFF3CD')  # Светло-желтый
                 elif payment_status == 'paid':
                     row_color = QColor('#D4EDDA')  # Светло-зеленый
@@ -3084,65 +3185,81 @@ class SupervisionCardEditDialog(QDialog):
 
                 # Должность
                 role_label = QLabel(payment.get('role', ''))
-                role_label.setStyleSheet(f"background-color: {row_color.name()};")
+                role_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                 role_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 table.setCellWidget(row, 0, role_label)
 
                 # ФИО
-                name_label = QLabel(payment.get('employee_name', ''))
-                name_label.setStyleSheet(f"background-color: {row_color.name()};")
+                employee_name = payment.get('employee_name', '')
+                if is_reassigned:
+                    employee_name = f"* {employee_name} *"
+                name_label = QLabel(employee_name)
+                if is_reassigned:
+                    name_label.setStyleSheet(f"background-color: {row_color.name()}; font-weight: bold; border-radius: 2px;")
+                    old_emp_id = payment.get('old_employee_id')
+                    if old_emp_id:
+                        try:
+                            old_emp = self.db.get_employee_by_id(old_emp_id)
+                            old_emp_name = old_emp.get('full_name', 'Неизвестный') if old_emp else 'Неизвестный'
+                        except Exception:
+                            old_emp_name = 'Неизвестный'
+                        name_label.setToolTip(f'Переназначено от: {old_emp_name}')
+                    else:
+                        name_label.setToolTip('Переназначенная выплата')
+                else:
+                    name_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                 name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 table.setCellWidget(row, 1, name_label)
 
                 # Стадия
                 stage_label = QLabel(payment.get('stage_name', '') or '-')
-                stage_label.setStyleSheet(f"background-color: {row_color.name()};")
+                stage_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                 stage_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 table.setCellWidget(row, 2, stage_label)
 
                 # Тип выплаты
                 type_label = QLabel(payment.get('payment_type', ''))
-                type_label.setStyleSheet(f"background-color: {row_color.name()};")
-                type_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                type_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
+                type_label.setAlignment(Qt.AlignCenter)
                 table.setCellWidget(row, 3, type_label)
 
                 # Выплата
                 final_amount = payment.get('final_amount', 0)
                 amount_label = QLabel(f"{final_amount:,.2f} ₽")
-                amount_label.setStyleSheet(f"background-color: {row_color.name()};")
-                amount_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                amount_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
+                amount_label.setAlignment(Qt.AlignCenter)
                 table.setCellWidget(row, 4, amount_label)
 
                 # Аванс/Доплата
                 payment_type = payment.get('payment_type', '')
                 if payment_type == 'Аванс':
                     advance_label = QLabel(f"{final_amount:,.2f} ₽")
-                    advance_label.setStyleSheet(f"background-color: {row_color.name()};")
-                    advance_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    advance_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
+                    advance_label.setAlignment(Qt.AlignCenter)
                     table.setCellWidget(row, 5, advance_label)
 
                     balance_empty = QLabel('-')
-                    balance_empty.setStyleSheet(f"background-color: {row_color.name()};")
+                    balance_empty.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                     balance_empty.setAlignment(Qt.AlignCenter)
                     table.setCellWidget(row, 6, balance_empty)
                 elif payment_type == 'Доплата':
                     advance_empty = QLabel('-')
-                    advance_empty.setStyleSheet(f"background-color: {row_color.name()};")
+                    advance_empty.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                     advance_empty.setAlignment(Qt.AlignCenter)
                     table.setCellWidget(row, 5, advance_empty)
 
                     balance_label = QLabel(f"{final_amount:,.2f} ₽")
-                    balance_label.setStyleSheet(f"background-color: {row_color.name()};")
-                    balance_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    balance_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
+                    balance_label.setAlignment(Qt.AlignCenter)
                     table.setCellWidget(row, 6, balance_label)
                 else:
                     advance_empty2 = QLabel('-')
-                    advance_empty2.setStyleSheet(f"background-color: {row_color.name()};")
+                    advance_empty2.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                     advance_empty2.setAlignment(Qt.AlignCenter)
                     table.setCellWidget(row, 5, advance_empty2)
 
                     balance_empty2 = QLabel('-')
-                    balance_empty2.setStyleSheet(f"background-color: {row_color.name()};")
+                    balance_empty2.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                     balance_empty2.setAlignment(Qt.AlignCenter)
                     table.setCellWidget(row, 6, balance_empty2)
 
@@ -3150,75 +3267,66 @@ class SupervisionCardEditDialog(QDialog):
                 from utils.date_utils import format_month_year
                 formatted_month = format_month_year(payment.get('report_month', ''))
                 month_label = QLabel(formatted_month)
-                month_label.setStyleSheet(f"background-color: {row_color.name()};")
-                month_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                month_label.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
+                month_label.setAlignment(Qt.AlignCenter)
                 table.setCellWidget(row, 7, month_label)
 
-                # Кнопка корректировки (столбец 8, только для руководителей)
-                if self.employee['position'] in ['Руководитель студии', 'Старший менеджер проектов']:
-                    # Создаем виджет-контейнер для кнопки корректировки
-                    adjust_widget = QWidget()
-                    adjust_widget.setStyleSheet(f"background-color: {row_color.name()};")
-                    adjust_layout = QHBoxLayout()
-                    adjust_layout.setContentsMargins(0, 0, 0, 0)
+                # Кнопки действий (столбец 8, только для руководителей)
+                if self.employee.get('position', '') in ['Руководитель студии', 'Старший менеджер проектов'] or self.employee.get('secondary_position', '') in ['Руководитель студии', 'Старший менеджер проектов']:
+                    actions_widget = QWidget()
+                    actions_widget.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
+                    actions_layout = QHBoxLayout()
+                    actions_layout.setContentsMargins(2, 2, 2, 2)
+                    actions_layout.setSpacing(4)
 
-                    adjust_btn = QPushButton('Изменить')
-                    adjust_btn.setFixedHeight(26)
-                    adjust_btn.setStyleSheet("""
+                    # Кнопка корректировки (иконка edit2)
+                    adj_btn = IconLoader.create_icon_button('edit2', '', 'Изменить сумму', icon_size=12)
+                    adj_btn.setFixedSize(20, 20)
+                    adj_btn.setStyleSheet('''
                         QPushButton {
-                            background-color: #ffd93c;
-                            color: #333333;
-                            padding: 2px 8px;
+                            background-color: #d4e4bc;
+                            border: 1px solid #c0d4a8;
                             border-radius: 4px;
-                            font-size: 10px;
-                            font-weight: bold;
-                            min-height: 26px;
-                            max-height: 26px;
+                            padding: 0px;
                         }
-                        QPushButton:hover { background-color: #e6c435; }
-                    """)
-                    adjust_btn.clicked.connect(
+                        QPushButton:hover {
+                            background-color: #c0d4a8;
+                        }
+                    ''')
+                    adj_btn.clicked.connect(
                         lambda checked, p_id=payment['id']: self.adjust_payment_amount(p_id)
                     )
-                    adjust_layout.addWidget(adjust_btn)
-                    adjust_widget.setLayout(adjust_layout)
-                    table.setCellWidget(row, 8, adjust_widget)
+                    actions_layout.addWidget(adj_btn)
 
-                    # Создаем виджет-контейнер для кнопки удаления
-                    delete_widget = QWidget()
-                    delete_widget.setStyleSheet(f"background-color: {row_color.name()};")
-                    delete_layout = QHBoxLayout()
-                    delete_layout.setContentsMargins(0, 0, 0, 0)
-
-                    delete_btn = QPushButton('Удалить')
-                    delete_btn.setFixedHeight(26)
-                    delete_btn.setStyleSheet("""
+                    # Кнопка удаления (иконка delete2)
+                    del_btn = IconLoader.create_icon_button('delete2', '', 'Удалить выплату', icon_size=12)
+                    del_btn.setFixedSize(20, 20)
+                    del_btn.setStyleSheet('''
                         QPushButton {
-                            background-color: #E74C3C;
-                            color: white;
-                            padding: 2px 8px;
+                            background-color: #FFE6E6;
+                            border: 1px solid #FFCCCC;
                             border-radius: 4px;
-                            font-size: 10px;
-                            font-weight: bold;
-                            min-height: 26px;
-                            max-height: 26px;
+                            padding: 0px;
                         }
-                        QPushButton:hover { background-color: #C0392B; }
-                    """)
-                    delete_btn.clicked.connect(
+                        QPushButton:hover {
+                            background-color: #FFCCCC;
+                        }
+                    ''')
+                    del_btn.clicked.connect(
                         lambda checked, p_id=payment['id'], p_role=payment['role'], p_name=payment['employee_name']:
                         self.delete_payment(p_id, p_role, p_name)
                     )
-                    delete_layout.addWidget(delete_btn)
-                    delete_widget.setLayout(delete_layout)
-                    table.setCellWidget(row, 9, delete_widget)
+                    actions_layout.addWidget(del_btn)
+
+                    actions_layout.setAlignment(Qt.AlignCenter)
+                    actions_widget.setLayout(actions_layout)
+                    table.setCellWidget(row, 8, actions_widget)
 
         # Настройка пропорционального изменения размера колонок
-        # Колонки: Должность, ФИО, Стадия, Тип выплаты, Выплата, Аванс, Доплата, Отчетный месяц, фиксированные: Корректировка, Действия
-        # Пропорции для 8 колонок: 0.10, 0.17, 0.12, 0.10, 0.09, 0.08, 0.08, 0.12
+        # Колонки: Должность, ФИО, Стадия, Тип выплаты, Выплата, Аванс, Доплата, Отчетный месяц, фикс: Действия
         table.setup_proportional_resize(
-            column_ratios=[0.10, 0.17, 0.12, 0.10, 0.09, 0.08, 0.08, 0.12],
-            fixed_columns={8: 90, 9: 120},  # Корректировка и Действия - фиксированные
+            column_ratios=[0.11, 0.18, 0.13, 0.11, 0.10, 0.09, 0.09, 0.13],
+            fixed_columns={8: 80},
             min_width=50
         )
 
@@ -3250,17 +3358,22 @@ class SupervisionCardEditDialog(QDialog):
 
         payments_layout.addWidget(table)
 
-        # Итого
-        if contract_id:
-            if self.api_client:
-                try:
-                    payments = self.api_client.get_payments_for_contract(contract_id)
-                except Exception as e:
-                    print(f"[WARNING] Ошибка загрузки оплат из API: {e}")
-                    payments = self.db.get_payments_for_contract(contract_id)
-            else:
-                payments = self.db.get_payments_for_contract(contract_id)
-            total = sum(p.get('final_amount', 0) for p in payments)
+        # Блок-запись о переназначении и итого (используем уже загруженные payments)
+        if contract_id and payments:
+            has_reassigned = any(p.get('reassigned') for p in payments)
+            if has_reassigned:
+                warning_label = QLabel(
+                    '<b>ВНИМАНИЕ!</b> Обнаружено переназначение сотрудников (строки выделены жёлтым).'
+                )
+                warning_label.setStyleSheet('''
+                    background-color: #FFF3CD; color: #856404; border: 2px solid #FFC107;
+                    border-radius: 4px; padding: 10px; font-size: 11px; margin: 10px 0;
+                ''')
+                warning_label.setWordWrap(True)
+                payments_layout.addWidget(warning_label)
+
+            # Итого: исключаем переназначенные (старые) записи, чтобы не было двойного подсчёта
+            total = sum(p.get('final_amount', 0) for p in payments if not p.get('reassigned', False))
             total_label = QLabel(f'<b>Итого:</b> {total:,.2f} ₽')
             total_label.setStyleSheet('''
                 font-size: 14px;
@@ -3386,7 +3499,7 @@ class SupervisionCardEditDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-radius: 10px;
             }
         """)
@@ -3405,31 +3518,37 @@ class SupervisionCardEditDialog(QDialog):
         """)
         border_layout.addWidget(title_bar)
 
+        # ИСПРАВЛЕНИЕ: Уменьшены размеры на 30% (как в основной CRM)
         content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: #FFFFFF;")
+
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 15, 20, 15)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
+        layout.setContentsMargins(14, 14, 14, 14)
 
-        # Информация о платеже
-        info_label = QLabel(f"<b>{payment['role']}</b><br>{payment['employee_name']}")
-        info_label.setStyleSheet('font-size: 11px; color: #555; margin-bottom: 5px;')
-        layout.addWidget(info_label)
+        # Подсказка
+        hint_label = QLabel('Введите новую сумму выплаты:')
+        hint_label.setStyleSheet('font-size: 10px; color: #666666;')
+        layout.addWidget(hint_label)
 
-        # Поле для ввода суммы
+        # Поле ввода суммы с кастомными стрелками (как в основной CRM)
+        amount_container = QWidget()
         amount_layout = QHBoxLayout()
-        amount_label = QLabel('Сумма (₽):')
-        amount_label.setStyleSheet('font-size: 11px; font-weight: bold;')
-        amount_layout.addWidget(amount_label)
+        amount_layout.setContentsMargins(0, 0, 0, 0)
+        amount_layout.setSpacing(4)
 
         amount_spin = QDoubleSpinBox()
-        amount_spin.setRange(0, 999999)
-        amount_spin.setValue(current_amount)
+        amount_spin.setRange(0, 10000000)
+        amount_spin.setSuffix(' ₽')
         amount_spin.setDecimals(2)
+        amount_spin.setValue(current_amount)
+        amount_spin.setSpecialValueText('Введите сумму...')
+        amount_spin.setButtonSymbols(QDoubleSpinBox.NoButtons)
         amount_spin.setStyleSheet("""
             QDoubleSpinBox {
                 padding: 6px;
                 font-size: 11px;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-radius: 4px;
                 background-color: #FFFFFF;
             }
@@ -3437,21 +3556,68 @@ class SupervisionCardEditDialog(QDialog):
                 border: 1px solid #ffd93c;
             }
         """)
-        amount_layout.addWidget(amount_spin)
-        layout.addLayout(amount_layout)
+        amount_layout.addWidget(amount_spin, 1)
 
-        # Выбор отчетного месяца
-        month_layout = QHBoxLayout()
+        # Кастомные кнопки вверх/вниз с иконками
+        buttons_container = QWidget()
+        buttons_vert_layout = QVBoxLayout()
+        buttons_vert_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_vert_layout.setSpacing(0)
+
+        up_btn = QPushButton()
+        up_btn.setIcon(IconLoader.load('arrow-up-circle'))
+        up_btn.setIconSize(QSize(12, 12))
+        up_btn.setFixedSize(16, 16)
+        up_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                padding: 0px;
+                min-height: 0px; max-height: 16px;
+                min-width: 0px; max-width: 16px;
+            }
+            QPushButton:hover { background-color: #E8F8F5; border-radius: 3px; }
+        """)
+        up_btn.clicked.connect(lambda: amount_spin.stepUp())
+
+        down_btn = QPushButton()
+        down_btn.setIcon(IconLoader.load('arrow-down-circle'))
+        down_btn.setIconSize(QSize(12, 12))
+        down_btn.setFixedSize(16, 16)
+        down_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                padding: 0px;
+                min-height: 0px; max-height: 16px;
+                min-width: 0px; max-width: 16px;
+            }
+            QPushButton:hover { background-color: #E8F8F5; border-radius: 3px; }
+        """)
+        down_btn.clicked.connect(lambda: amount_spin.stepDown())
+
+        buttons_vert_layout.addWidget(up_btn)
+        buttons_vert_layout.addWidget(down_btn)
+        buttons_container.setLayout(buttons_vert_layout)
+
+        amount_layout.addWidget(buttons_container)
+        amount_container.setLayout(amount_layout)
+        layout.addWidget(amount_container)
+
+        # Отчетный месяц
         month_label = QLabel('Отчетный месяц:')
-        month_label.setStyleSheet('font-size: 11px; font-weight: bold;')
-        month_layout.addWidget(month_label)
+        month_label.setStyleSheet('font-size: 10px; color: #666666; margin-top: 10px;')
+        layout.addWidget(month_label)
 
+        month_layout = QHBoxLayout()
+        month_layout.setSpacing(5)
+
+        # Выбор месяца
         month_combo = CustomComboBox()
         months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
         month_combo.addItems(months)
 
-        # Устанавливаем текущий месяц из БД
         from datetime import datetime
         try:
             if current_report_month:
@@ -3461,12 +3627,11 @@ class SupervisionCardEditDialog(QDialog):
                 month_combo.setCurrentIndex(datetime.now().month - 1)
         except Exception:
             month_combo.setCurrentIndex(datetime.now().month - 1)
-
         month_combo.setStyleSheet("""
             QComboBox {
                 padding: 6px;
                 font-size: 11px;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-radius: 4px;
                 background-color: #FFFFFF;
             }
@@ -3474,7 +3639,7 @@ class SupervisionCardEditDialog(QDialog):
                 border: 1px solid #ffd93c;
             }
         """)
-        month_layout.addWidget(month_combo)
+        month_layout.addWidget(month_combo, 1)
 
         # Выбор года
         year_combo = CustomComboBox()
@@ -3482,7 +3647,6 @@ class SupervisionCardEditDialog(QDialog):
         for year in range(current_year - 2, current_year + 3):
             year_combo.addItem(str(year))
 
-        # Устанавливаем текущий год из БД
         try:
             if current_report_month:
                 date_obj = datetime.strptime(current_report_month, '%Y-%m')
@@ -3491,12 +3655,11 @@ class SupervisionCardEditDialog(QDialog):
                 year_combo.setCurrentText(str(current_year))
         except Exception:
             year_combo.setCurrentText(str(current_year))
-
         year_combo.setStyleSheet("""
             QComboBox {
                 padding: 6px;
                 font-size: 11px;
-                border: none;
+                border: 1px solid #E0E0E0;
                 border-radius: 4px;
                 background-color: #FFFFFF;
             }
@@ -3505,6 +3668,7 @@ class SupervisionCardEditDialog(QDialog):
             }
         """)
         month_layout.addWidget(year_combo)
+
         layout.addLayout(month_layout)
 
         # Кнопки
@@ -3513,14 +3677,14 @@ class SupervisionCardEditDialog(QDialog):
         save_btn = QPushButton('Сохранить')
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27AE60;
-                color: white;
+                background-color: #ffd93c;
+                color: #333333;
                 padding: 7px 14px;
                 border-radius: 4px;
                 font-weight: bold;
                 font-size: 11px;
             }
-            QPushButton:hover { background-color: #229954; }
+            QPushButton:hover { background-color: #ffce00; }
         """)
         save_btn.clicked.connect(
             lambda: self.save_manual_amount(payment_id, amount_spin.value(), month_combo.currentIndex() + 1, int(year_combo.currentText()), dialog)
@@ -3541,6 +3705,7 @@ class SupervisionCardEditDialog(QDialog):
 
         buttons_layout.addWidget(save_btn)
         buttons_layout.addWidget(cancel_btn)
+
         layout.addLayout(buttons_layout)
 
         content_widget.setLayout(layout)
@@ -3550,14 +3715,11 @@ class SupervisionCardEditDialog(QDialog):
         main_layout.addWidget(border_frame)
         dialog.setLayout(main_layout)
 
-        dialog.setFixedWidth(400)
+        dialog.setFixedWidth(336)
 
-        # Центрирование на экране
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - dialog.width()) // 2 + screen.left()
-        y = (screen.height() - dialog.height()) // 3 + screen.top()
-        dialog.move(x, y)
+        # Центрирование относительно родительского окна
+        from utils.dialog_helpers import center_dialog_on_parent
+        center_dialog_on_parent(dialog)
 
         # Автофокус на поле ввода + выделение текста
         amount_spin.setFocus()
@@ -3599,7 +3761,8 @@ class SupervisionCardEditDialog(QDialog):
         cursor = conn.cursor()
         cursor.execute('''
             UPDATE payments
-            SET report_month = ?
+            SET report_month = ?,
+                reassigned = 0
             WHERE id = ?
         ''', (report_month, payment_id))
         conn.commit()
@@ -3679,6 +3842,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(15)
+        main_layout.setContentsMargins(20, 15, 20, 20)
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
         info_group = QGroupBox("Информация о проекте")
@@ -4040,46 +4204,34 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(15)
+        main_layout.setContentsMargins(20, 15, 20, 20)
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
         files_group = QGroupBox("Файлы авторского надзора")
         files_group.setStyleSheet(GROUP_BOX_STYLE)
         layout = QVBoxLayout()
 
-        # Кнопки управления файлами
+        # Кнопка загрузки по центру на половину ширины
         buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch(1)
 
-        # ИСПРАВЛЕНИЕ 06.02.2026: Стандартные размеры кнопок (#24)
         upload_btn = IconLoader.create_icon_button('upload', 'Загрузить файл', 'Загрузить файл на Яндекс.Диск', icon_size=12)
-        upload_btn.setFixedHeight(28)
+        upload_btn.setFixedHeight(32)
         upload_btn.setStyleSheet('''
             QPushButton {
                 background-color: #ffd93c;
                 color: #333333;
-                padding: 4px 12px;
+                padding: 6px 20px;
                 border-radius: 4px;
                 font-weight: bold;
+                min-width: 200px;
             }
             QPushButton:hover { background-color: #e6c435; }
         ''')
         upload_btn.clicked.connect(self.upload_supervision_file)
-        buttons_layout.addWidget(upload_btn)
+        buttons_layout.addWidget(upload_btn, 2)
 
-        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', 'Обновить список файлов', icon_size=12)
-        refresh_btn.setFixedHeight(28)
-        refresh_btn.setStyleSheet('''
-            QPushButton {
-                background-color: #27AE60;
-                color: white;
-                padding: 4px 12px;
-                border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #219A52; }
-        ''')
-        refresh_btn.clicked.connect(self.refresh_files_list)
-        buttons_layout.addWidget(refresh_btn)
-
-        buttons_layout.addStretch()
+        buttons_layout.addStretch(1)
         layout.addLayout(buttons_layout)
 
         # Таблица файлов
@@ -4098,21 +4250,22 @@ class SupervisionCardEditDialog(QDialog):
         self.files_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.files_table.verticalHeader().setDefaultSectionSize(32)
 
-        layout.addWidget(self.files_table)
+        layout.addWidget(self.files_table, 1)  # stretch=1 чтобы таблица заняла всю высоту
 
         # Загружаем список файлов
         self.load_supervision_files()
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Закрываем GroupBox
         files_group.setLayout(layout)
-        main_layout.addWidget(files_group)
-        main_layout.addStretch()
+        main_layout.addWidget(files_group, 1)  # stretch=1 чтобы таблица заняла всю высоту
 
         widget.setLayout(main_layout)
         return widget
 
-    def load_supervision_files(self):
+    def load_supervision_files(self, validate=True):
         """Загрузка списка файлов надзора"""
+        if not hasattr(self, 'files_table'):
+            return
         try:
             # Получаем contract_id из card_data
             contract_id = self.card_data.get('contract_id')
@@ -4124,7 +4277,15 @@ class SupervisionCardEditDialog(QDialog):
             # Пробуем загрузить из API
             if self.api_client and self.api_client.is_online:
                 try:
+                    # Новый формат: stage='supervision'
                     api_files = self.api_client.get_project_files(contract_id, stage='supervision')
+
+                    # Обратная совместимость: ищем старые файлы с file_type='Файл надзора'
+                    if not api_files:
+                        all_files = self.api_client.get_project_files(contract_id)
+                        api_files = [f for f in (all_files or [])
+                                     if f.get('file_type') == 'Файл надзора' or f.get('stage') == 'supervision']
+
                     if api_files:
                         files = [
                             {
@@ -4133,7 +4294,6 @@ class SupervisionCardEditDialog(QDialog):
                                 'file_type': f.get('file_type'),
                                 'yandex_path': f.get('yandex_path'),
                                 'public_link': f.get('public_link'),
-                                # ИСПРАВЛЕНИЕ 06.02.2026: API возвращает upload_date, не created_at (#23)
                                 'created_at': f.get('upload_date') or f.get('created_at')
                             }
                             for f in api_files
@@ -4146,11 +4306,11 @@ class SupervisionCardEditDialog(QDialog):
             if not files:
                 conn = self.db.connect()
                 cursor = conn.cursor()
-                # В SQLite столбец называется upload_date, не created_at
+                # stage='supervision' для новых файлов + file_type='Файл надзора' для старых
                 cursor.execute('''
                     SELECT id, file_name, file_type, yandex_path, public_link, upload_date as created_at
                     FROM project_files
-                    WHERE contract_id = ? AND stage = 'supervision'
+                    WHERE contract_id = ? AND (stage = 'supervision' OR file_type = 'Файл надзора')
                     ORDER BY upload_date DESC
                 ''', (contract_id,))
                 rows = cursor.fetchall()
@@ -4192,27 +4352,218 @@ class SupervisionCardEditDialog(QDialog):
                 actions_layout.setContentsMargins(4, 2, 4, 2)
                 actions_layout.setSpacing(4)
 
-                # Кнопка открыть
-                # ИСПРАВЛЕНИЕ 06.02.2026: Заменили 'link' на 'eye' (иконка link не существует) (#23)
-                if file_data['public_link']:
+                # Кнопка открыть (как во вкладке оплат)
+                file_link = file_data.get('public_link') or ''
+                file_yp = file_data.get('yandex_path') or ''
+                if file_link or file_yp:
                     open_btn = IconLoader.create_icon_button('eye', '', 'Открыть файл', icon_size=12)
-                    open_btn.setFixedSize(28, 28)
-                    open_btn.clicked.connect(lambda checked, link=file_data['public_link']: self.open_file_link(link))
+                    open_btn.setFixedSize(20, 20)
+                    open_btn.setStyleSheet('''
+                        QPushButton {
+                            background-color: #d4e4bc;
+                            border: 1px solid #c0d4a8;
+                            border-radius: 4px;
+                            padding: 0px;
+                        }
+                        QPushButton:hover {
+                            background-color: #c0d4a8;
+                        }
+                    ''')
+                    if file_link:
+                        open_btn.clicked.connect(lambda checked, link=file_link: self.open_file_link(link))
+                    else:
+                        # Нет публичной ссылки — попробуем получить при клике
+                        open_btn.clicked.connect(
+                            lambda checked, yp=file_yp, fid=file_data['id']: self._open_file_by_yandex_path(yp, fid)
+                        )
+                        open_btn.setToolTip('Получить ссылку и открыть файл')
                     actions_layout.addWidget(open_btn)
 
-                # Кнопка удалить
-                delete_btn = IconLoader.create_icon_button('delete', '', 'Удалить файл', icon_size=12)
-                delete_btn.setFixedSize(28, 28)
-                delete_btn.setStyleSheet('QPushButton:hover { background-color: #FFEBEE; }')
+                # Кнопка редактирования данных (бюджет, поставщик и т.д.)
+                file_stage = file_data.get('file_type') or ''
+                edit_data_btn = IconLoader.create_icon_button('settings', '', 'Редактировать данные файла', icon_size=12)
+                edit_data_btn.setFixedSize(20, 20)
+                edit_data_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #E3F2FD;
+                        border: 1px solid #90CAF9;
+                        border-radius: 4px;
+                        padding: 0px;
+                    }
+                    QPushButton:hover {
+                        background-color: #BBDEFB;
+                    }
+                ''')
+                edit_data_btn.clicked.connect(
+                    lambda checked, fstage=file_stage, fid=file_data['id']: self._edit_file_timeline_data(fstage, fid)
+                )
+                actions_layout.addWidget(edit_data_btn)
+
+                # Кнопка удалить (как во вкладке оплат)
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить файл', icon_size=12)
+                delete_btn.setFixedSize(20, 20)
+                delete_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #FFE6E6;
+                        border: 1px solid #FFCCCC;
+                        border-radius: 4px;
+                        padding: 0px;
+                    }
+                    QPushButton:hover {
+                        background-color: #FFCCCC;
+                    }
+                ''')
                 delete_btn.clicked.connect(lambda checked, fid=file_data['id'], fpath=file_data['yandex_path']: self.delete_supervision_file(fid, fpath))
                 actions_layout.addWidget(delete_btn)
 
-                actions_layout.addStretch()
+                actions_layout.setAlignment(Qt.AlignCenter)
                 actions_widget.setLayout(actions_layout)
                 self.files_table.setCellWidget(row, 3, actions_widget)
 
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки файлов надзора: {e}")
+
+        # Фоновая валидация файлов на Яндекс.Диске (только при первичной загрузке, не после валидации)
+        if validate:
+            self.validate_supervision_files_on_yandex()
+
+    def _show_sync_label(self):
+        """Показать надпись синхронизации"""
+        self._active_sync_count += 1
+        if hasattr(self, 'sync_label'):
+            self.sync_label.setVisible(True)
+
+    def _on_sync_ended(self):
+        """Скрыть надпись синхронизации когда все операции завершены"""
+        self._active_sync_count = max(0, self._active_sync_count - 1)
+        if self._active_sync_count == 0 and hasattr(self, 'sync_label'):
+            self.sync_label.setVisible(False)
+
+    def validate_supervision_files_on_yandex(self):
+        """Фоновая валидация файлов надзора на Яндекс.Диске"""
+        contract_id = self.card_data.get('contract_id')
+        if not contract_id:
+            return
+
+        self._show_sync_label()
+
+        def validate():
+            try:
+                # Step 1: Сканируем ЯД на наличие НОВЫХ файлов (не в БД)
+                new_files_found = False
+                if self.api_client and self.api_client.is_online:
+                    try:
+                        scan_result = self.api_client.scan_contract_files(contract_id, scope='supervision')
+                        new_count = scan_result.get('new_files_added', 0)
+                        if new_count > 0:
+                            print(f"[YD-SYNC-SV] Найдено {new_count} новых файлов на ЯД")
+                            new_files_found = True
+                        else:
+                            print(f"[YD-SYNC-SV] Новых файлов не найдено")
+                    except Exception as scan_err:
+                        print(f"[YD-SYNC-SV] Ошибка сканирования ЯД: {scan_err}")
+
+                # Step 2: Загружаем текущий список файлов
+                files = []
+
+                # При наличии API — берём файлы с СЕРВЕРНЫМИ ID (для серверной валидации)
+                if self.api_client and self.api_client.is_online:
+                    try:
+                        api_files = self.api_client.get_project_files(contract_id, stage='supervision')
+                        if not api_files:
+                            all_files = self.api_client.get_project_files(contract_id)
+                            api_files = [f for f in (all_files or [])
+                                         if f.get('file_type') == 'Файл надзора' or f.get('stage') == 'supervision']
+                        if api_files:
+                            files = api_files
+                    except Exception as api_err:
+                        print(f"[VALIDATE-SV] Ошибка загрузки файлов из API: {api_err}")
+
+                # Fallback на локальную БД
+                if not files:
+                    local_db = DatabaseManager()
+                    conn = local_db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT * FROM project_files
+                        WHERE contract_id = ? AND (stage = 'supervision' OR file_type = 'Файл надзора')
+                        ORDER BY upload_date DESC
+                    ''', (contract_id,))
+                    files = [dict(row) for row in cursor.fetchall()]
+                    local_db.close()
+
+                if not files:
+                    print(f"[VALIDATE-SV] Нет файлов надзора для contract_id={contract_id}")
+                    return
+
+                print(f"[VALIDATE-SV] Найдено {len(files)} файлов надзора, проверяем...")
+
+                # Серверная валидация (только если файлы загружены из API — ID серверные)
+                removed_ids = []
+                server_validated = False
+                if self.api_client and self.api_client.is_online:
+                    file_ids = [f['id'] for f in files if f.get('id')]
+                    if file_ids:
+                        try:
+                            results = self.data.validate_files(file_ids, auto_clean=True)
+                            if results:
+                                removed_ids = [r['file_id'] for r in results if not r.get('exists', True)]
+                                server_validated = True
+                                print(f"[VALIDATE-SV] Серверная валидация: {len(removed_ids)} мёртвых")
+                        except Exception as api_err:
+                            print(f"[VALIDATE-SV] Серверная валидация не удалась: {api_err}")
+
+                # Fallback: прямая проверка через Яндекс.Диск (для локальных файлов)
+                if not server_validated:
+                    from utils.yandex_disk import YandexDiskManager
+                    from config import YANDEX_DISK_TOKEN
+                    yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                    if not yd.token:
+                        print("[VALIDATE-SV] Токен не установлен, пропуск")
+                        return
+                    for f in files:
+                        yp = f.get('yandex_path')
+                        fid = f.get('id')
+                        if yp and fid:
+                            if not yd.file_exists(yp):
+                                removed_ids.append(fid)
+                                print(f"[VALIDATE-SV] Файл не найден: {yp}")
+
+                ui_needs_update = new_files_found
+
+                if removed_ids:
+                    if not server_validated:
+                        # Удаляем только из локальной БД если валидация была локальной
+                        local_db2 = DatabaseManager()
+                        for fid in removed_ids:
+                            try:
+                                local_db2.delete_project_file(fid)
+                            except Exception as del_err:
+                                print(f"[VALIDATE-SV] Ошибка удаления файла {fid}: {del_err}")
+                        local_db2.close()
+                    print(f"[VALIDATE-SV] Удалено {len(removed_ids)} мёртвых файлов")
+                    ui_needs_update = True
+                else:
+                    print(f"[VALIDATE-SV] Все файлы надзора на месте")
+
+                if ui_needs_update:
+                    try:
+                        self._reload_files_signal.emit()
+                    except RuntimeError:
+                        pass
+
+            except Exception as e:
+                import traceback
+                print(f"[ERROR] Ошибка валидации файлов надзора: {e}")
+                traceback.print_exc()
+            finally:
+                try:
+                    self._sync_ended.emit()
+                except RuntimeError:
+                    pass
+
+        thread = threading.Thread(target=validate, daemon=True)
+        thread.start()
 
     def upload_supervision_file(self):
         """Загрузка файла надзора на Яндекс.Диск с выбором стадии и даты"""
@@ -4232,21 +4583,8 @@ class SupervisionCardEditDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', 'Папка договора на Яндекс.Диске не найдена', 'error').exec_()
             return
 
-        # Список стадий надзора для выбора
-        stages = [
-            'Стадия 1: Закупка керамогранита',
-            'Стадия 2: Закупка сантехники',
-            'Стадия 3: Закупка оборудования',
-            'Стадия 4: Закупка дверей и окон',
-            'Стадия 5: Закупка настенных материалов',
-            'Стадия 6: Закупка напольных материалов',
-            'Стадия 7: Лепного декора',
-            'Стадия 8: Освещения',
-            'Стадия 9: бытовой техники',
-            'Стадия 10: Закупка заказной мебели',
-            'Стадия 11: Закупка фабричной мебели',
-            'Стадия 12: Закупка декора'
-        ]
+        # Список стадий надзора для выбора (имена должны совпадать с SUPERVISION_STAGE_MAPPING)
+        stages = list(SUPERVISION_STAGE_MAPPING.keys())
 
         # ИСПРАВЛЕНИЕ 07.02.2026: Открываем кастомный диалог загрузки файла (#23)
         dialog = SupervisionFileUploadDialog(self, self.card_data, stages, self.api_client)
@@ -4263,21 +4601,50 @@ class SupervisionCardEditDialog(QDialog):
         date = result['date']
         file_name = result['file_name']
 
+        # Сохраняем доп. данные для обновления таблицы сроков после загрузки
+        self._upload_timeline_data = {
+            'budget_planned': result.get('budget_planned', 0),
+            'budget_actual': result.get('budget_actual', 0),
+            'supplier': result.get('supplier', ''),
+            'commission': result.get('commission', 0),
+            'notes': result.get('notes', ''),
+            'stage_name': stage,
+        }
+
         # Прогресс загрузки с кастомным стилем
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QMetaObject, Q_ARG
+
         progress = QProgressDialog('Загрузка файла...', 'Отмена', 0, 100, self)
         progress.setWindowTitle('Загрузка на Яндекс.Диск')
         progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(True)
+        progress.setAutoReset(False)
+        progress.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        progress.setFixedSize(420, 144)
         progress.setStyleSheet("""
             QProgressDialog {
                 background-color: #FFFFFF;
                 border: 1px solid #E0E0E0;
                 border-radius: 8px;
             }
+            QLabel {
+                color: #333333;
+                font-size: 12px;
+                padding: 10px;
+                min-width: 380px;
+                max-width: 380px;
+            }
             QProgressBar {
                 border: 1px solid #E0E0E0;
                 border-radius: 4px;
                 text-align: center;
                 background-color: #F5F5F5;
+                height: 20px;
+                margin: 10px;
+                min-width: 380px;
+                max-width: 380px;
             }
             QProgressBar::chunk {
                 background-color: #ffd93c;
@@ -4295,83 +4662,145 @@ class SupervisionCardEditDialog(QDialog):
             }
         """)
         progress.show()
+        QApplication.processEvents()
 
+        # Сохраняем контекст для обработчиков
+        self._upload_progress = progress
+        self._upload_date = date
+
+        def upload_thread():
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+
+                # Создаем подпапку "Авторский надзор"
+                supervision_folder = f"{contract_folder}/Авторский надзор"
+                yd.create_folder(supervision_folder)
+
+                # Создаем подпапку для стадии
+                stage_folder = f"{supervision_folder}/{stage}"
+                yd.create_folder(stage_folder)
+
+                QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 30))
+                QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection,
+                                         Q_ARG(str, f"Загрузка: {file_name}..."))
+
+                # Загружаем файл
+                yandex_path = f"{stage_folder}/{file_name}"
+                result_upload = yd.upload_file(file_path, yandex_path)
+
+                QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 70))
+
+                if result_upload:
+                    QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection,
+                                             Q_ARG(str, "Получение публичной ссылки..."))
+                    public_link = yd.get_public_link(yandex_path)
+
+                    QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 100))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+
+                    self.supervision_upload_completed.emit(
+                        file_name, stage, date, public_link or '', yandex_path, contract_id
+                    )
+                else:
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    self.supervision_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
+
+            except Exception as e:
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.supervision_upload_error.emit(str(e))
+
+        thread = threading.Thread(target=upload_thread)
+        thread.start()
+
+    def _on_supervision_upload_completed(self, file_name, stage, date, public_link, yandex_path, contract_id):
+        """Обработчик успешной загрузки файла надзора (вызывается из главного потока через сигнал)"""
         try:
-            # Создаем подпапку "Авторский надзор" если не существует
-            supervision_folder = f"{contract_folder}/Авторский надзор"
-            self.yandex_disk.create_folder(supervision_folder)
+            # Сохраняем в БД (локально)
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO project_files (contract_id, stage, file_type, yandex_path, public_link, file_name, upload_date)
+                VALUES (?, 'supervision', ?, ?, ?, ?, datetime('now'))
+            ''', (contract_id, stage, yandex_path, public_link, file_name))
+            conn.commit()
+            self.db.close()
 
-            # Создаем подпапку для стадии
-            stage_folder = f"{supervision_folder}/{stage}"
-            self.yandex_disk.create_folder(stage_folder)
+            # Синхронизируем с API
+            if self.api_client and self.api_client.is_online:
+                try:
+                    server_id = self.api_client.add_project_file(
+                        contract_id=contract_id,
+                        stage='supervision',
+                        file_type=stage,
+                        public_link=public_link or '',
+                        yandex_path=yandex_path,
+                        file_name=file_name
+                    )
+                    if server_id:
+                        print(f"[API] Файл надзора синхронизирован, server_id={server_id}")
+                    else:
+                        print(f"[WARN] Файл сохранен локально, но не синхронизирован с сервером")
+                except Exception as api_err:
+                    print(f"[WARN] Ошибка синхронизации файла с API: {api_err}")
 
-            progress.setValue(30)
+            # Обновляем таблицу сроков надзора (бюджет, поставщик, комиссия, примечания)
+            extra = getattr(self, '_upload_timeline_data', None)
+            if extra:
+                stage_name = extra.get('stage_name', '')
+                stage_code = SUPERVISION_STAGE_MAPPING.get(stage_name, '')
+                if stage_code and self.card_data.get('id'):
+                    timeline_updates = {}
+                    if extra.get('budget_planned'):
+                        timeline_updates['budget_planned'] = extra['budget_planned']
+                    if extra.get('budget_actual'):
+                        timeline_updates['budget_actual'] = extra['budget_actual']
+                        # Пересчёт экономии
+                        bp = extra.get('budget_planned', 0) or 0
+                        ba = extra['budget_actual']
+                        timeline_updates['budget_savings'] = bp - ba
+                    if extra.get('supplier'):
+                        timeline_updates['supplier'] = extra['supplier']
+                    if extra.get('commission'):
+                        timeline_updates['commission'] = extra['commission']
+                    if extra.get('notes'):
+                        timeline_updates['notes'] = extra['notes']
 
-            # Загружаем файл в папку стадии
-            yandex_path = f"{stage_folder}/{file_name}"
+                    if timeline_updates:
+                        try:
+                            self.data.update_supervision_timeline_entry(
+                                self.card_data['id'], stage_code, timeline_updates
+                            )
+                            print(f"[TIMELINE] Обновлены данные стадии {stage_code}: {timeline_updates}")
+                        except Exception as tl_err:
+                            print(f"[WARN] Ошибка обновления таблицы сроков: {tl_err}")
 
-            # Загрузка
-            result_upload = self.yandex_disk.upload_file(file_path, yandex_path)
+                self._upload_timeline_data = None
 
-            progress.setValue(70)
+            CustomMessageBox(self, 'Успех', f'Файл "{file_name}" успешно загружен\nСтадия: {stage}\nДата: {date}', 'success').exec_()
 
-            if result_upload:
-                # Получаем публичную ссылку
-                public_link = self.yandex_disk.get_public_link(yandex_path)
+            # Добавляем запись в историю проекта
+            if self.employee:
+                description = f"Добавлен файл надзора: {file_name} (Стадия: {stage}, Дата: {date})"
+                self._add_action_history('file_upload', description)
 
-                progress.setValue(80)
+            # Обновляем список файлов
+            self.refresh_files_list()
 
-                # Сохраняем в БД (локально) с указанием стадии
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO project_files (contract_id, stage, file_type, yandex_path, public_link, file_name, upload_date)
-                    VALUES (?, ?, 'Файл надзора', ?, ?, ?, datetime('now'))
-                ''', (contract_id, stage, yandex_path, public_link, file_name))
-                local_file_id = cursor.lastrowid
-                conn.commit()
-                self.db.close()
-
-                progress.setValue(90)
-
-                # Синхронизируем с API
-                if self.api_client and self.api_client.is_online:
-                    try:
-                        server_id = self.api_client.add_project_file(
-                            contract_id=contract_id,
-                            stage=stage,
-                            file_type='Файл надзора',
-                            public_link=public_link or '',
-                            yandex_path=yandex_path,
-                            file_name=file_name
-                        )
-                        if server_id:
-                            print(f"[API] Файл надзора синхронизирован, server_id={server_id}")
-                        else:
-                            print(f"[WARN] Файл сохранен локально, но не синхронизирован с сервером")
-                    except Exception as api_err:
-                        print(f"[WARN] Ошибка синхронизации файла с API: {api_err}")
-
-                progress.setValue(100)
-                progress.close()
-
-                CustomMessageBox(self, 'Успех', f'Файл "{file_name}" успешно загружен\nСтадия: {stage}\nДата: {date}', 'success').exec_()
-
-                # Добавляем запись в историю проекта (#23: запись в историю с указанием стадии и даты)
-                if self.employee:
-                    description = f"Добавлен файл надзора: {file_name} (Стадия: {stage}, Дата: {date})"
-                    self._add_action_history('file_upload', description)
-
-                # Обновляем список
-                self.refresh_files_list()
-            else:
-                progress.close()
-                CustomMessageBox(self, 'Ошибка', 'Не удалось загрузить файл', 'error').exec_()
+            # Обновляем виджет таблицы сроков если он создан
+            try:
+                if hasattr(self, 'sv_timeline_widget') and self.sv_timeline_widget:
+                    self.sv_timeline_widget._load_data()
+            except Exception:
+                pass
 
         except Exception as e:
-            progress.close()
-            CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки: {e}', 'error').exec_()
-            print(f"[ERROR] Ошибка загрузки файла надзора: {e}")
+            print(f"[ERROR] Ошибка сохранения файла надзора: {e}")
+            CustomMessageBox(self, 'Ошибка', f'Файл загружен, но ошибка сохранения: {e}', 'error').exec_()
+
+    def _on_supervision_upload_error(self, error_msg):
+        """Обработчик ошибки загрузки файла надзора"""
+        CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки: {error_msg}', 'error').exec_()
+        print(f"[ERROR] Ошибка загрузки файла надзора: {error_msg}")
 
     def delete_supervision_file(self, file_id, yandex_path):
         """Удаление файла надзора"""
@@ -4385,27 +4814,30 @@ class SupervisionCardEditDialog(QDialog):
             return
 
         try:
-            # Удаляем с Яндекс.Диска
-            if self.yandex_disk and yandex_path:
-                self.yandex_disk.delete_file(yandex_path)
-
-            # Удаляем из локальной БД
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM project_files WHERE id = ?', (file_id,))
-            conn.commit()
-            self.db.close()
-
-            # Синхронизируем удаление с API
+            # Сначала удаляем через серверный API (удалит из серверной БД + с ЯД)
             if self.api_client and self.api_client.is_online:
                 try:
-                    result = self.api_client.delete_project_file(file_id)
-                    if result:
-                        print(f"[API] Файл надзора удален с сервера, id={file_id}")
-                    else:
-                        print(f"[WARN] Файл удален локально, но не удален с сервера")
+                    self.api_client.delete_file_record(file_id)
+                    print(f"[API] Файл надзора удален с сервера (БД + ЯД), id={file_id}")
                 except Exception as api_err:
-                    print(f"[WARN] Ошибка удаления файла с сервера: {api_err}")
+                    print(f"[ERROR] Ошибка удаления файла с сервера: {api_err}")
+                    CustomMessageBox(self, 'Ошибка', f'Не удалось удалить файл с сервера: {api_err}', 'error').exec_()
+                    return
+                # Удаляем из локальной БД после успешного удаления на сервере
+                conn = self.db.connect()
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM project_files WHERE id = ?', (file_id,))
+                conn.commit()
+                self.db.close()
+            else:
+                # Offline: удаляем локально и с ЯД напрямую
+                if self.yandex_disk and yandex_path:
+                    self.yandex_disk.delete_file(yandex_path)
+                conn = self.db.connect()
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM project_files WHERE id = ?', (file_id,))
+                conn.commit()
+                self.db.close()
 
             CustomMessageBox(self, 'Успех', 'Файл удален', 'success').exec_()
 
@@ -4422,8 +4854,36 @@ class SupervisionCardEditDialog(QDialog):
             print(f"[ERROR] Ошибка удаления файла надзора: {e}")
 
     def refresh_files_list(self):
-        """Обновление списка файлов"""
-        self.load_supervision_files()
+        """Обновление списка файлов с синхронизацией с Яндекс.Диском"""
+        contract_id = self.card_data.get('contract_id')
+        if contract_id and self.api_client and self.api_client.is_online:
+            self._show_sync_label()
+            # Сначала сканируем ЯД на наличие новых файлов (в фоне)
+            def scan_thread():
+                try:
+                    result = self.api_client.scan_contract_files(contract_id, scope='supervision')
+                    new_count = result.get('new_files_added', 0)
+                    if new_count > 0:
+                        print(f"[YD-SYNC] Найдено {new_count} новых файлов на ЯД для contract_id={contract_id}")
+                    else:
+                        print(f"[YD-SYNC] Новых файлов не найдено")
+                except Exception as e:
+                    print(f"[YD-SYNC] Ошибка сканирования ЯД: {e}")
+                finally:
+                    try:
+                        self._sync_ended.emit()
+                    except RuntimeError:
+                        pass
+                # В любом случае перезагружаем список (через сигнал — потокобезопасно)
+                try:
+                    self._reload_files_signal.emit()
+                except RuntimeError:
+                    pass
+
+            thread = threading.Thread(target=scan_thread, daemon=True)
+            thread.start()
+        else:
+            self.load_supervision_files()
 
     def _add_action_history(self, action_type: str, description: str, entity_type: str = 'supervision_card', entity_id: int = None):
         """ИСПРАВЛЕНИЕ 06.02.2026: Добавление метода записи истории действий (#22)"""
@@ -4468,9 +4928,204 @@ class SupervisionCardEditDialog(QDialog):
             from PyQt5.QtGui import QDesktopServices
             QDesktopServices.openUrl(QUrl(link))
 
+    def _open_file_by_yandex_path(self, yandex_path, file_id):
+        """Получить публичную ссылку по yandex_path и открыть файл"""
+        try:
+            if not self.yandex_disk:
+                CustomMessageBox(self, 'Ошибка', 'Yandex Disk не инициализирован', 'error').exec_()
+                return
+            public_link = self.yandex_disk.get_public_link(yandex_path)
+            if public_link:
+                # Сохраняем ссылку в локальную БД чтобы не запрашивать повторно
+                try:
+                    conn = self.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('UPDATE project_files SET public_link = ? WHERE id = ?', (public_link, file_id))
+                    conn.commit()
+                    self.db.close()
+                except Exception:
+                    pass
+                self.open_file_link(public_link)
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось получить публичную ссылку', 'error').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Ошибка получения ссылки: {e}', 'error').exec_()
+
+    def _edit_file_timeline_data(self, stage_name, file_id):
+        """Редактирование данных файла (бюджет, поставщик, комиссия, примечания)"""
+        # Определяем stage_code из stage_name
+        stage_code = SUPERVISION_STAGE_MAPPING.get(stage_name, '')
+
+        # Загружаем текущие данные из timeline если есть
+        current_data = {}
+        if stage_code and self.card_data.get('id'):
+            try:
+                entries = self.data.get_supervision_timeline(self.card_data['id'])
+                for entry in (entries or []):
+                    if entry.get('stage_code') == stage_code:
+                        current_data = entry
+                        break
+            except Exception:
+                pass
+
+        dialog = QDialog(self)
+        dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        dialog.setFixedWidth(420)
+
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout(border_frame)
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(dialog, 'Редактирование данных стадии', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet('QWidget { background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }')
+        layout = QVBoxLayout(content)
+        layout.setSpacing(10)
+        layout.setContentsMargins(20, 15, 20, 15)
+
+        stage_label = QLabel(f'Стадия: {stage_name}')
+        stage_label.setStyleSheet('font-size: 12px; font-weight: bold; color: #333;')
+        layout.addWidget(stage_label)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+        form.setLabelAlignment(Qt.AlignRight)
+
+        field_style = '''
+            QLineEdit {
+                border: 1px solid #E0E0E0; border-radius: 4px;
+                padding: 4px 8px; font-size: 12px; background-color: #FAFAFA;
+            }
+            QLineEdit:focus { border-color: #ffd93c; background-color: #FFFFFF; }
+        '''
+
+        bp_edit = QLineEdit(str(current_data.get('budget_planned', 0) or ''))
+        bp_edit.setFixedHeight(28)
+        bp_edit.setPlaceholderText('0')
+        bp_edit.setStyleSheet(field_style)
+        form.addRow('Бюджет план:', bp_edit)
+
+        ba_edit = QLineEdit(str(current_data.get('budget_actual', 0) or ''))
+        ba_edit.setFixedHeight(28)
+        ba_edit.setPlaceholderText('0')
+        ba_edit.setStyleSheet(field_style)
+        form.addRow('Бюджет факт:', ba_edit)
+
+        sup_edit = QLineEdit(current_data.get('supplier', '') or '')
+        sup_edit.setFixedHeight(28)
+        sup_edit.setPlaceholderText('Название поставщика')
+        sup_edit.setStyleSheet(field_style)
+        form.addRow('Поставщик:', sup_edit)
+
+        com_edit = QLineEdit(str(current_data.get('commission', 0) or ''))
+        com_edit.setFixedHeight(28)
+        com_edit.setPlaceholderText('0')
+        com_edit.setStyleSheet(field_style)
+        form.addRow('Комиссия:', com_edit)
+
+        notes_edit = QLineEdit(current_data.get('notes', '') or '')
+        notes_edit.setFixedHeight(28)
+        notes_edit.setPlaceholderText('Примечания')
+        notes_edit.setStyleSheet(field_style)
+        form.addRow('Примечания:', notes_edit)
+
+        layout.addLayout(form)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        save_btn = QPushButton('Сохранить')
+        save_btn.setFixedHeight(28)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd93c; color: #333333; padding: 0px 20px;
+                font-weight: bold; border-radius: 6px; border: none;
+            }
+            QPushButton:hover { background-color: #e6c435; }
+        """)
+
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0; color: #333333; padding: 0px 20px;
+                border-radius: 6px; border: none;
+            }
+            QPushButton:hover { background-color: #BDBDBD; }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        def parse_num(text):
+            text = text.strip().replace(' ', '').replace(',', '.')
+            try:
+                return float(text) if text else 0
+            except ValueError:
+                return 0
+
+        def save_data():
+            if not stage_code or not self.card_data.get('id'):
+                CustomMessageBox(dialog, 'Ошибка', 'Не удалось определить стадию', 'error').exec_()
+                return
+
+            bp = parse_num(bp_edit.text())
+            ba = parse_num(ba_edit.text())
+            updates = {
+                'budget_planned': bp,
+                'budget_actual': ba,
+                'budget_savings': bp - ba,
+                'supplier': sup_edit.text().strip(),
+                'commission': parse_num(com_edit.text()),
+                'notes': notes_edit.text().strip(),
+            }
+
+            try:
+                self.data.update_supervision_timeline_entry(
+                    self.card_data['id'], stage_code, updates
+                )
+                # Обновляем таблицу сроков если открыта
+                if hasattr(self, 'sv_timeline_widget') and self.sv_timeline_widget:
+                    self.sv_timeline_widget._load_data()
+                dialog.accept()
+            except Exception as e:
+                CustomMessageBox(dialog, 'Ошибка', f'Ошибка сохранения: {e}', 'error').exec_()
+
+        save_btn.clicked.connect(save_data)
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        border_layout.addWidget(content)
+        main_layout.addWidget(border_frame)
+        dialog.exec_()
+
     def load_data(self):
         """Загрузка данных (только для менеджеров)"""
-        if self.employee['position'] == 'ДАН':
+        if self.is_dan_role:
             return
 
         self._loading_data = True
@@ -4487,6 +5142,17 @@ class SupervisionCardEditDialog(QDialog):
                 self.dan.setCurrentIndex(i)
                 break
 
+        # Дата начала
+        start_date_str = self.card_data.get('start_date', '')
+        if start_date_str:
+            if 'T' in start_date_str:
+                start_date_str = start_date_str.split('T')[0]
+            if ' ' in start_date_str:
+                start_date_str = start_date_str.split(' ')[0]
+            sd = QDate.fromString(start_date_str, 'yyyy-MM-dd')
+            if sd.isValid():
+                self.start_date_edit.setDate(sd)
+
         # Дедлайн
         if self.card_data.get('deadline'):
             self.deadline.setDate(QDate.fromString(self.card_data['deadline'], 'yyyy-MM-dd'))
@@ -4500,6 +5166,7 @@ class SupervisionCardEditDialog(QDialog):
         """ИСПРАВЛЕНИЕ: Подключение сигналов для автосохранения данных при изменении"""
         self.senior_manager.currentIndexChanged.connect(self.auto_save_field)
         self.dan.currentIndexChanged.connect(self.auto_save_field)
+        self.start_date_edit.dateChanged.connect(self.auto_save_field)
         self.deadline.dateChanged.connect(self.auto_save_field)
         self.tags.textChanged.connect(self.auto_save_field)
 
@@ -4513,24 +5180,31 @@ class SupervisionCardEditDialog(QDialog):
             updates = {
                 'senior_manager_id': self.senior_manager.currentData(),
                 'dan_id': self.dan.currentData(),
+                'start_date': self.start_date_edit.date().toString('yyyy-MM-dd'),
                 'deadline': self.deadline.date().toString('yyyy-MM-dd'),
                 'tags': self.tags.text().strip()
             }
 
-            # ИСПРАВЛЕНИЕ: Сначала пробуем API, потом локальную БД
+            # Сначала пробуем API, потом локальную БД
             if self.api_client and self.api_client.is_online:
                 try:
                     self.api_client.update_supervision_card(self.card_data['id'], updates)
-                    print("[API] Данные карточки надзора автоматически сохранены через API")
                 except Exception as api_error:
                     print(f"[WARN] Ошибка API автосохранения: {api_error}, fallback на локальную БД")
                     self.db.update_supervision_card(self.card_data['id'], updates)
             else:
                 self.db.update_supervision_card(self.card_data['id'], updates)
-                print("[LOCAL] Данные карточки надзора сохранены локально")
 
             # Обновляем данные карточки
             self.card_data.update(updates)
+
+            # Обновляем таблицу сроков при изменении start_date
+            if hasattr(self, 'sv_timeline_widget') and self.sv_timeline_widget:
+                try:
+                    self.sv_timeline_widget.card_data = self.card_data
+                    self.sv_timeline_widget._load_data()
+                except Exception:
+                    pass
 
         except Exception as e:
             print(f"Ошибка автосохранения: {e}")
@@ -4538,13 +5212,14 @@ class SupervisionCardEditDialog(QDialog):
             traceback.print_exc()
 
     def save_changes(self):
-        """ИСПРАВЛЕНИЕ 30.01.2026: Сохранение изменений с API синхронизацией"""
-        if self.employee['position'] == 'ДАН':
+        """Сохранение изменений с API синхронизацией"""
+        if self.is_dan_role:
             return
 
         updates = {
             'senior_manager_id': self.senior_manager.currentData(),
             'dan_id': self.dan.currentData(),
+            'start_date': self.start_date_edit.date().toString('yyyy-MM-dd'),
             'deadline': self.deadline.date().toString('yyyy-MM-dd'),
             'tags': self.tags.text().strip()
         }
@@ -4576,8 +5251,197 @@ class SupervisionCardEditDialog(QDialog):
         # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
         self.accept()
 
+    def _on_start_date_manual_change(self):
+        """Изменение даты начала вручную — открыть календарь"""
+        cal = self.start_date_edit.calendarWidget()
+        if cal:
+            today = QDate.currentDate()
+            cal.setCurrentPage(today.year(), today.month())
+        self.start_date_edit.setFocus()
+        # Программно показать выпадающий календарь
+        self.start_date_edit.setCalendarPopup(True)
+        cal_popup = self.start_date_edit.findChild(QFrame)
+        if cal_popup:
+            cal_popup.show()
+        else:
+            # Альтернативный способ — клик по кнопке дропдауна
+            self.start_date_edit.setReadOnly(False)
+            self.start_date_edit.lineEdit().setFocus() if hasattr(self.start_date_edit, 'lineEdit') else None
+
+    def _pause_from_edit_tab(self):
+        """Приостановка карточки из вкладки редактирования"""
+        dialog = PauseDialog(self, api_client=self.api_client)
+        if dialog.exec_() == QDialog.Accepted:
+            reason = dialog.reason_text.toPlainText().strip()
+            if reason:
+                try:
+                    if self.api_client and self.api_client.is_online:
+                        try:
+                            self.api_client.pause_supervision_card(
+                                self.card_data['id'],
+                                reason
+                            )
+                        except Exception as e:
+                            print(f"[WARN] API ошибка pause: {e}")
+                            self.db.pause_supervision_card(
+                                self.card_data['id'],
+                                reason,
+                                self.employee['id']
+                            )
+                    else:
+                        self.db.pause_supervision_card(
+                            self.card_data['id'],
+                            reason,
+                            self.employee['id']
+                        )
+
+                    # Обновляем состояние
+                    self.card_data['is_paused'] = True
+                    self.card_data['pause_reason'] = reason
+                    from datetime import datetime
+                    self.card_data['paused_at'] = datetime.now().strftime('%Y-%m-%d')
+
+                    # Меняем кнопку на "Возобновить"
+                    self.pause_btn.setText('Возобновить')
+                    self.pause_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #27AE60; color: white;
+                            padding: 0px 10px; border-radius: 4px; border: none;
+                            font-size: 10px; font-weight: bold; min-height: 28px;
+                        }
+                        QPushButton:hover { background-color: #229954; }
+                    """)
+                    try:
+                        self.pause_btn.clicked.disconnect()
+                    except Exception:
+                        pass
+                    self.pause_btn.clicked.connect(self._resume_from_edit_tab)
+
+                    # Обновляем родительскую вкладку
+                    self.refresh_parent_tab()
+
+                except Exception as e:
+                    from ui.custom_message_box import CustomMessageBox
+                    CustomMessageBox(self, 'Ошибка', f'Ошибка приостановки: {e}', 'error').exec_()
+
+    def _resume_from_edit_tab(self):
+        """Возобновление карточки из вкладки редактирования"""
+        from ui.custom_message_box import CustomMessageBox
+        reply = CustomMessageBox(
+            self, 'Подтверждение',
+            'Возобновить работу над проектом?\nДедлайн будет продлён на время приостановки.',
+            'question'
+        )
+        reply.exec_()
+
+        # CustomMessageBox возвращает result() == QDialog.Accepted при подтверждении
+        if reply.result() == QDialog.Accepted:
+            try:
+                # Рассчитываем дни приостановки для продления дедлайна
+                paused_at_str = self.card_data.get('paused_at', '')
+                pause_days = 0
+                if paused_at_str:
+                    if 'T' in paused_at_str:
+                        paused_at_str = paused_at_str.split('T')[0]
+                    if ' ' in paused_at_str:
+                        paused_at_str = paused_at_str.split(' ')[0]
+                    from datetime import datetime, date
+                    try:
+                        paused_date = datetime.strptime(paused_at_str, '%Y-%m-%d').date()
+                        pause_days = (date.today() - paused_date).days
+                    except Exception:
+                        pass
+
+                if self.api_client and self.api_client.is_online:
+                    try:
+                        self.api_client.resume_supervision_card(
+                            self.card_data['id'],
+                            self.employee['id']
+                        )
+                    except Exception as e:
+                        print(f"[WARN] API ошибка resume: {e}")
+                        self.db.resume_supervision_card(
+                            self.card_data['id'],
+                            self.employee['id']
+                        )
+                else:
+                    self.db.resume_supervision_card(
+                        self.card_data['id'],
+                        self.employee['id']
+                    )
+
+                # Продлеваем дедлайн на дни приостановки
+                if pause_days > 0 and self.card_data.get('deadline'):
+                    deadline_str = self.card_data['deadline']
+                    if 'T' in deadline_str:
+                        deadline_str = deadline_str.split('T')[0]
+                    from datetime import datetime, timedelta
+                    try:
+                        deadline_date = datetime.strptime(deadline_str, '%Y-%m-%d').date()
+                        new_deadline = deadline_date + timedelta(days=pause_days)
+                        new_deadline_str = new_deadline.strftime('%Y-%m-%d')
+
+                        # Сохраняем новый дедлайн
+                        update_data = {'deadline': new_deadline_str}
+                        if self.api_client and self.api_client.is_online:
+                            try:
+                                self.api_client.update_supervision_card(
+                                    self.card_data['id'], update_data
+                                )
+                            except Exception:
+                                self.db.update_supervision_card(
+                                    self.card_data['id'], update_data
+                                )
+                        else:
+                            self.db.update_supervision_card(
+                                self.card_data['id'], update_data
+                            )
+
+                        self.card_data['deadline'] = new_deadline_str
+                        self._loading_data = True
+                        self.deadline.setDate(QDate.fromString(new_deadline_str, 'yyyy-MM-dd'))
+                        self._loading_data = False
+                    except Exception as e:
+                        print(f"[WARN] Ошибка продления дедлайна: {e}")
+
+                # Обновляем состояние
+                self.card_data['is_paused'] = False
+                self.card_data['pause_reason'] = None
+                self.card_data['paused_at'] = None
+
+                # Меняем кнопку на "Приостановить"
+                self.pause_btn.setText('Приостановить')
+                self.pause_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #F39C12; color: white;
+                        padding: 0px 10px; border-radius: 4px; border: none;
+                        font-size: 10px; font-weight: bold; min-height: 28px;
+                    }
+                    QPushButton:hover { background-color: #E67E22; }
+                """)
+                try:
+                    self.pause_btn.clicked.disconnect()
+                except Exception:
+                    pass
+                self.pause_btn.clicked.connect(self._pause_from_edit_tab)
+
+                # Обновляем родительскую вкладку
+                self.refresh_parent_tab()
+
+            except Exception as e:
+                CustomMessageBox(self, 'Ошибка', f'Ошибка возобновления: {e}', 'error').exec_()
+
+    def refresh_parent_tab(self):
+        """Обновить родительскую вкладку CRMSupervisionTab"""
+        parent = self.parent()
+        while parent:
+            if isinstance(parent, CRMSupervisionTab):
+                parent.refresh_current_tab()
+                break
+            parent = parent.parent()
+
     def reassign_dan(self):
-        """ИСПРАВЛЕНИЕ 28.01.2026: Переназначить исполнителя ДАН"""
+        """Переназначить исполнителя ДАН"""
         current_dan_name = self.dan.currentText()
 
         dialog = SupervisionReassignDANDialog(
@@ -4768,12 +5632,149 @@ class SupervisionCardEditDialog(QDialog):
             import traceback
             traceback.print_exc()
 
+    # ========== RESIZE: Изменение размера окна мышью ==========
+
+    def get_resize_edge(self, pos):
+        """Определение края для изменения размера"""
+        rect = self.rect()
+        margin = self.resize_margin
+        on_left = pos.x() <= margin
+        on_right = pos.x() >= rect.width() - margin
+        if on_left:
+            return 'left'
+        elif on_right:
+            return 'right'
+        return None
+
+    def set_cursor_shape(self, edge):
+        """Установка формы курсора"""
+        if edge in ('left', 'right'):
+            self.setCursor(Qt.SizeHorCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+    def mousePressEvent(self, event):
+        """Начало изменения размера"""
+        if event.button() == Qt.LeftButton:
+            edge = self.get_resize_edge(event.pos())
+            if edge:
+                self.resizing = True
+                self.resize_edge = edge
+                self.resize_start_pos = event.globalPos()
+                self.resize_start_geometry = self.geometry()
+                self.grabMouse()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Процесс изменения размера"""
+        if self.resizing and self.resize_edge:
+            delta = event.globalPos() - self.resize_start_pos
+            old_geo = self.resize_start_geometry
+            x, y, w, h = old_geo.x(), old_geo.y(), old_geo.width(), old_geo.height()
+            min_w = 1100
+
+            if self.resize_edge == 'left':
+                new_w = w - delta.x()
+                if new_w >= min_w:
+                    x = old_geo.x() + delta.x()
+                    w = new_w
+            elif self.resize_edge == 'right':
+                new_w = w + delta.x()
+                if new_w >= min_w:
+                    w = new_w
+
+            self.setGeometry(x, y, w, h)
+            event.accept()
+        else:
+            if not self.resizing:
+                edge = self.get_resize_edge(event.pos())
+                self.set_cursor_shape(edge)
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Завершение изменения размера"""
+        if event.button() == Qt.LeftButton and self.resizing:
+            self.releaseMouse()
+            self.resizing = False
+            self.resize_edge = None
+            self.setCursor(Qt.ArrowCursor)
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def event(self, event):
+        """Обработка событий наведения мыши"""
+        from PyQt5.QtCore import QEvent
+        if event.type() == QEvent.HoverMove:
+            if not self.resizing:
+                edge = self.get_resize_edge(event.pos())
+                self.set_cursor_shape(edge)
+        elif event.type() == QEvent.HoverLeave:
+            if not self.resizing:
+                self.setCursor(Qt.ArrowCursor)
+        return super().event(event)
+
+    def leaveEvent(self, event):
+        """Сброс курсора при выходе мыши"""
+        if not self.resizing:
+            self.setCursor(Qt.ArrowCursor)
+        super().leaveEvent(event)
+
+    # ========== /RESIZE ==========
+
     def showEvent(self, event):
-        """Центрирование при первом показе"""
+        """Центрирование при первом показе + отложенная инициализация тяжёлых вкладок"""
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
             self.center_on_screen()
+            # Инициализируем тяжёлые вкладки ПОСЛЕ показа окна (избегаем мелькание popup)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self._init_deferred_tabs)
+
+    def _init_deferred_tabs(self):
+        """Создание тяжёлых вкладок после показа диалога (предотвращает мелькание)"""
+        if self._deferred_tabs_ready:
+            return
+        self._deferred_tabs_ready = True
+
+        current_tab = self.tabs.currentIndex()
+
+        # Таблица сроков надзора
+        try:
+            from ui.supervision_timeline_widget import SupervisionTimelineWidget
+            self.sv_timeline_widget = SupervisionTimelineWidget(
+                card_data=self.card_data,
+                data=self.data,
+                db=self.db,
+                api_client=self.api_client,
+                employee=self.employee,
+                parent=self
+            )
+            self.tabs.removeTab(self._timeline_tab_index)
+            self.tabs.insertTab(self._timeline_tab_index, self.sv_timeline_widget, 'Таблица сроков')
+        except Exception as e:
+            print(f"[SupervisionCardEditDialog] Ошибка создания таблицы сроков: {e}")
+
+        # Оплаты надзора
+        payments_widget = self.create_payments_widget()
+        self.tabs.removeTab(self.payments_tab_index)
+        self.tabs.insertTab(self.payments_tab_index, payments_widget, 'Оплаты надзора')
+
+        # Информация о проекте
+        info_widget = self.create_project_info_widget()
+        self.tabs.removeTab(self.project_info_tab_index)
+        self.tabs.insertTab(self.project_info_tab_index, info_widget, 'Информация о проекте')
+
+        # Файлы надзора
+        files_widget = self.create_files_widget()
+        self.tabs.removeTab(self.files_tab_index)
+        self.tabs.insertTab(self.files_tab_index, files_widget, 'Файлы надзора')
+
+        # Восстановить текущую вкладку
+        self.tabs.setCurrentIndex(current_tab)
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
@@ -6990,10 +7991,70 @@ class SupervisionFileUploadDialog(QDialog):
         self.date_edit.setDate(QDate.currentDate())
         form_layout.addRow('Дата:', self.date_edit)
 
+        # Разделитель
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet('color: #E0E0E0;')
+        form_layout.addRow(separator)
+
+        # Доп. поля: данные для таблицы сроков надзора
+        fields_hint = QLabel('Данные для таблицы сроков (необязательно)')
+        fields_hint.setStyleSheet('color: #888; font-size: 10px; font-style: italic;')
+        form_layout.addRow(fields_hint)
+
+        field_style = '''
+            QLineEdit {
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 12px;
+                background-color: #FAFAFA;
+            }
+            QLineEdit:focus {
+                border-color: #ffd93c;
+                background-color: #FFFFFF;
+            }
+        '''
+
+        # Бюджет план
+        self.budget_planned_edit = QLineEdit()
+        self.budget_planned_edit.setFixedHeight(28)
+        self.budget_planned_edit.setPlaceholderText('0')
+        self.budget_planned_edit.setStyleSheet(field_style)
+        form_layout.addRow('Бюджет план:', self.budget_planned_edit)
+
+        # Бюджет факт
+        self.budget_actual_edit = QLineEdit()
+        self.budget_actual_edit.setFixedHeight(28)
+        self.budget_actual_edit.setPlaceholderText('0')
+        self.budget_actual_edit.setStyleSheet(field_style)
+        form_layout.addRow('Бюджет факт:', self.budget_actual_edit)
+
+        # Поставщик
+        self.supplier_edit = QLineEdit()
+        self.supplier_edit.setFixedHeight(28)
+        self.supplier_edit.setPlaceholderText('Название поставщика')
+        self.supplier_edit.setStyleSheet(field_style)
+        form_layout.addRow('Поставщик:', self.supplier_edit)
+
+        # Комиссия
+        self.commission_edit = QLineEdit()
+        self.commission_edit.setFixedHeight(28)
+        self.commission_edit.setPlaceholderText('0')
+        self.commission_edit.setStyleSheet(field_style)
+        form_layout.addRow('Комиссия:', self.commission_edit)
+
+        # Примечания
+        self.notes_edit = QLineEdit()
+        self.notes_edit.setFixedHeight(28)
+        self.notes_edit.setPlaceholderText('Примечания')
+        self.notes_edit.setStyleSheet(field_style)
+        form_layout.addRow('Примечания:', self.notes_edit)
+
         layout.addLayout(form_layout)
 
         # Подсказка
-        hint = QLabel('После загрузки файл будет привязан к выбранной стадии и добавлен в историю проекта')
+        hint = QLabel('После загрузки файл будет привязан к выбранной стадии.\nДанные бюджета и поставщика обновятся в таблице сроков.')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic; margin-top: 10px;')
         hint.setAlignment(Qt.AlignCenter)
@@ -7082,6 +8143,16 @@ class SupervisionFileUploadDialog(QDialog):
         has_stage = self.stage_combo.currentData() is not None
         self.upload_btn.setEnabled(has_file and has_stage)
 
+    def _parse_number(self, text):
+        """Парсинг числа из строки (поддержка пробелов, запятых)"""
+        text = text.strip().replace(' ', '').replace(',', '.')
+        if not text:
+            return 0
+        try:
+            return float(text)
+        except ValueError:
+            return 0
+
     def upload_file(self):
         """Подготовить данные и закрыть диалог"""
         if not self.selected_file_path:
@@ -7098,7 +8169,13 @@ class SupervisionFileUploadDialog(QDialog):
             'file_path': self.selected_file_path,
             'stage': stage,
             'date': date,
-            'file_name': os.path.basename(self.selected_file_path)
+            'file_name': os.path.basename(self.selected_file_path),
+            # Доп. поля для таблицы сроков
+            'budget_planned': self._parse_number(self.budget_planned_edit.text()),
+            'budget_actual': self._parse_number(self.budget_actual_edit.text()),
+            'supplier': self.supplier_edit.text().strip(),
+            'commission': self._parse_number(self.commission_edit.text()),
+            'notes': self.notes_edit.text().strip(),
         }
 
         self.accept()

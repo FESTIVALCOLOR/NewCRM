@@ -1,9 +1,10 @@
 """
 Pydantic схемы для валидации данных
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
+import re
 
 
 # =========================
@@ -29,20 +30,49 @@ class TokenResponse(BaseModel):
 
 class EmployeeBase(BaseModel):
     full_name: str
-    phone: str
+    phone: Optional[str] = ""
     email: Optional[str] = None
     address: Optional[str] = None
     birth_date: Optional[str] = None
     position: str
     secondary_position: Optional[str] = None
-    department: str
+    department: Optional[str] = ""
     role: Optional[str] = None
     status: str = "активный"
 
 
 class EmployeeCreate(EmployeeBase):
-    login: str
-    password: str
+    model_config = {"extra": "ignore"}
+
+    login: Optional[str] = Field(None, min_length=3, max_length=50)
+    password: str = Field(..., min_length=6, max_length=128)
+
+    @model_validator(mode='before')
+    @classmethod
+    def handle_username_alias(cls, data):
+        """Принимает username как алиас для login"""
+        if isinstance(data, dict):
+            if 'username' in data and not data.get('login'):
+                data['login'] = data['username']
+        return data
+
+    @model_validator(mode='after')
+    def ensure_login(self):
+        """Проверяем что login задан"""
+        if not self.login:
+            raise ValueError('login обязателен')
+        return self
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        if len(v) < 6:
+            raise ValueError('Пароль должен содержать минимум 6 символов')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Пароль должен содержать хотя бы одну цифру')
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Пароль должен содержать хотя бы одну букву')
+        return v
 
 
 class EmployeeUpdate(BaseModel):
@@ -62,9 +92,10 @@ class EmployeeUpdate(BaseModel):
 
 class EmployeeResponse(EmployeeBase):
     id: int
-    login: str
+    login: Optional[str] = None
     is_online: bool
     last_login: Optional[datetime] = None
+    agent_color: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -131,6 +162,8 @@ class ClientResponse(ClientBase):
 class ContractBase(BaseModel):
     client_id: int
     project_type: str
+    project_subtype: Optional[str] = None
+    floors: Optional[int] = 1
     agent_type: Optional[str] = None
     city: Optional[str] = None
     contract_number: str
@@ -144,6 +177,11 @@ class ContractBase(BaseModel):
     contract_period: Optional[int] = None
     comments: Optional[str] = None
     contract_file_link: Optional[str] = None
+    contract_file_yandex_path: Optional[str] = None
+    contract_file_name: Optional[str] = None
+    template_contract_file_link: Optional[str] = None
+    template_contract_file_yandex_path: Optional[str] = None
+    template_contract_file_name: Optional[str] = None
     tech_task_link: Optional[str] = None
     tech_task_yandex_path: Optional[str] = None
     tech_task_file_name: Optional[str] = None
@@ -159,6 +197,52 @@ class ContractBase(BaseModel):
     # Поля для референсов и фотофиксации (25.01.2026)
     references_yandex_path: Optional[str] = None
     photo_documentation_yandex_path: Optional[str] = None
+    # Поля для актов и информационного письма
+    act_planning_link: Optional[str] = None
+    act_planning_yandex_path: Optional[str] = None
+    act_planning_file_name: Optional[str] = None
+    act_concept_link: Optional[str] = None
+    act_concept_yandex_path: Optional[str] = None
+    act_concept_file_name: Optional[str] = None
+    info_letter_link: Optional[str] = None
+    info_letter_yandex_path: Optional[str] = None
+    info_letter_file_name: Optional[str] = None
+    act_final_link: Optional[str] = None
+    act_final_yandex_path: Optional[str] = None
+    act_final_file_name: Optional[str] = None
+    # Подписанные акты
+    act_planning_signed_link: Optional[str] = None
+    act_planning_signed_yandex_path: Optional[str] = None
+    act_planning_signed_file_name: Optional[str] = None
+    act_concept_signed_link: Optional[str] = None
+    act_concept_signed_yandex_path: Optional[str] = None
+    act_concept_signed_file_name: Optional[str] = None
+    info_letter_signed_link: Optional[str] = None
+    info_letter_signed_yandex_path: Optional[str] = None
+    info_letter_signed_file_name: Optional[str] = None
+    act_final_signed_link: Optional[str] = None
+    act_final_signed_yandex_path: Optional[str] = None
+    act_final_signed_file_name: Optional[str] = None
+    # Отслеживание платежей
+    advance_payment_paid_date: Optional[str] = None
+    additional_payment_paid_date: Optional[str] = None
+    third_payment_paid_date: Optional[str] = None
+    advance_receipt_link: Optional[str] = None
+    advance_receipt_yandex_path: Optional[str] = None
+    advance_receipt_file_name: Optional[str] = None
+    additional_receipt_link: Optional[str] = None
+    additional_receipt_yandex_path: Optional[str] = None
+    additional_receipt_file_name: Optional[str] = None
+    third_receipt_link: Optional[str] = None
+    third_receipt_yandex_path: Optional[str] = None
+    third_receipt_file_name: Optional[str] = None
+
+    @field_validator('area', mode='before')
+    @classmethod
+    def validate_area_positive(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError('Площадь должна быть больше 0')
+        return v
 
 
 class ContractCreate(ContractBase):
@@ -168,6 +252,8 @@ class ContractCreate(ContractBase):
 class ContractUpdate(BaseModel):
     client_id: Optional[int] = None
     project_type: Optional[str] = None
+    project_subtype: Optional[str] = None
+    floors: Optional[int] = None
     agent_type: Optional[str] = None
     city: Optional[str] = None
     contract_number: Optional[str] = None
@@ -181,6 +267,11 @@ class ContractUpdate(BaseModel):
     contract_period: Optional[int] = None
     comments: Optional[str] = None
     contract_file_link: Optional[str] = None
+    contract_file_yandex_path: Optional[str] = None
+    contract_file_name: Optional[str] = None
+    template_contract_file_link: Optional[str] = None
+    template_contract_file_yandex_path: Optional[str] = None
+    template_contract_file_name: Optional[str] = None
     tech_task_link: Optional[str] = None
     tech_task_yandex_path: Optional[str] = None
     tech_task_file_name: Optional[str] = None
@@ -196,6 +287,52 @@ class ContractUpdate(BaseModel):
     # Поля для референсов и фотофиксации (25.01.2026)
     references_yandex_path: Optional[str] = None
     photo_documentation_yandex_path: Optional[str] = None
+    # Поля для актов и информационного письма
+    act_planning_link: Optional[str] = None
+    act_planning_yandex_path: Optional[str] = None
+    act_planning_file_name: Optional[str] = None
+    act_concept_link: Optional[str] = None
+    act_concept_yandex_path: Optional[str] = None
+    act_concept_file_name: Optional[str] = None
+    info_letter_link: Optional[str] = None
+    info_letter_yandex_path: Optional[str] = None
+    info_letter_file_name: Optional[str] = None
+    act_final_link: Optional[str] = None
+    act_final_yandex_path: Optional[str] = None
+    act_final_file_name: Optional[str] = None
+    # Подписанные акты
+    act_planning_signed_link: Optional[str] = None
+    act_planning_signed_yandex_path: Optional[str] = None
+    act_planning_signed_file_name: Optional[str] = None
+    act_concept_signed_link: Optional[str] = None
+    act_concept_signed_yandex_path: Optional[str] = None
+    act_concept_signed_file_name: Optional[str] = None
+    info_letter_signed_link: Optional[str] = None
+    info_letter_signed_yandex_path: Optional[str] = None
+    info_letter_signed_file_name: Optional[str] = None
+    act_final_signed_link: Optional[str] = None
+    act_final_signed_yandex_path: Optional[str] = None
+    act_final_signed_file_name: Optional[str] = None
+    # Отслеживание платежей
+    advance_payment_paid_date: Optional[str] = None
+    additional_payment_paid_date: Optional[str] = None
+    third_payment_paid_date: Optional[str] = None
+    advance_receipt_link: Optional[str] = None
+    advance_receipt_yandex_path: Optional[str] = None
+    advance_receipt_file_name: Optional[str] = None
+    additional_receipt_link: Optional[str] = None
+    additional_receipt_yandex_path: Optional[str] = None
+    additional_receipt_file_name: Optional[str] = None
+    third_receipt_link: Optional[str] = None
+    third_receipt_yandex_path: Optional[str] = None
+    third_receipt_file_name: Optional[str] = None
+
+    @field_validator('area', mode='before')
+    @classmethod
+    def validate_area_positive(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError('Площадь должна быть больше 0')
+        return v
 
 
 class ContractResponse(ContractBase):
@@ -267,6 +404,19 @@ class CRMCardBase(BaseModel):
     surveyor_id: Optional[int] = None
     order_position: int = 0
 
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def validate_deadline_not_in_past(cls, v):
+        if v is not None and v != '':
+            try:
+                deadline_date = datetime.strptime(str(v), '%Y-%m-%d').date()
+                if deadline_date < date.today():
+                    raise ValueError('Дедлайн не может быть в прошлом')
+            except ValueError as e:
+                if 'Дедлайн' in str(e):
+                    raise
+        return v
+
 
 class CRMCardCreate(CRMCardBase):
     pass
@@ -290,6 +440,19 @@ class CRMCardUpdate(BaseModel):
     surveyor_id: Optional[int] = None
     order_position: Optional[int] = None
 
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def validate_deadline_not_in_past(cls, v):
+        if v is not None and v != '':
+            try:
+                deadline_date = datetime.strptime(str(v), '%Y-%m-%d').date()
+                if deadline_date < date.today():
+                    raise ValueError('Дедлайн не может быть в прошлом')
+            except ValueError as e:
+                if 'Дедлайн' in str(e):
+                    raise
+        return v
+
 
 class CRMCardResponse(CRMCardBase):
     id: int
@@ -308,6 +471,19 @@ class StageExecutorCreate(BaseModel):
     stage_name: str
     executor_id: int
     deadline: Optional[str] = None
+
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def validate_deadline_not_in_past(cls, v):
+        if v is not None and v != '':
+            try:
+                deadline_date = datetime.strptime(str(v), '%Y-%m-%d').date()
+                if deadline_date < date.today():
+                    raise ValueError('Дедлайн не может быть в прошлом')
+            except ValueError as e:
+                if 'Дедлайн' in str(e):
+                    raise
+        return v
 
 
 class StageExecutorUpdate(BaseModel):
@@ -341,11 +517,25 @@ class StageExecutorResponse(BaseModel):
 class SupervisionCardBase(BaseModel):
     contract_id: int
     column_name: str = "Новый заказ"
+    start_date: Optional[str] = None
     deadline: Optional[str] = None
     tags: Optional[str] = None
     senior_manager_id: Optional[int] = None
     dan_id: Optional[int] = None
     dan_completed: bool = False
+
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def validate_deadline_not_in_past(cls, v):
+        if v is not None and v != '':
+            try:
+                deadline_date = datetime.strptime(str(v), '%Y-%m-%d').date()
+                if deadline_date < date.today():
+                    raise ValueError('Дедлайн не может быть в прошлом')
+            except ValueError as e:
+                if 'Дедлайн' in str(e):
+                    raise
+        return v
 
 
 class SupervisionCardCreate(SupervisionCardBase):
@@ -354,11 +544,25 @@ class SupervisionCardCreate(SupervisionCardBase):
 
 class SupervisionCardUpdate(BaseModel):
     column_name: Optional[str] = None
+    start_date: Optional[str] = None
     deadline: Optional[str] = None
     tags: Optional[str] = None
     senior_manager_id: Optional[int] = None
     dan_id: Optional[int] = None
     dan_completed: Optional[bool] = None
+
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def validate_deadline_not_in_past(cls, v):
+        if v is not None and v != '':
+            try:
+                deadline_date = datetime.strptime(str(v), '%Y-%m-%d').date()
+                if deadline_date < date.today():
+                    raise ValueError('Дедлайн не может быть в прошлом')
+            except ValueError as e:
+                if 'Дедлайн' in str(e):
+                    raise
+        return v
 
 
 class SupervisionCardResponse(SupervisionCardBase):
@@ -401,6 +605,29 @@ class SupervisionHistoryResponse(BaseModel):
 
 
 # =========================
+# CRM: Запросы согласования и исполнителей
+# =========================
+
+class CompleteApprovalStageRequest(BaseModel):
+    stage_name: str
+
+
+class StageExecutorDeadlineRequest(BaseModel):
+    stage_name: str
+    deadline: Optional[str] = None
+
+
+class CompleteStageExecutorRequest(BaseModel):
+    executor_id: int
+
+
+class ManagerAcceptanceRequest(BaseModel):
+    stage_name: str
+    executor_name: str
+    manager_id: int
+
+
+# =========================
 # ПЛАТЕЖИ
 # =========================
 
@@ -421,6 +648,22 @@ class PaymentBase(BaseModel):
     reassigned: Optional[bool] = False  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
     old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
 
+    @field_validator('calculated_amount', 'manual_amount', 'final_amount', mode='before')
+    @classmethod
+    def validate_amount_non_negative(cls, v):
+        """Суммы не могут быть отрицательными"""
+        if v is not None and v < 0:
+            raise ValueError('Сумма не может быть отрицательной')
+        return v
+
+    @field_validator('report_month', mode='before')
+    @classmethod
+    def validate_report_month_format(cls, v):
+        """Формат отчётного месяца: YYYY-MM"""
+        if v is not None and v != '' and not re.match(r'^\d{4}-(0[1-9]|1[0-2])$', str(v)):
+            raise ValueError('Формат отчётного месяца должен быть YYYY-MM (например, 2026-01)')
+        return v
+
 
 class PaymentCreate(PaymentBase):
     pass
@@ -438,6 +681,20 @@ class PaymentUpdate(BaseModel):
     paid_by: Optional[int] = None
     reassigned: Optional[bool] = None  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
     old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
+
+    @field_validator('manual_amount', 'final_amount', mode='before')
+    @classmethod
+    def validate_amount_non_negative(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Сумма не может быть отрицательной')
+        return v
+
+    @field_validator('report_month', mode='before')
+    @classmethod
+    def validate_report_month_format(cls, v):
+        if v is not None and v != '' and not re.match(r'^\d{4}-(0[1-9]|1[0-2])$', str(v)):
+            raise ValueError('Формат отчётного месяца должен быть YYYY-MM')
+        return v
 
 
 class PaymentResponse(PaymentBase):
@@ -517,6 +774,20 @@ class SalaryBase(BaseModel):
     project_type: Optional[str] = None
     payment_status: Optional[str] = None
     comments: Optional[str] = None
+
+    @field_validator('amount', 'advance_payment', mode='before')
+    @classmethod
+    def validate_amount_non_negative(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Сумма не может быть отрицательной')
+        return v
+
+    @field_validator('report_month', mode='before')
+    @classmethod
+    def validate_report_month_format(cls, v):
+        if v is not None and v != '' and not re.match(r'^\d{4}-(0[1-9]|1[0-2])$', str(v)):
+            raise ValueError('Формат отчётного месяца должен быть YYYY-MM')
+        return v
 
 
 class SalaryCreate(SalaryBase):
@@ -633,10 +904,194 @@ class SurveyorRateRequest(BaseModel):
 
 
 class ContractFilesUpdate(BaseModel):
-    """Схема для обновления файлов договора (замер, референсы, фотофиксация)"""
+    """Схема для обновления файлов договора (замер, референсы, фотофиксация, акты)"""
     measurement_image_link: Optional[str] = None
     measurement_file_name: Optional[str] = None
     measurement_yandex_path: Optional[str] = None
     measurement_date: Optional[str] = None
     contract_file_link: Optional[str] = None
+    contract_file_yandex_path: Optional[str] = None
+    contract_file_name: Optional[str] = None
+    template_contract_file_link: Optional[str] = None
+    template_contract_file_yandex_path: Optional[str] = None
+    template_contract_file_name: Optional[str] = None
     tech_task_link: Optional[str] = None
+    # Поля для актов и информационного письма
+    act_planning_link: Optional[str] = None
+    act_planning_yandex_path: Optional[str] = None
+    act_planning_file_name: Optional[str] = None
+    act_concept_link: Optional[str] = None
+    act_concept_yandex_path: Optional[str] = None
+    act_concept_file_name: Optional[str] = None
+    info_letter_link: Optional[str] = None
+    info_letter_yandex_path: Optional[str] = None
+    info_letter_file_name: Optional[str] = None
+    act_final_link: Optional[str] = None
+    act_final_yandex_path: Optional[str] = None
+    act_final_file_name: Optional[str] = None
+    # Подписанные акты
+    act_planning_signed_link: Optional[str] = None
+    act_planning_signed_yandex_path: Optional[str] = None
+    act_planning_signed_file_name: Optional[str] = None
+    act_concept_signed_link: Optional[str] = None
+    act_concept_signed_yandex_path: Optional[str] = None
+    act_concept_signed_file_name: Optional[str] = None
+    info_letter_signed_link: Optional[str] = None
+    info_letter_signed_yandex_path: Optional[str] = None
+    info_letter_signed_file_name: Optional[str] = None
+    act_final_signed_link: Optional[str] = None
+    act_final_signed_yandex_path: Optional[str] = None
+    act_final_signed_file_name: Optional[str] = None
+    # Чеки платежей
+    advance_receipt_link: Optional[str] = None
+    advance_receipt_yandex_path: Optional[str] = None
+    advance_receipt_file_name: Optional[str] = None
+    additional_receipt_link: Optional[str] = None
+    additional_receipt_yandex_path: Optional[str] = None
+    additional_receipt_file_name: Optional[str] = None
+    third_receipt_link: Optional[str] = None
+    third_receipt_yandex_path: Optional[str] = None
+    third_receipt_file_name: Optional[str] = None
+
+
+# =========================
+# ТАБЛИЦА СРОКОВ ПРОЕКТА
+# =========================
+
+class TimelineEntryBase(BaseModel):
+    stage_code: str
+    stage_name: str
+    stage_group: str
+    substage_group: Optional[str] = None
+    actual_date: Optional[str] = None
+    actual_days: int = 0
+    norm_days: int = 0
+    status: str = ''
+    executor_role: str
+    is_in_contract_scope: bool = True
+    sort_order: int
+    raw_norm_days: float = 0
+    cumulative_days: float = 0
+
+class TimelineEntryCreate(TimelineEntryBase):
+    pass
+
+class TimelineEntryUpdate(BaseModel):
+    actual_date: Optional[str] = None
+    actual_days: Optional[int] = None
+    norm_days: Optional[int] = None
+    status: Optional[str] = None
+
+class TimelineEntryResponse(TimelineEntryBase):
+    id: int
+    contract_id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class TimelineInitRequest(BaseModel):
+    project_type: str
+    project_subtype: Optional[str] = None
+    area: float
+    floors: Optional[int] = 1
+
+
+# =========================
+# ТАБЛИЦА СРОКОВ НАДЗОРА
+# =========================
+
+class SupervisionTimelineBase(BaseModel):
+    stage_code: str
+    stage_name: str
+    sort_order: int
+    plan_date: Optional[str] = None
+    actual_date: Optional[str] = None
+    actual_days: int = 0
+    budget_planned: float = 0
+    budget_actual: float = 0
+    budget_savings: float = 0
+    supplier: Optional[str] = None
+    commission: float = 0
+    status: str = 'Не начато'
+    notes: Optional[str] = None
+    executor: Optional[str] = None
+    defects_found: int = 0
+    defects_resolved: int = 0
+    site_visits: int = 0
+
+class SupervisionTimelineCreate(SupervisionTimelineBase):
+    pass
+
+class SupervisionTimelineUpdate(BaseModel):
+    plan_date: Optional[str] = None
+    actual_date: Optional[str] = None
+    actual_days: Optional[int] = None
+    budget_planned: Optional[float] = None
+    budget_actual: Optional[float] = None
+    budget_savings: Optional[float] = None
+    supplier: Optional[str] = None
+    commission: Optional[float] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    executor: Optional[str] = None
+    defects_found: Optional[int] = None
+    defects_resolved: Optional[int] = None
+    site_visits: Optional[int] = None
+
+class SupervisionTimelineResponse(SupervisionTimelineBase):
+    id: int
+    supervision_card_id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+# =========================
+# ГЛОБАЛЬНЫЙ ПОИСК
+# =========================
+
+class SearchResult(BaseModel):
+    type: str  # "client", "contract", "crm_card"
+    id: int
+    title: str
+    subtitle: Optional[str] = None
+
+class SearchResponse(BaseModel):
+    results: List[SearchResult]
+    total: int
+    query: str
+
+
+# =========================
+# ПРАВА ДОСТУПА (PERMISSIONS)
+# =========================
+
+class PermissionSetRequest(BaseModel):
+    """Установить набор прав сотрудника"""
+    permissions: List[str]
+
+
+class PermissionDefinition(BaseModel):
+    """Определение одного права"""
+    name: str
+    description: str
+
+
+class PermissionResponse(BaseModel):
+    """Ответ с правами сотрудника"""
+    employee_id: int
+    permissions: List[str]
+    is_superuser: bool = False
+
+
+# =========================
+# БЛОКИРОВКИ
+# =========================
+
+class LockRequest(BaseModel):
+    """Запрос на создание блокировки"""
+    entity_type: str
+    entity_id: int
+    employee_id: Optional[int] = None

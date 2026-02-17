@@ -2,7 +2,7 @@
 База данных - SQLAlchemy модели
 Многопользовательская структура
 """
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -11,11 +11,24 @@ from config import get_settings
 settings = get_settings()
 
 # Создание engine
-engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
-    pool_pre_ping=True
-)
+_is_sqlite = "sqlite" in settings.database_url
+
+_engine_kwargs = {
+    "pool_pre_ping": True,
+}
+
+if _is_sqlite:
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    # PostgreSQL: настройка connection pool
+    _engine_kwargs.update({
+        "pool_size": 10,          # Постоянных соединений на worker
+        "max_overflow": 20,       # Дополнительных при пиковой нагрузке
+        "pool_timeout": 30,       # Ожидание свободного соединения (сек)
+        "pool_recycle": 1800,     # Пересоздание соединений каждые 30 мин
+    })
+
+engine = create_engine(settings.database_url, **_engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -55,14 +68,17 @@ class Employee(Base):
     last_activity = Column(DateTime)
     current_session_token = Column(String)
 
+    # Цвет агента (для сотрудников с position='Агент')
+    agent_color = Column(String)
+
     # Даты
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Связи
-    sessions = relationship("UserSession", back_populates="employee")
-    permissions = relationship("UserPermission", back_populates="employee", foreign_keys="[UserPermission.employee_id]")
-    notifications = relationship("Notification", back_populates="employee")
+    sessions = relationship("UserSession", back_populates="employee", cascade="all, delete-orphan")
+    permissions = relationship("UserPermission", back_populates="employee", foreign_keys="[UserPermission.employee_id]", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="employee", cascade="all, delete-orphan")
 
 
 class UserSession(Base):
@@ -90,14 +106,16 @@ class UserSession(Base):
 
 
 class UserPermission(Base):
-    """Детальные права доступа"""
+    """Именованные права доступа (granular permissions)"""
     __tablename__ = "user_permissions"
+    __table_args__ = (
+        UniqueConstraint('employee_id', 'permission_name', name='uq_employee_permission'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
 
-    permission_type = Column(String, nullable=False)  # 'tab_access', 'entity_edit', 'entity_delete', 'entity_create'
-    target = Column(String, nullable=False)  # название вкладки или таблицы
+    permission_name = Column(String, nullable=False)  # 'crm_cards.update', 'employees.create', ...
 
     granted_by = Column(Integer, ForeignKey("employees.id"), index=True)
     granted_date = Column(DateTime, default=datetime.utcnow)
@@ -235,6 +253,8 @@ class Contract(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
 
     project_type = Column(String, nullable=False)
+    project_subtype = Column(String)  # Полный/Эскизный/Планировочный / Стандарт/...
+    floors = Column(Integer, default=1)  # Кол-во этажей (для шаблонных)
     agent_type = Column(String)
     city = Column(String)
 
@@ -253,6 +273,11 @@ class Contract(Base):
     comments = Column(Text)
 
     contract_file_link = Column(String)
+    contract_file_yandex_path = Column(String)
+    contract_file_name = Column(String)
+    template_contract_file_link = Column(String)
+    template_contract_file_yandex_path = Column(String)
+    template_contract_file_name = Column(String)
     tech_task_link = Column(String)
     tech_task_yandex_path = Column(String)
     tech_task_file_name = Column(String)
@@ -272,6 +297,48 @@ class Contract(Base):
     # Поля для референсов и фотофиксации (25.01.2026)
     references_yandex_path = Column(String)
     photo_documentation_yandex_path = Column(String)
+
+    # Поля для актов и информационного письма
+    act_planning_link = Column(String)
+    act_planning_yandex_path = Column(String)
+    act_planning_file_name = Column(String)
+    act_concept_link = Column(String)
+    act_concept_yandex_path = Column(String)
+    act_concept_file_name = Column(String)
+    info_letter_link = Column(String)
+    info_letter_yandex_path = Column(String)
+    info_letter_file_name = Column(String)
+    act_final_link = Column(String)
+    act_final_yandex_path = Column(String)
+    act_final_file_name = Column(String)
+
+    # Подписанные акты
+    act_planning_signed_link = Column(String)
+    act_planning_signed_yandex_path = Column(String)
+    act_planning_signed_file_name = Column(String)
+    act_concept_signed_link = Column(String)
+    act_concept_signed_yandex_path = Column(String)
+    act_concept_signed_file_name = Column(String)
+    info_letter_signed_link = Column(String)
+    info_letter_signed_yandex_path = Column(String)
+    info_letter_signed_file_name = Column(String)
+    act_final_signed_link = Column(String)
+    act_final_signed_yandex_path = Column(String)
+    act_final_signed_file_name = Column(String)
+
+    # Отслеживание платежей (даты оплат + чеки)
+    advance_payment_paid_date = Column(String)
+    additional_payment_paid_date = Column(String)
+    third_payment_paid_date = Column(String)
+    advance_receipt_link = Column(String)
+    advance_receipt_yandex_path = Column(String)
+    advance_receipt_file_name = Column(String)
+    additional_receipt_link = Column(String)
+    additional_receipt_yandex_path = Column(String)
+    additional_receipt_file_name = Column(String)
+    third_receipt_link = Column(String)
+    third_receipt_yandex_path = Column(String)
+    third_receipt_file_name = Column(String)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -363,6 +430,7 @@ class SupervisionCard(Base):
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
 
     column_name = Column(String, nullable=False, default="Новый заказ")
+    start_date = Column(String)  # Дата начала надзора
     deadline = Column(String)
     tags = Column(String)
 
@@ -399,6 +467,87 @@ class SupervisionProjectHistory(Base):
 
     # Связи
     supervision_card = relationship("SupervisionCard", back_populates="history")
+
+
+# =========================
+# ТАБЛИЦЫ СРОКОВ (TIMELINE)
+# =========================
+
+class ProjectTimelineEntry(Base):
+    """Записи таблицы сроков проекта"""
+    __tablename__ = "project_timeline_entries"
+    __table_args__ = (
+        UniqueConstraint('contract_id', 'stage_code', name='uq_timeline_contract_stage'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    stage_code = Column(String(20), nullable=False)
+    stage_name = Column(String(255), nullable=False)
+    stage_group = Column(String(100), nullable=False)
+    substage_group = Column(String(100))
+    actual_date = Column(String)
+    actual_days = Column(Integer, default=0)
+    norm_days = Column(Integer, default=0)
+    status = Column(String(20), default='')
+    executor_role = Column(String(50), nullable=False)
+    is_in_contract_scope = Column(Boolean, default=True)
+    sort_order = Column(Integer, nullable=False)
+    raw_norm_days = Column(Float, default=0)
+    cumulative_days = Column(Float, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SupervisionTimelineEntry(Base):
+    """Записи таблицы сроков надзора"""
+    __tablename__ = "supervision_timeline_entries"
+    __table_args__ = (
+        UniqueConstraint('supervision_card_id', 'stage_code', name='uq_sv_timeline_card_stage'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    stage_code = Column(String(30), nullable=False)
+    stage_name = Column(String(255), nullable=False)
+    sort_order = Column(Integer, nullable=False)
+    plan_date = Column(String)
+    actual_date = Column(String)
+    actual_days = Column(Integer, default=0)
+    budget_planned = Column(Float, default=0)
+    budget_actual = Column(Float, default=0)
+    budget_savings = Column(Float, default=0)
+    supplier = Column(String(255))
+    commission = Column(Float, default=0)
+    status = Column(String(20), default='Не начато')
+    notes = Column(Text)
+    executor = Column(String(100))
+    defects_found = Column(Integer, default=0)
+    defects_resolved = Column(Integer, default=0)
+    site_visits = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =========================
+# РАБОЧИЙ ПРОЦЕСС (WORKFLOW)
+# =========================
+
+class StageWorkflowState(Base):
+    """Состояние рабочего процесса стадии CRM карточки"""
+    __tablename__ = "stage_workflow_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    stage_name = Column(String(255), nullable=False)
+    current_substep_code = Column(String(30))
+    status = Column(String(30), default='in_progress')  # in_progress, revision, client_approval, completed
+    revision_count = Column(Integer, default=0)
+    revision_file_path = Column(Text)
+    client_approval_started_at = Column(DateTime)
+    client_approval_deadline_paused = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # =========================
@@ -553,7 +702,12 @@ class ApprovalStageDeadline(Base):
 
 def init_db():
     """Инициализация базы данных"""
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        # Race condition при 2+ workers: один уже создал таблицы
+        import logging
+        logging.getLogger(__name__).warning(f"init_db warning (likely race condition): {e}")
 
 
 def get_db():

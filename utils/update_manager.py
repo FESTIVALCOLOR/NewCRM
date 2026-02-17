@@ -8,7 +8,7 @@ import json
 import tempfile
 import subprocess
 import requests
-from config import APP_VERSION, UPDATE_CHECK_URL, UPDATE_YANDEX_PUBLIC_KEY, UPDATE_CHECK_ENABLED
+from config import APP_VERSION, UPDATE_CHECK_URL, UPDATE_YANDEX_PUBLIC_KEY, UPDATE_CHECK_ENABLED, API_BASE_URL
 
 
 class UpdateManager:
@@ -58,6 +58,107 @@ class UpdateManager:
         except Exception as e:
             print(f"[UPDATE] Ошибка проверки обновлений: {e}")
             return {"available": False, "error": str(e)}
+
+    def check_server_version(self):
+        """
+        Сверка версии клиента с сервером
+
+        Returns:
+            dict: {'match': bool, 'server_version': str, 'client_version': str}
+                  или {'error': str} при ошибке
+        """
+        try:
+            response = requests.get(f"{API_BASE_URL}/api/version", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                server_version = data.get("version", "")
+                return {
+                    "match": server_version == self.current_version,
+                    "server_version": server_version,
+                    "client_version": self.current_version
+                }
+            return {"error": f"Сервер вернул код {response.status_code}"}
+        except Exception as e:
+            print(f"[UPDATE] Ошибка сверки версии с сервером: {e}")
+            return {"error": str(e)}
+
+    def upload_update_to_yandex(self, exe_path, version, changelog="", progress_callback=None):
+        """
+        Загрузка обновления на Яндекс.Диск в папку CRM_UPDATES
+
+        Args:
+            exe_path (str): Путь к exe-файлу обновления
+            version (str): Версия обновления (X.Y.Z)
+            changelog (str): Описание изменений
+            progress_callback (callable): Функция прогресса (current, total)
+
+        Returns:
+            bool: True при успехе
+        """
+        from utils.yandex_disk import YandexDiskManager
+
+        try:
+            yd = YandexDiskManager.get_instance()
+            if not yd.token:
+                raise Exception("Яндекс.Диск токен не настроен")
+
+            # Папка обновлений на Яндекс.Диске
+            from config import YANDEX_DISK_UPDATES
+            updates_folder = YANDEX_DISK_UPDATES
+            yd.create_folder(updates_folder)
+
+            # Загружаем exe файл
+            file_name = f"InteriorStudio_{version}.exe"
+            yandex_path = f"{updates_folder}/{file_name}"
+
+            print(f"[UPDATE] Загрузка {exe_path} → {yandex_path}")
+            yd.upload_file(exe_path, yandex_path)
+
+            # Формируем / обновляем version.json
+            file_size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+            from datetime import date
+            version_json_path = f"{updates_folder}/version.json"
+
+            # Пробуем загрузить существующий version.json
+            existing_data = self._download_version_json_from_disk(yd, version_json_path)
+            if not existing_data:
+                existing_data = {"latest_version": version, "versions": {}}
+
+            # Обновляем данные
+            existing_data["latest_version"] = version
+            existing_data["versions"][version] = {
+                "release_date": date.today().isoformat(),
+                "size_mb": f"{file_size_mb:.1f}",
+                "changelog": changelog or f"Обновление до версии {version}",
+                "file_name": file_name
+            }
+
+            # Сохраняем version.json во временный файл и загружаем
+            temp_json = os.path.join(tempfile.gettempdir(), "version.json")
+            with open(temp_json, 'w', encoding='utf-8') as f:
+                json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+            yd.upload_file(temp_json, version_json_path)
+            os.remove(temp_json)
+
+            print(f"[UPDATE] Обновление {version} загружено на Яндекс.Диск")
+            return True
+
+        except Exception as e:
+            print(f"[UPDATE] Ошибка загрузки обновления на Яндекс.Диск: {e}")
+            raise
+
+    def _download_version_json_from_disk(self, yd, yandex_path):
+        """Загрузить и распарсить version.json с Яндекс.Диска (OAuth)"""
+        try:
+            temp_path = os.path.join(tempfile.gettempdir(), "version_existing.json")
+            yd.download_file(yandex_path, temp_path)
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            os.remove(temp_path)
+            return data
+        except Exception:
+            return None
 
     def _fetch_version_json(self):
         """Загрузка version.json из публичной папки на Яндекс Диске"""

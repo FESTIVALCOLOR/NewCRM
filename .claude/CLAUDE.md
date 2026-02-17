@@ -1,405 +1,135 @@
 # Interior Studio CRM
 
+## Язык общения
+**Всегда отвечать на русском языке**, включая после компактинга контекста. Все комментарии в коде и строки UI — тоже на русском.
+
+## Описание проекта
+
 **Python:** 3.14.0 (клиент), 3.11 (сервер) | **PyInstaller:** 6.17.0
 **Архитектура:** PyQt5 Desktop клиент + FastAPI сервер + PostgreSQL
 
-## Структура проекта
-
-```
-main.py                    # Точка входа клиента
-config.py                  # API_BASE_URL, APP_VERSION, ROLES, POSITIONS
-InteriorStudio.spec        # PyInstaller конфигурация
-database/
-  db_manager.py            # Локальная SQLite БД (fallback), 4400+ строк, 50+ миграций
-ui/                        # PyQt5 модули
-  main_window.py           # Главное окно с табами
-  login_window.py          # Окно входа (API + локальный режим)
-  crm_tab.py               # CRM Kanban доска (17K+ строк)
-  crm_supervision_tab.py   # Авторский надзор
-  clients_tab.py           # Клиенты
-  contracts_tab.py         # Договоры
-  salaries_tab.py          # Зарплаты
-  employees_tab.py         # Сотрудники
-  employee_reports_tab.py  # Отчеты сотрудников
-  dashboard_widget.py      # Дашборд
-  dashboards.py            # Виджеты дашборда
-  rates_dialog.py          # Диалог тарифов
-  custom_title_bar.py      # Кастомный заголовок окна
-  custom_combobox.py       # Кастомный ComboBox
-  custom_dateedit.py       # Кастомный DateEdit
-  custom_message_box.py    # Кастомное MessageBox
-  file_gallery_widget.py   # Галерея файлов
-  file_list_widget.py      # Список файлов
-  file_preview_widget.py   # Предпросмотр файлов
-  variation_gallery_widget.py # Галерея вариаций
-  flow_layout.py           # Flow Layout
-utils/
-  api_client.py            # HTTP клиент для API (2300+ строк)
-  offline_manager.py       # Offline режим и очередь синхронизации
-  sync_manager.py          # Real-time синхронизация (QTimer 5 сек)
-  resource_path.py         # Пути к ресурсам для exe
-  unified_styles.py        # Единая система стилей
-  icon_loader.py           # Загрузчик SVG иконок
-  validators.py            # Валидаторы
-  table_settings.py        # Настройки таблиц
-  yandex_disk.py           # Интеграция с Яндекс.Диском
-  calendar_helpers.py      # Помощники календаря
-  data_access.py           # Слой доступа к данным
-  db_sync.py               # Синхронизация БД
-  pdf_generator.py         # Генератор PDF
-  preview_generator.py     # Генератор превью
-  tooltip_fix.py           # Исправление tooltip
-  logger.py                # Логирование
-  password_utils.py        # Работа с паролями
-  db_security.py           # Безопасность БД
-  cache_manager.py         # Менеджер кэша
-  constants.py             # Константы
-  date_utils.py            # Работа с датами
-  message_helper.py        # Помощник сообщений
-  tab_helpers.py           # Помощники вкладок
-  update_manager.py        # Менеджер обновлений
-server/                    # FastAPI (НЕ входит в exe)
-  main.py                  # 5800+ строк, 144 endpoints
-  database.py              # SQLAlchemy модели
-  schemas.py               # Pydantic схемы
-  auth.py                  # JWT (bcrypt==3.2.2)
-resources/
-  icons/                   # 50+ SVG иконок
-  logo.png                 # Логотип
-  icon.ico                 # Иконка приложения
-```
-
-## Критические правила
-
-### 1. __init__.py обязательны
-`database/__init__.py`, `ui/__init__.py`, `utils/__init__.py` -- без них PyInstaller не найдет модули.
-
-### 2. Запрет emoji в UI
-Никогда не использовать emoji в QLabel, QPushButton и любых UI строках. Использовать SVG иконки через IconLoader.
-
-### 3. resource_path() для всех ресурсов
-```python
-from utils.resource_path import resource_path
-logo = QPixmap(resource_path('resources/logo.png'))
-```
-Без resource_path() ресурсы не найдутся в exe.
-
-### 4. Рамки диалогов = 1px
-Все диалоги с FramelessWindowHint: `border: 1px solid #E0E0E0;` -- строго 1px.
-
-### 5. Docker пересборка после изменений сервера
-```bash
-ssh timeweb
-cd /opt/interior_studio
-docker-compose down && docker-compose build --no-cache api && docker-compose up -d
-```
-Простой restart НЕ перезагружает Python модули.
-
-### 6. Совместимость форматов API и клиента
-API должен возвращать те же ключи, что и db_manager.py. Проверять: `total_orders` (не `total_count`), `position`, `source`, `amount`.
-
-### 7. Порядок endpoints в FastAPI
-Статические пути ПЕРЕД динамическими: `/api/rates/template` ПЕРЕД `/api/rates/{rate_id}`.
-
-### 8. Двухрежимная архитектура
-Все функции должны работать в обоих режимах:
-- **Автономный** (`MULTI_USER_MODE=False`): локальная SQLite БД
-- **Сетевой** (`MULTI_USER_MODE=True`): клиент-сервер через REST API
-
-### 9. Доступ к данным через DataAccess
-Все CRUD операции в UI через `self.data` (DataAccess), НЕ через `self.api_client`/`self.db` напрямую.
-`self.db` допустим ТОЛЬКО для raw SQL запросов без API-эквивалента.
-
-```python
-# Инициализация в __init__ таба:
-from utils.data_access import DataAccess
-self.data = DataAccess(api_client=api_client)
-self.db = self.data.db  # обратная совместимость для raw SQL
-
-# Использование (DataAccess сам делает API -> fallback DB):
-clients = self.data.get_all_clients()
-self.data.update_crm_card(card_id, updates)
-self.data.create_contract(contract_data)
-
-# В диалогах:
-self.data = getattr(parent, 'data', DataAccess())
-self.db = self.data.db
-```
-
-## Двухрежимная архитектура
-
-### Сетевой режим (Data Flow)
-```
-LoginWindow -> APIClient.authenticate() -> (токен + сотрудник)
-    -> MainWindow + SyncManager (QTimer каждые 5 сек)
-    -> Табы работают через DataAccess (API + fallback на локальную БД)
-    -> При изменении: DataAccess -> API + offline очередь
-```
-
-### Автономный режим (Data Flow)
-```
-LoginWindow -> DatabaseManager.verify_credentials() (SQLite)
-    -> MainWindow (без SyncManager)
-    -> Табы работают через DataAccess (только локальная БД)
-```
+CRM-система для интерьерного бюро с двухрежимной архитектурой:
+- **Сетевой режим:** REST API (FastAPI) + PostgreSQL + JWT авторизация
+- **Автономный режим:** Локальная SQLite БД с offline-очередью синхронизации
 
 ### Ключевые компоненты
 
-| Компонент | Файл | Строк | Назначение |
-|-----------|------|-------|-----------|
-| DataAccess | utils/data_access.py | 700+ | Унифицированный API/DB с fallback и offline очередью |
-| API Client | utils/api_client.py | 2300+ | REST клиент, retry/timeout/fallback, JWT |
-| Sync Manager | utils/sync_manager.py | - | QTimer синхронизация (5 сек), сигналы для UI |
-| CRM Kanban | ui/crm_tab.py | 17K+ | Drag & drop доски, этапы согласования |
-| DB Manager | database/db_manager.py | 4400+ | SQLite + 50+ миграций on-the-fly |
-| Server API | server/main.py | 5800+ | 144 endpoints FastAPI |
+| Компонент | Файл | Строк |
+|-----------|------|-------|
+| CRM Kanban | ui/crm_tab.py | 17K+ |
+| FastAPI сервер | server/main.py | 5800+ (144+ endpoints) |
+| SQLite менеджер | database/db_manager.py | 4400+ (50+ миграций) |
+| REST клиент | utils/api_client.py | 2300+ |
+| Синхронизация БД | utils/db_sync.py | 1731 |
+| Доступ к данным | utils/data_access.py | 915 |
+
+## Полная документация
+
+> **Вся детальная документация находится в папке [docs/](../docs/)**
+
+**Содержание:** [docs/Index.md](../docs/Index.md)
+
+| # | Документ | Путь |
+|---|----------|------|
+| 1 | Roadmap | [docs/01-roadmap.md](../docs/01-roadmap.md) |
+| 2 | Правила проекта | [docs/02-project-rules.md](../docs/02-project-rules.md) |
+| 3 | Авторизация | [docs/03-auth.md](../docs/03-auth.md) |
+| 4 | Бекенд | [docs/04-backend.md](../docs/04-backend.md) |
+| 5 | Фронтенд | [docs/05-frontend.md](../docs/05-frontend.md) |
+| 6 | API и Endpoints | [docs/06-api-endpoints.md](../docs/06-api-endpoints.md) |
+| 7 | Сервер и деплой | [docs/07-server.md](../docs/07-server.md) |
+| 8 | Фичи и спеки | [docs/08-features-specs.md](../docs/08-features-specs.md) |
+| 9 | Дизайн и стили | [docs/09-design-styles.md](../docs/09-design-styles.md) |
+| 10 | UI и Utils | [docs/10-ui-utils.md](../docs/10-ui-utils.md) |
+| 11 | Система оплат | [docs/11-payments.md](../docs/11-payments.md) |
+| 12 | Система дедлайнов | [docs/12-deadlines.md](../docs/12-deadlines.md) |
+| 13 | CRM интеграция | [docs/13-crm-integration.md](../docs/13-crm-integration.md) |
+| 14 | CRM надзора | [docs/14-crm-supervision.md](../docs/14-crm-supervision.md) |
+| 15 | Тестирование | [docs/15-testing.md](../docs/15-testing.md) |
+| 16 | AI промпты | [docs/16-ai-prompts.md](../docs/16-ai-prompts.md) |
+| 17 | Субагенты | [docs/17-subagents.md](../docs/17-subagents.md) |
+| 18 | Agent Skills | [docs/18-agent-skills.md](../docs/18-agent-skills.md) |
+| 19 | Логи и покрытие | [docs/19-logs-coverage.md](../docs/19-logs-coverage.md) |
+| 20 | UI тесты (pywinauto) | [docs/20-ui-testing.md](../docs/20-ui-testing.md) |
+| 21 | Безопасность | [docs/21-security.md](../docs/21-security.md) |
+| 22 | Оптимизация (Roadmap) | [docs/22-optimization-roadmap.md](../docs/22-optimization-roadmap.md) |
+
+## Критические правила (краткий справочник)
+
+1. **`__init__.py` обязательны** в database/, ui/, utils/
+2. **Запрет emoji в UI** — только SVG через IconLoader
+3. **`resource_path()`** для всех ресурсов
+4. **Рамки диалогов = 1px** (`border: 1px solid #E0E0E0`)
+5. **Docker rebuild** после серверных изменений (не restart!)
+6. **Совместимость API/DB** ключей ответов
+7. **Статические пути ПЕРЕД динамическими** в FastAPI
+8. **Двухрежимная архитектура** (online + offline)
+9. **DataAccess** для всех CRUD в UI (не api_client/db напрямую)
+10. **API-first с fallback** на локальную БД при записи
+
+> Подробности: [docs/02-project-rules.md](../docs/02-project-rules.md)
 
 ## Сервер
 
-- **IP:** 147.45.154.193 | **API порт:** 8000
-- **SSH:** `ssh timeweb` (алиас в ~/.ssh/config, ключ ed25519)
+- **IP:** 147.45.154.193 | **Домен:** crm.festivalcolor.ru
+- **SSH:** `ssh timeweb` (порт 2222)
 - **Путь:** /opt/interior_studio/
-- **Docker:** postgres (5432), api (8000), nginx (80/443)
-- **БД:** PostgreSQL, user=crm_user, db=interior_studio_crm
-- **Учетная запись:** admin / admin123
+- **Docker:** postgres (внутренний), api (127.0.0.1:8000), nginx (80→443 SSL)
+- **Учётка:** admin / admin123
+- **Безопасность:** [docs/21-security.md](../docs/21-security.md) (~82%)
 
-### Управление сервером
 ```bash
+# Полная пересборка (применяет изменения)
 ssh timeweb
 cd /opt/interior_studio
-
-# Логи API
-docker-compose logs -f api
-
-# Перезапуск (НЕ применяет изменения кода!)
-docker-compose restart api
-
-# Полная пересборка (применяет изменения кода)
 docker-compose down && docker-compose build --no-cache api && docker-compose up -d
-
-# Статус
-docker-compose ps
-
-# Подключение к БД
-docker-compose exec postgres psql -U crm_user -d interior_studio_crm
 ```
 
 ## Клиент
 
-- **API:** `API_BASE_URL = "http://147.45.154.193:8000"` (config.py)
-- **Запуск:** `.venv\Scripts\python.exe main.py`
-- **Сборка:** `.venv\Scripts\pyinstaller.exe InteriorStudio.spec --clean --noconfirm`
+```bash
+# Запуск
+.venv\Scripts\python.exe main.py
 
-## Таймауты (utils/api_client.py)
-
-| Константа | Значение | Назначение |
-|-----------|----------|------------|
-| DEFAULT_TIMEOUT | 10 сек | Чтение |
-| WRITE_TIMEOUT | 15 сек | Запись |
-| OFFLINE_CACHE_DURATION | 3 сек | Кеш offline статуса |
-| SYNC_TIMEOUT | 10 сек | Синхронизация offline очереди |
-
-## Offline режим
-
-1. Приложение пытается API -> при ошибке fallback на локальную SQLite БД
-2. Изменения в offline добавляются в очередь (offline_manager.py)
-3. При восстановлении соединения очередь синхронизируется
-4. Поддерживаются: client, contract, crm_card, supervision_card, employee, payment, yandex_folder
-
-## Платежи -- ключевые правила
-
-1. CRM платежи имеют `crm_card_id`, надзора -- `supervision_card_id`
-2. `report_month = NULL` = "В работе"
-3. При переназначении: старый платеж `reassigned=True`, создается новый
-4. Расчет суммы всегда через `calculate_payment_amount()` endpoint
-5. При поиске старых платежей проверять `reassigned` флаг
-6. Тарифы надзора: `role` + `rate_per_m2` (не executor_rate/manager_rate)
-
-## Схема базы данных
-
-### employees -- Сотрудники
-```sql
-id, full_name, phone, email, address, birth_date, status,
-position, secondary_position, department, login, password,
-role, created_at
+# Сборка exe
+.venv\Scripts\pyinstaller.exe InteriorStudio.spec --clean --noconfirm
 ```
 
-### clients -- Клиенты
-```sql
-id, client_type, full_name, phone, email,
-passport_series, passport_number, registration_address,
-organization_name, inn, ogrn, created_at
+## Тестирование
+
+```bash
+pytest tests/db/ -v                          # DB тесты (без сервера)
+pytest tests/e2e/ -v --timeout=60            # E2E (нужен сервер)
+pytest tests/ -m critical -v --timeout=60    # Критические
 ```
 
-### contracts -- Договоры
-```sql
-id, client_id, project_type, agent_type, city,
-contract_number, contract_date, address, area,
-total_amount, advance_payment, additional_payment, third_payment,
-contract_period, status, termination_reason, created_at
+### Экономия контекста при чтении логов тестов
+
+**ВАЖНО:** Логи UI тестов (pywinauto) содержат 30-150K токенов из-за verbose unicode-escaped строк.
+НИКОГДА не читать их через Read. Всегда использовать парсер:
+
+```bash
+.venv/Scripts/python.exe tests/ui/parse_results.py <путь_к_output_файлу>
 ```
 
-### crm_cards -- Проекты в Kanban
-```sql
-id, contract_id, column_name, deadline, tags,
-is_approved, approval_stages, approval_deadline,
-senior_manager_id, sdp_id, gap_id, manager_id, surveyor_id,
-order_position, created_at
-```
+Парсер выдаёт только: итого passed/failed/skipped, имена FAILED тестов, причины XFAIL/SKIP.
+Детальные логи конкретного теста читать через Grep только при необходимости отладки.
 
-### supervision_cards -- Авторский надзор
-```sql
-id, contract_id, column_name, deadline, tags,
-senior_manager_id, dan_id, dan_completed,
-is_paused, pause_reason, paused_at, created_at
-```
+> Подробности: [docs/15-testing.md](../docs/15-testing.md)
 
-### salaries -- Зарплаты
-```sql
-id, contract_id, employee_id, payment_type, stage_name,
-amount, advance_payment, report_month, created_at
-```
+## Агенты (10 шт.)
 
-## Kanban статусы
+| Агент | Файл | Назначение |
+|-------|------|-----------|
+| Backend | .claude/agents/backend-agent.md | FastAPI, SQLAlchemy |
+| Frontend | .claude/agents/frontend-agent.md | PyQt5 UI |
+| API Client | .claude/agents/api-client-agent.md | REST, offline, sync |
+| Database | .claude/agents/database-agent.md | SQLite, миграции |
+| Test | .claude/agents/test-agent.md | pytest, валидация |
+| Full-Stack | .claude/agents/fullstack-agent.md | Координация слоёв |
+| Compatibility | .claude/agents/compatibility-checker.md | Server-client проверка |
+| Deploy | .claude/agents/deploy-agent.md | Docker деплой |
+| **Bug Fixer** | .claude/agents/bug-fixer-agent.md | Отладка, скриншоты, логи |
+| **Design Stylist** | .claude/agents/design-stylist-agent.md | Стили, QSS, дизайн |
 
-### Индивидуальные проекты (6 колонок)
-1. Новый заказ
-2. В ожидании
-3. Стадия 1: планировочные решения
-4. Стадия 2: концепция дизайна
-5. Стадия 3: рабочие чертежи
-6. Выполненный проект
-
-### Шаблонные проекты (5 колонок)
-1. Новый заказ
-2. В ожидании
-3. Стадия 1: планировочные решения
-4. Стадия 2: рабочие чертежи
-5. Выполненный проект
-
-## Роли и права доступа
-
-| Роль | Табы | Может редактировать |
-|------|------|---------------------|
-| Руководитель студии | Все | Да |
-| Старший менеджер проектов | Все | Да |
-| СДП / ГАП | СРМ, Статистика, Сотрудники | Да |
-| Дизайнер / Чертежник / Замерщик | СРМ (просмотр) | Нет |
-| ДАН | СРМ надзора | Нет |
-
-### Должности и отделы
-- **Административный:** Руководитель студии, Старший менеджер проектов, СДП, ГАП
-- **Проектный:** Дизайнер, Чертежник
-- **Исполнительный:** Менеджер, ДАН, Замерщик
-
-### Константы (config.py)
-```python
-PROJECT_TYPES = ['Индивидуальный', 'Шаблонный']
-AGENTS = ['ФЕСТИВАЛЬ', 'ПЕТРОВИЧ']
-CITIES = ['СПБ', 'МСК', 'ВН']
-PAYMENT_TYPES = ['Аванс', 'Основной платеж', 'Оплата согласования']
-```
-
-## Паттерны UI
-
-### CustomTitleBar
-```python
-from ui.custom_title_bar import CustomTitleBar
-title_bar = CustomTitleBar(self, "Заголовок", simple_mode=False)
-# simple_mode=True для диалогов, False для основных окон
-```
-
-### Кастомные диалоги
-```python
-from ui.custom_message_box import CustomMessageBox
-CustomMessageBox.info(self, "Успех", "Данные сохранены")
-```
-
-### SVG иконки
-```python
-from utils.icon_loader import IconLoader
-icon = IconLoader.load('search.svg', size=24)
-btn = IconLoader.create_icon_button('save', text='Сохранить', icon_size=20)
-```
-
-### Frameless окна
-Все окна используют `Qt.FramelessWindowHint` + `CustomTitleBar`.
-
-## Интеграция с Яндекс.Диском
-
-### Структура папок
-```
-АРХИВ ПРОЕКТОВ/
-  ФЕСТИВАЛЬ/
-    Индивидуальные/ (СПБ/, МСК/, ВН/)
-    Шаблонные/ (СПБ/, МСК/, ВН/)
-    Авторские надзоры/ (СПБ/, МСК/, ВН/)
-  ПЕТРОВИЧ/
-    (аналогично)
-```
-
-### Функции
-- При создании договора -- автоматически создается папка
-- При изменении типа/города/адреса -- папка перемещается
-- При удалении договора -- папка удаляется
-
-### Получение OAuth токена
-1. https://oauth.yandex.ru/ -> Зарегистрировать приложение
-2. Права: Яндекс.Диск REST API (Запись + Чтение)
-3. Redirect URI: `https://oauth.yandex.ru/verification_code`
-4. Перейти: `https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID`
-5. Скопировать токен из URL после `#access_token=`
-6. Установить: `setx YANDEX_DISK_TOKEN "токен"` или в config.py
-
-## Паттерны Database
-
-### Миграции (on-the-fly в __init__)
-```python
-cursor.execute("PRAGMA table_info(table_name)")
-columns = [col[1] for col in cursor.fetchall()]
-if 'new_column' not in columns:
-    cursor.execute('ALTER TABLE table_name ADD COLUMN new_column TYPE DEFAULT value')
-```
-
-### JSON в SQLite
-```python
-import json
-stages = json.loads(db_data['approval_stages'])  # чтение
-json_str = json.dumps(stages)                     # запись
-```
-
-## Добавление нового endpoint -- чеклист
-
-1. Добавить endpoint в server/main.py (статические пути ПЕРЕД динамическими)
-2. Добавить Pydantic схему в server/schemas.py
-3. Добавить метод в utils/api_client.py (сигнатура = как вызывается в UI)
-4. Добавить вызов в UI с try/except и fallback на db_manager
-5. Пересобрать Docker на сервере
-
-## Добавление нового UI модуля
-
-1. Создать файл `ui/new_module.py`
-2. Добавить `from utils.resource_path import resource_path`
-3. Поддержать оба режима (MULTI_USER_MODE True/False)
-4. Добавить в `InteriorStudio.spec` -> `hiddenimports`
-5. Зарегистрировать в `config.ROLES` для нужных ролей
-
-## Добавление новой таблицы БД
-
-1. Создать миграцию в `database/db_manager.py` (CREATE TABLE IF NOT EXISTS)
-2. Вызвать миграцию в `__init__()` DatabaseManager
-3. Создать CRUD методы в DatabaseManager
-4. Если нужен API: добавить endpoints в server/main.py
-
-## Соглашения об именах
-
-- **Переменные БД/Python:** `snake_case`
-- **Классы PyQt:** `PascalCase` (CRMTab, DraggableListWidget)
-- **Константы:** `UPPER_CASE` (DATABASE_PATH, PROJECT_TYPES)
-- **Кодировка:** `# -*- coding: utf-8 -*-` в начале каждого файла
-- **Все строки UI на русском языке**
-
-## GitHub
-
-- **Репозиторий:** git@github.com:FESTIVALCOLOR/NewCRM.git
-- **Ветка:** main
+> Подробности: [docs/17-subagents.md](../docs/17-subagents.md)

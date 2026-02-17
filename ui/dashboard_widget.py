@@ -41,6 +41,12 @@ def create_colored_icon(icon_path, color):
         svg_content = svg_content.replace('fill="#000"', f'fill="{color}"')
         svg_content = svg_content.replace('fill="#000000"', f'fill="{color}"')
 
+        # Заменяем white на нужный цвет (для иконок с белым stroke/fill)
+        svg_content = svg_content.replace('stroke="white"', f'stroke="{color}"')
+        svg_content = svg_content.replace("stroke='white'", f"stroke='{color}'")
+        svg_content = svg_content.replace('fill="white"', f'fill="{color}"')
+        svg_content = svg_content.replace("fill='white'", f"fill='{color}'")
+
         # Если нет явного указания stroke или fill, добавляем в svg тег
         if 'stroke=' not in svg_content.lower() and 'fill=' not in svg_content.lower():
             svg_content = svg_content.replace('<svg', f'<svg fill="{color}" stroke="{color}"')
@@ -116,6 +122,13 @@ class FilterButton(QPushButton):
             QPushButton:pressed {{
                 background-color: #EEEEEE;
             }}
+            QToolTip {{
+                background-color: #FFFFFF;
+                color: #000000;
+                border: 1px solid #d9d9d9;
+                border-radius: 6px;
+                padding: 6px 10px;
+            }}
         """)
 
         # Устанавливаем иконку вместо текста
@@ -148,7 +161,8 @@ class FilterButton(QPushButton):
         icon_map = {
             'agent': 'resources/icons/user.svg',
             'year': 'resources/icons/calendar.svg',
-            'month': 'resources/icons/clock.svg'
+            'month': 'resources/icons/clock.svg',
+            'project_type': 'resources/icons/briefcase.svg'
         }
 
         icon_path = icon_map.get(self.filter_type, 'resources/icons/settings.svg')
@@ -234,6 +248,13 @@ class MetricCard(QGroupBox):
             }}
             QGroupBox:hover {{
                 border: 3px solid {border_color};
+            }}
+            QToolTip {{
+                background-color: #FFFFFF;
+                color: #000000;
+                border: 1px solid #d9d9d9;
+                border-radius: 6px;
+                padding: 6px 10px;
             }}
         """)
 
@@ -346,6 +367,14 @@ class MetricCard(QGroupBox):
     def update_value(self, value):
         """Обновить значение метрики"""
         self.value_label.setText(str(value))
+
+    def resizeEvent(self, event):
+        """Маска по border-radius — убирает вылезание фона в углах"""
+        super().resizeEvent(event)
+        from PyQt5.QtGui import QPainterPath, QRegion
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 8, 8)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
     def get_filter_value(self, filter_type):
         """Получить значение фильтра"""

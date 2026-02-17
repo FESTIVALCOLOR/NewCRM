@@ -37,6 +37,13 @@ class DatabaseManager:
                 self.add_reassigned_field_to_payments()
                 self.add_submitted_date_to_stage_executors()
                 self.add_stage_field_to_payments()
+                self.add_contract_file_columns()
+                self.create_project_files_table()
+                self.create_project_templates_table()
+                self.create_timeline_tables()
+                self.add_project_subtype_to_contracts()
+                self.add_floors_to_contracts()
+                self.create_stage_workflow_state_table()
                 self.create_performance_indexes()
                 _migrations_completed = True
 
@@ -107,8 +114,127 @@ class DatabaseManager:
                 self.create_project_files_table()
                 # ====================================================
 
+                # ========== МИГРАЦИЯ: payment tracking fields ==========
+                self.add_payment_tracking_fields()
+                # ======================================================
+
+                # ========== МИГРАЦИЯ: signed acts fields ==========
+                self.add_signed_acts_fields()
+                # =================================================
+
+                # ========== МИГРАЦИЯ: user_permissions table ==========
+                self.create_user_permissions_table()
+                # =====================================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
+
+    def add_payment_tracking_fields(self):
+        """Миграция: добавление полей отслеживания платежей (даты оплат + чеки)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            new_cols = {
+                # Даты оплат
+                'advance_payment_paid_date': 'TEXT',
+                'additional_payment_paid_date': 'TEXT',
+                'third_payment_paid_date': 'TEXT',
+                # Чек аванса
+                'advance_receipt_link': 'TEXT',
+                'advance_receipt_yandex_path': 'TEXT',
+                'advance_receipt_file_name': 'TEXT',
+                # Чек 2-го платежа
+                'additional_receipt_link': 'TEXT',
+                'additional_receipt_yandex_path': 'TEXT',
+                'additional_receipt_file_name': 'TEXT',
+                # Чек 3-го платежа
+                'third_receipt_link': 'TEXT',
+                'third_receipt_yandex_path': 'TEXT',
+                'third_receipt_file_name': 'TEXT',
+            }
+
+            added = []
+            for col_name, col_type in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция payment_tracking: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля payment_tracking уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции payment_tracking: {e}")
+
+    def add_signed_acts_fields(self):
+        """Миграция: добавление полей для подписанных актов"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            new_cols = {
+                'act_planning_signed_link': 'TEXT',
+                'act_planning_signed_yandex_path': 'TEXT',
+                'act_planning_signed_file_name': 'TEXT',
+                'act_concept_signed_link': 'TEXT',
+                'act_concept_signed_yandex_path': 'TEXT',
+                'act_concept_signed_file_name': 'TEXT',
+                'info_letter_signed_link': 'TEXT',
+                'info_letter_signed_yandex_path': 'TEXT',
+                'info_letter_signed_file_name': 'TEXT',
+                'act_final_signed_link': 'TEXT',
+                'act_final_signed_yandex_path': 'TEXT',
+                'act_final_signed_file_name': 'TEXT',
+            }
+
+            added = []
+            for col_name, col_type in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция signed_acts: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля signed_acts уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции signed_acts: {e}")
+
+    def create_user_permissions_table(self):
+        """Миграция: создание таблицы user_permissions для granular permissions"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                permission_name TEXT NOT NULL,
+                granted_by INTEGER,
+                granted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (employee_id) REFERENCES employees(id),
+                UNIQUE(employee_id, permission_name)
+            )
+            ''')
+
+            conn.commit()
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции user_permissions: {e}")
 
     def add_third_payment_field(self):
         """Миграция: добавление поля third_payment"""
@@ -2576,6 +2702,7 @@ class DatabaseManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     contract_id INTEGER NOT NULL,
                     column_name TEXT NOT NULL DEFAULT 'Новый заказ',
+                    start_date TEXT,
                     deadline DATE,
                     tags TEXT,
                     senior_manager_id INTEGER,
@@ -2604,7 +2731,8 @@ class DatabaseManager:
                     'dan_completed': 'BOOLEAN DEFAULT 0',
                     'is_paused': 'BOOLEAN DEFAULT 0',
                     'pause_reason': 'TEXT',
-                    'paused_at': 'TIMESTAMP'
+                    'paused_at': 'TIMESTAMP',
+                    'start_date': 'TEXT'
                 }
                 
                 for field, field_type in new_fields.items():
@@ -3802,6 +3930,7 @@ class DatabaseManager:
                         upload_date TEXT DEFAULT CURRENT_TIMESTAMP,
                         preview_cache_path TEXT,
                         file_order INTEGER DEFAULT 0,
+                        variation INTEGER DEFAULT 1,
                         FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE
                     )
                 ''')
@@ -3822,9 +3951,133 @@ class DatabaseManager:
             else:
                 print("[OK] Таблица project_files уже существует")
 
+            # Миграция: добавление колонки variation
+            cursor.execute("PRAGMA table_info(project_files)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'variation' not in columns:
+                cursor.execute('ALTER TABLE project_files ADD COLUMN variation INTEGER DEFAULT 1')
+                conn.commit()
+                print("[OK] Добавлена колонка variation в project_files")
+
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка создания таблицы project_files: {e}")
+
+    def add_contract_file_columns(self):
+        """Миграция: добавление колонок для файлов договоров (yandex_path, file_name и т.д.)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            new_columns = {
+                'yandex_folder_path': 'TEXT',
+                'tech_task_file_name': 'TEXT',
+                'tech_task_yandex_path': 'TEXT',
+                'measurement_image_link': 'TEXT',
+                'measurement_file_name': 'TEXT',
+                'measurement_yandex_path': 'TEXT',
+                'measurement_date': 'DATE',
+                'contract_file_name': 'TEXT',
+                'contract_file_yandex_path': 'TEXT',
+                'template_contract_file_link': 'TEXT',
+                'template_contract_file_name': 'TEXT',
+                'template_contract_file_yandex_path': 'TEXT',
+                'references_yandex_path': 'TEXT',
+                'photo_documentation_yandex_path': 'TEXT',
+                # Акты и информационное письмо
+                'act_planning_link': 'TEXT',
+                'act_planning_yandex_path': 'TEXT',
+                'act_planning_file_name': 'TEXT',
+                'act_concept_link': 'TEXT',
+                'act_concept_yandex_path': 'TEXT',
+                'act_concept_file_name': 'TEXT',
+                'info_letter_link': 'TEXT',
+                'info_letter_yandex_path': 'TEXT',
+                'info_letter_file_name': 'TEXT',
+                'act_final_link': 'TEXT',
+                'act_final_yandex_path': 'TEXT',
+                'act_final_file_name': 'TEXT',
+                # Подписанные акты
+                'act_planning_signed_link': 'TEXT',
+                'act_planning_signed_yandex_path': 'TEXT',
+                'act_planning_signed_file_name': 'TEXT',
+                'act_concept_signed_link': 'TEXT',
+                'act_concept_signed_yandex_path': 'TEXT',
+                'act_concept_signed_file_name': 'TEXT',
+                'info_letter_signed_link': 'TEXT',
+                'info_letter_signed_yandex_path': 'TEXT',
+                'info_letter_signed_file_name': 'TEXT',
+                'act_final_signed_link': 'TEXT',
+                'act_final_signed_yandex_path': 'TEXT',
+                'act_final_signed_file_name': 'TEXT',
+                # Отслеживание платежей
+                'advance_payment_paid_date': 'TEXT',
+                'additional_payment_paid_date': 'TEXT',
+                'third_payment_paid_date': 'TEXT',
+                'advance_receipt_link': 'TEXT',
+                'advance_receipt_yandex_path': 'TEXT',
+                'advance_receipt_file_name': 'TEXT',
+                'additional_receipt_link': 'TEXT',
+                'additional_receipt_yandex_path': 'TEXT',
+                'additional_receipt_file_name': 'TEXT',
+                'third_receipt_link': 'TEXT',
+                'third_receipt_yandex_path': 'TEXT',
+                'third_receipt_file_name': 'TEXT',
+            }
+
+            added = []
+            for col_name, col_type in new_columns.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Добавлены колонки в contracts: {', '.join(added)}")
+            else:
+                print("[OK] Все колонки файлов в contracts уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции contract file columns: {e}")
+
+    def create_project_templates_table(self):
+        """Миграция: создание таблицы project_templates для ссылок на шаблоны проектов"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='project_templates'
+            """)
+
+            if not cursor.fetchone():
+                print("[>] Создание таблицы project_templates...")
+                cursor.execute('''
+                    CREATE TABLE project_templates (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        contract_id INTEGER NOT NULL,
+                        template_url TEXT NOT NULL,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_project_templates_contract
+                    ON project_templates(contract_id)
+                ''')
+                conn.commit()
+                print("[OK] Таблица project_templates создана")
+            else:
+                print("[OK] Таблица project_templates уже существует")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка создания таблицы project_templates: {e}")
 
     def reset_approval_stages(self, crm_card_id):
         """Сброс всех этапов согласования при повторном входе в стадию"""
@@ -5266,21 +5519,19 @@ class DatabaseManager:
                 join_clause = "JOIN contracts c ON p.contract_id = c.id"
                 type_condition = "AND c.project_type = 'Шаблонный'"
             elif payment_type == 'supervision':
-                join_clause = "JOIN contracts c ON p.contract_id = c.id"
-                type_condition = "AND c.status = 'АВТОРСКИЙ НАДЗОР'"
+                join_clause = ""
+                type_condition = "AND p.supervision_card_id IS NOT NULL"
             elif payment_type == 'salary':
                 # Оклады - отдельная таблица salaries
                 pass
 
             # Для окладов используем таблицу salaries
             if payment_type == 'salary':
-                # ВАЖНО: таблица salaries не имеет поля status
-                # Оклады считаются всегда выплаченными
-
-                # Всего выплачено (все оклады)
+                # Всего выплачено (только оплаченные оклады)
                 cursor.execute("""
                     SELECT COALESCE(SUM(amount), 0)
                     FROM salaries
+                    WHERE payment_status = 'paid'
                 """)
                 total_paid = cursor.fetchone()[0]
 
@@ -5289,7 +5540,8 @@ class DatabaseManager:
                     cursor.execute("""
                         SELECT COALESCE(SUM(amount), 0)
                         FROM salaries
-                        WHERE report_month LIKE ?
+                        WHERE payment_status = 'paid'
+                        AND report_month LIKE ?
                     """, (f'{year}-%',))
                     paid_by_year = cursor.fetchone()[0]
                 else:
@@ -5300,21 +5552,28 @@ class DatabaseManager:
                     cursor.execute("""
                         SELECT COALESCE(SUM(amount), 0)
                         FROM salaries
-                        WHERE report_month = ?
+                        WHERE payment_status = 'paid'
+                        AND report_month = ?
                     """, (f'{year}-{month:02d}',))
                     paid_by_month = cursor.fetchone()[0]
                 else:
                     paid_by_month = 0
 
-                # Количество выплат (все оклады)
+                # Количество выплат (только оплаченные)
                 cursor.execute("""
                     SELECT COUNT(*)
                     FROM salaries
+                    WHERE payment_status = 'paid'
                 """)
                 payments_count = cursor.fetchone()[0]
 
-                # К оплате - для окладов всегда 0 (нет статуса)
-                to_pay_amount = 0
+                # К оплате
+                cursor.execute("""
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM salaries
+                    WHERE payment_status = 'to_pay'
+                """)
+                to_pay_amount = cursor.fetchone()[0]
 
                 # По агенту - для окладов не применимо
                 by_agent = 0
@@ -5381,7 +5640,18 @@ class DatabaseManager:
 
                 # По агенту
                 if agent_type:
-                    if payment_type in ('individual', 'template', 'supervision'):
+                    if payment_type == 'supervision':
+                        # Надзор: через supervision_cards -> contracts
+                        cursor.execute("""
+                            SELECT COALESCE(SUM(p.final_amount), 0)
+                            FROM payments p
+                            JOIN supervision_cards sc ON p.supervision_card_id = sc.id
+                            JOIN contracts c ON sc.contract_id = c.id
+                            WHERE p.payment_status = 'paid'
+                            AND p.supervision_card_id IS NOT NULL
+                            AND c.agent_type = ?
+                        """, (agent_type,))
+                    elif payment_type in ('individual', 'template'):
                         cursor.execute(f"""
                             SELECT COALESCE(SUM(p.final_amount), 0)
                             FROM payments p
@@ -5684,10 +5954,11 @@ class DatabaseManager:
             conn = self.connect()
             cursor = conn.cursor()
 
-            # Всего выплачено и средний оклад
+            # Всего выплачено и средний оклад (только оплаченные)
             cursor.execute("""
                 SELECT COALESCE(SUM(amount), 0), COALESCE(AVG(amount), 0)
                 FROM salaries
+                WHERE payment_status = 'paid'
             """)
             row = cursor.fetchone()
             total_paid = row[0]
@@ -5700,7 +5971,8 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(amount), 0), COUNT(DISTINCT employee_id)
                     FROM salaries
-                    WHERE report_month LIKE ?
+                    WHERE payment_status = 'paid'
+                    AND report_month LIKE ?
                 """, (f'{year}-%',))
                 row = cursor.fetchone()
                 paid_by_year = row[0]
@@ -5712,7 +5984,8 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(amount), 0)
                     FROM salaries
-                    WHERE report_month = ?
+                    WHERE payment_status = 'paid'
+                    AND report_month = ?
                 """, (f'{year}-{month:02d}',))
                 paid_by_month = cursor.fetchone()[0]
 
@@ -5722,7 +5995,8 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(amount), 0)
                     FROM salaries
-                    WHERE project_type = ?
+                    WHERE payment_status = 'paid'
+                    AND project_type = ?
                 """, (project_type,))
                 by_project_type = cursor.fetchone()[0]
 
@@ -5745,18 +6019,18 @@ class DatabaseManager:
     def get_salaries_supervision_stats(self, year=None, month=None, agent_type=None):
         """Статистика для дашборда 'Авторский надзор'
         Возвращает: total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
+        Платежи надзора определяются по supervision_card_id IS NOT NULL.
         """
         try:
             conn = self.connect()
             cursor = conn.cursor()
 
-            # Всего выплачено
+            # Всего выплачено (только платежи привязанные к supervision_card)
             cursor.execute("""
                 SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*), COALESCE(AVG(p.final_amount), 0)
                 FROM payments p
-                JOIN contracts c ON p.contract_id = c.id
                 WHERE p.payment_status = 'paid'
-                AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                AND p.supervision_card_id IS NOT NULL
             """)
             row = cursor.fetchone()
             total_paid = row[0]
@@ -5770,9 +6044,8 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(p.final_amount), 0), COUNT(*)
                     FROM payments p
-                    JOIN contracts c ON p.contract_id = c.id
                     WHERE p.payment_status = 'paid'
-                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                    AND p.supervision_card_id IS NOT NULL
                     AND p.report_month LIKE ?
                 """, (f'{year}-%',))
                 row = cursor.fetchone()
@@ -5785,22 +6058,22 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT COALESCE(SUM(p.final_amount), 0)
                     FROM payments p
-                    JOIN contracts c ON p.contract_id = c.id
                     WHERE p.payment_status = 'paid'
-                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                    AND p.supervision_card_id IS NOT NULL
                     AND p.report_month = ?
                 """, (f'{year}-{month:02d}',))
                 paid_by_month = cursor.fetchone()[0]
 
-            # По агенту
+            # По агенту (через supervision_cards -> contracts)
             by_agent = 0
             if agent_type:
                 cursor.execute("""
                     SELECT COALESCE(SUM(p.final_amount), 0)
                     FROM payments p
-                    JOIN contracts c ON p.contract_id = c.id
+                    JOIN supervision_cards sc ON p.supervision_card_id = sc.id
+                    JOIN contracts c ON sc.contract_id = c.id
                     WHERE p.payment_status = 'paid'
-                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
+                    AND p.supervision_card_id IS NOT NULL
                     AND c.agent_type = ?
                 """, (agent_type,))
                 by_agent = cursor.fetchone()[0]
@@ -5890,4 +6163,390 @@ class DatabaseManager:
             print(f"[ERROR] Ошибка получения типов агентов: {e}")
             return []
 
+    # =====================================================
+    # ТАБЛИЦЫ СРОКОВ (TIMELINE)
+    # =====================================================
 
+    def add_project_subtype_to_contracts(self):
+        """Миграция: поле project_subtype в contracts"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'project_subtype' not in columns:
+                cursor.execute("ALTER TABLE contracts ADD COLUMN project_subtype TEXT")
+                conn.commit()
+                print("[OK] Поле project_subtype добавлено")
+            self.close()
+        except Exception as e:
+            print(f"[MIGRATION] Ошибка добавления project_subtype: {e}")
+
+    def add_floors_to_contracts(self):
+        """Миграция: поле floors в contracts"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'floors' not in columns:
+                cursor.execute("ALTER TABLE contracts ADD COLUMN floors INTEGER DEFAULT 1")
+                conn.commit()
+                print("[OK] Поле floors добавлено")
+            self.close()
+        except Exception as e:
+            print(f"[MIGRATION] Ошибка добавления floors: {e}")
+
+    def create_stage_workflow_state_table(self):
+        """Миграция: таблица stage_workflow_state"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS stage_workflow_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    crm_card_id INTEGER NOT NULL REFERENCES crm_cards(id),
+                    stage_name TEXT NOT NULL,
+                    current_substep_code TEXT,
+                    status TEXT DEFAULT 'in_progress',
+                    revision_count INTEGER DEFAULT 0,
+                    revision_file_path TEXT,
+                    client_approval_started_at TEXT,
+                    client_approval_deadline_paused INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )
+            ''')
+            conn.commit()
+            self.close()
+        except Exception as e:
+            print(f"[MIGRATION] Ошибка создания stage_workflow_state: {e}")
+
+    def create_timeline_tables(self):
+        """Миграция: таблицы сроков проектов и надзора"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS project_timeline_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contract_id INTEGER NOT NULL,
+                    stage_code TEXT NOT NULL,
+                    stage_name TEXT NOT NULL,
+                    stage_group TEXT NOT NULL,
+                    substage_group TEXT,
+                    actual_date TEXT,
+                    actual_days INTEGER DEFAULT 0,
+                    norm_days INTEGER DEFAULT 0,
+                    status TEXT DEFAULT '',
+                    executor_role TEXT NOT NULL,
+                    is_in_contract_scope INTEGER DEFAULT 1,
+                    sort_order INTEGER NOT NULL,
+                    raw_norm_days REAL DEFAULT 0,
+                    cumulative_days REAL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+                    UNIQUE(contract_id, stage_code)
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_timeline_contract
+                ON project_timeline_entries(contract_id)
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS supervision_timeline_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    supervision_card_id INTEGER NOT NULL,
+                    stage_code TEXT NOT NULL,
+                    stage_name TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL,
+                    plan_date TEXT,
+                    actual_date TEXT,
+                    actual_days INTEGER DEFAULT 0,
+                    budget_planned REAL DEFAULT 0,
+                    budget_actual REAL DEFAULT 0,
+                    budget_savings REAL DEFAULT 0,
+                    supplier TEXT,
+                    commission REAL DEFAULT 0,
+                    status TEXT DEFAULT 'Не начато',
+                    notes TEXT,
+                    executor TEXT,
+                    defects_found INTEGER DEFAULT 0,
+                    defects_resolved INTEGER DEFAULT 0,
+                    site_visits INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id) ON DELETE CASCADE,
+                    UNIQUE(supervision_card_id, stage_code)
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_supervision_timeline_card
+                ON supervision_timeline_entries(supervision_card_id)
+            ''')
+
+            # Миграция: добавляем commission если отсутствует
+            cursor.execute("PRAGMA table_info(supervision_timeline_entries)")
+            sv_cols = [col[1] for col in cursor.fetchall()]
+            if 'commission' not in sv_cols:
+                cursor.execute('ALTER TABLE supervision_timeline_entries ADD COLUMN commission REAL DEFAULT 0')
+
+            conn.commit()
+            self.close()
+        except Exception as e:
+            print(f"[MIGRATION] Ошибка создания таблиц timeline: {e}")
+
+    def init_project_timeline(self, contract_id, entries):
+        """Инициализация таблицы сроков проекта (INSERT OR IGNORE)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            for entry in entries:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO project_timeline_entries
+                    (contract_id, stage_code, stage_name, stage_group, substage_group,
+                     executor_role, is_in_contract_scope, sort_order, raw_norm_days,
+                     cumulative_days, norm_days)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    contract_id,
+                    entry['stage_code'],
+                    entry['stage_name'],
+                    entry['stage_group'],
+                    entry.get('substage_group', ''),
+                    entry['executor_role'],
+                    1 if entry.get('is_in_contract_scope', True) else 0,
+                    entry['sort_order'],
+                    entry.get('raw_norm_days', 0),
+                    entry.get('cumulative_days', 0),
+                    entry.get('norm_days', 0)
+                ))
+            conn.commit()
+            self.close()
+            return True
+        except Exception as e:
+            print(f"[DB] Ошибка init_project_timeline: {e}")
+            return False
+
+    def get_project_timeline(self, contract_id):
+        """Получить таблицу сроков проекта"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM project_timeline_entries
+                WHERE contract_id = ?
+                ORDER BY sort_order
+            ''', (contract_id,))
+            rows = [dict(row) for row in cursor.fetchall()]
+            self.close()
+            return rows
+        except Exception as e:
+            print(f"[DB] Ошибка get_project_timeline: {e}")
+            return []
+
+    def update_timeline_entry(self, contract_id, stage_code, updates):
+        """Обновить запись таблицы сроков проекта"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            set_clause = ', '.join([f"{k} = ?" for k in updates.keys()])
+            values = list(updates.values()) + [contract_id, stage_code]
+            cursor.execute(
+                f"UPDATE project_timeline_entries SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE contract_id = ? AND stage_code = ?",
+                tuple(values)
+            )
+            conn.commit()
+            self.close()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"[DB] Ошибка update_timeline_entry: {e}")
+            return False
+
+    def init_supervision_timeline(self, supervision_card_id, entries):
+        """Инициализация таблицы сроков надзора (INSERT OR IGNORE)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            for entry in entries:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO supervision_timeline_entries
+                    (supervision_card_id, stage_code, stage_name, sort_order,
+                     status, executor)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    supervision_card_id,
+                    entry['stage_code'],
+                    entry['stage_name'],
+                    entry['sort_order'],
+                    entry.get('status', 'Не начато'),
+                    entry.get('executor', '')
+                ))
+            conn.commit()
+            self.close()
+            return True
+        except Exception as e:
+            print(f"[DB] Ошибка init_supervision_timeline: {e}")
+            return False
+
+    def get_supervision_timeline(self, supervision_card_id):
+        """Получить таблицу сроков надзора"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM supervision_timeline_entries
+                WHERE supervision_card_id = ?
+                ORDER BY sort_order
+            ''', (supervision_card_id,))
+            rows = [dict(row) for row in cursor.fetchall()]
+            self.close()
+            return rows
+        except Exception as e:
+            print(f"[DB] Ошибка get_supervision_timeline: {e}")
+            return []
+
+    def update_supervision_timeline_entry(self, supervision_card_id, stage_code, updates):
+        """Обновить запись таблицы сроков надзора"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            set_clause = ', '.join([f"{k} = ?" for k in updates.keys()])
+            values = list(updates.values()) + [supervision_card_id, stage_code]
+            cursor.execute(
+                f"UPDATE supervision_timeline_entries SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE supervision_card_id = ? AND stage_code = ?",
+                tuple(values)
+            )
+            conn.commit()
+            self.close()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"[DB] Ошибка update_supervision_timeline_entry: {e}")
+            return False
+
+    # =========================
+    # ГЛОБАЛЬНЫЙ ПОИСК
+    # =========================
+
+    def global_search(self, query, limit=50):
+        """Полнотекстовый поиск по клиентам, договорам, CRM карточкам"""
+        results = []
+        if not query or len(query.strip()) < 2:
+            return {"results": [], "total": 0, "query": query}
+        pattern = f"%{query.strip()}%"
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            # Клиенты
+            cursor.execute(
+                "SELECT id, full_name, phone, email FROM clients WHERE full_name LIKE ? OR phone LIKE ? OR email LIKE ? LIMIT ?",
+                (pattern, pattern, pattern, limit)
+            )
+            for row in cursor.fetchall():
+                results.append({
+                    "type": "client",
+                    "id": row[0],
+                    "title": row[1] or "",
+                    "subtitle": row[2] or row[3] or "",
+                })
+            # Договоры
+            cursor.execute(
+                "SELECT id, contract_number, address FROM contracts WHERE contract_number LIKE ? OR address LIKE ? LIMIT ?",
+                (pattern, pattern, limit)
+            )
+            for row in cursor.fetchall():
+                results.append({
+                    "type": "contract",
+                    "id": row[0],
+                    "title": row[1] or "",
+                    "subtitle": row[2] or "",
+                })
+            # CRM карточки (через join с договорами)
+            cursor.execute(
+                """SELECT cc.id, c.contract_number, c.address, cc.column_name
+                   FROM crm_cards cc JOIN contracts c ON cc.contract_id = c.id
+                   WHERE c.address LIKE ? OR c.contract_number LIKE ? LIMIT ?""",
+                (pattern, pattern, limit)
+            )
+            for row in cursor.fetchall():
+                results.append({
+                    "type": "crm_card",
+                    "id": row[0],
+                    "title": f"Проект #{row[0]}",
+                    "subtitle": f"{row[2] or ''} ({row[3]})",
+                })
+            self.close()
+        except Exception as e:
+            print(f"[DB] Ошибка global_search: {e}")
+        return {"results": results[:limit], "total": len(results), "query": query}
+
+    # =========================
+    # СТАТИСТИКА (расширенная)
+    # =========================
+
+    def get_funnel_statistics(self, year=None, project_type=None):
+        """Статистика воронки: количество карточек по колонкам Kanban"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            query = "SELECT column_name, COUNT(*) as cnt FROM crm_cards"
+            conditions = []
+            params = []
+            if project_type:
+                conditions.append(
+                    "contract_id IN (SELECT id FROM contracts WHERE project_type = ?)"
+                )
+                params.append(project_type)
+            if year:
+                conditions.append(
+                    "contract_id IN (SELECT id FROM contracts WHERE strftime('%Y', contract_date) = ?)"
+                )
+                params.append(str(year))
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            query += " GROUP BY column_name ORDER BY cnt DESC"
+            cursor.execute(query, tuple(params))
+            funnel = {row[0]: row[1] for row in cursor.fetchall()}
+            self.close()
+            return {"funnel": funnel, "total": sum(funnel.values())}
+        except Exception as e:
+            print(f"[DB] Ошибка get_funnel_statistics: {e}")
+            return {"funnel": {}, "total": 0}
+
+    def get_executor_load(self, year=None, month=None):
+        """Нагрузка на исполнителей: количество активных стадий"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            query = """
+                SELECT e.full_name,
+                       COUNT(CASE WHEN se.completed = 0 THEN 1 END) as active_stages
+                FROM stage_executors se
+                JOIN employees e ON se.executor_id = e.id
+            """
+            conditions = []
+            params = []
+            if year:
+                conditions.append("strftime('%Y', se.assigned_date) = ?")
+                params.append(str(year))
+            if month:
+                conditions.append("strftime('%m', se.assigned_date) = ?")
+                params.append(f"{month:02d}")
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            query += " GROUP BY e.id, e.full_name HAVING active_stages > 0 ORDER BY active_stages DESC LIMIT 15"
+            cursor.execute(query, tuple(params))
+            result = [
+                {"name": row[0], "active_stages": row[1]}
+                for row in cursor.fetchall()
+            ]
+            self.close()
+            return result
+        except Exception as e:
+            print(f"[DB] Ошибка get_executor_load: {e}")
+            return []

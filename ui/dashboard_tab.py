@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-
                              QGroupBox, QGridLayout, QScrollArea, QSizePolicy)
 from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QFont
@@ -123,7 +122,7 @@ class DashboardTab(QWidget):
         
         content_layout.addLayout(grid_layout)
         # =========================================================
-        
+
         content_layout.addStretch()
         
         content.setLayout(content_layout)
@@ -227,8 +226,6 @@ class DashboardTab(QWidget):
             self.update_card_value('individual_area', f"{stats['individual_area']:,.0f} м²")
             self.update_card_value('template_area', f"{stats['template_area']:,.0f} м²")
             self.update_card_value('supervision_area', f"{stats['supervision_area']:,.0f} м²")
-
-            print("Статистика dashboard загружена")
 
         except Exception as e:
             print(f"Ошибка загрузки статистики dashboard: {e}")

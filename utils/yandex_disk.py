@@ -24,8 +24,9 @@ class YandexDiskManager:
     def __init__(self, token=None):
         self.token = token  # OAuth токен
         self.base_url = 'https://cloud-api.yandex.net/v1/disk'
-        # Корневая папка для архива проектов
-        self.archive_root = 'disk:/АРХИВ ПРОЕКТОВ'
+        # Корневая папка для проектов на Яндекс.Диске
+        from config import YANDEX_DISK_PROJECTS
+        self.archive_root = YANDEX_DISK_PROJECTS
 
         # Создаем сессию с повторными попытками
         self.session = requests.Session()
@@ -86,6 +87,8 @@ class YandexDiskManager:
 
         if upload_response.status_code not in [200, 201, 202]:
             raise Exception(f"Ошибка загрузки файла: {upload_response.status_code}")
+
+        return True
 
     def download_file(self, yandex_path, local_path):
         """Скачивание файла с Яндекс.Диска"""
@@ -585,6 +588,41 @@ class YandexDiskManager:
         print(f"[OK] Созданы папки стадий для договора")
         return stage_folders
 
+    def create_corrections_folder(self, contract_folder_path, stage_name):
+        """Создание папки правок внутри папки стадии
+
+        Args:
+            contract_folder_path: путь к папке договора
+            stage_name: имя стадии (напр. 'Стадия 1: планировочные решения')
+
+        Returns:
+            str: путь к папке правок или пустая строка
+        """
+        if not self.token:
+            return ''
+
+        if contract_folder_path.startswith('disk:'):
+            contract_folder_path = contract_folder_path[5:]
+
+        # Определяем папку стадии
+        stage_folder = ''
+        sl = stage_name.lower()
+        if 'стадия 1' in sl or 'планировочн' in sl:
+            stage_folder = f"{contract_folder_path}/1 стадия - Планировочное решение"
+        elif 'стадия 2' in sl and ('концепция' in sl or 'дизайн' in sl):
+            stage_folder = f"{contract_folder_path}/2 стадия - Концепция дизайна"
+        elif 'стадия 2' in sl or 'стадия 3' in sl and 'чертеж' in sl:
+            stage_folder = f"{contract_folder_path}/3 стадия - Чертежный проект"
+        elif 'стадия 3' in sl:
+            stage_folder = f"{contract_folder_path}/3 стадия - Чертежный проект"
+
+        if not stage_folder:
+            stage_folder = contract_folder_path
+
+        corrections_path = f"{stage_folder}/правки"
+        self.create_folder(corrections_path)
+        return corrections_path
+
     def upload_stage_files(self, local_files, contract_folder_path, stage, variation=None, progress_callback=None):
         """Загрузка множественных файлов для стадии
 
@@ -711,3 +749,135 @@ class YandexDiskManager:
 
             return base_path
         return None
+
+    def scan_contract_files(self, contract_folder_path):
+        """Сканирование всех файлов в папке договора на Яндекс.Диске
+
+        Рекурсивно обходит папки стадий и возвращает список найденных файлов.
+
+        Args:
+            contract_folder_path: путь к папке договора
+
+        Returns:
+            list[dict]: список файлов с ключами:
+                - yandex_path: полный путь на ЯД
+                - file_name: имя файла
+                - stage: определённая стадия (measurement, stage1, stage2_concept, etc.)
+                - file_type: тип файла (image, pdf, etc.)
+        """
+        if not self.token or not contract_folder_path:
+            return []
+
+        # Убираем disk: для маппинга стадий
+        clean_path = contract_folder_path
+        if clean_path.startswith('disk:'):
+            clean_path = clean_path[5:]
+
+        # Точный маппинг папок → стадий
+        folder_to_stage_exact = {
+            'Замер': 'measurement',
+            'Замеры': 'measurement',
+            '1 стадия - Планировочное решение': 'stage1',
+            'Планировочное решение': 'stage1',
+            'Концепция-коллажи': 'stage2_concept',
+            'Коллажи': 'stage2_concept',
+            '3D визуализация': 'stage2_3d',
+            '3D': 'stage2_3d',
+            '3 стадия - Чертежный проект': 'stage3',
+            'Чертежный проект': 'stage3',
+            'Чертежи': 'stage3',
+            'Референсы': 'references',
+            'Фотофиксация': 'photo_documentation',
+            'Фото': 'photo_documentation',
+            'Анкета': 'questionnaire',
+            'Анкеты': 'questionnaire',
+            'Документы': 'documents',
+            'Техническое задание': 'tech_task',
+            'ТЗ': 'tech_task',
+            'Авторский надзор': 'supervision',
+        }
+
+        # Нечёткий маппинг: ключевые слова → стадия
+        folder_keywords_to_stage = [
+            ('замер', 'measurement'),
+            ('1 стадия', 'stage1'),
+            ('1стадия', 'stage1'),
+            ('планировочн', 'stage1'),
+            ('концепция', 'stage2_concept'),
+            ('коллаж', 'stage2_concept'),
+            ('3d', 'stage2_3d'),
+            ('визуализ', 'stage2_3d'),
+            ('2 стадия', 'stage2_concept'),
+            ('2стадия', 'stage2_concept'),
+            ('3 стадия', 'stage3'),
+            ('3стадия', 'stage3'),
+            ('чертеж', 'stage3'),
+            ('рабочи', 'stage3'),
+            ('референ', 'references'),
+            ('фотофикс', 'photo_documentation'),
+            ('фото', 'photo_documentation'),
+            ('анкет', 'questionnaire'),
+            ('документ', 'documents'),
+            ('техническ', 'tech_task'),
+            ('надзор', 'supervision'),
+        ]
+
+        def match_folder_to_stage(folder_name):
+            """Определить стадию по имени папки: точное → нечёткое"""
+            if folder_name in folder_to_stage_exact:
+                return folder_to_stage_exact[folder_name]
+            name_lower = folder_name.lower()
+            for keyword, stage_id in folder_keywords_to_stage:
+                if keyword in name_lower:
+                    return stage_id
+            return None
+
+        # Определение типа файла по расширению
+        def detect_file_type(name):
+            ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+            if ext in ('png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg'):
+                return 'image'
+            elif ext == 'pdf':
+                return 'pdf'
+            elif ext in ('xls', 'xlsx', 'csv'):
+                return 'excel'
+            elif ext in ('doc', 'docx'):
+                return 'word'
+            elif ext in ('dwg', 'dxf'):
+                return 'cad'
+            return 'other'
+
+        found_files = []
+
+        def scan_folder(folder_path, stage=None):
+            """Рекурсивно сканирует папку"""
+            try:
+                items = self.get_folder_contents(folder_path)
+                for item in items:
+                    item_name = item.get('name', '')
+                    item_path = item.get('path', '')
+                    item_type = item.get('type', '')
+
+                    if item_type == 'dir':
+                        child_stage = match_folder_to_stage(item_name)
+                        if child_stage is None:
+                            child_stage = stage  # наследуем от родителя
+                        if stage == 'supervision' and item_name.startswith('Стадия'):
+                            child_stage = 'supervision'
+                        if item_name.startswith('Вариация') or item_name.startswith('вариация'):
+                            child_stage = stage
+                        scan_folder(item_path, child_stage)
+                    elif item_type == 'file' and stage:
+                        found_files.append({
+                            'yandex_path': item_path,
+                            'file_name': item_name,
+                            'stage': stage,
+                            'file_type': detect_file_type(item_name),
+                        })
+            except Exception as e:
+                print(f"[YD-SCAN] Ошибка сканирования {folder_path}: {e}")
+
+        print(f"[YD-SCAN] Сканирование папки договора: {contract_folder_path}")
+        scan_folder(contract_folder_path)
+        print(f"[YD-SCAN] Найдено {len(found_files)} файлов")
+        return found_files

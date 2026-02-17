@@ -36,7 +36,8 @@ class VariationGalleryWidget(QWidget):
         layout.setSpacing(5)
 
         # Заголовок и кнопки управления
-        header_layout = QHBoxLayout()
+        self.header_layout = QHBoxLayout()
+        header_layout = self.header_layout
 
         title_label = QLabel(f"<b>{self.title}</b>")
         title_label.setStyleSheet("font-size: 11px; color: #2C3E50;")

@@ -65,6 +65,11 @@ class YandexDiskService:
         Returns:
             dict с информацией о загруженном файле
         """
+        # Автоматически создаём родительскую папку если не существует
+        parent_dir = "/".join(yandex_path.split("/")[:-1])
+        if parent_dir and parent_dir != "/":
+            self.create_folder(parent_dir)
+
         # Получаем ссылку для загрузки
         upload_url_response = requests.get(
             f"{self.base_url}/resources/upload",
@@ -165,7 +170,7 @@ class YandexDiskService:
 
         return self.get_file_info(yandex_path)
 
-    def delete_file(self, yandex_path: str, permanently: bool = False) -> dict:
+    def delete_file(self, yandex_path: str, permanently: bool = True) -> dict:
         """
         Удалить файл с Яндекс.Диска
 
@@ -186,6 +191,32 @@ class YandexDiskService:
             raise Exception(f"Ошибка удаления: {response.json()}")
 
         return {"status": "deleted", "path": yandex_path}
+
+    def file_exists(self, yandex_path: str) -> bool:
+        """
+        Проверить существование файла на Яндекс.Диске
+
+        Args:
+            yandex_path: Путь к файлу
+
+        Returns:
+            True если файл существует, False если нет
+
+        Raises:
+            Exception: если токен не настроен (нельзя определить существование)
+        """
+        if not self.token:
+            raise Exception("Yandex Disk token not configured on server")
+
+        response = requests.get(
+            f"{self.base_url}/resources",
+            headers=self.headers,
+            params={"path": yandex_path, "fields": "type"},
+            timeout=10
+        )
+        if response.status_code == 401:
+            raise Exception("Yandex Disk token is invalid or expired")
+        return response.status_code == 200
 
     def get_public_link(self, yandex_path: str) -> str:
         """

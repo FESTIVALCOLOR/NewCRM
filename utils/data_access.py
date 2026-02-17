@@ -7,6 +7,14 @@ from typing import Optional, List, Dict, Any
 from database.db_manager import DatabaseManager
 from PyQt5.QtCore import QObject, pyqtSignal
 
+
+def _safe_log(msg):
+    """Безопасный вывод в консоль (не ломает except-блоки на Windows charmap)"""
+    try:
+        print(msg)
+    except (UnicodeEncodeError, OSError, AttributeError):
+        pass
+
 # Импорт OfflineManager (ленивый для избежания циклических импортов)
 _offline_manager = None
 
@@ -105,7 +113,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_clients(skip=0, limit=10000)
             except Exception as e:
-                print(f"[DataAccess] API error get_all_clients, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_all_clients, fallback: {e}")
         return self.db.get_all_clients()
 
     def get_client(self, client_id: int) -> Optional[Dict]:
@@ -114,7 +122,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_client(client_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_client, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_client, fallback: {e}")
         return self.db.get_client_by_id(client_id)
 
     def get_contracts_count_by_client(self, client_id: int) -> int:
@@ -124,7 +132,7 @@ class DataAccess(QObject):
                 contracts = self.api_client.get_contracts()
                 return sum(1 for c in contracts if c.get('client_id') == client_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_contracts_count_by_client, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_contracts_count_by_client, fallback: {e}")
         if hasattr(self.db, 'get_contracts_count_by_client'):
             return self.db.get_contracts_count_by_client(client_id)
         return 0
@@ -144,7 +152,7 @@ class DataAccess(QObject):
                         self._update_local_id('clients', client_id, server_id)
                     return result
             except Exception as e:
-                print(f"[DataAccess] Ошибка API create_client: {e}")
+                _safe_log(f"[DataAccess] Ошибка API create_client: {e}")
                 self._queue_operation('create', 'client', client_id, client_data)
         elif self.api_client:
             # Offline режим - добавляем в очередь
@@ -162,9 +170,9 @@ class DataAccess(QObject):
             cursor.execute(f"UPDATE {table} SET id = ? WHERE id = ?", (server_id, local_id))
             conn.commit()
             self.db.close()
-            print(f"[DataAccess] Обновлён ID в {table}: {local_id} -> {server_id}")
+            _safe_log(f"[DataAccess] Обновлён ID в {table}: {local_id} -> {server_id}")
         except Exception as e:
-            print(f"[DataAccess] Ошибка обновления ID: {e}")
+            _safe_log(f"[DataAccess] Ошибка обновления ID: {e}")
 
     def update_client(self, client_id: int, client_data: Dict) -> bool:
         """Обновить клиента"""
@@ -176,7 +184,7 @@ class DataAccess(QObject):
                 result = self.api_client.update_client(client_id, client_data)
                 return result is not None
             except Exception as e:
-                print(f"[DataAccess] Ошибка API update_client: {e}")
+                _safe_log(f"[DataAccess] Ошибка API update_client: {e}")
                 self._queue_operation('update', 'client', client_id, client_data)
         elif self.api_client:
             # Offline режим
@@ -193,7 +201,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.delete_client(client_id)
             except Exception as e:
-                print(f"[DataAccess] Ошибка API delete_client: {e}")
+                _safe_log(f"[DataAccess] Ошибка API delete_client: {e}")
                 self._queue_operation('delete', 'client', client_id, {})
         elif self.api_client:
             self._queue_operation('delete', 'client', client_id, {})
@@ -208,7 +216,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_contracts(skip=0, limit=10000)
             except Exception as e:
-                print(f"[DataAccess] API error get_all_contracts, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_all_contracts, fallback: {e}")
         return self.db.get_all_contracts()
 
     def get_contract(self, contract_id: int) -> Optional[Dict]:
@@ -217,7 +225,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_contract(contract_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_contract, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_contract, fallback: {e}")
         return self.db.get_contract_by_id(contract_id)
 
     def create_contract(self, contract_data: Dict) -> Optional[Dict]:
@@ -234,7 +242,7 @@ class DataAccess(QObject):
                         self._update_local_id('contracts', contract_id, server_id)
                     return result
             except Exception as e:
-                print(f"[DataAccess] Ошибка API create_contract: {e}")
+                _safe_log(f"[DataAccess] Ошибка API create_contract: {e}")
                 self._queue_operation('create', 'contract', contract_id, contract_data)
         elif self.api_client:
             self._queue_operation('create', 'contract', contract_id, contract_data)
@@ -251,7 +259,7 @@ class DataAccess(QObject):
                 result = self.api_client.update_contract(contract_id, contract_data)
                 return result is not None
             except Exception as e:
-                print(f"[DataAccess] Ошибка API update_contract: {e}")
+                _safe_log(f"[DataAccess] Ошибка API update_contract: {e}")
                 self._queue_operation('update', 'contract', contract_id, contract_data)
         elif self.api_client:
             self._queue_operation('update', 'contract', contract_id, contract_data)
@@ -272,7 +280,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.check_contract_number_exists(contract_number, exclude_id)
             except Exception as e:
-                print(f"[DataAccess] API error check_contract_number_exists, fallback: {e}")
+                _safe_log(f"[DataAccess] API error check_contract_number_exists, fallback: {e}")
         return self.db.check_contract_number_exists(contract_number, exclude_id)
 
     # ==================== СОТРУДНИКИ ====================
@@ -283,7 +291,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_employees(skip=0, limit=10000)
             except Exception as e:
-                print(f"[DataAccess] API error get_all_employees, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_all_employees, fallback: {e}")
         return self.db.get_all_employees()
 
     def get_employees_by_position(self, position: str) -> List[Dict]:
@@ -292,7 +300,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_employees_by_position(position)
             except Exception as e:
-                print(f"[DataAccess] API error get_employees_by_position, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_employees_by_position, fallback: {e}")
         return self.db.get_employees_by_position(position)
 
     def get_employee(self, employee_id: int) -> Optional[Dict]:
@@ -301,7 +309,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_employee(employee_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_employee, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_employee, fallback: {e}")
         return self.db.get_employee_by_id(employee_id)
 
     def create_employee(self, employee_data: Dict) -> Optional[Dict]:
@@ -317,7 +325,7 @@ class DataAccess(QObject):
                         self._update_local_id('employees', employee_id, server_id)
                     return result
             except Exception as e:
-                print(f"[DataAccess] API error create_employee: {e}")
+                _safe_log(f"[DataAccess] API error create_employee: {e}")
                 self._queue_operation('create', 'employee', employee_id, employee_data)
         elif self.api_client:
             self._queue_operation('create', 'employee', employee_id, employee_data)
@@ -333,7 +341,7 @@ class DataAccess(QObject):
                 result = self.api_client.update_employee(employee_id, employee_data)
                 return result is not None
             except Exception as e:
-                print(f"[DataAccess] API error update_employee: {e}")
+                _safe_log(f"[DataAccess] API error update_employee: {e}")
                 self._queue_operation('update', 'employee', employee_id, employee_data)
         elif self.api_client:
             self._queue_operation('update', 'employee', employee_id, employee_data)
@@ -348,7 +356,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.delete_employee(employee_id)
             except Exception as e:
-                print(f"[DataAccess] API error delete_employee: {e}")
+                _safe_log(f"[DataAccess] API error delete_employee: {e}")
                 self._queue_operation('delete', 'employee', employee_id, {})
         elif self.api_client:
             self._queue_operation('delete', 'employee', employee_id, {})
@@ -363,7 +371,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_crm_cards(project_type)
             except Exception as e:
-                print(f"[DataAccess] API error get_crm_cards, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_crm_cards, fallback: {e}")
         return self.db.get_crm_cards_by_project_type(project_type)
 
     def get_crm_card(self, card_id: int) -> Optional[Dict]:
@@ -372,7 +380,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_crm_card(card_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_crm_card, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_crm_card, fallback: {e}")
         return self.db.get_crm_card_data(card_id)
 
     def get_archived_crm_cards(self, project_type: str) -> List[Dict]:
@@ -381,7 +389,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_crm_cards(project_type)  # API фильтрует сам
             except Exception as e:
-                print(f"[DataAccess] API error get_archived_crm_cards, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_archived_crm_cards, fallback: {e}")
         return self.db.get_archived_crm_cards(project_type)
 
     def create_crm_card(self, card_data: Dict) -> Optional[Dict]:
@@ -401,7 +409,7 @@ class DataAccess(QObject):
                 result = self.api_client.update_crm_card(card_id, updates)
                 return result is not None
             except Exception as e:
-                print(f"[DataAccess] Ошибка API update_crm_card: {e}")
+                _safe_log(f"[DataAccess] Ошибка API update_crm_card: {e}")
                 self._queue_operation('update', 'crm_card', card_id, updates)
         elif self.api_client:
             self._queue_operation('update', 'crm_card', card_id, updates)
@@ -437,7 +445,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_supervision_cards(status="active")
             except Exception as e:
-                print(f"[DataAccess] API error get_supervision_cards_active, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_supervision_cards_active, fallback: {e}")
         return self.db.get_supervision_cards_active()
 
     def get_supervision_cards_archived(self) -> List[Dict]:
@@ -446,7 +454,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_supervision_cards(status="archived")
             except Exception as e:
-                print(f"[DataAccess] API error get_supervision_cards_archived, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_supervision_cards_archived, fallback: {e}")
         return self.db.get_supervision_cards_archived()
 
     def get_supervision_card(self, card_id: int) -> Optional[Dict]:
@@ -455,7 +463,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_supervision_card(card_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_supervision_card, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_supervision_card, fallback: {e}")
         return self.db.get_supervision_card_data(card_id)
 
     def create_supervision_card(self, card_data: Dict) -> Optional[Dict]:
@@ -475,7 +483,7 @@ class DataAccess(QObject):
                 result = self.api_client.update_supervision_card(card_id, updates)
                 return result is not None
             except Exception as e:
-                print(f"[DataAccess] Ошибка API update_supervision_card: {e}")
+                _safe_log(f"[DataAccess] Ошибка API update_supervision_card: {e}")
                 self._queue_operation('update', 'supervision_card', card_id, updates)
         elif self.api_client:
             self._queue_operation('update', 'supervision_card', card_id, updates)
@@ -497,7 +505,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_payments_for_contract(contract_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_payments_for_contract, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_payments_for_contract, fallback: {e}")
         return self.db.get_payments_for_contract(contract_id)
 
     def create_payment(self, payment_data: Dict) -> Optional[Dict]:
@@ -529,7 +537,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_action_history(entity_type, entity_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_action_history, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_action_history, fallback: {e}")
         return self.db.get_action_history(entity_type, entity_id)
 
     def add_action_history(self, user_id: int, action_type: str, entity_type: str,
@@ -555,7 +563,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_supervision_history(card_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_supervision_history, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_supervision_history, fallback: {e}")
         return self.db.get_supervision_history(card_id)
 
     def add_supervision_history(self, card_id: int, user_id: int, action_type: str,
@@ -579,7 +587,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_rates(project_type, role)
             except Exception as e:
-                print(f"[DataAccess] API error get_rates, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_rates, fallback: {e}")
         return self.db.get_rates(project_type, role)
 
     def get_rate(self, rate_id: int) -> Optional[Dict]:
@@ -588,7 +596,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_rate(rate_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_rate, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_rate, fallback: {e}")
         return self.db.get_rate_by_id(rate_id)
 
     def create_rate(self, rate_data: Dict) -> Optional[Dict]:
@@ -619,7 +627,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_salaries(report_month, employee_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_salaries, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_salaries, fallback: {e}")
         return self.db.get_salaries(report_month, employee_id)
 
     def get_salary(self, salary_id: int) -> Optional[Dict]:
@@ -628,7 +636,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_salary(salary_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_salary, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_salary, fallback: {e}")
         return self.db.get_salary_by_id(salary_id)
 
     def create_salary(self, salary_data: Dict) -> Optional[Dict]:
@@ -673,7 +681,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_stage_executors(card_id)
             except Exception as e:
-                print(f"[DataAccess] API error get_stage_history, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_stage_history, fallback: {e}")
         return self.db.get_stage_history(card_id)
 
     def get_accepted_stages(self, card_id: int) -> List[Dict]:
@@ -707,7 +715,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_contract_files(contract_id, stage)
             except Exception as e:
-                print(f"[DataAccess] API error get_contract_files, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_contract_files, fallback: {e}")
         return self.db.get_contract_files(contract_id, stage)
 
     def create_file_record(self, file_data: Dict) -> Optional[Dict]:
@@ -721,7 +729,17 @@ class DataAccess(QObject):
         """Удалить запись о файле"""
         if self.api_client:
             return self.api_client.delete_file_record(file_id)
-        return self.db.delete_contract_file(file_id)
+        return self.db.delete_project_file(file_id)
+
+    def validate_files(self, file_ids: list, auto_clean: bool = False) -> list:
+        """Пакетная проверка существования файлов на Яндекс.Диске"""
+        if self._should_use_api():
+            try:
+                return self.api_client.validate_files(file_ids, auto_clean)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error validate_files: {e}")
+                return []
+        return []
 
     # ==================== ШАБЛОНЫ ПРОЕКТОВ ====================
 
@@ -749,7 +767,7 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_dashboard_statistics(year, month, quarter, project_type)
             except Exception as e:
-                print(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
+                _safe_log(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
         return self.db.get_dashboard_statistics(year, month, quarter, project_type)
 
     def get_supervision_statistics(self, address: str = None, dan_id: int = None,
@@ -757,6 +775,117 @@ class DataAccess(QObject):
         """Получить статистику надзора"""
         # API пока не поддерживает, используем локальную БД
         return self.db.get_supervision_statistics_filtered(address, dan_id, manager_id)
+
+    # ==================== ТАБЛИЦА СРОКОВ (CRM) ====================
+
+    def get_project_timeline(self, contract_id: int) -> List[Dict]:
+        """Получить таблицу сроков проекта"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_project_timeline(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_project_timeline, fallback: {e}")
+        return self.db.get_project_timeline(contract_id)
+
+    def init_project_timeline(self, contract_id: int, data: Dict) -> Optional[Dict]:
+        """Инициализировать таблицу сроков из шаблона"""
+        if self._should_use_api():
+            try:
+                return self.api_client.init_project_timeline(contract_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error init_project_timeline: {e}")
+        return None
+
+    def reinit_project_timeline(self, contract_id: int, data: Dict) -> Optional[Dict]:
+        """Пересоздать таблицу сроков (удалить и создать заново)"""
+        if self._should_use_api():
+            try:
+                return self.api_client.reinit_project_timeline(contract_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error reinit_project_timeline: {e}")
+        return None
+
+    def update_timeline_entry(self, contract_id: int, stage_code: str, data: Dict) -> bool:
+        """Обновить запись таблицы сроков"""
+        self.db.update_timeline_entry(contract_id, stage_code, data)
+        if self.is_online and self.api_client:
+            try:
+                self.api_client.update_timeline_entry(contract_id, stage_code, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error update_timeline_entry: {e}")
+        return True
+
+    def get_timeline_summary(self, contract_id: int) -> Dict:
+        """Получить сводку по таблице сроков"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_timeline_summary(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_timeline_summary: {e}")
+        return {}
+
+    def export_timeline_excel(self, contract_id: int) -> bytes:
+        """Экспорт таблицы сроков в Excel"""
+        if self.api_client:
+            return self.api_client.export_timeline_excel(contract_id)
+        return b''
+
+    def export_timeline_pdf(self, contract_id: int) -> bytes:
+        """Экспорт таблицы сроков в PDF"""
+        if self.api_client:
+            return self.api_client.export_timeline_pdf(contract_id)
+        return b''
+
+    # ==================== ТАБЛИЦА СРОКОВ (НАДЗОР) ====================
+
+    def get_supervision_timeline(self, card_id: int) -> List[Dict]:
+        """Получить таблицу сроков надзора"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_supervision_timeline(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_supervision_timeline, fallback: {e}")
+        return self.db.get_supervision_timeline(card_id)
+
+    def init_supervision_timeline(self, card_id: int, data: Dict = None) -> Optional[Dict]:
+        """Инициализировать таблицу сроков надзора"""
+        if self._should_use_api():
+            try:
+                return self.api_client.init_supervision_timeline(card_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error init_supervision_timeline: {e}")
+        return None
+
+    def update_supervision_timeline_entry(self, card_id: int, stage_code: str, data: Dict) -> bool:
+        """Обновить запись таблицы сроков надзора"""
+        self.db.update_supervision_timeline_entry(card_id, stage_code, data)
+        if self.is_online and self.api_client:
+            try:
+                self.api_client.update_supervision_timeline_entry(card_id, stage_code, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error update_supervision_timeline_entry: {e}")
+        return True
+
+    def get_supervision_timeline_summary(self, card_id: int) -> Dict:
+        """Получить сводку по таблице сроков надзора"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_supervision_timeline_summary(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_supervision_timeline_summary: {e}")
+        return {}
+
+    def export_supervision_timeline_excel(self, card_id: int) -> bytes:
+        """Экспорт таблицы сроков надзора в Excel"""
+        if self.api_client:
+            return self.api_client.export_supervision_timeline_excel(card_id)
+        return b''
+
+    def export_supervision_timeline_pdf(self, card_id: int) -> bytes:
+        """Экспорт таблицы сроков надзора в PDF"""
+        if self.api_client:
+            return self.api_client.export_supervision_timeline_pdf(card_id)
+        return b''
 
     # ==================== ПРЯМОЙ ДОСТУП К БД (для сложных запросов) ====================
 
@@ -791,3 +920,39 @@ class DataAccess(QObject):
         conn.commit()
         conn.close()
         return rowcount
+
+    # =========================
+    # ГЛОБАЛЬНЫЙ ПОИСК
+    # =========================
+
+    def global_search(self, query: str, limit: int = 50) -> Dict[str, Any]:
+        """Полнотекстовый поиск по клиентам, договорам, CRM карточкам"""
+        if self.api_client:
+            try:
+                return self.api_client.search(query, limit)
+            except Exception:
+                pass
+        # Fallback: локальный поиск по SQLite
+        return self.db.global_search(query, limit)
+
+    # =========================
+    # СТАТИСТИКА (расширенная)
+    # =========================
+
+    def get_funnel_statistics(self, year: int = None, project_type: str = None) -> Dict[str, Any]:
+        """Статистика воронки проектов"""
+        if self.api_client:
+            try:
+                return self.api_client.get_funnel_statistics(year, project_type)
+            except Exception:
+                pass
+        return self.db.get_funnel_statistics(year, project_type)
+
+    def get_executor_load(self, year: int = None, month: int = None) -> List[Dict[str, Any]]:
+        """Нагрузка на исполнителей"""
+        if self.api_client:
+            try:
+                return self.api_client.get_executor_load(year, month)
+            except Exception:
+                pass
+        return self.db.get_executor_load(year, month)

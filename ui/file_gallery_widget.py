@@ -98,9 +98,10 @@ class FileGalleryWidget(QWidget):
                 file_id=file_data['id'],
                 file_name=file_data['file_name'],
                 file_type=file_data['file_type'],
-                public_link=file_data['public_link'],
+                public_link=file_data.get('public_link', ''),
                 preview_pixmap=preview_pixmap,
-                can_delete=self.can_delete
+                can_delete=self.can_delete,
+                yandex_path=file_data.get('yandex_path', '')
             )
 
             # Подключаем сигналы

@@ -9,6 +9,14 @@ YANDEX_DISK_LINK = "https://disk.yandex.ru/d/SMKt9A7JGjzSEw"
 # ВАЖНО: Для работы требуются права: cloud_api:disk.app_folder или cloud_api:disk.write
 YANDEX_DISK_TOKEN = os.getenv('YANDEX_DISK_TOKEN', '')
 
+# ========== ЯНДЕКС.ДИСК ПУТИ ==========
+# Единая корневая папка для всех данных CRM на Яндекс.Диске
+YANDEX_DISK_ROOT = 'disk:/CRM'
+YANDEX_DISK_PROJECTS = f'{YANDEX_DISK_ROOT}/Проекты'
+YANDEX_DISK_BACKUPS = f'{YANDEX_DISK_ROOT}/Бэкапы'
+YANDEX_DISK_UPDATES = f'{YANDEX_DISK_ROOT}/Обновления'
+# =======================================
+
 # Роли пользователей
 ROLES = {
     'Руководитель студии': {
@@ -46,7 +54,7 @@ ROLES = {
         'can_edit': True  # доступ к просмотру данных по проекту
     },
     'Менеджер': {
-        'tabs': ['СРМ', 'Сотрудники'],
+        'tabs': ['СРМ', 'СРМ надзора', 'Отчеты и Статистика', 'Сотрудники'],
         'can_assign': [],
         'can_edit': True
     },
@@ -75,6 +83,13 @@ POSITIONS = [
 ]
 # Типы проектов
 PROJECT_TYPES = ['Индивидуальный', 'Шаблонный']
+PROJECT_SUBTYPES = ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный']
+TEMPLATE_SUBTYPES = [
+    'Стандарт',
+    'Стандарт с визуализацией',
+    'Проект ванной комнаты',
+    'Проект ванной комнаты с визуализацией'
+]
 AGENTS = ['ФЕСТИВАЛЬ', 'ПЕТРОВИЧ']
 CITIES = ['СПБ', 'МСК', 'ВН']
 PROJECT_STATUSES = ['СДАН', 'АВТОРСКИЙ НАДЗОР', 'РАСТОРГНУТ']
@@ -104,8 +119,11 @@ UPDATE_CHECK_URL = "https://cloud-api.yandex.net/v1/disk/public/resources"
 # Включить многопользовательский режим (работа через API сервер)
 MULTI_USER_MODE = True
 
-# URL API сервера (замените на ваш сервер)
-API_BASE_URL = "http://147.45.154.193:8000"
+# URL API сервера (задать через переменную окружения API_BASE_URL)
+API_BASE_URL = os.getenv('API_BASE_URL', "https://crm.festivalcolor.ru")
+
+# Проверять SSL сертификат сервера (Let's Encrypt = валидный сертификат)
+API_VERIFY_SSL = os.getenv('API_VERIFY_SSL', 'true').lower() in ('true', '1', 'yes')
 
 # Интервал синхронизации с сервером (секунды)
 SYNC_INTERVAL = 5
@@ -132,10 +150,10 @@ class Settings(BaseSettings):
     api_version: str = APP_VERSION
     api_description: str = "REST API для многопользовательской CRM системы"
 
-    # Безопасность
-    secret_key: str = "interior_studio_secret_key_change_in_production"
+    # Безопасность (на сервере задаётся через SECRET_KEY в .env)
+    secret_key: str = os.getenv('SECRET_KEY', "local-dev-key-not-for-production")
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 1440  # 24 часа
+    access_token_expire_minutes: int = 60  # 60 минут (auto-refresh на клиенте)
 
     # База данных
     database_url: str = f"sqlite:///{DATABASE_PATH}"

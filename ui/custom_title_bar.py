@@ -61,7 +61,7 @@ class CustomTitleBar(QWidget):
             title_label.setStyleSheet("""
                 font-size: 12px;
                 color: #333333;
-                font-weight: 500;
+                font-weight: 700;
                 background-color: transparent;
             """)
             layout.addWidget(title_label)

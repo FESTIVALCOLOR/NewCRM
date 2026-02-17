@@ -126,31 +126,18 @@ class SalariesTab(QWidget):
         
         header_layout.addStretch()
 
-        # ========== КНОПКА ТАРИФОВ (ТОЛЬКО ДЛЯ РУКОВОДИТЕЛЯ) ==========
-        if self.employee['position'] == 'Руководитель студии':
+        if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
             try:
                 from ui.rates_dialog import RatesDialog
 
-                rates_btn = QPushButton('Тарифы')
-                rates_btn.setIcon(IconLoader.load('settings', 'Тарифы'))
-                rates_btn.setIconSize(QSize(12, 12))
-                rates_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #FF9800;
-                        color: white;
-                        padding: 2px 8px;
-                        font-size: 11px;
-                        border-radius: 4px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover { background-color: #F57C00; }
-                """)
+                rates_btn = IconLoader.create_action_button(
+                    'settings', 'Тарифы',
+                    bg_color='#FF9800', hover_color='#F57C00', icon_color='#ffffff')
                 rates_btn.clicked.connect(lambda: RatesDialog(self, api_client=self.api_client).exec_())
                 header_layout.addWidget(rates_btn)
 
             except Exception as e:
                 print(f" Не удалось создать кнопку тарифов: {e}")
-        # =============================================================
         
         layout.addLayout(header_layout)
                
@@ -233,6 +220,7 @@ class SalariesTab(QWidget):
             self.year_filter.addItem(str(year))
         self.year_filter.setCurrentText(str(QDate.currentDate().year()))
         self.year_filter.currentTextChanged.connect(self.apply_all_payments_filters)
+        self.year_filter.hide()  # По умолчанию период = "Все"
         row1_layout.addWidget(self.year_filter)
 
         self.quarter_filter = CustomComboBox()
@@ -248,6 +236,7 @@ class SalariesTab(QWidget):
         self.month_filter.addItems(months)
         self.month_filter.setCurrentIndex(QDate.currentDate().month() - 1)
         self.month_filter.currentIndexChanged.connect(self.apply_all_payments_filters)
+        self.month_filter.hide()  # По умолчанию период = "Все"
         row1_layout.addWidget(self.month_filter)
 
         row1_layout.addStretch()
@@ -385,7 +374,17 @@ class SalariesTab(QWidget):
         self.all_payments_table.verticalHeader().setDefaultSectionSize(36)
 
         layout.addWidget(self.all_payments_table)
-        
+
+        # Предупреждение о переназначении (изначально скрыто)
+        self.all_payments_warning = QLabel()
+        self.all_payments_warning.setStyleSheet('''
+            background-color: #FFF3CD; color: #856404; border: 2px solid #FFC107;
+            border-radius: 4px; padding: 10px; font-size: 11px; margin: 10px 0;
+        ''')
+        self.all_payments_warning.setWordWrap(True)
+        self.all_payments_warning.setVisible(False)
+        layout.addWidget(self.all_payments_warning)
+
         # Итого
         self.totals_label = QLabel()
         self.totals_label.setStyleSheet('''
@@ -711,6 +710,17 @@ class SalariesTab(QWidget):
 
         layout.addWidget(table)
 
+        # Предупреждение о переназначении (изначально скрыто)
+        warning_label = QLabel()
+        warning_label.setObjectName(f'warning_{payment_type}')
+        warning_label.setStyleSheet('''
+            background-color: #FFF3CD; color: #856404; border: 2px solid #FFC107;
+            border-radius: 4px; padding: 10px; font-size: 11px; margin: 10px 0;
+        ''')
+        warning_label.setWordWrap(True)
+        warning_label.setVisible(False)
+        layout.addWidget(warning_label)
+
         # Метка для итогов
         totals_label = QLabel()
         totals_label.setObjectName(f'totals_{payment_type}')
@@ -878,7 +888,7 @@ class SalariesTab(QWidget):
         layout.addWidget(edit_btn)
 
         # Кнопка удаления (только для руководителей)
-        if self.employee['position'] in ['Руководитель студии', 'Старший менеджер проектов']:
+        if self.employee.get('position', '') in ['Руководитель студии', 'Старший менеджер проектов'] or self.employee.get('secondary_position', '') in ['Руководитель студии', 'Старший менеджер проектов']:
             delete_btn = QPushButton()
             delete_btn.setIcon(IconLoader.load('delete2'))
             delete_btn.setIconSize(QSize(12, 12))
@@ -1043,20 +1053,20 @@ class SalariesTab(QWidget):
                 self.data.update_payment(payment['id'], {
                     'final_amount': payment_data['amount'],
                     'payment_type': payment_data['payment_type'],
-                    'report_month': payment_data['report_month']
+                    'report_month': payment_data['report_month'],
+                    'reassigned': False  # Сбрасываем флаг переназначения при редактировании
                 })
                 print(f"[DataAccess] Выплата обновлена: ID={payment['id']}")
-
-                CustomMessageBox(
-                    self,
-                    'Успех',
-                    'Выплата успешно обновлена',
-                    'success'
-                ).exec_()
 
                 # Обновляем таблицы (принудительная перезагрузка т.к. данные изменились)
                 self.invalidate_cache()
                 self.load_all_payments()
+
+                # Обновляем текущую подвкладку
+                current_idx = self.payment_tabs.currentIndex()
+                tab_names = ['Все выплаты', 'Индивидуальные проекты', 'Шаблонные проекты', 'Авторский надзор', 'Оклады']
+                if 0 < current_idx < len(tab_names):
+                    self.load_payment_type_data(tab_names[current_idx])
 
         except Exception as e:
             print(f" Ошибка редактирования выплаты: {e}")
@@ -1303,9 +1313,10 @@ class SalariesTab(QWidget):
         """Ленивая загрузка: данные загружаются при первом показе таба"""
         if not self._data_loaded:
             self._data_loaded = True
-            self.data.prefer_local = True
+            # Первая загрузка — из локальной БД для мгновенного отображения
+            self._prefer_local_load = True
             self.load_all_payments()
-            self.data.prefer_local = False
+            self._prefer_local_load = False
 
     def load_all_payments(self, force_reload=False):
         """Загрузка всех выплат с применением фильтров и кешированием"""
@@ -1327,7 +1338,9 @@ class SalariesTab(QWidget):
             # ИСПРАВЛЕНО 06.02.2026: include_null_month=True для включения платежей "В работе"
             # Загружаем данные за весь год (один запрос вместо 12)
             # get_year_payments - специфичный метод, не в DataAccess, используем api_client/db напрямую
-            if self.api_client:
+            # _prefer_local_load=True при первом открытии таба — мгновенная загрузка из локальной БД
+            use_api = self.api_client and not getattr(self, '_prefer_local_load', False)
+            if use_api:
                 try:
                     # Получаем все выплаты за год одним запросом, включая NULL report_month
                     all_payments = self.api_client.get_year_payments(year, include_null_month=True)
@@ -1348,7 +1361,7 @@ class SalariesTab(QWidget):
                 seen_ids = set()  # Множество для отслеживания уже добавленных платежей
                 for y in range(2020, 2031):
                     # get_year_payments - специфичный метод, не в DataAccess
-                    if self.api_client:
+                    if use_api:
                         try:
                             year_payments = self.api_client.get_year_payments(y, include_null_month=True)
                         except Exception as e:
@@ -1595,6 +1608,16 @@ class SalariesTab(QWidget):
         reassigned_count = sum(1 for p in payments if p.get('reassigned', False))
         reassigned_text = f'  |  Перераспределено: {reassigned_count}' if reassigned_count > 0 else ''
 
+        # Показываем/скрываем предупреждение о переназначении
+        if hasattr(self, 'all_payments_warning'):
+            if reassigned_count > 0:
+                self.all_payments_warning.setText(
+                    '<b>ВНИМАНИЕ!</b> Обнаружено переназначение сотрудников (строки выделены жёлтым).'
+                )
+                self.all_payments_warning.setVisible(True)
+            else:
+                self.all_payments_warning.setVisible(False)
+
         self.totals_label.setText(
             f'Итого за период: {total_month:,.2f} ₽  |  '
             f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
@@ -1633,7 +1656,8 @@ class SalariesTab(QWidget):
                        e.full_name as employee_name, e.position,
                        c.contract_number, c.address, c.area, c.city, c.agent_type,
                        sc.column_name as card_stage,
-                       'CRM Надзор' as source
+                       'CRM Надзор' as source,
+                       p.reassigned, p.old_employee_id
                 FROM payments p
                 JOIN employees e ON p.employee_id = e.id
                 LEFT JOIN supervision_cards sc ON p.supervision_card_id = sc.id
@@ -1647,7 +1671,8 @@ class SalariesTab(QWidget):
                        e.full_name as employee_name, e.position,
                        c.contract_number, c.address, c.area, c.city, c.agent_type,
                        NULL as card_stage,
-                       'Оклад' as source
+                       'Оклад' as source,
+                       0 as reassigned, NULL as old_employee_id
                 FROM salaries s
                 JOIN employees e ON s.employee_id = e.id
                 LEFT JOIN contracts c ON s.contract_id = c.id
@@ -1663,7 +1688,8 @@ class SalariesTab(QWidget):
                        e.full_name as employee_name, e.position,
                        c.contract_number, c.address, c.area, c.city, c.agent_type,
                        cc.column_name as card_stage,
-                       'CRM' as source
+                       'CRM' as source,
+                       p.reassigned, p.old_employee_id
                 FROM payments p
                 JOIN employees e ON p.employee_id = e.id
                 LEFT JOIN crm_cards cc ON p.crm_card_id = cc.id
@@ -1677,7 +1703,8 @@ class SalariesTab(QWidget):
                        e.full_name as employee_name, e.position,
                        c.contract_number, c.address, c.area, c.city, c.agent_type,
                        NULL as card_stage,
-                       'Оклад' as source
+                       'Оклад' as source,
+                       0 as reassigned, NULL as old_employee_id
                 FROM salaries s
                 JOIN employees e ON s.employee_id = e.id
                 LEFT JOIN contracts c ON s.contract_id = c.id
@@ -1875,15 +1902,6 @@ class SalariesTab(QWidget):
                     payment_type_value = item.get('payment_type', '')
                     amount_item = QTableWidgetItem(f"{item['final_amount']:,.2f} ₽")
                     amount_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                    # Цвет в зависимости от типа выплаты
-                    if payment_type_value == 'Аванс':
-                        amount_item.setForeground(QColor('#ffd93c'))  # Синий для аванса
-                    elif payment_type_value == 'Доплата':
-                        amount_item.setForeground(QColor('#E67E22'))  # Оранжевый для доплаты
-                    elif payment_type_value == 'Полная оплата':
-                        amount_item.setForeground(QColor('#27AE60'))  # Зеленый для полной оплаты
-
                     table.setItem(row, col, amount_item)
                     col += 1
 
@@ -1913,7 +1931,19 @@ class SalariesTab(QWidget):
 
                     # Применяем цвет строки в зависимости от статуса и переназначения
                     is_reassigned = item.get('reassigned', False)
-                    self.apply_row_color(table, row, item.get('payment_status'), is_reassigned)
+                    self.apply_row_color(table, row, item.get('payment_status'), is_reassigned, employee_col=6)
+
+                # Показываем/скрываем предупреждение о переназначении
+                warning_label = parent_widget.findChild(QLabel, f'warning_{payment_type}')
+                if warning_label:
+                    has_reassigned = any(item.get('reassigned', False) for item in data)
+                    if has_reassigned:
+                        warning_label.setText(
+                            '<b>ВНИМАНИЕ!</b> Обнаружено переназначение сотрудников (строки выделены жёлтым).'
+                        )
+                        warning_label.setVisible(True)
+                    else:
+                        warning_label.setVisible(False)
 
                 # Подсчитываем итоги
                 from datetime import datetime
@@ -1938,12 +1968,16 @@ class SalariesTab(QWidget):
                         if report_month.startswith(str(current_year)):
                             total_year += amount
 
+                # Подсчёт перераспределённых платежей
+                reassigned_count = sum(1 for item in data if item.get('reassigned', False))
+                reassigned_text = f'  |  Перераспределено: {reassigned_count}' if reassigned_count > 0 else ''
+
                 # Обновляем метку итогов
                 totals_label = parent_widget.findChild(QLabel, f'totals_{payment_type}')
                 if totals_label:
                     totals_label.setText(
                         f'Итого за месяц: {total_month:,.2f} ₽  |  '
-                        f'Итого за год: {total_year:,.2f} ₽'
+                        f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
                     )
 
                 # Включаем сортировку после загрузки данных
@@ -2294,12 +2328,19 @@ class SalariesTab(QWidget):
         widget.setLayout(layout)
         return widget
     
+    def _refresh_dashboard(self):
+        """Обновить дашборд после изменения данных"""
+        mw = self.window()
+        if hasattr(mw, 'refresh_current_dashboard'):
+            mw.refresh_current_dashboard()
+
     def add_salary_payment(self):
         """Добавление выплаты оклада"""
         dialog = PaymentDialog(self, payment_type='Оклады', api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
             self.load_all_payments()
+            self._refresh_dashboard()
 
     def add_payment(self, payment_type):
         """Добавление выплаты"""
@@ -2307,6 +2348,7 @@ class SalariesTab(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
             self.load_all_payments()
+            self._refresh_dashboard()
 
     def edit_payment(self, payment_data, payment_type):
         """Редактирование выплаты"""
@@ -2314,6 +2356,7 @@ class SalariesTab(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
             self.load_all_payments()
+            self._refresh_dashboard()
 
     def edit_salary_payment(self, payment_data):
         """Редактирование оклада"""
@@ -2322,6 +2365,7 @@ class SalariesTab(QWidget):
             self.invalidate_cache()
             self.load_all_payments()
             self.load_payment_type_data('Оклады')
+            self._refresh_dashboard()
 
     def delete_salary_payment(self, payment):
         """Удаление оклада (#5)"""
@@ -2339,6 +2383,7 @@ class SalariesTab(QWidget):
             self.invalidate_cache()
             self.load_all_payments()
             self.load_payment_type_data('Оклады')
+            self._refresh_dashboard()
 
     def delete_payment(self, payment_id):
         """Удаление выплаты"""
@@ -2353,6 +2398,7 @@ class SalariesTab(QWidget):
             self.data.delete_payment(payment_id)
             self.invalidate_cache()
             self.load_all_payments()
+            self._refresh_dashboard()
 
     def create_salary_payment_actions(self, payment, payment_type, table, row):
         """Кнопки действий для окладов с новым дизайном"""
@@ -2551,7 +2597,7 @@ class SalariesTab(QWidget):
         conn.commit()
         self.db.close()
 
-    def apply_row_color(self, table, row, status, is_reassigned=False):
+    def apply_row_color(self, table, row, status, is_reassigned=False, employee_col=2):
         """Применение цвета к строке в зависимости от статуса и переназначения"""
         if is_reassigned:
             color_name = '#FFF9C4'
@@ -2574,14 +2620,14 @@ class SalariesTab(QWidget):
                 text = item.text() if item else ""
                 alignment = item.textAlignment() if item else int(Qt.AlignLeft | Qt.AlignVCenter)
 
-                if is_reassigned and col == 2:
+                if is_reassigned and col == employee_col:
                     text = text + ' *'
 
                 label = QLabel(text)
                 label.setStyleSheet(style)
                 label.setAlignment(Qt.Alignment(alignment))
 
-                if is_reassigned and col == 2:
+                if is_reassigned and col == employee_col:
                     label.setToolTip('Выплата переназначена другому исполнителю')
 
                 table.setCellWidget(row, col, label)

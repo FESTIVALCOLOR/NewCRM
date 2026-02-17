@@ -3,15 +3,29 @@ FastAPI приложение - главный файл
 REST API для многопользовательской CRM
 """
 import logging
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
+import os
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from typing import List, Optional
 import io
+import json
+import threading
+
+# Блокировка для предотвращения параллельных сканирований одного договора
+_scanning_contracts_lock = threading.Lock()
+_scanning_contracts = set()
+
+# Brute-force защита логина: персистентная (в БД) + in-memory fallback
+from collections import defaultdict
+_login_attempts = defaultdict(list)
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_BLOCK_MINUTES = 15
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +37,8 @@ from database import (
     Employee, Client, Contract, Notification, UserSession, ActivityLog,
     CRMCard, StageExecutor, SupervisionCard, SupervisionProjectHistory,
     Payment, Rate, Salary, ProjectFile, ActionHistory, ConcurrentEdit,
-    ApprovalStageDeadline
+    ApprovalStageDeadline, ProjectTimelineEntry, SupervisionTimelineEntry,
+    StageWorkflowState
 )
 from schemas import (
     LoginRequest, TokenResponse,
@@ -49,12 +64,25 @@ from schemas import (
     ActionHistoryCreate, ActionHistoryResponse,
     # Extended Request Schemas
     PaymentManualUpdateRequest, TemplateRateRequest, IndividualRateRequest,
-    SupervisionRateRequest, SurveyorRateRequest, ContractFilesUpdate
+    SupervisionRateRequest, SurveyorRateRequest, ContractFilesUpdate,
+    # CRM Approval/Executor Request Schemas
+    CompleteApprovalStageRequest, StageExecutorDeadlineRequest,
+    CompleteStageExecutorRequest, ManagerAcceptanceRequest,
+    # Timeline
+    TimelineEntryCreate, TimelineEntryUpdate, TimelineEntryResponse, TimelineInitRequest,
+    SupervisionTimelineCreate, SupervisionTimelineUpdate, SupervisionTimelineResponse
 )
 from auth import (
     verify_password, get_password_hash, create_access_token,
     create_refresh_token, verify_refresh_token, get_current_user
 )
+from permissions import (
+    require_permission, check_permission as perm_check,
+    PERMISSION_NAMES, DEFAULT_ROLE_PERMISSIONS, SUPERUSER_ROLES,
+    seed_permissions, invalidate_cache as invalidate_perm_cache,
+    get_employee_permissions, set_employee_permissions, reset_to_defaults,
+)
+from schemas import PermissionSetRequest, PermissionResponse, PermissionDefinition, LockRequest
 
 settings = get_settings()
 
@@ -65,14 +93,38 @@ app = FastAPI(
     description="REST API для многопользовательской CRM Interior Studio"
 )
 
-# CORS middleware
+# CORS middleware — ЗАПРЕЩЁН wildcard "*" при allow_credentials=True
+_allowed_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if not _allowed_origins or _allowed_origins == "*":
+    # По умолчанию разрешаем только localhost (для разработки)
+    _cors_origins = ["http://localhost:3000", "http://localhost:8080"]
+    logger.warning("CORS: ALLOWED_ORIGINS не задан, используются origins для разработки")
+else:
+    _cors_origins = [o.strip() for o in _allowed_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшене заменить на конкретные домены
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
+
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Добавление защитных HTTP заголовков"""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    # HSTS — включать только при наличии HTTPS
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.on_event("startup")
@@ -81,6 +133,33 @@ async def startup_event():
     print(f"[INFO] Запуск {settings.app_name} v{settings.app_version}")
     init_db()
     print("[OK] База данных инициализирована")
+
+    # Миграция таблицы user_permissions: переименование колонок
+    from database import engine, UserPermission
+    from sqlalchemy import inspect, text
+    try:
+        insp = inspect(engine)
+        if insp.has_table("user_permissions"):
+            columns = [c["name"] for c in insp.get_columns("user_permissions")]
+            if "permission_type" in columns and "permission_name" not in columns:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE user_permissions RENAME COLUMN permission_type TO permission_name"))
+                    logger.info("Migrated user_permissions: permission_type -> permission_name")
+            if "target" in columns:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE user_permissions DROP COLUMN target"))
+                    logger.info("Migrated user_permissions: dropped column target")
+    except Exception as e:
+        logger.warning(f"user_permissions migration note: {e}")
+
+    # Seed дефолтных прав
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        seed_permissions(db)
+    finally:
+        db.close()
+    print("[OK] Permissions seeded")
 
 
 @app.get("/")
@@ -99,24 +178,158 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/api/version")
+async def get_app_version():
+    """Получить текущую версию серверного приложения для сверки клиентами"""
+    return {
+        "version": settings.app_version,
+        "app": settings.app_name
+    }
+
+
+# =========================
+# ГЛОБАЛЬНЫЙ ПОИСК
+# =========================
+
+@app.get("/api/search")
+async def global_search(
+    q: str,
+    limit: int = 50,
+    entity_types: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Полнотекстовый поиск по клиентам, договорам и CRM карточкам.
+    entity_types — через запятую: clients,contracts,crm_cards
+    """
+    if not q or len(q.strip()) < 2:
+        return {"results": [], "total": 0, "query": q}
+
+    query_text = q.strip()
+    search_pattern = f"%{query_text}%"
+    results = []
+    types_filter = entity_types.split(",") if entity_types else ["clients", "contracts", "crm_cards"]
+
+    # Поиск по клиентам
+    if "clients" in types_filter:
+        from database import Client as ClientModel
+        clients = db.query(ClientModel).filter(
+            or_(
+                ClientModel.full_name.ilike(search_pattern),
+                ClientModel.phone.ilike(search_pattern),
+                ClientModel.email.ilike(search_pattern),
+                ClientModel.organization_name.ilike(search_pattern)
+            )
+        ).limit(limit).all()
+        for c in clients:
+            results.append({
+                "type": "client",
+                "id": c.id,
+                "title": c.full_name or "",
+                "subtitle": c.phone or c.email or "",
+            })
+
+    # Поиск по договорам
+    if "contracts" in types_filter:
+        from database import Contract as ContractModel
+        contracts = db.query(ContractModel).filter(
+            or_(
+                ContractModel.contract_number.ilike(search_pattern),
+                ContractModel.address.ilike(search_pattern),
+            )
+        ).limit(limit).all()
+        for ct in contracts:
+            results.append({
+                "type": "contract",
+                "id": ct.id,
+                "title": ct.contract_number or "",
+                "subtitle": ct.address or "",
+            })
+
+    # Поиск по CRM карточкам (через join с договором)
+    if "crm_cards" in types_filter:
+        from database import CRMCard as CRMCardModel, Contract as ContractModel2
+        cards = db.query(CRMCardModel).join(
+            ContractModel2, CRMCardModel.contract_id == ContractModel2.id
+        ).filter(
+            or_(
+                ContractModel2.address.ilike(search_pattern),
+                ContractModel2.contract_number.ilike(search_pattern),
+            )
+        ).limit(limit).all()
+        for card in cards:
+            contract = db.query(ContractModel2).filter(ContractModel2.id == card.contract_id).first()
+            results.append({
+                "type": "crm_card",
+                "id": card.id,
+                "title": f"Проект #{card.id}",
+                "subtitle": f"{contract.address if contract else ''} ({card.column_name})",
+            })
+
+    return {
+        "results": results[:limit],
+        "total": len(results),
+        "query": q
+    }
+
+
 # =========================
 # АУТЕНТИФИКАЦИЯ
 # =========================
 
 @app.post("/api/auth/login")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     """Вход в систему - возвращает access_token и refresh_token"""
+    # Brute-force защита: in-memory + персистентная через ActivityLog
+    client_ip = request.client.host if request.client else "unknown"
+    now = datetime.utcnow()
+    cutoff = now - timedelta(minutes=_LOGIN_BLOCK_MINUTES)
+
+    # In-memory счётчик (быстрый)
+    _login_attempts[client_ip] = [
+        t for t in _login_attempts[client_ip] if t > cutoff
+    ]
+
+    # Дополнительно проверяем в БД (персистентно, переживает рестарт)
+    db_failed_count = db.query(ActivityLog).filter(
+        ActivityLog.action_type == "login_failed",
+        ActivityLog.entity_type == "auth",
+        ActivityLog.action_date > cutoff
+    ).count()
+
+    total_attempts = max(len(_login_attempts[client_ip]), db_failed_count)
+    if total_attempts >= _LOGIN_MAX_ATTEMPTS:
+        logger.warning(f"Brute-force заблокирован: IP={client_ip}, попыток={total_attempts}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Слишком много попыток входа. Повторите через {_LOGIN_BLOCK_MINUTES} минут",
+        )
+
     # Поиск сотрудника
     employee = db.query(Employee).filter(Employee.login == form_data.username).first()
     if not employee or not verify_password(form_data.password, employee.password_hash):
+        _login_attempts[client_ip].append(now)
+        # Логируем неудачную попытку в БД (персистентно)
+        failed_log = ActivityLog(
+            employee_id=employee.id if employee else 0,
+            action_type="login_failed",
+            entity_type="auth",
+            entity_id=0
+        )
+        db.add(failed_log)
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный логин или пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Успешный вход — очищаем счётчик
+    _login_attempts.pop(client_ip, None)
 
     # Создание токенов
     access_token = create_access_token(data={"sub": str(employee.id)})
@@ -154,7 +367,10 @@ async def login(
         "token_type": "bearer",
         "employee_id": employee.id,
         "full_name": employee.full_name,
-        "role": employee.role or ""
+        "role": employee.role or "",
+        "position": employee.position or "",
+        "secondary_position": employee.secondary_position or "",
+        "department": employee.department or ""
     }
 
 
@@ -282,16 +498,13 @@ async def get_employee(
     return employee
 
 
-@app.post("/api/employees", response_model=EmployeeResponse)
+@app.post("/api/employees", response_model=EmployeeResponse, status_code=201)
 async def create_employee(
     employee_data: EmployeeCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("employees.create")),
     db: Session = Depends(get_db)
 ):
     """Создать нового сотрудника"""
-    # Проверка прав (только руководитель)
-    if current_user.role != "Руководитель студии":
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
 
     # Проверка уникальности логина
     existing = db.query(Employee).filter(Employee.login == employee_data.login).first()
@@ -324,18 +537,24 @@ async def create_employee(
 async def update_employee(
     employee_id: int,
     employee_data: EmployeeUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("employees.update")),
     db: Session = Depends(get_db)
 ):
     """Обновить сотрудника"""
-    # Проверка прав (только руководители)
-    allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-    if current_user.role not in allowed_roles:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
 
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    # IDOR защита: Старший менеджер не может менять руководителей и других старших менеджеров
+    protected_roles = ['Руководитель студии', 'admin', 'director']
+    if current_user.role == 'Старший менеджер проектов':
+        if employee.role in protected_roles:
+            raise HTTPException(status_code=403, detail="Недостаточно прав для изменения этого сотрудника")
+        # Запрет повышения роли до руководителя
+        update_data_check = employee_data.model_dump(exclude_unset=True)
+        if 'role' in update_data_check and update_data_check['role'] in protected_roles:
+            raise HTTPException(status_code=403, detail="Недостаточно прав для назначения этой роли")
 
     # Обновление полей
     update_data = employee_data.model_dump(exclude_unset=True)
@@ -367,13 +586,10 @@ async def update_employee(
 @app.delete("/api/employees/{employee_id}")
 async def delete_employee(
     employee_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("employees.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить сотрудника"""
-    # Проверка прав (только Руководитель студии может удалять)
-    if current_user.role != 'Руководитель студии':
-        raise HTTPException(status_code=403, detail="Недостаточно прав для удаления сотрудников")
 
     # Нельзя удалить самого себя
     if employee_id == current_user.id:
@@ -383,19 +599,119 @@ async def delete_employee(
     if not employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
-    # Лог перед удалением
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="delete",
-        entity_type="employee",
-        entity_id=employee_id
-    )
-    db.add(log)
+    # Каскадное удаление связанных записей
+    session_ids = [s.id for s in db.query(UserSession).filter(UserSession.employee_id == employee_id).all()]
+    if session_ids:
+        db.query(ConcurrentEdit).filter(ConcurrentEdit.session_id.in_(session_ids)).delete(synchronize_session=False)
+    db.query(ConcurrentEdit).filter(ConcurrentEdit.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(ActivityLog).filter(ActivityLog.employee_id == employee_id).delete(synchronize_session=False)
+    if session_ids:
+        db.query(ActivityLog).filter(ActivityLog.session_id.in_(session_ids)).delete(synchronize_session=False)
 
+    # Удаляем stage_executors, payments, salaries, action_history
+    db.query(StageExecutor).filter(StageExecutor.executor_id == employee_id).delete(synchronize_session=False)
+    db.query(StageExecutor).filter(StageExecutor.assigned_by == employee_id).delete(synchronize_session=False)
+    db.query(Payment).filter(Payment.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(Payment).filter(Payment.paid_by == employee_id).update({"paid_by": None}, synchronize_session=False)
+    db.query(Salary).filter(Salary.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(ActionHistory).filter(ActionHistory.user_id == employee_id).delete(synchronize_session=False)
+
+    # Обнуляем FK ссылки в crm_cards и supervision_cards
+    for col in ['senior_manager_id', 'sdp_id', 'gap_id', 'manager_id', 'surveyor_id']:
+        db.query(CRMCard).filter(getattr(CRMCard, col) == employee_id).update({col: None}, synchronize_session=False)
+    for col in ['senior_manager_id', 'dan_id']:
+        db.query(SupervisionCard).filter(getattr(SupervisionCard, col) == employee_id).update({col: None}, synchronize_session=False)
+
+    # ORM cascade удалит: user_sessions, user_permissions, notifications
     db.delete(employee)
     db.commit()
 
     return {"status": "success", "message": "Сотрудник удален"}
+
+
+# =========================
+# ПРАВА ДОСТУПА (PERMISSIONS)
+# =========================
+
+@app.get("/api/permissions/definitions")
+async def get_permission_definitions(
+    current_user: Employee = Depends(get_current_user),
+):
+    """Получить список всех доступных прав с описаниями"""
+    return [
+        {"name": name, "description": desc}
+        for name, desc in PERMISSION_NAMES.items()
+    ]
+
+
+@app.get("/api/permissions/{employee_id}", response_model=PermissionResponse)
+async def get_permissions(
+    employee_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить права сотрудника"""
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    perms = get_employee_permissions(employee_id, db)
+    is_superuser = employee.role in SUPERUSER_ROLES
+    return PermissionResponse(employee_id=employee_id, permissions=perms, is_superuser=is_superuser)
+
+
+@app.put("/api/permissions/{employee_id}", response_model=PermissionResponse)
+async def update_permissions(
+    employee_id: int,
+    request: PermissionSetRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Установить права сотрудника (полная замена)"""
+    # Только Руководитель / admin / director могут менять права
+    if current_user.role not in SUPERUSER_ROLES and current_user.role != 'Руководитель студии':
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    # Нельзя менять права superuser
+    if employee.role in SUPERUSER_ROLES:
+        raise HTTPException(status_code=400, detail="Нельзя менять права системного пользователя")
+
+    # IDOR: Старший менеджер не может менять Руководителя (но мы уже ограничили до Руководителя)
+
+    # Валидация имён прав
+    invalid = [p for p in request.permissions if p not in PERMISSION_NAMES]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Неизвестные права: {', '.join(invalid)}")
+
+    set_employee_permissions(employee_id, request.permissions, current_user.id, db)
+    perms = get_employee_permissions(employee_id, db)
+    return PermissionResponse(employee_id=employee_id, permissions=perms)
+
+
+@app.post("/api/permissions/{employee_id}/reset-to-defaults", response_model=PermissionResponse)
+async def reset_permissions_to_defaults(
+    employee_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Сбросить права до дефолтных по роли"""
+    if current_user.role not in SUPERUSER_ROLES and current_user.role != 'Руководитель студии':
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    if employee.role in SUPERUSER_ROLES:
+        raise HTTPException(status_code=400, detail="Нельзя сбросить права системного пользователя")
+
+    reset_to_defaults(employee_id, db)
+    perms = get_employee_permissions(employee_id, db)
+    return PermissionResponse(employee_id=employee_id, permissions=perms)
 
 
 # =========================
@@ -488,7 +804,7 @@ async def update_client(
 @app.delete("/api/clients/{client_id}")
 async def delete_client(
     client_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("clients.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить клиента и все связанные данные"""
@@ -500,11 +816,22 @@ async def delete_client(
         # Сначала удаляем все связанные договоры (каскадно удалит карточки, платежи и т.д.)
         contracts = db.query(Contract).filter(Contract.client_id == client_id).all()
         for contract in contracts:
-            # Удаляем CRM карточки договора
-            db.query(CRMCard).filter(CRMCard.contract_id == contract.id).delete()
-            # Удаляем карточки надзора
-            db.query(SupervisionCard).filter(SupervisionCard.contract_id == contract.id).delete()
-            # Удаляем платежи
+            # Удаляем timeline записи
+            db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract.id).delete()
+            # Удаляем CRM карточки и связанные данные
+            crm_cards = db.query(CRMCard).filter(CRMCard.contract_id == contract.id).all()
+            for card in crm_cards:
+                db.query(StageExecutor).filter(StageExecutor.crm_card_id == card.id).delete()
+                db.query(Payment).filter(Payment.crm_card_id == card.id).delete()
+                db.delete(card)
+            # Удаляем карточки надзора и связанные данные
+            supervision_cards = db.query(SupervisionCard).filter(SupervisionCard.contract_id == contract.id).all()
+            for card in supervision_cards:
+                db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card.id).delete()
+                db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == card.id).delete()
+                db.query(Payment).filter(Payment.supervision_card_id == card.id).delete()
+                db.delete(card)
+            # Удаляем оставшиеся платежи
             db.query(Payment).filter(Payment.contract_id == contract.id).delete()
             # Удаляем файлы
             db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id).delete()
@@ -566,34 +893,47 @@ async def create_contract(
     db: Session = Depends(get_db)
 ):
     """Создать новый договор"""
-    contract = Contract(**contract_data.model_dump())
-    db.add(contract)
-    db.commit()
-    db.refresh(contract)
+    # Проверяем существование клиента
+    client = db.query(Client).filter(Client.id == contract_data.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
 
-    # Автоматически создаем CRM карточку для нового договора
-    # (кроме Авторского надзора - для него создается SupervisionCard)
-    if contract.project_type != 'Авторский надзор':
-        crm_card = CRMCard(
-            contract_id=contract.id,
-            column_name='Новый заказ',
-            manager_id=current_user.id
-        )
-        db.add(crm_card)
+    try:
+        contract = Contract(**contract_data.model_dump())
+        db.add(contract)
         db.commit()
-        print(f"[OK] Создана CRM карточка для договора {contract.id}")
+        db.refresh(contract)
 
-    # Лог
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="create",
-        entity_type="contract",
-        entity_id=contract.id
-    )
-    db.add(log)
-    db.commit()
+        # Автоматически создаем CRM карточку для нового договора
+        # (кроме Авторского надзора - для него создается SupervisionCard)
+        if contract.project_type != 'Авторский надзор':
+            crm_card = CRMCard(
+                contract_id=contract.id,
+                column_name='Новый заказ',
+                manager_id=current_user.id
+            )
+            db.add(crm_card)
+            db.commit()
+            print(f"[OK] Создана CRM карточка для договора {contract.id}")
 
-    return contract
+        # Лог
+        log = ActivityLog(
+            employee_id=current_user.id,
+            action_type="create",
+            entity_type="contract",
+            entity_id=contract.id
+        )
+        db.add(log)
+        db.commit()
+
+        return contract
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Договор с таким номером уже существует")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка создания договора: {str(e)}")
 
 
 @app.put("/api/contracts/{contract_id}", response_model=ContractResponse)
@@ -708,7 +1048,7 @@ async def update_contract_files(
 @app.delete("/api/contracts/{contract_id}")
 async def delete_contract(
     contract_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("contracts.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить договор и все связанные данные"""
@@ -717,6 +1057,9 @@ async def delete_contract(
         raise HTTPException(status_code=404, detail="Договор не найден")
 
     try:
+        # Удаляем timeline записи проекта
+        db.query(ProjectTimelineEntry).filter(ProjectTimelineEntry.contract_id == contract_id).delete()
+
         # Удаляем связанные CRM карточки
         crm_cards = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).all()
         for card in crm_cards:
@@ -730,6 +1073,8 @@ async def delete_contract(
         # Удаляем связанные SupervisionCard
         supervision_cards = db.query(SupervisionCard).filter(SupervisionCard.contract_id == contract_id).all()
         for card in supervision_cards:
+            # Удаляем timeline записи надзора
+            db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card.id).delete()
             # Удаляем связанную историю
             db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == card.id).delete()
             # Удаляем платежи привязанные к карточке надзора
@@ -946,7 +1291,7 @@ async def get_crm_cards(
                 'tags': card.tags,
                 'is_approved': card.is_approved,
                 'approval_deadline': str(card.approval_deadline) if card.approval_deadline else None,
-                'approval_stages': card.approval_stages,
+                'approval_stages': json.loads(card.approval_stages) if card.approval_stages else None,
                 'project_data_link': card.project_data_link,
                 'tech_task_file': card.tech_task_file,
                 'tech_task_date': str(card.tech_task_date) if card.tech_task_date else None,
@@ -967,6 +1312,9 @@ async def get_crm_cards(
                 'city': contract.city,
                 'agent_type': contract.agent_type,
                 'project_type': contract.project_type,
+                'project_subtype': contract.project_subtype if hasattr(contract, 'project_subtype') else None,
+                'floors': contract.floors if hasattr(contract, 'floors') else 1,
+                'contract_period': contract.contract_period,
                 'contract_status': contract.status,
                 # Поля ТЗ и замера из contracts
                 'tech_task_link': contract.tech_task_link,
@@ -1006,6 +1354,16 @@ async def get_crm_card(
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
 
+        # Контракт — для полей project_subtype, agent_type, address и т.д.
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first() if card.contract_id else None
+
+        # Имена сотрудников
+        def _emp_name(emp_id):
+            if not emp_id:
+                return None
+            emp = db.query(Employee).filter(Employee.id == emp_id).first()
+            return emp.full_name if emp else None
+
         stage_executors = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id
         ).all()
@@ -1025,7 +1383,7 @@ async def get_crm_card(
                 'completed_date': se.completed_date.isoformat() if se.completed_date else None,
             })
 
-        return {
+        result = {
             'id': card.id,
             'contract_id': card.contract_id,
             'column_name': card.column_name,
@@ -1037,8 +1395,13 @@ async def get_crm_card(
             'gap_id': card.gap_id,
             'manager_id': card.manager_id,
             'surveyor_id': card.surveyor_id,
+            'senior_manager_name': _emp_name(card.senior_manager_id),
+            'sdp_name': _emp_name(card.sdp_id),
+            'gap_name': _emp_name(card.gap_id),
+            'manager_name': _emp_name(card.manager_id),
+            'surveyor_name': _emp_name(card.surveyor_id),
             'approval_deadline': str(card.approval_deadline) if card.approval_deadline else None,
-            'approval_stages': card.approval_stages,
+            'approval_stages': json.loads(card.approval_stages) if card.approval_stages else None,
             'project_data_link': card.project_data_link,
             'tech_task_file': card.tech_task_file,
             'tech_task_date': str(card.tech_task_date) if card.tech_task_date else None,
@@ -1046,6 +1409,23 @@ async def get_crm_card(
             'order_position': card.order_position,
             'stage_executors': executor_data,
         }
+
+        # Поля из контракта
+        if contract:
+            result.update({
+                'contract_number': contract.contract_number,
+                'address': contract.address,
+                'area': contract.area,
+                'city': contract.city,
+                'agent_type': contract.agent_type,
+                'project_type': contract.project_type,
+                'project_subtype': contract.project_subtype if hasattr(contract, 'project_subtype') else None,
+                'floors': contract.floors if hasattr(contract, 'floors') else 1,
+                'contract_period': contract.contract_period,
+                'contract_status': contract.status,
+            })
+
+        return result
 
     except HTTPException:
         raise
@@ -1084,7 +1464,7 @@ async def create_crm_card(
             "tags": card.tags,
             "is_approved": card.is_approved,
             "approval_deadline": card.approval_deadline,
-            "approval_stages": card.approval_stages,
+            "approval_stages": json.loads(card.approval_stages) if card.approval_stages else None,
             "project_data_link": card.project_data_link,
             "tech_task_file": card.tech_task_file,
             "tech_task_date": card.tech_task_date,
@@ -1108,15 +1488,11 @@ async def create_crm_card(
 async def update_crm_card(
     card_id: int,
     updates: CRMCardUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.update")),
     db: Session = Depends(get_db)
 ):
     """Обновить CRM карточку"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -1159,21 +1535,47 @@ async def update_crm_card(
 async def move_crm_card_to_column(
     card_id: int,
     move_request: ColumnMoveRequest,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
     """Переместить CRM карточку в другую колонку"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        VALID_CRM_COLUMNS = [
+            'Новый заказ', 'В ожидании',
+            'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
+            'Стадия 3: рабочие чертежи', 'Стадия 4: комплектация',
+            'Выполненный проект'
+        ]
+        if move_request.column_name not in VALID_CRM_COLUMNS:
+            raise HTTPException(status_code=422, detail=f"Недопустимая колонка: {move_request.column_name}")
 
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
 
         old_column = card.column_name
-        card.column_name = move_request.column_name
+        new_column = move_request.column_name
+
+        # Валидация последовательности переходов (руководство может перемещать свободно)
+        free_move_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
+        if current_user.role not in free_move_roles:
+            CRM_COLUMN_ORDER = [
+                'Новый заказ',
+                'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
+                'Стадия 3: рабочие чертежи', 'Стадия 4: комплектация',
+                'Выполненный проект'
+            ]
+            # "В ожидании" — специальная колонка, можно перемещать туда и обратно
+            if old_column != 'В ожидании' and new_column != 'В ожидании':
+                old_idx = CRM_COLUMN_ORDER.index(old_column) if old_column in CRM_COLUMN_ORDER else -1
+                new_idx = CRM_COLUMN_ORDER.index(new_column) if new_column in CRM_COLUMN_ORDER else -1
+                if old_idx >= 0 and new_idx >= 0 and abs(new_idx - old_idx) > 1:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Нельзя перескакивать стадии: {old_column} → {new_column}"
+                    )
+
+        card.column_name = new_column
 
         db.commit()
         db.refresh(card)
@@ -1196,15 +1598,11 @@ async def move_crm_card_to_column(
 async def assign_stage_executor(
     card_id: int,
     executor_data: StageExecutorCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.assign_executor")),
     db: Session = Depends(get_db)
 ):
     """Назначить исполнителя на стадию"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -1212,6 +1610,18 @@ async def assign_stage_executor(
         executor = db.query(Employee).filter(Employee.id == executor_data.executor_id).first()
         if not executor:
             raise HTTPException(status_code=404, detail="Исполнитель не найден")
+
+        # Проверка дубликата: тот же исполнитель на ту же стадию
+        existing = db.query(StageExecutor).filter(
+            StageExecutor.crm_card_id == card_id,
+            StageExecutor.stage_name == executor_data.stage_name,
+            StageExecutor.executor_id == executor_data.executor_id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Исполнитель {executor.full_name} уже назначен на стадию '{executor_data.stage_name}'"
+            )
 
         stage_executor = StageExecutor(
             crm_card_id=card_id,
@@ -1302,15 +1712,11 @@ async def complete_stage(
 @app.delete("/api/crm/cards/{card_id}")
 async def delete_crm_card(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить CRM карточку"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -1345,15 +1751,11 @@ async def delete_crm_card(
 @app.delete("/api/crm/stage-executors/{executor_id}")
 async def delete_stage_executor(
     executor_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.delete_executor")),
     db: Session = Depends(get_db)
 ):
     """Удалить назначение исполнителя на стадию"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         executor = db.query(StageExecutor).filter(StageExecutor.id == executor_id).first()
         if not executor:
             raise HTTPException(status_code=404, detail="Назначение не найдено")
@@ -1502,7 +1904,20 @@ async def create_supervision_card(
         db.add(log)
         db.commit()
 
-        return card
+        return {
+            "id": card.id,
+            "contract_id": card.contract_id,
+            "column_name": card.column_name,
+            "deadline": str(card.deadline) if card.deadline else None,
+            "tags": card.tags,
+            "senior_manager_id": card.senior_manager_id,
+            "dan_id": card.dan_id,
+            "dan_completed": card.dan_completed,
+            "is_paused": card.is_paused,
+            "pause_reason": card.pause_reason,
+            "paused_at": card.paused_at.isoformat() if card.paused_at else None,
+            "created_at": card.created_at.isoformat() if card.created_at else None,
+        }
 
     except Exception as e:
         db.rollback()
@@ -1513,15 +1928,11 @@ async def create_supervision_card(
 async def update_supervision_card(
     card_id: int,
     updates: SupervisionCardUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.update")),
     db: Session = Depends(get_db)
 ):
     """Обновить карточку надзора"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
@@ -1558,14 +1969,23 @@ async def update_supervision_card(
 async def move_supervision_card_to_column(
     card_id: int,
     move_request: SupervisionColumnMoveRequest,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.move")),
     db: Session = Depends(get_db)
 ):
     """Переместить карточку надзора в другую колонку"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        VALID_SUPERVISION_COLUMNS = [
+            'Новый заказ', 'В ожидании',
+            'Стадия 1: Закупка керамогранита', 'Стадия 2: Закупка сантехники',
+            'Стадия 3: Закупка оборудования', 'Стадия 4: Закупка дверей и окон',
+            'Стадия 5: Закупка настенных материалов', 'Стадия 6: Закупка напольных материалов',
+            'Стадия 7: Лепного декора', 'Стадия 8: Освещения',
+            'Стадия 9: бытовой техники', 'Стадия 10: Закупка заказной мебели',
+            'Стадия 11: Закупка фабричной мебели', 'Стадия 12: Закупка декора',
+            'Выполненный проект'
+        ]
+        if move_request.column_name not in VALID_SUPERVISION_COLUMNS:
+            raise HTTPException(status_code=422, detail=f"Недопустимая колонка надзора: {move_request.column_name}")
 
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
         if not card:
@@ -1595,15 +2015,11 @@ async def move_supervision_card_to_column(
 async def pause_supervision_card(
     card_id: int,
     pause_request: SupervisionPauseRequest,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.pause_resume")),
     db: Session = Depends(get_db)
 ):
     """Приостановить карточку надзора"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
@@ -1641,15 +2057,11 @@ async def pause_supervision_card(
 @app.post("/api/supervision/cards/{card_id}/resume")
 async def resume_supervision_card(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.pause_resume")),
     db: Session = Depends(get_db)
 ):
     """Возобновить карточку надзора"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
@@ -1768,6 +2180,37 @@ async def create_payment(
     db: Session = Depends(get_db)
 ):
     """Создать платеж"""
+    # Проверяем существование договора
+    if payment_data.contract_id:
+        contract = db.query(Contract).filter(Contract.id == payment_data.contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+
+    # Проверяем существование сотрудника
+    if payment_data.employee_id:
+        employee = db.query(Employee).filter(Employee.id == payment_data.employee_id).first()
+        if not employee:
+            raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    # Защита от дублей: проверяем нет ли уже платежа с теми же параметрами
+    if payment_data.contract_id and payment_data.employee_id and payment_data.stage_name:
+        duplicate_query = db.query(Payment).filter(
+            Payment.contract_id == payment_data.contract_id,
+            Payment.employee_id == payment_data.employee_id,
+            Payment.stage_name == payment_data.stage_name,
+            Payment.role == payment_data.role
+        )
+        if payment_data.crm_card_id:
+            duplicate_query = duplicate_query.filter(Payment.crm_card_id == payment_data.crm_card_id)
+        if payment_data.supervision_card_id:
+            duplicate_query = duplicate_query.filter(Payment.supervision_card_id == payment_data.supervision_card_id)
+        existing = duplicate_query.first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Платёж уже существует (id={existing.id}). Используйте PUT для обновления."
+            )
+
     try:
         # Получаем данные и устанавливаем значения по умолчанию для NOT NULL полей
         data = payment_data.model_dump(exclude_unset=True)
@@ -2143,7 +2586,9 @@ async def get_payments_by_type(
                     'city': contract.city if contract else None,
                     'agent_type': contract.agent_type if contract else None,
                     'source': 'CRM',
-                    'card_stage': crm_card.column_name if crm_card else None
+                    'card_stage': crm_card.column_name if crm_card else None,
+                    'reassigned': p.reassigned if hasattr(p, 'reassigned') else False,
+                    'old_employee_id': p.old_employee_id if hasattr(p, 'old_employee_id') else None
                 })
 
             # Добавляем оклады с этим типом проекта
@@ -2561,6 +3006,9 @@ async def get_payment_by_id(
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Платеж не найден")
+    # Добавляем employee_name через JOIN
+    employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
+    payment.employee_name = employee.full_name if employee else 'Неизвестный'
     return payment
 
 
@@ -2589,7 +3037,7 @@ async def update_payment(
 @app.delete("/api/payments/{payment_id}")
 async def delete_payment(
     payment_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("payments.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить платеж"""
@@ -2759,6 +3207,63 @@ async def get_salaries(
     return query.all()
 
 
+@app.get("/api/salaries/report")
+async def get_salary_report(
+    report_month: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    payment_type: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить отчет по зарплатам"""
+    try:
+        query = db.query(Salary)
+
+        if report_month:
+            query = query.filter(Salary.report_month == report_month)
+        if employee_id:
+            query = query.filter(Salary.employee_id == employee_id)
+        if payment_type:
+            query = query.filter(Salary.payment_type == payment_type)
+
+        salaries = query.all()
+
+        # Группировка по сотрудникам
+        employee_totals = {}
+        for s in salaries:
+            emp_id = s.employee_id
+            if emp_id not in employee_totals:
+                emp = db.query(Employee).filter(Employee.id == emp_id).first()
+                employee_totals[emp_id] = {
+                    'employee_id': emp_id,
+                    'employee_name': emp.full_name if emp else 'Неизвестный',
+                    'position': emp.position if emp else '',
+                    'total_amount': 0,
+                    'advance_payment': 0,
+                    'records': []
+                }
+
+            employee_totals[emp_id]['total_amount'] += s.amount or 0
+            employee_totals[emp_id]['advance_payment'] += s.advance_payment or 0
+            employee_totals[emp_id]['records'].append({
+                'id': s.id,
+                'payment_type': s.payment_type,
+                'stage_name': s.stage_name,
+                'amount': s.amount,
+                'report_month': s.report_month,
+                'payment_status': s.payment_status
+            })
+
+        return {
+            'report_month': report_month,
+            'total_amount': sum(e['total_amount'] for e in employee_totals.values()),
+            'employees': list(employee_totals.values())
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения отчета: {str(e)}")
+
+
 @app.get("/api/salaries/{salary_id}", response_model=SalaryResponse)
 async def get_salary(
     salary_id: int,
@@ -2810,13 +3315,21 @@ async def update_salary(
 @app.delete("/api/salaries/{salary_id}")
 async def delete_salary(
     salary_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("salaries.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить запись о зарплате"""
     salary = db.query(Salary).filter(Salary.id == salary_id).first()
     if not salary:
         raise HTTPException(status_code=404, detail="Запись о зарплате не найдена")
+
+    log = ActivityLog(
+        employee_id=current_user.id,
+        action_type="delete",
+        entity_type="salary",
+        entity_id=salary_id
+    )
+    db.add(log)
 
     db.delete(salary)
     db.commit()
@@ -2918,9 +3431,33 @@ async def create_file_record(
     db: Session = Depends(get_db)
 ):
     """Создать запись о файле"""
-    file_record = ProjectFile(**file_data.model_dump())
+    # Проверяем дубликат по (contract_id, yandex_path) перед вставкой
+    data = file_data.model_dump()
+    yp = data.get('yandex_path', '')
+    if yp:
+        existing = db.query(ProjectFile).filter(
+            ProjectFile.contract_id == data.get('contract_id'),
+            ProjectFile.yandex_path == yp
+        ).first()
+        if existing:
+            # Дубликат — возвращаем существующую запись
+            return existing
+
+    file_record = ProjectFile(**data)
     db.add(file_record)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        # После rollback пробуем найти существующую запись
+        if yp:
+            existing = db.query(ProjectFile).filter(
+                ProjectFile.contract_id == data.get('contract_id'),
+                ProjectFile.yandex_path == yp
+            ).first()
+            if existing:
+                return existing
+        raise HTTPException(status_code=409, detail="Дубликат файла")
     db.refresh(file_record)
     return file_record
 
@@ -2931,10 +3468,24 @@ async def delete_file_record(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Удалить запись о файле"""
+    """Удалить запись о файле и файл с Яндекс.Диска"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="Файл не найден")
+
+    # Удаляем файл с Яндекс.Диска (до удаления из БД!)
+    yandex_path = file_record.yandex_path
+    if yandex_path and yandex_disk_available:
+        try:
+            yd = get_yandex_disk_service()
+            yd.delete_file(yandex_path)
+            logger.info(f"Файл удалён с Яндекс.Диска: {yandex_path}")
+        except Exception as e:
+            error_str = str(e)
+            if "DiskNotFoundError" not in error_str and "not found" not in error_str.lower():
+                logger.error(f"Не удалось удалить файл с Яндекс.Диска: {e}")
+                raise HTTPException(status_code=500, detail=f"Не удалось удалить файл с Яндекс.Диска: {e}")
+            logger.info(f"Файл уже удалён с Яндекс.Диска: {yandex_path}")
 
     db.delete(file_record)
     db.commit()
@@ -2966,10 +3517,26 @@ async def upload_file_to_yandex(
 
     try:
         yd_service = get_yandex_disk_service()
+        if not yd_service.token:
+            raise HTTPException(status_code=503, detail="Yandex Disk token not configured")
         file_bytes = await file.read()
 
+        # Проверка размера файла
+        max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 50)) * 1024 * 1024
+        if len(file_bytes) > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 50)} МБ)"
+            )
+
         if not yandex_path:
-            yandex_path = f"/uploads/{file.filename}"
+            # Защита от path traversal в имени файла
+            safe_filename = os.path.basename(file.filename or "unnamed")
+            yandex_path = f"/uploads/{safe_filename}"
+        else:
+            # Защита от path traversal: запрещаем ".." в пути
+            if ".." in yandex_path:
+                raise HTTPException(status_code=400, detail="Недопустимый путь файла")
 
         result = yd_service.upload_file_from_bytes(file_bytes, yandex_path)
 
@@ -2984,7 +3551,12 @@ async def upload_file_to_yandex(
         else:
             raise HTTPException(status_code=500, detail="Failed to upload file")
 
+    except HTTPException:
+        raise
     except Exception as e:
+        error_msg = str(e).lower()
+        if "unauthorized" in error_msg or "token" in error_msg or "401" in error_msg:
+            raise HTTPException(status_code=503, detail="Yandex Disk not configured or token expired")
         raise HTTPException(status_code=500, detail=f"Upload error: {str(e)}")
 
 
@@ -2997,6 +3569,10 @@ async def create_yandex_folder(
     if not yandex_disk_available:
         raise HTTPException(status_code=503, detail="Yandex Disk service not available")
 
+    # Защита от path traversal
+    if ".." in folder_path:
+        raise HTTPException(status_code=400, detail="Недопустимый путь папки")
+
     try:
         yd_service = get_yandex_disk_service()
         result = yd_service.create_folder(folder_path)
@@ -3006,8 +3582,13 @@ async def create_yandex_folder(
             "folder_path": folder_path
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Folder creation error: {str(e)}")
+        error_str = str(e)
+        if "DiskNotFoundError" in error_str or "not found" in error_str.lower():
+            raise HTTPException(status_code=404, detail=f"Путь не найден: {folder_path}")
+        raise HTTPException(status_code=500, detail=f"Folder creation error: {error_str}")
 
 
 @app.get("/api/files/public-link")
@@ -3032,31 +3613,47 @@ async def get_public_link(
         else:
             raise HTTPException(status_code=404, detail="File not found or cannot create public link")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting public link: {str(e)}")
+        error_str = str(e)
+        if "DiskNotFoundError" in error_str or "not found" in error_str.lower():
+            raise HTTPException(status_code=404, detail=f"Файл не найден: {yandex_path}")
+        raise HTTPException(status_code=500, detail=f"Error getting public link: {error_str}")
 
 
 @app.get("/api/files/list")
 async def list_yandex_files(
-    folder_path: str,
+    folder_path: Optional[str] = None,
+    path: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
 ):
     """Получить список файлов в папке Яндекс.Диска"""
+    # Принимаем и folder_path и path как алиасы
+    resolved_path = folder_path or path
+    if not resolved_path:
+        raise HTTPException(status_code=422, detail="Необходимо указать folder_path или path")
+
     if not yandex_disk_available:
         raise HTTPException(status_code=503, detail="Yandex Disk service not available")
 
     try:
         yd_service = get_yandex_disk_service()
-        files = yd_service.list_files(folder_path)
+        files = yd_service.list_files(resolved_path)
 
         return {
             "status": "success",
-            "folder_path": folder_path,
+            "folder_path": resolved_path,
             "files": files
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+        error_str = str(e)
+        if "DiskNotFoundError" in error_str or "not found" in error_str.lower():
+            raise HTTPException(status_code=404, detail=f"Папка не найдена: {resolved_path}")
+        raise HTTPException(status_code=500, detail=f"Error listing files: {error_str}")
 
 
 @app.delete("/api/files/yandex")
@@ -3077,8 +3674,430 @@ async def delete_yandex_file(
             "yandex_path": yandex_path
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+        error_str = str(e)
+        if "DiskNotFoundError" in error_str or "not found" in error_str.lower():
+            raise HTTPException(status_code=404, detail=f"Файл не найден: {yandex_path}")
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {error_str}")
+
+
+@app.post("/api/files/scan/{contract_id}")
+async def scan_contract_files_on_yandex(
+    contract_id: int,
+    scope: str = "all",
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Сканирование файлов на Яндекс.Диске для договора.
+
+    Находит файлы, которые есть на ЯД но отсутствуют в БД, и создаёт записи.
+    scope: 'all' — вся папка проекта, 'supervision' — только Авторский надзор.
+    """
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+
+    # Получаем договор для определения папки
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    folder_path = contract.yandex_folder_path
+    if not folder_path:
+        raise HTTPException(status_code=404, detail="Папка договора на ЯД не задана")
+
+    # Защита от параллельных сканирований одного договора
+    with _scanning_contracts_lock:
+        if contract_id in _scanning_contracts:
+            return {
+                "status": "already_scanning",
+                "total_on_disk": 0,
+                "already_in_db": 0,
+                "new_files_added": 0,
+                "new_files": []
+            }
+        _scanning_contracts.add(contract_id)
+
+    try:
+        yd_service = get_yandex_disk_service()
+
+        # Точный маппинг папок → стадий
+        folder_to_stage_exact = {
+            'Замер': 'measurement',
+            'Замеры': 'measurement',
+            '1 стадия - Планировочное решение': 'stage1',
+            'Планировочное решение': 'stage1',
+            'Концепция-коллажи': 'stage2_concept',
+            'Коллажи': 'stage2_concept',
+            '3D визуализация': 'stage2_3d',
+            '3D': 'stage2_3d',
+            '3 стадия - Чертежный проект': 'stage3',
+            'Чертежный проект': 'stage3',
+            'Чертежи': 'stage3',
+            'Референсы': 'references',
+            'Фотофиксация': 'photo_documentation',
+            'Фото': 'photo_documentation',
+            'Анкета': 'questionnaire',
+            'Анкеты': 'questionnaire',
+            'Документы': 'documents',
+            'Техническое задание': 'tech_task',
+            'ТЗ': 'tech_task',
+            'Авторский надзор': 'supervision',
+        }
+
+        # Нечёткий маппинг: ключевые слова → стадия (для папок с нестандартными именами)
+        folder_keywords_to_stage = [
+            ('замер', 'measurement'),
+            ('1 стадия', 'stage1'),
+            ('1стадия', 'stage1'),
+            ('планировочн', 'stage1'),
+            ('концепция', 'stage2_concept'),
+            ('коллаж', 'stage2_concept'),
+            ('3d', 'stage2_3d'),
+            ('визуализ', 'stage2_3d'),
+            ('2 стадия', 'stage2_concept'),
+            ('2стадия', 'stage2_concept'),
+            ('3 стадия', 'stage3'),
+            ('3стадия', 'stage3'),
+            ('чертеж', 'stage3'),
+            ('рабочи', 'stage3'),
+            ('референ', 'references'),
+            ('фотофикс', 'photo_documentation'),
+            ('фото', 'photo_documentation'),
+            ('анкет', 'questionnaire'),
+            ('документ', 'documents'),
+            ('техническ', 'tech_task'),
+            ('надзор', 'supervision'),
+        ]
+
+        def match_folder_to_stage(folder_name):
+            """Определить стадию по имени папки: сначала точное, потом нечёткое"""
+            # Точное совпадение
+            if folder_name in folder_to_stage_exact:
+                return folder_to_stage_exact[folder_name]
+            # Нечёткое: ищем ключевое слово в нижнем регистре
+            name_lower = folder_name.lower()
+            for keyword, stage_id in folder_keywords_to_stage:
+                if keyword in name_lower:
+                    return stage_id
+            return None
+
+        def detect_file_type(name):
+            ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+            if ext in ('png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg'):
+                return 'image'
+            elif ext == 'pdf':
+                return 'pdf'
+            elif ext in ('xls', 'xlsx', 'csv'):
+                return 'excel'
+            elif ext in ('doc', 'docx'):
+                return 'word'
+            elif ext in ('dwg', 'dxf'):
+                return 'cad'
+            return 'other'
+
+        def normalize_path(p):
+            """Нормализация пути: убираем 'disk:' префикс для сравнения"""
+            if p and p.startswith('disk:'):
+                return p[5:]
+            return p or ''
+
+        found_files = []
+
+        def scan_folder(path, stage=None):
+            try:
+                items = yd_service.list_files(path)
+                for item in items:
+                    item_name = item.get('name', '')
+                    item_path = item.get('path', '')
+                    item_type = item.get('type', '')
+
+                    if item_type == 'dir':
+                        # Пропускаем папку "правки" — файлы правок отображаются отдельно
+                        if item_name.lower() == 'правки':
+                            continue
+                        child_stage = match_folder_to_stage(item_name)
+                        if child_stage is None:
+                            child_stage = stage  # наследуем стадию от родителя
+                        # Внутри Авторского надзора подпапки "Стадия ..." остаются supervision
+                        if stage == 'supervision' and item_name.startswith('Стадия'):
+                            child_stage = 'supervision'
+                        # Подпапки "Вариация N" наследуют стадию от родителя
+                        if item_name.startswith('Вариация') or item_name.startswith('вариация'):
+                            child_stage = stage
+                        scan_folder(item_path, child_stage)
+                    elif item_type == 'file':
+                        # Файлы с определённой стадией добавляем
+                        # Файлы в корне (stage=None) — пропускаем
+                        if stage:
+                            found_files.append({
+                                'yandex_path': item_path,
+                                'file_name': item_name,
+                                'stage': stage,
+                                'file_type': detect_file_type(item_name),
+                            })
+            except Exception as e:
+                logger.warning(f"Ошибка сканирования {path}: {e}")
+
+        if scope == 'supervision':
+            # Для надзора сканируем только подпапку "Авторский надзор"
+            supervision_path = folder_path.rstrip('/') + '/Авторский надзор'
+            logger.info(f"Scan scope=supervision: сканируем только {supervision_path}")
+            scan_folder(supervision_path, stage='supervision')
+        else:
+            scan_folder(folder_path)
+
+        # Получаем существующие записи — нормализуем пути для сравнения
+        existing_paths_normalized = set()
+        existing_records = db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id).all()
+        for rec in existing_records:
+            if rec.yandex_path:
+                # Добавляем оба варианта пути (с disk: и без) для надёжного сравнения
+                norm = normalize_path(rec.yandex_path)
+                existing_paths_normalized.add(norm)
+                if not norm.startswith('/'):
+                    existing_paths_normalized.add('/' + norm)
+                else:
+                    existing_paths_normalized.add(norm.lstrip('/'))
+
+        # Создаём записи для новых файлов (сравнение по нормализованному пути)
+        new_files = []
+        for f in found_files:
+            yp = f['yandex_path']
+            yp_normalized = normalize_path(yp)
+
+            if yp_normalized in existing_paths_normalized:
+                continue
+
+            # Добавляем в множество чтобы не дублировать внутри одного скана
+            existing_paths_normalized.add(yp_normalized)
+
+            # Получаем публичную ссылку
+            try:
+                public_link = yd_service.get_public_link(yp)
+            except Exception:
+                public_link = ''
+
+            # Для файлов надзора file_type хранит название стадии
+            file_type_val = f['file_type']
+            if f['stage'] == 'supervision':
+                # Определяем стадию надзора из пути
+                parts = yp.split('/')
+                for part in parts:
+                    if part.startswith('Стадия'):
+                        file_type_val = part
+                        break
+
+            # Дополнительная проверка: прямой запрос в БД (защита от дубликатов)
+            existing_exact = db.query(ProjectFile).filter(
+                ProjectFile.contract_id == contract_id,
+                ProjectFile.yandex_path == yp
+            ).first()
+            if existing_exact:
+                logger.info(f"Scan: файл уже есть в БД (exact match), пропускаем: {f['file_name']}")
+                continue
+
+            new_record = ProjectFile(
+                contract_id=contract_id,
+                stage=f['stage'],
+                file_type=file_type_val,
+                yandex_path=yp,
+                public_link=public_link,
+                file_name=f['file_name']
+            )
+            try:
+                # Используем savepoint чтобы rollback не затронул предыдущие записи
+                savepoint = db.begin_nested()
+                db.add(new_record)
+                db.flush()
+            except Exception as insert_err:
+                savepoint.rollback()
+                logger.warning(f"Scan: не удалось добавить файл (дубликат?): {f['file_name']}: {insert_err}")
+                continue
+            new_files.append({
+                'yandex_path': yp,
+                'file_name': f['file_name'],
+                'stage': f['stage'],
+                'file_type': file_type_val,
+                'public_link': public_link,
+            })
+
+        # Для файлов из "Анкета" (questionnaire/tech_task): обновляем contract.tech_task_link
+        tech_task_files = [f for f in new_files if f['stage'] in ('questionnaire', 'tech_task')]
+        if tech_task_files and not contract.tech_task_link:
+            first_tt = tech_task_files[0]
+            contract.tech_task_link = first_tt.get('public_link', '')
+            contract.tech_task_yandex_path = first_tt.get('yandex_path', '')
+            contract.tech_task_file_name = first_tt.get('file_name', '')
+            logger.info(f"Scan: обновлён tech_task_link для contract {contract_id}")
+
+        # Обновляем references_yandex_path и photo_documentation_yandex_path
+        # Логика: файлы есть → создать ссылку; файлов нет → очистить ссылку
+        contract_updated = False
+
+        if scope == 'all':
+            ref_files = [f for f in found_files if f['stage'] == 'references']
+            if ref_files:
+                # Файлы есть — создаём ссылку если нет
+                if not contract.references_yandex_path:
+                    try:
+                        first_ref_path = ref_files[0]['yandex_path']
+                        ref_folder = '/'.join(first_ref_path.split('/')[:-1])
+                        logger.info(f"Scan: публикуем папку референсов: {ref_folder}")
+                        ref_link = yd_service.get_public_link(ref_folder)
+                        if ref_link:
+                            contract.references_yandex_path = ref_link
+                            contract_updated = True
+                            logger.info(f"Scan: обновлён references_yandex_path: {ref_link}")
+                    except Exception as e:
+                        logger.warning(f"Scan: не удалось получить ссылку на Референсы: {e}")
+            else:
+                # Файлов нет — очищаем ссылку если была
+                if contract.references_yandex_path:
+                    logger.info(f"Scan: папка референсов пуста, очищаем references_yandex_path")
+                    contract.references_yandex_path = ''
+                    contract_updated = True
+
+            photo_files = [f for f in found_files if f['stage'] == 'photo_documentation']
+            if photo_files:
+                # Файлы есть — создаём ссылку если нет
+                if not contract.photo_documentation_yandex_path:
+                    try:
+                        first_photo_path = photo_files[0]['yandex_path']
+                        photo_folder = '/'.join(first_photo_path.split('/')[:-1])
+                        logger.info(f"Scan: публикуем папку фотофиксации: {photo_folder}")
+                        photo_link = yd_service.get_public_link(photo_folder)
+                        if photo_link:
+                            contract.photo_documentation_yandex_path = photo_link
+                            contract_updated = True
+                            logger.info(f"Scan: обновлён photo_documentation_yandex_path: {photo_link}")
+                    except Exception as e:
+                        logger.warning(f"Scan: не удалось получить ссылку на Фотофиксацию: {e}")
+            else:
+                # Файлов нет — очищаем ссылку если была
+                if contract.photo_documentation_yandex_path:
+                    logger.info(f"Scan: папка фотофиксации пуста, очищаем photo_documentation_yandex_path")
+                    contract.photo_documentation_yandex_path = ''
+                    contract_updated = True
+
+        if new_files or contract_updated:
+            db.commit()
+            logger.info(f"Scan contract {contract_id}: новых файлов={len(new_files)}, contract_updated={contract_updated}")
+
+        return {
+            "status": "success",
+            "total_on_disk": len(found_files),
+            "already_in_db": len(existing_records),
+            "new_files_added": len(new_files),
+            "new_files": new_files,
+            "contract_updated": contract_updated
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка сканирования: {str(e)}")
+    finally:
+        with _scanning_contracts_lock:
+            _scanning_contracts.discard(contract_id)
+
+
+@app.get("/api/files/updated")
+async def get_updated_files(
+    since: str = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить файлы, загруженные после указанного timestamp"""
+    if not since:
+        raise HTTPException(status_code=400, detail="Parameter 'since' is required")
+
+    try:
+        since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid timestamp format")
+
+    files = db.query(ProjectFile).filter(
+        ProjectFile.upload_date > since_dt
+    ).all()
+
+    return [
+        {
+            "id": f.id,
+            "contract_id": f.contract_id,
+            "stage": f.stage,
+            "file_type": f.file_type,
+            "public_link": f.public_link,
+            "yandex_path": f.yandex_path,
+            "file_name": f.file_name,
+            "upload_date": f.upload_date.isoformat() if f.upload_date else None,
+            "variation": f.variation
+        }
+        for f in files
+    ]
+
+
+@app.post("/api/files/validate")
+async def validate_files(
+    request: dict,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Пакетная проверка существования файлов на Яндекс.Диске"""
+    file_ids = request.get("file_ids", [])
+    auto_clean = request.get("auto_clean", False)
+
+    if not file_ids:
+        return []
+
+    if len(file_ids) > 50:
+        raise HTTPException(status_code=400, detail="Максимум 50 файлов за запрос")
+
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+
+    yd = get_yandex_disk_service()
+    results = []
+
+    for file_id in file_ids:
+        file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
+        if not file_record:
+            results.append({"file_id": file_id, "exists": False, "reason": "not_in_db"})
+            continue
+
+        yandex_path = file_record.yandex_path
+        if not yandex_path:
+            results.append({"file_id": file_id, "exists": False, "reason": "no_path"})
+            if auto_clean:
+                db.delete(file_record)
+            continue
+
+        try:
+            # Нормализация пути: Яндекс API принимает и disk: и без
+            check_path = yandex_path
+            exists = yd.file_exists(check_path)
+            # Если не найден с disk: префиксом — попробуем без
+            if not exists and check_path.startswith('disk:'):
+                exists = yd.file_exists(check_path[5:])
+            # И наоборот
+            if not exists and not check_path.startswith('disk:'):
+                exists = yd.file_exists('disk:' + check_path)
+        except Exception as e:
+            logger.warning(f"Ошибка проверки файла {file_id} на YD: {e}")
+            results.append({"file_id": file_id, "exists": True, "reason": "check_error"})
+            continue
+
+        results.append({"file_id": file_id, "exists": exists})
+
+        if not exists and auto_clean:
+            db.delete(file_record)
+            logger.info(f"Автоочистка: удалена запись файла {file_id} path={yandex_path} (нет на YD)")
+
+    if auto_clean:
+        db.commit()
+
+    return results
 
 
 # =========================
@@ -3329,75 +4348,14 @@ async def get_cities(
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
 
-@app.get("/api/salaries/report")
-async def get_salary_report(
-    report_month: Optional[str] = None,
-    employee_id: Optional[int] = None,
-    payment_type: Optional[str] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Получить отчет по зарплатам"""
-    try:
-        query = db.query(Salary)
-
-        if report_month:
-            query = query.filter(Salary.report_month == report_month)
-        if employee_id:
-            query = query.filter(Salary.employee_id == employee_id)
-        if payment_type:
-            query = query.filter(Salary.payment_type == payment_type)
-
-        salaries = query.all()
-
-        # Группировка по сотрудникам
-        employee_totals = {}
-        for s in salaries:
-            emp_id = s.employee_id
-            if emp_id not in employee_totals:
-                emp = db.query(Employee).filter(Employee.id == emp_id).first()
-                employee_totals[emp_id] = {
-                    'employee_id': emp_id,
-                    'employee_name': emp.full_name if emp else 'Неизвестный',
-                    'position': emp.position if emp else '',
-                    'total_amount': 0,
-                    'advance_payment': 0,
-                    'records': []
-                }
-
-            employee_totals[emp_id]['total_amount'] += s.amount or 0
-            employee_totals[emp_id]['advance_payment'] += s.advance_payment or 0
-            employee_totals[emp_id]['records'].append({
-                'id': s.id,
-                'payment_type': s.payment_type,
-                'stage_name': s.stage_name,
-                'amount': s.amount,
-                'report_month': s.report_month,
-                'payment_status': s.payment_status
-            })
-
-        return {
-            'report_month': report_month,
-            'total_amount': sum(e['total_amount'] for e in employee_totals.values()),
-            'employees': list(employee_totals.values())
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка получения отчета: {str(e)}")
-
-
 @app.post("/api/crm/cards/{card_id}/reset-stages")
 async def reset_crm_card_stages(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.reset_stages")),
     db: Session = Depends(get_db)
 ):
     """Сбросить выполнение стадий карточки"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -3423,15 +4381,11 @@ async def reset_crm_card_stages(
 @app.post("/api/crm/cards/{card_id}/reset-approval")
 async def reset_crm_card_approval(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.reset_approval")),
     db: Session = Depends(get_db)
 ):
     """Сбросить стадии согласования карточки"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -3459,15 +4413,11 @@ async def reset_crm_card_approval(
 @app.post("/api/supervision/cards/{card_id}/reset-stages")
 async def reset_supervision_card_stages(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.reset_stages")),
     db: Session = Depends(get_db)
 ):
     """Сбросить выполнение стадий надзора"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
@@ -3489,15 +4439,11 @@ async def reset_supervision_card_stages(
 @app.post("/api/supervision/cards/{card_id}/complete-stage")
 async def complete_supervision_stage(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.complete_stage")),
     db: Session = Depends(get_db)
 ):
     """Завершить стадию надзора"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов', 'ДАН']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
@@ -3528,15 +4474,11 @@ async def complete_supervision_stage(
 async def delete_supervision_order(
     supervision_card_id: int,
     contract_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.delete_order")),
     db: Session = Depends(get_db)
 ):
     """Удалить заказ надзора"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
@@ -3596,6 +4538,8 @@ async def get_payments_for_supervision(
             'report_month': payment.report_month,
             'payment_status': payment.payment_status,
             'is_paid': payment.is_paid,
+            'reassigned': payment.reassigned if hasattr(payment, 'reassigned') else False,
+            'old_employee_id': payment.old_employee_id if hasattr(payment, 'old_employee_id') else None,
         })
 
     return result
@@ -3631,6 +4575,8 @@ async def get_payments_by_supervision_card(
             'report_month': payment.report_month,
             'payment_status': payment.payment_status,
             'is_paid': payment.is_paid,
+            'reassigned': payment.reassigned if hasattr(payment, 'reassigned') else False,
+            'old_employee_id': payment.old_employee_id if hasattr(payment, 'old_employee_id') else None,
         })
 
     return result
@@ -4292,7 +5238,13 @@ async def get_all_agents(
             Employee.secondary_position == 'Агент'
         )
     ).all()
-    return agents
+    return [{
+        "id": a.id,
+        "name": a.full_name,
+        "full_name": a.full_name,
+        "color": a.agent_color or "#FFFFFF",
+        "status": a.status
+    } for a in agents]
 
 
 @app.get("/api/reports/employee")
@@ -4711,6 +5663,1419 @@ async def update_file_order(
 
 
 # =========================
+# TIMELINE ENDPOINTS (CRM)
+# =========================
+
+def calc_contract_term(project_type_code: int, area: float):
+    """Расчёт срока договора. 1=Полный, 2=Эскизный, 3=Планировочный"""
+    if project_type_code == 1:
+        thresholds = [(70,50),(100,60),(130,70),(160,80),(190,90),(220,100),
+                      (250,110),(300,120),(350,130),(400,140),(450,150),(500,160)]
+    elif project_type_code == 3:
+        thresholds = [(70,10),(100,15),(130,20),(160,25),(190,30),(220,35),
+                      (250,40),(300,45),(350,50),(400,55),(450,60),(500,65)]
+    else:
+        thresholds = [(70,30),(100,35),(130,40),(160,45),(190,50),(220,55),
+                      (250,60),(300,65),(350,70),(400,75),(450,80),(500,85)]
+    for max_area, days in thresholds:
+        if area <= max_area:
+            return days
+    return 0  # индивидуальный расчёт
+
+
+def calc_area_coefficient(area: float) -> int:
+    return max(0, int((area - 1) // 100))
+
+
+def build_project_timeline_template(project_type: str, area: float, project_subtype: str = None):
+    """Генерация полного шаблона подэтапов с формулами.
+    project_subtype: 'Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный'
+    """
+    K = calc_area_coefficient(area)
+    # Определяем pt_code из project_subtype (если задан)
+    if project_subtype:
+        if 'Полный' in project_subtype:
+            pt_code = 1
+        elif 'Планировочный' in project_subtype:
+            pt_code = 3
+        else:
+            pt_code = 2
+    else:
+        pt_code = 1 if project_type == 'Индивидуальный' else 2
+    contract_term = calc_contract_term(pt_code, area)
+
+    # Все подэтапы: (stage_code, stage_name, stage_group, substage_group, raw_G, executor, in_scope)
+    entries = []
+    order = 0
+
+    def add(code, name, group, subgroup, g, executor, in_scope=True):
+        nonlocal order
+        order += 1
+        entries.append({
+            'stage_code': code, 'stage_name': name, 'stage_group': group,
+            'substage_group': subgroup, 'raw_norm_days': g, 'executor_role': executor,
+            'is_in_contract_scope': in_scope, 'sort_order': order
+        })
+
+    def add_header(code, name, group, subgroup=''):
+        nonlocal order
+        order += 1
+        entries.append({
+            'stage_code': code, 'stage_name': name, 'stage_group': group,
+            'substage_group': subgroup, 'raw_norm_days': 0, 'executor_role': 'header',
+            'is_in_contract_scope': False, 'sort_order': order
+        })
+
+    # --- ДАТА НАЧАЛА ---
+    add('START', 'ДАТА НАЧАЛА РАЗРАБОТКИ', 'START', '', 0, 'Менеджер', True)
+
+    # --- ЭТАП 1: ПЛАНИРОВОЧНОЕ РЕШЕНИЕ ---
+    add_header('S1_HDR', 'ЭТАП 1: ПЛАНИРОВОЧНОЕ РЕШЕНИЕ', 'STAGE1')
+
+    # Подэтап 1.1 — входит
+    add_header('S1_1_HDR', 'Подэтап 1.1', 'STAGE1', 'Подэтап 1.1')
+    add('S1_1_01', 'Разработка 3 вар. планировок', 'STAGE1', 'Подэтап 1.1', 4 + K*2, 'Чертежник', True)
+    add('S1_1_02', 'Проверка СДП', 'STAGE1', 'Подэтап 1.1', 1 + K*0.5, 'СДП', True)
+    add('S1_1_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.1', 1.5 + K*1, 'Чертежник', True)
+    add('S1_1_04', 'Проверка повторная СДП', 'STAGE1', 'Подэтап 1.1', 0.5 + K*0.5, 'СДП', True)
+    add('S1_1_05', 'Отправка клиенту', 'STAGE1', 'Подэтап 1.1', 0, 'Клиент', False)
+    add('S1_1_06', 'Сбор правок от клиента СДП', 'STAGE1', 'Подэтап 1.1', 1 + K*0.5, 'СДП', False)
+
+    # Подэтап 1.2 — не входит
+    add_header('S1_2_HDR', 'Подэтап 1.2 — Фин. план 1 круг', 'STAGE1', 'Подэтап 1.2')
+    add('S1_2_01', 'Фин. план. решение (1 круг)', 'STAGE1', 'Подэтап 1.2', 1 + K*1, 'Чертежник', True)
+    add('S1_2_02', 'Проверка СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', False)
+    add('S1_2_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'Чертежник', False)
+    add('S1_2_04', 'Проверка повторная СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', False)
+    add('S1_2_05', 'Отправка клиенту', 'STAGE1', 'Подэтап 1.2', 0, 'Клиент', False)
+    add('S1_2_06', 'Сбор правок от клиента СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', False)
+
+    # Подэтап 1.3 — не входит
+    add_header('S1_3_HDR', 'Подэтап 1.3 — Фин. план 2 круг', 'STAGE1', 'Подэтап 1.3')
+    add('S1_3_01', 'Фин. план. решение (2 круг)', 'STAGE1', 'Подэтап 1.3', 1 + K*1, 'Чертежник', False)
+    add('S1_3_02', 'Проверка СДП', 'STAGE1', 'Подэтап 1.3', 1 + K*0.5, 'СДП', False)
+    add('S1_3_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.3', 1 + K*0.5, 'Чертежник', False)
+    add('S1_3_04', 'Проверка СДП', 'STAGE1', 'Подэтап 1.3', 1 + K*0.5, 'СДП', False)
+    add('S1_3_05', 'Согласование планировки. Акт', 'STAGE1', 'Подэтап 1.3', 0, 'Клиент', False)
+
+    # --- ЭТАП 2: КОНЦЕПЦИЯ ДИЗАЙНА ---
+    add_header('S2_HDR', 'ЭТАП 2: КОНЦЕПЦИЯ ДИЗАЙНА', 'STAGE2')
+
+    # 2.1 Мудборды
+    add_header('S2_1_HDR', 'Подэтап 2.1 — Мудборды', 'STAGE2', 'Подэтап 2.1')
+    add('S2_1_01', 'Разработка мудбордов', 'STAGE2', 'Подэтап 2.1', 3 + K*2, 'Дизайнер', True)
+    add('S2_1_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.1', 1 + K*1, 'СДП', True)
+    add('S2_1_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.1', 2 + K*1, 'Дизайнер', True)
+    add('S2_1_04', 'Проверка повторная СДП', 'STAGE2', 'Подэтап 2.1', 1 + K*0.5, 'СДП', True)
+    add('S2_1_05', 'Отправка клиенту', 'STAGE2', 'Подэтап 2.1', 0, 'Клиент', False)
+    add('S2_1_06', 'Сбор правок СДП', 'STAGE2', 'Подэтап 2.1', 1 + K*0.5, 'СДП', False)
+    add('S2_1_07', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.1', 1 + K*1, 'Дизайнер', False)
+    add('S2_1_08', 'Проверка СДП', 'STAGE2', 'Подэтап 2.1', 1, 'СДП', False)
+    add('S2_1_09', 'Согласование мудборда', 'STAGE2', 'Подэтап 2.1', 0, 'Клиент', False)
+
+    # 2.2 Виз 1 пом.
+    add_header('S2_2_HDR', 'Подэтап 2.2 — Виз 1 пом.', 'STAGE2', 'Подэтап 2.2')
+    add('S2_2_01', 'Разработка визуализации 1 пом.', 'STAGE2', 'Подэтап 2.2', 3 + K*0.5, 'Дизайнер', True)
+    add('S2_2_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.2', 1, 'СДП', True)
+    add('S2_2_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.2', 2, 'Дизайнер', True)
+    add('S2_2_04', 'Проверка повторная СДП', 'STAGE2', 'Подэтап 2.2', 1, 'СДП', True)
+    add('S2_2_05', 'Отправка клиенту', 'STAGE2', 'Подэтап 2.2', 0, 'Клиент', False)
+    add('S2_2_06', 'Сбор правок СДП', 'STAGE2', 'Подэтап 2.2', 1, 'СДП', False)
+
+    # 2.3 Виз 1 пом. 1 круг — не входит
+    add_header('S2_3_HDR', 'Подэтап 2.3 — Виз 1 пом. 1 круг', 'STAGE2', 'Подэтап 2.3')
+    add('S2_3_01', 'Правка визуализации (1 круг)', 'STAGE2', 'Подэтап 2.3', 2 + K*0.5, 'Дизайнер', False)
+    add('S2_3_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.3', 1, 'СДП', False)
+    add('S2_3_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.3', 1, 'Дизайнер', False)
+    add('S2_3_04', 'Проверка повторная СДП', 'STAGE2', 'Подэтап 2.3', 1, 'СДП', False)
+    add('S2_3_05', 'Отправка клиенту', 'STAGE2', 'Подэтап 2.3', 0, 'Клиент', False)
+    add('S2_3_06', 'Сбор правок СДП', 'STAGE2', 'Подэтап 2.3', 1, 'СДП', False)
+
+    # 2.4 Виз 1 пом. 2 круг — не входит
+    add_header('S2_4_HDR', 'Подэтап 2.4 — Виз 1 пом. 2 круг', 'STAGE2', 'Подэтап 2.4')
+    add('S2_4_01', 'Правка визуализации (2 круг)', 'STAGE2', 'Подэтап 2.4', 1 + K*1, 'Дизайнер', False)
+    add('S2_4_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.4', 1, 'СДП', False)
+    add('S2_4_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.4', 1, 'Дизайнер', False)
+    add('S2_4_04', 'Проверка СДП', 'STAGE2', 'Подэтап 2.4', 1, 'СДП', False)
+    add('S2_4_05', 'Согласование 1 пом.', 'STAGE2', 'Подэтап 2.4', 0, 'Клиент', False)
+
+    # 2.5 Виз остальных — входит
+    add_header('S2_5_HDR', 'Подэтап 2.5 — Виз остальных', 'STAGE2', 'Подэтап 2.5')
+    add('S2_5_01', 'Разработка визуализаций всех', 'STAGE2', 'Подэтап 2.5', 10 + K*10, 'Дизайнер', True)
+    add('S2_5_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.5', 3 + K*2.5, 'СДП', True)
+    add('S2_5_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.5', 5 + K*5, 'Дизайнер', True)
+    add('S2_5_04', 'Проверка повторная СДП', 'STAGE2', 'Подэтап 2.5', 2 + K*1.5, 'СДП', True)
+    add('S2_5_05', 'Отправка клиенту', 'STAGE2', 'Подэтап 2.5', 0, 'Клиент', False)
+    add('S2_5_06', 'Сбор правок СДП', 'STAGE2', 'Подэтап 2.5', 2 + K*1.5, 'СДП', False)
+
+    # 2.6 Виз все 1 круг — не входит
+    add_header('S2_6_HDR', 'Подэтап 2.6 — Виз все 1 круг', 'STAGE2', 'Подэтап 2.6')
+    add('S2_6_01', 'Правка визуализаций (1 круг)', 'STAGE2', 'Подэтап 2.6', 5 + K*5, 'Дизайнер', False)
+    add('S2_6_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.6', 2 + K*1.5, 'СДП', False)
+    add('S2_6_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.6', 2 + K*1.5, 'Дизайнер', False)
+    add('S2_6_04', 'Проверка повторная СДП', 'STAGE2', 'Подэтап 2.6', 2 + K*1.5, 'СДП', False)
+    add('S2_6_05', 'Согласование визуализаций', 'STAGE2', 'Подэтап 2.6', 0, 'Клиент', False)
+
+    # 2.7 Виз все 2 круг — не входит
+    add_header('S2_7_HDR', 'Подэтап 2.7 — Виз все 2 круг', 'STAGE2', 'Подэтап 2.7')
+    add('S2_7_01', 'Правка визуализаций (2 круг)', 'STAGE2', 'Подэтап 2.7', 3 + K*3, 'Дизайнер', False)
+    add('S2_7_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.7', 1 + K*1, 'СДП', False)
+    add('S2_7_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.7', 1 + K*1, 'Дизайнер', False)
+    add('S2_7_04', 'Проверка СДП', 'STAGE2', 'Подэтап 2.7', 1 + K*1, 'СДП', False)
+    add('S2_7_05', 'Согласование дизайна. Акт', 'STAGE2', 'Подэтап 2.7', 0, 'Клиент', False)
+
+    # --- ЭТАП 3: РАБОЧАЯ ДОКУМЕНТАЦИЯ ---
+    add_header('S3_HDR', 'ЭТАП 3: РАБОЧАЯ ДОКУМЕНТАЦИЯ', 'STAGE3')
+
+    add('S3_01', 'Подготовка файлов, выдача', 'STAGE3', '', 1, 'СДП', True)
+    add('S3_02', 'Разработка комплекта РД', 'STAGE3', '', 10 + K*2, 'Чертежник', True)
+    add('S3_03', 'Проверка ГАП (1 круг)', 'STAGE3', '', 3 + K*0.5, 'ГАП', True)
+    add('S3_04', 'Правка чертежником', 'STAGE3', '', 2 + K*1, 'Чертежник', True)
+    add('S3_05', 'Проверка ГАП (2 круг)', 'STAGE3', '', 1 + K*0.5, 'ГАП', True)
+    add('S3_06', 'Правка чертежником (при необх.)', 'STAGE3', '', 1, 'Чертежник', True)
+    add('S3_07', 'Проверка ГАП (3 круг)', 'STAGE3', '', 1, 'ГАП', True)
+    add('S3_08', 'Отправка клиенту', 'STAGE3', '', 0, 'Клиент', False)
+    add('S3_09', 'Сбор правок от клиента', 'STAGE3', '', 1 + K*0.5, 'Менеджер', False)
+    add('S3_10', 'Внесение правок чертежником', 'STAGE3', '', 1 + K*1, 'Чертежник', False)
+    add('S3_11', 'Проверка ГАП (4 круг)', 'STAGE3', '', 1 + K*0.5, 'ГАП', False)
+    add('S3_12', 'Принятие проекта. Акт финальный', 'STAGE3', '', 0, 'Клиент', False)
+
+    # --- Фильтрация по подтипу проекта ---
+    if project_subtype and 'Планировочный' in project_subtype:
+        # Только START + STAGE1
+        entries = [e for e in entries if e['stage_group'] in ('START', 'STAGE1')]
+    elif project_subtype and 'Эскизный' in project_subtype:
+        # START + STAGE1 + мудборды (Подэтап 2.1) + STAGE3
+        entries = [e for e in entries if e['stage_group'] in ('START', 'STAGE1', 'STAGE3')
+                   or (e['stage_group'] == 'STAGE2' and e['substage_group'] == 'Подэтап 2.1')
+                   or e['stage_code'] == 'S2_HDR']
+    # Полный / None — все этапы
+
+    # Перенумерация sort_order после фильтрации
+    for i, e in enumerate(entries, 1):
+        e['sort_order'] = i
+
+    # Пропорциональный расчёт норм
+    in_scope = [e for e in entries if e['is_in_contract_scope'] and e['executor_role'] != 'header' and e['raw_norm_days'] > 0]
+    total_raw = sum(e['raw_norm_days'] for e in in_scope)
+
+    if total_raw > 0 and contract_term > 0:
+        cumulative = 0
+        prev_rounded = 0
+        for e in in_scope:
+            cumulative += e['raw_norm_days']
+            e['cumulative_days'] = cumulative
+            current_rounded = round(cumulative / total_raw * contract_term)
+            e['norm_days'] = max(1, current_rounded - prev_rounded) if prev_rounded > 0 else max(1, current_rounded)
+            prev_rounded = current_rounded
+
+    # Не в сроке: norm = max(1, round(raw))
+    for e in entries:
+        if e['executor_role'] == 'header':
+            e['norm_days'] = 0
+            continue
+        if not e['is_in_contract_scope'] and e['raw_norm_days'] > 0:
+            e['norm_days'] = max(1, round(e['raw_norm_days']))
+
+    return entries, contract_term, K
+
+
+def calc_template_contract_term(template_subtype: str, area: float, floors: int = 1) -> int:
+    """Расчёт срока для шаблонных проектов (рабочие дни)"""
+    sub = template_subtype.lower()
+    if 'ванной' in sub:
+        if 'визуализац' in sub:
+            return 20
+        return 10
+
+    # Стандарт / Стандарт с визуализацией
+    if area <= 90:
+        base_days = 20
+    else:
+        extra = int((area - 90 - 1) // 50) + 1
+        base_days = 20 + extra * 10
+
+    # Доп. этажи
+    if floors > 1:
+        for _ in range(1, floors):
+            if area <= 90:
+                base_days += 10
+            else:
+                extra = int((area - 90 - 1) // 50) + 1
+                base_days += 10 + extra * 10
+
+    # Визуализация
+    if 'визуализац' in sub:
+        if area <= 90:
+            base_days += 25
+        else:
+            extra = int((area - 90 - 1) // 50) + 1
+            base_days += 25 + extra * 15
+
+    return int(base_days)
+
+
+def build_template_project_timeline(template_subtype: str, area: float, floors: int = 1):
+    """Генерация шаблона таблицы сроков для шаблонных проектов.
+    template_subtype: 'Стандарт', 'Стандарт с визуализацией',
+                      'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией'
+    """
+    contract_term = calc_template_contract_term(template_subtype, area, floors)
+    entries = []
+    order = 0
+
+    def add(code, name, group, subgroup, g, executor, in_scope=True):
+        nonlocal order
+        order += 1
+        entries.append({
+            'stage_code': code, 'stage_name': name, 'stage_group': group,
+            'substage_group': subgroup, 'raw_norm_days': g, 'executor_role': executor,
+            'is_in_contract_scope': in_scope, 'sort_order': order
+        })
+
+    def add_header(code, name, group, subgroup=''):
+        nonlocal order
+        order += 1
+        entries.append({
+            'stage_code': code, 'stage_name': name, 'stage_group': group,
+            'substage_group': subgroup, 'raw_norm_days': 0, 'executor_role': 'header',
+            'is_in_contract_scope': False, 'sort_order': order
+        })
+
+    # --- ДАТА НАЧАЛА ---
+    add('START', 'ДАТА НАЧАЛА РАЗРАБОТКИ', 'START', '', 0, 'Менеджер', True)
+
+    # --- СТАДИЯ 1: ПЛАНИРОВОЧНЫЕ РЕШЕНИЯ ---
+    add_header('T1_HDR', 'СТАДИЯ 1: ПЛАНИРОВОЧНЫЕ РЕШЕНИЯ', 'STAGE1')
+
+    # Подэтап 1.1
+    add_header('T1_1_HDR', 'Подэтап 1.1', 'STAGE1', 'Подэтап 1.1')
+    add('T1_1_01', 'Разработка 3 вар. план. решений', 'STAGE1', 'Подэтап 1.1', 3, 'Чертежник', True)
+    add('T1_1_02', 'Проверка менеджером', 'STAGE1', 'Подэтап 1.1', 1, 'Менеджер', True)
+    add('T1_1_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.1', 1, 'Чертежник', True)
+    add('T1_1_04', 'Проверка повторная менеджером', 'STAGE1', 'Подэтап 1.1', 0.5, 'Менеджер', True)
+    add('T1_1_05', 'Отправка клиенту / Согласование', 'STAGE1', 'Подэтап 1.1', 0, 'Клиент', False)
+    add('T1_1_06', 'Сбор правок от клиента', 'STAGE1', 'Подэтап 1.1', 1, 'Менеджер', False)
+
+    # Подэтап 1.2
+    add_header('T1_2_HDR', 'Подэтап 1.2 — Финальное план. решение', 'STAGE1', 'Подэтап 1.2')
+    add('T1_2_01', 'Финальное план. решение (1 круг)', 'STAGE1', 'Подэтап 1.2', 1, 'Чертежник', True)
+    add('T1_2_02', 'Проверка менеджером', 'STAGE1', 'Подэтап 1.2', 1, 'Менеджер', False)
+    add('T1_2_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.2', 1, 'Чертежник', False)
+    add('T1_2_04', 'Проверка повторная менеджером', 'STAGE1', 'Подэтап 1.2', 0.5, 'Менеджер', False)
+    add('T1_2_05', 'Отправка клиенту / Согласование', 'STAGE1', 'Подэтап 1.2', 0, 'Клиент', False)
+
+    # --- СТАДИЯ 2: РАБОЧИЕ ЧЕРТЕЖИ ---
+    add_header('T2_HDR', 'СТАДИЯ 2: РАБОЧИЕ ЧЕРТЕЖИ', 'STAGE2')
+
+    add('T2_01', 'Подготовка файлов, выдача чертежнику', 'STAGE2', '', 1, 'Менеджер', True)
+    add('T2_02', 'Разработка комплекта РД', 'STAGE2', '', 5, 'Чертежник', True)
+    add('T2_03', 'Проверка ГАП (1 круг)', 'STAGE2', '', 2, 'ГАП', True)
+    add('T2_04', 'Правка чертежником', 'STAGE2', '', 1, 'Чертежник', True)
+    add('T2_05', 'Проверка ГАП (2 круг)', 'STAGE2', '', 1, 'ГАП', True)
+    add('T2_06', 'Правка чертежником (при необх.)', 'STAGE2', '', 1, 'Чертежник', False)
+    add('T2_07', 'Проверка ГАП (3 круг)', 'STAGE2', '', 1, 'ГАП', False)
+    add('T2_08', 'Отправка клиенту / Согласование', 'STAGE2', '', 0, 'Клиент', False)
+    add('T2_09', 'Сбор правок от клиента', 'STAGE2', '', 1, 'Менеджер', False)
+    add('T2_10', 'Внесение правок чертежником', 'STAGE2', '', 1, 'Чертежник', False)
+    add('T2_11', 'Проверка ГАП (4 круг)', 'STAGE2', '', 1, 'ГАП', False)
+    add('T2_12', 'Принятие проекта. Закрытие.', 'STAGE2', '', 0, 'Клиент', False)
+
+    # --- СТАДИЯ 3: 3Д ВИЗУАЛИЗАЦИЯ (только для подтипов с визуализацией) ---
+    has_viz = 'визуализац' in template_subtype.lower()
+    if has_viz:
+        add_header('T3_HDR', 'СТАДИЯ 3: 3Д ВИЗУАЛИЗАЦИЯ', 'STAGE3')
+
+        add('T3_01', 'Разработка визуализаций всех пом.', 'STAGE3', '', 10, 'Дизайнер', True)
+        add('T3_02', 'Проверка менеджером', 'STAGE3', '', 2, 'Менеджер', True)
+        add('T3_03', 'Правка дизайнером', 'STAGE3', '', 3, 'Дизайнер', True)
+        add('T3_04', 'Проверка повторная менеджером', 'STAGE3', '', 1, 'Менеджер', True)
+        add('T3_05', 'Отправка клиенту / Согласование', 'STAGE3', '', 0, 'Клиент', False)
+        add('T3_06', 'Принятие проекта. Закрытие.', 'STAGE3', '', 0, 'Клиент', False)
+
+    # Перенумерация sort_order
+    for i, e in enumerate(entries, 1):
+        e['sort_order'] = i
+
+    # Пропорциональный расчёт норм
+    in_scope = [e for e in entries if e['is_in_contract_scope'] and e['executor_role'] != 'header' and e['raw_norm_days'] > 0]
+    total_raw = sum(e['raw_norm_days'] for e in in_scope)
+
+    if total_raw > 0 and contract_term > 0:
+        cumulative = 0
+        prev_rounded = 0
+        for e in in_scope:
+            cumulative += e['raw_norm_days']
+            e['cumulative_days'] = cumulative
+            current_rounded = round(cumulative / total_raw * contract_term)
+            e['norm_days'] = max(1, current_rounded - prev_rounded) if prev_rounded > 0 else max(1, current_rounded)
+            prev_rounded = current_rounded
+
+    # Не в сроке: norm = max(1, round(raw))
+    for e in entries:
+        if e['executor_role'] == 'header':
+            e['norm_days'] = 0
+            continue
+        if not e['is_in_contract_scope'] and e['raw_norm_days'] > 0:
+            e['norm_days'] = max(1, round(e['raw_norm_days']))
+
+    return entries, contract_term, 0
+
+
+@app.get("/api/timeline")
+async def get_all_timelines(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить все записи таймлайна проектов"""
+    entries = db.query(ProjectTimelineEntry).order_by(
+        ProjectTimelineEntry.contract_id,
+        ProjectTimelineEntry.sort_order
+    ).all()
+    return [
+        {c.name: getattr(e, c.name) for c in e.__table__.columns}
+        for e in entries
+    ]
+
+
+@app.get("/api/timeline/{contract_id}")
+async def get_project_timeline(
+    contract_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить таблицу сроков проекта"""
+    entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id
+    ).order_by(ProjectTimelineEntry.sort_order).all()
+    return [
+        {c.name: getattr(e, c.name) for c in e.__table__.columns}
+        for e in entries
+    ]
+
+
+@app.post("/api/timeline/{contract_id}/init")
+async def init_project_timeline(
+    contract_id: int,
+    request: TimelineInitRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Инициализация таблицы сроков проекта из шаблона"""
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    # Проверяем, есть ли уже записи
+    existing = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id
+    ).count()
+    if existing > 0:
+        return {"status": "already_initialized", "count": existing}
+
+    if request.project_type == 'Шаблонный':
+        template_subtype = request.project_subtype or 'Стандарт'
+        floors = getattr(request, 'floors', 1) or 1
+        entries, contract_term, K = build_template_project_timeline(
+            template_subtype, request.area, floors
+        )
+    else:
+        entries, contract_term, K = build_project_timeline_template(
+            request.project_type, request.area, request.project_subtype
+        )
+
+    for e in entries:
+        record = ProjectTimelineEntry(
+            contract_id=contract_id,
+            stage_code=e['stage_code'],
+            stage_name=e['stage_name'],
+            stage_group=e['stage_group'],
+            substage_group=e.get('substage_group', ''),
+            executor_role=e['executor_role'],
+            is_in_contract_scope=e['is_in_contract_scope'],
+            sort_order=e['sort_order'],
+            raw_norm_days=e.get('raw_norm_days', 0),
+            cumulative_days=e.get('cumulative_days', 0),
+            norm_days=e.get('norm_days', 0)
+        )
+        db.add(record)
+
+    db.commit()
+    return {
+        "status": "initialized",
+        "count": len(entries),
+        "contract_term": contract_term,
+        "area_coefficient": K
+    }
+
+
+@app.post("/api/timeline/{contract_id}/reinit")
+async def reinit_project_timeline(
+    contract_id: int,
+    request: TimelineInitRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Пересоздать таблицу сроков проекта (удалить старые записи и создать заново)"""
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    # Удаляем старые записи
+    db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id
+    ).delete()
+    db.flush()
+
+    if request.project_type == 'Шаблонный':
+        template_subtype = request.project_subtype or 'Стандарт'
+        floors = getattr(request, 'floors', 1) or 1
+        entries, contract_term, K = build_template_project_timeline(
+            template_subtype, request.area, floors
+        )
+    else:
+        entries, contract_term, K = build_project_timeline_template(
+            request.project_type, request.area, request.project_subtype
+        )
+
+    for e in entries:
+        record = ProjectTimelineEntry(
+            contract_id=contract_id,
+            stage_code=e['stage_code'],
+            stage_name=e['stage_name'],
+            stage_group=e['stage_group'],
+            substage_group=e.get('substage_group', ''),
+            executor_role=e['executor_role'],
+            is_in_contract_scope=e['is_in_contract_scope'],
+            sort_order=e['sort_order'],
+            raw_norm_days=e.get('raw_norm_days', 0),
+            cumulative_days=e.get('cumulative_days', 0),
+            norm_days=e.get('norm_days', 0)
+        )
+        db.add(record)
+
+    db.commit()
+    return {
+        "status": "reinitialized",
+        "count": len(entries),
+        "contract_term": contract_term,
+        "area_coefficient": K
+    }
+
+
+@app.put("/api/timeline/{contract_id}/entry/{stage_code}")
+async def update_timeline_entry(
+    contract_id: int,
+    stage_code: str,
+    update: TimelineEntryUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Обновить запись таблицы сроков"""
+    entry = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.stage_code == stage_code
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+
+    update_data = update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(entry, key, value)
+    entry.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {c.name: getattr(entry, c.name) for c in entry.__table__.columns}
+
+
+@app.get("/api/timeline/{contract_id}/summary")
+async def get_timeline_summary(
+    contract_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Сводка по таблице сроков"""
+    entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.executor_role != 'header'
+    ).all()
+
+    total_norm = sum(e.norm_days for e in entries if e.is_in_contract_scope)
+    total_actual = sum(e.actual_days for e in entries if e.is_in_contract_scope and e.actual_days > 0)
+    overdue_count = sum(1 for e in entries if e.actual_days > e.norm_days > 0)
+
+    return {
+        "total_norm_days": total_norm,
+        "total_actual_days": total_actual,
+        "overdue_count": overdue_count,
+        "entries_count": len(entries)
+    }
+
+
+# =========================
+# WORKFLOW ENDPOINTS (CRM)
+# =========================
+
+@app.get("/api/crm/cards/{card_id}/workflow/state")
+async def get_workflow_state(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить текущее состояние рабочего процесса карточки"""
+    states = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id
+    ).all()
+    return [
+        {c.name: getattr(s, c.name) for c in s.__table__.columns}
+        for s in states
+    ]
+
+
+@app.post("/api/crm/cards/{card_id}/workflow/submit")
+async def workflow_submit_work(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Сдача работы исполнителем — записывает дату в timeline"""
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    contract_id = card.contract_id
+    stage_name = card.column_name
+
+    # Находим текущий подэтап (первый без actual_date, is_in_contract_scope, не header)
+    stage_group = _resolve_stage_group(stage_name)
+    if not stage_group:
+        return {"status": "no_stage_group"}
+
+    entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.stage_group == stage_group,
+        ProjectTimelineEntry.executor_role != 'header',
+        ProjectTimelineEntry.actual_date.is_(None)
+    ).order_by(ProjectTimelineEntry.sort_order).all()
+
+    # Также check entries with empty string
+    if not entries:
+        entries = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role != 'header',
+            ProjectTimelineEntry.actual_date == ''
+        ).order_by(ProjectTimelineEntry.sort_order).all()
+
+    if entries:
+        entry = entries[0]
+        entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+        entry.updated_at = datetime.utcnow()
+
+    # Обновляем workflow state
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if not wf:
+        wf = StageWorkflowState(
+            crm_card_id=card_id,
+            stage_name=stage_name,
+            current_substep_code=entries[0].stage_code if entries else None,
+            status='in_progress'
+        )
+        db.add(wf)
+    wf.current_substep_code = entries[0].stage_code if entries else wf.current_substep_code
+    wf.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"status": "submitted", "substep": entries[0].stage_code if entries else None}
+
+
+@app.post("/api/crm/cards/{card_id}/workflow/accept")
+async def workflow_accept_work(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Приемка работы — записывает дату проверки в timeline"""
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    contract_id = card.contract_id
+    stage_name = card.column_name
+    stage_group = _resolve_stage_group(stage_name)
+
+    if stage_group:
+        entries = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role != 'header',
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).all()
+
+        if entries:
+            entry = entries[0]
+            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+            entry.updated_at = datetime.utcnow()
+
+    # Обновляем workflow state
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if wf:
+        wf.status = 'in_progress'
+        wf.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"status": "accepted"}
+
+
+@app.post("/api/crm/cards/{card_id}/workflow/reject")
+async def workflow_reject_work(
+    card_id: int,
+    request: Request,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить на исправление — обновляет workflow state и сбрасывает completed.
+    Опционально принимает revision_file_path (путь к папке правок на ЯД)."""
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    stage_name = card.column_name
+    revision_file_path = body.get('revision_file_path', '')
+
+    # Сбрасываем completed у исполнителя текущей стадии
+    # чтобы он увидел кнопку "Сдать работу" снова
+    executors = db.query(StageExecutor).filter(
+        StageExecutor.crm_card_id == card_id,
+        StageExecutor.completed == True
+    ).all()
+    for ex in executors:
+        # Сбрасываем только если stage_name совпадает с текущей стадией
+        if ex.stage_name and (
+            ex.stage_name == stage_name or
+            stage_name.lower() in ex.stage_name.lower() or
+            ex.stage_name.lower() in stage_name.lower()
+        ):
+            ex.completed = False
+            ex.completed_date = None
+
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if not wf:
+        wf = StageWorkflowState(
+            crm_card_id=card_id,
+            stage_name=stage_name,
+            status='revision',
+            revision_count=1,
+            revision_file_path=revision_file_path or None
+        )
+        db.add(wf)
+    else:
+        wf.status = 'revision'
+        wf.revision_count = (wf.revision_count or 0) + 1
+        if revision_file_path:
+            wf.revision_file_path = revision_file_path
+        wf.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"status": "rejected", "revision_count": wf.revision_count, "revision_file_path": wf.revision_file_path}
+
+
+@app.post("/api/crm/cards/{card_id}/workflow/client-send")
+async def workflow_client_send(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить на согласование клиенту — приостанавливает дедлайн"""
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    stage_name = card.column_name
+    contract_id = card.contract_id
+    stage_group = _resolve_stage_group(stage_name)
+
+    # Записываем дату в timeline (Отправка клиенту)
+    if stage_group:
+        entries = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role == 'Клиент',
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).first()
+        if entries:
+            entries.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if not wf:
+        wf = StageWorkflowState(
+            crm_card_id=card_id,
+            stage_name=stage_name,
+            status='client_approval',
+            client_approval_started_at=datetime.utcnow(),
+            client_approval_deadline_paused=True
+        )
+        db.add(wf)
+    else:
+        wf.status = 'client_approval'
+        wf.client_approval_started_at = datetime.utcnow()
+        wf.client_approval_deadline_paused = True
+        wf.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"status": "sent_to_client"}
+
+
+@app.post("/api/crm/cards/{card_id}/workflow/client-ok")
+async def workflow_client_approved(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Клиент согласовал — возобновляет дедлайн"""
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    stage_name = card.column_name
+
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if wf:
+        wf.status = 'in_progress'
+        wf.client_approval_deadline_paused = False
+        wf.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"status": "client_approved"}
+
+
+def _resolve_stage_group(column_name: str) -> str:
+    """Определить stage_group по имени колонки канбана"""
+    col = column_name.lower()
+    if 'стадия 1' in col:
+        return 'STAGE1'
+    elif 'стадия 2' in col and ('концепция' in col or 'дизайн' in col):
+        return 'STAGE2'
+    elif 'стадия 2' in col:
+        return 'STAGE2'
+    elif 'стадия 3' in col:
+        return 'STAGE3'
+    return ''
+
+
+# =========================
+# SUPERVISION TIMELINE ENDPOINTS
+# =========================
+
+SUPERVISION_STAGES = [
+    ('STAGE_1_CERAMIC', 'Стадия 1: Закупка керамогранита'),
+    ('STAGE_2_PLUMBING', 'Стадия 2: Закупка сантехники'),
+    ('STAGE_3_EQUIPMENT', 'Стадия 3: Закупка оборудования'),
+    ('STAGE_4_DOORS', 'Стадия 4: Закупка дверей и окон'),
+    ('STAGE_5_WALL', 'Стадия 5: Закупка настенных материалов'),
+    ('STAGE_6_FLOOR', 'Стадия 6: Закупка напольных материалов'),
+    ('STAGE_7_STUCCO', 'Стадия 7: Лепной декор'),
+    ('STAGE_8_LIGHTING', 'Стадия 8: Освещение'),
+    ('STAGE_9_APPLIANCES', 'Стадия 9: Бытовая техника'),
+    ('STAGE_10_CUSTOM_FURNITURE', 'Стадия 10: Закупка заказной мебели'),
+    ('STAGE_11_FACTORY_FURNITURE', 'Стадия 11: Закупка фабричной мебели'),
+    ('STAGE_12_DECOR', 'Стадия 12: Закупка декора'),
+]
+
+
+@app.get("/api/supervision-timeline")
+async def get_all_supervision_timelines(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить все записи таймлайна надзора"""
+    entries = db.query(SupervisionTimelineEntry).order_by(
+        SupervisionTimelineEntry.supervision_card_id,
+        SupervisionTimelineEntry.sort_order
+    ).all()
+    return {
+        "entries": [
+            {c.name: getattr(e, c.name) for c in e.__table__.columns}
+            for e in entries
+        ],
+        "total": len(entries)
+    }
+
+
+@app.get("/api/supervision-timeline/{card_id}")
+async def get_supervision_timeline(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить таблицу сроков надзора"""
+    entries = db.query(SupervisionTimelineEntry).filter(
+        SupervisionTimelineEntry.supervision_card_id == card_id
+    ).order_by(SupervisionTimelineEntry.sort_order).all()
+    return [
+        {c.name: getattr(e, c.name) for c in e.__table__.columns}
+        for e in entries
+    ]
+
+
+@app.post("/api/supervision-timeline/{card_id}/init")
+async def init_supervision_timeline(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Инициализация таблицы сроков надзора (12 стадий)"""
+    sv_card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
+    if not sv_card:
+        raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
+
+    existing = db.query(SupervisionTimelineEntry).filter(
+        SupervisionTimelineEntry.supervision_card_id == card_id
+    ).count()
+    if existing > 0:
+        return {"status": "already_initialized", "count": existing}
+
+    for i, (code, name) in enumerate(SUPERVISION_STAGES):
+        record = SupervisionTimelineEntry(
+            supervision_card_id=card_id,
+            stage_code=code,
+            stage_name=name,
+            sort_order=i + 1,
+            status='Не начато'
+        )
+        db.add(record)
+
+    db.commit()
+    return {"status": "initialized", "count": len(SUPERVISION_STAGES)}
+
+
+@app.put("/api/supervision-timeline/{card_id}/entry/{stage_code}")
+async def update_supervision_timeline_entry(
+    card_id: int,
+    stage_code: str,
+    update: SupervisionTimelineUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Обновить запись таблицы сроков надзора"""
+    entry = db.query(SupervisionTimelineEntry).filter(
+        SupervisionTimelineEntry.supervision_card_id == card_id,
+        SupervisionTimelineEntry.stage_code == stage_code
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+
+    update_data = update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(entry, key, value)
+
+    # Автоматический расчёт экономии
+    if entry.budget_planned is not None and entry.budget_actual is not None:
+        entry.budget_savings = entry.budget_planned - entry.budget_actual
+
+    entry.updated_at = datetime.utcnow()
+    db.commit()
+    return {c.name: getattr(entry, c.name) for c in entry.__table__.columns}
+
+
+@app.get("/api/supervision-timeline/{card_id}/summary")
+async def get_supervision_timeline_summary(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Сводка по таблице сроков надзора"""
+    entries = db.query(SupervisionTimelineEntry).filter(
+        SupervisionTimelineEntry.supervision_card_id == card_id
+    ).all()
+
+    total_budget_planned = sum(e.budget_planned or 0 for e in entries)
+    total_budget_actual = sum(e.budget_actual or 0 for e in entries)
+    total_savings = sum(e.budget_savings or 0 for e in entries)
+    total_defects = sum(e.defects_found or 0 for e in entries)
+    total_resolved = sum(e.defects_resolved or 0 for e in entries)
+    total_visits = sum(e.site_visits or 0 for e in entries)
+
+    status_counts = {}
+    for e in entries:
+        status_counts[e.status] = status_counts.get(e.status, 0) + 1
+
+    return {
+        "total_budget_planned": total_budget_planned,
+        "total_budget_actual": total_budget_actual,
+        "total_savings": total_savings,
+        "total_defects_found": total_defects,
+        "total_defects_resolved": total_resolved,
+        "total_site_visits": total_visits,
+        "status_counts": status_counts,
+        "entries_count": len(entries)
+    }
+
+
+@app.get("/api/timeline/{contract_id}/export/excel")
+async def export_timeline_excel(
+    contract_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Экспорт таблицы сроков CRM в Excel"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id
+    ).order_by(ProjectTimelineEntry.sort_order).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Таблица сроков"
+
+    # Шапка
+    ws.append(["Адрес:", contract.address or ""])
+    ws.append(["Тип проекта:", contract.project_type or ""])
+    ws.append(["Площадь:", f"{contract.area or 0} м²"])
+    ws.append([])
+
+    # Заголовки таблицы
+    headers = ["Действия по этапам", "Дата", "Кол-во дней", "Норма дней", "Статус", "Исполнитель"]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=5, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Данные
+    stage_fill = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+    stage_font = Font(bold=True, color="FFFFFF")
+    substage_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+    substage_font = Font(bold=True)
+    overdue_fill = PatternFill(start_color="F2DCDB", end_color="F2DCDB", fill_type="solid")
+
+    for entry in entries:
+        row_data = [
+            entry.stage_name,
+            entry.actual_date or "",
+            entry.actual_days or 0,
+            entry.norm_days or 0,
+            entry.status or "",
+            entry.executor_role or ""
+        ]
+        ws.append(row_data)
+        row_idx = ws.max_row
+
+        # Стили для заголовков этапов
+        if entry.executor_role == 'header':
+            for col_idx in range(1, 7):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.fill = stage_fill
+                cell.font = stage_font
+                cell.border = thin_border
+        elif entry.executor_role == 'subheader':
+            for col_idx in range(1, 7):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.fill = substage_fill
+                cell.font = substage_font
+                cell.border = thin_border
+        else:
+            for col_idx in range(1, 7):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.border = thin_border
+            # Подсветка просроченных
+            if entry.actual_days and entry.norm_days and entry.actual_days > entry.norm_days:
+                for col_idx in range(1, 7):
+                    ws.cell(row=row_idx, column=col_idx).fill = overdue_fill
+
+    # Ширина колонок
+    ws.column_dimensions['A'].width = 45
+    ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 14
+    ws.column_dimensions['D'].width = 14
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 18
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"timeline_{contract_id}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/api/timeline/{contract_id}/export/pdf")
+async def export_timeline_pdf(
+    contract_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Экспорт таблицы сроков CRM в PDF (для клиента)"""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id
+    ).order_by(ProjectTimelineEntry.sort_order).all()
+
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
+                            leftMargin=15*mm, rightMargin=15*mm,
+                            topMargin=15*mm, bottomMargin=15*mm)
+
+    # Попытка зарегистрировать шрифт с кириллицей
+    font_name = "Helvetica"
+    for font_path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                      "/usr/share/fonts/TTF/DejaVuSans.ttf"]:
+        if os.path.exists(font_path):
+            pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
+            font_name = "DejaVuSans"
+            break
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title_RU', parent=styles['Title'],
+                                  fontName=font_name, fontSize=14)
+    cell_style = ParagraphStyle('Cell_RU', fontName=font_name, fontSize=8,
+                                 leading=10)
+    header_style = ParagraphStyle('Header_RU', fontName=font_name, fontSize=9,
+                                   leading=11, textColor=colors.white)
+
+    elements = []
+    elements.append(Paragraph(f"Таблица сроков проекта", title_style))
+    elements.append(Spacer(1, 5*mm))
+
+    # Информация о проекте
+    info_text = f"Адрес: {contract.address or '-'}  |  Тип: {contract.project_type or '-'}  |  Площадь: {contract.area or 0} м²"
+    elements.append(Paragraph(info_text, ParagraphStyle('Info', fontName=font_name, fontSize=10)))
+    elements.append(Spacer(1, 5*mm))
+
+    # Таблица
+    table_data = [[
+        Paragraph("Этап", header_style),
+        Paragraph("Дата", header_style),
+        Paragraph("Дней", header_style),
+        Paragraph("Норма", header_style),
+        Paragraph("Статус", header_style),
+        Paragraph("Исполнитель", header_style)
+    ]]
+
+    for entry in entries:
+        table_data.append([
+            Paragraph(entry.stage_name or "", cell_style),
+            Paragraph(entry.actual_date or "", cell_style),
+            Paragraph(str(entry.actual_days or ""), cell_style),
+            Paragraph(str(entry.norm_days or ""), cell_style),
+            Paragraph(entry.status or "", cell_style),
+            Paragraph(entry.executor_role if entry.executor_role not in ('header', 'subheader') else "", cell_style)
+        ])
+
+    col_widths = [180, 60, 50, 50, 50, 80]
+    table = Table(table_data, colWidths=col_widths)
+
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F5496')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F8F8')]),
+    ]
+
+    # Подсветка строк-заголовков
+    for i, entry in enumerate(entries, 1):
+        if entry.executor_role == 'header':
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#2F5496')))
+            style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), colors.white))
+        elif entry.executor_role == 'subheader':
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#D6E4F0')))
+        elif entry.actual_days and entry.norm_days and entry.actual_days > entry.norm_days:
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#F2DCDB')))
+
+    table.setStyle(TableStyle(style_cmds))
+    elements.append(table)
+
+    doc.build(elements)
+    output.seek(0)
+
+    filename = f"timeline_{contract_id}.pdf"
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/api/supervision-timeline/{card_id}/export/excel")
+async def export_supervision_timeline_excel(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Экспорт таблицы сроков надзора в Excel"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
+
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    entries = db.query(SupervisionTimelineEntry).filter(
+        SupervisionTimelineEntry.supervision_card_id == card_id
+    ).order_by(SupervisionTimelineEntry.sort_order).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Таблица сроков надзора"
+
+    # Шапка
+    ws.append(["Адрес:", contract.address if contract else ""])
+    ws.append([])
+
+    # Заголовки
+    headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Бюджет план",
+               "Бюджет факт", "Экономия", "Поставщик", "Статус", "Примечания"]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+
+    # Цвета статусов
+    status_colors = {
+        'В работе': 'FFF8E1',
+        'Закуплено': 'E3F2FD',
+        'Доставлено': 'E8F5E9',
+        'Просрочено': 'FFEBEE',
+    }
+
+    for entry in entries:
+        row_data = [
+            entry.stage_name,
+            entry.plan_date or "",
+            entry.actual_date or "",
+            entry.actual_days or 0,
+            entry.budget_planned or 0,
+            entry.budget_actual or 0,
+            entry.budget_savings or 0,
+            entry.supplier or "",
+            entry.status or "",
+            entry.notes or ""
+        ]
+        ws.append(row_data)
+        row_idx = ws.max_row
+
+        for col_idx in range(1, 11):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.border = thin_border
+
+        # Цвет по статусу
+        color_hex = status_colors.get(entry.status)
+        if color_hex:
+            fill = PatternFill(start_color=color_hex, end_color=color_hex, fill_type="solid")
+            for col_idx in range(1, 11):
+                ws.cell(row=row_idx, column=col_idx).fill = fill
+
+    # Сводка внизу
+    ws.append([])
+    total_planned = sum(e.budget_planned or 0 for e in entries)
+    total_actual = sum(e.budget_actual or 0 for e in entries)
+    total_savings = sum(e.budget_savings or 0 for e in entries)
+    ws.append(["ИТОГО:", "", "", "", total_planned, total_actual, total_savings])
+    total_row = ws.max_row
+    for col_idx in range(1, 11):
+        cell = ws.cell(row=total_row, column=col_idx)
+        cell.font = Font(bold=True)
+        cell.border = thin_border
+
+    # Ширина колонок
+    widths = [30, 14, 14, 10, 14, 14, 14, 20, 14, 25]
+    for i, w in enumerate(widths):
+        ws.column_dimensions[chr(65 + i)].width = w
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"supervision_timeline_{card_id}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/api/supervision-timeline/{card_id}/export/pdf")
+async def export_supervision_timeline_pdf(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Экспорт таблицы сроков надзора в PDF (без бюджетов)"""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+
+    card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
+
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    entries = db.query(SupervisionTimelineEntry).filter(
+        SupervisionTimelineEntry.supervision_card_id == card_id
+    ).order_by(SupervisionTimelineEntry.sort_order).all()
+
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
+                            leftMargin=15*mm, rightMargin=15*mm,
+                            topMargin=15*mm, bottomMargin=15*mm)
+
+    font_name = "Helvetica"
+    for font_path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                      "/usr/share/fonts/TTF/DejaVuSans.ttf"]:
+        if os.path.exists(font_path):
+            pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
+            font_name = "DejaVuSans"
+            break
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title_RU', parent=styles['Title'],
+                                  fontName=font_name, fontSize=14)
+    cell_style = ParagraphStyle('Cell_RU', fontName=font_name, fontSize=8,
+                                 leading=10)
+    header_style = ParagraphStyle('Header_RU', fontName=font_name, fontSize=9,
+                                   leading=11, textColor=colors.white)
+
+    elements = []
+    elements.append(Paragraph("Таблица сроков надзора", title_style))
+    elements.append(Spacer(1, 5*mm))
+
+    addr = contract.address if contract else "-"
+    elements.append(Paragraph(f"Адрес: {addr}", ParagraphStyle('Info', fontName=font_name, fontSize=10)))
+    elements.append(Spacer(1, 5*mm))
+
+    # PDF без бюджетов — только: Стадия, План, Факт, Дней, Поставщик, Статус, Примечания
+    table_data = [[
+        Paragraph("Стадия", header_style),
+        Paragraph("План. дата", header_style),
+        Paragraph("Факт. дата", header_style),
+        Paragraph("Дней", header_style),
+        Paragraph("Поставщик", header_style),
+        Paragraph("Статус", header_style),
+        Paragraph("Примечания", header_style)
+    ]]
+
+    for entry in entries:
+        table_data.append([
+            Paragraph(entry.stage_name or "", cell_style),
+            Paragraph(entry.plan_date or "", cell_style),
+            Paragraph(entry.actual_date or "", cell_style),
+            Paragraph(str(entry.actual_days or ""), cell_style),
+            Paragraph(entry.supplier or "", cell_style),
+            Paragraph(entry.status or "", cell_style),
+            Paragraph(entry.notes or "", cell_style)
+        ])
+
+    col_widths = [140, 65, 65, 40, 100, 70, 120]
+    table = Table(table_data, colWidths=col_widths)
+
+    status_pdf_colors = {
+        'В работе': '#FFF8E1',
+        'Закуплено': '#E3F2FD',
+        'Доставлено': '#E8F5E9',
+        'Просрочено': '#FFEBEE',
+    }
+
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F5496')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+    ]
+
+    for i, entry in enumerate(entries, 1):
+        color_hex = status_pdf_colors.get(entry.status)
+        if color_hex:
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor(color_hex)))
+
+    table.setStyle(TableStyle(style_cmds))
+    elements.append(table)
+
+    doc.build(elements)
+    output.seek(0)
+
+    filename = f"supervision_timeline_{card_id}.pdf"
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# =========================
 # PROJECT TEMPLATES ENDPOINTS
 # =========================
 
@@ -4734,6 +7099,7 @@ async def add_project_template(
             stage='template',
             file_type='template_url',
             public_link=template_url,
+            yandex_path='',
             file_name=template_url
         )
         db.add(file_record)
@@ -4765,7 +7131,7 @@ async def get_project_templates(
         'id': t.id,
         'contract_id': t.contract_id,
         'template_url': t.public_link,
-        'created_at': t.created_at.isoformat() if t.created_at else None
+        'created_at': t.upload_date.isoformat() if t.upload_date else None
     } for t in templates]
 
 
@@ -4797,15 +7163,11 @@ async def delete_project_template(
 @app.post("/api/crm/cards/{card_id}/reset-designer")
 async def reset_designer_completion(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.reset_designer")),
     db: Session = Depends(get_db)
 ):
     """Сбросить отметку о завершении дизайнером"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
-
         # ИСПРАВЛЕНИЕ 06.02.2026: Добавлен поиск по '3д визуализация' для шаблонных проектов (#10)
         designer_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
@@ -4832,14 +7194,11 @@ async def reset_designer_completion(
 @app.post("/api/crm/cards/{card_id}/reset-draftsman")
 async def reset_draftsman_completion(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.reset_draftsman")),
     db: Session = Depends(get_db)
 ):
     """Сбросить отметку о завершении чертежником"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
 
         # Находим назначение чертежника
         draftsman_executor = db.query(StageExecutor).filter(
@@ -4880,39 +7239,46 @@ async def get_approval_stage_deadlines(
         'card_id': card_id,
         'is_approved': card.is_approved,
         'approval_deadline': str(card.approval_deadline) if card.approval_deadline else None,
-        'approval_stages': card.approval_stages
+        'approval_stages': json.loads(card.approval_stages) if card.approval_stages else None
     }
 
 
 @app.post("/api/crm/cards/{card_id}/complete-approval-stage")
 async def complete_approval_stage(
     card_id: int,
-    stage_name: str,
-    current_user: Employee = Depends(get_current_user),
+    body: CompleteApprovalStageRequest,
+    current_user: Employee = Depends(require_permission("crm_cards.complete_approval")),
     db: Session = Depends(get_db)
 ):
     """Завершить стадию согласования"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        stage_name = body.stage_name
 
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
 
         # Обновляем approval_stages (JSON)
-        current_stages = card.approval_stages or {}
+        current_stages = json.loads(card.approval_stages) if card.approval_stages else {}
         current_stages[stage_name] = {
             'completed': True,
             'completed_date': datetime.utcnow().isoformat(),
             'completed_by': current_user.id
         }
-        card.approval_stages = current_stages
+        card.approval_stages = json.dumps(current_stages)
+
+        # Авто-установка is_approved когда текущая стадия согласована
+        if stage_name == card.column_name:
+            card.is_approved = True
 
         db.commit()
 
-        return {"status": "success", "stage_name": stage_name, "completed": True}
+        return {
+            "status": "success",
+            "stage_name": stage_name,
+            "completed": True,
+            "is_approved": card.is_approved
+        }
 
     except HTTPException:
         raise
@@ -4924,16 +7290,18 @@ async def complete_approval_stage(
 @app.patch("/api/crm/cards/{card_id}/stage-executor-deadline")
 async def update_stage_executor_deadline(
     card_id: int,
-    stage_keyword: str,
-    deadline: str,
+    body: StageExecutorDeadlineRequest,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Обновить дедлайн исполнителя стадии"""
     try:
+        stage_name = body.stage_name
+        deadline = body.deadline
+
         stage_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
-            StageExecutor.stage_name.ilike(f'%{stage_keyword}%')
+            StageExecutor.stage_name.ilike(f'%{stage_name}%')
         ).order_by(StageExecutor.id.desc()).first()
 
         if not stage_executor:
@@ -4956,17 +7324,34 @@ async def update_stage_executor_deadline(
 async def complete_stage_for_executor(
     card_id: int,
     stage_name: str,
-    executor_id: int,
+    body: CompleteStageExecutorRequest,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Отметить стадию как выполненную для исполнителя"""
     try:
+        executor_id = body.executor_id
+
         stage_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
             StageExecutor.stage_name == stage_name,
             StageExecutor.executor_id == executor_id
         ).first()
+
+        # Fallback: поиск по подстроке stage_name
+        if not stage_executor:
+            stage_executor = db.query(StageExecutor).filter(
+                StageExecutor.crm_card_id == card_id,
+                StageExecutor.stage_name.ilike(f'%{stage_name}%'),
+                StageExecutor.executor_id == executor_id
+            ).order_by(StageExecutor.id.desc()).first()
+
+        # Fallback 2: поиск только по card_id + executor_id (последнее назначение)
+        if not stage_executor:
+            stage_executor = db.query(StageExecutor).filter(
+                StageExecutor.crm_card_id == card_id,
+                StageExecutor.executor_id == executor_id
+            ).order_by(StageExecutor.id.desc()).first()
 
         if not stage_executor:
             raise HTTPException(status_code=404, detail="Назначение стадии не найдено")
@@ -5012,14 +7397,16 @@ async def get_previous_executor_by_position(
 @app.post("/api/crm/cards/{card_id}/manager-acceptance")
 async def save_manager_acceptance(
     card_id: int,
-    stage_name: str,
-    executor_name: str,
-    manager_id: int,
+    body: ManagerAcceptanceRequest,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Сохранить принятие работы менеджером"""
     try:
+        stage_name = body.stage_name
+        executor_name = body.executor_name
+        manager_id = body.manager_id
+
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
@@ -5110,9 +7497,9 @@ async def get_payments_for_crm(
 # OPTIMIZED PAYMENTS ENDPOINTS
 @app.get("/api/statistics/crm")
 async def get_crm_statistics(
-    project_type: str,
-    period: str,
-    year: int,
+    project_type: str = "Индивидуальный",
+    period: str = "all",
+    year: Optional[int] = None,
     month: Optional[int] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -5120,6 +7507,9 @@ async def get_crm_statistics(
     """Получить статистику CRM"""
     try:
         from sqlalchemy import extract
+
+        if year is None:
+            year = datetime.utcnow().year
 
         query = db.query(CRMCard).join(Contract).filter(
             Contract.project_type == project_type
@@ -5280,7 +7670,7 @@ async def get_approval_statistics(
                 'address': card.contract.address,
                 'is_approved': card.is_approved,
                 'approval_deadline': str(card.approval_deadline) if card.approval_deadline else None,
-                'approval_stages': card.approval_stages
+                'approval_stages': json.loads(card.approval_stages) if card.approval_stages else None
             })
 
         return result
@@ -5359,6 +7749,75 @@ async def get_general_statistics(
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
 
+@app.get("/api/statistics/funnel")
+async def get_funnel_statistics(
+    year: Optional[int] = None,
+    project_type: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Воронка проектов: количество CRM-карточек по колонкам Kanban"""
+    try:
+        from sqlalchemy import extract, func
+
+        query = db.query(
+            CRMCard.column_name,
+            func.count(CRMCard.id).label("count")
+        ).join(Contract, CRMCard.contract_id == Contract.id)
+
+        if year:
+            query = query.filter(extract('year', Contract.created_at) == year)
+        if project_type:
+            query = query.filter(Contract.project_type == project_type)
+
+        rows = query.group_by(CRMCard.column_name).all()
+
+        funnel = {row.column_name: row.count for row in rows}
+        return {"funnel": funnel, "total": sum(funnel.values())}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+
+@app.get("/api/statistics/executor-load")
+async def get_executor_load(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Нагрузка на исполнителей: количество активных стадий на каждого"""
+    try:
+        from sqlalchemy import extract, func
+
+        query = db.query(
+            Employee.full_name,
+            func.count(StageExecutor.id).label("active_stages")
+        ).join(
+            StageExecutor, StageExecutor.employee_id == Employee.id
+        ).join(
+            CRMCard, CRMCard.id == StageExecutor.crm_card_id
+        ).filter(
+            CRMCard.column_name.notin_(['СДАН', 'РАСТОРГНУТ'])
+        )
+
+        if year or month:
+            query = query.join(Contract, CRMCard.contract_id == Contract.id)
+            if year:
+                query = query.filter(extract('year', Contract.created_at) == year)
+            if month:
+                query = query.filter(extract('month', Contract.created_at) == month)
+
+        rows = query.group_by(Employee.full_name).order_by(
+            func.count(StageExecutor.id).desc()
+        ).limit(15).all()
+
+        return [{"name": row.full_name, "active_stages": row.active_stages} for row in rows]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+
 # =========================
 # AGENTS ENDPOINTS
 # =========================
@@ -5366,22 +7825,30 @@ async def get_general_statistics(
 @app.post("/api/agents")
 async def add_agent(
     name: str,
-    color: str,
-    current_user: Employee = Depends(get_current_user),
+    color: str = "#FFFFFF",
+    current_user: Employee = Depends(require_permission("agents.create")),
     db: Session = Depends(get_db)
 ):
     """Добавить нового агента"""
     try:
-        allowed_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        # Проверяем, не существует ли уже агент с таким именем
+        existing = db.query(Employee).filter(
+            Employee.full_name == name,
+            Employee.position == 'Агент'
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Агент с таким именем уже существует")
 
-        # Создаем агента как сотрудника
+        # Создаём агента как сотрудника с обязательными полями
         agent = Employee(
             full_name=name,
+            login=f"agent_{name.lower().replace(' ', '_')}",
             position='Агент',
-            status='активный',
-            color=color  # Предполагается, что есть поле color
+            department='Агенты',
+            phone='',
+            password_hash='',
+            agent_color=color,
+            status='активный'
         )
         db.add(agent)
         db.commit()
@@ -5413,10 +7880,8 @@ async def update_agent_color(
         if not agent:
             raise HTTPException(status_code=404, detail="Агент не найден")
 
-        # Если есть поле color, обновляем его
-        if hasattr(agent, 'color'):
-            agent.color = color
-            db.commit()
+        agent.agent_color = color
+        db.commit()
 
         return {"status": "success", "name": name, "color": color}
 
@@ -5484,16 +7949,18 @@ async def send_heartbeat(
 
 @app.post("/api/locks")
 async def create_lock(
-    entity_type: str,
-    entity_id: int,
-    employee_id: int,
+    lock_data: LockRequest,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Создать блокировку записи для редактирования.
+    Принимает JSON body: {entity_type, entity_id, employee_id (опционально)}.
     Возвращает 409 если запись уже заблокирована другим пользователем.
     """
+    entity_type = lock_data.entity_type
+    entity_id = lock_data.entity_id
+    employee_id = lock_data.employee_id or current_user.id
     try:
         # Проверяем существующую блокировку
         existing_lock = db.query(ConcurrentEdit).filter(
@@ -5530,12 +7997,29 @@ async def create_lock(
                 db.commit()
                 return {'status': 'renewed', 'entity_type': entity_type, 'entity_id': entity_id}
 
+        # Получаем реальную сессию текущего пользователя
+        user_session = db.query(UserSession).filter(
+            UserSession.employee_id == current_user.id
+        ).order_by(UserSession.last_activity.desc()).first()
+
+        if not user_session:
+            # Создаём сессию если нет
+            user_session = UserSession(
+                employee_id=current_user.id,
+                session_token="lock-session",
+                ip_address="0.0.0.0",
+                last_activity=datetime.utcnow(),
+                is_active=True
+            )
+            db.add(user_session)
+            db.flush()
+
         # Создаём новую блокировку
         new_lock = ConcurrentEdit(
             entity_type=entity_type,
             entity_id=entity_id,
             employee_id=employee_id,
-            session_id=1,  # Placeholder, можно улучшить
+            session_id=user_session.id,
             locked_at=datetime.utcnow(),
             expires_at=datetime.utcnow() + timedelta(minutes=2)
         )
@@ -5593,6 +8077,38 @@ async def check_lock(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/locks/user/{employee_id}")
+async def release_user_locks(
+    employee_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Снять все блокировки пользователя"""
+    try:
+        # Только сам пользователь или админ может снять блокировки
+        if employee_id != current_user.id and current_user.position not in ['Руководитель студии', 'Старший менеджер проектов']:
+            raise HTTPException(status_code=403, detail="Нет прав")
+
+        locks = db.query(ConcurrentEdit).filter(
+            ConcurrentEdit.employee_id == employee_id
+        ).all()
+
+        count = len(locks)
+        for lock in locks:
+            db.delete(lock)
+
+        db.commit()
+
+        return {'status': 'released', 'count': count}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"User locks release error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/api/locks/{entity_type}/{entity_id}")
 async def release_lock(
     entity_type: str,
@@ -5623,38 +8139,6 @@ async def release_lock(
     except Exception as e:
         db.rollback()
         logger.error(f"Lock release error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/locks/user/{employee_id}")
-async def release_user_locks(
-    employee_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Снять все блокировки пользователя"""
-    try:
-        # Только сам пользователь или админ может снять блокировки
-        if employee_id != current_user.id and current_user.position not in ['Руководитель студии', 'Старший менеджер проектов']:
-            raise HTTPException(status_code=403, detail="Нет прав")
-
-        locks = db.query(ConcurrentEdit).filter(
-            ConcurrentEdit.employee_id == employee_id
-        ).all()
-
-        count = len(locks)
-        for lock in locks:
-            db.delete(lock)
-
-        db.commit()
-
-        return {'status': 'released', 'count': count}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"User locks release error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -6378,15 +8862,17 @@ async def get_salaries_salary_dashboard(
 ):
     """Дашборд 'Оклады': total_paid, paid_by_year, paid_by_month, by_project_type, avg_salary, employees_count"""
     try:
-        # Всего выплачено и средний оклад
+        # Всего выплачено и средний оклад (только оплаченные)
         total_result = db.query(
             func.coalesce(func.sum(Salary.amount), 0),
             func.coalesce(func.avg(Salary.amount), 0)
+        ).filter(
+            Salary.payment_status == 'paid'
         ).first()
         total_paid = total_result[0]
         avg_salary = total_result[1]
 
-        # За год и кол-во уникальных сотрудников
+        # За год и кол-во уникальных сотрудников (только оплаченные)
         paid_by_year = 0
         employees_count = 0
         if year:
@@ -6394,26 +8880,29 @@ async def get_salaries_salary_dashboard(
                 func.coalesce(func.sum(Salary.amount), 0),
                 func.count(func.distinct(Salary.employee_id))
             ).filter(
+                Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%')
             ).first()
             paid_by_year = year_result[0]
             employees_count = year_result[1]
 
-        # За месяц
+        # За месяц (только оплаченные)
         paid_by_month = 0
         if year and month:
             paid_by_month = db.query(
                 func.coalesce(func.sum(Salary.amount), 0)
             ).filter(
+                Salary.payment_status == 'paid',
                 Salary.report_month == f'{year}-{month:02d}'
             ).scalar()
 
-        # По типу проекта
+        # По типу проекта (только оплаченные)
         by_project_type = 0
         if project_type:
             by_project_type = db.query(
                 func.coalesce(func.sum(Salary.amount), 0)
             ).filter(
+                Salary.payment_status == 'paid',
                 Salary.project_type == project_type
             ).scalar()
 
@@ -6441,13 +8930,13 @@ async def get_salaries_supervision_dashboard(
 ):
     """Дашборд 'Авторский надзор': total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count"""
     try:
-        # Всего выплачено и средний чек
+        # Всего выплачено и средний чек (надзорные = supervision_card_id IS NOT NULL)
         total_result = db.query(
             func.coalesce(func.sum(Payment.final_amount), 0),
             func.coalesce(func.avg(Payment.final_amount), 0)
-        ).join(Contract).filter(
+        ).filter(
             Payment.payment_status == 'paid',
-            Contract.status == 'АВТОРСКИЙ НАДЗОР'
+            Payment.supervision_card_id.isnot(None)
         ).first()
         total_paid = total_result[0]
         avg_payment = total_result[1]
@@ -6459,9 +8948,9 @@ async def get_salaries_supervision_dashboard(
             year_result = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0),
                 func.count(Payment.id)
-            ).join(Contract).filter(
+            ).filter(
                 Payment.payment_status == 'paid',
-                Contract.status == 'АВТОРСКИЙ НАДЗОР',
+                Payment.supervision_card_id.isnot(None),
                 Payment.report_month.like(f'{year}-%')
             ).first()
             paid_by_year = year_result[0]
@@ -6472,20 +8961,22 @@ async def get_salaries_supervision_dashboard(
         if year and month:
             paid_by_month = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).filter(
                 Payment.payment_status == 'paid',
-                Contract.status == 'АВТОРСКИЙ НАДЗОР',
+                Payment.supervision_card_id.isnot(None),
                 Payment.report_month == f'{year}-{month:02d}'
             ).scalar()
 
-        # По агенту
+        # По агенту (нужен JOIN через supervision_cards -> contracts)
         by_agent = 0
         if agent_type:
             by_agent = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(SupervisionCard, Payment.supervision_card_id == SupervisionCard.id
+            ).join(Contract, SupervisionCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
-                Contract.status == 'АВТОРСКИЙ НАДЗОР',
+                Payment.supervision_card_id.isnot(None),
                 Contract.agent_type == agent_type
             ).scalar()
 

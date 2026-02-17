@@ -18,7 +18,40 @@ from ui.reports_tab import ReportsTab
 from ui.employees_tab import EmployeesTab
 from ui.salaries_tab import SalariesTab
 from ui.employee_reports_tab import EmployeeReportsTab
+from ui.global_search_widget import GlobalSearchWidget
 from utils.tab_helpers import disable_wheel_on_tabwidget
+
+# Структуры Windows API для корректной работы Snap Assist
+if sys.platform == 'win32':
+    import ctypes
+    from ctypes import wintypes
+
+    class POINT(ctypes.Structure):
+        _fields_ = [('x', ctypes.c_long), ('y', ctypes.c_long)]
+
+    class MINMAXINFO(ctypes.Structure):
+        _fields_ = [
+            ('ptReserved', POINT),
+            ('ptMaxSize', POINT),
+            ('ptMaxPosition', POINT),
+            ('ptMinTrackSize', POINT),
+            ('ptMaxTrackSize', POINT),
+        ]
+
+    class RECT(ctypes.Structure):
+        _fields_ = [
+            ('left', ctypes.c_long), ('top', ctypes.c_long),
+            ('right', ctypes.c_long), ('bottom', ctypes.c_long),
+        ]
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [
+            ('cbSize', wintypes.DWORD),
+            ('rcMonitor', RECT),
+            ('rcWork', RECT),
+            ('dwFlags', wintypes.DWORD),
+        ]
+
 
 class MainWindow(QMainWindow):
     def __init__(self, employee_data, api_client=None):
@@ -102,10 +135,18 @@ class MainWindow(QMainWindow):
         # Рекомендуемый минимум 1400x800 контролируется в mouseMoveEvent
         self.setMinimumSize(800, 600)
         self.resize(1400, 800)
-        
+
         #   TITLE BAR
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)  #  border-radius
+
+        # Добавляем нативные стили для Windows Snap Assist и Snap Layouts
+        self._enable_windows_snap()
+
+        # Явная установка иконки для панели задач Windows
+        # ИСПРАВЛЕНИЕ 13.02.2026: Используем Win32 API WM_SETICON — надежнее Qt setWindowIcon
+        # для frameless окон с WS_CAPTION (которое добавляет _enable_windows_snap)
+        self._set_taskbar_icon()
 
         # ==========     ==========
         self.setAutoFillBackground(True)
@@ -180,87 +221,75 @@ class MainWindow(QMainWindow):
         # =========================================
         
         #   ()
-        info_label = QLabel(f'Пользователь: {self.employee["full_name"]} - должность: {self.employee["position"]}')
-        info_label.setStyleSheet('''
-            padding: 8px 15px; 
-            background-color: #F8F9FA; 
-            border-bottom: 0px solid #E0E0E0;
-            font-size: 12px;
-            color: #555;
-            font-weight: 500;
-        ''')
-        layout.addWidget(info_label)
+        position_text = self.employee.get("position", "")
+        secondary = self.employee.get("secondary_position", "")
+        if secondary and secondary != position_text:
+            position_text = f'{position_text}/{secondary}'
+        # Панель информации с поиском
+        info_bar = QWidget()
+        info_bar.setStyleSheet('background-color: #F8F9FA; border-bottom: 0px solid #E0E0E0;')
+        info_bar_layout = QHBoxLayout()
+        info_bar_layout.setContentsMargins(15, 4, 15, 4)
+        info_bar_layout.setSpacing(10)
+        info_bar.setLayout(info_bar_layout)
+
+        info_label = QLabel(f'Пользователь: {self.employee["full_name"]} - должность: {position_text}')
+        info_label.setStyleSheet('font-size: 11px; color: #999; font-weight: 400; background: transparent;')
+        info_bar_layout.addWidget(info_label)
+
+        layout.addWidget(info_bar)
         
         #
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: none;
+                border-top: 1px solid #E0E0E0;
                 background: white;
             }
             QTabBar::tab {
-                background: #ffffff;
-                border: 1px solid #d9d9d9;
-                padding: 6px 16px;
-                margin-right: 2px;
-                border-radius: 4px 4px 0 0;
+                background: transparent;
+                border: none;
+                border-bottom: 2px solid transparent;
+                padding: 8px 16px;
+                color: #808080;
+                font-weight: 500;
             }
             QTabBar::tab:hover {
-                background: #fafafa;
+                color: #E74C3C;
             }
             QTabBar::tab:selected {
-                background: #ffd93c;
+                color: #000000;
                 font-weight: bold;
-                border-color: #e6c236;
+                border-bottom: 2px solid #ffd93c;
             }
         """)
 
         #
         disable_wheel_on_tabwidget(self.tabs)
+        self.tabs.tabBar().setExpanding(False)
+
+        # Глобальный поиск — размещаем в правом углу строки вкладок
+        from utils.data_access import DataAccess
+        self._search_data_access = DataAccess(api_client=self.api_client, db=self.db)
+        self.search_widget = GlobalSearchWidget(self._search_data_access, parent=self.tabs)
+        self.search_widget.result_selected.connect(self._on_search_result_selected)
+        self.tabs.setCornerWidget(self.search_widget, Qt.TopRightCorner)
 
         # ==========  DASHBOARD CONTAINER ==========
-        # Создаем дашборды ПЕРЕД setup_tabs, чтобы они были готовы при вызове on_tab_changed
+        # Дашборды создаются отложенно в _init_deferred() после показа окна
         from PyQt5.QtWidgets import QStackedWidget
-        from ui.dashboards import (ClientsDashboard, ContractsDashboard, CRMDashboard,
-                                   EmployeesDashboard, SalariesDashboard,
-                                   SalariesAllPaymentsDashboard, SalariesIndividualDashboard,
-                                   SalariesTemplateDashboard, SalariesSalaryDashboard,
-                                   SalariesSupervisionDashboard)
 
-        # Создаем QStackedWidget с parent=border_frame чтобы не было отдельного окна
         self.dashboard_stack = QStackedWidget(border_frame)
         self.dashboard_stack.setObjectName('dashboard_stack')
-
-        # Создаем все дашборды сразу с parent=dashboard_stack
-        # ПРИМЕЧАНИЕ: Дашборды для "Отчеты и Статистика" и "Отчеты по сотрудникам" временно отключены
-        # т.к. эти страницы будут полностью переработаны в будущем
-        self.dashboards = {
-            'Клиенты': ClientsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Договора': ContractsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'СРМ (Индивидуальные)': CRMDashboard(self.db, 'Индивидуальный', self.api_client, parent=self.dashboard_stack),
-            'СРМ (Шаблонные)': CRMDashboard(self.db, 'Шаблонный', self.api_client, parent=self.dashboard_stack),
-            'СРМ надзора': CRMDashboard(self.db, 'Авторский надзор', self.api_client, parent=self.dashboard_stack),
-            'Сотрудники': EmployeesDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            # Дашборды для вкладок Зарплаты - по одному на каждую внутреннюю вкладку
-            'Зарплаты (Все)': SalariesAllPaymentsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Индивидуальные)': SalariesIndividualDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Шаблонные)': SalariesTemplateDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Оклады)': SalariesSalaryDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-            'Зарплаты (Надзор)': SalariesSupervisionDashboard(self.db, self.api_client, parent=self.dashboard_stack),
-        }
-
-        # Добавляем все дашборды в stack и сохраняем индексы
+        self.dashboards = {}
         self.dashboard_indices = {}
-        for key, dashboard in self.dashboards.items():
-            index = self.dashboard_stack.addWidget(dashboard)
-            self.dashboard_indices[key] = index
-
-        # Текущий ключ дашборда
         self.current_dashboard_key = None
+        self._dashboards_created = False
+        self._dashboard_factories = {}
         # ======================================================
 
-        #
-        self.setup_tabs()
+        # Вкладки создаются отложенно в _init_deferred() после показа окна
 
         # Контейнер для вкладок с отступами слева и справа
         tabs_container = QWidget()
@@ -326,34 +355,33 @@ class MainWindow(QMainWindow):
         self.version_label.setStyleSheet("color: #555; font-size: 11px; border: none;")
         status_bar_layout.addWidget(self.version_label)
 
-        # Кнопка "Обновить" (только для руководителя студии)
-        if self.employee.get('position') == 'Руководитель студии':
-            from utils.resource_path import resource_path
-            self.update_btn = QPushButton()
+        # Кнопка "Обновить" (доступна для всех ролей)
+        from utils.resource_path import resource_path
+        self.update_btn = QPushButton()
 
-            # Загружаем иконку с помощью resource_path
-            icon_path = resource_path('resources/icons/refresh.svg')
+        # Загружаем иконку с помощью resource_path
+        icon_path = resource_path('resources/icons/refresh.svg')
 
-            if os.path.exists(icon_path):
-                self.update_btn.setIcon(QIcon(icon_path))
-                self.update_btn.setIconSize(QSize(12, 12))
+        if os.path.exists(icon_path):
+            self.update_btn.setIcon(QIcon(icon_path))
+            self.update_btn.setIconSize(QSize(12, 12))
 
-            self.update_btn.setFixedSize(16, 16)
-            self.update_btn.setToolTip("Проверить обновления")
-            self.update_btn.setProperty('icon-only', True)  # Для применения стилей без padding
-            self.update_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 0px;
-                }
-                QPushButton:hover {
-                    background-color: #E0E0E0;
-                }
-            """)
-            self.update_btn.clicked.connect(self.check_for_updates_manual)
-            status_bar_layout.addWidget(self.update_btn)
+        self.update_btn.setFixedSize(16, 16)
+        self.update_btn.setToolTip("Проверить обновления")
+        self.update_btn.setProperty('icon-only', True)  # Для применения стилей без padding
+        self.update_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #E0E0E0;
+            }
+        """)
+        self.update_btn.clicked.connect(self.check_for_updates_manual)
+        status_bar_layout.addWidget(self.update_btn)
 
         #
         status_bar_container.setStyleSheet("""
@@ -610,8 +638,109 @@ class MainWindow(QMainWindow):
 
         return super().event(event)
 
+    def _enable_windows_snap(self):
+        """Добавить нативные стили WS_THICKFRAME для Windows Snap Assist и Snap Layouts"""
+        import sys
+        if sys.platform != 'win32':
+            return
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            GWL_STYLE = -16
+            WS_THICKFRAME = 0x00040000   # Рамка с изменением размера (нужна для Snap)
+            WS_MAXIMIZEBOX = 0x00010000  # Кнопка maximize (нужна для Snap Layouts)
+            WS_MINIMIZEBOX = 0x00020000  # Кнопка minimize
+            WS_CAPTION = 0x00C00000      # Заголовок (WS_BORDER | WS_DLGFRAME)
+
+            style = ctypes.windll.user32.GetWindowLongPtrW(hwnd, GWL_STYLE)
+            style |= WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CAPTION
+            ctypes.windll.user32.SetWindowLongPtrW(hwnd, GWL_STYLE, style)
+
+            # Уведомляем Windows об изменении стилей
+            SWP_FRAMECHANGED = 0x0020
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOZORDER = 0x0004
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, 0, 0, 0, 0, 0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+            )
+        except Exception:
+            pass
+
+    def _set_taskbar_icon(self):
+        """Установка иконки в панели задач Windows через Win32 API.
+        Использует WM_SETICON + SetClassLongPtrW для надежности с frameless окнами."""
+        import sys
+        if sys.platform != 'win32':
+            return
+        try:
+            import ctypes
+            from utils.resource_path import resource_path
+
+            hwnd = int(self.winId())
+            WM_SETICON = 0x0080
+            ICON_BIG = 1
+            ICON_SMALL = 0
+            GCL_HICON = -14
+            GCL_HICONSM = -34
+            LR_LOADFROMFILE = 0x00000010
+            LR_SHARED = 0x00008000
+            IMAGE_ICON = 1
+
+            # Загружаем .ico через Win32 API LoadImage
+            ico_path = resource_path('resources/icon256.ico')
+            if not os.path.exists(ico_path):
+                ico_path = resource_path('resources/icon.ico')
+
+            ico_small_path = resource_path('resources/icon32.ico')
+            if not os.path.exists(ico_small_path):
+                ico_small_path = ico_path
+
+            # Большая иконка (для Alt+Tab, панели задач) — LR_SHARED предотвращает утечку GDI
+            hicon_big = ctypes.windll.user32.LoadImageW(
+                0, ico_path, IMAGE_ICON, 256, 256, LR_LOADFROMFILE | LR_SHARED
+            )
+
+            # Маленькая иконка (для заголовка окна, панели задач)
+            hicon_small = ctypes.windll.user32.LoadImageW(
+                0, ico_small_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE | LR_SHARED
+            )
+
+            if hicon_big:
+                # Устанавливаем через WM_SETICON (окно)
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big)
+                # Устанавливаем через SetClassLongPtrW (класс окна — надежнее для taskbar)
+                ctypes.windll.user32.SetClassLongPtrW(hwnd, GCL_HICON, hicon_big)
+
+            if hicon_small:
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
+                ctypes.windll.user32.SetClassLongPtrW(hwnd, GCL_HICONSM, hicon_small)
+
+            # Также устанавливаем через Qt для согласованности
+            from PyQt5.QtWidgets import QApplication
+            if QApplication.instance():
+                self.setWindowIcon(QApplication.instance().windowIcon())
+        except Exception as e:
+            # Fallback на Qt метод
+            from PyQt5.QtWidgets import QApplication
+            if QApplication.instance():
+                self.setWindowIcon(QApplication.instance().windowIcon())
+
+    def showEvent(self, event):
+        """Переопределяем showEvent для повторной установки иконки"""
+        super().showEvent(event)
+        # Повторно устанавливаем иконку при каждом показе окна
+        self._set_taskbar_icon()
+        # Отложенная повторная установка: Windows может сбросить иконку
+        # после применения WS_CAPTION/WM_NCCALCSIZE
+        if not hasattr(self, '_icon_timer_done'):
+            self._icon_timer_done = True
+            QTimer.singleShot(500, self._set_taskbar_icon)
+            QTimer.singleShot(2000, self._set_taskbar_icon)
+
     def nativeEvent(self, eventType, message):
-        """Обработка нативных Windows событий для корректной работы Snap Assist"""
+        """Обработка нативных Windows событий для Windows Snap и Snap Layouts"""
         try:
             import sys
             if sys.platform == 'win32':
@@ -619,13 +748,14 @@ class MainWindow(QMainWindow):
                 from ctypes import wintypes
 
                 # Константы Windows сообщений
-                WM_NCCALCSIZE = 0x0083  # Расчет размера клиентской области
-                WM_GETMINMAXINFO = 0x0024  # Ограничение размеров
-                WM_NCHITTEST = 0x0084  # Определение зоны клика (для Snap Assist!)
+                WM_NCCALCSIZE = 0x0083
+                WM_GETMINMAXINFO = 0x0024
+                WM_NCHITTEST = 0x0084
 
                 # Константы зон NCHITTEST
-                HTCAPTION = 2  # Заголовок окна (для перетаскивания и Snap Assist)
-                HTCLIENT = 1   # Клиентская область
+                HTCLIENT = 1
+                HTCAPTION = 2
+                HTMAXBUTTON = 9   # Для Snap Layouts (Windows 11)
                 HTLEFT = 10
                 HTRIGHT = 11
                 HTTOP = 12
@@ -635,65 +765,78 @@ class MainWindow(QMainWindow):
                 HTBOTTOMLEFT = 16
                 HTBOTTOMRIGHT = 17
 
-                # Получаем сообщение
                 msg = ctypes.wintypes.MSG.from_address(message.__int__())
 
                 if msg.message == WM_NCHITTEST:
-                    # ИСПРАВЛЕНИЕ 07.02.2026: Обработка WM_NCHITTEST для Snap Assist
-                    # Получаем координаты курсора из lParam
-                    x = msg.lParam & 0xFFFF
-                    y = (msg.lParam >> 16) & 0xFFFF
+                    # Координаты курсора (signed: lParam может содержать отрицательные значения)
+                    x = ctypes.c_short(msg.lParam & 0xFFFF).value
+                    y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
 
-                    # Преобразуем в локальные координаты
                     from PyQt5.QtCore import QPoint
                     local_pos = self.mapFromGlobal(QPoint(x, y))
                     lx, ly = local_pos.x(), local_pos.y()
 
-                    # Зона resize (края окна) - 5 пикселей
-                    border = 5
                     w, h = self.width(), self.height()
+                    border = 5
 
-                    # Проверяем углы и края для resize
-                    if lx < border and ly < border:
-                        return True, HTTOPLEFT
-                    elif lx > w - border and ly < border:
-                        return True, HTTOPRIGHT
-                    elif lx < border and ly > h - border:
-                        return True, HTBOTTOMLEFT
-                    elif lx > w - border and ly > h - border:
-                        return True, HTBOTTOMRIGHT
-                    elif lx < border:
-                        return True, HTLEFT
-                    elif lx > w - border:
-                        return True, HTRIGHT
-                    elif ly < border:
-                        return True, HTTOP
-                    elif ly > h - border:
-                        return True, HTBOTTOM
+                    # Углы и края для resize (не в maximized состоянии)
+                    if not self.isMaximized():
+                        if lx < border and ly < border:
+                            return True, HTTOPLEFT
+                        elif lx > w - border and ly < border:
+                            return True, HTTOPRIGHT
+                        elif lx < border and ly > h - border:
+                            return True, HTBOTTOMLEFT
+                        elif lx > w - border and ly > h - border:
+                            return True, HTBOTTOMRIGHT
+                        elif lx < border:
+                            return True, HTLEFT
+                        elif lx > w - border:
+                            return True, HTRIGHT
+                        elif ly < border:
+                            return True, HTTOP
+                        elif ly > h - border:
+                            return True, HTBOTTOM
 
-                    # Проверяем зону заголовка (верхние 40 пикселей = title bar)
-                    # Это активирует Snap Assist при перетаскивании за title bar
-                    if ly < 40:
-                        # Исключаем область кнопок управления окном (правый край)
-                        # Обычно кнопки занимают ~120px справа
-                        if lx < w - 120:
+                    # Title bar zone (верхние 45px)
+                    if ly < 45:
+                        # Кнопка maximize: ~56-96px от правого края (между minimize и close)
+                        # Layout: ... [minimize 40px] [10px gap] [maximize 40px] [10px gap] [close 40px] [6px margin]
+                        # Close: w-6-40 = w-46 to w-6
+                        # Maximize: w-46-10-40 = w-96 to w-56
+                        if w - 96 <= lx <= w - 56:
+                            return True, HTMAXBUTTON
+
+                        # Остальная часть title bar (кроме кнопок) = HTCAPTION
+                        if lx < w - 146:
                             return True, HTCAPTION
 
                     return True, HTCLIENT
 
                 elif msg.message == WM_NCCALCSIZE:
-                    # При WM_NCCALCSIZE с wParam=True Windows запрашивает размер клиентской области
-                    # Возвращаем 0 чтобы убрать стандартную рамку
-                    if self.isMaximized():
-                        return True, 0
-                    return False, 0
+                    # ВСЕГДА возвращаем 0: клиентская область = всё окно (убираем рамку)
+                    return True, 0
 
                 elif msg.message == WM_GETMINMAXINFO:
-                    # Ограничиваем минимальный размер при Snap Assist
-                    pass
+                    # Корректные размеры при maximize (учитываем taskbar)
+                    info = ctypes.cast(msg.lParam, ctypes.POINTER(MINMAXINFO)).contents
+                    # Получаем монитор для текущего окна
+                    monitor = ctypes.windll.user32.MonitorFromWindow(
+                        int(self.winId()),
+                        0x00000002  # MONITOR_DEFAULTTONEAREST
+                    )
+                    if monitor:
+                        mi = MONITORINFO()
+                        mi.cbSize = ctypes.sizeof(MONITORINFO)
+                        if ctypes.windll.user32.GetMonitorInfoW(monitor, ctypes.byref(mi)):
+                            work = mi.rcWork
+                            info.ptMaxPosition.x = work.left
+                            info.ptMaxPosition.y = work.top
+                            info.ptMaxSize.x = work.right - work.left
+                            info.ptMaxSize.y = work.bottom - work.top
+                    return True, 0
 
-        except Exception as e:
-            # Если что-то пошло не так с нативными событиями - игнорируем
+        except Exception:
             pass
 
         return super().nativeEvent(eventType, message)
@@ -982,65 +1125,112 @@ class MainWindow(QMainWindow):
         print(f"    : {sorted(allowed_tabs)}")
         print(f"    : {can_edit}\n")
 
-        # Сохраняем ссылки на вкладки для подключения сигналов синхронизации
+        # Ссылки на вкладки (заполняются при lazy-создании)
         self.clients_tab = None
         self.contracts_tab = None
         self.crm_tab = None
         self.crm_supervision_tab = None
+        self.employees_tab = None
 
-        # Добавляем вкладки
+        # Конфигурация вкладок: (tab_label, attr_name, factory, sync_info)
+        # sync_info = (signal_name, slot_name) или None
+        tab_configs = []
+
         if 'Клиенты' in allowed_tabs:
-            self.clients_tab = ClientsTab(self.employee, api_client=self.api_client, parent=self)
-            self.tabs.addTab(self.clients_tab, '  Клиенты  ')
+            tab_configs.append(('  Клиенты  ', 'clients_tab',
+                lambda: ClientsTab(self.employee, api_client=self.api_client, parent=self),
+                ('clients_updated', 'on_sync_update')))
 
         if 'Договора' in allowed_tabs:
-            self.contracts_tab = ContractsTab(self.employee, api_client=self.api_client, parent=self)
-            self.tabs.addTab(self.contracts_tab, '  Договора  ')
+            tab_configs.append(('  Договора  ', 'contracts_tab',
+                lambda: ContractsTab(self.employee, api_client=self.api_client, parent=self),
+                ('contracts_updated', 'on_sync_update')))
 
         if 'СРМ' in allowed_tabs:
-            self.crm_tab = CRMTab(self.employee, can_edit, api_client=self.api_client, parent=self)
-            self.tabs.addTab(self.crm_tab, '  СРМ  ')
+            tab_configs.append(('  СРМ  ', 'crm_tab',
+                lambda _ce=can_edit: CRMTab(self.employee, _ce, api_client=self.api_client, parent=self),
+                ('crm_cards_updated', 'on_sync_update')))
 
         if 'СРМ надзора' in allowed_tabs:
-            self.crm_supervision_tab = CRMSupervisionTab(self.employee, api_client=self.api_client, parent=self)
-            self.tabs.addTab(self.crm_supervision_tab, '  СРМ надзора  ')
+            tab_configs.append(('  СРМ надзора  ', 'crm_supervision_tab',
+                lambda: CRMSupervisionTab(self.employee, api_client=self.api_client, parent=self),
+                ('supervision_cards_updated', 'on_sync_update')))
 
         if 'Отчеты и Статистика' in allowed_tabs:
-            self.tabs.addTab(ReportsTab(self.employee, api_client=self.api_client), '  Отчеты и Статистика  ')
+            tab_configs.append(('  Отчеты и Статистика  ', None,
+                lambda: ReportsTab(self.employee, api_client=self.api_client),
+                None))
 
         if 'Сотрудники' in allowed_tabs:
-            self.employees_tab = EmployeesTab(self.employee, api_client=self.api_client, parent=self)
-            self.tabs.addTab(self.employees_tab, '  Сотрудники  ')
+            tab_configs.append(('  Сотрудники  ', 'employees_tab',
+                lambda: EmployeesTab(self.employee, api_client=self.api_client, parent=self),
+                ('employees_updated', 'on_sync_update')))
 
         if 'Зарплаты' in allowed_tabs:
-            self.tabs.addTab(SalariesTab(self.employee, api_client=self.api_client, parent=self), '  Зарплаты  ')
+            tab_configs.append(('  Зарплаты  ', None,
+                lambda: SalariesTab(self.employee, api_client=self.api_client, parent=self),
+                None))
 
         if 'Отчеты по сотрудникам' in allowed_tabs:
-            self.tabs.addTab(EmployeeReportsTab(self.employee, api_client=self.api_client), '  Отчеты по сотрудникам  ')
+            tab_configs.append(('  Отчеты по сотрудникам  ', None,
+                lambda: EmployeeReportsTab(self.employee, api_client=self.api_client),
+                None))
 
-        # Подключаем сигналы синхронизации к вкладкам
-        if self.sync_manager:
-            if self.clients_tab:
-                self.sync_manager.clients_updated.connect(self.clients_tab.on_sync_update)
-            if self.contracts_tab:
-                self.sync_manager.contracts_updated.connect(self.contracts_tab.on_sync_update)
-            if self.crm_tab:
-                self.sync_manager.crm_cards_updated.connect(self.crm_tab.on_sync_update)
-            if self.crm_supervision_tab:
-                self.sync_manager.supervision_cards_updated.connect(self.crm_supervision_tab.on_sync_update)
-            if hasattr(self, 'employees_tab') and self.employees_tab:
-                self.sync_manager.employees_updated.connect(self.employees_tab.on_sync_update)
+        # Первую вкладку создаём сразу, остальные — lazy placeholder
+        for i, (tab_label, attr_name, factory, sync_info) in enumerate(tab_configs):
+            if i == 0:
+                real_tab = factory()
+                self.tabs.addTab(real_tab, tab_label)
+                if attr_name:
+                    setattr(self, attr_name, real_tab)
+                if self.sync_manager and sync_info:
+                    signal_name, slot_name = sync_info
+                    signal = getattr(self.sync_manager, signal_name, None)
+                    slot = getattr(real_tab, slot_name, None)
+                    if signal and slot:
+                        signal.connect(slot)
+            else:
+                placeholder = QWidget()
+                placeholder._is_lazy_placeholder = True
+                placeholder._lazy_factory = factory
+                placeholder._lazy_attr = attr_name
+                placeholder._lazy_sync = sync_info
+                self.tabs.addTab(placeholder, tab_label)
 
         self.tabs.currentChanged.connect(self.on_tab_changed)
-
-        # Показываем дашборд для первой вкладки при запуске
-        self.on_tab_changed(0)
 
     def on_tab_changed(self, index):
         """Обновление данных при переключении вкладок + переключение дашбордов"""
         try:
             current_widget = self.tabs.widget(index)
             tab_name = self.tabs.tabText(index).strip()
+
+            # Lazy tab materialization: заменяем placeholder реальной вкладкой
+            if getattr(current_widget, '_is_lazy_placeholder', False):
+                factory = current_widget._lazy_factory
+                attr_name = current_widget._lazy_attr
+                sync_info = current_widget._lazy_sync
+                tab_label = self.tabs.tabText(index)
+
+                real_tab = factory()
+
+                self.tabs.blockSignals(True)
+                self.tabs.removeTab(index)
+                self.tabs.insertTab(index, real_tab, tab_label)
+                self.tabs.setCurrentIndex(index)
+                self.tabs.blockSignals(False)
+
+                if attr_name:
+                    setattr(self, attr_name, real_tab)
+                if self.sync_manager and sync_info:
+                    signal_name, slot_name = sync_info
+                    signal = getattr(self.sync_manager, signal_name, None)
+                    slot = getattr(real_tab, slot_name, None)
+                    if signal and slot:
+                        signal.connect(slot)
+
+                current_widget.deleteLater()
+                current_widget = real_tab
 
             # Определяем, какой дашборд показывать
             dashboard_key = None
@@ -1087,36 +1277,119 @@ class MainWindow(QMainWindow):
             # elif 'Отчеты по сотрудникам' in tab_name:
             #     dashboard_key = 'Отчеты по сотрудникам'
 
-            # Переключаем дашборд
+            # Переключаем дашборд (мгновенно — только переключение виджета в stack)
             self.switch_dashboard(dashboard_key)
 
-            # Ленивая загрузка данных при первом показе таба
-            if hasattr(current_widget, 'ensure_data_loaded'):
-                current_widget.ensure_data_loaded()
-            elif hasattr(current_widget, 'load_all_statistics'):
-                current_widget.load_all_statistics()
-            elif hasattr(current_widget, 'refresh_current_tab'):
-                current_widget.refresh_current_tab()
+            # Отложенная загрузка данных — не блокирует переключение вкладки
+            def _deferred_load(widget=current_widget):
+                try:
+                    if hasattr(widget, 'ensure_data_loaded'):
+                        widget.ensure_data_loaded()
+                    elif hasattr(widget, 'load_all_statistics'):
+                        widget.load_all_statistics()
+                    elif hasattr(widget, 'refresh_current_tab'):
+                        widget.refresh_current_tab()
+                except Exception as e:
+                    print(f"Ошибка загрузки данных таба: {e}")
+            QTimer.singleShot(0, _deferred_load)
 
         except Exception as e:
             print(f"Ошибка обновления данных: {e}")
             import traceback
             traceback.print_exc()
 
+    def _on_search_result_selected(self, entity_type, entity_id):
+        """Навигация к результату глобального поиска с выбором конкретной строки"""
+        tab_map = {
+            "client": "Клиенты",
+            "contract": "Договора",
+            "crm_card": "СРМ",
+        }
+        target = tab_map.get(entity_type)
+        if not target:
+            return
+        for i in range(self.tabs.count()):
+            if target in self.tabs.tabText(i):
+                self.tabs.setCurrentIndex(i)
+                tab_widget = self.tabs.widget(i)
+
+                # Отложенный выбор строки — даём вкладке время на загрузку данных
+                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id):
+                    try:
+                        table = None
+                        id_column = 0  # колонка с идентификатором
+
+                        if etype == "client" and hasattr(tw, 'clients_table'):
+                            table = tw.clients_table
+                            # В клиентах ID хранится как текст в колонке 0
+                        elif etype == "contract" and hasattr(tw, 'contracts_table'):
+                            table = tw.contracts_table
+                            # В договорах колонка 0 — номер договора, ищем по ID через все колонки
+                        elif etype == "crm_card":
+                            # CRM — Kanban-доска, навигация к карточке не через таблицу
+                            return
+
+                        if not table:
+                            return
+
+                        for row in range(table.rowCount()):
+                            item = table.item(row, id_column)
+                            if not item:
+                                continue
+
+                            # Проверяем совпадение: сначала UserRole, потом текст ячейки
+                            item_data = item.data(Qt.UserRole)
+                            if item_data is not None:
+                                if isinstance(item_data, dict):
+                                    if item_data.get('id') == eid:
+                                        table.selectRow(row)
+                                        table.scrollToItem(item)
+                                        return
+                                elif item_data == eid:
+                                    table.selectRow(row)
+                                    table.scrollToItem(item)
+                                    return
+
+                            # Fallback: сравнение текста ячейки с ID
+                            if item.text() == str(eid):
+                                table.selectRow(row)
+                                table.scrollToItem(item)
+                                return
+                    except Exception as e:
+                        print(f"[SEARCH] Ошибка навигации к строке: {e}")
+
+                QTimer.singleShot(200, _select_row)
+                break
+
     def switch_dashboard(self, dashboard_key):
-        """Переключение дашборда через QStackedWidget"""
+        """Переключение дашборда через QStackedWidget (lazy creation)"""
         try:
-            if dashboard_key and dashboard_key in self.dashboard_indices:
-                # Переключаем на нужный дашборд
-                index = self.dashboard_indices[dashboard_key]
-                self.dashboard_stack.setCurrentIndex(index)
+            if dashboard_key:
+                # Lazy creation: создаём дашборд при первом обращении
+                if dashboard_key not in self.dashboards and dashboard_key in self._dashboard_factories:
+                    dashboard = self._dashboard_factories[dashboard_key]()
+                    self.dashboards[dashboard_key] = dashboard
+                    index = self.dashboard_stack.addWidget(dashboard)
+                    self.dashboard_indices[dashboard_key] = index
 
-                # ИСПРАВЛЕНО 05.02.2026: Всегда обновляем данные при переключении
-                # чтобы дашборд показывал актуальные данные
-                self.dashboards[dashboard_key].refresh()
-                self.current_dashboard_key = dashboard_key
+                if dashboard_key in self.dashboard_indices:
+                    # Переключаем на нужный дашборд (мгновенно)
+                    index = self.dashboard_indices[dashboard_key]
+                    self.dashboard_stack.setCurrentIndex(index)
+                    self.current_dashboard_key = dashboard_key
+                    self.dashboard_stack.show()
 
-                self.dashboard_stack.show()
+                    # Обновляем данные отложенно — не блокирует переключение
+                    def _refresh_dashboard(key=dashboard_key):
+                        try:
+                            if key in self.dashboards:
+                                self.dashboards[key].refresh()
+                        except Exception as e:
+                            print(f"[ERROR] Ошибка обновления дашборда: {e}")
+                    QTimer.singleShot(50, _refresh_dashboard)
+                else:
+                    self.dashboard_stack.hide()
+                    self.current_dashboard_key = None
             else:
                 # Скрываем дашборд для страниц без него
                 self.dashboard_stack.hide()
@@ -1132,6 +1405,47 @@ class MainWindow(QMainWindow):
         if self.current_dashboard_key and self.current_dashboard_key in self.dashboards:
             self.dashboards[self.current_dashboard_key].refresh()
 
+    def showEvent(self, event):
+        """Отложенная инициализация тяжёлых компонентов после показа окна"""
+        super().showEvent(event)
+        if not hasattr(self, '_shown_deferred'):
+            self._shown_deferred = True
+            QTimer.singleShot(0, self._init_deferred)
+
+    def _init_deferred(self):
+        """Создание вкладок, дашбордов и загрузка данных (после показа окна)"""
+        if self._dashboards_created:
+            return
+        self._dashboards_created = True
+
+        # Шаг 1: Создаём вкладки (отложено из init_ui для мгновенного показа окна)
+        self.setup_tabs()
+        QApplication.processEvents()
+
+        # Шаг 2: Настраиваем фабрики дашбордов (lazy - создаются по требованию)
+        from ui.dashboards import (ClientsDashboard, ContractsDashboard, CRMDashboard,
+                                   EmployeesDashboard,
+                                   SalariesAllPaymentsDashboard, SalariesIndividualDashboard,
+                                   SalariesTemplateDashboard, SalariesSalaryDashboard,
+                                   SalariesSupervisionDashboard)
+
+        self._dashboard_factories = {
+            'Клиенты': lambda: ClientsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'Договора': lambda: ContractsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'СРМ (Индивидуальные)': lambda: CRMDashboard(self.db, 'Индивидуальный', self.api_client, parent=self.dashboard_stack),
+            'СРМ (Шаблонные)': lambda: CRMDashboard(self.db, 'Шаблонный', self.api_client, parent=self.dashboard_stack),
+            'СРМ надзора': lambda: CRMDashboard(self.db, 'Авторский надзор', self.api_client, parent=self.dashboard_stack),
+            'Сотрудники': lambda: EmployeesDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'Зарплаты (Все)': lambda: SalariesAllPaymentsDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'Зарплаты (Индивидуальные)': lambda: SalariesIndividualDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'Зарплаты (Шаблонные)': lambda: SalariesTemplateDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'Зарплаты (Оклады)': lambda: SalariesSalaryDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+            'Зарплаты (Надзор)': lambda: SalariesSupervisionDashboard(self.db, self.api_client, parent=self.dashboard_stack),
+        }
+
+        # Загрузка данных первой вкладки + показ дашборда (дашборд создастся по требованию)
+        self.on_tab_changed(self.tabs.currentIndex())
+
     # ========== СИСТЕМА ОБНОВЛЕНИЯ ПРОГРАММЫ ==========
     def check_for_updates_manual(self):
         """Ручная проверка обновлений (по нажатию кнопки)"""
@@ -1139,16 +1453,19 @@ class MainWindow(QMainWindow):
         from ui.update_dialogs import UpdateDialog, VersionDialog
         import threading
 
-        # Проверяем, нажата ли Shift для управления версией
+        # Проверяем, нажата ли Shift для управления версией (только для Руководителя студии)
         from PyQt5.QtWidgets import QApplication
         modifiers = QApplication.keyboardModifiers()
         from PyQt5.QtCore import Qt
 
         if modifiers == Qt.ShiftModifier:
-            # Shift + клик = управление версией
-            dialog = VersionDialog(self)
-            dialog.exec_()
-            return
+            _pos = self.employee.get('position', '')
+            _sec = self.employee.get('secondary_position', '')
+            if _pos == 'Руководитель студии' or _sec == 'Руководитель студии':
+                # Shift + клик = управление версией и загрузка обновлений
+                dialog = VersionDialog(self)
+                dialog.exec_()
+                return
 
         self.status_label.setText("Проверка обновлений...")
         self.update_btn.setEnabled(False)

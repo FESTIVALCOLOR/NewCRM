@@ -5,10 +5,13 @@ API клиент для взаимодействия с сервером
 import requests
 import urllib3
 import time
+import json
+import base64
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-# Отключаем предупреждения о самоподписанных сертификатах (только для разработки!)
+# Подавление предупреждений для самоподписанных сертификатов
+# SECURITY NOTE: В production с валидным SSL сертификатом установить API_VERIFY_SSL=true
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -60,17 +63,23 @@ class APIClient:
     # 10 сек дает достаточно времени для восстановления без лишних сообщений
     OFFLINE_CACHE_DURATION = 10  # Секунд кешировать offline статус
 
+    # Порог для автоматического обновления токена (за 5 минут до истечения)
+    TOKEN_REFRESH_THRESHOLD = 300  # секунд
+
     def __init__(self, base_url: str, verify_ssl: bool = False):
         """
         Args:
             base_url: Базовый URL API (например: https://your-app.railway.app)
-            verify_ssl: Проверять SSL сертификат (False для самоподписанных)
+            verify_ssl: Проверять SSL сертификат
+                        False для self-signed сертификатов (текущий сервер)
+                        True при наличии валидного SSL от CA
         """
         self.base_url = base_url.rstrip('/')
         self.token: Optional[str] = None
         self.refresh_token: Optional[str] = None  # Refresh token для автоматического обновления
+        self._token_exp: Optional[float] = None  # Время истечения access token (unix timestamp)
         self.employee_id: Optional[int] = None
-        self.verify_ssl = verify_ssl  # Для самоподписанных сертификатов = False
+        self.verify_ssl = verify_ssl
         self.headers = {
             "Content-Type": "application/json"
         }
@@ -113,6 +122,10 @@ class APIClient:
             APIConnectionError: При ошибке соединения
             APIError: При других ошибках
         """
+        # Автоматическое обновление токена перед запросом (если скоро истечёт)
+        if not url.endswith('/api/auth/refresh') and not url.endswith('/api/auth/login'):
+            self._auto_refresh_if_needed()
+
         # Если недавно были offline - сразу выбрасываем исключение без запроса
         # НО: только если это не фоновый запрос (mark_offline=True)
         if mark_offline and self._is_recently_offline():
@@ -295,6 +308,11 @@ class APIClient:
             raise APIAuthError("Требуется авторизация")
         elif response.status_code == 403:
             raise APIAuthError("Доступ запрещён")
+        elif response.status_code == 429:
+            raise APIResponseError(
+                f"Слишком много попыток. {error_detail}",
+                status_code=response.status_code
+            )
         else:
             raise APIResponseError(
                 f"Ошибка сервера (HTTP {response.status_code}): {error_detail}",
@@ -315,9 +333,38 @@ class APIClient:
         """Статус соединения с сервером"""
         return self._is_online
 
+    def _extract_token_expiry(self, token: str) -> Optional[float]:
+        """Извлечь время истечения из JWT токена (без проверки подписи)"""
+        try:
+            # JWT = header.payload.signature — декодируем payload
+            parts = token.split('.')
+            if len(parts) != 3:
+                return None
+            # Добавляем padding для base64
+            payload_b64 = parts[1] + '=' * (4 - len(parts[1]) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+            return payload.get('exp')
+        except Exception:
+            return None
+
+    def _is_token_expiring_soon(self) -> bool:
+        """Проверить, истекает ли access token в ближайшее время"""
+        if self._token_exp is None:
+            return False
+        remaining = self._token_exp - time.time()
+        return remaining < self.TOKEN_REFRESH_THRESHOLD
+
+    def _auto_refresh_if_needed(self):
+        """Автоматически обновить access token если он скоро истечёт"""
+        if not self.token or not self.refresh_token:
+            return
+        if self._is_token_expiring_soon() and not self._is_refreshing:
+            self.refresh_access_token()
+
     def set_token(self, token: str, refresh_token: str = None):
         """Установить JWT токен для аутентификации"""
         self.token = token
+        self._token_exp = self._extract_token_expiry(token)
         self.headers["Authorization"] = f"Bearer {token}"
         if refresh_token:
             self.refresh_token = refresh_token
@@ -326,6 +373,7 @@ class APIClient:
         """Очистить токен"""
         self.token = None
         self.refresh_token = None
+        self._token_exp = None
         if "Authorization" in self.headers:
             del self.headers["Authorization"]
 
@@ -384,13 +432,10 @@ class APIClient:
                 data = response.json()
                 self.set_token(data["access_token"], self.refresh_token)
                 self.employee_id = data.get("employee_id", self.employee_id)
-                print("[API] Токен успешно обновлен через refresh_token")
                 return True
             else:
-                print(f"[API] Ошибка обновления токена: {response.status_code}")
                 return False
-        except Exception as e:
-            print(f"[API] Ошибка refresh_token: {e}")
+        except Exception:
             return False
         finally:
             self._is_refreshing = False
@@ -1120,8 +1165,7 @@ class APIClient:
         response = self._request(
             'POST',
             f"{self.base_url}/api/files",
-            json=file_data,
-            mark_offline=False  # Не переходим в offline при ошибке синхронизации файлов
+            json=file_data
         )
         return self._handle_response(response)
 
@@ -1129,11 +1173,42 @@ class APIClient:
         """Удалить запись о файле"""
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/files/{file_id}",
-            mark_offline=False  # Не переходим в offline при ошибке синхронизации файлов
+            f"{self.base_url}/api/files/{file_id}"
         )
         self._handle_response(response)
         return True
+
+    def get_updated_files(self, since: str) -> list:
+        """Получить файлы, загруженные после указанного timestamp"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/files/updated",
+            params={"since": since},
+            retry=False,
+            timeout=5
+        )
+        return self._handle_response(response)
+
+    def validate_files(self, file_ids: list, auto_clean: bool = False) -> list:
+        """Пакетная проверка существования файлов на Яндекс.Диске"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/files/validate",
+            json={"file_ids": file_ids, "auto_clean": auto_clean}
+        )
+        return self._handle_response(response)
+
+    def scan_contract_files(self, contract_id: int, scope: str = 'all') -> dict:
+        """Сканирование файлов на ЯД для договора — находит файлы не в БД.
+        scope: 'all' — вся папка проекта, 'supervision' — только Авторский надзор.
+        """
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/files/scan/{contract_id}",
+            params={'scope': scope},
+            timeout=60  # Сканирование может быть долгим
+        )
+        return self._handle_response(response)
 
     # =========================
     # STAGE EXECUTORS
@@ -1950,13 +2025,13 @@ class APIClient:
             print(f"[API] Ошибка получения предыдущего исполнителя: {e}")
             return None
 
-    def update_stage_executor_deadline(self, crm_card_id: int, stage_keyword: str, deadline: str) -> bool:
+    def update_stage_executor_deadline(self, crm_card_id: int, stage_name: str, deadline: str) -> bool:
         """Обновить дедлайн исполнителя стадии"""
         try:
             response = self._request(
                 'PATCH',
                 f"{self.base_url}/api/crm/cards/{crm_card_id}/stage-executor-deadline",
-                json={'stage_keyword': stage_keyword, 'deadline': deadline}
+                json={'stage_name': stage_name, 'deadline': deadline}
             )
             self._handle_response(response)
             return True
@@ -2874,5 +2949,244 @@ class APIClient:
         except Exception as e:
             print(f"[API] Ошибка получения истории надзора: {e}")
             return []
+
+    # ==================== ТАБЛИЦА СРОКОВ (CRM) ====================
+
+    def get_project_timeline(self, contract_id: int) -> List[Dict[str, Any]]:
+        """Получить таблицу сроков проекта"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/timeline/{contract_id}"
+        )
+        return self._handle_response(response)
+
+    def init_project_timeline(self, contract_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Инициализировать таблицу сроков проекта из шаблона"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/timeline/{contract_id}/init",
+            json=data
+        )
+        return self._handle_response(response)
+
+    def reinit_project_timeline(self, contract_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Пересоздать таблицу сроков проекта (удалить и создать заново)"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/timeline/{contract_id}/reinit",
+            json=data
+        )
+        return self._handle_response(response)
+
+    def update_timeline_entry(self, contract_id: int, stage_code: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Обновить запись таблицы сроков"""
+        response = self._request(
+            'PUT',
+            f"{self.base_url}/api/timeline/{contract_id}/entry/{stage_code}",
+            json=data
+        )
+        return self._handle_response(response)
+
+    def get_timeline_summary(self, contract_id: int) -> Dict[str, Any]:
+        """Получить сводку по таблице сроков"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/timeline/{contract_id}/summary"
+        )
+        return self._handle_response(response)
+
+    def export_timeline_excel(self, contract_id: int) -> bytes:
+        """Экспорт таблицы сроков в Excel (возвращает байты файла)"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/timeline/{contract_id}/export/excel"
+        )
+        if response.status_code == 200:
+            return response.content
+        self._handle_response(response)
+        return b''
+
+    def export_timeline_pdf(self, contract_id: int) -> bytes:
+        """Экспорт таблицы сроков в PDF (возвращает байты файла)"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/timeline/{contract_id}/export/pdf"
+        )
+        if response.status_code == 200:
+            return response.content
+        self._handle_response(response)
+        return b''
+
+    # ==================== WORKFLOW (CRM) ====================
+
+    def get_workflow_state(self, card_id: int) -> List[Dict[str, Any]]:
+        """Получить состояние рабочего процесса карточки"""
+        response = self._request('GET', f"{self.base_url}/api/crm/cards/{card_id}/workflow/state")
+        return self._handle_response(response) or []
+
+    def workflow_submit(self, card_id: int) -> Dict[str, Any]:
+        """Сдача работы"""
+        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/submit")
+        return self._handle_response(response)
+
+    def workflow_accept(self, card_id: int) -> Dict[str, Any]:
+        """Приемка работы"""
+        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/accept")
+        return self._handle_response(response)
+
+    def workflow_reject(self, card_id: int, corrections_path: str = '') -> Dict[str, Any]:
+        """Отправить на исправление с путем к папке правок на ЯД"""
+        data = {}
+        if corrections_path:
+            data['revision_file_path'] = corrections_path
+        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/reject", json=data)
+        return self._handle_response(response)
+
+    def workflow_client_send(self, card_id: int) -> Dict[str, Any]:
+        """Отправить на согласование клиенту"""
+        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/client-send")
+        return self._handle_response(response)
+
+    def workflow_client_ok(self, card_id: int) -> Dict[str, Any]:
+        """Клиент согласовал"""
+        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/client-ok")
+        return self._handle_response(response)
+
+    # ==================== ТАБЛИЦА СРОКОВ (НАДЗОР) ====================
+
+    def get_supervision_timeline(self, card_id: int) -> List[Dict[str, Any]]:
+        """Получить таблицу сроков надзора"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-timeline/{card_id}"
+        )
+        return self._handle_response(response)
+
+    def init_supervision_timeline(self, card_id: int, data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Инициализировать таблицу сроков надзора"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/supervision-timeline/{card_id}/init",
+            json=data or {}
+        )
+        return self._handle_response(response)
+
+    def update_supervision_timeline_entry(self, card_id: int, stage_code: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Обновить запись таблицы сроков надзора"""
+        response = self._request(
+            'PUT',
+            f"{self.base_url}/api/supervision-timeline/{card_id}/entry/{stage_code}",
+            json=data
+        )
+        return self._handle_response(response)
+
+    def get_supervision_timeline_summary(self, card_id: int) -> Dict[str, Any]:
+        """Получить сводку по таблице сроков надзора"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-timeline/{card_id}/summary"
+        )
+        return self._handle_response(response)
+
+    def export_supervision_timeline_excel(self, card_id: int) -> bytes:
+        """Экспорт таблицы сроков надзора в Excel"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-timeline/{card_id}/export/excel"
+        )
+        if response.status_code == 200:
+            return response.content
+        self._handle_response(response)
+        return b''
+
+    def export_supervision_timeline_pdf(self, card_id: int) -> bytes:
+        """Экспорт таблицы сроков надзора в PDF"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-timeline/{card_id}/export/pdf"
+        )
+        if response.status_code == 200:
+            return response.content
+        self._handle_response(response)
+        return b''
+
+    # =========================
+    # ГЛОБАЛЬНЫЙ ПОИСК
+    # =========================
+
+    def search(self, query: str, limit: int = 50, entity_types: str = None) -> Dict[str, Any]:
+        """Полнотекстовый поиск по клиентам, договорам, CRM карточкам"""
+        params = {"q": query, "limit": limit}
+        if entity_types:
+            params["entity_types"] = entity_types
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/search",
+            params=params
+        )
+        return self._handle_response(response)
+
+    # =========================
+    # СТАТИСТИКА (расширенная)
+    # =========================
+
+    def get_funnel_statistics(self, year: int = None, project_type: str = None) -> Dict[str, Any]:
+        """Статистика воронки: количество карточек по колонкам"""
+        params = {}
+        if year:
+            params['year'] = year
+        if project_type:
+            params['project_type'] = project_type
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/statistics/funnel",
+            params=params
+        )
+        return self._handle_response(response)
+
+    def get_executor_load(self, year: int = None, month: int = None) -> List[Dict[str, Any]]:
+        """Нагрузка на исполнителей: количество активных стадий"""
+        params = {}
+        if year:
+            params['year'] = year
+        if month:
+            params['month'] = month
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/statistics/executor-load",
+            params=params
+        )
+        return self._handle_response(response)
+
+    # =========================
+    # ПРАВА ДОСТУПА (PERMISSIONS)
+    # =========================
+
+    def get_permission_definitions(self) -> List[Dict[str, str]]:
+        """Получить список всех доступных прав с описаниями"""
+        response = self._request('GET', f"{self.base_url}/api/permissions/definitions")
+        return self._handle_response(response)
+
+    def get_employee_permissions(self, employee_id: int) -> Dict[str, Any]:
+        """Получить права конкретного сотрудника"""
+        response = self._request('GET', f"{self.base_url}/api/permissions/{employee_id}")
+        return self._handle_response(response)
+
+    def set_employee_permissions(self, employee_id: int, permissions: List[str]) -> Dict[str, Any]:
+        """Установить права сотрудника (полная замена)"""
+        response = self._request(
+            'PUT',
+            f"{self.base_url}/api/permissions/{employee_id}",
+            json={"permissions": permissions}
+        )
+        return self._handle_response(response)
+
+    def reset_employee_permissions(self, employee_id: int) -> Dict[str, Any]:
+        """Сбросить права сотрудника до дефолтных по роли"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/permissions/{employee_id}/reset-to-defaults"
+        )
+        return self._handle_response(response)
 
 

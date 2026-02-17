@@ -122,13 +122,7 @@ async def get_current_user(
     return employee
 
 
-def check_permission(employee: Employee, permission_type: str, target: str) -> bool:
-    """Проверка прав доступа"""
-    # Руководитель студии имеет все права
-    if employee.role == "Руководитель студии":
-        return True
-
-    # Проверяем в таблице permissions
-    # TODO: Реализовать проверку в базе
-
-    return False
+def check_permission(employee: Employee, permission_name: str, db: Session) -> bool:
+    """Проверка прав доступа (делегирует в permissions модуль)"""
+    from permissions import check_permission as _check
+    return _check(employee, permission_name, db)

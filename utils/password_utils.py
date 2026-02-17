@@ -52,9 +52,13 @@ def verify_password(password: str, stored_password: str) -> bool:
     try:
         # Разбираем сохранённый пароль
         if '$' not in stored_password:
-            # Старый формат (plain text) - для обратной совместимости
-            # ВАЖНО: Это временная мера, нужно удалить после миграции всех паролей
-            return password == stored_password
+            # Plaintext пароли ЗАПРЕЩЕНЫ — требуется миграция
+            import logging
+            logging.warning(
+                "SECURITY: Обнаружен plaintext пароль в БД! "
+                "Необходима миграция: hash_password() для всех паролей."
+            )
+            return False
 
         salt_b64, hash_b64 = stored_password.split('$', 1)
 
@@ -73,8 +77,8 @@ def verify_password(password: str, stored_password: str) -> bool:
         # Сравниваем хэши (используем secrets.compare_digest для защиты от timing attacks)
         return secrets.compare_digest(password_hash, stored_hash)
 
-    except Exception as e:
-        print(f"Ошибка при проверке пароля: {e}")
+    except Exception:
+        # Не раскрываем детали ошибки проверки пароля
         return False
 
 
