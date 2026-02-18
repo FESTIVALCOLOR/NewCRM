@@ -14,3 +14,9 @@ pydantic-settings==2.6.1
 alembic==1.14.0
 openpyxl==3.1.5
 reportlab==4.2.5
+# Telegram мессенджер-чаты
+aiogram==3.13.1
+pyrogram==2.0.106
+tgcrypto==1.2.5
+# Email для invite-ссылок
+aiosmtplib==3.0.2

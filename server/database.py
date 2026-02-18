@@ -2,7 +2,7 @@
 База данных - SQLAlchemy модели
 Многопользовательская структура
 """
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Boolean, DateTime, Float, Text, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -698,6 +698,98 @@ class ApprovalStageDeadline(Base):
     completed_date = Column(DateTime)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# =========================
+# МЕССЕНДЖЕР-ЧАТЫ
+# =========================
+
+class MessengerChat(Base):
+    """Чаты проектов в мессенджерах"""
+    __tablename__ = "messenger_chats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"))
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id"))
+    supervision_card_id = Column(Integer, nullable=True)
+
+    messenger_type = Column(String, nullable=False, default="telegram")
+    telegram_chat_id = Column(BigInteger, nullable=True)
+    chat_title = Column(String, nullable=True)
+    invite_link = Column(String, nullable=True)
+    avatar_type = Column(String, nullable=True)  # 'festival' / 'petrovich'
+    creation_method = Column(String, nullable=False, default="manual")  # 'auto' / 'manual'
+
+    created_by = Column(Integer, ForeignKey("employees.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+
+class MessengerChatMember(Base):
+    """Участники чата"""
+    __tablename__ = "messenger_chat_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    messenger_chat_id = Column(Integer, ForeignKey("messenger_chats.id", ondelete="CASCADE"), nullable=False)
+
+    member_type = Column(String, nullable=False)  # 'employee' / 'client'
+    member_id = Column(Integer, nullable=False)
+    role_in_project = Column(String, nullable=True)
+    is_mandatory = Column(Boolean, default=False)
+
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    telegram_user_id = Column(BigInteger, nullable=True)
+
+    invite_status = Column(String, default="pending")  # pending/sent/joined/email_sent
+    invited_at = Column(DateTime, nullable=True)
+    joined_at = Column(DateTime, nullable=True)
+
+
+class MessengerScript(Base):
+    """Скрипты автоматических сообщений"""
+    __tablename__ = "messenger_scripts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    script_type = Column(String, nullable=False)  # project_start/stage_complete/project_end
+    project_type = Column(String, nullable=True)  # Индивидуальный/Шаблонный/Авторский надзор/NULL
+    stage_name = Column(String, nullable=True)
+
+    message_template = Column(Text, nullable=False)
+    use_auto_deadline = Column(Boolean, default=True)
+    is_enabled = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MessengerSetting(Base):
+    """Настройки мессенджера"""
+    __tablename__ = "messenger_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    setting_key = Column(String, unique=True, nullable=False)
+    setting_value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+
+
+class MessengerMessageLog(Base):
+    """Лог отправленных сообщений"""
+    __tablename__ = "messenger_message_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    messenger_chat_id = Column(Integer, ForeignKey("messenger_chats.id", ondelete="CASCADE"))
+
+    message_type = Column(String, nullable=True)  # auto_stage/auto_start/auto_end/file/manual
+    message_text = Column(Text, nullable=True)
+    file_links = Column(Text, nullable=True)  # JSON
+
+    sent_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    sent_at = Column(DateTime, default=datetime.utcnow)
+    telegram_message_id = Column(BigInteger, nullable=True)
+    delivery_status = Column(String, default="sent")  # sent/failed/pending
 
 
 def init_db():

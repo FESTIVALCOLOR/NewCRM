@@ -44,6 +44,7 @@ class DatabaseManager:
                 self.add_project_subtype_to_contracts()
                 self.add_floors_to_contracts()
                 self.create_stage_workflow_state_table()
+                self.create_messenger_tables()
                 self.create_performance_indexes()
                 _migrations_completed = True
 
@@ -6221,6 +6222,104 @@ class DatabaseManager:
             self.close()
         except Exception as e:
             print(f"[MIGRATION] Ошибка создания stage_workflow_state: {e}")
+
+    def create_messenger_tables(self):
+        """Миграция: таблицы системы мессенджер-чатов"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Таблица чатов проектов
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messenger_chats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contract_id INTEGER REFERENCES contracts(id),
+                    crm_card_id INTEGER REFERENCES crm_cards(id),
+                    supervision_card_id INTEGER,
+                    messenger_type TEXT NOT NULL DEFAULT 'telegram',
+                    telegram_chat_id INTEGER,
+                    chat_title TEXT,
+                    invite_link TEXT,
+                    avatar_type TEXT,
+                    creation_method TEXT NOT NULL DEFAULT 'manual',
+                    created_by INTEGER REFERENCES employees(id),
+                    created_at TEXT DEFAULT (datetime('now')),
+                    is_active INTEGER DEFAULT 1
+                )
+            ''')
+
+            # Таблица участников чата
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messenger_chat_members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    messenger_chat_id INTEGER NOT NULL REFERENCES messenger_chats(id) ON DELETE CASCADE,
+                    member_type TEXT NOT NULL,
+                    member_id INTEGER NOT NULL,
+                    role_in_project TEXT,
+                    is_mandatory INTEGER DEFAULT 0,
+                    phone TEXT,
+                    email TEXT,
+                    telegram_user_id INTEGER,
+                    invite_status TEXT DEFAULT 'pending',
+                    invited_at TEXT,
+                    joined_at TEXT
+                )
+            ''')
+
+            # Таблица скриптов сообщений
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messenger_scripts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    script_type TEXT NOT NULL,
+                    project_type TEXT,
+                    stage_name TEXT,
+                    message_template TEXT NOT NULL,
+                    use_auto_deadline INTEGER DEFAULT 1,
+                    is_enabled INTEGER DEFAULT 1,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )
+            ''')
+
+            # Таблица настроек мессенджера
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messenger_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    setting_key TEXT UNIQUE NOT NULL,
+                    setting_value TEXT,
+                    updated_at TEXT DEFAULT (datetime('now')),
+                    updated_by INTEGER REFERENCES employees(id)
+                )
+            ''')
+
+            # Лог отправленных сообщений
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messenger_message_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    messenger_chat_id INTEGER REFERENCES messenger_chats(id) ON DELETE CASCADE,
+                    message_type TEXT,
+                    message_text TEXT,
+                    file_links TEXT,
+                    sent_by INTEGER REFERENCES employees(id),
+                    sent_at TEXT DEFAULT (datetime('now')),
+                    telegram_message_id INTEGER,
+                    delivery_status TEXT DEFAULT 'sent'
+                )
+            ''')
+
+            # Индексы для быстрого поиска
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_chats_crm_card ON messenger_chats(crm_card_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_chats_contract ON messenger_chats(contract_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_members_chat ON messenger_chat_members(messenger_chat_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_log_chat ON messenger_message_log(messenger_chat_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_scripts_type ON messenger_scripts(script_type, project_type)")
+
+            conn.commit()
+            print("[OK] Таблицы мессенджера созданы")
+            self.close()
+        except Exception as e:
+            print(f"[MIGRATION] Ошибка создания таблиц мессенджера: {e}")
 
     def create_timeline_tables(self):
         """Миграция: таблицы сроков проектов и надзора"""

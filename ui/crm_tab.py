@@ -4542,7 +4542,91 @@ class CardEditDialog(QDialog):
                 buttons_layout.addWidget(delete_btn)
 
             buttons_layout.addWidget(self.sync_label)
+
+            # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
+
+            # --- Кнопки чата ---
+            self.create_chat_btn = IconLoader.create_icon_button(
+                'message-circle', 'Создать чат', 'Создать чат в мессенджере', icon_size=14
+            )
+            self.create_chat_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffd93c;
+                    color: #ffffff;
+                    padding: 0px 16px;
+                    border-radius: 4px;
+                    border: 1px solid #e6c236;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #ffdb4d; border-color: #d9b530; }
+                QPushButton:pressed { background-color: #e6c236; }
+                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+            """)
+            self.create_chat_btn.setFixedHeight(36)
+            self.create_chat_btn.clicked.connect(self._on_create_chat)
+
+            self.open_chat_btn = IconLoader.create_icon_button(
+                'external-link', 'Открыть чат', 'Открыть чат в мессенджере', icon_size=14
+            )
+            self.open_chat_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffffff;
+                    color: #333333;
+                    padding: 0px 16px;
+                    border-radius: 4px;
+                    border: 1px solid #d9d9d9;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+            """)
+            self.open_chat_btn.setFixedHeight(36)
+            self.open_chat_btn.clicked.connect(self._on_open_chat)
+
+            self.delete_chat_btn = IconLoader.create_icon_button(
+                'trash', 'Удалить чат', 'Удалить чат из мессенджера', icon_size=14
+            )
+            self.delete_chat_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffffff;
+                    color: #F44336;
+                    padding: 0px 16px;
+                    border-radius: 4px;
+                    border: 1px solid #F44336;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #FFF5F5; border-color: #E74C3C; }
+                QPushButton:pressed { background-color: #FFEBEE; }
+                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+            """)
+            self.delete_chat_btn.setFixedHeight(36)
+            self.delete_chat_btn.clicked.connect(self._on_delete_chat)
+
+            buttons_layout.addWidget(self.create_chat_btn)
+            buttons_layout.addWidget(self.open_chat_btn)
+            buttons_layout.addWidget(self.delete_chat_btn)
+
+            # Кнопка администрирования чатов (только для Директора)
+            if _emp_has_pos(self.employee, 'Руководитель студии'):
+                self.chat_admin_btn = IconLoader.create_action_button(
+                    'settings', 'Настройки чатов', icon_size=16, button_size=36,
+                )
+                self.chat_admin_btn.clicked.connect(self._on_chat_admin)
+                buttons_layout.addWidget(self.chat_admin_btn)
+
+            buttons_layout.addStretch()
+
+            # Загружаем состояние чата и обновляем кнопки
+            self._messenger_chat_data = None
+            self._load_messenger_chat_state()
 
             save_btn = QPushButton('Сохранить')
             save_btn.clicked.connect(self.save_changes)
@@ -9879,6 +9963,125 @@ class CardEditDialog(QDialog):
                 traceback.print_exc()
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить заказ:\n{str(e)}', 'error').exec_()
                 
+    # =========================
+    # МЕТОДЫ МЕССЕНДЖЕР-ЧАТА
+    # =========================
+
+    def _load_messenger_chat_state(self):
+        """Загрузить состояние чата и обновить кнопки"""
+        try:
+            crm_card_id = self.card_data.get('id')
+            if crm_card_id and hasattr(self, 'data_access') and self.data_access:
+                self._messenger_chat_data = self.data_access.get_messenger_chat(crm_card_id)
+            elif crm_card_id and self.api_client:
+                self._messenger_chat_data = self.api_client.get_messenger_chat_by_card(crm_card_id)
+            else:
+                self._messenger_chat_data = None
+        except Exception:
+            self._messenger_chat_data = None
+
+        self._update_chat_buttons_state()
+
+    def _update_chat_buttons_state(self):
+        """Обновить enabled/disabled состояние кнопок чата"""
+        has_chat = (
+            self._messenger_chat_data is not None
+            and self._messenger_chat_data.get('chat', {}).get('is_active', False)
+        )
+        is_online = bool(self.api_client)
+
+        if hasattr(self, 'create_chat_btn'):
+            self.create_chat_btn.setEnabled(not has_chat and is_online)
+            self.open_chat_btn.setEnabled(has_chat)
+            self.delete_chat_btn.setEnabled(has_chat and is_online)
+
+            if not is_online:
+                self.create_chat_btn.setToolTip("Требуется подключение к серверу")
+                self.delete_chat_btn.setToolTip("Требуется подключение к серверу")
+            elif has_chat:
+                self.create_chat_btn.setToolTip("Чат уже создан")
+            else:
+                self.delete_chat_btn.setToolTip("Чат не создан")
+                self.open_chat_btn.setToolTip("Чат не создан")
+
+    def _on_create_chat(self):
+        """Обработчик кнопки 'Создать чат'"""
+        from ui.messenger_select_dialog import MessengerSelectDialog
+        dialog = MessengerSelectDialog(
+            parent=self,
+            card_data=self.card_data,
+            api_client=self.api_client,
+            db=self.db,
+            data_access=getattr(self, 'data_access', None),
+            employee=self.employee,
+        )
+        if dialog.exec_() == QDialog.Accepted:
+            self._messenger_chat_data = dialog.result_chat_data
+            self._update_chat_buttons_state()
+
+    def _on_open_chat(self):
+        """Обработчик кнопки 'Открыть чат'"""
+        if not self._messenger_chat_data:
+            return
+
+        chat = self._messenger_chat_data.get('chat', {})
+        invite_link = chat.get('invite_link', '')
+
+        if invite_link:
+            from PyQt5.QtGui import QDesktopServices
+            from PyQt5.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(invite_link))
+        else:
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(
+                self, 'Ошибка',
+                'Ссылка на чат не найдена. Попробуйте пересоздать чат.',
+                'error'
+            ).exec_()
+
+    def _on_delete_chat(self):
+        """Обработчик кнопки 'Удалить чат'"""
+        if not self._messenger_chat_data:
+            return
+
+        from ui.custom_message_box import CustomQuestionBox
+        reply = CustomQuestionBox(
+            self,
+            'Удаление чата',
+            'Внимание! Все сообщения в чате будут удалены безвозвратно.\n\n'
+            'Вы уверены, что хотите удалить чат?'
+        ).exec_()
+
+        if reply == QDialog.Accepted:
+            try:
+                chat = self._messenger_chat_data.get('chat', {})
+                chat_id = chat.get('id')
+                if chat_id:
+                    if hasattr(self, 'data_access') and self.data_access:
+                        self.data_access.delete_messenger_chat(chat_id)
+                    elif self.api_client:
+                        self.api_client.delete_messenger_chat(chat_id)
+
+                    self._messenger_chat_data = None
+                    self._update_chat_buttons_state()
+
+                    from ui.custom_message_box import CustomMessageBox
+                    CustomMessageBox(self, 'Успех', 'Чат успешно удалён', 'success').exec_()
+            except Exception as e:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{str(e)}', 'error').exec_()
+
+    def _on_chat_admin(self):
+        """Обработчик кнопки 'Настройки чатов' (Директор)"""
+        from ui.messenger_admin_dialog import MessengerAdminDialog
+        dialog = MessengerAdminDialog(
+            parent=self,
+            api_client=self.api_client,
+            data_access=getattr(self, 'data_access', None),
+            employee=self.employee,
+        )
+        dialog.exec_()
+
     def create_payments_tab(self):
         """Создание вкладки оплат с раздельными блоками для каждой группы"""
         import re

@@ -57,17 +57,28 @@ class CustomTitleBar(QWidget):
             layout.addWidget(logo_label)
             
             # НАЗВАНИЕ ОКНА
-            title_label = QLabel(self.title_text)
-            title_label.setStyleSheet("""
+            self._title_label = QLabel(self.title_text)
+            self._title_label.setStyleSheet("""
                 font-size: 12px;
                 color: #333333;
                 font-weight: 700;
                 background-color: transparent;
             """)
-            layout.addWidget(title_label)
+            layout.addWidget(self._title_label)
         
+        # Заголовок для simple_mode
+        if self.simple_mode and self.title_text:
+            self._title_label = QLabel(self.title_text)
+            self._title_label.setStyleSheet("""
+                font-size: 13px;
+                color: #333333;
+                font-weight: 600;
+                background-color: transparent;
+            """)
+            layout.addWidget(self._title_label)
+
         layout.addStretch()
-        
+
         # ========== РЕЖИМ 2: ПРОСТОЙ (для login_window) ==========
         if self.simple_mode:
             # ТОЛЬКО КНОПКА ЗАКРЫТИЯ
@@ -112,7 +123,13 @@ class CustomTitleBar(QWidget):
             layout.addWidget(self.close_btn)
         
         self.setLayout(layout)
-    
+
+    def set_title(self, title: str):
+        """Обновить заголовок окна"""
+        self.title_text = title
+        if hasattr(self, '_title_label'):
+            self._title_label.setText(title)
+
     def load_svg_icon(self, icon_name):
         """Загрузка SVG иконки"""
         icon_path = resource_path(f'resources/icons/{icon_name}')

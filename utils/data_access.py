@@ -956,3 +956,90 @@ class DataAccess(QObject):
             except Exception:
                 pass
         return self.db.get_executor_load(year, month)
+
+    # =========================
+    # МЕССЕНДЖЕР
+    # =========================
+
+    def create_messenger_chat(self, crm_card_id: int, messenger_type: str = "telegram",
+                               members: list = None) -> Optional[Dict]:
+        """Создать чат автоматически"""
+        if self._should_use_api():
+            try:
+                return self.api_client.create_messenger_chat(crm_card_id, messenger_type, members)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка create_messenger_chat: {e}")
+        return None
+
+    def bind_messenger_chat(self, crm_card_id: int, invite_link: str,
+                             messenger_type: str = "telegram", members: list = None) -> Optional[Dict]:
+        """Привязать существующий чат"""
+        if self._should_use_api():
+            try:
+                return self.api_client.bind_messenger_chat(crm_card_id, invite_link, messenger_type, members)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка bind_messenger_chat: {e}")
+        return None
+
+    def get_messenger_chat(self, crm_card_id: int) -> Optional[Dict]:
+        """Получить чат по CRM-карточке"""
+        if self.api_client:
+            try:
+                return self.api_client.get_messenger_chat_by_card(crm_card_id)
+            except Exception:
+                pass
+        return None
+
+    def delete_messenger_chat(self, chat_id: int) -> Optional[Dict]:
+        """Удалить чат"""
+        if self._should_use_api():
+            try:
+                return self.api_client.delete_messenger_chat(chat_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка delete_messenger_chat: {e}")
+        return None
+
+    def send_messenger_message(self, chat_id: int, text: str) -> Optional[Dict]:
+        """Отправить сообщение в чат"""
+        if self._should_use_api():
+            try:
+                return self.api_client.send_messenger_message(chat_id, text)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка send_messenger_message: {e}")
+        return None
+
+    def get_messenger_scripts(self, project_type: str = None) -> List[Dict]:
+        """Получить скрипты мессенджера"""
+        if self.api_client:
+            try:
+                return self.api_client.get_messenger_scripts(project_type)
+            except Exception:
+                pass
+        return []
+
+    def get_messenger_settings(self) -> List[Dict]:
+        """Получить настройки мессенджера"""
+        if self.api_client:
+            try:
+                return self.api_client.get_messenger_settings()
+            except Exception:
+                pass
+        return []
+
+    def update_messenger_settings(self, settings: list) -> Optional[Dict]:
+        """Обновить настройки мессенджера"""
+        if self._should_use_api():
+            try:
+                return self.api_client.update_messenger_settings(settings)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка update_messenger_settings: {e}")
+        return None
+
+    def get_messenger_status(self) -> Dict:
+        """Статус сервисов мессенджера"""
+        if self.api_client:
+            try:
+                return self.api_client.get_messenger_status()
+            except Exception:
+                pass
+        return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}

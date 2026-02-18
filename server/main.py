@@ -4,6 +4,7 @@ REST API для многопользовательской CRM
 """
 import logging
 import os
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
@@ -38,7 +39,8 @@ from database import (
     CRMCard, StageExecutor, SupervisionCard, SupervisionProjectHistory,
     Payment, Rate, Salary, ProjectFile, ActionHistory, ConcurrentEdit,
     ApprovalStageDeadline, ProjectTimelineEntry, SupervisionTimelineEntry,
-    StageWorkflowState
+    StageWorkflowState,
+    MessengerChat, MessengerChatMember, MessengerScript, MessengerSetting, MessengerMessageLog
 )
 from schemas import (
     LoginRequest, TokenResponse,
@@ -72,6 +74,16 @@ from schemas import (
     TimelineEntryCreate, TimelineEntryUpdate, TimelineEntryResponse, TimelineInitRequest,
     SupervisionTimelineCreate, SupervisionTimelineUpdate, SupervisionTimelineResponse
 )
+from messenger_schemas import (
+    MessengerChatCreate, MessengerChatBind, MessengerChatResponse, MessengerChatDetailResponse,
+    ChatMemberInput, ChatMemberResponse,
+    MessengerScriptCreate, MessengerScriptUpdate, MessengerScriptResponse,
+    MessengerSettingUpdate, MessengerSettingResponse, MessengerSettingsBulkUpdate,
+    SendMessageRequest, SendFilesRequest, SendScriptMessageRequest, MessageLogResponse,
+    SendInvitesRequest
+)
+from telegram_service import get_telegram_service, TelegramService
+from email_service import get_email_service, EmailService
 from auth import (
     verify_password, get_password_hash, create_access_token,
     create_refresh_token, verify_refresh_token, get_current_user
@@ -157,9 +169,97 @@ async def startup_event():
     db = SessionLocal()
     try:
         seed_permissions(db)
+        print("[OK] Permissions seeded")
+
+        # Инициализация Telegram и Email сервисов из настроек БД
+        try:
+            messenger_settings = {}
+            ms_rows = db.query(MessengerSetting).all()
+            for row in ms_rows:
+                messenger_settings[row.setting_key] = row.setting_value or ""
+
+            tg_service = get_telegram_service()
+            tg_service.configure(messenger_settings)
+            print(f"[OK] Telegram: bot={'да' if tg_service.bot_available else 'нет'}, mtproto={'да' if tg_service.mtproto_available else 'нет'}")
+
+            email_svc = get_email_service()
+            email_svc.configure(messenger_settings)
+            print(f"[OK] Email: {'настроен' if email_svc.available else 'не настроен'}")
+        except Exception as e:
+            logger.warning(f"Messenger services init: {e}")
+
+        # Seed дефолтных скриптов мессенджера
+        try:
+            _seed_default_messenger_scripts(db)
+        except Exception as e:
+            logger.warning(f"Messenger scripts seed: {e}")
     finally:
         db.close()
-    print("[OK] Permissions seeded")
+
+
+def _seed_default_messenger_scripts(db: Session):
+    """Заполнить дефолтные скрипты если таблица пуста"""
+    existing = db.query(MessengerScript).count()
+    if existing > 0:
+        return
+
+    defaults = [
+        MessengerScript(
+            script_type="project_start",
+            project_type=None,
+            stage_name=None,
+            message_template=(
+                "Всем доброго дня!\n"
+                "Приветствую в рабочем чате!\n"
+                "Прикрепляем памятку, это кратко описанные основные пункты договора простым языком, "
+                "которые важны в первую очередь. Пишите сюда любые вопросы, мы будем сами распределять "
+                "кто на какие вопросы отвечает ввиду своих внутренних распорядков и компетенций.\n"
+                "{senior_manager} отвечает за организационную часть проекта. "
+                "{sdp} у нас старший дизайнер - она будет вести с вами весь проект. "
+                "{director} руководитель студии, с ним вы заключали договор."
+            ),
+            use_auto_deadline=False,
+            is_enabled=True,
+            sort_order=0,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type=None,
+            stage_name=None,
+            message_template=(
+                "Добрый день!\n"
+                "Прошу рассмотреть {stage_name}, собрать для нас вопросы/правки/замечания "
+                "и при необходимости назначить время-день для обсуждения (видео-созвон), когда Вам удобно.\n"
+                "Рассмотреть необходимо до {deadline} или напишите, пожалуйста, "
+                "срок необходимый Вам для согласования этапа."
+            ),
+            use_auto_deadline=True,
+            is_enabled=True,
+            sort_order=1,
+        ),
+        MessengerScript(
+            script_type="project_end",
+            project_type=None,
+            stage_name=None,
+            message_template=(
+                "Добрый день!\n"
+                "Благодарим за сотрудничество, надеемся вы остались довольны нашей работой.\n"
+                "Желаем успехов в ремонте!\n"
+                "Прикрепляем памятку о дальнейших этапах реализации проекта. "
+                "Обращайтесь если будет необходима помощь.\n"
+                "Очень просим Вас оставить отзыв о нашей работе: "
+                "https://yandex.ru/maps/org/festival_color/21058411145/"
+            ),
+            use_auto_deadline=False,
+            is_enabled=True,
+            sort_order=2,
+        ),
+    ]
+
+    for script in defaults:
+        db.add(script)
+    db.commit()
+    print(f"[OK] Создано {len(defaults)} дефолтных скриптов мессенджера")
 
 
 @app.get("/")
@@ -1579,6 +1679,17 @@ async def move_crm_card_to_column(
 
         db.commit()
         db.refresh(card)
+
+        # Хук: автоуведомление в чат при перемещении карточки
+        if old_column != new_column:
+            if new_column == 'Выполненный проект':
+                asyncio.create_task(_trigger_messenger_notification(
+                    db, card.id, 'project_end', stage_name=new_column
+                ))
+            elif 'Стадия' in new_column:
+                asyncio.create_task(_trigger_messenger_notification(
+                    db, card.id, 'stage_complete', stage_name=old_column
+                ))
 
         return {
             'id': card.id,
@@ -6289,6 +6400,12 @@ async def workflow_submit_work(
     wf.updated_at = datetime.utcnow()
 
     db.commit()
+
+    # Хук: уведомление в чат о сдаче работы
+    asyncio.create_task(_trigger_messenger_notification(
+        db, card_id, 'stage_complete', stage_name=stage_name
+    ))
+
     return {"status": "submitted", "substep": entries[0].stage_code if entries else None}
 
 
@@ -6440,6 +6557,12 @@ async def workflow_client_send(
         wf.updated_at = datetime.utcnow()
 
     db.commit()
+
+    # Хук: уведомление в чат об отправке клиенту
+    asyncio.create_task(_trigger_messenger_notification(
+        db, card_id, 'stage_complete', stage_name=f"{stage_name} (отправлено клиенту)"
+    ))
+
     return {"status": "sent_to_client"}
 
 
@@ -6466,6 +6589,12 @@ async def workflow_client_approved(
         wf.updated_at = datetime.utcnow()
 
     db.commit()
+
+    # Хук: уведомление в чат о согласовании клиентом
+    asyncio.create_task(_trigger_messenger_notification(
+        db, card_id, 'stage_complete', stage_name=f"{stage_name} (клиент согласовал)"
+    ))
+
     return {"status": "client_approved"}
 
 
@@ -8335,57 +8464,90 @@ async def get_employees_dashboard(
 ):
     """Получить статистику для дашборда страницы Сотрудники"""
     try:
+        # Используем func.lower для регистронезависимого сравнения
+        # Значения в БД: 'активный', 'уволен', 'в резерве'
+        # Отделы: 'Административный отдел', 'Проектный отдел', 'Исполнительный отдел'
+
         # 1. Активные сотрудники
         active_employees = db.query(Employee).filter(
-            Employee.status == 'Активный'
+            func.lower(Employee.status) == 'активный'
         ).count()
 
         # 2. Резерв
         reserve_employees = db.query(Employee).filter(
-            Employee.status == 'Резерв'
+            func.lower(Employee.status) == 'в резерве'
         ).count()
 
-        # 3. Активное руководство
+        # 3. Руководящий состав (по должностям, как во вкладках UI)
+        admin_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
         active_management = db.query(Employee).filter(
-            Employee.status == 'Активный',
-            Employee.department == 'Руководство'
+            func.lower(Employee.status) == 'активный',
+            Employee.position.in_(admin_positions)
         ).count()
 
-        # 4. Активный отдел проектов
+        # 4. Проектный отдел (по должностям)
+        project_positions = ['Дизайнер', 'Чертёжник']
         active_projects_dept = db.query(Employee).filter(
-            Employee.status == 'Активный',
-            Employee.department == 'Отдел проектов'
+            func.lower(Employee.status) == 'активный',
+            Employee.position.in_(project_positions)
         ).count()
 
-        # 5. Активный отдел реализации
+        # 5. Исполнительный отдел (по должностям)
+        exec_positions = ['Менеджер', 'ДАН', 'Замерщик']
         active_execution_dept = db.query(Employee).filter(
-            Employee.status == 'Активный',
-            Employee.department == 'Отдел реализации'
+            func.lower(Employee.status) == 'активный',
+            Employee.position.in_(exec_positions)
         ).count()
 
         # 6. Дни рождения (ближайшие 30 дней)
         today = datetime.now()
         upcoming_birthdays = 0
+        nearest_birthday = None
+        min_days = 366
 
-        employees = db.query(Employee).filter(Employee.status == 'Активный').all()
+        employees = db.query(Employee).filter(
+            func.lower(Employee.status) == 'активный'
+        ).all()
+        from datetime import date as date_cls
+        birthday_names = []
         for emp in employees:
             if emp.birth_date:
-                # Переносим дату рождения на текущий год
-                birth_this_year = emp.birth_date.replace(year=today.year)
-                if birth_this_year < today.date():
-                    birth_this_year = emp.birth_date.replace(year=today.year + 1)
+                try:
+                    # birth_date хранится как строка 'yyyy-MM-dd'
+                    if isinstance(emp.birth_date, str):
+                        bd = datetime.strptime(emp.birth_date, '%Y-%m-%d').date()
+                    else:
+                        bd = emp.birth_date if isinstance(emp.birth_date, date_cls) else emp.birth_date.date()
 
-                days_until = (birth_this_year - today.date()).days
-                if 0 <= days_until <= 30:
-                    upcoming_birthdays += 1
+                    birth_this_year = bd.replace(year=today.year)
+                    if birth_this_year < today.date():
+                        birth_this_year = bd.replace(year=today.year + 1)
+
+                    days_until = (birth_this_year - today.date()).days
+                    if 0 <= days_until <= 30:
+                        upcoming_birthdays += 1
+
+                    if days_until < min_days:
+                        min_days = days_until
+                        birthday_names = [emp.full_name]
+                    elif days_until == min_days:
+                        birthday_names.append(emp.full_name)
+                except Exception:
+                    continue
+
+        nearest_birthday_text = ", ".join(birthday_names) if birthday_names else "Нет данных"
 
         return {
             'active_employees': active_employees,
             'reserve_employees': reserve_employees,
             'active_management': active_management,
+            'active_admin': active_management,
             'active_projects_dept': active_projects_dept,
+            'active_project': active_projects_dept,
             'active_execution_dept': active_execution_dept,
-            'upcoming_birthdays': upcoming_birthdays
+            'active_execution': active_execution_dept,
+            'upcoming_birthdays': upcoming_birthdays,
+            'nearest_birthday': nearest_birthday_text
         }
 
     except Exception as e:
@@ -9159,6 +9321,840 @@ async def get_all_supervision_history(
     except Exception as e:
         logger.error(f"Sync supervision history error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
+# MESSENGER ENDPOINTS
+# =========================
+
+# --- Вспомогательная функция: формирование названия чата ---
+def _build_chat_title(contract, card) -> str:
+    """Формирует название чата: ИН-Город-Адрес"""
+    type_prefix = {
+        'Индивидуальный': 'ИН',
+        'Шаблонный': 'ШП',
+    }
+    prefix = type_prefix.get(contract.project_type, 'ПР')
+    city = contract.city or ''
+    address = contract.address or ''
+    return f"{prefix}-{city}-{address}"
+
+
+def _build_script_context(db: Session, card, contract) -> dict:
+    """Собрать контекст переменных для скриптов"""
+    ctx = {
+        'client_name': '',
+        'stage_name': '',
+        'deadline': '',
+        'manager_name': '',
+        'senior_manager': '',
+        'sdp': '',
+        'director': '',
+        'address': contract.address or '',
+        'city': contract.city or '',
+        'project_type': contract.project_type or '',
+        'contract_number': contract.contract_number or '',
+        'area': str(contract.area or ''),
+    }
+
+    # Клиент
+    if contract.client_id:
+        client = db.query(Client).filter(Client.id == contract.client_id).first()
+        if client:
+            ctx['client_name'] = client.full_name or ''
+
+    # Менеджер
+    if card.manager_id:
+        mgr = db.query(Employee).filter(Employee.id == card.manager_id).first()
+        if mgr:
+            ctx['manager_name'] = mgr.full_name or ''
+
+    # Старший менеджер
+    if card.senior_manager_id:
+        sm = db.query(Employee).filter(Employee.id == card.senior_manager_id).first()
+        if sm:
+            ctx['senior_manager'] = sm.full_name or ''
+
+    # СДП
+    if card.sdp_id:
+        sdp = db.query(Employee).filter(Employee.id == card.sdp_id).first()
+        if sdp:
+            ctx['sdp'] = sdp.full_name or ''
+
+    # Руководитель студии
+    director = db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
+    if director:
+        ctx['director'] = director.full_name or ''
+
+    return ctx
+
+
+async def _send_invites_to_members(chat_id: int, db: Session):
+    """Разослать invite-ссылки участникам чата"""
+    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
+    if not chat or not chat.invite_link:
+        return
+
+    members = db.query(MessengerChatMember).filter(
+        MessengerChatMember.messenger_chat_id == chat_id,
+        MessengerChatMember.invite_status == 'pending'
+    ).all()
+
+    tg = get_telegram_service()
+    email_svc = get_email_service()
+
+    for member in members:
+        sent = False
+
+        # Пробуем через Telegram бота (личное сообщение)
+        if member.telegram_user_id and tg.bot_available:
+            try:
+                await tg.send_message(
+                    member.telegram_user_id,
+                    f"Вас пригласили в проектный чат: {chat.chat_title}\n"
+                    f"Присоединяйтесь: {chat.invite_link}"
+                )
+                member.invite_status = 'sent'
+                sent = True
+            except Exception:
+                pass
+
+        # Если не получилось через Telegram — отправляем email
+        if not sent and member.email and email_svc.available:
+            # Получаем имя участника
+            name = ""
+            if member.member_type == 'employee':
+                emp = db.query(Employee).filter(Employee.id == member.member_id).first()
+                name = emp.full_name if emp else ""
+            elif member.member_type == 'client':
+                cl = db.query(Client).filter(Client.id == member.member_id).first()
+                name = cl.full_name if cl else ""
+
+            success = await email_svc.send_chat_invite(
+                to_email=member.email,
+                recipient_name=name,
+                chat_title=chat.chat_title or "",
+                invite_link=chat.invite_link,
+            )
+            if success:
+                member.invite_status = 'email_sent'
+                sent = True
+
+        member.invited_at = datetime.utcnow() if sent else None
+
+    db.commit()
+
+
+async def _trigger_messenger_notification(
+    db: Session,
+    crm_card_id: int,
+    script_type: str,
+    stage_name: str = "",
+):
+    """
+    Хук автоуведомлений: найти чат карточки → найти подходящий скрипт → отправить.
+    Вызывается из workflow-эндпоинтов через asyncio.create_task().
+    script_type: 'project_start' | 'stage_complete' | 'project_end'
+    """
+    try:
+        # Найти активный чат для карточки
+        chat = db.query(MessengerChat).filter(
+            MessengerChat.crm_card_id == crm_card_id,
+            MessengerChat.is_active == True
+        ).first()
+        if not chat or not chat.telegram_chat_id:
+            return  # Чат не создан или не привязан к Telegram
+
+        # Найти подходящий скрипт
+        scripts_query = db.query(MessengerScript).filter(
+            MessengerScript.script_type == script_type,
+            MessengerScript.is_enabled == True
+        )
+        # Для stage_complete — ищем скрипт конкретной стадии или общий
+        if script_type == 'stage_complete' and stage_name:
+            specific = scripts_query.filter(
+                MessengerScript.stage_name == stage_name
+            ).first()
+            if specific:
+                script = specific
+            else:
+                script = scripts_query.filter(
+                    (MessengerScript.stage_name == None) | (MessengerScript.stage_name == '')
+                ).first()
+        else:
+            script = scripts_query.first()
+
+        if not script:
+            return  # Нет включённого скрипта для этого события
+
+        # Собрать контекст
+        card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+        if not card:
+            return
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if not contract:
+            return
+
+        ctx = _build_script_context(db, card, contract)
+        ctx['stage_name'] = stage_name or card.column_name or ''
+
+        # Отправить через Telegram
+        tg = get_telegram_service()
+        msg_id = await tg.send_script_message(
+            chat_id=chat.telegram_chat_id,
+            template=script.message_template,
+            context=ctx,
+        )
+
+        # Записать в лог
+        if msg_id:
+            log_entry = MessengerMessageLog(
+                messenger_chat_id=chat.id,
+                message_type=f'auto_{script_type}',
+                message_text=tg.render_template(script.message_template, ctx),
+                sent_by=None,
+                telegram_message_id=msg_id,
+                delivery_status='sent',
+            )
+            db.add(log_entry)
+            db.commit()
+            logger.info(
+                f"Автоуведомление отправлено: card={crm_card_id}, "
+                f"type={script_type}, stage={stage_name}"
+            )
+    except Exception as e:
+        logger.error(f"Ошибка автоуведомления (card={crm_card_id}): {e}")
+
+
+@app.post("/api/messenger/chats", response_model=MessengerChatDetailResponse)
+async def create_messenger_chat(
+    data: MessengerChatCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Создать чат автоматически (MTProto) для CRM-карточки"""
+    # Проверка: уже есть активный чат
+    existing = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == data.crm_card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Чат для этой карточки уже существует")
+
+    # Получаем карточку и контракт
+    card = db.query(CRMCard).filter(CRMCard.id == data.crm_card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    tg = get_telegram_service()
+    if not tg.mtproto_available:
+        raise HTTPException(status_code=503, detail="MTProto не настроен. Используйте привязку чата.")
+
+    # Формируем название чата
+    chat_title = _build_chat_title(contract, card)
+
+    # Определяем фото
+    avatar_type = (contract.agent_type or '').lower()
+    if 'фестиваль' in avatar_type or 'festival' in avatar_type:
+        avatar_type = 'festival'
+    elif 'петрович' in avatar_type or 'petrovich' in avatar_type:
+        avatar_type = 'petrovich'
+    else:
+        avatar_type = 'festival'
+
+    photo_path = os.path.join(os.path.dirname(__file__), '..', 'resources', f'{avatar_type}_logo.png')
+    if not os.path.exists(photo_path):
+        photo_path = None
+
+    # Получаем username бота
+    bot_username = None
+    if tg.bot_available:
+        try:
+            bot_info = await tg._bot.get_me()
+            bot_username = bot_info.username
+        except Exception:
+            pass
+
+    # Создаём группу
+    result = await tg.create_group(
+        title=chat_title,
+        photo_path=photo_path,
+        bot_username=bot_username,
+    )
+
+    # Сохраняем в БД
+    chat = MessengerChat(
+        contract_id=contract.id,
+        crm_card_id=data.crm_card_id,
+        messenger_type=data.messenger_type,
+        telegram_chat_id=result["chat_id"],
+        chat_title=result["title"],
+        invite_link=result["invite_link"],
+        avatar_type=avatar_type,
+        creation_method="auto",
+        created_by=current_user.id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()
+
+    # Добавляем участников
+    members_resp = _add_chat_members(db, chat, data.members, contract, card)
+
+    db.commit()
+
+    # Рассылаем invite-ссылки асинхронно
+    asyncio.create_task(_send_invites_to_members(chat.id, db))
+
+    return MessengerChatDetailResponse(
+        chat=MessengerChatResponse.model_validate(chat),
+        members=members_resp
+    )
+
+
+@app.post("/api/messenger/chats/bind", response_model=MessengerChatDetailResponse)
+async def bind_messenger_chat(
+    data: MessengerChatBind,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Привязать существующий чат по invite-ссылке"""
+    # Проверка: уже есть активный чат
+    existing = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == data.crm_card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Чат для этой карточки уже существует")
+
+    card = db.query(CRMCard).filter(CRMCard.id == data.crm_card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    chat_title = _build_chat_title(contract, card)
+
+    # Определяем avatar_type
+    avatar_type = (contract.agent_type or '').lower()
+    if 'фестиваль' in avatar_type or 'festival' in avatar_type:
+        avatar_type = 'festival'
+    else:
+        avatar_type = 'petrovich'
+
+    # Пробуем получить chat_id через бота (бот должен быть в группе)
+    tg = get_telegram_service()
+    telegram_chat_id = None
+
+    if tg.bot_available:
+        resolved = await tg.resolve_invite_link(data.invite_link)
+        if resolved:
+            telegram_chat_id = resolved
+
+    chat = MessengerChat(
+        contract_id=contract.id,
+        crm_card_id=data.crm_card_id,
+        messenger_type=data.messenger_type,
+        telegram_chat_id=telegram_chat_id,
+        chat_title=chat_title,
+        invite_link=data.invite_link,
+        avatar_type=avatar_type,
+        creation_method="manual",
+        created_by=current_user.id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()
+
+    # Участники
+    members_resp = _add_chat_members(db, chat, data.members, contract, card)
+
+    db.commit()
+
+    # Рассылаем invite-ссылки
+    asyncio.create_task(_send_invites_to_members(chat.id, db))
+
+    return MessengerChatDetailResponse(
+        chat=MessengerChatResponse.model_validate(chat),
+        members=members_resp
+    )
+
+
+def _add_chat_members(
+    db: Session, chat: MessengerChat, members_input: list,
+    contract: Contract, card: CRMCard
+) -> list:
+    """Добавить участников в чат"""
+    members_resp = []
+
+    for m in members_input:
+        phone = None
+        email = None
+
+        if m.member_type == 'employee':
+            emp = db.query(Employee).filter(Employee.id == m.member_id).first()
+            if emp:
+                phone = emp.phone
+                email = emp.email
+        elif m.member_type == 'client':
+            cl = db.query(Client).filter(Client.id == m.member_id).first()
+            if cl:
+                phone = cl.phone
+                email = cl.email
+
+        member = MessengerChatMember(
+            messenger_chat_id=chat.id,
+            member_type=m.member_type,
+            member_id=m.member_id,
+            role_in_project=m.role_in_project,
+            is_mandatory=m.is_mandatory,
+            phone=phone,
+            email=email,
+            invite_status='pending',
+        )
+        db.add(member)
+        db.flush()
+        members_resp.append(ChatMemberResponse.model_validate(member))
+
+    return members_resp
+
+
+@app.get("/api/messenger/chats/by-card/{card_id}", response_model=MessengerChatDetailResponse)
+async def get_messenger_chat_by_card(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить чат по CRM-карточке"""
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+
+    members = db.query(MessengerChatMember).filter(
+        MessengerChatMember.messenger_chat_id == chat.id
+    ).all()
+
+    return MessengerChatDetailResponse(
+        chat=MessengerChatResponse.model_validate(chat),
+        members=[ChatMemberResponse.model_validate(m) for m in members]
+    )
+
+
+@app.delete("/api/messenger/chats/{chat_id}")
+async def delete_messenger_chat(
+    chat_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Удалить/отвязать чат"""
+    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+
+    tg = get_telegram_service()
+
+    # Если чат был создан автоматически — пробуем удалить группу
+    if chat.creation_method == 'auto' and chat.telegram_chat_id:
+        await tg.delete_group(chat.telegram_chat_id)
+    elif chat.telegram_chat_id and tg.bot_available:
+        # Для привязанного чата — бот просто покидает
+        await tg.leave_chat(chat.telegram_chat_id)
+
+    # Помечаем как неактивный
+    chat.is_active = False
+    db.commit()
+
+    return {"status": "deleted", "chat_id": chat_id}
+
+
+@app.post("/api/messenger/chats/{chat_id}/message")
+async def send_chat_message(
+    chat_id: int,
+    data: SendMessageRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить сообщение в чат"""
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.id == chat_id, MessengerChat.is_active == True
+    ).first()
+    if not chat or not chat.telegram_chat_id:
+        raise HTTPException(status_code=404, detail="Чат не найден или не привязан")
+
+    tg = get_telegram_service()
+    msg_id = await tg.send_message(chat.telegram_chat_id, data.text)
+
+    # Логируем
+    log = MessengerMessageLog(
+        messenger_chat_id=chat.id,
+        message_type='manual',
+        message_text=data.text,
+        sent_by=current_user.id,
+        telegram_message_id=msg_id,
+        delivery_status='sent' if msg_id else 'failed',
+    )
+    db.add(log)
+    db.commit()
+
+    return {"status": "sent" if msg_id else "failed", "telegram_message_id": msg_id}
+
+
+@app.post("/api/messenger/chats/{chat_id}/send-invites")
+async def send_chat_invites(
+    chat_id: int,
+    data: SendInvitesRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Разослать invite-ссылки участникам"""
+    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+
+    await _send_invites_to_members(chat.id, db)
+    return {"status": "invites_sent"}
+
+
+@app.post("/api/messenger/chats/{chat_id}/files")
+async def send_files_to_chat(
+    chat_id: int,
+    data: SendFilesRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить файлы в чат (с Яндекс.Диска)"""
+    import tempfile
+
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.id == chat_id, MessengerChat.is_active == True
+    ).first()
+    if not chat or not chat.telegram_chat_id:
+        raise HTTPException(status_code=404, detail="Чат не найден или не привязан")
+
+    tg = get_telegram_service()
+    yd = get_yandex_disk_service()
+    sent_ids = []
+
+    # Собираем Yandex пути: из file_ids + из прямых yandex_paths
+    yandex_files = []
+    for file_id in (data.file_ids or []):
+        pf = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
+        if pf and pf.yandex_path:
+            yandex_files.append({
+                "yandex_path": pf.yandex_path,
+                "file_name": pf.file_name or os.path.basename(pf.yandex_path),
+                "file_type": pf.file_type or "file",
+            })
+
+    for yp in (data.yandex_paths or []):
+        yandex_files.append({
+            "yandex_path": yp,
+            "file_name": os.path.basename(yp),
+            "file_type": "image" if any(yp.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']) else "file",
+        })
+
+    if not yandex_files:
+        raise HTTPException(status_code=400, detail="Нет файлов для отправки")
+
+    # Определяем тип отправки: галерея (изображения) или документы
+    image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+
+    if data.as_gallery:
+        # Отправка изображений галереей
+        images_for_gallery = []
+        docs_to_send = []
+
+        for yf in yandex_files:
+            ext = os.path.splitext(yf["file_name"])[1].lower()
+            if ext in image_exts:
+                images_for_gallery.append(yf)
+            else:
+                docs_to_send.append(yf)
+
+        # Скачиваем и отправляем изображения галереей
+        if images_for_gallery:
+            photo_bytes_list = []
+            for img in images_for_gallery[:10]:  # Telegram ограничение: 10 фото в галерее
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(img["file_name"])[1]) as tmp:
+                        yd.download_file(img["yandex_path"], tmp.name)
+                        with open(tmp.name, 'rb') as f:
+                            photo_bytes_list.append({
+                                "bytes": f.read(),
+                                "filename": img["file_name"],
+                            })
+                    os.unlink(tmp.name)
+                except Exception as e:
+                    logger.warning(f"Ошибка скачивания {img['yandex_path']}: {e}")
+
+            if photo_bytes_list:
+                msg_ids = await tg.send_media_group_from_bytes(
+                    chat.telegram_chat_id, photo_bytes_list, caption=data.caption
+                )
+                if msg_ids:
+                    sent_ids.extend(msg_ids)
+
+        # Документы отправляем отдельно
+        for doc in docs_to_send:
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(doc["file_name"])[1]) as tmp:
+                    yd.download_file(doc["yandex_path"], tmp.name)
+                    msg_id = await tg.send_document(
+                        chat.telegram_chat_id, tmp.name, caption=doc["file_name"]
+                    )
+                    if msg_id:
+                        sent_ids.append(msg_id)
+                os.unlink(tmp.name)
+            except Exception as e:
+                logger.warning(f"Ошибка отправки документа {doc['file_name']}: {e}")
+    else:
+        # Все файлы как документы (со ссылками)
+        links = []
+        for yf in yandex_files:
+            try:
+                public_link = yd.get_public_link(yf["yandex_path"])
+                links.append(f'<a href="{public_link}">{yf["file_name"]}</a>')
+            except Exception:
+                links.append(yf["file_name"])
+
+        if links:
+            text = data.caption + "\n\n" if data.caption else ""
+            text += "\n".join(links)
+            msg_id = await tg.send_message(chat.telegram_chat_id, text, parse_mode="HTML")
+            if msg_id:
+                sent_ids.append(msg_id)
+
+    # Логируем
+    file_names = [yf["file_name"] for yf in yandex_files]
+    log = MessengerMessageLog(
+        messenger_chat_id=chat.id,
+        message_type='files',
+        message_text=data.caption or "",
+        file_links=",".join(file_names),
+        sent_by=current_user.id,
+        telegram_message_id=sent_ids[0] if sent_ids else None,
+        delivery_status='sent' if sent_ids else 'failed',
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "status": "sent" if sent_ids else "failed",
+        "files_count": len(yandex_files),
+        "telegram_message_ids": sent_ids,
+    }
+
+
+# =========================
+# MESSENGER SCRIPTS ENDPOINTS
+# =========================
+
+@app.get("/api/messenger/scripts", response_model=list[MessengerScriptResponse])
+async def get_messenger_scripts(
+    project_type: str = None,
+    script_type: str = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить скрипты (с фильтрацией)"""
+    query = db.query(MessengerScript)
+    if project_type:
+        query = query.filter(
+            (MessengerScript.project_type == project_type) | (MessengerScript.project_type == None)
+        )
+    if script_type:
+        query = query.filter(MessengerScript.script_type == script_type)
+
+    scripts = query.order_by(MessengerScript.sort_order).all()
+    return [MessengerScriptResponse.model_validate(s) for s in scripts]
+
+
+@app.post("/api/messenger/scripts", response_model=MessengerScriptResponse)
+async def create_messenger_script(
+    data: MessengerScriptCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Создать скрипт"""
+    script = MessengerScript(**data.model_dump())
+    db.add(script)
+    db.commit()
+    db.refresh(script)
+    return MessengerScriptResponse.model_validate(script)
+
+
+@app.put("/api/messenger/scripts/{script_id}", response_model=MessengerScriptResponse)
+async def update_messenger_script(
+    script_id: int,
+    data: MessengerScriptUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Обновить скрипт"""
+    script = db.query(MessengerScript).filter(MessengerScript.id == script_id).first()
+    if not script:
+        raise HTTPException(status_code=404, detail="Скрипт не найден")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(script, key, value)
+    script.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(script)
+    return MessengerScriptResponse.model_validate(script)
+
+
+@app.delete("/api/messenger/scripts/{script_id}")
+async def delete_messenger_script(
+    script_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Удалить скрипт"""
+    script = db.query(MessengerScript).filter(MessengerScript.id == script_id).first()
+    if not script:
+        raise HTTPException(status_code=404, detail="Скрипт не найден")
+    db.delete(script)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.patch("/api/messenger/scripts/{script_id}/toggle")
+async def toggle_messenger_script(
+    script_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Включить/выключить скрипт"""
+    script = db.query(MessengerScript).filter(MessengerScript.id == script_id).first()
+    if not script:
+        raise HTTPException(status_code=404, detail="Скрипт не найден")
+    script.is_enabled = not script.is_enabled
+    script.updated_at = datetime.utcnow()
+    db.commit()
+    return {"id": script.id, "is_enabled": script.is_enabled}
+
+
+# =========================
+# MESSENGER SETTINGS ENDPOINTS
+# =========================
+
+@app.get("/api/messenger/settings", response_model=list[MessengerSettingResponse])
+async def get_messenger_settings(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить все настройки мессенджера"""
+    settings_list = db.query(MessengerSetting).all()
+    return [MessengerSettingResponse.model_validate(s) for s in settings_list]
+
+
+@app.put("/api/messenger/settings")
+async def update_messenger_settings(
+    data: MessengerSettingsBulkUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Обновить настройки мессенджера (массовое обновление)"""
+    for item in data.settings:
+        setting = db.query(MessengerSetting).filter(
+            MessengerSetting.setting_key == item.setting_key
+        ).first()
+        if setting:
+            setting.setting_value = item.setting_value
+            setting.updated_at = datetime.utcnow()
+            setting.updated_by = current_user.id
+        else:
+            setting = MessengerSetting(
+                setting_key=item.setting_key,
+                setting_value=item.setting_value,
+                updated_by=current_user.id,
+            )
+            db.add(setting)
+
+    db.commit()
+
+    # Переинициализируем сервисы с новыми настройками
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+
+    tg = get_telegram_service()
+    tg.configure(messenger_settings)
+
+    email_svc = get_email_service()
+    email_svc.configure(messenger_settings)
+
+    return {"status": "updated", "bot_available": tg.bot_available, "email_available": email_svc.available}
+
+
+@app.get("/api/messenger/status")
+async def get_messenger_status(
+    current_user: Employee = Depends(get_current_user),
+):
+    """Статус сервисов мессенджера"""
+    tg = get_telegram_service()
+    email_svc = get_email_service()
+    return {
+        "telegram_bot_available": tg.bot_available,
+        "telegram_mtproto_available": tg.mtproto_available,
+        "email_available": email_svc.available,
+    }
+
+
+# =========================
+# SYNC MESSENGER DATA
+# =========================
+
+@app.get("/api/sync/messenger-chats")
+async def sync_messenger_chats(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Синхронизация чатов"""
+    chats = db.query(MessengerChat).all()
+    return [{
+        'id': c.id,
+        'contract_id': c.contract_id,
+        'crm_card_id': c.crm_card_id,
+        'messenger_type': c.messenger_type,
+        'telegram_chat_id': c.telegram_chat_id,
+        'chat_title': c.chat_title,
+        'invite_link': c.invite_link,
+        'avatar_type': c.avatar_type,
+        'creation_method': c.creation_method,
+        'created_by': c.created_by,
+        'created_at': c.created_at.isoformat() if c.created_at else None,
+        'is_active': c.is_active,
+    } for c in chats]
+
+
+@app.get("/api/sync/messenger-scripts")
+async def sync_messenger_scripts(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Синхронизация скриптов"""
+    scripts = db.query(MessengerScript).all()
+    return [{
+        'id': s.id,
+        'script_type': s.script_type,
+        'project_type': s.project_type,
+        'stage_name': s.stage_name,
+        'message_template': s.message_template,
+        'use_auto_deadline': s.use_auto_deadline,
+        'is_enabled': s.is_enabled,
+        'sort_order': s.sort_order,
+        'created_at': s.created_at.isoformat() if s.created_at else None,
+        'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+    } for s in scripts]
 
 
 if __name__ == "__main__":
