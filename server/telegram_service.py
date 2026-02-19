@@ -360,11 +360,27 @@ class TelegramService:
             raise
 
     async def delete_group(self, chat_id: int) -> bool:
-        """Удалить группу через MTProto"""
+        """Удалить группу через MTProto: сначала кикнуть всех, потом удалить"""
         try:
             client = await self._get_pyrogram_client()
+
+            # Кикаем всех участников перед удалением
+            try:
+                me = await client.get_me()
+                my_id = me.id
+                async for member in client.get_chat_members(chat_id):
+                    if member.user.id == my_id:
+                        continue
+                    try:
+                        await client.ban_chat_member(chat_id, member.user.id)
+                        logger.debug(f"Кикнут участник {member.user.id} из {chat_id}")
+                    except Exception as kick_err:
+                        logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
+            except Exception as members_err:
+                logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
+
             await client.delete_supergroup(chat_id)
-            logger.info(f"Группа {chat_id} удалена")
+            logger.info(f"Группа {chat_id} удалена (участники исключены)")
             return True
         except Exception as e:
             logger.warning(f"Не удалось удалить группу {chat_id}: {e}")

@@ -33,6 +33,13 @@ class MessengerChatBind(BaseModel):
     members: List[ChatMemberInput] = []
 
 
+class SupervisionChatCreate(BaseModel):
+    """Создание чата для карточки надзора"""
+    supervision_card_id: int
+    messenger_type: str = "telegram"
+    members: List[ChatMemberInput] = []
+
+
 class MessengerChatResponse(BaseModel):
     """Ответ с данными чата"""
     id: int
