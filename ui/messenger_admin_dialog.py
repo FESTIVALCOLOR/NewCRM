@@ -448,7 +448,6 @@ class MessengerAdminDialog(QDialog):
             "QPushButton:hover { background-color: #42A5F5; }"
             "QPushButton:disabled { background-color: #e0e0e0; color: #999; border-color: #ccc; }"
         )
-        self._mtproto_sms_btn.setVisible(False)
         self._mtproto_sms_btn.clicked.connect(self._on_mtproto_resend_sms)
         btn_row.addWidget(self._mtproto_sms_btn)
 
@@ -960,7 +959,10 @@ class MessengerAdminDialog(QDialog):
                 self._mtproto_session_label.setStyleSheet(
                     "font-size: 11px; color: #4CAF50; font-weight: bold; border: none;"
                 )
+                # Показать поле ввода кода
+                self._mtproto_code_input.setVisible(True)
                 self._mtproto_code_input.setFocus()
+                self._mtproto_verify_btn.setVisible(True)
             else:
                 error = result.get("detail", result.get("error", "Ошибка"))
                 self._mtproto_session_label.setText(f"Ошибка SMS: {error}")

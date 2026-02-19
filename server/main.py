@@ -10184,7 +10184,7 @@ async def mtproto_resend_sms(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Переотправить код по SMS (после send-code)"""
+    """Отправить код сразу по SMS (send_code + resend_code за один вызов)"""
     if current_user.role not in ("admin", "director", "Руководитель студии"):
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
@@ -10195,14 +10195,9 @@ async def mtproto_resend_sms(
     tg = get_telegram_service()
     tg.configure(messenger_settings)
 
-    # Читаем phone_code_hash из БД (мог быть сохранён другим воркером)
-    current_hash = messenger_settings.get("telegram_phone_code_hash", "")
-    if not current_hash:
-        raise HTTPException(status_code=400, detail="Сначала нажмите «Запросить код»")
-
     try:
-        new_hash = await tg.resend_auth_code_sms(current_hash)
-        # Обновляем hash в БД
+        new_hash = await tg.send_auth_code_sms()
+        # Сохраняем hash в БД
         existing = db.query(MessengerSetting).filter_by(setting_key="telegram_phone_code_hash").first()
         if existing:
             existing.setting_value = new_hash
@@ -10211,7 +10206,7 @@ async def mtproto_resend_sms(
         db.commit()
         return {"status": "sms_sent", "phone": messenger_settings.get("telegram_phone", "")}
     except Exception as e:
-        logger.error(f"Ошибка переотправки кода по SMS: {e}")
+        logger.error(f"Ошибка отправки кода по SMS: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

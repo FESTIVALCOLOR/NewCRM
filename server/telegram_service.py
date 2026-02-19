@@ -159,16 +159,61 @@ class TelegramService:
         self._auth_phone_code_hash = phone_code_hash
         return client
 
-    async def resend_auth_code_sms(self, phone_code_hash: str) -> str:
-        """Переотправить код через SMS (next_type).
-        Принимает phone_code_hash из БД (для кросс-воркер доступа).
+    async def send_auth_code_sms(self) -> str:
+        """Отправить код сразу по SMS (send_code + resend_code в одном вызове).
+        Создаёт свежий клиент, отправляет код, моментально переключает на SMS.
         """
-        client = await self._get_or_restore_auth_client(phone_code_hash)
+        if not PYROGRAM_AVAILABLE:
+            raise RuntimeError("Pyrogram не установлен")
+        if not self._api_id or not self._api_hash or not self._phone:
+            raise RuntimeError("API ID, API Hash и телефон должны быть заполнены")
 
-        sent_code = await client.resend_code(self._phone, phone_code_hash)
-        logger.info(f"Код переотправлен на {self._phone}, тип: {sent_code.type}")
-        self._auth_phone_code_hash = sent_code.phone_code_hash
-        return sent_code.phone_code_hash
+        # Закрыть предыдущий auth-клиент
+        if hasattr(self, '_auth_client') and self._auth_client:
+            try:
+                if self._auth_client.is_connected:
+                    await self._auth_client.disconnect()
+            except Exception:
+                pass
+            self._auth_client = None
+
+        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
+        session_file = session_path + ".session"
+        if os.path.exists(session_file):
+            try:
+                os.remove(session_file)
+            except Exception:
+                pass
+
+        client = PyrogramClient(
+            session_path,
+            api_id=self._api_id,
+            api_hash=self._api_hash,
+        )
+        await client.connect()
+
+        # Шаг 1: send_code — Telegram отправит код в приложение
+        sent_code = await client.send_code(self._phone)
+        logger.info(f"send_code: тип={sent_code.type}, next_type={getattr(sent_code, 'next_type', 'N/A')}")
+
+        # Шаг 2: сразу resend_code — переключить на SMS
+        try:
+            resent = await client.resend_code(self._phone, sent_code.phone_code_hash)
+            final_hash = resent.phone_code_hash
+            logger.info(f"resend_code (SMS): тип={resent.type}")
+        except Exception as e:
+            logger.warning(f"resend_code не удался ({e}), используем код из приложения")
+            final_hash = sent_code.phone_code_hash
+
+        # Сохраняем сессию на диск
+        try:
+            await client.storage.save()
+        except Exception:
+            pass
+
+        self._auth_client = client
+        self._auth_phone_code_hash = final_hash
+        return final_hash
 
     async def verify_auth_code(self, phone_code_hash: str, code: str) -> Dict[str, Any]:
         """Подтвердить код и завершить авторизацию MTProto.
