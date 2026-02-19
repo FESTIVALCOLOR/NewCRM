@@ -87,7 +87,8 @@ class TelegramService:
 
     async def send_auth_code(self) -> str:
         """Отправить код подтверждения для MTProto авторизации.
-        Клиент остаётся подключённым до verify_auth_code().
+        Клиент остаётся подключённым до verify/resend.
+        Сессия сохраняется на диск для доступа с другого воркера.
         Возвращает phone_code_hash.
         """
         if not PYROGRAM_AVAILABLE:
@@ -122,19 +123,47 @@ class TelegramService:
         await client.connect()
         sent_code = await client.send_code(self._phone)
         logger.info(f"Код подтверждения отправлен на {self._phone}, тип: {sent_code.type}")
+
+        # Сохраняем сессию на диск (для доступа другим воркером)
+        try:
+            await client.storage.save()
+            logger.info("Сессия сохранена на диск")
+        except Exception as e:
+            logger.warning(f"Не удалось сохранить сессию: {e}")
+
         # Сохраняем клиент живым — нужен для verify_auth_code / resend
         self._auth_client = client
         self._auth_phone_code_hash = sent_code.phone_code_hash
         return sent_code.phone_code_hash
 
-    async def resend_auth_code_sms(self) -> str:
-        """Переотправить код через SMS (next_type).
-        Использует живой клиент из send_auth_code().
-        """
+    async def _get_or_restore_auth_client(self, phone_code_hash: str):
+        """Получить живой auth-клиент или восстановить из файла сессии."""
         client = getattr(self, '_auth_client', None)
-        phone_code_hash = getattr(self, '_auth_phone_code_hash', None)
-        if not client or not client.is_connected or not phone_code_hash:
-            raise RuntimeError("Сначала нажмите «Запросить код»")
+        if client and client.is_connected:
+            return client
+
+        # Восстановление: другой воркер — загружаем сессию с диска
+        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
+        session_file = session_path + ".session"
+        if not os.path.exists(session_file):
+            raise RuntimeError("Нет файла сессии. Нажмите «Запросить код» заново.")
+
+        logger.info("Восстановление auth-клиента из файла сессии (другой воркер)")
+        client = PyrogramClient(
+            session_path,
+            api_id=self._api_id,
+            api_hash=self._api_hash,
+        )
+        await client.connect()
+        self._auth_client = client
+        self._auth_phone_code_hash = phone_code_hash
+        return client
+
+    async def resend_auth_code_sms(self, phone_code_hash: str) -> str:
+        """Переотправить код через SMS (next_type).
+        Принимает phone_code_hash из БД (для кросс-воркер доступа).
+        """
+        client = await self._get_or_restore_auth_client(phone_code_hash)
 
         sent_code = await client.resend_code(self._phone, phone_code_hash)
         logger.info(f"Код переотправлен на {self._phone}, тип: {sent_code.type}")
@@ -143,16 +172,12 @@ class TelegramService:
 
     async def verify_auth_code(self, phone_code_hash: str, code: str) -> Dict[str, Any]:
         """Подтвердить код и завершить авторизацию MTProto.
-        Использует клиент, созданный в send_auth_code().
+        Использует живой клиент или восстанавливает из файла сессии.
         """
         if not PYROGRAM_AVAILABLE:
             raise RuntimeError("Pyrogram не установлен")
 
-        client = getattr(self, '_auth_client', None)
-        if not client or not client.is_connected:
-            raise RuntimeError(
-                "Нет активного соединения. Нажмите «Запросить код» заново."
-            )
+        client = await self._get_or_restore_auth_client(phone_code_hash)
 
         try:
             await client.sign_in(self._phone, phone_code_hash, code)

@@ -10195,14 +10195,19 @@ async def mtproto_resend_sms(
     tg = get_telegram_service()
     tg.configure(messenger_settings)
 
+    # Читаем phone_code_hash из БД (мог быть сохранён другим воркером)
+    current_hash = messenger_settings.get("telegram_phone_code_hash", "")
+    if not current_hash:
+        raise HTTPException(status_code=400, detail="Сначала нажмите «Запросить код»")
+
     try:
-        phone_code_hash = await tg.resend_auth_code_sms()
+        new_hash = await tg.resend_auth_code_sms(current_hash)
         # Обновляем hash в БД
         existing = db.query(MessengerSetting).filter_by(setting_key="telegram_phone_code_hash").first()
         if existing:
-            existing.setting_value = phone_code_hash
+            existing.setting_value = new_hash
         else:
-            db.add(MessengerSetting(setting_key="telegram_phone_code_hash", setting_value=phone_code_hash))
+            db.add(MessengerSetting(setting_key="telegram_phone_code_hash", setting_value=new_hash))
         db.commit()
         return {"status": "sms_sent", "phone": messenger_settings.get("telegram_phone", "")}
     except Exception as e:
