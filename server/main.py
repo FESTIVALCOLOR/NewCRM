@@ -75,7 +75,8 @@ from schemas import (
     SupervisionTimelineCreate, SupervisionTimelineUpdate, SupervisionTimelineResponse
 )
 from messenger_schemas import (
-    MessengerChatCreate, MessengerChatBind, MessengerChatResponse, MessengerChatDetailResponse,
+    MessengerChatCreate, MessengerChatBind, SupervisionChatCreate,
+    MessengerChatResponse, MessengerChatDetailResponse,
     ChatMemberInput, ChatMemberResponse,
     MessengerScriptCreate, MessengerScriptUpdate, MessengerScriptResponse,
     MessengerSettingUpdate, MessengerSettingResponse, MessengerSettingsBulkUpdate,
@@ -427,6 +428,22 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный логин или пароль",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Проверка: уволенный сотрудник не может войти
+    if employee.status != 'активный':
+        _login_attempts[client_ip].append(now)
+        failed_log = ActivityLog(
+            employee_id=employee.id,
+            action_type="login_denied_inactive",
+            entity_type="auth",
+            entity_id=0
+        )
+        db.add(failed_log)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Учётная запись деактивирована. Обратитесь к администратору.",
         )
     # Успешный вход — очищаем счётчик
     _login_attempts.pop(client_ip, None)
@@ -9760,6 +9777,162 @@ async def get_messenger_chat_by_card(
     return MessengerChatDetailResponse(
         chat=MessengerChatResponse.model_validate(chat),
         members=[ChatMemberResponse.model_validate(m) for m in members]
+    )
+
+
+@app.get("/api/messenger/chats/by-supervision/{supervision_card_id}", response_model=MessengerChatDetailResponse)
+async def get_messenger_chat_by_supervision(
+    supervision_card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить чат по карточке надзора"""
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.supervision_card_id == supervision_card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+
+    members = db.query(MessengerChatMember).filter(
+        MessengerChatMember.messenger_chat_id == chat.id
+    ).all()
+
+    return MessengerChatDetailResponse(
+        chat=MessengerChatResponse.model_validate(chat),
+        members=[ChatMemberResponse.model_validate(m) for m in members]
+    )
+
+
+@app.post("/api/messenger/chats/supervision", response_model=MessengerChatDetailResponse)
+async def create_supervision_chat(
+    data: SupervisionChatCreate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Создать чат автоматически (MTProto) для карточки надзора"""
+    # Перечитываем настройки
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+    tg_svc = get_telegram_service()
+    tg_svc.configure(messenger_settings)
+
+    # Проверка: уже есть активный чат
+    existing = db.query(MessengerChat).filter(
+        MessengerChat.supervision_card_id == data.supervision_card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Чат для этой карточки надзора уже существует")
+
+    # Получаем карточку надзора и контракт
+    sv_card = db.query(SupervisionCard).filter(SupervisionCard.id == data.supervision_card_id).first()
+    if not sv_card:
+        raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
+    contract = db.query(Contract).filter(Contract.id == sv_card.contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    tg = get_telegram_service()
+    if not tg.mtproto_available:
+        raise HTTPException(status_code=503, detail="MTProto не настроен")
+
+    # Формируем название чата: АН-Город-Адрес
+    city = (contract.city or '').replace('_', '-')
+    address = (contract.address or '').replace('_', '-')
+    if city and address:
+        city_map = {'спб': 'санкт-петербург', 'мск': 'москва', 'нск': 'новосибирск', 'екб': 'екатеринбург'}
+        full_city = city_map.get(city.lower(), city.lower())
+        addr_check = address.lower().replace('_', '-')
+        for c in [full_city, city.lower()]:
+            if addr_check.startswith(c):
+                address = address[len(c):].lstrip('.,;:_ -')
+                break
+    chat_title = f"АН-{city}-{address}"
+
+    # Определяем фото
+    avatar_type = (contract.agent_type or '').lower()
+    if 'фестиваль' in avatar_type or 'festival' in avatar_type:
+        avatar_type = 'festival'
+    elif 'петрович' in avatar_type or 'petrovich' in avatar_type:
+        avatar_type = 'petrovich'
+    else:
+        avatar_type = 'festival'
+
+    photo_path = os.path.join(os.path.dirname(__file__), '..', 'resources', f'{avatar_type}_logo.png')
+    if not os.path.exists(photo_path):
+        photo_path = None
+
+    # Получаем username бота
+    bot_username = None
+    if tg.bot_available:
+        try:
+            bot_info = await tg._bot.get_me()
+            bot_username = bot_info.username
+        except Exception:
+            pass
+
+    # Создаём группу
+    result = await tg.create_group(
+        title=chat_title,
+        photo_path=photo_path,
+        bot_username=bot_username,
+    )
+
+    # Сохраняем в БД
+    chat = MessengerChat(
+        contract_id=contract.id,
+        supervision_card_id=data.supervision_card_id,
+        messenger_type=data.messenger_type,
+        telegram_chat_id=result["chat_id"],
+        chat_title=result["title"],
+        invite_link=result["invite_link"],
+        avatar_type=avatar_type,
+        creation_method="auto",
+        created_by=current_user.id,
+        is_active=True,
+    )
+    db.add(chat)
+    db.flush()
+
+    # Добавляем участников
+    members_resp = []
+    for m in data.members:
+        phone = None
+        email = None
+        if m.member_type == 'employee':
+            emp = db.query(Employee).filter(Employee.id == m.member_id).first()
+            if emp:
+                phone = emp.phone
+                email = emp.email
+        elif m.member_type == 'client':
+            cl = db.query(Client).filter(Client.id == m.member_id).first()
+            if cl:
+                phone = cl.phone
+                email = cl.email
+        member = MessengerChatMember(
+            messenger_chat_id=chat.id,
+            member_type=m.member_type,
+            member_id=m.member_id,
+            role_in_project=m.role_in_project,
+            is_mandatory=m.is_mandatory,
+            phone=phone,
+            email=email,
+            invite_status='pending',
+        )
+        db.add(member)
+        db.flush()
+        members_resp.append(ChatMemberResponse.model_validate(member))
+
+    db.commit()
+
+    # Рассылаем invite-ссылки
+    asyncio.create_task(_send_invites_to_members(chat.id, db))
+
+    return MessengerChatDetailResponse(
+        chat=MessengerChatResponse.model_validate(chat),
+        members=members_resp
     )
 
 
