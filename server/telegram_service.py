@@ -87,46 +87,66 @@ class TelegramService:
 
     async def send_auth_code(self) -> str:
         """Отправить код подтверждения для MTProto авторизации.
-        Возвращает phone_code_hash для последующего verify_auth_code().
+        Клиент остаётся подключённым до verify_auth_code().
+        Возвращает phone_code_hash.
         """
         if not PYROGRAM_AVAILABLE:
             raise RuntimeError("Pyrogram не установлен")
         if not self._api_id or not self._api_hash or not self._phone:
             raise RuntimeError("API ID, API Hash и телефон должны быть заполнены")
 
+        # Закрыть предыдущий auth-клиент если был
+        if hasattr(self, '_auth_client') and self._auth_client:
+            try:
+                if self._auth_client.is_connected:
+                    await self._auth_client.disconnect()
+            except Exception:
+                pass
+            self._auth_client = None
+
         session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
+        # Удаляем старый невалидный файл сессии если есть
+        session_file = session_path + ".session"
+        if os.path.exists(session_file):
+            try:
+                os.remove(session_file)
+                logger.info("Удалён старый файл сессии")
+            except Exception:
+                pass
+
         client = PyrogramClient(
             session_path,
             api_id=self._api_id,
             api_hash=self._api_hash,
         )
         await client.connect()
-        try:
-            sent_code = await client.send_code(self._phone)
-            logger.info(f"Код подтверждения отправлен на {self._phone}")
-            return sent_code.phone_code_hash
-        finally:
-            await client.disconnect()
+        sent_code = await client.send_code(self._phone)
+        logger.info(f"Код подтверждения отправлен на {self._phone}, тип: {sent_code.type}")
+        # Сохраняем клиент живым — нужен для verify_auth_code
+        self._auth_client = client
+        return sent_code.phone_code_hash
 
     async def verify_auth_code(self, phone_code_hash: str, code: str) -> Dict[str, Any]:
         """Подтвердить код и завершить авторизацию MTProto.
-        Возвращает информацию о пользователе.
+        Использует клиент, созданный в send_auth_code().
         """
         if not PYROGRAM_AVAILABLE:
             raise RuntimeError("Pyrogram не установлен")
 
-        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
-        client = PyrogramClient(
-            session_path,
-            api_id=self._api_id,
-            api_hash=self._api_hash,
-        )
-        await client.connect()
+        client = getattr(self, '_auth_client', None)
+        if not client or not client.is_connected:
+            raise RuntimeError(
+                "Нет активного соединения. Нажмите «Запросить код» заново."
+            )
+
         try:
             await client.sign_in(self._phone, phone_code_hash, code)
             me = await client.get_me()
             logger.info(f"MTProto авторизация успешна: {me.first_name} (@{me.username or 'N/A'})")
-            # Сбросить кэшированный клиент — при следующем вызове будет создан с сессией
+            # stop() сохраняет сессию на диск
+            await client.stop()
+            self._auth_client = None
+            # Сбросить кэшированный рабочий клиент
             self._pyrogram_client = None
             return {
                 "first_name": me.first_name or "",
@@ -134,10 +154,16 @@ class TelegramService:
                 "username": me.username or "",
             }
         except SessionPasswordNeeded:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            self._auth_client = None
             raise RuntimeError("Аккаунт защищён двухфакторной аутентификацией (2FA). "
                                "Отключите облачный пароль в Telegram и повторите.")
-        finally:
-            await client.disconnect()
+        except Exception:
+            # Не закрываем клиент — пусть пользователь попробует другой код
+            raise
 
     async def check_session_valid(self) -> Dict[str, Any]:
         """Проверить, есть ли валидная Pyrogram-сессия.
