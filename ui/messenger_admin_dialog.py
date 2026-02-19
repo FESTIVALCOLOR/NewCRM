@@ -384,6 +384,72 @@ class MessengerAdminDialog(QDialog):
         sf_layout.addWidget(self._tg_status)
         layout.addWidget(status_frame)
 
+        # Секция активации MTProto
+        mtproto_frame = QFrame()
+        mtproto_frame.setStyleSheet(
+            "QFrame { background-color: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; }"
+        )
+        mf_layout = QVBoxLayout(mtproto_frame)
+        mf_layout.setContentsMargins(10, 8, 10, 8)
+        mf_layout.setSpacing(6)
+
+        mf_title = QLabel("Активация MTProto (автосоздание групп)")
+        mf_title.setStyleSheet("font-weight: bold; font-size: 12px; color: #333; border: none;")
+        mf_layout.addWidget(mf_title)
+
+        mf_desc = QLabel(
+            "Для автоматического создания Telegram-групп нужна авторизация.\n"
+            "Нажмите «Запросить код» — на телефон придёт код из Telegram."
+        )
+        mf_desc.setStyleSheet("font-size: 11px; color: #666; border: none;")
+        mf_desc.setWordWrap(True)
+        mf_layout.addWidget(mf_desc)
+
+        # Кнопка "Запросить код"
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        self._mtproto_send_btn = QPushButton("Запросить код")
+        self._mtproto_send_btn.setFixedHeight(34)
+        self._mtproto_send_btn.setStyleSheet(
+            "QPushButton { background-color: #ffd93c; border: 1px solid #e6c200; border-radius: 6px; "
+            "font-size: 12px; font-weight: bold; padding: 0 16px; }"
+            "QPushButton:hover { background-color: #ffe566; }"
+            "QPushButton:disabled { background-color: #e0e0e0; color: #999; border-color: #ccc; }"
+        )
+        self._mtproto_send_btn.clicked.connect(self._on_mtproto_send_code)
+        btn_row.addWidget(self._mtproto_send_btn)
+
+        # Поле ввода кода + кнопка подтвердить (скрыты)
+        self._mtproto_code_input = QLineEdit()
+        self._mtproto_code_input.setPlaceholderText("Код из Telegram")
+        self._mtproto_code_input.setFixedWidth(140)
+        self._mtproto_code_input.setStyleSheet(_INPUT_STYLE)
+        self._mtproto_code_input.setVisible(False)
+        btn_row.addWidget(self._mtproto_code_input)
+
+        self._mtproto_verify_btn = QPushButton("Подтвердить")
+        self._mtproto_verify_btn.setFixedHeight(34)
+        self._mtproto_verify_btn.setStyleSheet(
+            "QPushButton { background-color: #4CAF50; border: 1px solid #388E3C; border-radius: 6px; "
+            "font-size: 12px; font-weight: bold; color: white; padding: 0 16px; }"
+            "QPushButton:hover { background-color: #66BB6A; }"
+            "QPushButton:disabled { background-color: #e0e0e0; color: #999; border-color: #ccc; }"
+        )
+        self._mtproto_verify_btn.setVisible(False)
+        self._mtproto_verify_btn.clicked.connect(self._on_mtproto_verify_code)
+        btn_row.addWidget(self._mtproto_verify_btn)
+
+        btn_row.addStretch()
+        mf_layout.addLayout(btn_row)
+
+        # Статус MTProto сессии
+        self._mtproto_session_label = QLabel("")
+        self._mtproto_session_label.setStyleSheet("font-size: 11px; color: #666; border: none;")
+        self._mtproto_session_label.setWordWrap(True)
+        mf_layout.addWidget(self._mtproto_session_label)
+
+        layout.addWidget(mtproto_frame)
+
         layout.addStretch()
         return tab
 
@@ -758,6 +824,37 @@ class MessengerAdminDialog(QDialog):
                 f"font-size: 12px; color: {'#4CAF50' if email_ok else '#F44336'}; border: none;"
             )
 
+            # Проверка MTProto-сессии
+            try:
+                session_info = {}
+                if self.data_access:
+                    session_info = self.data_access.mtproto_session_status()
+                elif self.api_client:
+                    session_info = self.api_client.mtproto_session_status()
+
+                if session_info.get("valid"):
+                    name = session_info.get("first_name", "")
+                    username = session_info.get("username", "")
+                    self._mtproto_session_label.setText(
+                        f"Сессия активна: {name}"
+                        + (f" (@{username})" if username else "")
+                    )
+                    self._mtproto_session_label.setStyleSheet(
+                        "font-size: 11px; color: #4CAF50; font-weight: bold; border: none;"
+                    )
+                else:
+                    if mtproto_ok:
+                        self._mtproto_session_label.setText(
+                            "Настройки заполнены, но сессия не активирована"
+                        )
+                        self._mtproto_session_label.setStyleSheet(
+                            "font-size: 11px; color: #FF9800; border: none;"
+                        )
+                    else:
+                        self._mtproto_session_label.setText("")
+            except Exception:
+                pass
+
             # Общий статус
             parts = []
             if bot_ok:
@@ -773,6 +870,121 @@ class MessengerAdminDialog(QDialog):
             logger.warning(f"Ошибка загрузки статуса: {e}")
             self._tg_status.setText("Статус: ошибка загрузки")
             self._email_status.setText("Статус: ошибка загрузки")
+
+    # ================================================================
+    # MTProto авторизация
+    # ================================================================
+
+    def _on_mtproto_send_code(self):
+        """Шаг 1: Запросить код подтверждения"""
+        self._mtproto_send_btn.setEnabled(False)
+        self._mtproto_send_btn.setText("Отправка...")
+        self._mtproto_session_label.setText("")
+
+        try:
+            result = {}
+            if self.data_access:
+                result = self.data_access.mtproto_send_code()
+            elif self.api_client:
+                result = self.api_client.mtproto_send_code()
+
+            if result.get("status") == "code_sent":
+                phone = result.get("phone", "")
+                self._mtproto_session_label.setText(
+                    f"Код отправлен на {phone}. Введите код из Telegram."
+                )
+                self._mtproto_session_label.setStyleSheet(
+                    "font-size: 11px; color: #4CAF50; border: none;"
+                )
+                # Показать поле ввода кода
+                self._mtproto_code_input.setVisible(True)
+                self._mtproto_code_input.setFocus()
+                self._mtproto_verify_btn.setVisible(True)
+                self._mtproto_send_btn.setText("Отправить повторно")
+                self._mtproto_send_btn.setEnabled(True)
+            else:
+                error = result.get("detail", result.get("error", "Неизвестная ошибка"))
+                self._mtproto_session_label.setText(f"Ошибка: {error}")
+                self._mtproto_session_label.setStyleSheet(
+                    "font-size: 11px; color: #F44336; border: none;"
+                )
+                self._mtproto_send_btn.setText("Запросить код")
+                self._mtproto_send_btn.setEnabled(True)
+        except Exception as e:
+            error_msg = str(e)
+            # Извлечь detail из ответа API если есть
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_msg = e.response.json().get("detail", error_msg)
+                except Exception:
+                    pass
+            self._mtproto_session_label.setText(f"Ошибка: {error_msg}")
+            self._mtproto_session_label.setStyleSheet(
+                "font-size: 11px; color: #F44336; border: none;"
+            )
+            self._mtproto_send_btn.setText("Запросить код")
+            self._mtproto_send_btn.setEnabled(True)
+
+    def _on_mtproto_verify_code(self):
+        """Шаг 2: Подтвердить код"""
+        code = self._mtproto_code_input.text().strip()
+        if not code:
+            self._mtproto_session_label.setText("Введите код подтверждения")
+            self._mtproto_session_label.setStyleSheet(
+                "font-size: 11px; color: #F44336; border: none;"
+            )
+            return
+
+        self._mtproto_verify_btn.setEnabled(False)
+        self._mtproto_verify_btn.setText("Проверка...")
+        self._mtproto_session_label.setText("")
+
+        try:
+            result = {}
+            if self.data_access:
+                result = self.data_access.mtproto_verify_code(code)
+            elif self.api_client:
+                result = self.api_client.mtproto_verify_code(code)
+
+            if result.get("status") == "success":
+                user_info = result.get("user", {})
+                name = user_info.get("first_name", "")
+                username = user_info.get("username", "")
+                self._mtproto_session_label.setText(
+                    f"MTProto активирован! Авторизован как: {name}"
+                    + (f" (@{username})" if username else "")
+                )
+                self._mtproto_session_label.setStyleSheet(
+                    "font-size: 11px; color: #4CAF50; font-weight: bold; border: none;"
+                )
+                # Скрыть поле ввода
+                self._mtproto_code_input.setVisible(False)
+                self._mtproto_verify_btn.setVisible(False)
+                self._mtproto_send_btn.setText("Запросить код")
+                self._mtproto_send_btn.setEnabled(True)
+                # Обновить статусы
+                self._load_status()
+            else:
+                error = result.get("detail", result.get("error", "Неверный код"))
+                self._mtproto_session_label.setText(f"Ошибка: {error}")
+                self._mtproto_session_label.setStyleSheet(
+                    "font-size: 11px; color: #F44336; border: none;"
+                )
+                self._mtproto_verify_btn.setText("Подтвердить")
+                self._mtproto_verify_btn.setEnabled(True)
+        except Exception as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_msg = e.response.json().get("detail", error_msg)
+                except Exception:
+                    pass
+            self._mtproto_session_label.setText(f"Ошибка: {error_msg}")
+            self._mtproto_session_label.setStyleSheet(
+                "font-size: 11px; color: #F44336; border: none;"
+            )
+            self._mtproto_verify_btn.setText("Подтвердить")
+            self._mtproto_verify_btn.setEnabled(True)
 
     # ================================================================
     # Скрипты — UI

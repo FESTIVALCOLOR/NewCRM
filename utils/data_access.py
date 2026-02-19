@@ -1043,3 +1043,21 @@ class DataAccess(QObject):
             except Exception:
                 pass
         return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}
+
+    def mtproto_send_code(self) -> Dict:
+        """Шаг 1: Отправить код подтверждения для MTProto"""
+        if self.api_client:
+            return self.api_client.mtproto_send_code()
+        return {"error": "API не доступен"}
+
+    def mtproto_verify_code(self, code: str) -> Dict:
+        """Шаг 2: Подтвердить код MTProto"""
+        if self.api_client:
+            return self.api_client.mtproto_verify_code(code)
+        return {"error": "API не доступен"}
+
+    def mtproto_session_status(self) -> Dict:
+        """Проверить статус MTProto сессии"""
+        if self.api_client:
+            return self.api_client.mtproto_session_status()
+        return {"valid": False}

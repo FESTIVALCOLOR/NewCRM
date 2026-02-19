@@ -82,7 +82,7 @@ from messenger_schemas import (
     SendMessageRequest, SendFilesRequest, SendScriptMessageRequest, MessageLogResponse,
     SendInvitesRequest
 )
-from telegram_service import get_telegram_service, TelegramService
+from telegram_service import get_telegram_service, TelegramService, PYROGRAM_AVAILABLE
 from email_service import get_email_service, EmailService
 from auth import (
     verify_password, get_password_hash, create_access_token,
@@ -10133,6 +10133,115 @@ async def get_messenger_status(
         "telegram_mtproto_available": tg.mtproto_available,
         "email_available": email_svc.available,
     }
+
+
+# =========================
+# MESSENGER MTPROTO AUTHORIZATION
+# =========================
+
+@app.post("/api/messenger/mtproto/send-code")
+async def mtproto_send_code(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Шаг 1: Отправить код подтверждения на телефон для MTProto авторизации"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Только администратор")
+
+    # Перечитываем настройки из БД
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+
+    tg = get_telegram_service()
+    tg.configure(messenger_settings)
+
+    if not PYROGRAM_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Pyrogram не установлен на сервере")
+
+    if not messenger_settings.get("telegram_api_id") or not messenger_settings.get("telegram_api_hash"):
+        raise HTTPException(status_code=400, detail="API ID и API Hash не заполнены")
+    if not messenger_settings.get("telegram_phone"):
+        raise HTTPException(status_code=400, detail="Телефон не указан")
+
+    try:
+        phone_code_hash = await tg.send_auth_code()
+        # Сохраняем hash в БД чтобы любой воркер мог его прочитать
+        existing = db.query(MessengerSetting).filter_by(setting_key="telegram_phone_code_hash").first()
+        if existing:
+            existing.setting_value = phone_code_hash
+        else:
+            db.add(MessengerSetting(setting_key="telegram_phone_code_hash", setting_value=phone_code_hash))
+        db.commit()
+        return {"status": "code_sent", "phone": messenger_settings["telegram_phone"]}
+    except Exception as e:
+        logger.error(f"Ошибка отправки кода MTProto: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/messenger/mtproto/verify-code")
+async def mtproto_verify_code(
+    data: dict,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Шаг 2: Подтвердить код и активировать MTProto сессию"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Только администратор")
+
+    code = str(data.get("code", "")).strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Код не указан")
+
+    # Перечитываем настройки и hash из БД
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+
+    phone_code_hash = messenger_settings.get("telegram_phone_code_hash", "")
+    if not phone_code_hash:
+        raise HTTPException(status_code=400, detail="Сначала запросите код через send-code")
+
+    tg = get_telegram_service()
+    tg.configure(messenger_settings)
+
+    try:
+        user_info = await tg.verify_auth_code(phone_code_hash, code)
+        # Удаляем hash — больше не нужен
+        hash_row = db.query(MessengerSetting).filter_by(setting_key="telegram_phone_code_hash").first()
+        if hash_row:
+            db.delete(hash_row)
+            db.commit()
+        return {"status": "success", "user": user_info}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Ошибка верификации MTProto: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/messenger/mtproto/session-status")
+async def mtproto_session_status(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Проверить статус Pyrogram-сессии"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Только администратор")
+
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+
+    tg = get_telegram_service()
+    tg.configure(messenger_settings)
+
+    try:
+        result = await tg.check_session_valid()
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка проверки MTProto сессии: {e}")
+        return {"valid": False, "error": str(e)}
 
 
 # =========================

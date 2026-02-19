@@ -19,7 +19,7 @@ try:
     from pyrogram.types import ChatPhoto
     from pyrogram.errors import (
         FloodWait, UserNotParticipant, ChatAdminRequired,
-        PeerIdInvalid, PhoneNumberInvalid
+        PeerIdInvalid, PhoneNumberInvalid, SessionPasswordNeeded
     )
     PYROGRAM_AVAILABLE = True
 except ImportError:
@@ -80,6 +80,99 @@ class TelegramService:
             and bool(self._api_hash)
             and bool(self._phone)
         )
+
+    # ========================================
+    # MTProto — авторизация (Pyrogram)
+    # ========================================
+
+    async def send_auth_code(self) -> str:
+        """Отправить код подтверждения для MTProto авторизации.
+        Возвращает phone_code_hash для последующего verify_auth_code().
+        """
+        if not PYROGRAM_AVAILABLE:
+            raise RuntimeError("Pyrogram не установлен")
+        if not self._api_id or not self._api_hash or not self._phone:
+            raise RuntimeError("API ID, API Hash и телефон должны быть заполнены")
+
+        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
+        client = PyrogramClient(
+            session_path,
+            api_id=self._api_id,
+            api_hash=self._api_hash,
+        )
+        await client.connect()
+        try:
+            sent_code = await client.send_code(self._phone)
+            logger.info(f"Код подтверждения отправлен на {self._phone}")
+            return sent_code.phone_code_hash
+        finally:
+            await client.disconnect()
+
+    async def verify_auth_code(self, phone_code_hash: str, code: str) -> Dict[str, Any]:
+        """Подтвердить код и завершить авторизацию MTProto.
+        Возвращает информацию о пользователе.
+        """
+        if not PYROGRAM_AVAILABLE:
+            raise RuntimeError("Pyrogram не установлен")
+
+        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
+        client = PyrogramClient(
+            session_path,
+            api_id=self._api_id,
+            api_hash=self._api_hash,
+        )
+        await client.connect()
+        try:
+            await client.sign_in(self._phone, phone_code_hash, code)
+            me = await client.get_me()
+            logger.info(f"MTProto авторизация успешна: {me.first_name} (@{me.username or 'N/A'})")
+            # Сбросить кэшированный клиент — при следующем вызове будет создан с сессией
+            self._pyrogram_client = None
+            return {
+                "first_name": me.first_name or "",
+                "last_name": me.last_name or "",
+                "username": me.username or "",
+            }
+        except SessionPasswordNeeded:
+            raise RuntimeError("Аккаунт защищён двухфакторной аутентификацией (2FA). "
+                               "Отключите облачный пароль в Telegram и повторите.")
+        finally:
+            await client.disconnect()
+
+    async def check_session_valid(self) -> Dict[str, Any]:
+        """Проверить, есть ли валидная Pyrogram-сессия.
+        Возвращает info о пользователе или None.
+        """
+        if not PYROGRAM_AVAILABLE or not self._api_id or not self._api_hash:
+            return {"valid": False}
+
+        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
+        session_file = session_path + ".session"
+        if not os.path.exists(session_file):
+            return {"valid": False}
+
+        client = PyrogramClient(
+            session_path,
+            api_id=self._api_id,
+            api_hash=self._api_hash,
+        )
+        try:
+            await client.connect()
+            me = await client.get_me()
+            await client.disconnect()
+            return {
+                "valid": True,
+                "first_name": me.first_name or "",
+                "last_name": me.last_name or "",
+                "username": me.username or "",
+            }
+        except Exception as e:
+            logger.warning(f"Сессия невалидна: {e}")
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            return {"valid": False}
 
     # ========================================
     # MTProto — создание групп (Pyrogram)

@@ -3328,4 +3328,22 @@ class APIClient:
         except Exception:
             return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}
 
+    def mtproto_send_code(self) -> Dict[str, Any]:
+        """Шаг 1: Отправить код подтверждения для MTProto"""
+        response = self._request('POST', f"{self.base_url}/api/messenger/mtproto/send-code")
+        return self._handle_response(response)
+
+    def mtproto_verify_code(self, code: str) -> Dict[str, Any]:
+        """Шаг 2: Подтвердить код MTProto"""
+        response = self._request('POST', f"{self.base_url}/api/messenger/mtproto/verify-code", json={"code": code})
+        return self._handle_response(response)
+
+    def mtproto_session_status(self) -> Dict[str, Any]:
+        """Проверить статус MTProto сессии"""
+        try:
+            response = self._request('GET', f"{self.base_url}/api/messenger/mtproto/session-status")
+            return self._handle_response(response)
+        except Exception:
+            return {"valid": False}
+
 
