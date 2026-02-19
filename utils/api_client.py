@@ -3333,6 +3333,11 @@ class APIClient:
         response = self._request('POST', f"{self.base_url}/api/messenger/mtproto/send-code")
         return self._handle_response(response)
 
+    def mtproto_resend_sms(self) -> Dict[str, Any]:
+        """Переотправить код по SMS"""
+        response = self._request('POST', f"{self.base_url}/api/messenger/mtproto/resend-sms")
+        return self._handle_response(response)
+
     def mtproto_verify_code(self, code: str) -> Dict[str, Any]:
         """Шаг 2: Подтвердить код MTProto"""
         response = self._request('POST', f"{self.base_url}/api/messenger/mtproto/verify-code", json={"code": code})

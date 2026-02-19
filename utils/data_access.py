@@ -1050,6 +1050,12 @@ class DataAccess(QObject):
             return self.api_client.mtproto_send_code()
         return {"error": "API не доступен"}
 
+    def mtproto_resend_sms(self) -> Dict:
+        """Переотправить код по SMS"""
+        if self.api_client:
+            return self.api_client.mtproto_resend_sms()
+        return {"error": "API не доступен"}
+
     def mtproto_verify_code(self, code: str) -> Dict:
         """Шаг 2: Подтвердить код MTProto"""
         if self.api_client:

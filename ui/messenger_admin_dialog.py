@@ -439,6 +439,19 @@ class MessengerAdminDialog(QDialog):
         self._mtproto_verify_btn.clicked.connect(self._on_mtproto_verify_code)
         btn_row.addWidget(self._mtproto_verify_btn)
 
+        # Кнопка "Отправить по SMS" (скрыта, появляется после send-code)
+        self._mtproto_sms_btn = QPushButton("Отправить по SMS")
+        self._mtproto_sms_btn.setFixedHeight(34)
+        self._mtproto_sms_btn.setStyleSheet(
+            "QPushButton { background-color: #2196F3; border: 1px solid #1976D2; border-radius: 6px; "
+            "font-size: 12px; font-weight: bold; color: white; padding: 0 16px; }"
+            "QPushButton:hover { background-color: #42A5F5; }"
+            "QPushButton:disabled { background-color: #e0e0e0; color: #999; border-color: #ccc; }"
+        )
+        self._mtproto_sms_btn.setVisible(False)
+        self._mtproto_sms_btn.clicked.connect(self._on_mtproto_resend_sms)
+        btn_row.addWidget(self._mtproto_sms_btn)
+
         btn_row.addStretch()
         mf_layout.addLayout(btn_row)
 
@@ -891,15 +904,17 @@ class MessengerAdminDialog(QDialog):
             if result.get("status") == "code_sent":
                 phone = result.get("phone", "")
                 self._mtproto_session_label.setText(
-                    f"Код отправлен на {phone}. Введите код из Telegram."
+                    f"Код отправлен на {phone}. Проверьте Telegram.\n"
+                    "Если код не пришёл — нажмите «Отправить по SMS»."
                 )
                 self._mtproto_session_label.setStyleSheet(
                     "font-size: 11px; color: #4CAF50; border: none;"
                 )
-                # Показать поле ввода кода
+                # Показать поле ввода кода + кнопки
                 self._mtproto_code_input.setVisible(True)
                 self._mtproto_code_input.setFocus()
                 self._mtproto_verify_btn.setVisible(True)
+                self._mtproto_sms_btn.setVisible(True)
                 self._mtproto_send_btn.setText("Отправить повторно")
                 self._mtproto_send_btn.setEnabled(True)
             else:
@@ -924,6 +939,48 @@ class MessengerAdminDialog(QDialog):
             )
             self._mtproto_send_btn.setText("Запросить код")
             self._mtproto_send_btn.setEnabled(True)
+
+    def _on_mtproto_resend_sms(self):
+        """Переотправить код по SMS"""
+        self._mtproto_sms_btn.setEnabled(False)
+        self._mtproto_sms_btn.setText("Отправка SMS...")
+
+        try:
+            result = {}
+            if self.data_access:
+                result = self.data_access.mtproto_resend_sms()
+            elif self.api_client:
+                result = self.api_client.mtproto_resend_sms()
+
+            if result.get("status") == "sms_sent":
+                phone = result.get("phone", "")
+                self._mtproto_session_label.setText(
+                    f"SMS отправлена на {phone}. Введите код из SMS."
+                )
+                self._mtproto_session_label.setStyleSheet(
+                    "font-size: 11px; color: #4CAF50; font-weight: bold; border: none;"
+                )
+                self._mtproto_code_input.setFocus()
+            else:
+                error = result.get("detail", result.get("error", "Ошибка"))
+                self._mtproto_session_label.setText(f"Ошибка SMS: {error}")
+                self._mtproto_session_label.setStyleSheet(
+                    "font-size: 11px; color: #F44336; border: none;"
+                )
+        except Exception as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_msg = e.response.json().get("detail", error_msg)
+                except Exception:
+                    pass
+            self._mtproto_session_label.setText(f"Ошибка SMS: {error_msg}")
+            self._mtproto_session_label.setStyleSheet(
+                "font-size: 11px; color: #F44336; border: none;"
+            )
+        finally:
+            self._mtproto_sms_btn.setText("Отправить по SMS")
+            self._mtproto_sms_btn.setEnabled(True)
 
     def _on_mtproto_verify_code(self):
         """Шаг 2: Подтвердить код"""
@@ -960,6 +1017,7 @@ class MessengerAdminDialog(QDialog):
                 # Скрыть поле ввода
                 self._mtproto_code_input.setVisible(False)
                 self._mtproto_verify_btn.setVisible(False)
+                self._mtproto_sms_btn.setVisible(False)
                 self._mtproto_send_btn.setText("Запросить код")
                 self._mtproto_send_btn.setEnabled(True)
                 # Обновить статусы

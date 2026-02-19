@@ -122,8 +122,23 @@ class TelegramService:
         await client.connect()
         sent_code = await client.send_code(self._phone)
         logger.info(f"Код подтверждения отправлен на {self._phone}, тип: {sent_code.type}")
-        # Сохраняем клиент живым — нужен для verify_auth_code
+        # Сохраняем клиент живым — нужен для verify_auth_code / resend
         self._auth_client = client
+        self._auth_phone_code_hash = sent_code.phone_code_hash
+        return sent_code.phone_code_hash
+
+    async def resend_auth_code_sms(self) -> str:
+        """Переотправить код через SMS (next_type).
+        Использует живой клиент из send_auth_code().
+        """
+        client = getattr(self, '_auth_client', None)
+        phone_code_hash = getattr(self, '_auth_phone_code_hash', None)
+        if not client or not client.is_connected or not phone_code_hash:
+            raise RuntimeError("Сначала нажмите «Запросить код»")
+
+        sent_code = await client.resend_code(self._phone, phone_code_hash)
+        logger.info(f"Код переотправлен на {self._phone}, тип: {sent_code.type}")
+        self._auth_phone_code_hash = sent_code.phone_code_hash
         return sent_code.phone_code_hash
 
     async def verify_auth_code(self, phone_code_hash: str, code: str) -> Dict[str, Any]:
