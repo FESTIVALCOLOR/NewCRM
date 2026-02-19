@@ -307,7 +307,7 @@ class APIClient:
                     raise APIAuthError("Токен обновлен, повторите запрос")
             raise APIAuthError("Требуется авторизация")
         elif response.status_code == 403:
-            raise APIAuthError("Доступ запрещён")
+            raise APIAuthError(error_detail or "Доступ запрещён")
         elif response.status_code == 429:
             raise APIResponseError(
                 f"Слишком много попыток. {error_detail}",
@@ -3229,6 +3229,28 @@ class APIClient:
             return self._handle_response(response)
         except Exception:
             return None
+
+    def get_supervision_chat(self, supervision_card_id: int) -> Optional[Dict[str, Any]]:
+        """Получить чат по карточке надзора"""
+        try:
+            response = self._request('GET', f"{self.base_url}/api/messenger/chats/by-supervision/{supervision_card_id}")
+            return self._handle_response(response)
+        except Exception:
+            return None
+
+    def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram",
+                                 members: list = None) -> Dict[str, Any]:
+        """Создать чат для карточки надзора"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/messenger/chats/supervision",
+            json={
+                "supervision_card_id": supervision_card_id,
+                "messenger_type": messenger_type,
+                "members": members or []
+            }
+        )
+        return self._handle_response(response)
 
     def delete_messenger_chat(self, chat_id: int) -> Dict[str, Any]:
         """Удалить/отвязать чат"""

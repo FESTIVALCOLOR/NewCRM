@@ -449,6 +449,8 @@ class LoginWindow(QWidget):
                     error_msg = "Слишком много попыток входа.\nПовторите через 15 минут."
                 elif "401" in error_str or "Требуется авторизация" in error_str:
                     error_msg = "Неверный логин или пароль!"
+                elif "Вход запрещён" in error_str or "Статус сотрудника" in error_str:
+                    error_msg = error_str
                 elif "ConnectionError" in error_str or "Timeout" in error_str or "Offline" in error_str:
                     app_logger.info(f"Попытка offline-аутентификации после ошибки: {login}")
                     offline_result = self._try_offline_login(login, password)
@@ -459,9 +461,10 @@ class LoginWindow(QWidget):
                     # Обобщённое сообщение — НЕ раскрываем внутренние детали
                     error_msg = "Ошибка входа. Попробуйте позже."
 
+                error_title = 'Отказано в доступе' if 'Вход запрещён' in error_msg else 'Ошибка входа'
                 CustomMessageBox(
                     self,
-                    'Ошибка входа',
+                    error_title,
                     error_msg,
                     'error'
                 ).exec_()
