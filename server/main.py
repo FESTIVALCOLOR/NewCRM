@@ -10145,8 +10145,8 @@ async def mtproto_send_code(
     db: Session = Depends(get_db),
 ):
     """Шаг 1: Отправить код подтверждения на телефон для MTProto авторизации"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Только администратор")
+    if current_user.role not in ("admin", "director", "Руководитель студии"):
+        raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     # Перечитываем настройки из БД
     messenger_settings = {}
@@ -10186,8 +10186,8 @@ async def mtproto_verify_code(
     db: Session = Depends(get_db),
 ):
     """Шаг 2: Подтвердить код и активировать MTProto сессию"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Только администратор")
+    if current_user.role not in ("admin", "director", "Руководитель студии"):
+        raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     code = str(data.get("code", "")).strip()
     if not code:
@@ -10226,8 +10226,8 @@ async def mtproto_session_status(
     db: Session = Depends(get_db),
 ):
     """Проверить статус Pyrogram-сессии"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Только администратор")
+    if current_user.role not in ("admin", "director", "Руководитель студии"):
+        raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     messenger_settings = {}
     for row in db.query(MessengerSetting).all():
