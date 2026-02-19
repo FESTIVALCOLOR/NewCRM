@@ -9335,8 +9335,17 @@ def _build_chat_title(contract, card) -> str:
         'Шаблонный': 'ШП',
     }
     prefix = type_prefix.get(contract.project_type, 'ПР')
-    city = contract.city or ''
-    address = contract.address or ''
+    city = (contract.city or '').replace('_', '-')
+    address = (contract.address or '').replace('_', '-')
+    # Убираем дублирование города в адресе
+    if city and address:
+        city_map = {'спб': 'санкт-петербург', 'мск': 'москва', 'нск': 'новосибирск', 'екб': 'екатеринбург'}
+        full_city = city_map.get(city.lower(), city.lower())
+        addr_check = address.lower().replace('_', '-')
+        for c in [full_city, city.lower()]:
+            if addr_check.startswith(c):
+                address = address[len(c):].lstrip('.,;:_ -')
+                break
     return f"{prefix}-{city}-{address}"
 
 
@@ -9533,6 +9542,13 @@ async def create_messenger_chat(
     db: Session = Depends(get_db)
 ):
     """Создать чат автоматически (MTProto) для CRM-карточки"""
+    # Перечитываем настройки (для консистентности между воркерами)
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+    tg_svc = get_telegram_service()
+    tg_svc.configure(messenger_settings)
+
     # Проверка: уже есть активный чат
     existing = db.query(MessengerChat).filter(
         MessengerChat.crm_card_id == data.crm_card_id,
@@ -10098,10 +10114,20 @@ async def update_messenger_settings(
 @app.get("/api/messenger/status")
 async def get_messenger_status(
     current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Статус сервисов мессенджера"""
+    """Статус сервисов мессенджера (перечитывает настройки из БД для консистентности между воркерами)"""
+    # Перечитываем настройки из БД чтобы учесть изменения от другого воркера
+    messenger_settings = {}
+    for row in db.query(MessengerSetting).all():
+        messenger_settings[row.setting_key] = row.setting_value or ""
+
     tg = get_telegram_service()
+    tg.configure(messenger_settings)
+
     email_svc = get_email_service()
+    email_svc.configure(messenger_settings)
+
     return {
         "telegram_bot_available": tg.bot_available,
         "telegram_mtproto_available": tg.mtproto_available,

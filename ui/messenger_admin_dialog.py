@@ -24,6 +24,16 @@ from utils.icon_loader import IconLoader
 
 logger = logging.getLogger(__name__)
 
+# Стиль кнопки toggle-пароля (глаз)
+_EYE_BTN_STYLE = """
+    QPushButton {
+        background-color: transparent;
+        border: none;
+        padding: 4px;
+    }
+    QPushButton:hover { background-color: #f0f0f0; border-radius: 4px; }
+"""
+
 # Стили
 _INPUT_STYLE = """
     QLineEdit {
@@ -93,8 +103,11 @@ SCRIPT_PLACEHOLDERS = {
     "{client_name}": "Имя клиента",
     "{project_name}": "Название проекта (номер договора)",
     "{stage_name}": "Название стадии",
+    "{substage_name}": "Название подэтапа",
     "{deadline}": "Дата дедлайна (ДД.ММ.ГГГГ)",
-    "{manager_name}": "Имя менеджера проекта",
+    "{manager_name}": "Имя менеджера",
+    "{senior_manager}": "Старший менеджер (СДП)",
+    "{director}": "Директор",
     "{address}": "Адрес объекта",
     "{city}": "Город",
 }
@@ -103,17 +116,56 @@ SCRIPT_TYPES = {
     "project_start": "Начало проекта",
     "stage_complete": "Завершение стадии",
     "project_end": "Завершение проекта",
+    "project_paused": "Приостановка проекта",
+    "custom": "Пользовательский",
 }
 
-# Стадии CRM для уведомлений
-CRM_STAGES = [
-    "Стадия 1: планировочные решения",
-    "Стадия 2: концепция дизайна",
-    "Стадия 2: рабочие чертежи",
-    "Стадия 3: рабочие чертежи",
-    "Стадия 3: 3д визуализация (Дополнительная)",
-    "Выполненный проект",
-]
+# Стадии CRM для уведомлений, сгруппированные по типу проекта
+CRM_STAGE_GROUPS = {
+    "Индивидуальный проект": [
+        ("Стадия 1: планировочные решения", [
+            "Подэтап 1.1: Разработка планировок",
+            "Подэтап 1.2: Фин. план. решение (1 круг)",
+            "Подэтап 1.3: Фин. план. решение (2 круг)",
+        ]),
+        ("Стадия 2: концепция дизайна", [
+            "Подэтап 2.1: Мудборды",
+            "Подэтап 2.2: Визуализация 1 помещения",
+            "Подэтап 2.3: Виз. 1 пом. (1 круг правок)",
+            "Подэтап 2.4: Виз. 1 пом. (2 круг правок)",
+            "Подэтап 2.5: Визуализация остальных помещений",
+            "Подэтап 2.6: Виз. все (1 круг правок)",
+            "Подэтап 2.7: Виз. все (2 круг правок)",
+        ]),
+        ("Стадия 3: рабочие чертежи", []),
+        ("Стадия 3: 3д визуализация (Доп.)", []),
+        ("Выполненный проект", []),
+    ],
+    "Шаблонный проект": [
+        ("Стадия 1: планировочные решения", [
+            "Подэтап 1.1: Разработка планировок",
+            "Подэтап 1.2: Финальное план. решение",
+        ]),
+        ("Стадия 2: рабочие чертежи", []),
+        ("Стадия 3: 3д визуализация (Доп.)", []),
+        ("Выполненный проект", []),
+    ],
+    "Надзор": [
+        ("Стадия 1: Закупка керамогранита", []),
+        ("Стадия 2: Закупка сантехники", []),
+        ("Стадия 3: Закупка оборудования", []),
+        ("Стадия 4: Закупка дверей и окон", []),
+        ("Стадия 5: Закупка настенных материалов", []),
+        ("Стадия 6: Закупка напольных материалов", []),
+        ("Стадия 7: Лепной декор", []),
+        ("Стадия 8: Освещение", []),
+        ("Стадия 9: Бытовая техника", []),
+        ("Стадия 10: Закупка заказной мебели", []),
+        ("Стадия 11: Закупка фабричной мебели", []),
+        ("Стадия 12: Закупка декора", []),
+        ("Выполненный проект", []),
+    ],
+}
 
 
 class MessengerAdminDialog(QDialog):
@@ -234,6 +286,52 @@ class MessengerAdminDialog(QDialog):
         root.addWidget(border_frame)
 
     # ----------------------------------------------------------------
+    # Поле пароля с кнопкой-глазом
+    # ----------------------------------------------------------------
+
+    def _make_password_field(self, placeholder: str = "") -> tuple:
+        """Создать QLineEdit с кнопкой toggle-видимости (глаз).
+        Возвращает (container_widget, line_edit)."""
+        container = QWidget()
+        h = QHBoxLayout(container)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(4)
+
+        edit = QLineEdit()
+        edit.setPlaceholderText(placeholder)
+        edit.setStyleSheet(_INPUT_STYLE)
+        edit.setEchoMode(QLineEdit.Password)
+        h.addWidget(edit)
+
+        eye_btn = QPushButton()
+        eye_btn.setFixedSize(30, 30)
+        eye_btn.setCursor(Qt.PointingHandCursor)
+        eye_btn.setStyleSheet(_EYE_BTN_STYLE)
+        eye_btn.setToolTip("Показать / скрыть")
+        eye_icon = IconLoader.load("eye")
+        if eye_icon and not eye_icon.isNull():
+            eye_btn.setIcon(eye_icon)
+            eye_btn.setIconSize(QSize(16, 16))
+
+        def _toggle():
+            if edit.echoMode() == QLineEdit.Password:
+                edit.setEchoMode(QLineEdit.Normal)
+                off_icon = IconLoader.load("eye-off")
+                if off_icon and not off_icon.isNull():
+                    eye_btn.setIcon(off_icon)
+                eye_btn.setToolTip("Скрыть")
+            else:
+                edit.setEchoMode(QLineEdit.Password)
+                on_icon = IconLoader.load("eye")
+                if on_icon and not on_icon.isNull():
+                    eye_btn.setIcon(on_icon)
+                eye_btn.setToolTip("Показать")
+
+        eye_btn.clicked.connect(_toggle)
+        h.addWidget(eye_btn)
+        return container, edit
+
+    # ----------------------------------------------------------------
     # Вкладка Telegram
     # ----------------------------------------------------------------
 
@@ -256,22 +354,16 @@ class MessengerAdminDialog(QDialog):
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self._tg_bot_token = QLineEdit()
-        self._tg_bot_token.setPlaceholderText("123456:ABC-DEF1234ghIkl-zyx57W2v...")
-        self._tg_bot_token.setStyleSheet(_INPUT_STYLE)
-        self._tg_bot_token.setEchoMode(QLineEdit.Password)
-        form.addRow("Bot Token:", self._tg_bot_token)
+        token_row, self._tg_bot_token = self._make_password_field("123456:ABC-DEF1234ghIkl-zyx57W2v...")
+        form.addRow("Bot Token:", token_row)
 
         self._tg_api_id = QLineEdit()
         self._tg_api_id.setPlaceholderText("12345678")
         self._tg_api_id.setStyleSheet(_INPUT_STYLE)
         form.addRow("API ID:", self._tg_api_id)
 
-        self._tg_api_hash = QLineEdit()
-        self._tg_api_hash.setPlaceholderText("abcdef0123456789abcdef0123456789")
-        self._tg_api_hash.setStyleSheet(_INPUT_STYLE)
-        self._tg_api_hash.setEchoMode(QLineEdit.Password)
-        form.addRow("API Hash:", self._tg_api_hash)
+        hash_row, self._tg_api_hash = self._make_password_field("abcdef0123456789abcdef0123456789")
+        form.addRow("API Hash:", hash_row)
 
         self._tg_phone = QLineEdit()
         self._tg_phone.setPlaceholderText("+79062003365")
@@ -332,11 +424,8 @@ class MessengerAdminDialog(QDialog):
         self._smtp_username.setStyleSheet(_INPUT_STYLE)
         form.addRow("Логин:", self._smtp_username)
 
-        self._smtp_password = QLineEdit()
-        self._smtp_password.setPlaceholderText("пароль приложения")
-        self._smtp_password.setStyleSheet(_INPUT_STYLE)
-        self._smtp_password.setEchoMode(QLineEdit.Password)
-        form.addRow("Пароль:", self._smtp_password)
+        pwd_row, self._smtp_password = self._make_password_field("пароль приложения")
+        form.addRow("Пароль:", pwd_row)
 
         self._smtp_tls = QCheckBox("Использовать SSL/TLS")
         self._smtp_tls.setChecked(True)
@@ -458,15 +547,13 @@ class MessengerAdminDialog(QDialog):
         type_row.addWidget(self._script_type_combo)
         ed_layout.addLayout(type_row)
 
-        # Стадия (для stage_complete)
+        # Стадия (для stage_complete и других типов с привязкой к стадии)
         stage_row = QHBoxLayout()
         stage_row.setSpacing(8)
         stage_row.addWidget(QLabel("Стадия:"))
         self._script_stage_combo = QComboBox()
         self._script_stage_combo.setStyleSheet(_COMBO_STYLE)
-        self._script_stage_combo.addItem("(все стадии)", "")
-        for stage in CRM_STAGES:
-            self._script_stage_combo.addItem(stage, stage)
+        self._populate_stage_combo()
         stage_row.addWidget(self._script_stage_combo)
         ed_layout.addLayout(stage_row)
 
@@ -514,7 +601,7 @@ class MessengerAdminDialog(QDialog):
             btn.clicked.connect(lambda _, p=placeholder: self._insert_placeholder(p))
             ph_layout.addWidget(btn, row, col)
             col += 1
-            if col >= 3:
+            if col >= 4:
                 col = 0
                 row += 1
 
@@ -732,11 +819,19 @@ class MessengerAdminDialog(QDialog):
         if idx >= 0:
             self._script_type_combo.setCurrentIndex(idx)
 
-        # Стадия
+        # Стадия — ищем по data, а если не нашли — по тексту (подэтапы имеют отступ)
         stage = script.get("stage_name", "") or ""
         s_idx = self._script_stage_combo.findData(stage)
+        if s_idx < 0 and stage:
+            # Попробуем найти по тексту (возможно подэтап)
+            for i in range(self._script_stage_combo.count()):
+                if self._script_stage_combo.itemData(i) == stage:
+                    s_idx = i
+                    break
         if s_idx >= 0:
             self._script_stage_combo.setCurrentIndex(s_idx)
+        else:
+            self._script_stage_combo.setCurrentIndex(0)  # (все стадии)
 
         # Текст
         self._script_text.setPlainText(script.get("message_template", ""))
@@ -747,10 +842,38 @@ class MessengerAdminDialog(QDialog):
 
         self._on_script_type_changed()
 
+    def _populate_stage_combo(self):
+        """Заполнить комбобокс стадий с группировкой по типам проектов"""
+        self._script_stage_combo.clear()
+        self._script_stage_combo.addItem("(все стадии)", "")
+
+        from PyQt5.QtGui import QStandardItemModel
+        model = self._script_stage_combo.model()
+
+        for group_name, stages in CRM_STAGE_GROUPS.items():
+            # Разделитель-заголовок группы
+            sep_idx = self._script_stage_combo.count()
+            self._script_stage_combo.addItem(f"── {group_name} ──", f"__group__{group_name}")
+            sep_item = model.item(sep_idx)
+            if sep_item:
+                sep_item.setEnabled(False)
+                sep_item.setForeground(QColor("#999999"))
+                f = sep_item.font()
+                f.setBold(True)
+                f.setPointSize(f.pointSize() - 1)
+                sep_item.setFont(f)
+
+            for stage_name, substages in stages:
+                self._script_stage_combo.addItem(f"  {stage_name}", stage_name)
+                # Подэтапы
+                for sub in substages:
+                    self._script_stage_combo.addItem(f"    {sub}", sub)
+
     def _on_script_type_changed(self):
         """Показать/скрыть выбор стадии в зависимости от типа"""
         current_type = self._script_type_combo.currentData()
-        show_stage = (current_type == "stage_complete")
+        # Стадию показываем для всех типов кроме project_start и project_end
+        show_stage = current_type not in ("project_start", "project_end")
         self._script_stage_combo.setVisible(show_stage)
         # Найти label "Стадия:" — он в parent layout
         for i in range(self._script_stage_combo.parent().layout().count()):
@@ -768,22 +891,102 @@ class MessengerAdminDialog(QDialog):
         self._script_text.setFocus()
 
     def _on_add_script(self):
-        """Добавить новый скрипт"""
+        """Добавить новый скрипт — сначала спросить тип"""
         from ui.custom_message_box import CustomMessageBox
+
+        # Мини-диалог выбора типа
+        type_dialog = QDialog(self)
+        type_dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        type_dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        type_dialog.setFixedWidth(340)
+
+        d_root = QVBoxLayout(type_dialog)
+        d_root.setContentsMargins(0, 0, 0, 0)
+
+        d_frame = QFrame()
+        d_frame.setObjectName("addScriptFrame")
+        d_frame.setStyleSheet("""
+            QFrame#addScriptFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #CCCCCC;
+                border-radius: 10px;
+            }
+        """)
+        d_layout = QVBoxLayout(d_frame)
+        d_layout.setContentsMargins(20, 16, 20, 16)
+        d_layout.setSpacing(12)
+
+        d_title = QLabel("Выберите тип скрипта")
+        d_title.setStyleSheet("font-size: 14px; font-weight: 600; color: #333;")
+        d_layout.addWidget(d_title)
+
+        type_combo = QComboBox()
+        type_combo.setStyleSheet(_COMBO_STYLE)
+        for key, label in SCRIPT_TYPES.items():
+            type_combo.addItem(label, key)
+        d_layout.addWidget(type_combo)
+
+        d_btns = QHBoxLayout()
+        d_btns.setSpacing(8)
+        d_btns.addStretch()
+
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedHeight(32)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff; color: #333;
+                border: 1px solid #d9d9d9; border-radius: 4px;
+                padding: 0 16px; font-size: 12px;
+            }
+            QPushButton:hover { background-color: #f5f5f5; }
+        """)
+        cancel_btn.clicked.connect(type_dialog.reject)
+        d_btns.addWidget(cancel_btn)
+
+        ok_btn = QPushButton("Создать")
+        ok_btn.setFixedHeight(32)
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd93c; color: #333;
+                border: none; border-radius: 4px;
+                padding: 0 20px; font-size: 12px; font-weight: 600;
+            }
+            QPushButton:hover { background-color: #f0c929; }
+        """)
+        ok_btn.clicked.connect(type_dialog.accept)
+        d_btns.addWidget(ok_btn)
+
+        d_layout.addLayout(d_btns)
+        d_root.addWidget(d_frame)
+
+        if type_dialog.exec_() != QDialog.Accepted:
+            return
+
+        chosen_type = type_combo.currentData()
+
+        # Шаблоны по умолчанию для разных типов
+        default_templates = {
+            "project_start": "Здравствуйте, {client_name}!\n\nДобро пожаловать в проект. Ваш менеджер — {manager_name}.\nАдрес объекта: {address}, {city}.",
+            "stage_complete": "Здравствуйте, {client_name}!\n\nЭтап «{stage_name}» готов к согласованию.\nПросим ознакомиться с материалами.",
+            "project_end": "Здравствуйте, {client_name}!\n\nПроект завершён. Благодарим за сотрудничество!",
+            "project_paused": "Здравствуйте, {client_name}!\n\nПроект временно приостановлен.\nМенеджер {manager_name} свяжется с вами для уточнения деталей.",
+            "custom": "Здравствуйте, {client_name}!\n\n",
+        }
 
         try:
             data = {
-                "script_type": "stage_complete",
-                "message_template": "Здравствуйте, {client_name}!\n\nНовое уведомление по проекту.",
+                "script_type": chosen_type,
+                "message_template": default_templates.get(chosen_type, ""),
                 "is_enabled": True,
-                "use_auto_deadline": True,
+                "use_auto_deadline": chosen_type == "stage_complete",
                 "sort_order": len(self._scripts),
             }
             if self.api_client:
                 result = self.api_client.create_messenger_script(data)
                 if result:
                     self._load_scripts()
-                    # Выбрать последний
                     if self._script_list.count() > 0:
                         self._script_list.setCurrentRow(self._script_list.count() - 1)
             else:

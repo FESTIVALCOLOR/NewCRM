@@ -497,6 +497,8 @@ class MessengerSelectDialog(QDialog):
         self._update_create_btn_text()
 
     def _update_create_btn_text(self):
+        if not hasattr(self, '_create_btn') or self._create_btn is None:
+            return
         if self._radio_manual.isChecked():
             self._create_btn.setText("Привязать чат")
         else:
@@ -510,6 +512,34 @@ class MessengerSelectDialog(QDialog):
         """Сформировать название чата из данных карточки"""
         city = self.card_data.get("city", "")
         address = self.card_data.get("address", "")
+        # Убираем дублирование города из адреса (если адрес начинается с города)
+        if address and city:
+            # Адрес может содержать "Санкт_петербург. ..." — убираем город-префикс
+            addr_lower = address.lower().replace("_", "-").replace(".", "").strip()
+            city_lower = city.lower().replace("_", "-")
+            # Убираем варианты: "Санкт-Петербург", "Санкт_петербург", "СПБ"
+            for prefix in [city_lower, city_lower.replace("-", "_")]:
+                if addr_lower.startswith(prefix):
+                    address = address[len(prefix):].lstrip(".,;: ")
+                    break
+            # Также убираем полное название города если оно в начале адреса
+            city_full_map = {
+                "спб": "Санкт-Петербург",
+                "мск": "Москва",
+                "нск": "Новосибирск",
+                "екб": "Екатеринбург",
+            }
+            full_city = city_full_map.get(city_lower, "")
+            if full_city:
+                full_lower = full_city.lower()
+                addr_check = address.lower().replace("_", "-")
+                if addr_check.startswith(full_lower):
+                    address = address[len(full_city):].lstrip(".,;:_ ")
+        # Заменяем подчёркивания на дефисы
+        if city:
+            city = city.replace("_", "-")
+        if address:
+            address = address.replace("_", "-")
         parts = ["ИН"]
         if city:
             parts.append(city)
