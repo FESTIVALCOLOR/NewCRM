@@ -11,6 +11,7 @@ from utils.pdf_generator import PDFGenerator
 from utils.icon_loader import IconLoader  # ← ДОБАВЛЕНО
 from utils.calendar_helpers import ICONS_PATH
 from utils.table_settings import apply_no_focus_delegate
+from utils.data_access import DataAccess
 from datetime import datetime
 
 class EmployeeReportsTab(QWidget):
@@ -19,6 +20,7 @@ class EmployeeReportsTab(QWidget):
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.pdf_gen = PDFGenerator()
         self.init_ui()
 
@@ -303,15 +305,19 @@ class EmployeeReportsTab(QWidget):
             quarter = quarter_combo.currentText() if period == 'Квартал' else None
             month = month_combo.currentIndex() + 1 if period == 'Месяц' else None
             
-            # Получаем данные из API или БД
-            if self.api_client:
-                try:
-                    report_data = self.api_client.get_employee_report_data(project_type, period, year, quarter, month)
-                except Exception as e:
-                    print(f"[WARN] API ошибка get_employee_report_data: {e}")
-                    report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
-            else:
-                report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
+            # Получаем данные из API или БД через DataAccess
+            try:
+                report_data = self.data_access.get_employee_report_data(
+                    self.employee.get('id', 0),
+                    project_type=project_type,
+                    period=period,
+                    year=year,
+                    quarter=quarter,
+                    month=month
+                )
+            except Exception as e:
+                print(f"[WARN] DataAccess ошибка get_employee_report_data: {e}")
+                report_data = {'completed': [], 'salaries': []}
             
             # Обновляем таблицы
             self.update_completed_table(tab_widget, project_type, report_data.get('completed', []))
@@ -405,15 +411,19 @@ class EmployeeReportsTab(QWidget):
             )
             
             if filename:
-                # Получаем данные
-                if self.api_client:
-                    try:
-                        report_data = self.api_client.get_employee_report_data(project_type, period, year, quarter, month)
-                    except Exception as e:
-                        print(f"[WARN] API ошибка get_employee_report_data: {e}")
-                        report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
-                else:
-                    report_data = self.db.get_employee_report_data(project_type, period, year, quarter, month)
+                # Получаем данные через DataAccess
+                try:
+                    report_data = self.data_access.get_employee_report_data(
+                        self.employee.get('id', 0),
+                        project_type=project_type,
+                        period=period,
+                        year=year,
+                        quarter=quarter,
+                        month=month
+                    )
+                except Exception as e:
+                    print(f"[WARN] DataAccess ошибка get_employee_report_data: {e}")
+                    report_data = {'completed': [], 'salaries': []}
                 
                 # Генерируем PDF
                 if report_type == 'completed':

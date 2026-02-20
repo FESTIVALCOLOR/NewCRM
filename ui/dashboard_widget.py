@@ -12,6 +12,7 @@ from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter, QColor
 from PyQt5.QtSvg import QSvgWidget, QSvgRenderer
 import os
 from utils.resource_path import resource_path
+from utils.data_access import DataAccess
 
 
 def create_colored_icon(icon_path, color):
@@ -395,6 +396,7 @@ class DashboardWidget(QWidget):
         super().__init__(parent)
         self.db = db_manager
         self.api_client = api_client
+        self.data_access = DataAccess(api_client=api_client, db=db_manager)
         self.metric_cards = {}
 
         # Фиксированная высота дашборда - компактный вид
@@ -470,7 +472,7 @@ class DashboardWidget(QWidget):
     def get_years(self):
         """Получить динамический список годов из договоров для фильтров
 
-        Пытается получить список годов из API или локальной БД.
+        Пытается получить список годов через DataAccess.
         Включает текущий год и следующий год.
 
         Returns:
@@ -479,26 +481,13 @@ class DashboardWidget(QWidget):
         from datetime import datetime
 
         try:
-            # Сначала пробуем API
-            if self.api_client:
-                try:
-                    years = self.api_client.get_contract_years()
-                    if years:
-                        return years
-                except Exception as e:
-                    print(f"[WARN] Ошибка получения годов через API: {e}")
-
-            # Затем локальная БД
-            if self.db:
-                try:
-                    years = self.db.get_contract_years()
-                    if years:
-                        return years
-                except Exception as e:
-                    print(f"[WARN] Ошибка получения годов из БД: {e}")
+            # Используем DataAccess для получения годов
+            years = self.data_access.get_contract_years()
+            if years:
+                return years
 
         except Exception as e:
-            print(f"[ERROR] Ошибка получения годов: {e}")
+            print(f"[ERROR] Ошибка получения годов через DataAccess: {e}")
 
         # Fallback: 10 лет назад до следующего года
         current_year = datetime.now().year

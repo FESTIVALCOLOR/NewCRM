@@ -6,6 +6,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtSvg import QSvgWidget
 from database.db_manager import DatabaseManager
 from utils.resource_path import resource_path
+from utils.data_access import DataAccess
 import os
 
 class DashboardTab(QWidget):
@@ -16,6 +17,7 @@ class DashboardTab(QWidget):
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.init_ui()
     
     def init_ui(self):
@@ -206,16 +208,16 @@ class DashboardTab(QWidget):
     def load_statistics(self):
         """Загрузка статистики за все время"""
         try:
-            if self.api_client and self.api_client.is_online:
-                # Многопользовательский режим - загружаем из API
+            if self.data_access.is_multi_user:
+                # Многопользовательский режим - загружаем через DataAccess
                 try:
                     stats = self.calculate_api_statistics()
                 except Exception as e:
-                    print(f"[WARN] API error, using local DB: {e}")
-                    stats = self.db.get_dashboard_statistics()
+                    print(f"[WARN] DataAccess error, using fallback: {e}")
+                    stats = self.data_access.get_dashboard_statistics()
             else:
-                # Локальный режим - загружаем из локальной БД
-                stats = self.db.get_dashboard_statistics()
+                # Локальный режим - загружаем через DataAccess
+                stats = self.data_access.get_dashboard_statistics()
 
             # Обновляем карточки заказов
             self.update_card_value('individual_orders', str(stats['individual_orders']))
@@ -233,8 +235,8 @@ class DashboardTab(QWidget):
     def calculate_api_statistics(self):
         """Рассчитать статистику из данных API"""
         try:
-            # Получаем все договоры с сервера
-            contracts = self.api_client.get_contracts(limit=1000)
+            # Получаем все договоры через DataAccess
+            contracts = self.data_access.get_all_contracts()
 
             # Инициализируем счетчики
             stats = {
