@@ -127,8 +127,8 @@ class APIClient:
             self._auto_refresh_if_needed()
 
         # Если недавно были offline - сразу выбрасываем исключение без запроса
-        # НО: только если это не фоновый запрос (mark_offline=True)
-        if mark_offline and self._is_recently_offline():
+        # НО: логин всегда должен пытаться подключиться к серверу
+        if mark_offline and self._is_recently_offline() and not url.endswith('/api/auth/login'):
             # Подавляем повторные сообщения об offline в консоли
             raise APIConnectionError(f"Offline режим (кеш): {url}")
 
@@ -424,7 +424,7 @@ class APIClient:
             response = self._request(
                 'POST',
                 f"{self.base_url}/api/auth/refresh",
-                params={"refresh_token": self.refresh_token},
+                json={"refresh_token": self.refresh_token},
                 mark_offline=False  # Не помечаем offline при ошибке refresh
             )
 
@@ -483,6 +483,24 @@ class APIClient:
         )
         return self._handle_response(response)
 
+    def get_clients_paginated(
+        self, skip: int = 0, limit: int = 100
+    ) -> tuple:
+        """Получить список клиентов с информацией о пагинации.
+
+        Возвращает кортеж (список клиентов, общее количество записей).
+        Общее количество читается из заголовка X-Total-Count ответа сервера.
+        """
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/clients",
+            params={"skip": skip, "limit": limit}
+        )
+        data = self._handle_response(response)
+        # Читаем общее количество записей из заголовка X-Total-Count
+        total = int(response.headers.get("X-Total-Count", len(data)))
+        return data, total
+
     def get_client(self, client_id: int) -> Dict[str, Any]:
         """Получить клиента по ID"""
         response = self._request('GET', f"{self.base_url}/api/clients/{client_id}")
@@ -524,6 +542,46 @@ class APIClient:
             params={"skip": skip, "limit": limit}
         )
         return self._handle_response(response)
+
+    def get_contracts_paginated(
+        self, skip: int = 0, limit: int = 100
+    ) -> tuple:
+        """Получить список договоров с информацией о пагинации.
+
+        Возвращает кортеж (список договоров, общее количество записей).
+        Общее количество читается из заголовка X-Total-Count ответа сервера.
+        """
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/contracts",
+            params={"skip": skip, "limit": limit}
+        )
+        data = self._handle_response(response)
+        # Читаем общее количество записей из заголовка X-Total-Count
+        total = int(response.headers.get("X-Total-Count", len(data)))
+        return data, total
+
+    def get_contracts_count(
+        self,
+        status: Optional[str] = None,
+        project_type: Optional[str] = None,
+        year: Optional[int] = None
+    ) -> int:
+        """Получить количество договоров без загрузки всех записей"""
+        params = {}
+        if status is not None:
+            params['status'] = status
+        if project_type is not None:
+            params['project_type'] = project_type
+        if year is not None:
+            params['year'] = year
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/contracts/count",
+            params=params
+        )
+        result = self._handle_response(response)
+        return result.get('count', 0) if isinstance(result, dict) else 0
 
     def get_contract(self, contract_id: int) -> Dict[str, Any]:
         """Получить договор по ID"""
@@ -3189,6 +3247,16 @@ class APIClient:
         )
         return self._handle_response(response)
 
+    def get_role_permissions_matrix(self) -> Dict[str, Any]:
+        """Получить матрицу прав по ролям"""
+        response = self._request('GET', f"{self.base_url}/api/permissions/role-matrix")
+        return self._handle_response(response)
+
+    def save_role_permissions_matrix(self, data: dict) -> Dict[str, Any]:
+        """Сохранить матрицу прав по ролям"""
+        response = self._request('PUT', f"{self.base_url}/api/permissions/role-matrix", json=data)
+        return self._handle_response(response)
+
     # =========================
     # MESSENGER ENDPOINTS
     # =========================
@@ -3373,4 +3441,27 @@ class APIClient:
         except Exception:
             return {"valid": False}
 
+    # ========== Нормо-дни (шаблоны) ==========
 
+    def get_norm_days_template(self, project_type: str, project_subtype: str) -> Dict[str, Any]:
+        """Получить шаблон нормо-дней для типа/подтипа проекта"""
+        params = {"project_type": project_type, "project_subtype": project_subtype}
+        response = self._request('GET', f"{self.base_url}/api/norm-days/templates", params=params)
+        return self._handle_response(response)
+
+    def save_norm_days_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Сохранить кастомный шаблон нормо-дней"""
+        response = self._request('PUT', f"{self.base_url}/api/norm-days/templates", json=data)
+        return self._handle_response(response)
+
+    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float) -> Dict[str, Any]:
+        """Предпросмотр расчёта нормо-дней для указанной площади"""
+        response = self._request('POST', f"{self.base_url}/api/norm-days/templates/preview",
+                                 json={"project_type": project_type, "project_subtype": project_subtype, "area": area})
+        return self._handle_response(response)
+
+    def reset_norm_days_template(self, project_type: str, project_subtype: str) -> Dict[str, Any]:
+        """Сбросить кастомный шаблон нормо-дней (возврат к формулам)"""
+        response = self._request('POST', f"{self.base_url}/api/norm-days/templates/reset",
+                                 json={"project_type": project_type, "project_subtype": project_subtype})
+        return self._handle_response(response)

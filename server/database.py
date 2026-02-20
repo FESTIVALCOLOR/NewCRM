@@ -124,6 +124,44 @@ class UserPermission(Base):
     employee = relationship("Employee", back_populates="permissions", foreign_keys=[employee_id])
 
 
+class RoleDefaultPermission(Base):
+    """Дефолтные права по ролям (настраиваемая матрица)"""
+    __tablename__ = "role_default_permissions"
+    __table_args__ = (
+        UniqueConstraint('role', 'permission_name', name='uq_role_perm'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(String, nullable=False, index=True)
+    permission_name = Column(String, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+
+
+class NormDaysTemplate(Base):
+    """Шаблоны нормо-дней по типам проектов"""
+    __tablename__ = "norm_days_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_type = Column(String, nullable=False)       # 'Индивидуальный' / 'Шаблонный'
+    project_subtype = Column(String, nullable=False)     # 'Полный', 'Эскизный', etc.
+    stage_code = Column(String, nullable=False)          # S1_1_01, T1_1_01
+    stage_name = Column(String, nullable=False)
+    stage_group = Column(String, nullable=False)         # STAGE1, STAGE2, STAGE3
+    substage_group = Column(String, nullable=True)
+    base_norm_days = Column(Float, nullable=False)       # базовое значение
+    k_multiplier = Column(Float, default=0)              # множитель K (площади)
+    executor_role = Column(String, nullable=False)
+    is_in_contract_scope = Column(Boolean, default=True)
+    sort_order = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('project_type', 'project_subtype', 'stage_code', name='uq_norm_template'),
+    )
+
+
 class ActivityLog(Base):
     """Расширенный лог действий"""
     __tablename__ = "activity_log"

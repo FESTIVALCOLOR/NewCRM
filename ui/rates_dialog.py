@@ -8,6 +8,7 @@ from PyQt5.QtCore import Qt
 from database.db_manager import DatabaseManager
 from utils.table_settings import apply_no_focus_delegate
 from utils.resource_path import resource_path
+from utils.data_access import DataAccess
 from config import CITIES
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
@@ -21,8 +22,9 @@ class RatesDialog(QDialog):
 
     def __init__(self, parent, api_client=None):
         super().__init__(parent)
-        self.db = DatabaseManager()
         self.api_client = api_client
+        self.db = DatabaseManager()
+        self.data_access = DataAccess(api_client=api_client, db=self.db)
         
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -420,29 +422,45 @@ class RatesDialog(QDialog):
         widget.setLayout(layout)
         return widget
 
+    def _get_all_cities(self):
+        """Получить все города: из конфига + уникальные из договоров"""
+        cities = list(CITIES)
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != ''")
+            db_cities = [row['city'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
+            for c in db_cities:
+                if c and c not in cities:
+                    cities.append(c)
+        except Exception as e:
+            print(f"[WARN] Ошибка получения городов из БД: {e}")
+        return cities
+
     def create_surveyor_rates_tab(self):
         """Тарифы замерщика по городам"""
         widget = QWidget()
         layout = QVBoxLayout()
-        
+
         info = QLabel('Фиксированная стоимость замера по городам:')
         info.setStyleSheet('font-size: 12px; font-weight: bold;')
         layout.addWidget(info)
-        
+
         table = QTableWidget()
         table.setObjectName('surveyor_rates_table')
         apply_no_focus_delegate(table)
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(['Город', 'Стоимость замера (₽)', 'Действия'])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        
+
         # ========== УВЕЛИЧЕННАЯ ВЫСОТА ==========
         table.verticalHeader().setDefaultSectionSize(36)
         # ========================================
-        
-        table.setRowCount(len(CITIES))
-        
-        for row, city in enumerate(CITIES):
+
+        all_cities = self._get_all_cities()
+        table.setRowCount(len(all_cities))
+
+        for row, city in enumerate(all_cities):
             table.setItem(row, 0, QTableWidgetItem(city))
             
             price_spin = QDoubleSpinBox()
@@ -598,13 +616,12 @@ class RatesDialog(QDialog):
             print("[RATES] ЗАГРУЗКА ТАРИФОВ...")
             print("="*60)
 
-            if self.api_client:
-                try:
-                    rates_data = self.api_client.get_rates()
-                    self._load_rates_from_data(rates_data)
-                    return
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки тарифов: {e}, fallback на локальную БД")
+            try:
+                rates_data = self.data_access.get_rates()
+                self._load_rates_from_data(rates_data)
+                return
+            except Exception as e:
+                print(f"[WARN] Ошибка загрузки тарифов через DataAccess: {e}, fallback на локальную БД")
 
             conn = self.db.connect()
             cursor = conn.cursor()
@@ -775,35 +792,12 @@ class RatesDialog(QDialog):
             # УСТАНАВЛИВАЕМ ВЫСОТУ СТРОК
             table.verticalHeader().setDefaultSectionSize(36)
 
-            # Получаем тарифы из БД или API
-            if self.api_client:
-                try:
-                    ranges = self.api_client.get_template_rates(role)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки диапазонов: {e}")
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                    SELECT area_from, area_to, fixed_price
-                    FROM rates
-                    WHERE project_type = 'Шаблонный' AND role = ?
-                    ORDER BY area_from ASC
-                    ''', (role,))
-                    ranges = cursor.fetchall()
-                    self.db.close()
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                SELECT area_from, area_to, fixed_price
-                FROM rates
-                WHERE project_type = 'Шаблонный' AND role = ?
-                ORDER BY area_from ASC
-                ''', (role,))
-
-                ranges = cursor.fetchall()
-                self.db.close()
+            # Получаем тарифы через DataAccess
+            try:
+                ranges = self.data_access.get_template_rates(role)
+            except Exception as e:
+                print(f"[WARN] Ошибка загрузки диапазонов через DataAccess: {e}")
+                ranges = []
             
             # Очищаем таблицу
             table.setRowCount(0)
@@ -973,64 +967,14 @@ class RatesDialog(QDialog):
     def save_template_range(self, role, area_from, area_to, price):
         """Сохранение диапазона для шаблонного проекта"""
         try:
-            if self.api_client:
-                try:
-                    self.api_client.save_template_rate(role, area_from, area_to, price)
-                    print(f"[API] Сохранен диапазон: {role} {area_from}-{area_to} м² = {price:.0f} рублей")
-                    CustomMessageBox(
-                        self,
-                        'Успех',
-                        f'Тариф сохранен:\n\n'
-                        f'{role}\n'
-                        f'{area_from:.0f} - {area_to:.0f} м² = {price:,.0f} рублей',
-                        'success'
-                    ).exec_()
-                    return
-                except Exception as e:
-                    print(f"[WARN] Ошибка API сохранения: {e}, fallback на локальную БД")
-
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            # Проверяем, существует ли уже такой диапазон
-            cursor.execute('''
-            SELECT id FROM rates
-            WHERE project_type = 'Шаблонный' 
-              AND role = ?
-              AND area_from = ?
-              AND area_to = ?
-            ''', (role, area_from, area_to))
-            
-            existing = cursor.fetchone()
-            
-            if existing:
-                # Обновляем
-                cursor.execute('''
-                UPDATE rates
-                SET fixed_price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                ''', (price, existing['id']))
-                
-                print(f"Обновлен диапазон: {role} {area_from}-{area_to} м² = {price:.0f} ₽")
-            else:
-                # Создаем новый
-                cursor.execute('''
-                INSERT INTO rates 
-                (project_type, role, area_from, area_to, fixed_price)
-                VALUES ('Шаблонный', ?, ?, ?, ?)
-                ''', (role, area_from, area_to, price))
-                
-                print(f"Создан диапазон: {role} {area_from}-{area_to} м² = {price:.0f} ₽")
-            
-            conn.commit()
-            self.db.close()
-            
+            self.data_access.save_template_rate(role, area_from, area_to, price)
+            print(f"[DataAccess] Сохранен диапазон: {role} {area_from}-{area_to} м² = {price:.0f} рублей")
             CustomMessageBox(
-                self, 
-                'Успех', 
+                self,
+                'Успех',
                 f'Тариф сохранен:\n\n'
                 f'{role}\n'
-                f'{area_from:.0f} - {area_to:.0f} м² = {price:,.0f} ₽',
+                f'{area_from:.0f} - {area_to:.0f} м² = {price:,.0f} рублей',
                 'success'
             ).exec_()
             
@@ -1051,37 +995,9 @@ class RatesDialog(QDialog):
 
         if reply == QDialog.Accepted:
             try:
-                if self.api_client:
-                    try:
-                        self.api_client.delete_individual_rate(role)
-                        # Обнуляем поле в таблице
-                        table = self.findChild(QTableWidget, 'individual_rates_table')
-                        for row in range(table.rowCount()):
-                            role_item = table.item(row, 0)
-                            if role_item and role_item.text() == role:
-                                spin = table.cellWidget(row, 1)
-                                if spin:
-                                    spin.setValue(0)
-                                break
-                        CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
-                        return
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API удаления: {e}, fallback на локальную БД")
-
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                DELETE FROM rates
-                WHERE project_type = 'Индивидуальный' AND role = ?
-                ''', (role,))
-                
-                conn.commit()
-                self.db.close()
-                
+                self.data_access.delete_individual_rate(role)
                 # Обнуляем поле в таблице
                 table = self.findChild(QTableWidget, 'individual_rates_table')
-                
                 for row in range(table.rowCount()):
                     role_item = table.item(row, 0)
                     if role_item and role_item.text() == role:
@@ -1089,7 +1005,6 @@ class RatesDialog(QDialog):
                         if spin:
                             spin.setValue(0)
                         break
-                
                 CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
                 
             except Exception as e:
@@ -1099,74 +1014,10 @@ class RatesDialog(QDialog):
     def save_supervision_rate(self, stage_name, executor_rate, manager_rate):
         """Сохранение тарифов для авторского надзора"""
         try:
-            if self.api_client:
-                try:
-                    self.api_client.save_supervision_rate(stage_name, executor_rate, manager_rate)
-                    CustomMessageBox(
-                        self,
-                        'Успех',
-                        f'Тарифы для стадии "{stage_name}" сохранены:\n\n'
-                        f'ДАН: {executor_rate:.0f} руб/м²\n'
-                        f'Старший менеджер: {manager_rate:.0f} руб/м²',
-                        'success'
-                    ).exec_()
-                    return
-                except Exception as e:
-                    print(f"[WARN] Ошибка API сохранения тарифа надзора: {e}, fallback на локальную БД")
-
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            # Сохраняем тариф для исполнителя (ДАН)
-            cursor.execute('''
-            SELECT id FROM rates
-            WHERE project_type = 'Авторский надзор' AND role = 'ДАН' AND stage_name = ?
-            ''', (stage_name,))
-            
-            existing_executor = cursor.fetchone()
-            
-            if existing_executor:
-                cursor.execute('''
-                UPDATE rates
-                SET rate_per_m2 = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                ''', (executor_rate, existing_executor['id']))
-            else:
-                cursor.execute('''
-                INSERT INTO rates 
-                (project_type, role, stage_name, rate_per_m2)
-                VALUES ('Авторский надзор', 'ДАН', ?, ?)
-                ''', (stage_name, executor_rate))
-            
-            # Сохраняем тариф для старшего менеджера
-            cursor.execute('''
-            SELECT id FROM rates
-            WHERE project_type = 'Авторский надзор' 
-              AND role = 'Старший менеджер проектов' 
-              AND stage_name = ?
-            ''', (stage_name,))
-            
-            existing_manager = cursor.fetchone()
-            
-            if existing_manager:
-                cursor.execute('''
-                UPDATE rates
-                SET rate_per_m2 = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                ''', (manager_rate, existing_manager['id']))
-            else:
-                cursor.execute('''
-                INSERT INTO rates 
-                (project_type, role, stage_name, rate_per_m2)
-                VALUES ('Авторский надзор', 'Старший менеджер проектов', ?, ?)
-                ''', (stage_name, manager_rate))
-            
-            conn.commit()
-            self.db.close()
-            
+            self.data_access.save_supervision_rate(stage_name, executor_rate, manager_rate)
             CustomMessageBox(
-                self, 
-                'Успех', 
+                self,
+                'Успех',
                 f'Тарифы для стадии "{stage_name}" сохранены:\n\n'
                 f'ДАН: {executor_rate:.0f} ₽/м²\n'
                 f'Старший менеджер: {manager_rate:.0f} ₽/м²',
@@ -1187,86 +1038,9 @@ class RatesDialog(QDialog):
             print(f"   Стадия: {stage_name}")
             print(f"   Цена: {rate_per_m2:.0f} руб/м²")
 
-            if self.api_client:
-                try:
-                    self.api_client.save_individual_rate(role, rate_per_m2, stage_name)
-                    stage_display = f'\n\nСтадия: {stage_name}' if stage_name else ''
-                    CustomMessageBox(
-                        self,
-                        'Успех',
-                        f'Тариф для {role} сохранен: {rate_per_m2:.0f} руб/м²{stage_display}',
-                        'success'
-                    ).exec_()
-                    return
-                except Exception as e:
-                    print(f"[WARN] Ошибка API сохранения: {e}, fallback на локальную БД")
-
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            # Для чертёжника учитываем стадию!
-            if stage_name:
-                cursor.execute('''
-                SELECT id FROM rates
-                WHERE project_type = 'Индивидуальный' 
-                  AND role = ? 
-                  AND stage_name = ?
-                ''', (role, stage_name))
-            else:
-                cursor.execute('''
-                SELECT id FROM rates
-                WHERE project_type = 'Индивидуальный' 
-                  AND role = ?
-                  AND stage_name IS NULL
-                ''', (role,))
-            
-            existing = cursor.fetchone()
-            
-            if existing:
-                # Обновляем
-                cursor.execute('''
-                UPDATE rates
-                SET rate_per_m2 = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                ''', (rate_per_m2, existing['id']))
-                
-                stage_text = f" ({stage_name})" if stage_name else ""
-                print(f"   Обновлен тариф ID={existing['id']}: {role}{stage_text} = {rate_per_m2:.0f} ₽/м²")
-            else:
-                # Создаем новый
-                cursor.execute('''
-                INSERT INTO rates 
-                (project_type, role, stage_name, rate_per_m2)
-                VALUES ('Индивидуальный', ?, ?, ?)
-                ''', (role, stage_name, rate_per_m2))
-                
-                new_id = cursor.lastrowid
-                stage_text = f" ({stage_name})" if stage_name else ""
-                print(f"   Создан тариф ID={new_id}: {role}{stage_text} = {rate_per_m2:.0f} ₽/м²")
-            
-            conn.commit()
-            
-            # ========== ПРОВЕРКА СОХРАНЕНИЯ ==========
-            if stage_name:
-                cursor.execute('''
-                SELECT id, rate_per_m2 FROM rates
-                WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name = ?
-                ''', (role, stage_name))
-            else:
-                cursor.execute('''
-                SELECT id, rate_per_m2 FROM rates
-                WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name IS NULL
-                ''', (role,))
-            
-            saved = cursor.fetchone()
-            
-            if saved:
-                print(f"   ПРОВЕРКА: Тариф сохранен в БД (ID={saved['id']}, значение={saved['rate_per_m2']:.0f})")
-            else:
-                print(f"   [WARN] ПРОВЕРКА ПРОВАЛЕНА: Тариф НЕ найден в БД после сохранения!")
-            # =========================================
-            
-            self.db.close()
+            self.data_access.save_individual_rate(role, rate_per_m2, stage_name)
+            stage_text = f" ({stage_name})" if stage_name else ""
+            print(f"   [DataAccess] Сохранен тариф: {role}{stage_text} = {rate_per_m2:.0f} ₽/м²")
 
             stage_display = f'\n\nСтадия: {stage_name}' if stage_name else ''
             CustomMessageBox(
@@ -1288,59 +1062,19 @@ class RatesDialog(QDialog):
     def reset_individual_rate(self, role, stage_name=None):
         """Сброс тарифа с учетом стадии"""
         try:
-            if self.api_client:
-                try:
-                    self.api_client.delete_individual_rate(role, stage_name)
-                    # Обнуляем поле в таблице
-                    table = self.findChild(QTableWidget, 'individual_rates_table')
-                    for row in range(table.rowCount()):
-                        role_item = table.item(row, 0)
-                        stage_item = table.item(row, 1)
-                        if role_item and role_item.text() == role:
-                            current_stage = stage_item.text() if stage_item.text() != '-' else None
-                            if (stage_name and current_stage == stage_name) or (not stage_name and not current_stage):
-                                spin = table.cellWidget(row, 2)
-                                if spin:
-                                    spin.setValue(0)
-                                break
-                    CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
-                    return
-                except Exception as e:
-                    print(f"[WARN] Ошибка API удаления: {e}, fallback на локальную БД")
-
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            if stage_name:
-                cursor.execute('''
-                DELETE FROM rates
-                WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name = ?
-                ''', (role, stage_name))
-            else:
-                cursor.execute('''
-                DELETE FROM rates
-                WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name IS NULL
-                ''', (role,))
-            
-            conn.commit()
-            self.db.close()
-            
+            self.data_access.delete_individual_rate(role, stage_name)
             # Обнуляем поле в таблице
             table = self.findChild(QTableWidget, 'individual_rates_table')
-            
             for row in range(table.rowCount()):
                 role_item = table.item(row, 0)
                 stage_item = table.item(row, 1)
-                
                 if role_item and role_item.text() == role:
                     current_stage = stage_item.text() if stage_item.text() != '-' else None
-                    
                     if (stage_name and current_stage == stage_name) or (not stage_name and not current_stage):
                         spin = table.cellWidget(row, 2)
                         if spin:
                             spin.setValue(0)
                         break
-            
             CustomMessageBox(self, 'Успех', f'Тариф для {role} удален', 'success').exec_()
             
         except Exception as e:
@@ -1350,7 +1084,7 @@ class RatesDialog(QDialog):
     def _offer_recalculate_payments(self, role: str = None):
         """Предложение пересчитать выплаты после изменения тарифа"""
         try:
-            if not self.api_client:
+            if not self.data_access.is_online:
                 return
 
             reply = CustomQuestionBox(
@@ -1363,7 +1097,7 @@ class RatesDialog(QDialog):
 
             if reply == QDialog.Accepted:
                 try:
-                    result = self.api_client.recalculate_payments(role=role)
+                    result = self.data_access.recalculate_payments(role=role)
                     if result.get('status') == 'success':
                         updated = result.get('updated', 0)
                         total = result.get('total', 0)
@@ -1394,58 +1128,12 @@ class RatesDialog(QDialog):
     def save_surveyor_rate(self, city, price):
         """ИСПРАВЛЕНИЕ 30.01.2026: Сохранение тарифа замерщика с проверкой is_online"""
         try:
-            if self.api_client and self.api_client.is_online:
-                try:
-                    self.api_client.save_surveyor_rate(city, price)
-                    print(f"[API] Тариф замерщика сохранён: {city} = {price}")
-                    CustomMessageBox(
-                        self,
-                        'Успех',
-                        f'Тариф замера в городе {city}: {price:.0f} рублей',
-                        'success'
-                    ).exec_()
-                    return
-                except Exception as e:
-                    print(f"[WARN] Ошибка API сохранения тарифа замера: {e}, fallback на локальную БД")
-
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            # Проверяем, существует ли уже тариф
-            cursor.execute('''
-            SELECT id FROM rates
-            WHERE role = 'Замерщик' AND city = ?
-            ''', (city,))
-            
-            existing = cursor.fetchone()
-            
-            if existing:
-                # Обновляем
-                cursor.execute('''
-                UPDATE rates
-                SET surveyor_price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                ''', (price, existing['id']))
-                
-                print(f"Обновлен тариф замера: {city} = {price:.0f} ₽")
-            else:
-                # ========== ИСПРАВЛЕНИЕ: УКАЗЫВАЕМ project_type = NULL ==========
-                cursor.execute('''
-                INSERT INTO rates 
-                (project_type, role, city, surveyor_price)
-                VALUES (NULL, 'Замерщик', ?, ?)
-                ''', (city, price))
-                # ================================================================
-                
-                print(f"Создан тариф замера: {city} = {price:.0f} ₽")
-            
-            conn.commit()
-            self.db.close()
-            
+            self.data_access.save_surveyor_rate(city, price)
+            print(f"[DataAccess] Тариф замерщика сохранён: {city} = {price}")
             CustomMessageBox(
-                self, 
-                'Успех', 
-                f'Тариф замера в городе {city}: {price:.0f} ₽',
+                self,
+                'Успех',
+                f'Тариф замера в городе {city}: {price:.0f} рублей',
                 'success'
             ).exec_()
             
@@ -1467,4 +1155,98 @@ class RatesDialog(QDialog):
         from utils.dialog_helpers import center_dialog_on_parent
         center_dialog_on_parent(self)
 
-        
+
+class RatesSettingsWidget(QWidget):
+    """Виджет управления тарифами — встраивается в AdminDialog"""
+
+    def __init__(self, parent=None, api_client=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self.db = DatabaseManager()
+        self.data_access = DataAccess(api_client=api_client, db=self.db)
+        self._init_ui()
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(200, self.load_all_rates)
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        tabs = QTabWidget()
+        tabs.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
+                gridline-color: #e0e0e0;
+            }}
+            QTableWidget::item {{ padding: 2px; }}
+            QHeaderView::section {{
+                background-color: #f5f5f5;
+                padding: 6px;
+                border: none;
+                border-bottom: 1px solid #d9d9d9;
+                font-weight: bold;
+            }}
+            QDoubleSpinBox {{
+                padding: 2px 4px; padding-right: 20px;
+                max-height: 26px; min-height: 26px;
+                border: 1px solid #d9d9d9; border-radius: 3px;
+                background-color: #FFFFFF; font-size: 11px;
+            }}
+            QDoubleSpinBox:hover {{ border-color: #c0c0c0; }}
+            QDoubleSpinBox:focus {{ border-color: #ffd93c; }}
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+                width: 16px; border: none;
+                background-color: #F8F9FA; border-radius: 3px;
+            }}
+            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {{
+                background-color: #f5f5f5;
+            }}
+            QDoubleSpinBox::up-arrow {{
+                image: url({ICONS_PATH}/arrow-up-circle.svg);
+                width: 12px; height: 12px;
+            }}
+            QDoubleSpinBox::down-arrow {{
+                image: url({ICONS_PATH}/arrow-down-circle.svg);
+                width: 12px; height: 12px;
+            }}
+            QComboBox {{
+                max-height: 28px; min-height: 28px;
+                padding: 2px 8px;
+                border: 1px solid #d9d9d9; border-radius: 3px;
+                background-color: #FFFFFF; font-size: 11px;
+            }}
+        """)
+
+        # Делегируем создание вкладок через proxy с инициализированным C++ QDialog
+        self._dialog_proxy = RatesDialog.__new__(RatesDialog)
+        QDialog.__init__(self._dialog_proxy, self)
+        self._dialog_proxy.hide()
+        self._dialog_proxy.db = self.db
+        self._dialog_proxy.api_client = self.api_client
+        self._dialog_proxy.data_access = self.data_access
+        # Привязываем findChild к нашему виджету
+        self._dialog_proxy.findChild = self.findChild
+
+        individual_widget = self._dialog_proxy.create_individual_rates_tab()
+        tabs.addTab(individual_widget, '  Индивидуальные (за м²)  ')
+
+        template_widget = self._dialog_proxy.create_template_rates_tab()
+        tabs.addTab(template_widget, '  Шаблонные (диапазоны)  ')
+
+        supervision_widget = self._dialog_proxy.create_supervision_rates_tab()
+        tabs.addTab(supervision_widget, '  Авторский надзор (за м²)  ')
+
+        surveyor_widget = self._dialog_proxy.create_surveyor_rates_tab()
+        tabs.addTab(surveyor_widget, '  Замерщик (по городам)  ')
+
+        layout.addWidget(tabs, 1)
+
+    def load_all_rates(self):
+        """Загрузка всех тарифов через proxy"""
+        # Перенаправляем findChild на себя
+        self._dialog_proxy.findChild = self.findChild
+        self._dialog_proxy.load_all_rates()
+

@@ -490,12 +490,6 @@ class ClientDialog(QDialog):
         self.phone = QLineEdit()
         self.phone.setPlaceholderText('+7 (999) 123-45-67')
         # ИСПРАВЛЕНИЕ: Убираем InputMask, используем кастомное форматирование
-        # ИСПРАВЛЕНИЕ: Тонкий курсор через CSS
-        self.phone.setStyleSheet("""
-            QLineEdit {
-                caret-width: 1px;
-            }
-        """)
         # Не устанавливаем начальное значение, чтобы сохранить placeholder
         self.phone.textChanged.connect(lambda: self.format_phone_input(self.phone))
         self.phone.focusInEvent = lambda e: self.on_phone_focus_in(self.phone, e)
@@ -598,12 +592,6 @@ class ClientDialog(QDialog):
         self.org_phone.setPlaceholderText('+7 (999) 123-45-67')
         # ИСПРАВЛЕНИЕ: Убираем InputMask, используем кастомное форматирование
         # ИСПРАВЛЕНИЕ: Было self.phone.setInputMask (ошибка!), исправлено на self.org_phone
-        # ИСПРАВЛЕНИЕ: Тонкий курсор через CSS
-        self.org_phone.setStyleSheet("""
-            QLineEdit {
-                caret-width: 1px;
-            }
-        """)
         # Не устанавливаем начальное значение, чтобы сохранить placeholder
         self.org_phone.textChanged.connect(lambda: self.format_phone_input(self.org_phone))
         self.org_phone.focusInEvent = lambda e: self.on_phone_focus_in(self.org_phone, e)
@@ -1066,12 +1054,7 @@ class ClientSearchDialog(QDialog):
 
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText('+7 (999) 123-45-67')
-        # Тонкий курсор через CSS
-        self.phone_input.setStyleSheet(input_style + """
-            QLineEdit {
-                caret-width: 1px;
-            }
-        """)
+        self.phone_input.setStyleSheet(input_style)
         # Подключаем форматирование телефона
         self.phone_input.textChanged.connect(lambda: self.format_phone_input(self.phone_input))
         self.phone_input.focusInEvent = lambda e: self.on_phone_focus_in(self.phone_input, e)

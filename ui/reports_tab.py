@@ -12,6 +12,7 @@ from database.db_manager import DatabaseManager
 from ui.chart_widget import FunnelBarChart, ExecutorLoadChart, ProjectTypePieChart
 from utils.icon_loader import IconLoader
 from utils.resource_path import resource_path
+from utils.data_access import DataAccess
 from datetime import datetime
 
 # Опциональный импорт matplotlib
@@ -31,6 +32,7 @@ class ReportsTab(QWidget):
         self.employee = employee
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self._data_loaded = False
         self.init_ui()
 
@@ -287,13 +289,7 @@ class ReportsTab(QWidget):
         """Загрузка данных для графиков аналитики"""
         try:
             # Типы проектов (из текущей статистики)
-            if self.api_client and getattr(self.api_client, 'is_online', False):
-                try:
-                    contracts = self.api_client.get_contracts(limit=1000)
-                except Exception:
-                    contracts = self.db.get_all_contracts()
-            else:
-                contracts = self.db.get_all_contracts()
+            contracts = self.data_access.get_all_contracts()
 
             individual = sum(1 for c in contracts if c.get('project_type') == 'Индивидуальный')
             template = sum(1 for c in contracts if c.get('project_type') == 'Шаблонный')
@@ -301,13 +297,13 @@ class ReportsTab(QWidget):
             self.pie_chart.set_data(individual, template, supervision)
 
             # Воронка
-            funnel_data = self.db.get_funnel_statistics()
+            funnel_data = self.data_access.get_funnel_statistics()
             funnel = funnel_data.get("funnel", {})
             if funnel:
                 self.funnel_chart.set_data(funnel)
 
             # Нагрузка исполнителей
-            executors = self.db.get_executor_load()
+            executors = self.data_access.get_executor_load()
             if executors:
                 self.executor_chart.set_data(executors)
 
@@ -421,30 +417,9 @@ class ReportsTab(QWidget):
             self.city_combo.clear()
             self.city_combo.addItem('Все')
 
-            if self.api_client and self.api_client.is_online:
-                try:
-                    cities = self.api_client.get_cities()
-                    for city in cities:
-                        self.city_combo.addItem(city)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки городов: {e}")
-                    # Fallback to local DB
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != "" ORDER BY city')
-                    cities = [row['city'] for row in cursor.fetchall()]
-                    self.db.close()
-                    for city in cities:
-                        self.city_combo.addItem(city)
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != "" ORDER BY city')
-                cities = [row['city'] for row in cursor.fetchall()]
-                self.db.close()
-
-                for city in cities:
-                    self.city_combo.addItem(city)
+            cities = self.data_access.get_cities()
+            for city in cities:
+                self.city_combo.addItem(city)
         except Exception as e:
             print(f"Ошибка загрузки городов: {e}")
     
@@ -454,40 +429,9 @@ class ReportsTab(QWidget):
             self.agent_type_combo.clear()
             self.agent_type_combo.addItem('Все')
 
-            if self.api_client and self.api_client.is_online:
-                try:
-                    agents = self.api_client.get_agent_types()
-                    for agent in agents:
-                        self.agent_type_combo.addItem(agent)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки типов агентов: {e}")
-                    # Fallback to local DB
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                    SELECT DISTINCT agent_type
-                    FROM contracts
-                    WHERE agent_type IS NOT NULL AND agent_type != ""
-                    ORDER BY agent_type
-                    ''')
-                    agents = [row['agent_type'] for row in cursor.fetchall()]
-                    self.db.close()
-                    for agent in agents:
-                        self.agent_type_combo.addItem(agent)
-            else:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                SELECT DISTINCT agent_type
-                FROM contracts
-                WHERE agent_type IS NOT NULL AND agent_type != ""
-                ORDER BY agent_type
-                ''')
-                agents = [row['agent_type'] for row in cursor.fetchall()]
-                self.db.close()
-
-                for agent in agents:
-                    self.agent_type_combo.addItem(agent)
+            agents = self.data_access.get_agent_types()
+            for agent in agents:
+                self.agent_type_combo.addItem(agent)
         except Exception as e:
             print(f"Ошибка загрузки типов агентов: {e}")
     
@@ -543,14 +487,10 @@ class ReportsTab(QWidget):
     def load_project_statistics(self, project_type, year, quarter, month, agent_type, city):
         """Загрузка статистики для типа проекта"""
         try:
-            if self.api_client and self.api_client.is_online:
-                try:
-                    stats = self.api_client.get_project_statistics(project_type, year, quarter, month, agent_type, city)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API статистики проектов: {e}")
-                    stats = self.db.get_project_statistics(project_type, year, quarter, month, agent_type, city)
-            else:
-                stats = self.db.get_project_statistics(project_type, year, quarter, month, agent_type, city)
+            stats = self.data_access.get_project_statistics(
+                project_type=project_type, year=year, quarter=quarter,
+                month=month, agent_type=agent_type, city=city
+            )
 
             # Обновляем только диаграммы - карточки статистики в дашборде main_window
             self.update_pie_chart(f'{project_type}_cities_chart', stats['by_cities'])
@@ -564,14 +504,10 @@ class ReportsTab(QWidget):
     def load_supervision_statistics(self, year, quarter, month, agent_type, city):
         """Загрузка статистики авторского надзора"""
         try:
-            if self.api_client and self.api_client.is_online:
-                try:
-                    stats = self.api_client.get_supervision_statistics(year, quarter, month, agent_type, city)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API статистики надзора: {e}")
-                    stats = self.db.get_supervision_statistics_report(year, quarter, month, agent_type, city)
-            else:
-                stats = self.db.get_supervision_statistics_report(year, quarter, month, agent_type, city)
+            stats = self.data_access.get_supervision_statistics_report(
+                year=year, quarter=quarter, month=month,
+                agent_type=agent_type, city=city
+            )
 
             # Обновляем только диаграммы - карточки статистики в дашборде main_window
             self.update_pie_chart('supervision_cities_chart', stats['by_cities'])
@@ -691,20 +627,17 @@ class ReportsTab(QWidget):
             quarter = self.quarter_combo.currentText() if self.quarter_combo.currentText() != 'Все' else None
             month = self.month_combo.currentIndex() if self.month_combo.currentText() != 'Все' else None
 
-            if self.api_client and self.api_client.is_online:
-                try:
-                    individual = self.api_client.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
-                    template = self.api_client.get_project_statistics('Шаблонный', year, quarter, month, None, None)
-                    supervision = self.api_client.get_supervision_statistics(year, quarter, month, None, None)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API для PDF экспорта: {e}")
-                    individual = self.db.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
-                    template = self.db.get_project_statistics('Шаблонный', year, quarter, month, None, None)
-                    supervision = self.db.get_supervision_statistics_report(year, quarter, month, None, None)
-            else:
-                individual = self.db.get_project_statistics('Индивидуальный', year, quarter, month, None, None)
-                template = self.db.get_project_statistics('Шаблонный', year, quarter, month, None, None)
-                supervision = self.db.get_supervision_statistics_report(year, quarter, month, None, None)
+            individual = self.data_access.get_project_statistics(
+                project_type='Индивидуальный', year=year, quarter=quarter,
+                month=month, agent_type=None, city=None
+            )
+            template = self.data_access.get_project_statistics(
+                project_type='Шаблонный', year=year, quarter=quarter,
+                month=month, agent_type=None, city=None
+            )
+            supervision = self.data_access.get_supervision_statistics_report(
+                year=year, quarter=quarter, month=month, agent_type=None, city=None
+            )
             
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)

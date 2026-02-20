@@ -107,14 +107,37 @@ class DataAccess(QObject):
 
     # ==================== КЛИЕНТЫ ====================
 
-    def get_all_clients(self) -> List[Dict]:
-        """Получить всех клиентов"""
+    def get_all_clients(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
+        """Получить всех клиентов.
+
+        Параметры skip/limit позволяют получать данные постранично.
+        По умолчанию limit=10000 для обратной совместимости (загрузка всех записей).
+        """
         if self._should_use_api():
             try:
-                return self.api_client.get_clients(skip=0, limit=10000)
+                return self.api_client.get_clients(skip=skip, limit=limit)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_clients, fallback: {e}")
-        return self.db.get_all_clients()
+        return self.db.get_all_clients(skip=skip, limit=limit)
+
+    def get_clients_paginated(
+        self, skip: int = 0, limit: int = 100
+    ) -> tuple:
+        """Получить клиентов с информацией о пагинации.
+
+        Возвращает кортеж (список клиентов, общее количество записей).
+        В сетевом режиме использует заголовок X-Total-Count от сервера.
+        В автономном режиме подсчитывает total через запрос к локальной БД.
+        """
+        if self._should_use_api():
+            try:
+                return self.api_client.get_clients_paginated(skip=skip, limit=limit)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_clients_paginated, fallback: {e}")
+        # Автономный режим: данные и total из локальной БД
+        clients = self.db.get_all_clients(skip=skip, limit=limit)
+        total = self.db.get_clients_count()
+        return clients, total
 
     def get_client(self, client_id: int) -> Optional[Dict]:
         """Получить клиента по ID"""
@@ -135,6 +158,33 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_contracts_count_by_client, fallback: {e}")
         if hasattr(self.db, 'get_contracts_count_by_client'):
             return self.db.get_contracts_count_by_client(client_id)
+        return 0
+
+    def get_contracts_count(
+        self,
+        status: Optional[str] = None,
+        project_type: Optional[str] = None,
+        year: Optional[int] = None
+    ) -> int:
+        """Получить общее количество договоров (API-first, fallback на локальную БД)"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_contracts_count(
+                    status=status,
+                    project_type=project_type,
+                    year=year
+                )
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_contracts_count, fallback: {e}")
+        if self.db and hasattr(self.db, 'get_contracts_count'):
+            try:
+                return self.db.get_contracts_count(
+                    status=status,
+                    project_type=project_type,
+                    year=year
+                )
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB error get_contracts_count: {e}")
         return 0
 
     def create_client(self, client_data: Dict) -> Optional[Dict]:
@@ -210,14 +260,37 @@ class DataAccess(QObject):
 
     # ==================== ДОГОВОРА ====================
 
-    def get_all_contracts(self) -> List[Dict]:
-        """Получить все договора"""
+    def get_all_contracts(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
+        """Получить все договора.
+
+        Параметры skip/limit позволяют получать данные постранично.
+        По умолчанию limit=10000 для обратной совместимости (загрузка всех записей).
+        """
         if self._should_use_api():
             try:
-                return self.api_client.get_contracts(skip=0, limit=10000)
+                return self.api_client.get_contracts(skip=skip, limit=limit)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_contracts, fallback: {e}")
-        return self.db.get_all_contracts()
+        return self.db.get_all_contracts(skip=skip, limit=limit)
+
+    def get_contracts_paginated(
+        self, skip: int = 0, limit: int = 100
+    ) -> tuple:
+        """Получить договора с информацией о пагинации.
+
+        Возвращает кортеж (список договоров, общее количество записей).
+        В сетевом режиме использует заголовок X-Total-Count от сервера.
+        В автономном режиме подсчитывает total через запрос к локальной БД.
+        """
+        if self._should_use_api():
+            try:
+                return self.api_client.get_contracts_paginated(skip=skip, limit=limit)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_contracts_paginated, fallback: {e}")
+        # Автономный режим: данные и total из локальной БД
+        contracts = self.db.get_all_contracts(skip=skip, limit=limit)
+        total = self.db.get_contracts_count()
+        return contracts, total
 
     def get_contract(self, contract_id: int) -> Optional[Dict]:
         """Получить договор по ID"""
@@ -268,9 +341,26 @@ class DataAccess(QObject):
 
     def delete_contract(self, contract_id: int) -> bool:
         """Удалить договор"""
-        if self.api_client:
-            return self.api_client.delete_contract(contract_id)
-        # Локально используется delete_order
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.delete_contract(contract_id)
+                if result:
+                    # Также удаляем локально для консистентности кэша
+                    crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
+                    self.db.delete_order(contract_id, crm_card_id)
+                    return True
+                return False
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_contract: {e}")
+                self._queue_operation('delete', 'contract', contract_id, {})
+                crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
+                return self.db.delete_order(contract_id, crm_card_id)
+        elif self.api_client:
+            # Offline-режим: удаляем локально и ставим в очередь
+            self._queue_operation('delete', 'contract', contract_id, {})
+            crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
+            return self.db.delete_order(contract_id, crm_card_id)
+        # Только локальная БД
         crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
         return self.db.delete_order(contract_id, crm_card_id)
 
@@ -394,8 +484,24 @@ class DataAccess(QObject):
 
     def create_crm_card(self, card_data: Dict) -> Optional[Dict]:
         """Создать CRM карточку"""
-        if self.api_client:
-            return self.api_client.create_crm_card(card_data)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_crm_card(card_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API create_crm_card: {e}")
+                # Сохраняем локально и добавляем в очередь
+                card_id = self.db.add_crm_card(card_data)
+                if card_id:
+                    self._queue_operation('create', 'crm_card', card_id, card_data)
+                    return {'id': card_id, **card_data}
+                return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            card_id = self.db.add_crm_card(card_data)
+            if card_id:
+                self._queue_operation('create', 'crm_card', card_id, card_data)
+                return {'id': card_id, **card_data}
+            return None
         card_id = self.db.add_crm_card(card_data)
         return {'id': card_id, **card_data} if card_id else None
 
@@ -418,17 +524,117 @@ class DataAccess(QObject):
 
     def delete_crm_card(self, card_id: int) -> bool:
         """Удалить CRM карточку"""
-        if self.api_client:
-            return self.api_client.delete_crm_card(card_id)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.delete_crm_card(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_crm_card: {e}")
+                self._queue_operation('delete', 'crm_card', card_id, {})
+                contract_id = self.db.get_contract_id_by_crm_card(card_id)
+                return self.db.delete_order(contract_id, card_id) if contract_id else False
+        elif self.api_client:
+            # Offline-режим: удаляем локально и ставим в очередь
+            self._queue_operation('delete', 'crm_card', card_id, {})
+            contract_id = self.db.get_contract_id_by_crm_card(card_id)
+            return self.db.delete_order(contract_id, card_id) if contract_id else False
         contract_id = self.db.get_contract_id_by_crm_card(card_id)
         return self.db.delete_order(contract_id, card_id) if contract_id else False
 
     def update_crm_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку в другую колонку"""
+        # Сначала обновляем локально
+        self.db.update_crm_card_column(card_id, column)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_crm_card(card_id, {'column_name': column})
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_crm_card_column: {e}")
+                self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+        elif self.api_client:
+            self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+
+        return True
+
+    # ==================== CRM WORKFLOW ====================
+
+    def move_crm_card(self, card_id: int, column: str) -> bool:
+        """Переместить CRM карточку в другую колонку (через workflow или напрямую)"""
         if self.api_client:
-            result = self.api_client.update_crm_card(card_id, {'column_position': column})
-            return result is not None
+            try:
+                result = self.api_client.move_crm_card(card_id, column)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API move_crm_card: {e}")
         return self.db.update_crm_card_column(card_id, column)
+
+    def get_workflow_state(self, card_id: int) -> Optional[Dict]:
+        """Получить состояние workflow карточки (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] get_workflow_state: API недоступен")
+            return None
+        try:
+            return self.api_client.get_workflow_state(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API get_workflow_state: {e}")
+            return None
+
+    def workflow_submit(self, card_id: int) -> Optional[Dict]:
+        """Отправить карточку на проверку (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_submit: API недоступен")
+            return None
+        try:
+            return self.api_client.workflow_submit(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_submit: {e}")
+            return None
+
+    def workflow_accept(self, card_id: int) -> Optional[Dict]:
+        """Принять карточку (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_accept: API недоступен")
+            return None
+        try:
+            return self.api_client.workflow_accept(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_accept: {e}")
+            return None
+
+    def workflow_reject(self, card_id: int, stage_name: str = None, reason: str = None,
+                        corrections_path: str = None) -> Optional[Dict]:
+        """Отклонить карточку (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_reject: API недоступен")
+            return None
+        try:
+            return self.api_client.workflow_reject(card_id, corrections_path=corrections_path or '')
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_reject: {e}")
+            return None
+
+    def workflow_client_send(self, card_id: int) -> Optional[Dict]:
+        """Отправить клиенту (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_client_send: API недоступен")
+            return None
+        try:
+            return self.api_client.workflow_client_send(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_client_send: {e}")
+            return None
+
+    def workflow_client_ok(self, card_id: int) -> Optional[Dict]:
+        """Подтверждение от клиента (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_client_ok: API недоступен")
+            return None
+        try:
+            return self.api_client.workflow_client_ok(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_client_ok: {e}")
+            return None
 
     def get_contract_id_by_crm_card(self, card_id: int) -> Optional[int]:
         """Получить ID договора по ID CRM карточки"""
@@ -466,10 +672,28 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_supervision_card, fallback: {e}")
         return self.db.get_supervision_card_data(card_id)
 
-    def create_supervision_card(self, card_data: Dict) -> Optional[Dict]:
-        """Создать карточку надзора"""
-        if self.api_client:
-            return self.api_client.create_supervision_card(card_data)
+    def create_supervision_card(self, card_data) -> Optional[Dict]:
+        """Создать карточку надзора (принимает Dict или int contract_id)"""
+        if isinstance(card_data, int):
+            card_data = {'contract_id': card_data, 'column_name': 'Новый заказ'}
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_supervision_card(card_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API create_supervision_card: {e}")
+                # Сохраняем локально и добавляем в очередь
+                card_id = self.db.add_supervision_card(card_data)
+                if card_id:
+                    self._queue_operation('create', 'supervision_card', card_id, card_data)
+                    return {'id': card_id, **card_data}
+                return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            card_id = self.db.add_supervision_card(card_data)
+            if card_id:
+                self._queue_operation('create', 'supervision_card', card_id, card_data)
+                return {'id': card_id, **card_data}
+            return None
         card_id = self.db.add_supervision_card(card_data)
         return {'id': card_id, **card_data} if card_id else None
 
@@ -492,10 +716,146 @@ class DataAccess(QObject):
 
     def update_supervision_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку надзора в другую колонку"""
+        # Сначала обновляем локально
+        self.db.update_supervision_card_column(card_id, column)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_supervision_card(card_id, {'column_name': column})
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_supervision_card_column: {e}")
+                self._queue_operation('update', 'supervision_card', card_id, {'column_name': column})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_card', card_id, {'column_name': column})
+
+        return True
+
+    # ==================== SUPERVISION ACTIONS ====================
+
+    def move_supervision_card(self, card_id: int, column: str) -> bool:
+        """Переместить карточку надзора через специализированный метод"""
         if self.api_client:
-            result = self.api_client.update_supervision_card(card_id, {'column_position': column})
-            return result is not None
-        return self.db.update_supervision_card_column(card_id, column)
+            try:
+                result = self.api_client.move_supervision_card(card_id, column)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API move_supervision_card: {e}")
+        try:
+            return self.db.update_supervision_card_column(card_id, column)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB move_supervision_card: {e}")
+            return False
+
+    def complete_supervision_stage(self, card_id: int, **kwargs) -> Optional[Dict]:
+        """Завершить стадию надзора"""
+        if self.api_client:
+            try:
+                return self.api_client.complete_supervision_stage(card_id, **kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API complete_supervision_stage: {e}")
+        try:
+            return self.db.complete_supervision_stage(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB complete_supervision_stage: {e}")
+            return None
+
+    def reset_supervision_stage_completion(self, card_id: int) -> bool:
+        """Сбросить отметку выполнения стадии надзора"""
+        if self.api_client:
+            try:
+                result = self.api_client.reset_supervision_stage_completion(card_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API reset_supervision_stage_completion: {e}")
+        try:
+            return self.db.reset_supervision_stage_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_supervision_stage_completion: {e}")
+            return False
+
+    def pause_supervision_card(self, card_id: int, reason: str = None, employee_id: int = None) -> Optional[Dict]:
+        """Поставить карточку надзора на паузу"""
+        if self.api_client:
+            try:
+                return self.api_client.pause_supervision_card(card_id, reason or '')
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API pause_supervision_card: {e}")
+        try:
+            return self.db.pause_supervision_card(card_id, reason or '', employee_id or 0)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB pause_supervision_card: {e}")
+            return None
+
+    def resume_supervision_card(self, card_id: int, employee_id: int = None) -> Optional[Dict]:
+        """Возобновить карточку надзора после паузы"""
+        if self.api_client:
+            try:
+                return self.api_client.resume_supervision_card(card_id, employee_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API resume_supervision_card: {e}")
+        try:
+            return self.db.resume_supervision_card(card_id, employee_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB resume_supervision_card: {e}")
+            return None
+
+    def delete_supervision_order(self, contract_id: int, supervision_card_id: int = None) -> bool:
+        """Удалить выезд из карточки надзора"""
+        if self.api_client:
+            try:
+                result = self.api_client.delete_supervision_order(contract_id, supervision_card_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_supervision_order: {e}")
+        try:
+            return self.db.delete_supervision_order(contract_id, supervision_card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB delete_supervision_order: {e}")
+            return False
+
+    def get_contract_id_by_supervision_card(self, card_id: int) -> Optional[int]:
+        """Получить ID договора по ID карточки надзора"""
+        if self.api_client:
+            try:
+                return self.api_client.get_contract_id_by_supervision_card(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API get_contract_id_by_supervision_card: {e}")
+        try:
+            return self.db.get_contract_id_by_supervision_card(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB get_contract_id_by_supervision_card: {e}")
+            return None
+
+    def get_supervision_addresses(self) -> List[str]:
+        """Получить список адресов карточек надзора"""
+        if self.api_client:
+            try:
+                return self.api_client.get_supervision_addresses()
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API get_supervision_addresses: {e}")
+        try:
+            return self.db.get_supervision_addresses()
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB get_supervision_addresses: {e}")
+            return []
+
+    def get_supervision_statistics_filtered(self, period=None, year=None, quarter=None, month=None,
+                                            address_id=None, stage=None, executor_id=None,
+                                            manager_id=None, status=None) -> Dict:
+        """Получить отфильтрованную статистику надзора"""
+        if self.api_client:
+            try:
+                return self.api_client.get_supervision_statistics_filtered(
+                    year=year, quarter=quarter, month=month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API get_supervision_statistics_filtered: {e}")
+        try:
+            return self.db.get_supervision_statistics_filtered(
+                period, year, quarter, month, address_id, stage, executor_id, manager_id, status)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB get_supervision_statistics_filtered: {e}")
+            return {}
 
     # ==================== ПЛАТЕЖИ ====================
 
@@ -510,24 +870,211 @@ class DataAccess(QObject):
 
     def create_payment(self, payment_data: Dict) -> Optional[Dict]:
         """Создать платёж"""
-        if self.api_client:
-            return self.api_client.create_payment(payment_data)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_payment(payment_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API create_payment: {e}")
+                # Сохраняем локально и добавляем в очередь
+                payment_id = self.db.add_payment(payment_data)
+                if payment_id:
+                    self._queue_operation('create', 'payment', payment_id, payment_data)
+                    return {'id': payment_id, **payment_data}
+                return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            payment_id = self.db.add_payment(payment_data)
+            if payment_id:
+                self._queue_operation('create', 'payment', payment_id, payment_data)
+                return {'id': payment_id, **payment_data}
+            return None
         payment_id = self.db.add_payment(payment_data)
         return {'id': payment_id, **payment_data} if payment_id else None
 
     def update_payment(self, payment_id: int, payment_data: Dict) -> bool:
         """Обновить платёж"""
-        if self.api_client:
-            result = self.api_client.update_payment(payment_id, payment_data)
-            return result is not None
-        return self.db.update_payment(payment_id, payment_data)
+        # Сначала обновляем локально
+        self.db.update_payment(payment_id, payment_data)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_payment(payment_id, payment_data)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_payment: {e}")
+                self._queue_operation('update', 'payment', payment_id, payment_data)
+        elif self.api_client:
+            self._queue_operation('update', 'payment', payment_id, payment_data)
+
+        return True
 
     def delete_payment(self, payment_id: int) -> bool:
         """Удалить платёж"""
+        # Сначала удаляем локально
+        self.db.delete_payment(payment_id)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.delete_payment(payment_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_payment: {e}")
+                self._queue_operation('delete', 'payment', payment_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'payment', payment_id, {})
+
+        return True
+
+    def get_payment(self, payment_id: int) -> Optional[Dict]:
+        """Получить платёж по ID"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_payment(payment_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_payment, fallback: {e}")
+        return self.db.get_payment(payment_id)
+
+    def get_payments_by_type(self, payment_type: str, project_type_filter: str = None) -> List[Dict]:
+        """Получить платежи по типу"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_payments_by_type(payment_type, project_type_filter=project_type_filter)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_payments_by_type, fallback: {e}")
+        return self.db.get_payments_by_type(payment_type)
+
+    def get_payments_by_supervision_card(self, card_id: int) -> List[Dict]:
+        """Получить платежи по карточке надзора"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_payments_by_supervision_card(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_payments_by_supervision_card, fallback: {e}")
+        return self.db.get_payments_by_supervision_card(card_id)
+
+    def get_payments_for_supervision(self, contract_id: int) -> List[Dict]:
+        """Получить платежи надзора по договору"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_payments_for_supervision(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_payments_for_supervision, fallback: {e}")
+        return self.db.get_payments_for_supervision(contract_id)
+
+    def get_payments_for_crm(self, contract_id: int) -> List[Dict]:
+        """Получить платежи CRM по договору"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_payments_for_crm(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_payments_for_crm, fallback: {e}")
+        return self.db.get_payments_for_crm(contract_id)
+
+    def get_year_payments(self, year: int, include_null_month: bool = False) -> List[Dict]:
+        """Получить платежи за год"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_year_payments(year, include_null_month=include_null_month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_year_payments, fallback: {e}")
+        return self.db.get_year_payments(year)
+
+    def mark_payment_as_paid(self, payment_id: int, employee_id: int = None) -> bool:
+        """Отметить платёж как оплаченный"""
+        # Сначала отмечаем локально
+        self.db.mark_payment_as_paid(payment_id, employee_id)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.mark_payment_as_paid(payment_id, employee_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API mark_payment_as_paid: {e}")
+                self._queue_operation('update', 'payment', payment_id,
+                                      {'_action': 'mark_paid', 'employee_id': employee_id})
+        elif self.api_client:
+            self._queue_operation('update', 'payment', payment_id,
+                                  {'_action': 'mark_paid', 'employee_id': employee_id})
+
+        return True
+
+    def create_payment_record(self, contract_id: int, employee_id: int, role: str,
+                             stage_name: str = None, payment_type: str = 'Полная оплата',
+                             report_month: str = None, crm_card_id: int = None,
+                             supervision_card_id: int = None) -> Optional[Dict]:
+        """Создать платёж с расширенными параметрами"""
         if self.api_client:
-            result = self.api_client.delete_payment(payment_id)
-            return result is not None
-        return self.db.delete_payment(payment_id)
+            try:
+                return self.api_client.create_payment_record(
+                    contract_id, employee_id, role, stage_name=stage_name,
+                    payment_type=payment_type, report_month=report_month,
+                    crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error create_payment_record: {e}")
+        try:
+            return self.db.create_payment_record(
+                contract_id, employee_id, role, stage_name=stage_name,
+                payment_type=payment_type, report_month=report_month,
+                crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB error create_payment_record: {e}")
+            return None
+
+    def update_payment_manual(self, payment_id: int, amount: float) -> bool:
+        """Обновить сумму платежа вручную"""
+        # Сначала обновляем локально
+        self.db.update_payment_manual(payment_id, amount)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_payment_manual(payment_id, amount)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_payment_manual: {e}")
+                self._queue_operation('update', 'payment', payment_id,
+                                      {'_action': 'manual_amount', 'amount': amount})
+        elif self.api_client:
+            self._queue_operation('update', 'payment', payment_id,
+                                  {'_action': 'manual_amount', 'amount': amount})
+
+        return True
+
+    def calculate_payment_amount(self, contract_id, employee_id, role,
+                                  stage_name=None, supervision_card_id=None) -> Optional[Dict]:
+        """Рассчитать сумму платежа"""
+        if self._should_use_api():
+            try:
+                return self.api_client.calculate_payment_amount(
+                    contract_id, employee_id, role,
+                    stage_name=stage_name, supervision_card_id=supervision_card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error calculate_payment_amount, fallback: {e}")
+        return self.db.calculate_payment_amount(
+            contract_id, employee_id, role,
+            stage_name=stage_name, supervision_card_id=supervision_card_id)
+
+    def recalculate_payments(self, role: str = None) -> Optional[Dict]:
+        """Пересчитать платежи (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.recalculate_payments(role)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error recalculate_payments: {e}")
+                return None
+        _safe_log("[DataAccess] recalculate_payments: API недоступен")
+        return None
+
+    def set_payments_report_month(self, contract_id: int, month: str) -> bool:
+        """Установить отчётный месяц для платежей (только API)"""
+        if self.api_client:
+            try:
+                result = self.api_client.set_payments_report_month(contract_id, month)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error set_payments_report_month: {e}")
+                return False
+        _safe_log("[DataAccess] set_payments_report_month: API недоступен")
+        return False
 
     # ==================== ИСТОРИЯ ДЕЙСТВИЙ ====================
 
@@ -543,16 +1090,28 @@ class DataAccess(QObject):
     def add_action_history(self, user_id: int, action_type: str, entity_type: str,
                           entity_id: int, description: str = None) -> bool:
         """Добавить запись в историю действий"""
-        if self.api_client:
-            history_data = {
-                'user_id': user_id,
-                'action_type': action_type,
-                'entity_type': entity_type,
-                'entity_id': entity_id,
-                'description': description
-            }
-            result = self.api_client.create_action_history(history_data)
-            return result is not None
+        history_data = {
+            'user_id': user_id,
+            'action_type': action_type,
+            'entity_type': entity_type,
+            'entity_id': entity_id,
+            'description': description
+        }
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.create_action_history(history_data)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API add_action_history: {e}")
+                # Сохраняем локально и добавляем в очередь
+                self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
+                self._queue_operation('create', 'action_history', entity_id, history_data)
+                return True
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
+            self._queue_operation('create', 'action_history', entity_id, history_data)
+            return True
         return self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
 
     # ==================== ИСТОРИЯ НАДЗОРА ====================
@@ -569,15 +1128,37 @@ class DataAccess(QObject):
     def add_supervision_history(self, card_id: int, user_id: int, action_type: str,
                                description: str = None) -> bool:
         """Добавить запись в историю надзора"""
-        if self.api_client:
-            history_data = {
-                'user_id': user_id,
-                'action_type': action_type,
-                'description': description
-            }
-            result = self.api_client.add_supervision_history(card_id, history_data)
-            return result is not None
-        return self.db.add_supervision_history(card_id, user_id, action_type, description)
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.add_supervision_history(
+                    card_id,
+                    entry_type=action_type,
+                    message=description or "",
+                    employee_id=user_id
+                )
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API add_supervision_history: {e}")
+                # Сохраняем локально и добавляем в очередь
+                self.db.add_supervision_history(card_id, action_type, description or "", user_id)
+                self._queue_operation('create', 'supervision_history', card_id, {
+                    'card_id': card_id,
+                    'entry_type': action_type,
+                    'message': description or "",
+                    'employee_id': user_id
+                })
+                return True
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            self.db.add_supervision_history(card_id, action_type, description or "", user_id)
+            self._queue_operation('create', 'supervision_history', card_id, {
+                'card_id': card_id,
+                'entry_type': action_type,
+                'message': description or "",
+                'employee_id': user_id
+            })
+            return True
+        return self.db.add_supervision_history(card_id, action_type, description or "", user_id)
 
     # ==================== СТАВКИ ====================
 
@@ -601,23 +1182,125 @@ class DataAccess(QObject):
 
     def create_rate(self, rate_data: Dict) -> Optional[Dict]:
         """Создать ставку"""
-        if self.api_client:
-            return self.api_client.create_rate(rate_data)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_rate(rate_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API create_rate: {e}")
+                # Сохраняем локально и добавляем в очередь
+                rate_id = self.db.add_rate(rate_data)
+                if rate_id:
+                    self._queue_operation('create', 'rate', rate_id, rate_data)
+                    return {'id': rate_id, **rate_data}
+                return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            rate_id = self.db.add_rate(rate_data)
+            if rate_id:
+                self._queue_operation('create', 'rate', rate_id, rate_data)
+                return {'id': rate_id, **rate_data}
+            return None
         rate_id = self.db.add_rate(rate_data)
         return {'id': rate_id, **rate_data} if rate_id else None
 
     def update_rate(self, rate_id: int, rate_data: Dict) -> bool:
         """Обновить ставку"""
-        if self.api_client:
-            result = self.api_client.update_rate(rate_id, rate_data)
-            return result is not None
-        return self.db.update_rate(rate_id, rate_data)
+        # Сначала обновляем локально
+        self.db.update_rate(rate_id, rate_data)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_rate(rate_id, rate_data)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_rate: {e}")
+                self._queue_operation('update', 'rate', rate_id, rate_data)
+        elif self.api_client:
+            self._queue_operation('update', 'rate', rate_id, rate_data)
+
+        return True
 
     def delete_rate(self, rate_id: int) -> bool:
         """Удалить ставку"""
+        # Сначала удаляем локально
+        self.db.delete_rate(rate_id)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.delete_rate(rate_id)
+                return result if isinstance(result, bool) else True
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_rate: {e}")
+                self._queue_operation('delete', 'rate', rate_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'rate', rate_id, {})
+
+        return True
+
+    def get_template_rates(self, role: str = None) -> List[Dict]:
+        """Получить шаблонные ставки"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_template_rates(role)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_template_rates, fallback: {e}")
+        return self.db.get_template_rates(role)
+
+    def save_template_rate(self, role: str, area_from: float, area_to: float, price: float) -> Optional[Dict]:
+        """Сохранить шаблонную ставку (только API)"""
         if self.api_client:
-            return self.api_client.delete_rate(rate_id)
-        return self.db.delete_rate(rate_id)
+            try:
+                return self.api_client.save_template_rate(role, area_from, area_to, price)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error save_template_rate: {e}")
+                return None
+        _safe_log("[DataAccess] save_template_rate: API недоступен")
+        return None
+
+    def save_individual_rate(self, role: str, rate_per_m2: float, stage_name: str = None) -> Optional[Dict]:
+        """Сохранить индивидуальную ставку (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.save_individual_rate(role, rate_per_m2, stage_name)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error save_individual_rate: {e}")
+                return None
+        _safe_log("[DataAccess] save_individual_rate: API недоступен")
+        return None
+
+    def delete_individual_rate(self, role: str, stage_name: str = None) -> bool:
+        """Удалить индивидуальную ставку (только API)"""
+        if self.api_client:
+            try:
+                result = self.api_client.delete_individual_rate(role, stage_name)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error delete_individual_rate: {e}")
+                return False
+        _safe_log("[DataAccess] delete_individual_rate: API недоступен")
+        return False
+
+    def save_surveyor_rate(self, city: str, price: float) -> Optional[Dict]:
+        """Сохранить ставку геодезиста (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.save_surveyor_rate(city, price)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error save_surveyor_rate: {e}")
+                return None
+        _safe_log("[DataAccess] save_surveyor_rate: API недоступен")
+        return None
+
+    def save_supervision_rate(self, stage: str, exec_rate: float, mgr_rate: float) -> Optional[Dict]:
+        """Сохранить ставку надзора (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.save_supervision_rate(stage, exec_rate, mgr_rate)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error save_supervision_rate: {e}")
+                return None
+        _safe_log("[DataAccess] save_supervision_rate: API недоступен")
+        return None
 
     # ==================== ЗАРПЛАТЫ ====================
 
@@ -641,23 +1324,59 @@ class DataAccess(QObject):
 
     def create_salary(self, salary_data: Dict) -> Optional[Dict]:
         """Создать запись о зарплате"""
-        if self.api_client:
-            return self.api_client.create_salary(salary_data)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_salary(salary_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API create_salary: {e}")
+                # Сохраняем локально и добавляем в очередь
+                salary_id = self.db.add_salary(salary_data)
+                if salary_id:
+                    self._queue_operation('create', 'salary', salary_id, salary_data)
+                    return {'id': salary_id, **salary_data}
+                return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            salary_id = self.db.add_salary(salary_data)
+            if salary_id:
+                self._queue_operation('create', 'salary', salary_id, salary_data)
+                return {'id': salary_id, **salary_data}
+            return None
         salary_id = self.db.add_salary(salary_data)
         return {'id': salary_id, **salary_data} if salary_id else None
 
     def update_salary(self, salary_id: int, salary_data: Dict) -> bool:
         """Обновить запись о зарплате"""
-        if self.api_client:
-            result = self.api_client.update_salary(salary_id, salary_data)
-            return result is not None
-        return self.db.update_salary(salary_id, salary_data)
+        # Сначала обновляем локально
+        self.db.update_salary(salary_id, salary_data)
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.update_salary(salary_id, salary_data)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_salary: {e}")
+                self._queue_operation('update', 'salary', salary_id, salary_data)
+        elif self.api_client:
+            self._queue_operation('update', 'salary', salary_id, salary_data)
+
+        return True
 
     def delete_salary(self, salary_id: int) -> bool:
         """Удалить запись о зарплате"""
-        if self.api_client:
-            return self.api_client.delete_salary(salary_id)
-        return self.db.delete_salary(salary_id)
+        # Сначала удаляем локально
+        self.db.delete_salary(salary_id)
+
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.delete_salary(salary_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_salary: {e}")
+                self._queue_operation('delete', 'salary', salary_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'salary', salary_id, {})
+
+        return True
 
     # ==================== АГЕНТЫ ====================
 
@@ -672,6 +1391,48 @@ class DataAccess(QObject):
         """Получить цвет агента"""
         # API не поддерживает цвета агентов, используем локальную БД
         return self.db.get_agent_color(agent_name)
+
+    def add_agent(self, name: str, color: str = None) -> Optional[Dict]:
+        """Добавить агента"""
+        if self.api_client:
+            try:
+                return self.api_client.add_agent(name, color)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API add_agent: {e}")
+        if self.db:
+            try:
+                return self.db.add_agent(name, color)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB add_agent: {e}")
+        return None
+
+    def update_agent_color(self, name: str, color: str) -> bool:
+        """Обновить цвет агента"""
+        if self.api_client:
+            try:
+                return self.api_client.update_agent_color(name, color)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API update_agent_color: {e}")
+        if self.db:
+            try:
+                return self.db.update_agent_color(name, color)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB update_agent_color: {e}")
+        return False
+
+    def get_agent_types(self) -> List[str]:
+        """Получить типы агентов"""
+        if self.api_client:
+            try:
+                return self.api_client.get_agent_types()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_agent_types: {e}")
+        if self.db:
+            try:
+                return self.db.get_agent_types()
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_agent_types: {e}")
+        return []
 
     # ==================== СТАДИИ ====================
 
@@ -695,17 +1456,148 @@ class DataAccess(QObject):
         return self.db.get_submitted_stages(card_id)
 
     def update_stage_executor_deadline(self, card_id: int, stage_name: str,
-                                       executor_id: int = None, deadline: str = None) -> bool:
+                                       deadline: str = None, executor_id: int = None) -> bool:
         """Обновить дедлайн исполнителя стадии"""
         if self.api_client:
             update_data = {}
-            if executor_id is not None:
-                update_data['executor_id'] = executor_id
             if deadline is not None:
                 update_data['deadline'] = deadline
+            if executor_id is not None:
+                update_data['executor_id'] = executor_id
             result = self.api_client.update_stage_executor(card_id, stage_name, update_data)
             return result is not None
-        return self.db.update_stage_executor_deadline(card_id, stage_name, executor_id, deadline)
+        return self.db.update_stage_executor_deadline(card_id, stage_name, deadline)
+
+    # ==================== STAGE EXECUTORS ====================
+
+    def assign_stage_executor(self, card_id: int, data: Dict) -> Optional[Dict]:
+        """Назначить исполнителя на стадию"""
+        if self.api_client:
+            try:
+                return self.api_client.assign_stage_executor(card_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API assign_stage_executor: {e}")
+        try:
+            return self.db.assign_stage_executor(
+                card_id,
+                data.get('stage_name', ''),
+                data.get('executor_id'),
+                data.get('assigned_by'),
+                data.get('deadline'))
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
+            return None
+
+    def complete_stage_for_executor(self, card_id: int, stage_name: str, executor_id: int = None) -> Optional[Dict]:
+        """Отметить стадию выполненной для исполнителя"""
+        if self.api_client:
+            try:
+                return self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API complete_stage_for_executor: {e}")
+        try:
+            return self.db.complete_stage_for_executor(card_id, stage_name, executor_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB complete_stage_for_executor: {e}")
+            return None
+
+    def reset_stage_completion(self, card_id: int) -> bool:
+        """Сбросить отметку выполнения стадии"""
+        if self.api_client:
+            try:
+                result = self.api_client.reset_stage_completion(card_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API reset_stage_completion: {e}")
+        try:
+            return self.db.reset_stage_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_stage_completion: {e}")
+            return False
+
+    def reset_designer_completion(self, card_id: int) -> bool:
+        """Сбросить отметку выполнения дизайнера"""
+        if self.api_client:
+            try:
+                result = self.api_client.reset_designer_completion(card_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API reset_designer_completion: {e}")
+        try:
+            return self.db.reset_designer_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_designer_completion: {e}")
+            return False
+
+    def reset_draftsman_completion(self, card_id: int) -> bool:
+        """Сбросить отметку выполнения чертёжника"""
+        if self.api_client:
+            try:
+                result = self.api_client.reset_draftsman_completion(card_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API reset_draftsman_completion: {e}")
+        try:
+            return self.db.reset_draftsman_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_draftsman_completion: {e}")
+            return False
+
+    def reset_approval_stages(self, card_id: int) -> bool:
+        """Сбросить стадии согласования"""
+        if self.api_client:
+            try:
+                result = self.api_client.reset_approval_stages(card_id)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API reset_approval_stages: {e}")
+        try:
+            return self.db.reset_approval_stages(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_approval_stages: {e}")
+            return False
+
+    def save_manager_acceptance(self, card_id: int, stage_name: str,
+                               executor_name: str, manager_id: int) -> Optional[Dict]:
+        """Сохранить приёмку менеджера"""
+        if self.api_client:
+            try:
+                return self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API save_manager_acceptance: {e}")
+        try:
+            return self.db.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB save_manager_acceptance: {e}")
+            return None
+
+    def get_previous_executor_by_position(self, card_id: int, position: str) -> Optional[Dict]:
+        """Получить предыдущего исполнителя по должности (только локальная БД)"""
+        try:
+            return self.db.get_previous_executor_by_position(card_id, position)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB get_previous_executor_by_position: {e}")
+            return None
+
+    def get_crm_statistics_filtered(self, project_type=None, period=None, year=None,
+                                     quarter=None, month=None, project_id=None,
+                                     executor_id=None, stage_name=None, status_filter=None) -> Dict:
+        """Получить отфильтрованную статистику CRM"""
+        if self.api_client:
+            try:
+                return self.api_client.get_crm_statistics_filtered(
+                    project_type, period, year, quarter=quarter, month=month,
+                    project_id=project_id, executor_id=executor_id,
+                    stage_name=stage_name, status_filter=status_filter)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API get_crm_statistics_filtered: {e}")
+        try:
+            return self.db.get_crm_statistics_filtered(
+                project_type, period, year, quarter, month, project_id,
+                executor_id, stage_name, status_filter)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB get_crm_statistics_filtered: {e}")
+            return {}
 
     # ==================== ФАЙЛЫ ====================
 
@@ -720,16 +1612,121 @@ class DataAccess(QObject):
 
     def create_file_record(self, file_data: Dict) -> Optional[Dict]:
         """Создать запись о файле"""
-        if self.api_client:
-            return self.api_client.create_file_record(file_data)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_file_record(file_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API create_file_record: {e}")
+                # Сохраняем локально и добавляем в очередь
+                file_id = self.db.add_contract_file(file_data)
+                if file_id:
+                    self._queue_operation('create', 'project_file', file_id, file_data)
+                    return {'id': file_id, **file_data}
+                return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            file_id = self.db.add_contract_file(file_data)
+            if file_id:
+                self._queue_operation('create', 'project_file', file_id, file_data)
+                return {'id': file_id, **file_data}
+            return None
         file_id = self.db.add_contract_file(file_data)
         return {'id': file_id, **file_data} if file_id else None
 
     def delete_file_record(self, file_id: int) -> bool:
         """Удалить запись о файле"""
+        # Сначала удаляем локально
+        self.db.delete_project_file(file_id)
+
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.delete_file_record(file_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_file_record: {e}")
+                self._queue_operation('delete', 'project_file', file_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'project_file', file_id, {})
+
+        return True
+
+    def get_project_files(self, contract_id: int, stage: str = None) -> List[Dict]:
+        """Получить файлы проекта"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_project_files(contract_id, stage)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_project_files, fallback: {e}")
+        return self.db.get_project_files(contract_id, stage)
+
+    def add_project_file(self, data: Dict = None, **kwargs) -> Optional[Dict]:
+        """Добавить файл проекта (принимает Dict или именованные аргументы)"""
+        if data is None:
+            data = kwargs
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.add_project_file(**data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API add_project_file: {e}")
+                # Сохраняем локально и добавляем в очередь
+                try:
+                    result = self.db.add_project_file(**data)
+                    if result:
+                        file_id = result.get('id') if isinstance(result, dict) else result
+                        self._queue_operation('create', 'project_file', file_id, data)
+                    return result
+                except Exception as db_e:
+                    _safe_log(f"[DataAccess] DB error add_project_file: {db_e}")
+                    return None
+        elif self.api_client:
+            # Offline-режим: сохраняем локально и ставим в очередь
+            try:
+                result = self.db.add_project_file(**data)
+                if result:
+                    file_id = result.get('id') if isinstance(result, dict) else result
+                    self._queue_operation('create', 'project_file', file_id, data)
+                return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB error add_project_file: {e}")
+                return None
+        try:
+            return self.db.add_project_file(**data)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB error add_project_file: {e}")
+            return None
+
+    def scan_contract_files(self, contract_id: int, scope: str = None) -> Optional[Dict]:
+        """Сканировать файлы договора на Яндекс.Диске (только API)"""
         if self.api_client:
-            return self.api_client.delete_file_record(file_id)
-        return self.db.delete_project_file(file_id)
+            try:
+                return self.api_client.scan_contract_files(contract_id, scope)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error scan_contract_files: {e}")
+                return None
+        _safe_log("[DataAccess] scan_contract_files: API недоступен")
+        return None
+
+    def get_yandex_public_link(self, path: str) -> Optional[str]:
+        """Получить публичную ссылку на файл Яндекс.Диска (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_yandex_public_link(path)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_yandex_public_link: {e}")
+                return None
+        _safe_log("[DataAccess] get_yandex_public_link: API недоступен")
+        return None
+
+    def delete_yandex_file(self, path: str) -> bool:
+        """Удалить файл с Яндекс.Диска (только API)"""
+        if self.api_client:
+            try:
+                result = self.api_client.delete_yandex_file(path)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error delete_yandex_file: {e}")
+                return False
+        _safe_log("[DataAccess] delete_yandex_file: API недоступен")
+        return False
 
     def validate_files(self, file_ids: list, auto_clean: bool = False) -> list:
         """Пакетная проверка существования файлов на Яндекс.Диске"""
@@ -768,13 +1765,203 @@ class DataAccess(QObject):
                 return self.api_client.get_dashboard_statistics(year, month, quarter, project_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
-        return self.db.get_dashboard_statistics(year, month, quarter, project_type)
+        return self.db.get_dashboard_statistics()
 
     def get_supervision_statistics(self, address: str = None, dan_id: int = None,
                                   manager_id: int = None) -> Dict:
-        """Получить статистику надзора"""
-        # API пока не поддерживает, используем локальную БД
-        return self.db.get_supervision_statistics_filtered(address, dan_id, manager_id)
+        """Получить статистику надзора (упрощённая версия)"""
+        try:
+            return self.db.get_supervision_statistics_filtered(
+                None, None, None, None, address, None, dan_id, manager_id, None)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB error get_supervision_statistics: {e}")
+            return {}
+
+    def get_clients_dashboard_stats(self, **kwargs) -> Dict:
+        """Получить статистику дашборда клиентов"""
+        if self.api_client:
+            try:
+                return self.api_client.get_clients_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_clients_dashboard_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_clients_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_clients_dashboard_stats: {e}")
+        return {}
+
+    def get_contracts_dashboard_stats(self, **kwargs) -> Dict:
+        """Получить статистику дашборда договоров"""
+        if self.api_client:
+            try:
+                return self.api_client.get_contracts_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_contracts_dashboard_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_contracts_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_contracts_dashboard_stats: {e}")
+        return {}
+
+    def get_crm_dashboard_stats(self, **kwargs) -> Dict:
+        """Получить статистику дашборда CRM"""
+        if self.api_client:
+            try:
+                return self.api_client.get_crm_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_crm_dashboard_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_crm_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_crm_dashboard_stats: {e}")
+        return {}
+
+    def get_employees_dashboard_stats(self) -> Dict:
+        """Получить статистику дашборда сотрудников"""
+        if self.api_client:
+            try:
+                return self.api_client.get_employees_dashboard_stats()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_employees_dashboard_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_employees_dashboard_stats()
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_employees_dashboard_stats: {e}")
+        return {}
+
+    def get_salaries_dashboard_stats(self, **kwargs) -> Dict:
+        """Получить сводную статистику дашборда зарплат"""
+        if self.api_client:
+            try:
+                return self.api_client.get_salaries_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_salaries_dashboard_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_salaries_dashboard_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_salaries_dashboard_stats: {e}")
+        return {}
+
+    def get_salaries_individual_stats(self, **kwargs) -> Dict:
+        """Получить индивидуальную статистику зарплат"""
+        if self.api_client:
+            try:
+                return self.api_client.get_salaries_individual_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_salaries_individual_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_salaries_individual_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_salaries_individual_stats: {e}")
+        return {}
+
+    def get_salaries_salary_stats(self, **kwargs) -> Dict:
+        """Получить статистику по выплатам зарплат"""
+        if self.api_client:
+            try:
+                return self.api_client.get_salaries_salary_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_salaries_salary_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_salaries_salary_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_salaries_salary_stats: {e}")
+        return {}
+
+    def get_salaries_supervision_stats(self, **kwargs) -> Dict:
+        """Получить статистику зарплат по надзору"""
+        if self.api_client:
+            try:
+                return self.api_client.get_salaries_supervision_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_salaries_supervision_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_salaries_supervision_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_salaries_supervision_stats: {e}")
+        return {}
+
+    def get_salaries_template_stats(self, **kwargs) -> Dict:
+        """Получить статистику зарплат по шаблонам"""
+        if self.api_client:
+            try:
+                return self.api_client.get_salaries_template_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_salaries_template_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_salaries_template_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_salaries_template_stats: {e}")
+        return {}
+
+    def get_salaries_all_payments_stats(self, **kwargs) -> Dict:
+        """Получить статистику по всем выплатам"""
+        if self.api_client:
+            try:
+                return self.api_client.get_salaries_all_payments_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_salaries_all_payments_stats: {e}")
+        if self.db:
+            try:
+                return self.db.get_salaries_all_payments_stats(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_salaries_all_payments_stats: {e}")
+        return {}
+
+    def get_employee_report_data(self, employee_id: int = None, project_type: str = None,
+                                period: str = None, year: int = None,
+                                quarter: int = None, month: int = None) -> Dict:
+        """Получить данные отчёта по сотруднику"""
+        if self.api_client:
+            try:
+                return self.api_client.get_employee_report_data(
+                    project_type, period, year, quarter=quarter, month=month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_employee_report_data: {e}")
+        if self.db:
+            try:
+                return self.db.get_employee_report_data(
+                    project_type, period, year, quarter, month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_employee_report_data: {e}")
+        return {}
+
+    def get_project_statistics(self, **kwargs) -> Dict:
+        """Получить статистику по проектам"""
+        if self.api_client:
+            try:
+                return self.api_client.get_project_statistics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_project_statistics: {e}")
+        if self.db:
+            try:
+                return self.db.get_project_statistics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_project_statistics: {e}")
+        return {}
+
+    def get_supervision_statistics_report(self, **kwargs) -> Dict:
+        """Получить отчёт по статистике надзора"""
+        if self.api_client:
+            try:
+                return self.api_client.get_supervision_statistics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_supervision_statistics_report: {e}")
+        if self.db:
+            try:
+                return self.db.get_supervision_statistics_report(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_supervision_statistics_report: {e}")
+        return {}
 
     # ==================== ТАБЛИЦА СРОКОВ (CRM) ====================
 
@@ -807,12 +1994,27 @@ class DataAccess(QObject):
 
     def update_timeline_entry(self, contract_id: int, stage_code: str, data: Dict) -> bool:
         """Обновить запись таблицы сроков"""
+        # Сначала обновляем локально
         self.db.update_timeline_entry(contract_id, stage_code, data)
+
         if self.is_online and self.api_client:
             try:
                 self.api_client.update_timeline_entry(contract_id, stage_code, data)
             except Exception as e:
-                _safe_log(f"[DataAccess] API error update_timeline_entry: {e}")
+                _safe_log(f"[DataAccess] Ошибка API update_timeline_entry: {e}")
+                # Добавляем в очередь для синхронизации при восстановлении связи
+                self._queue_operation('update', 'timeline_entry', contract_id, {
+                    'contract_id': contract_id,
+                    'stage_code': stage_code,
+                    **data
+                })
+        elif self.api_client:
+            self._queue_operation('update', 'timeline_entry', contract_id, {
+                'contract_id': contract_id,
+                'stage_code': stage_code,
+                **data
+            })
+
         return True
 
     def get_timeline_summary(self, contract_id: int) -> Dict:
@@ -858,12 +2060,27 @@ class DataAccess(QObject):
 
     def update_supervision_timeline_entry(self, card_id: int, stage_code: str, data: Dict) -> bool:
         """Обновить запись таблицы сроков надзора"""
+        # Сначала обновляем локально
         self.db.update_supervision_timeline_entry(card_id, stage_code, data)
+
         if self.is_online and self.api_client:
             try:
                 self.api_client.update_supervision_timeline_entry(card_id, stage_code, data)
             except Exception as e:
-                _safe_log(f"[DataAccess] API error update_supervision_timeline_entry: {e}")
+                _safe_log(f"[DataAccess] Ошибка API update_supervision_timeline_entry: {e}")
+                # Добавляем в очередь для синхронизации при восстановлении связи
+                self._queue_operation('update', 'supervision_timeline_entry', card_id, {
+                    'card_id': card_id,
+                    'stage_code': stage_code,
+                    **data
+                })
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_timeline_entry', card_id, {
+                'card_id': card_id,
+                'stage_code': stage_code,
+                **data
+            })
+
         return True
 
     def get_supervision_timeline_summary(self, card_id: int) -> Dict:
@@ -990,6 +2207,25 @@ class DataAccess(QObject):
                 pass
         return None
 
+    def get_supervision_chat(self, supervision_card_id: int) -> Optional[Dict]:
+        """Получить чат по карточке надзора"""
+        if self.api_client:
+            try:
+                return self.api_client.get_supervision_chat(supervision_card_id)
+            except Exception:
+                pass
+        return None
+
+    def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram",
+                                 members: list = None) -> Optional[Dict]:
+        """Создать чат для карточки надзора"""
+        if self._should_use_api():
+            try:
+                return self.api_client.create_supervision_chat(supervision_card_id, messenger_type, members)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка create_supervision_chat: {e}")
+        return None
+
     def delete_messenger_chat(self, chat_id: int) -> Optional[Dict]:
         """Удалить чат"""
         if self._should_use_api():
@@ -1044,6 +2280,39 @@ class DataAccess(QObject):
                 pass
         return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}
 
+    def create_messenger_script(self, data: Dict) -> Optional[Dict]:
+        """Создать скрипт мессенджера"""
+        if self.api_client:
+            try:
+                return self.api_client.create_messenger_script(data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API create_messenger_script: {e}")
+        else:
+            _safe_log("[DataAccess] create_messenger_script: API недоступен")
+        return None
+
+    def update_messenger_script(self, script_id: int, data: Dict) -> Optional[Dict]:
+        """Обновить скрипт мессенджера"""
+        if self.api_client:
+            try:
+                return self.api_client.update_messenger_script(script_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API update_messenger_script: {e}")
+        else:
+            _safe_log("[DataAccess] update_messenger_script: API недоступен")
+        return None
+
+    def delete_messenger_script(self, script_id: int) -> bool:
+        """Удалить скрипт мессенджера"""
+        if self.api_client:
+            try:
+                return self.api_client.delete_messenger_script(script_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_messenger_script: {e}")
+        else:
+            _safe_log("[DataAccess] delete_messenger_script: API недоступен")
+        return False
+
     def mtproto_send_code(self) -> Dict:
         """Шаг 1: Отправить код подтверждения для MTProto"""
         if self.api_client:
@@ -1067,3 +2336,219 @@ class DataAccess(QObject):
         if self.api_client:
             return self.api_client.mtproto_session_status()
         return {"valid": False}
+
+    # =========================
+    # АДМИНИСТРИРОВАНИЕ
+    # =========================
+
+    def get_role_permissions_matrix(self) -> Dict[str, Any]:
+        """Получить матрицу прав по ролям"""
+        if self.api_client:
+            try:
+                return self.api_client.get_role_permissions_matrix()
+            except Exception:
+                pass
+        return {"roles": {}}
+
+    def save_role_permissions_matrix(self, data: dict) -> Optional[Dict]:
+        """Сохранить матрицу прав по ролям"""
+        if self._should_use_api():
+            try:
+                return self.api_client.save_role_permissions_matrix(data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка save_role_permissions_matrix: {e}")
+        return None
+
+    def get_employee_permissions(self, employee_id: int) -> Optional[Dict]:
+        """Получить персональные права сотрудника"""
+        if self.api_client:
+            try:
+                return self.api_client.get_employee_permissions(employee_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_employee_permissions: {e}")
+        if self.db:
+            try:
+                return self.db.get_employee_permissions(employee_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_employee_permissions: {e}")
+        return None
+
+    def set_employee_permissions(self, employee_id: int, data: Dict) -> bool:
+        """Установить персональные права сотрудника"""
+        if self.api_client:
+            try:
+                return self.api_client.set_employee_permissions(employee_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API set_employee_permissions: {e}")
+        if self.db:
+            try:
+                return self.db.set_employee_permissions(employee_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB set_employee_permissions: {e}")
+        return False
+
+    def reset_employee_permissions(self, employee_id: int) -> bool:
+        """Сбросить персональные права сотрудника к ролевым (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.reset_employee_permissions(employee_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API reset_employee_permissions: {e}")
+        else:
+            _safe_log("[DataAccess] reset_employee_permissions: API недоступен")
+        return False
+
+    def get_permission_definitions(self) -> List[Dict]:
+        """Получить описание всех прав системы (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_permission_definitions()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_permission_definitions: {e}")
+        else:
+            _safe_log("[DataAccess] get_permission_definitions: API недоступен")
+        return []
+
+    def get_norm_days_template(self, project_type: str, project_subtype: str) -> Dict[str, Any]:
+        """Получить шаблон нормо-дней"""
+        if self.api_client:
+            try:
+                return self.api_client.get_norm_days_template(project_type, project_subtype)
+            except Exception:
+                pass
+        return {"entries": []}
+
+    def save_norm_days_template(self, data: Dict[str, Any]) -> Optional[Dict]:
+        """Сохранить шаблон нормо-дней"""
+        if self._should_use_api():
+            try:
+                return self.api_client.save_norm_days_template(data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка save_norm_days_template: {e}")
+        return None
+
+    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float) -> Dict[str, Any]:
+        """Превью нормо-дней для конкретной площади"""
+        if self.api_client:
+            try:
+                return self.api_client.preview_norm_days_template(project_type, project_subtype, area)
+            except Exception:
+                pass
+        return {"entries": [], "contract_term": 0, "k_coefficient": 0}
+
+    def reset_norm_days_template(self, project_type: str, project_subtype: str) -> Optional[Dict]:
+        """Сбросить шаблон нормо-дней к формулам"""
+        if self._should_use_api():
+            try:
+                return self.api_client.reset_norm_days_template(project_type, project_subtype)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка reset_norm_days_template: {e}")
+        return None
+
+    # ==================== ПРОЧЕЕ ====================
+
+    def get_contract_years(self) -> List[int]:
+        """Получить список лет, в которых есть договора"""
+        if self.api_client:
+            try:
+                return self.api_client.get_contract_years()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_contract_years: {e}")
+        if self.db:
+            try:
+                return self.db.get_contract_years()
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_contract_years: {e}")
+        return []
+
+    def get_cities(self) -> List[str]:
+        """Получить список городов (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_cities()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_cities: {e}")
+        else:
+            _safe_log("[DataAccess] get_cities: API недоступен")
+        return []
+
+    def get_current_user(self) -> Optional[Dict]:
+        """Получить текущего авторизованного пользователя (только API)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_current_user()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_current_user: {e}")
+        else:
+            _safe_log("[DataAccess] get_current_user: API недоступен")
+        return None
+
+    # ==================== ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ====================
+
+    def delete_order(self, contract_id: int, crm_card_id: int = None) -> bool:
+        """Полное удаление заказа (договор + CRM карточка)"""
+        if self.api_client:
+            try:
+                if crm_card_id:
+                    self.api_client.delete_crm_card(crm_card_id)
+                self.api_client.delete_contract(contract_id)
+                return True
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_order: {e}")
+        return self.db.delete_order(contract_id, crm_card_id)
+
+    def delete_project_file(self, file_id: int) -> Optional[Dict]:
+        """Удалить файл стадии проекта. Возвращает данные файла (yandex_path и т.д.)"""
+        if self.api_client:
+            try:
+                return self.api_client.delete_project_file(file_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API delete_project_file: {e}")
+        return self.db.delete_project_file(file_id)
+
+    def get_projects_by_type(self, project_type: str) -> List[Dict]:
+        """Получить список проектов по типу для статистики"""
+        if self.api_client:
+            try:
+                return self.api_client.get_projects_by_type(project_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API get_projects_by_type: {e}")
+        return self.db.get_projects_by_type(project_type)
+
+    def get_supervision_cards(self, status: str = "active") -> List[Dict]:
+        """Получить карточки авторского надзора (active/archived/all)"""
+        if self.api_client:
+            try:
+                return self.api_client.get_supervision_cards(status=status)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API get_supervision_cards: {e}")
+        if status == "archived":
+            return self.db.get_archived_supervision_cards() if hasattr(self.db, 'get_archived_supervision_cards') else []
+        return self.db.get_active_supervision_cards() if hasattr(self.db, 'get_active_supervision_cards') else []
+
+    def update_stage_executor(self, card_id: int, stage_name: str, update_data: Dict) -> Optional[Dict]:
+        """Обновить исполнителя стадии (переназначение)"""
+        if self.api_client:
+            try:
+                return self.api_client.update_stage_executor(card_id, stage_name, update_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_stage_executor: {e}")
+        # Локальный fallback через прямой SQL
+        executor_id = update_data.get('executor_id')
+        deadline = update_data.get('deadline')
+        completed = update_data.get('completed', False)
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                '''UPDATE stage_executors SET executor_id=?, deadline=?, completed=?, completed_date=NULL
+                   WHERE crm_card_id=? AND stage_name LIKE ? ORDER BY id DESC LIMIT 1''',
+                (executor_id, deadline, 1 if completed else 0, card_id, f'%{stage_name}%')
+            )
+            conn.commit()
+            self.db.close()
+            return {'success': True}
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка локального update_stage_executor: {e}")
+            self.db.close()
+        return None

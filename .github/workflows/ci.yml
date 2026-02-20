@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Проверка синтаксиса Python
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Проверка синтаксиса серверных файлов
+        run: |
+          python -m py_compile server/main.py
+          python -m py_compile server/database.py
+          python -m py_compile server/schemas.py
+          python -m py_compile server/auth.py
+          python -m py_compile server/config.py
+
+  # Lint серверного кода
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install flake8
+      - name: Lint сервера
+        run: flake8 server/ --max-line-length=200 --ignore=E501,W503,E402,E722,F841,W504
+
+  # Тесты БД (без сервера, temp SQLite)
+  test-db:
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Установка зависимостей
+        run: |
+          pip install -r requirements-dev.txt
+          pip install bcrypt==3.2.2 passlib[bcrypt]==1.7.4 python-jose[cryptography]==3.3.0
+      - name: Запуск DB тестов
+        run: pytest tests/db/ -v --timeout=60
+
+  # Сборка Docker образа
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сборка Docker образа API
+        run: docker build -t crm-api ./server
+
+  # E2E тесты (с реальным PostgreSQL)
+  test-e2e:
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: crm_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: interior_studio_crm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U crm_user"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Установка зависимостей сервера
+        run: pip install -r server/requirements.txt
+      - name: Установка зависимостей тестов
+        run: pip install -r requirements-dev.txt
+      - name: Запуск API сервера
+        env:
+          DATABASE_URL: postgresql://crm_user:test_password@localhost:5432/interior_studio_crm
+          SECRET_KEY: test-secret-key-for-ci
+        run: |
+          cd server
+          uvicorn main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+          curl -f http://localhost:8000/health || exit 1
+      - name: Запуск E2E тестов
+        env:
+          API_BASE_URL: http://localhost:8000
+        run: pytest tests/e2e/ -v --timeout=60 -x

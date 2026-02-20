@@ -762,8 +762,6 @@ class MessengerAdminDialog(QDialog):
             settings_list = []
             if self.data_access:
                 settings_list = self.data_access.get_messenger_settings()
-            elif self.api_client:
-                settings_list = self.api_client.get_messenger_settings()
 
             self._settings = {}
             for s in (settings_list or []):
@@ -797,8 +795,6 @@ class MessengerAdminDialog(QDialog):
         try:
             if self.data_access:
                 self._scripts = self.data_access.get_messenger_scripts() or []
-            elif self.api_client:
-                self._scripts = self.api_client.get_messenger_scripts() or []
             else:
                 self._scripts = []
 
@@ -813,8 +809,6 @@ class MessengerAdminDialog(QDialog):
             status = {}
             if self.data_access:
                 status = self.data_access.get_messenger_status()
-            elif self.api_client:
-                status = self.api_client.get_messenger_status()
 
             # Telegram
             bot_ok = status.get("telegram_bot_available", False)
@@ -841,8 +835,6 @@ class MessengerAdminDialog(QDialog):
                 session_info = {}
                 if self.data_access:
                     session_info = self.data_access.mtproto_session_status()
-                elif self.api_client:
-                    session_info = self.api_client.mtproto_session_status()
 
                 if session_info.get("valid"):
                     name = session_info.get("first_name", "")
@@ -897,8 +889,6 @@ class MessengerAdminDialog(QDialog):
             result = {}
             if self.data_access:
                 result = self.data_access.mtproto_send_code()
-            elif self.api_client:
-                result = self.api_client.mtproto_send_code()
 
             if result.get("status") == "code_sent":
                 phone = result.get("phone", "")
@@ -948,8 +938,6 @@ class MessengerAdminDialog(QDialog):
             result = {}
             if self.data_access:
                 result = self.data_access.mtproto_resend_sms()
-            elif self.api_client:
-                result = self.api_client.mtproto_resend_sms()
 
             if result.get("status") == "sms_sent":
                 phone = result.get("phone", "")
@@ -1002,8 +990,6 @@ class MessengerAdminDialog(QDialog):
             result = {}
             if self.data_access:
                 result = self.data_access.mtproto_verify_code(code)
-            elif self.api_client:
-                result = self.api_client.mtproto_verify_code(code)
 
             if result.get("status") == "success":
                 user_info = result.get("user", {})
@@ -1255,8 +1241,8 @@ class MessengerAdminDialog(QDialog):
                 "use_auto_deadline": chosen_type == "stage_complete",
                 "sort_order": len(self._scripts),
             }
-            if self.api_client:
-                result = self.api_client.create_messenger_script(data)
+            if self.data_access:
+                result = self.data_access.create_messenger_script(data)
                 if result:
                     self._load_scripts()
                     if self._script_list.count() > 0:
@@ -1287,8 +1273,8 @@ class MessengerAdminDialog(QDialog):
         }
 
         try:
-            if self.api_client:
-                self.api_client.update_messenger_script(self._current_script_id, data)
+            if self.data_access:
+                self.data_access.update_messenger_script(self._current_script_id, data)
                 self._load_scripts()
                 CustomMessageBox(self, "Готово", "Скрипт сохранён", "success").exec_()
             else:
@@ -1310,8 +1296,8 @@ class MessengerAdminDialog(QDialog):
 
         if reply == QDialog.Accepted:
             try:
-                if self.api_client:
-                    self.api_client.delete_messenger_script(self._current_script_id)
+                if self.data_access:
+                    self.data_access.delete_messenger_script(self._current_script_id)
                     self._current_script_id = None
                     self._load_scripts()
             except Exception as e:
@@ -1344,8 +1330,6 @@ class MessengerAdminDialog(QDialog):
             result = None
             if self.data_access:
                 result = self.data_access.update_messenger_settings(settings)
-            elif self.api_client:
-                result = self.api_client.update_messenger_settings(settings)
 
             if result is not None:
                 CustomMessageBox(
@@ -1360,3 +1344,77 @@ class MessengerAdminDialog(QDialog):
             CustomMessageBox(
                 self, "Ошибка", f"Не удалось сохранить настройки:\n{str(e)}", "error"
             ).exec_()
+
+
+class MessengerSettingsWidget(QWidget):
+    """Виджет настроек мессенджера — встраивается в AdminDialog.
+    Содержит 3 вкладки (Telegram, Email, Скрипты) + кнопку Сохранить.
+    Делегирует всю логику в MessengerAdminDialog через proxy.
+    """
+
+    def __init__(self, parent=None, api_client=None, data_access=None, employee=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self.data_access = data_access
+        self.employee = employee or {}
+
+        # Proxy: создаём MessengerAdminDialog и инициализируем C++ QDialog,
+        # чтобы сигналы/слоты и findChild работали корректно
+        self._proxy = MessengerAdminDialog.__new__(MessengerAdminDialog)
+        QDialog.__init__(self._proxy, self)
+        self._proxy.hide()
+        self._proxy.api_client = api_client
+        self._proxy.data_access = data_access
+        self._proxy.employee = employee or {}
+        self._proxy._settings = {}
+        self._proxy._scripts = []
+        self._proxy._current_script_id = None
+
+        self._init_ui()
+        self._proxy._load_data()
+
+    def _init_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(10)
+
+        tabs = QTabWidget()
+        tabs.setStyleSheet(_TAB_STYLE)
+
+        # Создаём вкладки через proxy
+        self._proxy._tabs = tabs
+        tab_tg = self._proxy._create_telegram_tab()
+        tab_email = self._proxy._create_email_tab()
+        tab_scripts = self._proxy._create_scripts_tab()
+
+        tabs.addTab(tab_tg, "Telegram")
+        tabs.addTab(tab_email, "Email (SMTP)")
+        tabs.addTab(tab_scripts, "Скрипты")
+
+        root.addWidget(tabs, 1)
+
+        # Нижняя панель
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(10)
+
+        self._proxy._status_label = QLabel("")
+        self._proxy._status_label.setStyleSheet("font-size: 12px; color: #999;")
+        bottom_row.addWidget(self._proxy._status_label)
+        bottom_row.addStretch()
+
+        save_btn = QPushButton("Сохранить")
+        save_btn.setFixedHeight(38)
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd93c; color: #333333;
+                border: none; border-radius: 6px;
+                padding: 0 30px; font-size: 13px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
+        """)
+        save_btn.clicked.connect(self._proxy._on_save)
+        bottom_row.addWidget(save_btn)
+
+        root.addLayout(bottom_row)

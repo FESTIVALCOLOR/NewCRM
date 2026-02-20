@@ -511,6 +511,18 @@ class OfflineManager(QObject):
                 return self._sync_yandex_folder_operation(op_type, entity_id, data)
             elif entity_type == 'project_file':
                 return self._sync_project_file_operation(op_type, entity_id, data)
+            elif entity_type == 'rate':
+                return self._sync_rate_operation(op_type, entity_id, data)
+            elif entity_type == 'salary':
+                return self._sync_salary_operation(op_type, entity_id, data)
+            elif entity_type == 'action_history':
+                return self._sync_action_history_operation(op_type, entity_id, data)
+            elif entity_type == 'supervision_history':
+                return self._sync_supervision_history_operation(op_type, entity_id, data)
+            elif entity_type == 'timeline_entry':
+                return self._sync_timeline_entry_operation(op_type, entity_id, data)
+            elif entity_type == 'supervision_timeline_entry':
+                return self._sync_supervision_timeline_entry_operation(op_type, entity_id, data)
             else:
                 return {'success': False, 'error': f'Unknown entity type: {entity_type}'}
 
@@ -563,21 +575,47 @@ class OfflineManager(QObject):
 
     def _sync_crm_card_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
         """Синхронизация операции с CRM карточкой"""
-        if op_type == OperationType.UPDATE.value:
+        if op_type == OperationType.CREATE.value:
+            result = self.api_client.create_crm_card(data)
+            if result:
+                return {'success': True, 'server_id': result.get('id')}
+            return {'success': False, 'error': 'Failed to create CRM card'}
+
+        elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_crm_card(entity_id, data)
             if result:
                 return {'success': True, 'server_id': entity_id}
             return {'success': False, 'error': 'Failed to update CRM card'}
 
+        elif op_type == OperationType.DELETE.value:
+            try:
+                self.api_client.delete_crm_card(entity_id)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
         return {'success': False, 'error': 'Unknown operation type for CRM card'}
 
     def _sync_supervision_card_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
         """Синхронизация операции с карточкой надзора"""
-        if op_type == OperationType.UPDATE.value:
+        if op_type == OperationType.CREATE.value:
+            result = self.api_client.create_supervision_card(data)
+            if result:
+                return {'success': True, 'server_id': result.get('id')}
+            return {'success': False, 'error': 'Failed to create supervision card'}
+
+        elif op_type == OperationType.UPDATE.value:
             result = self.api_client.update_supervision_card(entity_id, data)
             if result:
                 return {'success': True, 'server_id': entity_id}
             return {'success': False, 'error': 'Failed to update supervision card'}
+
+        elif op_type == OperationType.DELETE.value:
+            try:
+                self.api_client.delete_supervision_card(entity_id)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
 
         return {'success': False, 'error': 'Unknown operation type for supervision card'}
 
@@ -695,6 +733,116 @@ class OfflineManager(QObject):
 
         return {'success': False, 'error': 'Unknown operation type for project_file'}
 
+    def _sync_rate_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции со ставкой"""
+        if op_type == OperationType.CREATE.value:
+            result = self.api_client.create_rate(data)
+            if result:
+                return {'success': True, 'server_id': result.get('id')}
+            return {'success': False, 'error': 'Failed to create rate'}
+
+        elif op_type == OperationType.UPDATE.value:
+            result = self.api_client.update_rate(entity_id, data)
+            if result:
+                return {'success': True, 'server_id': entity_id}
+            return {'success': False, 'error': 'Failed to update rate'}
+
+        elif op_type == OperationType.DELETE.value:
+            try:
+                self.api_client.delete_rate(entity_id)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for rate'}
+
+    def _sync_salary_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции с зарплатой"""
+        if op_type == OperationType.CREATE.value:
+            result = self.api_client.create_salary(data)
+            if result:
+                return {'success': True, 'server_id': result.get('id')}
+            return {'success': False, 'error': 'Failed to create salary'}
+
+        elif op_type == OperationType.UPDATE.value:
+            result = self.api_client.update_salary(entity_id, data)
+            if result:
+                return {'success': True, 'server_id': entity_id}
+            return {'success': False, 'error': 'Failed to update salary'}
+
+        elif op_type == OperationType.DELETE.value:
+            try:
+                self.api_client.delete_salary(entity_id)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for salary'}
+
+    def _sync_action_history_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация записи истории действий"""
+        if op_type == OperationType.CREATE.value:
+            try:
+                result = self.api_client.create_action_history(data)
+                if result:
+                    return {'success': True, 'server_id': result.get('id', entity_id)}
+                return {'success': False, 'error': 'Failed to create action history'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for action_history'}
+
+    def _sync_supervision_history_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация записи истории надзора"""
+        if op_type == OperationType.CREATE.value:
+            try:
+                card_id = data.get('card_id', entity_id)
+                result = self.api_client.add_supervision_history(
+                    card_id,
+                    entry_type=data.get('entry_type', ''),
+                    message=data.get('message', ''),
+                    employee_id=data.get('employee_id')
+                )
+                if result:
+                    return {'success': True, 'server_id': entity_id}
+                return {'success': False, 'error': 'Failed to create supervision history'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for supervision_history'}
+
+    def _sync_timeline_entry_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация записи таблицы сроков CRM"""
+        if op_type == OperationType.UPDATE.value:
+            try:
+                contract_id = data.get('contract_id', entity_id)
+                stage_code = data.get('stage_code', '')
+                # Формируем данные без служебных ключей
+                entry_data = {k: v for k, v in data.items()
+                              if k not in ('contract_id', 'stage_code')}
+                self.api_client.update_timeline_entry(contract_id, stage_code, entry_data)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for timeline_entry'}
+
+    def _sync_supervision_timeline_entry_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация записи таблицы сроков надзора"""
+        if op_type == OperationType.UPDATE.value:
+            try:
+                card_id = data.get('card_id', entity_id)
+                stage_code = data.get('stage_code', '')
+                # Формируем данные без служебных ключей
+                entry_data = {k: v for k, v in data.items()
+                              if k not in ('card_id', 'stage_code')}
+                self.api_client.update_supervision_timeline_entry(card_id, stage_code, entry_data)
+                return {'success': True, 'server_id': entity_id}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': 'Unknown operation type for supervision_timeline_entry'}
+
     def _update_operation_status(self, operation_id: int, status: OperationStatus,
                                  error_message: str = None, server_entity_id: int = None):
         """Обновить статус операции в очереди"""
@@ -744,7 +892,10 @@ class OfflineManager(QObject):
             'contract': 'contracts',
             'crm_card': 'crm_cards',
             'supervision_card': 'supervision_cards',
-            'payment': 'payments'
+            'payment': 'payments',
+            'rate': 'rates',
+            'salary': 'salaries',
+            'project_file': 'project_files',
         }
 
         table = table_map.get(entity_type)

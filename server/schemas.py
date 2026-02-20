@@ -2,9 +2,30 @@
 Pydantic схемы для валидации данных
 """
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime, date
 import re
+
+
+# =========================
+# ОБЩИЕ ОТВЕТЫ
+# =========================
+
+class StatusResponse(BaseModel):
+    """Ответ со статусом операции"""
+    status: str
+    message: str
+
+
+class MessageResponse(BaseModel):
+    """Ответ с сообщением"""
+    message: str
+
+
+class DeleteCountResponse(BaseModel):
+    """Ответ с количеством удалённых записей"""
+    status: str
+    deleted_count: int
 
 
 # =========================
@@ -24,6 +45,27 @@ class TokenResponse(BaseModel):
     role: str
 
 
+class LoginResponse(BaseModel):
+    """Полный ответ при успешном входе"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    employee_id: int
+    full_name: str
+    role: str
+    position: str
+    secondary_position: str
+    department: str
+
+
+class RefreshTokenResponse(BaseModel):
+    """Ответ при обновлении access_token"""
+    access_token: str
+    token_type: str = "bearer"
+    employee_id: int
+    full_name: str
+
+
 # =========================
 # СОТРУДНИКИ
 # =========================
@@ -39,6 +81,17 @@ class EmployeeBase(BaseModel):
     department: Optional[str] = ""
     role: Optional[str] = None
     status: str = "активный"
+
+
+def _validate_password(v: str) -> str:
+    """Общая валидация пароля (используется в EmployeeCreate и EmployeeUpdate)"""
+    if len(v) < 6:
+        raise ValueError('Пароль должен содержать минимум 6 символов')
+    if not any(c.isdigit() for c in v):
+        raise ValueError('Пароль должен содержать хотя бы одну цифру')
+    if not any(c.isalpha() for c in v):
+        raise ValueError('Пароль должен содержать хотя бы одну букву')
+    return v
 
 
 class EmployeeCreate(EmployeeBase):
@@ -66,13 +119,7 @@ class EmployeeCreate(EmployeeBase):
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v):
-        if len(v) < 6:
-            raise ValueError('Пароль должен содержать минимум 6 символов')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Пароль должен содержать хотя бы одну цифру')
-        if not any(c.isalpha() for c in v):
-            raise ValueError('Пароль должен содержать хотя бы одну букву')
-        return v
+        return _validate_password(v)
 
 
 class EmployeeUpdate(BaseModel):
@@ -88,6 +135,13 @@ class EmployeeUpdate(BaseModel):
     status: Optional[str] = None
     login: Optional[str] = None
     password: Optional[str] = None
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        if v is None:
+            return v
+        return _validate_password(v)
 
 
 class EmployeeResponse(EmployeeBase):
@@ -842,6 +896,24 @@ class ProjectFileResponse(ProjectFileBase):
 
 
 # =========================
+# ДЕДЛАЙНЫ СОГЛАСОВАНИЯ
+# =========================
+
+class ApprovalDeadlineResponse(BaseModel):
+    """Ответ с дедлайном согласования"""
+    id: int
+    crm_card_id: int
+    stage_name: str
+    deadline: Optional[str] = None
+    is_completed: bool
+    completed_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# =========================
 # ИСТОРИЯ ДЕЙСТВИЙ
 # =========================
 
@@ -1084,6 +1156,56 @@ class PermissionResponse(BaseModel):
     employee_id: int
     permissions: List[str]
     is_superuser: bool = False
+
+
+class RoleMatrixResponse(BaseModel):
+    """Ответ с матрицей прав по ролям"""
+    roles: Dict[str, List[str]]
+
+
+class RoleMatrixUpdateRequest(BaseModel):
+    """Запрос на обновление матрицы прав по ролям"""
+    roles: Dict[str, List[str]]
+    apply_to_employees: bool = False
+
+
+# =========================
+# НОРМО-ДНИ (ШАБЛОНЫ)
+# =========================
+
+class NormDaysTemplateEntry(BaseModel):
+    """Одна запись шаблона нормо-дней"""
+    stage_code: str = Field(..., min_length=1, max_length=50)
+    stage_name: str = Field(..., min_length=1, max_length=200)
+    stage_group: str = Field(..., min_length=1, max_length=50)
+    substage_group: Optional[str] = None
+    base_norm_days: float = Field(..., ge=0)
+    k_multiplier: float = Field(default=0, ge=0)
+    executor_role: str = Field(..., min_length=1, max_length=50)
+    is_in_contract_scope: bool = True
+    sort_order: int = Field(..., ge=0)
+
+
+class NormDaysTemplateRequest(BaseModel):
+    """Запрос на сохранение шаблона нормо-дней"""
+    project_type: str = Field(..., min_length=1, max_length=50)
+    project_subtype: str = Field(..., min_length=1, max_length=100)
+    entries: List[NormDaysTemplateEntry] = Field(..., min_length=1)
+
+
+class NormDaysTemplateResponse(BaseModel):
+    """Ответ с шаблоном нормо-дней"""
+    project_type: str
+    project_subtype: str
+    entries: List[NormDaysTemplateEntry]
+    is_custom: bool = False  # True если из БД, False если из формул
+
+
+class NormDaysPreviewRequest(BaseModel):
+    """Запрос на предпросмотр расчёта нормо-дней"""
+    project_type: str = Field(..., min_length=1, max_length=50)
+    project_subtype: str = Field(..., min_length=1, max_length=100)
+    area: float = Field(..., gt=0, le=2000)
 
 
 # =========================

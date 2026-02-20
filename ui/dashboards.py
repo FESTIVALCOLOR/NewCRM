@@ -5,6 +5,7 @@
 
 from datetime import datetime
 from ui.dashboard_widget import DashboardWidget
+from utils.data_access import DataAccess
 
 
 class ClientsDashboard(DashboardWidget):
@@ -12,10 +13,11 @@ class ClientsDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         # Получаем список агентов
         try:
-            self.agent_types = self.db.get_agent_types()
+            self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Прямой', 'Агент', 'Партнер']
         except Exception as e:
@@ -129,15 +131,8 @@ class ClientsDashboard(DashboardWidget):
         self._update_agent_clients_by_year()
 
     def _get_stats(self, year=None, agent_type=None):
-        """Получить статистику из API или локальной БД"""
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_clients_dashboard_stats(year=year, agent_type=agent_type)
-            else:
-                return self.db.get_clients_dashboard_stats(year=year, agent_type=agent_type)
-        except Exception as e:
-            print(f"[WARN] API error, using local DB: {e}")
-            return self.db.get_clients_dashboard_stats(year=year, agent_type=agent_type)
+        """Получить статистику через DataAccess"""
+        return self.data_access.get_clients_dashboard_stats(year=year, agent_type=agent_type)
 
     def _update_clients_by_year(self):
         """Обновить только карточку 'Клиенты за год'"""
@@ -192,9 +187,10 @@ class ContractsDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         try:
-            self.agent_types = self.db.get_agent_types()
+            self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Прямой', 'Агент', 'Партнер']
         except Exception as e:
@@ -293,15 +289,8 @@ class ContractsDashboard(DashboardWidget):
         self._update_agent_stats()
 
     def _get_stats(self, year=None, agent_type=None):
-        """Получить статистику из API или локальной БД"""
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_contracts_dashboard_stats(year=year, agent_type=agent_type)
-            else:
-                return self.db.get_contracts_dashboard_stats(year=year, agent_type=agent_type)
-        except Exception as e:
-            print(f"[WARN] API error, using local DB: {e}")
-            return self.db.get_contracts_dashboard_stats(year=year, agent_type=agent_type)
+        """Получить статистику через DataAccess"""
+        return self.data_access.get_contracts_dashboard_stats(year=year, agent_type=agent_type)
 
     def _update_agent_stats(self):
         """Обновить карточки агента"""
@@ -342,9 +331,10 @@ class CRMDashboard(DashboardWidget):
         """
         self.project_type = project_type
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         try:
-            self.agent_types = self.db.get_agent_types()
+            self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Прямой', 'Агент', 'Партнер']
         except Exception as e:
@@ -445,24 +435,11 @@ class CRMDashboard(DashboardWidget):
         self._update_agent_archive()
 
     def _get_stats(self, agent_type=None):
-        """Получить статистику из API или локальной БД"""
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_crm_dashboard_stats(
-                    project_type=self.project_type,
-                    agent_type=agent_type
-                )
-            else:
-                return self.db.get_crm_dashboard_stats(
-                    project_type=self.project_type,
-                    agent_type=agent_type
-                )
-        except Exception as e:
-            print(f"[WARN] API error, using local DB: {e}")
-            return self.db.get_crm_dashboard_stats(
-                project_type=self.project_type,
-                agent_type=agent_type
-            )
+        """Получить статистику через DataAccess"""
+        return self.data_access.get_crm_dashboard_stats(
+            project_type=self.project_type,
+            agent_type=agent_type
+        )
 
     def _update_agent_active(self):
         """Обновить карточку активных заказов агента"""
@@ -506,6 +483,7 @@ class EmployeesDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.setup_ui()
         # НЕ вызываем load_data() здесь - будет вызван в refresh() при показе дашборда
 
@@ -577,15 +555,7 @@ class EmployeesDashboard(DashboardWidget):
     def load_data(self):
         """Загрузка данных"""
         try:
-            # Получаем статистику из API или локальной БД
-            if self.api_client and self.api_client.is_online:
-                try:
-                    stats = self.api_client.get_employees_dashboard_stats()
-                except Exception as e:
-                    print(f"[WARN] API error, using local DB: {e}")
-                    stats = self.db.get_employees_dashboard_stats()
-            else:
-                stats = self.db.get_employees_dashboard_stats()
+            stats = self.data_access.get_employees_dashboard_stats()
 
             self.update_metric('active_employees', str(stats.get('active_employees', 0)))
             self.update_metric('reserve_employees', str(stats.get('reserve_employees', 0)))
@@ -618,6 +588,7 @@ class SalariesDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
@@ -727,24 +698,10 @@ class SalariesDashboard(DashboardWidget):
     def load_data(self):
         """Загрузка данных"""
         try:
-            # Получаем статистику из API или локальной БД
-            if self.api_client and self.api_client.is_online:
-                try:
-                    stats = self.api_client.get_salaries_dashboard_stats(
-                        year=self.current_year,
-                        month=self.current_month
-                    )
-                except Exception as e:
-                    print(f"[WARN] API error, using local DB: {e}")
-                    stats = self.db.get_salaries_dashboard_stats(
-                        year=self.current_year,
-                        month=self.current_month
-                    )
-            else:
-                stats = self.db.get_salaries_dashboard_stats(
-                    year=self.current_year,
-                    month=self.current_month
-                )
+            stats = self.data_access.get_salaries_dashboard_stats(
+                year=self.current_year,
+                month=self.current_month
+            )
 
             self.update_metric('total_paid', f"{stats['total_paid']:,.0f} руб")
             self.update_metric('paid_by_year', f"{stats['paid_by_year']:,.0f} руб")
@@ -765,6 +722,7 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
         self.setup_ui()
@@ -862,16 +820,8 @@ class SalariesAllPaymentsDashboard(DashboardWidget):
         self._update_month_card()
 
     def _get_stats(self, year=None, month=None):
-        """Получить статистику"""
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_salaries_all_payments_stats(year=year, month=month)
-            else:
-                return self.db.get_salaries_all_payments_stats(year=year, month=month)
-        except Exception as e:
-            print(f"[WARN] Ошибка получения статистики AllPayments: {e}")
-            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-                    'individual_by_year': 0, 'template_by_year': 0, 'supervision_by_year': 0}
+        """Получить статистику через DataAccess"""
+        return self.data_access.get_salaries_all_payments_stats(year=year, month=month)
 
     def _update_year_based_cards(self):
         """Обновить карточки зависящие от года"""
@@ -910,12 +860,13 @@ class SalariesIndividualDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
         self.filter_agent_type = None
 
         try:
-            self.agent_types = self.db.get_agent_types()
+            self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Фестиваль', 'Петрович']
         except Exception:
@@ -1019,15 +970,7 @@ class SalariesIndividualDashboard(DashboardWidget):
         self._update_agent_card()
 
     def _get_stats(self, year=None, month=None, agent_type=None):
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_salaries_individual_stats(year=year, month=month, agent_type=agent_type)
-            else:
-                return self.db.get_salaries_individual_stats(year=year, month=month, agent_type=agent_type)
-        except Exception as e:
-            print(f"[WARN] Ошибка получения статистики Individual: {e}")
-            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-                    'by_agent': 0, 'avg_payment': 0, 'payments_count': 0}
+        return self.data_access.get_salaries_individual_stats(year=year, month=month, agent_type=agent_type)
 
     def _update_year_based_cards(self):
         try:
@@ -1070,12 +1013,13 @@ class SalariesTemplateDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
         self.filter_agent_type = None
 
         try:
-            self.agent_types = self.db.get_agent_types()
+            self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Фестиваль', 'Петрович']
         except Exception:
@@ -1179,15 +1123,7 @@ class SalariesTemplateDashboard(DashboardWidget):
         self._update_agent_card()
 
     def _get_stats(self, year=None, month=None, agent_type=None):
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_salaries_template_stats(year=year, month=month, agent_type=agent_type)
-            else:
-                return self.db.get_salaries_template_stats(year=year, month=month, agent_type=agent_type)
-        except Exception as e:
-            print(f"[WARN] Ошибка получения статистики: {e}")
-            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-                    'by_agent': 0, 'avg_payment': 0, 'payments_count': 0}
+        return self.data_access.get_salaries_template_stats(year=year, month=month, agent_type=agent_type)
 
     def _update_year_based_cards(self):
         try:
@@ -1230,6 +1166,7 @@ class SalariesSalaryDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
         self.filter_project_type = None
@@ -1333,15 +1270,7 @@ class SalariesSalaryDashboard(DashboardWidget):
         self._update_project_type_card()
 
     def _get_stats(self, year=None, month=None, project_type=None):
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_salaries_salary_stats(year=year, month=month, project_type=project_type)
-            else:
-                return self.db.get_salaries_salary_stats(year=year, month=month, project_type=project_type)
-        except Exception as e:
-            print(f"[WARN] Ошибка получения статистики: {e}")
-            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-                    'by_project_type': 0, 'avg_salary': 0, 'employees_count': 0}
+        return self.data_access.get_salaries_salary_stats(year=year, month=month, project_type=project_type)
 
     def _update_year_based_cards(self):
         try:
@@ -1384,12 +1313,13 @@ class SalariesSupervisionDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
         self.filter_agent_type = None
 
         try:
-            self.agent_types = self.db.get_agent_types()
+            self.agent_types = self.data_access.get_agent_types()
             if not self.agent_types:
                 self.agent_types = ['Фестиваль', 'Петрович']
         except Exception:
@@ -1493,15 +1423,7 @@ class SalariesSupervisionDashboard(DashboardWidget):
         self._update_agent_card()
 
     def _get_stats(self, year=None, month=None, agent_type=None):
-        try:
-            if self.api_client and self.api_client.is_online:
-                return self.api_client.get_salaries_supervision_stats(year=year, month=month, agent_type=agent_type)
-            else:
-                return self.db.get_salaries_supervision_stats(year=year, month=month, agent_type=agent_type)
-        except Exception as e:
-            print(f"[WARN] Ошибка получения статистики: {e}")
-            return {'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-                    'by_agent': 0, 'avg_payment': 0, 'payments_count': 0}
+        return self.data_access.get_salaries_supervision_stats(year=year, month=month, agent_type=agent_type)
 
     def _update_year_based_cards(self):
         try:
@@ -1544,6 +1466,7 @@ class ReportsStatisticsDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self.setup_ui()
         # НЕ вызываем load_data() здесь - будет вызван в refresh() при показе дашборда
 
@@ -1667,45 +1590,11 @@ class ReportsStatisticsDashboard(DashboardWidget):
     def load_data(self):
         """Загрузка агрегированных данных"""
         try:
-            if not self.db:
-                print(f"[ERROR] self.db is None in ReportsStatisticsDashboard.load_data()")
-                return
-
-            # Проверяем статус подключения один раз
-            use_api = self.api_client and self.api_client.is_online
-
-            # Загружаем данные клиентов
-            if use_api:
-                try:
-                    clients_stats = self.api_client.get_clients_dashboard_stats()
-                except Exception:
-                    clients_stats = self.db.get_clients_dashboard_stats()
-            else:
-                clients_stats = self.db.get_clients_dashboard_stats()
-
-            # Загружаем данные договоров
-            if use_api:
-                try:
-                    contracts_stats = self.api_client.get_contracts_dashboard_stats()
-                except Exception:
-                    contracts_stats = self.db.get_contracts_dashboard_stats()
-            else:
-                contracts_stats = self.db.get_contracts_dashboard_stats()
-
-            # Загружаем данные СРМ
-            if use_api:
-                try:
-                    crm_individual = self.api_client.get_crm_dashboard_stats('Индивидуальный')
-                    crm_template = self.api_client.get_crm_dashboard_stats('Шаблонный')
-                    crm_supervision = self.api_client.get_crm_dashboard_stats('Авторский надзор')
-                except Exception:
-                    crm_individual = self.db.get_crm_dashboard_stats('Индивидуальный')
-                    crm_template = self.db.get_crm_dashboard_stats('Шаблонный')
-                    crm_supervision = self.db.get_crm_dashboard_stats('Авторский надзор')
-            else:
-                crm_individual = self.db.get_crm_dashboard_stats('Индивидуальный')
-                crm_template = self.db.get_crm_dashboard_stats('Шаблонный')
-                crm_supervision = self.db.get_crm_dashboard_stats('Авторский надзор')
+            clients_stats = self.data_access.get_clients_dashboard_stats()
+            contracts_stats = self.data_access.get_contracts_dashboard_stats()
+            crm_individual = self.data_access.get_crm_dashboard_stats(project_type='Индивидуальный')
+            crm_template = self.data_access.get_crm_dashboard_stats(project_type='Шаблонный')
+            crm_supervision = self.data_access.get_crm_dashboard_stats(project_type='Авторский надзор')
 
             # Обновляем метрики клиентов
             self.update_metric('total_clients', str(clients_stats.get('total_clients', 0)))
@@ -1742,6 +1631,7 @@ class EmployeeReportsDashboard(DashboardWidget):
 
     def __init__(self, db_manager, api_client=None, parent=None):
         super().__init__(db_manager, api_client, parent)
+        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
@@ -1905,39 +1795,11 @@ class EmployeeReportsDashboard(DashboardWidget):
     def load_data(self):
         """Загрузка агрегированных данных"""
         try:
-            if not self.db:
-                print(f"[ERROR] self.db is None in EmployeeReportsDashboard.load_data()")
-                return
-
-            # Проверяем статус подключения один раз
-            use_api = self.api_client and self.api_client.is_online
-
-            # Загружаем данные сотрудников
-            if use_api:
-                try:
-                    employees_stats = self.api_client.get_employees_dashboard_stats()
-                except Exception:
-                    employees_stats = self.db.get_employees_dashboard_stats()
-            else:
-                employees_stats = self.db.get_employees_dashboard_stats()
-
-            # Загружаем данные зарплат
-            if use_api:
-                try:
-                    salaries_stats = self.api_client.get_salaries_dashboard_stats(
-                        year=self.current_year,
-                        month=self.current_month
-                    )
-                except Exception:
-                    salaries_stats = self.db.get_salaries_dashboard_stats(
-                        year=self.current_year,
-                        month=self.current_month
-                    )
-            else:
-                salaries_stats = self.db.get_salaries_dashboard_stats(
-                    year=self.current_year,
-                    month=self.current_month
-                )
+            employees_stats = self.data_access.get_employees_dashboard_stats()
+            salaries_stats = self.data_access.get_salaries_dashboard_stats(
+                year=self.current_year,
+                month=self.current_month
+            )
 
             # Обновляем метрики сотрудников (поддержка разных ключей от API и локальной БД)
             self.update_metric('active_employees', str(employees_stats.get('active_employees', 0)))

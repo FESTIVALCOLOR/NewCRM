@@ -105,6 +105,7 @@ class MessengerSelectDialog(QDialog):
         db,
         data_access,
         employee: Dict[str, Any],
+        card_type: str = "crm",  # "crm" или "supervision"
     ):
         super().__init__(parent)
         self.card_data = card_data or {}
@@ -112,6 +113,7 @@ class MessengerSelectDialog(QDialog):
         self.db = db
         self.data_access = data_access
         self.employee = employee or {}
+        self.card_type = card_type  # crm / supervision
         self.result_chat_data: Optional[Dict] = None
 
         self._selected_messenger = "telegram"
@@ -393,45 +395,49 @@ class MessengerSelectDialog(QDialog):
         if sm_id and sm_name:
             self._add_participant_cb(layout, "Старший менеджер", sm_name, sm_id, mandatory=True)
 
-        # СДП (опциональный)
-        sdp_id = self.card_data.get("sdp_id")
-        sdp_name = self.card_data.get("sdp_name")
-        if sdp_id and sdp_name:
-            self._add_participant_cb(layout, "СДП", sdp_name, sdp_id, mandatory=False, checked=True)
+        if self.card_type == "supervision":
+            # Надзор: ДАН (обязательный)
+            dan_id = self.card_data.get("dan_id")
+            dan_name = self.card_data.get("dan_name")
+            if dan_id and dan_name:
+                self._add_participant_cb(layout, "ДАН", dan_name, dan_id, mandatory=True)
+        else:
+            # CRM: СДП, ГАП, Менеджер, Дизайнер/Чертёжник
+            sdp_id = self.card_data.get("sdp_id")
+            sdp_name = self.card_data.get("sdp_name")
+            if sdp_id and sdp_name:
+                self._add_participant_cb(layout, "СДП", sdp_name, sdp_id, mandatory=False, checked=True)
 
-        # ГАП (опциональный)
-        gap_id = self.card_data.get("gap_id")
-        gap_name = self.card_data.get("gap_name")
-        if gap_id and gap_name:
-            self._add_participant_cb(layout, "ГАП", gap_name, gap_id, mandatory=False, checked=True)
+            gap_id = self.card_data.get("gap_id")
+            gap_name = self.card_data.get("gap_name")
+            if gap_id and gap_name:
+                self._add_participant_cb(layout, "ГАП", gap_name, gap_id, mandatory=False, checked=True)
 
-        # Менеджер (опциональный)
-        mgr_id = self.card_data.get("manager_id")
-        mgr_name = self.card_data.get("manager_name")
-        if mgr_id and mgr_name:
-            self._add_participant_cb(layout, "Менеджер", mgr_name, mgr_id, mandatory=False, checked=True)
+            mgr_id = self.card_data.get("manager_id")
+            mgr_name = self.card_data.get("manager_name")
+            if mgr_id and mgr_name:
+                self._add_participant_cb(layout, "Менеджер", mgr_name, mgr_id, mandatory=False, checked=True)
 
-        # Дизайнер / Чертёжник из stage_executors
-        stage_executors = self.card_data.get("stage_executors") or []
-        seen_ids = set()
-        for se in stage_executors:
-            se_id = se.get("executor_id")
-            se_name = se.get("executor_name", "")
-            stage = (se.get("stage_name") or "").lower()
-            if not se_id or se_id in seen_ids:
-                continue
-            seen_ids.add(se_id)
+            stage_executors = self.card_data.get("stage_executors") or []
+            seen_ids = set()
+            for se in stage_executors:
+                se_id = se.get("executor_id")
+                se_name = se.get("executor_name", "")
+                stage = (se.get("stage_name") or "").lower()
+                if not se_id or se_id in seen_ids:
+                    continue
+                seen_ids.add(se_id)
 
-            if "дизайн" in stage:
-                self._add_participant_cb(
-                    layout, "Дизайнер", se_name, se_id,
-                    mandatory=False, checked=False,
-                )
-            elif "черт" in stage:
-                self._add_participant_cb(
-                    layout, "Чертёжник", se_name, se_id,
-                    mandatory=False, checked=False,
-                )
+                if "дизайн" in stage:
+                    self._add_participant_cb(
+                        layout, "Дизайнер", se_name, se_id,
+                        mandatory=False, checked=False,
+                    )
+                elif "черт" in stage:
+                    self._add_participant_cb(
+                        layout, "Чертёжник", se_name, se_id,
+                        mandatory=False, checked=False,
+                    )
 
         if not self._participant_checkboxes:
             no_data = QLabel("Исполнители не назначены")
@@ -463,8 +469,6 @@ class MessengerSelectDialog(QDialog):
             employees = []
             if self.data_access:
                 employees = self.data_access.get_all_employees()
-            elif self.api_client:
-                employees = self.api_client.get_employees(skip=0, limit=1000)
 
             for emp in (employees or []):
                 pos = (emp.get("position") or emp.get("role") or "").lower()
@@ -540,7 +544,8 @@ class MessengerSelectDialog(QDialog):
             city = city.replace("_", "-")
         if address:
             address = address.replace("_", "-")
-        parts = ["ИН"]
+        prefix = "АН" if self.card_type == "supervision" else "ИН"
+        parts = [prefix]
         if city:
             parts.append(city)
         if address:
@@ -627,26 +632,23 @@ class MessengerSelectDialog(QDialog):
             self._create_btn.setEnabled(True)
             self._update_create_btn_text()
 
-    def _do_create(self, crm_card_id: int, members: List[Dict]) -> Optional[Dict]:
+    def _do_create(self, card_id: int, members: List[Dict]) -> Optional[Dict]:
         """Автоматическое создание чата через MTProto"""
-        if self.data_access:
+        if not self.data_access:
+            return None
+        if self.card_type == "supervision":
+            return self.data_access.create_supervision_chat(
+                card_id, self._selected_messenger, members,
+            )
+        else:
             return self.data_access.create_messenger_chat(
-                crm_card_id, self._selected_messenger, members,
+                card_id, self._selected_messenger, members,
             )
-        elif self.api_client:
-            return self.api_client.create_messenger_chat(
-                crm_card_id, self._selected_messenger, members,
-            )
-        return None
 
-    def _do_bind(self, crm_card_id: int, invite_link: str, members: List[Dict]) -> Optional[Dict]:
+    def _do_bind(self, card_id: int, invite_link: str, members: List[Dict]) -> Optional[Dict]:
         """Привязка существующего чата"""
-        if self.data_access:
-            return self.data_access.bind_messenger_chat(
-                crm_card_id, invite_link, self._selected_messenger, members,
-            )
-        elif self.api_client:
-            return self.api_client.bind_messenger_chat(
-                crm_card_id, invite_link, self._selected_messenger, members,
-            )
-        return None
+        if not self.data_access:
+            return None
+        return self.data_access.bind_messenger_chat(
+            card_id, invite_link, self._selected_messenger, members,
+        )

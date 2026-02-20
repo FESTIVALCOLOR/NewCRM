@@ -6,6 +6,7 @@ from PyQt5.QtCore import QDate
 from utils.password_utils import hash_password, verify_password
 from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
+from database.migrations import DatabaseMigrations
 
 
 # Флаг для предотвращения повторных миграций
@@ -13,7 +14,7 @@ _migrations_completed = False
 _migrations_lock = threading.Lock()
 
 
-class DatabaseManager:
+class DatabaseManager(DatabaseMigrations):
     def __init__(self, db_path='interior_studio.db'):
         global _migrations_completed
 
@@ -46,218 +47,9 @@ class DatabaseManager:
                 self.create_stage_workflow_state_table()
                 self.create_messenger_tables()
                 self.create_performance_indexes()
+                self.add_missing_fields_rates_payments_salaries()
                 _migrations_completed = True
 
-    def run_migrations(self):
-        """Запуск миграций базы данных"""
-        try:
-            import os
-            if os.path.exists('database/migrations.py'):
-                # Проверяем, нужна ли миграция
-                conn = self.connect()
-                cursor = conn.cursor()
-                
-                # Миграция №1: status и termination_reason
-                cursor.execute("PRAGMA table_info(contracts)")
-                columns = [column[1] for column in cursor.fetchall()]
-                self.close()
-                
-                if 'status' not in columns or 'termination_reason' not in columns:
-                    from database.migrations import add_contract_status_fields
-                    add_contract_status_fields(self.db_path)
-            
-                # ========== НОВАЯ МИГРАЦИЯ №2 ==========
-                # Добавляем поле approval_deadline в crm_cards
-                self.add_approval_deadline_field()
-                # =======================================
-
-                # ========== МИГРАЦИЯ №3 ==========
-                self.add_approval_stages_field()
-                # =================================
-                
-                # ========== МИГРАЦИЯ №4: Таблица дедлайнов согласования ==========
-                self.create_approval_deadlines_table()
-                # =================================================================
-
-                # ========== МИГРАЦИЯ №5 ==========
-                self.add_project_data_link_field()
-                # =================================
-
-                # ========== МИГРАЦИЯ: third_payment =======
-                self.add_third_payment_field()
-                # ==========================================
-
-                # ========== МИГРАЦИЯ: birth_date ==========
-                self.add_birth_date_column()
-                # ==========================================
-                
-                # ========== МИГРАЦИЯ: address ==========
-                self.add_address_column()
-                # =======================================
-                
-                # ========== МИГРАЦИЯ: secondary_position ==========
-                self.add_secondary_position_column()
-                # ==================================================
-
-                # ========== МИГРАЦИЯ: status_changed_date ==========
-                self.add_status_changed_date_column()
-                # ===================================================
-
-                # ========== МИГРАЦИЯ: tech_task fields ==========
-                self.add_tech_task_fields()
-                # ================================================
-
-                # ========== МИГРАЦИЯ: survey_date ==========
-                self.add_survey_date_column()
-                # ===========================================
-
-                # ========== МИГРАЦИЯ: project_files table ==========
-                self.create_project_files_table()
-                # ====================================================
-
-                # ========== МИГРАЦИЯ: payment tracking fields ==========
-                self.add_payment_tracking_fields()
-                # ======================================================
-
-                # ========== МИГРАЦИЯ: signed acts fields ==========
-                self.add_signed_acts_fields()
-                # =================================================
-
-                # ========== МИГРАЦИЯ: user_permissions table ==========
-                self.create_user_permissions_table()
-                # =====================================================
-
-        except Exception as e:
-            print(f"[WARN] Предупреждение при миграции: {e}")
-
-    def add_payment_tracking_fields(self):
-        """Миграция: добавление полей отслеживания платежей (даты оплат + чеки)"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            new_cols = {
-                # Даты оплат
-                'advance_payment_paid_date': 'TEXT',
-                'additional_payment_paid_date': 'TEXT',
-                'third_payment_paid_date': 'TEXT',
-                # Чек аванса
-                'advance_receipt_link': 'TEXT',
-                'advance_receipt_yandex_path': 'TEXT',
-                'advance_receipt_file_name': 'TEXT',
-                # Чек 2-го платежа
-                'additional_receipt_link': 'TEXT',
-                'additional_receipt_yandex_path': 'TEXT',
-                'additional_receipt_file_name': 'TEXT',
-                # Чек 3-го платежа
-                'third_receipt_link': 'TEXT',
-                'third_receipt_yandex_path': 'TEXT',
-                'third_receipt_file_name': 'TEXT',
-            }
-
-            added = []
-            for col_name, col_type in new_cols.items():
-                if col_name not in columns:
-                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
-                    added.append(col_name)
-
-            if added:
-                conn.commit()
-                print(f"[OK] Миграция payment_tracking: добавлено {len(added)} колонок: {', '.join(added)}")
-            else:
-                print("[OK] Поля payment_tracking уже существуют")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции payment_tracking: {e}")
-
-    def add_signed_acts_fields(self):
-        """Миграция: добавление полей для подписанных актов"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            new_cols = {
-                'act_planning_signed_link': 'TEXT',
-                'act_planning_signed_yandex_path': 'TEXT',
-                'act_planning_signed_file_name': 'TEXT',
-                'act_concept_signed_link': 'TEXT',
-                'act_concept_signed_yandex_path': 'TEXT',
-                'act_concept_signed_file_name': 'TEXT',
-                'info_letter_signed_link': 'TEXT',
-                'info_letter_signed_yandex_path': 'TEXT',
-                'info_letter_signed_file_name': 'TEXT',
-                'act_final_signed_link': 'TEXT',
-                'act_final_signed_yandex_path': 'TEXT',
-                'act_final_signed_file_name': 'TEXT',
-            }
-
-            added = []
-            for col_name, col_type in new_cols.items():
-                if col_name not in columns:
-                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
-                    added.append(col_name)
-
-            if added:
-                conn.commit()
-                print(f"[OK] Миграция signed_acts: добавлено {len(added)} колонок: {', '.join(added)}")
-            else:
-                print("[OK] Поля signed_acts уже существуют")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции signed_acts: {e}")
-
-    def create_user_permissions_table(self):
-        """Миграция: создание таблицы user_permissions для granular permissions"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_permissions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id INTEGER NOT NULL,
-                permission_name TEXT NOT NULL,
-                granted_by INTEGER,
-                granted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (employee_id) REFERENCES employees(id),
-                UNIQUE(employee_id, permission_name)
-            )
-            ''')
-
-            conn.commit()
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции user_permissions: {e}")
-
-    def add_third_payment_field(self):
-        """Миграция: добавление поля third_payment"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'third_payment' not in columns:
-                print("[>] Выполняется миграция: добавление third_payment...")
-                cursor.execute("ALTER TABLE contracts ADD COLUMN third_payment REAL DEFAULT 0")
-                conn.commit()
-                print("[OK] Поле third_payment добавлено")
-            else:
-                print("[OK] Поле third_payment уже существует")
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции third_payment: {e}")
-    
     def connect(self):
         """Подключение к БД"""
         self.connection = sqlite3.connect(self.db_path)
@@ -269,209 +61,38 @@ class DatabaseManager:
         """Закрытие соединения"""
         if self.connection:
             self.connection.close()
-    
-    def initialize_database(self):
-        """Создание всех таблиц"""
-        conn = self.connect()
-        cursor = conn.cursor()
-        
-        # Таблица сотрудников
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            email TEXT,
-            status TEXT DEFAULT 'активный',
-            position TEXT NOT NULL,
-            department TEXT NOT NULL,
-            legal_status TEXT,
-            hire_date DATE,
-            payment_details TEXT,
-            login TEXT UNIQUE,
-            password TEXT,
-            role TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # Таблица клиентов
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_type TEXT NOT NULL,
-            full_name TEXT,
-            phone TEXT NOT NULL,
-            email TEXT,
-            passport_series TEXT,
-            passport_number TEXT,
-            passport_issued_by TEXT,
-            passport_issued_date DATE,
-            registration_address TEXT,
-            organization_type TEXT,
-            organization_name TEXT,
-            inn TEXT,
-            ogrn TEXT,
-            account_details TEXT,
-            responsible_person TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # Таблица договоров
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS contracts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id INTEGER NOT NULL,
-            project_type TEXT NOT NULL,
-            agent_type TEXT,
-            city TEXT,
-            contract_number TEXT UNIQUE NOT NULL,
-            contract_date DATE,
-            address TEXT,
-            area REAL,
-            total_amount REAL,
-            advance_payment REAL,
-            additional_payment REAL,
-            third_payment REAL,  -- ← НОВОЕ ПОЛЕ
-            contract_period INTEGER,
-            comments TEXT,
-            contract_file_link TEXT,
-            tech_task_link TEXT,
-            status TEXT DEFAULT 'Новый заказ',
-            termination_reason TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (client_id) REFERENCES clients(id)
-        )
-        ''')
-        
-        # Таблица CRM (карточки проектов)
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS crm_cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            contract_id INTEGER NOT NULL,
-            column_name TEXT NOT NULL,
-            deadline DATE,
-            tags TEXT,
-            is_approved BOOLEAN DEFAULT 0,
-            senior_manager_id INTEGER,
-            sdp_id INTEGER,
-            gap_id INTEGER,
-            manager_id INTEGER,
-            surveyor_id INTEGER,
-            order_position INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (contract_id) REFERENCES contracts(id)
-        )
-        ''')
-        
-        # Таблица исполнителей по стадиям
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS stage_executors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            crm_card_id INTEGER NOT NULL,
-            stage_name TEXT NOT NULL,
-            executor_id INTEGER NOT NULL,
-            assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            assigned_by INTEGER NOT NULL,
-            deadline DATE,
-            completed BOOLEAN DEFAULT 0,
-            completed_date TIMESTAMP,
-            FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id),
-            FOREIGN KEY (executor_id) REFERENCES employees(id),
-            FOREIGN KEY (assigned_by) REFERENCES employees(id)
-        )
-        ''')
-        
-        # Таблица CRM надзора
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS crm_supervision (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            contract_id INTEGER NOT NULL,
-            column_name TEXT NOT NULL,
-            deadline DATE,
-            tags TEXT,
-            is_approved BOOLEAN DEFAULT 0,
-            is_purchased BOOLEAN DEFAULT 0,
-            executor_id INTEGER,
-            order_position INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (contract_id) REFERENCES contracts(id),
-            FOREIGN KEY (executor_id) REFERENCES employees(id)
-        )
-        ''')
-        
-        # Таблица зарплат
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS salaries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            contract_id INTEGER,
-            employee_id INTEGER NOT NULL,
-            payment_type TEXT NOT NULL,
-            stage_name TEXT,
-            amount REAL NOT NULL,
-            advance_payment REAL,
-            report_month TEXT NOT NULL,
-            comments TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (contract_id) REFERENCES contracts(id),
-            FOREIGN KEY (employee_id) REFERENCES employees(id)
-        )
-        ''')
-        
-        # Таблица истории действий (для аудита)
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS action_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            action_type TEXT NOT NULL,
-            entity_type TEXT NOT NULL,
-            entity_id INTEGER NOT NULL,
-            description TEXT,
-            action_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES employees(id)
-        )
-        ''')
-        
-        # Создание администратора по умолчанию
-        # ВАЖНО: Пароль теперь хэшируется!
-        default_password_hash = hash_password('admin')
-        cursor.execute('''
-        INSERT OR IGNORE INTO employees
-        (full_name, phone, position, department, login, password, role, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', ('Администратор', '+7 (000) 000-00-00', 'Руководитель студии',
-              'Руководящий отдел', 'admin', default_password_hash, 'Администратор', 'активный'))
 
-        # ИСПРАВЛЕНИЕ: Таблица агентов с цветами
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS agents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            color TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
+    # Whitelist допустимых имён таблиц для динамического SQL
+    ALLOWED_TABLES = {
+        'clients', 'contracts', 'employees', 'crm_cards', 'supervision_cards',
+        'payments', 'rates', 'salaries', 'project_files', 'action_history',
+        'supervision_history', 'stage_executors', 'supervision_orders',
+        'employee_permissions', 'template_rates', 'contract_templates',
+        'messenger_settings', 'messenger_scripts', 'norm_days'
+    }
 
-        # Добавляем агентов по умолчанию с цветами
-        cursor.execute('SELECT COUNT(*) as count FROM agents')
-        if cursor.fetchone()['count'] == 0:
-            cursor.execute('''
-            INSERT INTO agents (name, color) VALUES
-            ('ПЕТРОВИЧ', '#FFA500'),
-            ('ФЕСТИВАЛЬ', '#FF69B4')
-            ''')
-            print("Агенты по умолчанию добавлены с цветами")
+    def _validate_table(self, table: str):
+        """Проверяет имя таблицы по whitelist перед подстановкой в SQL"""
+        if table not in self.ALLOWED_TABLES:
+            raise ValueError(f"Недопустимое имя таблицы: {table}")
 
-        conn.commit()
-        self.close()
-        print("База данных успешно инициализирована!")
-    
+    @staticmethod
+    def _validate_columns(columns):
+        """Проверяет имена колонок перед подстановкой в SQL SET clause.
+        Допускаются только snake_case идентификаторы (a-z, 0-9, _)."""
+        import re
+        pattern = re.compile(r'^[a-z_][a-z0-9_]*$')
+        for col in columns:
+            if not pattern.match(col):
+                raise ValueError(f"Недопустимое имя колонки: {col}")
+
+    def _build_set_clause(self, data: dict):
+        """Строит безопасный SET clause из словаря данных.
+        Валидирует имена колонок и возвращает (set_clause, values)."""
+        self._validate_columns(data.keys())
+        set_parts = [f'{key} = ?' for key in data.keys()]
+        return ', '.join(set_parts), list(data.values())
+
     # Методы для работы с сотрудниками
     def add_employee(self, employee_data):
         """Добавление сотрудника В БАЗУ ДАННЫХ"""
@@ -632,15 +253,32 @@ class DatabaseManager:
         self.close()
         return client_id
     
-    def get_all_clients(self):
-        """Получение всех клиентов"""
+    def get_all_clients(self, skip: int = 0, limit: int = 10000):
+        """Получение всех клиентов с поддержкой пагинации.
+
+        Args:
+            skip: Количество записей для пропуска (OFFSET)
+            limit: Максимальное количество записей (LIMIT)
+        """
         conn = self.connect()
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM clients ORDER BY id DESC')
+        # Параметризованный SQL запрос с поддержкой пагинации
+        cursor.execute(
+            'SELECT * FROM clients ORDER BY id DESC LIMIT ? OFFSET ?',
+            (limit, skip)
+        )
         clients = [dict(row) for row in cursor.fetchall()]
         self.close()
         return clients
+
+    def get_clients_count(self) -> int:
+        """Получить общее количество клиентов (для пагинации)"""
+        conn = self.connect()
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM clients')
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
     
     # Методы для работы с договорами
     def add_contract(self, contract_data):
@@ -800,8 +438,8 @@ class DatabaseManager:
             self.close()
             return
 
-        set_clause = ', '.join([f'{key} = ?' for key in validated_data.keys()])
-        values = list(validated_data.values()) + [client_id]
+        set_clause, values = self._build_set_clause(validated_data)
+        values = values + [client_id]
 
         cursor.execute(f'UPDATE clients SET {set_clause} WHERE id = ?', values)
         conn.commit()
@@ -818,18 +456,26 @@ class DatabaseManager:
         
         return dict(client) if client else None
     
-    def get_all_contracts(self):
-        """Получение всех договоров"""
+    def get_all_contracts(self, skip: int = 0, limit: int = 10000):
+        """Получение всех договоров с поддержкой пагинации.
+
+        Args:
+            skip: Количество записей для пропуска (OFFSET)
+            limit: Максимальное количество записей (LIMIT)
+        """
         conn = self.connect()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-        SELECT c.*, cl.full_name, cl.organization_name, cl.client_type
-        FROM contracts c
-        LEFT JOIN clients cl ON c.client_id = cl.id
-        ORDER BY c.id DESC
-        ''')
-        
+        # Параметризованный SQL запрос с поддержкой пагинации
+        cursor.execute(
+            '''
+            SELECT c.*, cl.full_name, cl.organization_name, cl.client_type
+            FROM contracts c
+            LEFT JOIN clients cl ON c.client_id = cl.id
+            ORDER BY c.id DESC
+            LIMIT ? OFFSET ?
+            ''',
+            (limit, skip)
+        )
         contracts = [dict(row) for row in cursor.fetchall()]
         self.close()
         return contracts
@@ -911,9 +557,8 @@ class DatabaseManager:
                     need_supervision_card = True
 
         # Формируем SQL запрос динамически
-        set_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
-        values = list(updates.values())
-        values.append(contract_id)
+        set_clause, values = self._build_set_clause(updates)
+        values = values + [contract_id]
 
         query = f"UPDATE contracts SET {set_clause} WHERE id = ?"
 
@@ -1114,9 +759,9 @@ class DatabaseManager:
         conn = self.connect()
         cursor = conn.cursor()
         
-        set_clause = ', '.join([f'{key} = ?' for key in updates.keys()])
-        values = list(updates.values()) + [card_id]
-        
+        set_clause, values = self._build_set_clause(updates)
+        values = values + [card_id]
+
         cursor.execute(f'UPDATE crm_cards SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', values)
         conn.commit()
 
@@ -1401,9 +1046,9 @@ class DatabaseManager:
         conn = self.connect()
         cursor = conn.cursor()
         
-        set_clause = ', '.join([f'{key} = ?' for key in updates.keys()])
-        values = list(updates.values()) + [card_id]
-        
+        set_clause, values = self._build_set_clause(updates)
+        values = values + [card_id]
+
         cursor.execute(f'UPDATE crm_supervision SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', values)
         conn.commit()
         self.close()
@@ -1639,39 +1284,26 @@ class DatabaseManager:
     
     def get_crm_cards_by_project_type(self, project_type):
         """Получение карточек по типу проекта (ТОЛЬКО АКТИВНЫЕ, исключая архив)"""
-        print(f"\n[DB] ════════════════════════════════════════")
-        print(f"[DB] Запрос: Активные карточки типа '{project_type}'")
-        
         conn = self.connect()
         cursor = conn.cursor()
-        
-        # 1. Проверяем ОБЩЕЕ количество карточек
-        cursor.execute('SELECT COUNT(*) as total FROM crm_cards')
-        total_cards = cursor.fetchone()['total']
-        print(f"[DB] ├─ Всего карточек в таблице: {total_cards}")
-        
-        # 2. Проверяем количество договоров с таким типом
-        cursor.execute('SELECT COUNT(*) as total FROM contracts WHERE project_type = ?', (project_type,))
-        total_contracts = cursor.fetchone()['total']
-        print(f"[DB] ├─ Договоров с типом '{project_type}': {total_contracts}")
-        
-        # 3. Проверяем статусы договоров
-        cursor.execute('''
-        SELECT status, COUNT(*) as count 
-        FROM contracts 
-        WHERE project_type = ? 
-        GROUP BY status
-        ''', (project_type,))
-        status_counts = cursor.fetchall()
-        print(f"[DB] ├─ Статусы договоров:")
-        for row in status_counts:
-            print(f"[DB] │  • {row['status'] or 'NULL/Пусто'}: {row['count']} шт.")
-        
-        # 4. ОСНОВНОЙ ЗАПРОС (ИСПРАВЛЕННЫЙ)
+
+        # ОСНОВНОЙ ЗАПРОС (CTE вместо коррелированных подзапросов)
         query = '''
+        WITH designer_latest AS (
+            SELECT se.crm_card_id, MAX(se.id) as max_id
+            FROM stage_executors se
+            WHERE se.stage_name LIKE '%концепция%'
+            GROUP BY se.crm_card_id
+        ),
+        draftsman_latest AS (
+            SELECT se.crm_card_id, MAX(se.id) as max_id
+            FROM stage_executors se
+            WHERE se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%'
+            GROUP BY se.crm_card_id
+        )
         SELECT cc.id as id, cc.contract_id, cc.column_name, cc.deadline, cc.tags,
                cc.is_approved, cc.approval_deadline, cc.approval_stages,
-               cc.project_data_link,  -- ← НОВОЕ
+               cc.project_data_link,
                cc.senior_manager_id, cc.sdp_id, cc.gap_id,
                cc.manager_id, cc.surveyor_id,
                c.contract_number, c.address, c.area, c.city, c.agent_type,
@@ -1681,55 +1313,23 @@ class DatabaseManager:
                e3.full_name as gap_name,
                e4.full_name as manager_name,
                e5.full_name as surveyor_name,
-               
-               -- ДИЗАЙНЕР
-               (SELECT e.full_name 
-                FROM stage_executors se 
-                JOIN employees e ON se.executor_id = e.id
-                WHERE se.crm_card_id = cc.id 
-                  AND se.stage_name LIKE '%концепция%'
-                ORDER BY se.id DESC LIMIT 1) as designer_name,
-               
-               (SELECT se.completed 
-                FROM stage_executors se
-                WHERE se.crm_card_id = cc.id 
-                  AND se.stage_name LIKE '%концепция%'
-                ORDER BY se.id DESC LIMIT 1) as designer_completed,
-               
-               -- ========== НОВОЕ: ДЕДЛАЙН ДИЗАЙНЕРА ==========
-               (SELECT se.deadline 
-                FROM stage_executors se
-                WHERE se.crm_card_id = cc.id 
-                  AND se.stage_name LIKE '%концепция%'
-                ORDER BY se.id DESC LIMIT 1) as designer_deadline,
-               
-               -- ЧЕРТЁЖНИК
-               (SELECT e.full_name 
-                FROM stage_executors se 
-                JOIN employees e ON se.executor_id = e.id
-                WHERE se.crm_card_id = cc.id 
-                  AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
-                ORDER BY se.id DESC LIMIT 1) as draftsman_name,
-               
-               (SELECT se.completed 
-                FROM stage_executors se
-                WHERE se.crm_card_id = cc.id 
-                  AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
-                ORDER BY se.id DESC LIMIT 1) as draftsman_completed,
-               
-               -- ========== НОВОЕ: ДЕДЛАЙН ЧЕРТЁЖНИКА ==========
-               (SELECT se.deadline
-                FROM stage_executors se
-                WHERE se.crm_card_id = cc.id
-                  AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
-                ORDER BY se.id DESC LIMIT 1) as draftsman_deadline,
 
-               -- ========== ПОЛЯ ДЛЯ ТЗ И ЗАМЕРА (из crm_cards для совместимости) ==========
+               -- ДИЗАЙНЕР (через CTE)
+               ed.full_name as designer_name,
+               sed.completed as designer_completed,
+               sed.deadline as designer_deadline,
+
+               -- ЧЕРТЁЖНИК (через CTE)
+               edr.full_name as draftsman_name,
+               sedr.completed as draftsman_completed,
+               sedr.deadline as draftsman_deadline,
+
+               -- ПОЛЯ ДЛЯ ТЗ И ЗАМЕРА (из crm_cards для совместимости)
                cc.tech_task_file,
                cc.tech_task_date,
                cc.survey_date,
 
-               -- ========== ПОЛЯ ДЛЯ ТЗ И ЗАМЕРА (из contracts - новые данные) ==========
+               -- ПОЛЯ ДЛЯ ТЗ И ЗАМЕРА (из contracts)
                c.tech_task_link,
                c.tech_task_file_name,
                c.tech_task_yandex_path,
@@ -1745,31 +1345,22 @@ class DatabaseManager:
         LEFT JOIN employees e3 ON cc.gap_id = e3.id
         LEFT JOIN employees e4 ON cc.manager_id = e4.id
         LEFT JOIN employees e5 ON cc.surveyor_id = e5.id
-        WHERE c.project_type = ? 
+        LEFT JOIN designer_latest dl ON dl.crm_card_id = cc.id
+        LEFT JOIN stage_executors sed ON sed.id = dl.max_id
+        LEFT JOIN employees ed ON sed.executor_id = ed.id
+        LEFT JOIN draftsman_latest drl ON drl.crm_card_id = cc.id
+        LEFT JOIN stage_executors sedr ON sedr.id = drl.max_id
+        LEFT JOIN employees edr ON sedr.executor_id = edr.id
+        WHERE c.project_type = ?
           AND (c.status IS NULL OR c.status = '' OR c.status NOT IN ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'))
         ORDER BY cc.order_position, cc.id
         '''
         
         cursor.execute(query, (project_type,))
         rows = cursor.fetchall()
-        
-        print(f"[DB] └─ [OK] Результат запроса: {len(rows)} активных карточек")
-        
-        cards = []
-        for row in rows:
-            card = dict(row)
-            cards.append(card)
-            print(f"[DB]    • ID={card['id']} | Колонка: '{card['column_name']}' | "
-                  f"Дизайнер: {card.get('designer_name', 'Не назначен')} "
-                  f"({'[OK] сдано' if card.get('designer_completed') else 'в работе'}) | "
-                  f"Чертёжник: {card.get('draftsman_name', 'Не назначен')} "
-                  f"({'[OK] сдано' if card.get('draftsman_completed') else 'в работе'})")
-        
-        if not cards:
-            print(f"[DB] [WARN] ВНИМАНИЕ: Нет активных карточек!")
-        
-        print(f"[DB] ════════════════════════════════════════\n")
-        
+
+        cards = [dict(row) for row in rows]
+
         self.close()
         return cards
     
@@ -1880,8 +1471,8 @@ class DatabaseManager:
         conn = self.connect()
         cursor = conn.cursor()
 
-        set_clause = ', '.join([f'{key} = ?' for key in employee_data.keys()])
-        values = list(employee_data.values()) + [employee_id]
+        set_clause, values = self._build_set_clause(employee_data)
+        values = values + [employee_id]
 
         cursor.execute(f'UPDATE employees SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', values)
         conn.commit()
@@ -2199,9 +1790,9 @@ class DatabaseManager:
         conn = self.connect()
         cursor = conn.cursor()
         
-        set_clause = ', '.join([f'{key} = ?' for key in salary_data.keys()])
-        values = list(salary_data.values()) + [salary_id]
-        
+        set_clause, values = self._build_set_clause(salary_data)
+        values = values + [salary_id]
+
         cursor.execute(f'UPDATE salaries SET {set_clause} WHERE id = ?', values)
         conn.commit()
         self.close()
@@ -2297,79 +1888,7 @@ class DatabaseManager:
             'deadlines': deadlines,
             'salaries': salaries
         }
-    
 
-
-    def add_approval_deadline_field(self):
-        """Миграция: добавление поля approval_deadline в crm_cards"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            # Проверяем, есть ли уже это поле
-            cursor.execute("PRAGMA table_info(crm_cards)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'approval_deadline' not in columns:
-                print("[>] Выполняется миграция: добавление approval_deadline...")
-                cursor.execute("ALTER TABLE crm_cards ADD COLUMN approval_deadline DATE")
-                conn.commit()
-                print("[OK] Поле approval_deadline добавлено")
-            else:
-                print("[OK] Поле approval_deadline уже существует")
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции approval_deadline: {e}")
-            import traceback
-            traceback.print_exc()
-            
-    def add_approval_stages_field(self):
-        """Миграция: добавление поля approval_stages в crm_cards"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute("PRAGMA table_info(crm_cards)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'approval_stages' not in columns:
-                print("[>] Выполняется миграция: добавление approval_stages...")
-                cursor.execute("ALTER TABLE crm_cards ADD COLUMN approval_stages TEXT")
-                conn.commit()
-                print("[OK] Поле approval_stages добавлено")
-            else:
-                print("[OK] Поле approval_stages уже существует")
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции approval_stages: {e}")
-            
-    def create_approval_deadlines_table(self):
-        """Создание таблицы для дедлайнов этапов согласования"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS approval_stage_deadlines (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                crm_card_id INTEGER NOT NULL,
-                stage_name TEXT NOT NULL,
-                deadline DATE NOT NULL,
-                is_completed BOOLEAN DEFAULT 0,
-                completed_date TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id)
-            )
-            ''')
-            
-            conn.commit()
-            self.close()
-            print("[OK] Таблица approval_stage_deadlines создана")
-        except Exception as e:
-            print(f"[WARN] Ошибка создания таблицы approval_stage_deadlines: {e}")
-            
     def get_approval_stage_deadlines(self, crm_card_id):
         """Получение дедлайнов по стадиям согласования"""
         try:
@@ -2540,28 +2059,7 @@ class DatabaseManager:
             import traceback
             traceback.print_exc()
             return False
-            
-    def add_project_data_link_field(self):
-        """Миграция: добавление поля project_data_link в crm_cards"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute("PRAGMA table_info(crm_cards)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'project_data_link' not in columns:
-                print("[>] Выполняется миграция: добавление project_data_link...")
-                cursor.execute("ALTER TABLE crm_cards ADD COLUMN project_data_link TEXT")
-                conn.commit()
-                print("[OK] Поле project_data_link добавлено")
-            else:
-                print("[OK] Поле project_data_link уже существует")
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции project_data_link: {e}")
-            
+
     def get_crm_card_id_by_contract(self, contract_id):
         """Получение ID CRM карточки по ID договора"""
         try:
@@ -2686,135 +2184,6 @@ class DatabaseManager:
             raise e
         
     # ========== МЕТОДЫ ДЛЯ CRM АВТОРСКОГО НАДЗОРА ==========
-    def create_supervision_table_migration(self):
-        """Миграция: обновление таблицы supervision_cards"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            # Проверяем, существует ли таблица
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='supervision_cards'")
-            exists = cursor.fetchone()
-            
-            if not exists:
-                print("[>] Создание таблицы supervision_cards...")
-                cursor.execute('''
-                CREATE TABLE supervision_cards (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    contract_id INTEGER NOT NULL,
-                    column_name TEXT NOT NULL DEFAULT 'Новый заказ',
-                    start_date TEXT,
-                    deadline DATE,
-                    tags TEXT,
-                    senior_manager_id INTEGER,
-                    dan_id INTEGER,
-                    dan_completed BOOLEAN DEFAULT 0,
-                    is_paused BOOLEAN DEFAULT 0,
-                    pause_reason TEXT,
-                    paused_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (contract_id) REFERENCES contracts(id),
-                    FOREIGN KEY (senior_manager_id) REFERENCES employees(id),
-                    FOREIGN KEY (dan_id) REFERENCES employees(id)
-                )
-                ''')
-                conn.commit()
-                print("[OK] Таблица supervision_cards создана")
-            else:
-                # Проверяем наличие новых полей
-                cursor.execute("PRAGMA table_info(supervision_cards)")
-                columns = [col[1] for col in cursor.fetchall()]
-                
-                new_fields = {
-                    'senior_manager_id': 'INTEGER',
-                    'dan_id': 'INTEGER',
-                    'dan_completed': 'BOOLEAN DEFAULT 0',
-                    'is_paused': 'BOOLEAN DEFAULT 0',
-                    'pause_reason': 'TEXT',
-                    'paused_at': 'TIMESTAMP',
-                    'start_date': 'TEXT'
-                }
-                
-                for field, field_type in new_fields.items():
-                    if field not in columns:
-                        print(f"[>] Добавление поля {field}...")
-                        cursor.execute(f"ALTER TABLE supervision_cards ADD COLUMN {field} {field_type}")
-                        print(f"[OK] Поле {field} добавлено")
-                
-                conn.commit()
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции supervision_cards: {e}")
-            import traceback
-            traceback.print_exc()
-            
-    def create_supervision_history_table(self):
-        """Создание таблицы истории проектов надзора"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS supervision_project_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                supervision_card_id INTEGER NOT NULL,
-                entry_type TEXT NOT NULL,
-                message TEXT NOT NULL,
-                created_by INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id),
-                FOREIGN KEY (created_by) REFERENCES employees(id)
-            )
-            ''')
-            
-            conn.commit()
-            self.close()
-            print("[OK] Таблица supervision_project_history создана")
-            
-        except Exception as e:
-            print(f"[WARN] Ошибка создания таблицы supervision_project_history: {e}")
-       
-    def fix_supervision_cards_column_name(self):
-        """Миграция: исправление column_name для существующих карточек надзора"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            print("[>] Проверка и исправление column_name в supervision_cards...")
-            
-            # Обновляем все старые карточки с неправильным column_name
-            cursor.execute('''
-            UPDATE supervision_cards
-            SET column_name = 'Новый заказ', updated_at = datetime('now')
-            WHERE column_name NOT IN (
-                'Новый заказ', 'В ожидании',
-                'Стадия 1: Закупка керамогранита', 'Стадия 2: Закупка сантехники',
-                'Стадия 3: Закупка оборудования', 'Стадия 4: Закупка дверей и окон',
-                'Стадия 5: Закупка настенных материалов', 'Стадия 6: Закупка напольных материалов',
-                'Стадия 7: Лепного декора', 'Стадия 8: Освещения',
-                'Стадия 9: бытовой техники', 'Стадия 10: Закупка заказной мебели',
-                'Стадия 11: Закупка фабричной мебели', 'Стадия 12: Закупка декора',
-                'Выполненный проект'
-            )
-            ''')
-            
-            fixed_count = cursor.rowcount
-            
-            if fixed_count > 0:
-                print(f"[OK] Исправлено {fixed_count} карточек надзора (установлено 'Новый заказ')")
-            else:
-                print("[OK] Все карточки надзора уже имеют правильные значения column_name")
-            
-            conn.commit()
-            self.close()
-            
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции column_name: {e}")
-            import traceback
-            traceback.print_exc()
-            
     def create_supervision_card(self, contract_id):
         """Создание карточки авторского надзора"""
         try:
@@ -2852,8 +2221,9 @@ class DatabaseManager:
             print(f"[ERROR] Ошибка создания карточки надзора: {e}")
             import traceback
             traceback.print_exc()
+            self.close()
             return None
-    
+
     def get_supervision_cards_active(self):
         """Получение активных карточек надзора (НЕ архив)"""
         conn = self.connect()
@@ -2904,9 +2274,9 @@ class DatabaseManager:
         conn = self.connect()
         cursor = conn.cursor()
         
-        set_clause = ', '.join([f'{key} = ?' for key in updates.keys()])
-        values = list(updates.values()) + [card_id]
-        
+        set_clause, values = self._build_set_clause(updates)
+        values = values + [card_id]
+
         cursor.execute(f'UPDATE supervision_cards SET {set_clause}, updated_at = datetime("now") WHERE id = ?', values)
         conn.commit()
         self.close()
@@ -3090,6 +2460,24 @@ class DatabaseManager:
             import traceback
             traceback.print_exc()
 
+    def get_action_history(self, entity_type, entity_id):
+        """Получить историю действий по сущности"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM action_history
+                WHERE entity_type = ? AND entity_id = ?
+                ORDER BY created_at DESC
+            ''', (entity_type, entity_id))
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+            self.close()
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception as e:
+            print(f"[WARN] get_action_history: {e}")
+            return []
+
     def get_supervision_addresses(self):
         """Получение списка адресов для фильтра"""
         conn = self.connect()
@@ -3221,33 +2609,7 @@ class DatabaseManager:
         conn.commit()
         self.close()
         print(f"[OK] Отметка чертёжника сброшена для карточки {crm_card_id}")
-        
-    def create_manager_acceptance_table(self):
-        """Создание таблицы принятия работ менеджером"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS manager_stage_acceptance (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                crm_card_id INTEGER NOT NULL,
-                stage_name TEXT NOT NULL,
-                executor_name TEXT NOT NULL,
-                accepted_by INTEGER NOT NULL,
-                accepted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id),
-                FOREIGN KEY (accepted_by) REFERENCES employees(id)
-            )
-            ''')
-            
-            conn.commit()
-            self.close()
-            print("[OK] Таблица manager_stage_acceptance создана")
-            
-        except Exception as e:
-            print(f"[WARN] Ошибка создания таблицы manager_stage_acceptance: {e}")
-            
+
     def save_manager_acceptance(self, crm_card_id, stage_name, executor_name, manager_id):
         """Сохранение принятия работы менеджером"""
         try:
@@ -3491,8 +2853,6 @@ class DatabaseManager:
                 print(f"   → Фильтр: city={city}")
             
             where_clause = ' AND '.join(where_clauses)
-            print(f"   WHERE: {where_clause}")
-            print(f"   PARAMS: {params}")
             
             # ========== ВСЕГО ЗАКАЗОВ ==========
             query = f'SELECT COUNT(*) as total FROM contracts c WHERE {where_clause}'
@@ -3642,7 +3002,6 @@ class DatabaseManager:
                 params.append(city)
             
             where_clause = ' AND '.join(where_clauses) if where_clauses else '1=1'
-            print(f"   WHERE: {where_clause}")
             
             # ========== ВСЕГО ЗАКАЗОВ НАДЗОРА ==========
             cursor.execute(f'''
@@ -3763,323 +3122,6 @@ class DatabaseManager:
                 'by_cities': {}, 'by_agents': {}, 'by_stages': {}
             }
             
-    def add_birth_date_column(self):
-        """Добавление столбца birth_date в таблицу employees"""
-        try:
-            conn = self.connect()  # ← ПРАВИЛЬНО: создаем подключение
-            cursor = conn.cursor()
-            
-            # Проверяем, есть ли уже поле
-            cursor.execute("PRAGMA table_info(employees)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'birth_date' not in columns:
-                print("[>] Выполняется миграция: добавление birth_date...")
-                cursor.execute("ALTER TABLE employees ADD COLUMN birth_date TEXT")
-                conn.commit()
-                print("[OK] Поле birth_date добавлено")
-            else:
-                print("[OK] Поле birth_date уже существует")
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка добавления birth_date: {e}")
-            import traceback
-            traceback.print_exc()
-            
-    def add_address_column(self):
-        """Добавление столбца address в таблицу employees"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            # Проверяем, есть ли уже поле
-            cursor.execute("PRAGMA table_info(employees)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'address' not in columns:
-                print("[>] Выполняется миграция: добавление address...")
-                cursor.execute("ALTER TABLE employees ADD COLUMN address TEXT")
-                conn.commit()
-                print("[OK] Поле address добавлено")
-            else:
-                print("[OK] Поле address уже существует")
-            
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка добавления address: {e}")
-            import traceback
-            traceback.print_exc()
-            
-    def add_secondary_position_column(self):
-        """Добавление столбца secondary_position в таблицу employees"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(employees)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            if 'secondary_position' not in columns:
-                print("[>] Выполняется миграция: добавление secondary_position...")
-                cursor.execute("ALTER TABLE employees ADD COLUMN secondary_position TEXT")
-                conn.commit()
-                print("[OK] Поле secondary_position добавлено")
-            else:
-                print("[OK] Поле secondary_position уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка добавления secondary_position: {e}")
-
-    def add_status_changed_date_column(self):
-        """Добавление столбца status_changed_date в таблицу contracts"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            if 'status_changed_date' not in columns:
-                print("[>] Выполняется миграция: добавление status_changed_date...")
-                cursor.execute("ALTER TABLE contracts ADD COLUMN status_changed_date DATE")
-                conn.commit()
-                print("[OK] Поле status_changed_date добавлено")
-            else:
-                print("[OK] Поле status_changed_date уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка добавления status_changed_date: {e}")
-
-    def add_tech_task_fields(self):
-        """Добавление полей tech_task_file и tech_task_date в таблицу crm_cards"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(crm_cards)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            if 'tech_task_file' not in columns:
-                print("[>] Выполняется миграция: добавление tech_task_file...")
-                cursor.execute("ALTER TABLE crm_cards ADD COLUMN tech_task_file TEXT")
-                conn.commit()
-                print("[OK] Поле tech_task_file добавлено")
-            else:
-                print("[OK] Поле tech_task_file уже существует")
-
-            if 'tech_task_date' not in columns:
-                print("[>] Выполняется миграция: добавление tech_task_date...")
-                cursor.execute("ALTER TABLE crm_cards ADD COLUMN tech_task_date DATE")
-                conn.commit()
-                print("[OK] Поле tech_task_date добавлено")
-            else:
-                print("[OK] Поле tech_task_date уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка добавления tech_task полей: {e}")
-
-    def add_survey_date_column(self):
-        """Добавление столбца survey_date в таблицу crm_cards"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(crm_cards)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            if 'survey_date' not in columns:
-                print("[>] Выполняется миграция: добавление survey_date...")
-                cursor.execute("ALTER TABLE crm_cards ADD COLUMN survey_date DATE")
-                conn.commit()
-                print("[OK] Поле survey_date добавлено")
-            else:
-                print("[OK] Поле survey_date уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка добавления survey_date: {e}")
-
-    def create_project_files_table(self):
-        """Создание таблицы project_files для управления файлами стадий проекта"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            # Проверяем, существует ли таблица
-            cursor.execute("""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name='project_files'
-            """)
-
-            if not cursor.fetchone():
-                print("[>] Создание таблицы project_files...")
-
-                # Создаем таблицу
-                cursor.execute('''
-                    CREATE TABLE project_files (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        contract_id INTEGER NOT NULL,
-                        stage TEXT NOT NULL,
-                        file_type TEXT NOT NULL,
-                        public_link TEXT,
-                        yandex_path TEXT NOT NULL,
-                        file_name TEXT NOT NULL,
-                        upload_date TEXT DEFAULT CURRENT_TIMESTAMP,
-                        preview_cache_path TEXT,
-                        file_order INTEGER DEFAULT 0,
-                        variation INTEGER DEFAULT 1,
-                        FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE
-                    )
-                ''')
-
-                # Создаем индексы
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_project_files_contract
-                    ON project_files(contract_id)
-                ''')
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_project_files_stage
-                    ON project_files(contract_id, stage)
-                ''')
-
-                conn.commit()
-                print("[OK] Таблица project_files создана с индексами")
-            else:
-                print("[OK] Таблица project_files уже существует")
-
-            # Миграция: добавление колонки variation
-            cursor.execute("PRAGMA table_info(project_files)")
-            columns = [col[1] for col in cursor.fetchall()]
-            if 'variation' not in columns:
-                cursor.execute('ALTER TABLE project_files ADD COLUMN variation INTEGER DEFAULT 1')
-                conn.commit()
-                print("[OK] Добавлена колонка variation в project_files")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка создания таблицы project_files: {e}")
-
-    def add_contract_file_columns(self):
-        """Миграция: добавление колонок для файлов договоров (yandex_path, file_name и т.д.)"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            new_columns = {
-                'yandex_folder_path': 'TEXT',
-                'tech_task_file_name': 'TEXT',
-                'tech_task_yandex_path': 'TEXT',
-                'measurement_image_link': 'TEXT',
-                'measurement_file_name': 'TEXT',
-                'measurement_yandex_path': 'TEXT',
-                'measurement_date': 'DATE',
-                'contract_file_name': 'TEXT',
-                'contract_file_yandex_path': 'TEXT',
-                'template_contract_file_link': 'TEXT',
-                'template_contract_file_name': 'TEXT',
-                'template_contract_file_yandex_path': 'TEXT',
-                'references_yandex_path': 'TEXT',
-                'photo_documentation_yandex_path': 'TEXT',
-                # Акты и информационное письмо
-                'act_planning_link': 'TEXT',
-                'act_planning_yandex_path': 'TEXT',
-                'act_planning_file_name': 'TEXT',
-                'act_concept_link': 'TEXT',
-                'act_concept_yandex_path': 'TEXT',
-                'act_concept_file_name': 'TEXT',
-                'info_letter_link': 'TEXT',
-                'info_letter_yandex_path': 'TEXT',
-                'info_letter_file_name': 'TEXT',
-                'act_final_link': 'TEXT',
-                'act_final_yandex_path': 'TEXT',
-                'act_final_file_name': 'TEXT',
-                # Подписанные акты
-                'act_planning_signed_link': 'TEXT',
-                'act_planning_signed_yandex_path': 'TEXT',
-                'act_planning_signed_file_name': 'TEXT',
-                'act_concept_signed_link': 'TEXT',
-                'act_concept_signed_yandex_path': 'TEXT',
-                'act_concept_signed_file_name': 'TEXT',
-                'info_letter_signed_link': 'TEXT',
-                'info_letter_signed_yandex_path': 'TEXT',
-                'info_letter_signed_file_name': 'TEXT',
-                'act_final_signed_link': 'TEXT',
-                'act_final_signed_yandex_path': 'TEXT',
-                'act_final_signed_file_name': 'TEXT',
-                # Отслеживание платежей
-                'advance_payment_paid_date': 'TEXT',
-                'additional_payment_paid_date': 'TEXT',
-                'third_payment_paid_date': 'TEXT',
-                'advance_receipt_link': 'TEXT',
-                'advance_receipt_yandex_path': 'TEXT',
-                'advance_receipt_file_name': 'TEXT',
-                'additional_receipt_link': 'TEXT',
-                'additional_receipt_yandex_path': 'TEXT',
-                'additional_receipt_file_name': 'TEXT',
-                'third_receipt_link': 'TEXT',
-                'third_receipt_yandex_path': 'TEXT',
-                'third_receipt_file_name': 'TEXT',
-            }
-
-            added = []
-            for col_name, col_type in new_columns.items():
-                if col_name not in columns:
-                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
-                    added.append(col_name)
-
-            if added:
-                conn.commit()
-                print(f"[OK] Добавлены колонки в contracts: {', '.join(added)}")
-            else:
-                print("[OK] Все колонки файлов в contracts уже существуют")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции contract file columns: {e}")
-
-    def create_project_templates_table(self):
-        """Миграция: создание таблицы project_templates для ссылок на шаблоны проектов"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name='project_templates'
-            """)
-
-            if not cursor.fetchone():
-                print("[>] Создание таблицы project_templates...")
-                cursor.execute('''
-                    CREATE TABLE project_templates (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        contract_id INTEGER NOT NULL,
-                        template_url TEXT NOT NULL,
-                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE
-                    )
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_project_templates_contract
-                    ON project_templates(contract_id)
-                ''')
-                conn.commit()
-                print("[OK] Таблица project_templates создана")
-            else:
-                print("[OK] Таблица project_templates уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка создания таблицы project_templates: {e}")
-
     def reset_approval_stages(self, crm_card_id):
         """Сброс всех этапов согласования при повторном входе в стадию"""
         try:
@@ -4105,212 +3147,6 @@ class DatabaseManager:
             import traceback
             traceback.print_exc()
             
-    def create_payments_system_tables(self):
-        """Создание таблиц системы оплат"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            
-            # ========== ИСПРАВЛЕНИЕ: БЕЗ УДАЛЕНИЯ ТАБЛИЦЫ! ==========
-            # Проверяем, существует ли таблица
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rates'")
-            table_exists = cursor.fetchone()
-            
-            if not table_exists:
-                print("[>] Создание таблицы rates...")
-                
-                cursor.execute('''
-                CREATE TABLE rates (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    project_type TEXT,
-                    role TEXT NOT NULL,
-                    stage_name TEXT,
-                    rate_per_m2 REAL,
-                    area_from REAL,
-                    area_to REAL,
-                    fixed_price REAL,
-                    city TEXT,
-                    surveyor_price REAL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                ''')
-                
-                print("[OK] Таблица rates создана")
-            else:
-                print("[OK] Таблица rates уже существует (сохранение данных)")
-            # =========================================================
-            
-            # Таблица выплат
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS payments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                contract_id INTEGER NOT NULL,
-                crm_card_id INTEGER,
-                supervision_card_id INTEGER,
-                employee_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                stage_name TEXT,
-                calculated_amount REAL NOT NULL,
-                manual_amount REAL,
-                final_amount REAL NOT NULL,
-                is_manual BOOLEAN DEFAULT 0,
-                payment_type TEXT,
-                report_month TEXT,
-                is_paid BOOLEAN DEFAULT 0,
-                paid_date TIMESTAMP,
-                paid_by INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (contract_id) REFERENCES contracts(id),
-                FOREIGN KEY (employee_id) REFERENCES employees(id)
-            )
-            ''')
-            
-            # Таблица замеров
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS surveys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                contract_id INTEGER NOT NULL,
-                surveyor_id INTEGER NOT NULL,
-                survey_date DATE NOT NULL,
-                created_by INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (contract_id) REFERENCES contracts(id),
-                FOREIGN KEY (surveyor_id) REFERENCES employees(id)
-            )
-            ''')
-            
-            conn.commit()
-            self.close()
-            print("[OK] Таблицы системы оплат готовы к работе")
-            
-        except Exception as e:
-            print(f"[ERROR] Ошибка создания таблиц оплат: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def add_reassigned_field_to_payments(self):
-        """Миграция: добавление поля reassigned в payments"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            # Проверяем, есть ли уже это поле
-            cursor.execute("PRAGMA table_info(payments)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            if 'reassigned' not in columns:
-                print("[>] Выполняется миграция: добавление reassigned в payments...")
-                cursor.execute("ALTER TABLE payments ADD COLUMN reassigned BOOLEAN DEFAULT 0")
-                conn.commit()
-                print("[OK] Поле reassigned добавлено")
-            else:
-                print("[OK] Поле reassigned уже существует")
-
-            if 'old_employee_id' not in columns:
-                print("[>] Выполняется миграция: добавление old_employee_id в payments...")
-                cursor.execute("ALTER TABLE payments ADD COLUMN old_employee_id INTEGER")
-                conn.commit()
-                print("[OK] Поле old_employee_id добавлено")
-            else:
-                print("[OK] Поле old_employee_id уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции reassigned: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def add_submitted_date_to_stage_executors(self):
-        """Миграция: добавление поля submitted_date в stage_executors"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            # Проверяем, есть ли уже это поле
-            cursor.execute("PRAGMA table_info(stage_executors)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            if 'submitted_date' not in columns:
-                print("[>] Выполняется миграция: добавление submitted_date в stage_executors...")
-                cursor.execute("ALTER TABLE stage_executors ADD COLUMN submitted_date TIMESTAMP")
-                conn.commit()
-                print("[OK] Поле submitted_date добавлено")
-            else:
-                print("[OK] Поле submitted_date уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции submitted_date: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def add_stage_field_to_payments(self):
-        """Миграция: добавление полей для синхронизации в payments"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            # Проверяем, какие поля уже есть
-            cursor.execute("PRAGMA table_info(payments)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            # Список полей для добавления
-            fields_to_add = {
-                'stage': 'TEXT',
-                'base_amount': 'REAL',
-                'bonus_amount': 'REAL',
-                'penalty_amount': 'REAL',
-                'status': 'TEXT',
-                'payment_date': 'TIMESTAMP'
-            }
-
-            for field_name, field_type in fields_to_add.items():
-                if field_name not in columns:
-                    print(f"[>] Выполняется миграция: добавление {field_name} в payments...")
-                    cursor.execute(f"ALTER TABLE payments ADD COLUMN {field_name} {field_type}")
-                    conn.commit()
-                    print(f"[OK] Поле {field_name} добавлено")
-                else:
-                    print(f"[OK] Поле {field_name} уже существует")
-
-            self.close()
-        except Exception as e:
-            print(f"[ERROR] Ошибка миграции полей payments: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def create_performance_indexes(self):
-        """Миграция: создание индексов для ускорения запросов"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            indexes = [
-                "CREATE INDEX IF NOT EXISTS idx_contracts_client_id ON contracts(client_id)",
-                "CREATE INDEX IF NOT EXISTS idx_crm_cards_contract_id ON crm_cards(contract_id)",
-                "CREATE INDEX IF NOT EXISTS idx_crm_cards_column_name ON crm_cards(column_name)",
-                "CREATE INDEX IF NOT EXISTS idx_stage_executors_crm_card_id ON stage_executors(crm_card_id)",
-                "CREATE INDEX IF NOT EXISTS idx_stage_executors_executor_id ON stage_executors(executor_id)",
-                "CREATE INDEX IF NOT EXISTS idx_stage_executors_stage_name ON stage_executors(stage_name)",
-                "CREATE INDEX IF NOT EXISTS idx_payments_contract_id ON payments(contract_id)",
-                "CREATE INDEX IF NOT EXISTS idx_payments_employee_id ON payments(employee_id)",
-                "CREATE INDEX IF NOT EXISTS idx_payments_crm_card_id ON payments(crm_card_id)",
-                "CREATE INDEX IF NOT EXISTS idx_payments_supervision_card_id ON payments(supervision_card_id)",
-                "CREATE INDEX IF NOT EXISTS idx_supervision_cards_contract_id ON supervision_cards(contract_id)",
-                "CREATE INDEX IF NOT EXISTS idx_project_files_contract_id ON project_files(contract_id)",
-                "CREATE INDEX IF NOT EXISTS idx_salaries_employee_id ON salaries(employee_id)",
-            ]
-            for idx_sql in indexes:
-                try:
-                    cursor.execute(idx_sql)
-                except Exception:
-                    pass  # Table may not exist yet
-            conn.commit()
-            self.close()
-        except Exception as e:
-            print(f"[WARN] Index creation: {e}")
-
     def calculate_payment_amount(self, contract_id, employee_id, role, stage_name=None, supervision_card_id=None):
         """Расчет суммы оплаты на основе тарифов"""
         try:
@@ -4664,6 +3500,7 @@ class DatabaseManager:
             cursor.execute('INSERT INTO agents (name, color) VALUES (?, ?)', (name, color))
             conn.commit()
             self.close()
+            DatabaseManager._agent_colors_cache = None
             print(f"[OK] Агент '{name}' добавлен с цветом {color}")
             return True
         except Exception as e:
@@ -4678,24 +3515,41 @@ class DatabaseManager:
             cursor.execute('UPDATE agents SET color = ? WHERE name = ?', (color, name))
             conn.commit()
             self.close()
+            DatabaseManager._agent_colors_cache = None
             print(f"[OK] Цвет агента '{name}' обновлен на {color}")
             return True
         except Exception as e:
             print(f"[ERROR] Ошибка обновления цвета агента: {e}")
             return False
 
+    # Кэш цветов агентов на уровне класса (загружается один раз)
+    _agent_colors_cache = None
+
     def get_agent_color(self, name):
-        """Получение цвета агента по имени"""
+        """Получение цвета агента по имени (с кэшированием)"""
         try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            cursor.execute('SELECT color FROM agents WHERE name = ?', (name,))
-            result = cursor.fetchone()
-            self.close()
-            return result['color'] if result else None
+            if DatabaseManager._agent_colors_cache is None:
+                self._load_agent_colors_cache()
+            return DatabaseManager._agent_colors_cache.get(name)
         except Exception as e:
             print(f"[ERROR] Ошибка получения цвета агента: {e}")
             return None
+
+    def _load_agent_colors_cache(self):
+        """Загрузка всех цветов агентов одним запросом"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT name, color FROM agents')
+            rows = cursor.fetchall()
+            self.close()
+            DatabaseManager._agent_colors_cache = {row['name']: row['color'] for row in rows}
+        except Exception:
+            DatabaseManager._agent_colors_cache = {}
+
+    def invalidate_agent_colors_cache(self):
+        """Сброс кэша цветов агентов"""
+        DatabaseManager._agent_colors_cache = None
 
     # ========== МЕТОДЫ ДЛЯ РАБОТЫ С ФАЙЛАМИ СТАДИЙ ПРОЕКТА ==========
 
@@ -4844,6 +3698,299 @@ class DatabaseManager:
         except Exception as e:
             print(f"[ERROR] Ошибка обновления порядка файла: {e}")
             return False
+
+    # ========== МЕТОДЫ-ОБЁРТКИ ДЛЯ OFFLINE FALLBACK (DataAccess) ==========
+
+    def get_payment(self, payment_id):
+        """Получить платёж по ID"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM payments WHERE id = ?', (payment_id,))
+            row = cursor.fetchone()
+            if row:
+                result = dict(row)
+                self.close()
+                return result
+            self.close()
+            return None
+        except Exception as e:
+            print(f"[WARN] get_payment: {e}")
+            return None
+
+    def add_payment(self, payment_data):
+        """Добавить платёж (обёртка для DataAccess)"""
+        try:
+            return self.create_payment_record(
+                payment_data.get('contract_id'),
+                payment_data.get('employee_id'),
+                payment_data.get('role', ''),
+                payment_data.get('stage_name'),
+                payment_data.get('payment_type'),
+                payment_data.get('report_month'),
+                payment_data.get('crm_card_id'),
+                payment_data.get('supervision_card_id')
+            )
+        except Exception as e:
+            print(f"[WARN] add_payment: {e}")
+            return None
+
+    def update_payment(self, payment_id, payment_data):
+        """Обновить платёж"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            set_clause, values = self._build_set_clause(payment_data)
+            values = values + [payment_id]
+            cursor.execute(f'UPDATE payments SET {set_clause} WHERE id = ?', values)
+            conn.commit()
+            self.close()
+            return True
+        except Exception as e:
+            print(f"[WARN] update_payment: {e}")
+            return False
+
+    def get_payments_by_supervision_card(self, card_id):
+        """Получить платежи по карточке надзора"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM payments WHERE supervision_card_id = ?', (card_id,))
+            rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            self.close()
+            return result
+        except Exception as e:
+            print(f"[WARN] get_payments_by_supervision_card: {e}")
+            return []
+
+    def get_salaries(self, report_month=None, employee_id=None):
+        """Получить зарплаты"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            query = 'SELECT * FROM salaries WHERE 1=1'
+            params = []
+            if report_month:
+                query += ' AND report_month = ?'
+                params.append(report_month)
+            if employee_id:
+                query += ' AND employee_id = ?'
+                params.append(employee_id)
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            self.close()
+            return result
+        except Exception as e:
+            print(f"[WARN] get_salaries: {e}")
+            return []
+
+    def get_salary_by_id(self, salary_id):
+        """Получить зарплату по ID"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM salaries WHERE id = ?', (salary_id,))
+            row = cursor.fetchone()
+            if row:
+                result = dict(row)
+                self.close()
+                return result
+            self.close()
+            return None
+        except Exception as e:
+            print(f"[WARN] get_salary_by_id: {e}")
+            return None
+
+    def get_rates(self, project_type=None, role=None):
+        """Получить ставки"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            query = 'SELECT * FROM rates WHERE 1=1'
+            params = []
+            if project_type:
+                query += ' AND project_type = ?'
+                params.append(project_type)
+            if role:
+                query += ' AND role = ?'
+                params.append(role)
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            self.close()
+            return result
+        except Exception as e:
+            print(f"[WARN] get_rates: {e}")
+            return []
+
+    def get_rate_by_id(self, rate_id):
+        """Получить ставку по ID"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM rates WHERE id = ?', (rate_id,))
+            row = cursor.fetchone()
+            if row:
+                result = dict(row)
+                self.close()
+                return result
+            self.close()
+            return None
+        except Exception as e:
+            print(f"[WARN] get_rate_by_id: {e}")
+            return None
+
+    def add_rate(self, rate_data):
+        """Добавить ставку"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            columns = ', '.join(rate_data.keys())
+            placeholders = ', '.join(['?'] * len(rate_data))
+            cursor.execute(
+                f'INSERT INTO rates ({columns}) VALUES ({placeholders})',
+                list(rate_data.values())
+            )
+            conn.commit()
+            rate_id = cursor.lastrowid
+            self.close()
+            return {'id': rate_id, **rate_data}
+        except Exception as e:
+            print(f"[WARN] add_rate: {e}")
+            return None
+
+    def update_rate(self, rate_id, rate_data):
+        """Обновить ставку"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            set_clause, values = self._build_set_clause(rate_data)
+            values = values + [rate_id]
+            cursor.execute(f'UPDATE rates SET {set_clause} WHERE id = ?', values)
+            conn.commit()
+            self.close()
+            return True
+        except Exception as e:
+            print(f"[WARN] update_rate: {e}")
+            return False
+
+    def delete_rate(self, rate_id):
+        """Удалить ставку"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM rates WHERE id = ?', (rate_id,))
+            conn.commit()
+            self.close()
+            return True
+        except Exception as e:
+            print(f"[WARN] delete_rate: {e}")
+            return False
+
+    def get_template_rates(self, role=None):
+        """Получить шаблонные ставки (fallback на rates)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            # Таблица template_rates может отсутствовать — пробуем rates
+            query = 'SELECT * FROM rates WHERE 1=1'
+            params = []
+            if role:
+                query += ' AND role = ?'
+                params.append(role)
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            self.close()
+            return result
+        except Exception as e:
+            print(f"[WARN] get_template_rates: {e}")
+            return []
+
+    def get_contract_files(self, contract_id, stage=None):
+        """Получить файлы договора (алиас для get_project_files)"""
+        return self.get_project_files(contract_id, stage)
+
+    def add_contract_file(self, file_data):
+        """Добавить файл договора (обёртка над add_project_file)"""
+        try:
+            return self.add_project_file(
+                file_data.get('contract_id'),
+                file_data.get('stage', ''),
+                file_data.get('file_type', ''),
+                file_data.get('public_link', ''),
+                file_data.get('yandex_path', ''),
+                file_data.get('file_name', ''),
+                file_data.get('preview_cache_path'),
+                file_data.get('variation', 1)
+            )
+        except Exception as e:
+            print(f"[WARN] add_contract_file: {e}")
+            return None
+
+    def get_supervision_card_data(self, card_id):
+        """Получить данные карточки надзора по ID"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM supervision_cards WHERE id = ?', (card_id,))
+            row = cursor.fetchone()
+            if row:
+                result = dict(row)
+                self.close()
+                return result
+            self.close()
+            return None
+        except Exception as e:
+            print(f"[WARN] get_supervision_card_data: {e}")
+            return None
+
+    def add_supervision_card(self, card_data):
+        """Добавить карточку надзора (обёртка над create_supervision_card)"""
+        try:
+            contract_id = card_data.get('contract_id') if isinstance(card_data, dict) else card_data
+            return self.create_supervision_card(contract_id)
+        except Exception as e:
+            print(f"[WARN] add_supervision_card: {e}")
+            return None
+
+    def get_employee_permissions(self, employee_id):
+        """Получить права сотрудника (заглушка для offline)"""
+        try:
+            return {'permissions': []}
+        except Exception as e:
+            print(f"[WARN] get_employee_permissions: {e}")
+            return {'permissions': []}
+
+    def set_employee_permissions(self, employee_id, data):
+        """Установить права сотрудника (заглушка для offline)"""
+        try:
+            return False
+        except Exception as e:
+            print(f"[WARN] set_employee_permissions: {e}")
+            return False
+
+    def add_crm_card(self, card_data):
+        """Добавить CRM-карточку (обёртка над _create_crm_card)"""
+        try:
+            contract_id = card_data.get('contract_id') if isinstance(card_data, dict) else card_data
+            project_type = card_data.get('project_type', 'Индивидуальный') if isinstance(card_data, dict) else 'Индивидуальный'
+            # _create_crm_card использует self.connection напрямую
+            conn = self.connect()
+            self._create_crm_card(contract_id, project_type)
+            # Получаем ID созданной карточки
+            cursor = conn.cursor()
+            cursor.execute('SELECT id FROM crm_cards WHERE contract_id = ? ORDER BY id DESC LIMIT 1', (contract_id,))
+            row = cursor.fetchone()
+            self.close()
+            if row:
+                return {'id': row['id'], 'contract_id': contract_id}
+            return None
+        except Exception as e:
+            print(f"[WARN] add_crm_card: {e}")
+            return None
 
     # ========== МЕТОДЫ ДЛЯ РАБОТЫ С ШАБЛОНАМИ ПРОЕКТОВ ==========
 
@@ -5094,6 +4241,55 @@ class DatabaseManager:
                 'agent_area_by_year': 0
             }
 
+    def get_contracts_count(
+        self,
+        status=None,
+        project_type=None,
+        year=None
+    ):
+        """Получить количество договоров с фильтрацией (без загрузки всех записей)
+
+        Args:
+            status: Фильтр по статусу договора (опционально)
+            project_type: Фильтр по типу проекта (опционально)
+            year: Фильтр по году даты договора (опционально)
+
+        Returns:
+            int: Количество договоров, удовлетворяющих фильтрам
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Строим запрос с параметризованными условиями
+            conditions = []
+            params = []
+
+            if status is not None:
+                conditions.append('status = ?')
+                params.append(status)
+
+            if project_type is not None:
+                conditions.append('project_type = ?')
+                params.append(project_type)
+
+            if year is not None:
+                conditions.append("strftime('%Y', contract_date) = ?")
+                params.append(str(year))
+
+            query = 'SELECT COUNT(*) as cnt FROM contracts'
+            if conditions:
+                query += ' WHERE ' + ' AND '.join(conditions)
+
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            self.close()
+            return row[0] if row else 0
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка get_contracts_count: {e}")
+            return 0
+
     def get_crm_dashboard_stats(self, project_type, agent_type=None):
         """Статистика для дашборда СРМ (Индивидуальные/Шаблонные/Надзор)
 
@@ -5131,6 +4327,7 @@ class DatabaseManager:
                 crm_table = 'crm_cards'
                 contract_condition = "c.project_type = 'Шаблонный'"
                 crm_join_condition = "crm.contract_id = c.id AND c.project_type = 'Шаблонный'"
+            self._validate_table(crm_table)
 
             # 1-2. Всего заказов и площадь (из договоров)
             cursor.execute(f'''
@@ -6168,238 +5365,6 @@ class DatabaseManager:
     # ТАБЛИЦЫ СРОКОВ (TIMELINE)
     # =====================================================
 
-    def add_project_subtype_to_contracts(self):
-        """Миграция: поле project_subtype в contracts"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [col[1] for col in cursor.fetchall()]
-            if 'project_subtype' not in columns:
-                cursor.execute("ALTER TABLE contracts ADD COLUMN project_subtype TEXT")
-                conn.commit()
-                print("[OK] Поле project_subtype добавлено")
-            self.close()
-        except Exception as e:
-            print(f"[MIGRATION] Ошибка добавления project_subtype: {e}")
-
-    def add_floors_to_contracts(self):
-        """Миграция: поле floors в contracts"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(contracts)")
-            columns = [col[1] for col in cursor.fetchall()]
-            if 'floors' not in columns:
-                cursor.execute("ALTER TABLE contracts ADD COLUMN floors INTEGER DEFAULT 1")
-                conn.commit()
-                print("[OK] Поле floors добавлено")
-            self.close()
-        except Exception as e:
-            print(f"[MIGRATION] Ошибка добавления floors: {e}")
-
-    def create_stage_workflow_state_table(self):
-        """Миграция: таблица stage_workflow_state"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS stage_workflow_state (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    crm_card_id INTEGER NOT NULL REFERENCES crm_cards(id),
-                    stage_name TEXT NOT NULL,
-                    current_substep_code TEXT,
-                    status TEXT DEFAULT 'in_progress',
-                    revision_count INTEGER DEFAULT 0,
-                    revision_file_path TEXT,
-                    client_approval_started_at TEXT,
-                    client_approval_deadline_paused INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-            ''')
-            conn.commit()
-            self.close()
-        except Exception as e:
-            print(f"[MIGRATION] Ошибка создания stage_workflow_state: {e}")
-
-    def create_messenger_tables(self):
-        """Миграция: таблицы системы мессенджер-чатов"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            # Таблица чатов проектов
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS messenger_chats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    contract_id INTEGER REFERENCES contracts(id),
-                    crm_card_id INTEGER REFERENCES crm_cards(id),
-                    supervision_card_id INTEGER,
-                    messenger_type TEXT NOT NULL DEFAULT 'telegram',
-                    telegram_chat_id INTEGER,
-                    chat_title TEXT,
-                    invite_link TEXT,
-                    avatar_type TEXT,
-                    creation_method TEXT NOT NULL DEFAULT 'manual',
-                    created_by INTEGER REFERENCES employees(id),
-                    created_at TEXT DEFAULT (datetime('now')),
-                    is_active INTEGER DEFAULT 1
-                )
-            ''')
-
-            # Таблица участников чата
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS messenger_chat_members (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    messenger_chat_id INTEGER NOT NULL REFERENCES messenger_chats(id) ON DELETE CASCADE,
-                    member_type TEXT NOT NULL,
-                    member_id INTEGER NOT NULL,
-                    role_in_project TEXT,
-                    is_mandatory INTEGER DEFAULT 0,
-                    phone TEXT,
-                    email TEXT,
-                    telegram_user_id INTEGER,
-                    invite_status TEXT DEFAULT 'pending',
-                    invited_at TEXT,
-                    joined_at TEXT
-                )
-            ''')
-
-            # Таблица скриптов сообщений
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS messenger_scripts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    script_type TEXT NOT NULL,
-                    project_type TEXT,
-                    stage_name TEXT,
-                    message_template TEXT NOT NULL,
-                    use_auto_deadline INTEGER DEFAULT 1,
-                    is_enabled INTEGER DEFAULT 1,
-                    sort_order INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now'))
-                )
-            ''')
-
-            # Таблица настроек мессенджера
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS messenger_settings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    setting_key TEXT UNIQUE NOT NULL,
-                    setting_value TEXT,
-                    updated_at TEXT DEFAULT (datetime('now')),
-                    updated_by INTEGER REFERENCES employees(id)
-                )
-            ''')
-
-            # Лог отправленных сообщений
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS messenger_message_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    messenger_chat_id INTEGER REFERENCES messenger_chats(id) ON DELETE CASCADE,
-                    message_type TEXT,
-                    message_text TEXT,
-                    file_links TEXT,
-                    sent_by INTEGER REFERENCES employees(id),
-                    sent_at TEXT DEFAULT (datetime('now')),
-                    telegram_message_id INTEGER,
-                    delivery_status TEXT DEFAULT 'sent'
-                )
-            ''')
-
-            # Индексы для быстрого поиска
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_chats_crm_card ON messenger_chats(crm_card_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_chats_contract ON messenger_chats(contract_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_members_chat ON messenger_chat_members(messenger_chat_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_log_chat ON messenger_message_log(messenger_chat_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messenger_scripts_type ON messenger_scripts(script_type, project_type)")
-
-            conn.commit()
-            print("[OK] Таблицы мессенджера созданы")
-            self.close()
-        except Exception as e:
-            print(f"[MIGRATION] Ошибка создания таблиц мессенджера: {e}")
-
-    def create_timeline_tables(self):
-        """Миграция: таблицы сроков проектов и надзора"""
-        try:
-            conn = self.connect()
-            cursor = conn.cursor()
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS project_timeline_entries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    contract_id INTEGER NOT NULL,
-                    stage_code TEXT NOT NULL,
-                    stage_name TEXT NOT NULL,
-                    stage_group TEXT NOT NULL,
-                    substage_group TEXT,
-                    actual_date TEXT,
-                    actual_days INTEGER DEFAULT 0,
-                    norm_days INTEGER DEFAULT 0,
-                    status TEXT DEFAULT '',
-                    executor_role TEXT NOT NULL,
-                    is_in_contract_scope INTEGER DEFAULT 1,
-                    sort_order INTEGER NOT NULL,
-                    raw_norm_days REAL DEFAULT 0,
-                    cumulative_days REAL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
-                    UNIQUE(contract_id, stage_code)
-                )
-            ''')
-
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_timeline_contract
-                ON project_timeline_entries(contract_id)
-            ''')
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS supervision_timeline_entries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    supervision_card_id INTEGER NOT NULL,
-                    stage_code TEXT NOT NULL,
-                    stage_name TEXT NOT NULL,
-                    sort_order INTEGER NOT NULL,
-                    plan_date TEXT,
-                    actual_date TEXT,
-                    actual_days INTEGER DEFAULT 0,
-                    budget_planned REAL DEFAULT 0,
-                    budget_actual REAL DEFAULT 0,
-                    budget_savings REAL DEFAULT 0,
-                    supplier TEXT,
-                    commission REAL DEFAULT 0,
-                    status TEXT DEFAULT 'Не начато',
-                    notes TEXT,
-                    executor TEXT,
-                    defects_found INTEGER DEFAULT 0,
-                    defects_resolved INTEGER DEFAULT 0,
-                    site_visits INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id) ON DELETE CASCADE,
-                    UNIQUE(supervision_card_id, stage_code)
-                )
-            ''')
-
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_supervision_timeline_card
-                ON supervision_timeline_entries(supervision_card_id)
-            ''')
-
-            # Миграция: добавляем commission если отсутствует
-            cursor.execute("PRAGMA table_info(supervision_timeline_entries)")
-            sv_cols = [col[1] for col in cursor.fetchall()]
-            if 'commission' not in sv_cols:
-                cursor.execute('ALTER TABLE supervision_timeline_entries ADD COLUMN commission REAL DEFAULT 0')
-
-            conn.commit()
-            self.close()
-        except Exception as e:
-            print(f"[MIGRATION] Ошибка создания таблиц timeline: {e}")
-
     def init_project_timeline(self, contract_id, entries):
         """Инициализация таблицы сроков проекта (INSERT OR IGNORE)"""
         try:
@@ -6454,8 +5419,8 @@ class DatabaseManager:
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            set_clause = ', '.join([f"{k} = ?" for k in updates.keys()])
-            values = list(updates.values()) + [contract_id, stage_code]
+            set_clause, values = self._build_set_clause(updates)
+            values = values + [contract_id, stage_code]
             cursor.execute(
                 f"UPDATE project_timeline_entries SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE contract_id = ? AND stage_code = ?",
                 tuple(values)
@@ -6515,8 +5480,8 @@ class DatabaseManager:
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            set_clause = ', '.join([f"{k} = ?" for k in updates.keys()])
-            values = list(updates.values()) + [supervision_card_id, stage_code]
+            set_clause, values = self._build_set_clause(updates)
+            values = values + [supervision_card_id, stage_code]
             cursor.execute(
                 f"UPDATE supervision_timeline_entries SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE supervision_card_id = ? AND stage_code = ?",
                 tuple(values)

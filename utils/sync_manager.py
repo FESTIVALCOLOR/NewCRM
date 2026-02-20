@@ -8,6 +8,7 @@ from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Callable
 import traceback
+import threading
 
 
 class SyncManager(QObject):
@@ -59,6 +60,8 @@ class SyncManager(QObject):
         self.last_sync_timestamp: Optional[datetime] = None
         self.is_running = False
         self.is_connected = False
+        self._sync_paused = False  # Флаг паузы синхронизации (при перемещении карточек)
+        self._sync_in_progress = False  # Флаг выполнения синхронизации
 
         # Таймеры
         self._sync_timer = QTimer(self)
@@ -124,36 +127,59 @@ class SyncManager(QObject):
 
         print("[SyncManager] Остановлен")
 
+    def pause_sync(self):
+        """Приостановить синхронизацию (при перемещении карточек и других UI операциях)"""
+        self._sync_paused = True
+
+    def resume_sync(self):
+        """Возобновить синхронизацию"""
+        self._sync_paused = False
+
     def _sync_data(self):
-        """Синхронизация данных с сервером"""
+        """Синхронизация данных с сервером (запускает фоновый поток)"""
         if not self.api_client or not self.last_sync_timestamp:
             return
 
-        # Пропускаем sync если API в offline режиме
-        if not self.api_client.is_online:
+        # Пропускаем sync если API в offline режиме, на паузе или уже выполняется
+        if not self.api_client.is_online or self._sync_paused or self._sync_in_progress:
+            return
+
+        self._sync_in_progress = True
+
+        def _do_sync():
+            try:
+                result = self.api_client.sync(
+                    last_sync_timestamp=self.last_sync_timestamp,
+                    entity_types=self._sync_entity_types,
+                    retry=False,
+                    timeout=3
+                )
+                # Отправляем результат в основной поток
+                QTimer.singleShot(0, lambda r=result: self._process_sync_result(r))
+            except Exception:
+                QTimer.singleShot(0, self._on_sync_error)
+
+        thread = threading.Thread(target=_do_sync, daemon=True)
+        thread.start()
+
+    def _process_sync_result(self, result):
+        """Обработка результата синхронизации в основном потоке"""
+        self._sync_in_progress = False
+
+        # Если синхронизация на паузе — игнорируем результат
+        if self._sync_paused:
             return
 
         try:
-            # Получаем обновления (без retry для sync - не критично)
-            result = self.api_client.sync(
-                last_sync_timestamp=self.last_sync_timestamp,
-                entity_types=self._sync_entity_types,
-                retry=False,  # Отключаем retry для фоновой синхронизации
-                timeout=3  # Короткий таймаут для sync
-            )
-
-            # Обновляем статус соединения
             if not self.is_connected:
                 self.is_connected = True
                 self.connection_status_changed.emit(True)
 
-            # Обновляем timestamp
             if result.get('timestamp'):
                 self.last_sync_timestamp = datetime.fromisoformat(
                     result['timestamp'].replace('Z', '+00:00')
                 )
 
-            # Обрабатываем обновления по типам сущностей (только если есть данные)
             clients = result.get('clients', [])
             if clients:
                 self.clients_updated.emit(clients)
@@ -169,26 +195,40 @@ class SyncManager(QObject):
                 self.employees_updated.emit(employees)
                 self.data_updated.emit('employees', employees)
 
-            # Синхронизация файлов (отдельный endpoint)
-            try:
-                since_str = self.last_sync_timestamp.isoformat() if self.last_sync_timestamp else None
-                if since_str:
-                    updated_files = self.api_client.get_updated_files(since_str)
-                    if updated_files:
-                        self.files_updated.emit(updated_files)
-                        self.data_updated.emit('project_files', updated_files)
-                        # Сохраняем в локальную БД
-                        self._save_files_locally(updated_files)
-            except Exception:
-                pass  # Ошибка sync файлов не критична
+            # Синхронизация файлов (отдельный endpoint) — тоже в фоне
+            def _sync_files():
+                try:
+                    since_str = self.last_sync_timestamp.isoformat() if self.last_sync_timestamp else None
+                    if since_str:
+                        updated_files = self.api_client.get_updated_files(since_str)
+                        if updated_files:
+                            QTimer.singleShot(0, lambda f=updated_files: self._process_files_result(f))
+                except Exception:
+                    pass
 
-        except Exception as e:
-            # Обновляем статус соединения
-            if self.is_connected:
-                self.is_connected = False
-                self.connection_status_changed.emit(False)
-            # Не спамим в консоль при каждой ошибке sync
+            thread = threading.Thread(target=_sync_files, daemon=True)
+            thread.start()
+
+        except Exception:
             pass
+
+    def _process_files_result(self, updated_files):
+        """Обработка синхронизированных файлов в основном потоке"""
+        if self._sync_paused:
+            return
+        try:
+            self.files_updated.emit(updated_files)
+            self.data_updated.emit('project_files', updated_files)
+            self._save_files_locally(updated_files)
+        except Exception:
+            pass
+
+    def _on_sync_error(self):
+        """Обработка ошибки синхронизации в основном потоке"""
+        self._sync_in_progress = False
+        if self.is_connected:
+            self.is_connected = False
+            self.connection_status_changed.emit(False)
 
     def _send_heartbeat(self):
         """Отправка heartbeat для поддержания онлайн-статуса"""

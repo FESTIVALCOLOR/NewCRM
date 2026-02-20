@@ -125,20 +125,8 @@ class SalariesTab(QWidget):
         header_layout.addWidget(header)
         
         header_layout.addStretch()
+        # Кнопка "Тарифы" перенесена в Администрирование (ui/admin_dialog.py)
 
-        if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
-            try:
-                from ui.rates_dialog import RatesDialog
-
-                rates_btn = IconLoader.create_action_button(
-                    'settings', 'Тарифы',
-                    bg_color='#FF9800', hover_color='#F57C00', icon_color='#ffffff')
-                rates_btn.clicked.connect(lambda: RatesDialog(self, api_client=self.api_client).exec_())
-                header_layout.addWidget(rates_btn)
-
-            except Exception as e:
-                print(f" Не удалось создать кнопку тарифов: {e}")
-        
         layout.addLayout(header_layout)
                
         # Вкладки
@@ -1154,15 +1142,7 @@ class SalariesTab(QWidget):
     def mark_as_paid(self, payment_id):
         """Отметка выплаты как оплаченной"""
         try:
-            # mark_payment_as_paid - специфичный метод, не в DataAccess, используем db напрямую
-            if self.api_client:
-                try:
-                    self.api_client.mark_payment_as_paid(payment_id, self.employee['id'])
-                except Exception as e:
-                    print(f"[WARN] Ошибка API отметки оплаты: {e}, fallback на локальную БД")
-                    self.db.mark_payment_as_paid(payment_id, self.employee['id'])
-            else:
-                self.db.mark_payment_as_paid(payment_id, self.employee['id'])
+            self.data.mark_payment_as_paid(payment_id, self.employee['id'])
             
             # Перезагружаем таблицу (инвалидируем кеш т.к. статус изменился)
             self.invalidate_cache()
@@ -1337,18 +1317,15 @@ class SalariesTab(QWidget):
         if need_reload:
             # ИСПРАВЛЕНО 06.02.2026: include_null_month=True для включения платежей "В работе"
             # Загружаем данные за весь год (один запрос вместо 12)
-            # get_year_payments - специфичный метод, не в DataAccess, используем api_client/db напрямую
             # _prefer_local_load=True при первом открытии таба — мгновенная загрузка из локальной БД
-            use_api = self.api_client and not getattr(self, '_prefer_local_load', False)
-            if use_api:
-                try:
-                    # Получаем все выплаты за год одним запросом, включая NULL report_month
-                    all_payments = self.api_client.get_year_payments(year, include_null_month=True)
-                except Exception as e:
-                    print(f"[WARN] Ошибка API загрузки годовых выплат: {e}")
-                    all_payments = self.db.get_year_payments(year)
-            else:
-                all_payments = self.db.get_year_payments(year)
+            use_local = getattr(self, '_prefer_local_load', False)
+            if use_local:
+                self.data.prefer_local = True
+            try:
+                # Получаем все выплаты за год одним запросом, включая NULL report_month
+                all_payments = self.data.get_year_payments(year, include_null_month=True)
+            finally:
+                self.data.prefer_local = False
 
             # Сохраняем в кеш
             self._all_payments_cache = all_payments
@@ -1360,14 +1337,11 @@ class SalariesTab(QWidget):
                 all_payments = []
                 seen_ids = set()  # Множество для отслеживания уже добавленных платежей
                 for y in range(2020, 2031):
-                    # get_year_payments - специфичный метод, не в DataAccess
-                    if use_api:
-                        try:
-                            year_payments = self.api_client.get_year_payments(y, include_null_month=True)
-                        except Exception as e:
-                            year_payments = self.db.get_year_payments(y)
-                    else:
-                        year_payments = self.db.get_year_payments(y)
+                    try:
+                        year_payments = self.data.get_year_payments(y, include_null_month=True)
+                    except Exception as e:
+                        print(f"[WARN] Ошибка загрузки выплат за {y}: {e}")
+                        year_payments = []
 
                     # Дедупликация: добавляем только уникальные платежи
                     for p in year_payments:
@@ -1756,15 +1730,7 @@ class SalariesTab(QWidget):
                 else:
                     project_type_filter = None
 
-                # get_payments_by_type - специфичный API метод, не в DataAccess
-                if self.api_client:
-                    try:
-                        data = self.api_client.get_payments_by_type(payment_type, project_type_filter)
-                    except Exception as e:
-                        print(f"[WARN] Ошибка API загрузки выплат по типу: {e}, fallback на локальную БД")
-                        data = self._get_payments_by_type_from_db(payment_type, project_type_filter)
-                else:
-                    data = self._get_payments_by_type_from_db(payment_type, project_type_filter)
+                data = self.data.get_payments_by_type(payment_type, project_type_filter)
 
                 # Заполняем фильтры уникальными значениями
                 addresses = set()

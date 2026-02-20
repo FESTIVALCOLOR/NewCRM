@@ -76,6 +76,7 @@ services:
     volumes:
       - uploads_data:/app/uploads
       - previews_data:/app/previews
+      - ./resources:/app/resources:ro
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

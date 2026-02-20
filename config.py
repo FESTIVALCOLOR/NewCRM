@@ -1,4 +1,5 @@
 import os
+import secrets
 
 # Пути
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -122,7 +123,7 @@ MULTI_USER_MODE = True
 # URL API сервера (задать через переменную окружения API_BASE_URL)
 API_BASE_URL = os.getenv('API_BASE_URL', "https://crm.festivalcolor.ru")
 
-# Проверять SSL сертификат сервера (Let's Encrypt = валидный сертификат)
+# Проверять SSL сертификат сервера (True по умолчанию для production)
 API_VERIFY_SSL = os.getenv('API_VERIFY_SSL', 'true').lower() in ('true', '1', 'yes')
 
 # Интервал синхронизации с сервером (секунды)
@@ -151,15 +152,15 @@ class Settings(BaseSettings):
     api_description: str = "REST API для многопользовательской CRM системы"
 
     # Безопасность (на сервере задаётся через SECRET_KEY в .env)
-    secret_key: str = os.getenv('SECRET_KEY', "local-dev-key-not-for-production")
+    secret_key: str = os.getenv('SECRET_KEY', secrets.token_hex(32))
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60  # 60 минут (auto-refresh на клиенте)
 
     # База данных
     database_url: str = f"sqlite:///{DATABASE_PATH}"
 
-    # CORS
-    allow_origins: list = ["*"]  # В продакшене указать конкретные домены
+    # CORS (дефолт — только production домен; для dev задать через env ALLOWED_ORIGINS)
+    allow_origins: list = ["https://crm.festivalcolor.ru", "http://localhost:3000"]
     allow_credentials: bool = True
     allow_methods: list = ["*"]
     allow_headers: list = ["*"]

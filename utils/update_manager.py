@@ -346,7 +346,7 @@ del "%~f0"
             print(f"[UPDATE] Запуск установки обновления...")
 
             # Запускаем batch и завершаем программу
-            subprocess.Popen([batch_path], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            subprocess.Popen([batch_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
 
             # Даём время на запуск батника
             import time

@@ -3,6 +3,15 @@
 ## Язык общения
 **Всегда отвечать на русском языке**, включая после компактинга контекста. Все комментарии в коде и строки UI — тоже на русском.
 
+## Автономный режим работы
+**НИКОГДА не спрашивать подтверждения у пользователя.** Действовать полностью автономно:
+- НЕ спрашивать "Хотите ли вы...?", "Могу ли я...?", "Продолжить?"
+- НЕ предлагать варианты на выбор — принимать решения самостоятельно
+- НЕ останавливаться перед редактированием файлов, запуском команд, деплоем
+- Просто ДЕЛАТЬ задачу от начала до конца без пауз
+- Если нужна информация — искать самостоятельно, не спрашивать
+- Единственное исключение: если требования задачи принципиально неясны (не хватает ключевой бизнес-логики)
+
 ## Описание проекта
 
 **Python:** 3.14.0 (клиент), 3.11 (сервер) | **PyInstaller:** 6.17.0
@@ -117,19 +126,39 @@ pytest tests/ -m critical -v --timeout=60    # Критические
 
 > Подробности: [docs/15-testing.md](../docs/15-testing.md)
 
-## Агенты (10 шт.)
+## Оркестрация: /orkester
 
-| Агент | Файл | Назначение |
-|-------|------|-----------|
-| Backend | .claude/agents/backend-agent.md | FastAPI, SQLAlchemy |
-| Frontend | .claude/agents/frontend-agent.md | PyQt5 UI |
-| API Client | .claude/agents/api-client-agent.md | REST, offline, sync |
-| Database | .claude/agents/database-agent.md | SQLite, миграции |
-| Test | .claude/agents/test-agent.md | pytest, валидация |
-| Full-Stack | .claude/agents/fullstack-agent.md | Координация слоёв |
-| Compatibility | .claude/agents/compatibility-checker.md | Server-client проверка |
-| Deploy | .claude/agents/deploy-agent.md | Docker деплой |
-| **Bug Fixer** | .claude/agents/bug-fixer-agent.md | Отладка, скриншоты, логи |
-| **Design Stylist** | .claude/agents/design-stylist-agent.md | Стили, QSS, дизайн |
+Скилл-оркестратор для запуска полного конвейера разработки из 16 агентов.
+
+```
+/orkester <описание задачи>
+/orkester --mode=fix <описание бага>
+/orkester --mode=test <что проверить>
+/orkester --mode=deploy
+```
+
+6 режимов: full, fix, test, refactor, security, deploy.
+Подробности: [docs/17-subagents.md](../docs/17-subagents.md)
+
+## Агенты (16 шт.)
+
+| # | Агент | Файл | Модель | Назначение |
+|---|-------|------|--------|-----------|
+| 1 | Planner | .claude/agents/planner-agent.md | opus | Планирование задач |
+| 2 | Worker | .claude/agents/worker-agent.md | opus | Исполнение кода, координация |
+| 3 | Test-Runner | .claude/agents/test-runner-agent.md | haiku | Запуск и написание тестов |
+| 4 | Debugger | .claude/agents/debugger-agent.md | sonnet | Отладка, исправление падений |
+| 5 | Reviewer | .claude/agents/reviewer-agent.md | sonnet | Code review по 12 правилам |
+| 6 | Documenter | .claude/agents/documenter-agent.md | haiku | Документация, tech debt |
+| 7 | Refactor | .claude/agents/refactor-agent.md | sonnet | Рефакторинг кода |
+| 8 | Security Auditor | .claude/agents/security-auditor-agent.md | sonnet | Аудит безопасности |
+| 9 | Senior Reviewer | .claude/agents/senior-reviewer-agent.md | opus | Архитектурный обзор |
+| 10 | Backend | .claude/agents/backend-agent.md | sonnet | FastAPI, SQLAlchemy |
+| 11 | Frontend | .claude/agents/frontend-agent.md | sonnet | PyQt5 UI |
+| 12 | API Client | .claude/agents/api-client-agent.md | sonnet | REST, offline, sync |
+| 13 | Database | .claude/agents/database-agent.md | haiku | SQLite, миграции |
+| 14 | Compatibility | .claude/agents/compatibility-checker.md | haiku | Server-client проверка |
+| 15 | Deploy | .claude/agents/deploy-agent.md | opus | Docker деплой |
+| 16 | Design Stylist | .claude/agents/design-stylist-agent.md | sonnet | Стили, QSS, дизайн |
 
 > Подробности: [docs/17-subagents.md](../docs/17-subagents.md)

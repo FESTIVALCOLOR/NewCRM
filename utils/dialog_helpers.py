@@ -4,6 +4,79 @@
 """
 
 
+def create_progress_dialog(title, label_text, cancel_text, maximum, parent):
+    """
+    Создание стилизованного прогресс-диалога (frameless, 1px border).
+    Заменяет 13+ копий boilerplate QProgressDialog в UI.
+
+    Args:
+        title: Заголовок окна (для accessibility)
+        label_text: Текст надписи (например "Подготовка к загрузке...")
+        cancel_text: Текст кнопки отмены (None — без кнопки)
+        maximum: Максимальное значение прогресса
+        parent: Родительский виджет
+
+    Returns:
+        QProgressDialog — настроенный и показанный
+    """
+    from PyQt5.QtWidgets import QProgressDialog
+    from PyQt5.QtCore import Qt
+
+    progress = QProgressDialog(label_text, cancel_text, 0, maximum, parent)
+    progress.setWindowModality(Qt.WindowModal)
+    progress.setWindowTitle(title)
+    progress.setMinimumDuration(0)
+    progress.setAutoClose(True)
+    progress.setAutoReset(False)
+    progress.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+    progress.setFixedSize(420, 144)
+
+    progress.setStyleSheet("""
+        QProgressDialog {
+            background-color: white;
+            border: 1px solid #E0E0E0;
+            border-radius: 10px;
+        }
+        QLabel {
+            color: #2C3E50;
+            font-size: 12px;
+            padding: 10px;
+            min-width: 380px;
+            max-width: 380px;
+        }
+        QProgressBar {
+            border: none;
+            border-radius: 4px;
+            text-align: center;
+            background-color: #F0F0F0;
+            height: 20px;
+            margin: 10px;
+            min-width: 380px;
+            max-width: 380px;
+        }
+        QProgressBar::chunk {
+            background-color: #90EE90;
+            border-radius: 2px;
+        }
+        QPushButton {
+            background-color: #E74C3C;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            min-width: 80px;
+        }
+        QPushButton:hover {
+            background-color: #C0392B;
+        }
+        QDialogButtonBox {
+            alignment: center;
+        }
+    """)
+    progress.show()
+    return progress
+
+
 def center_dialog_on_parent(dialog, parent=None):
     """
     Центрирование диалогового окна относительно родительского окна

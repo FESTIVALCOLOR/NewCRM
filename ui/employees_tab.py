@@ -34,6 +34,7 @@ class EmployeesTab(QWidget):
         # ======================================
 
         self._data_loaded = False
+        self.current_department = None  # Текущий выбранный фильтр отдела
         self.init_ui()
     
     def init_ui(self):
@@ -247,19 +248,12 @@ class EmployeesTab(QWidget):
             self.employees_table.setItem(row, 5, QTableWidgetItem(formatted_date))
             # ==========================================
             
-            # ========== НОВОЕ: СТАТУС ==========
+            # ========== СТАТУС (QLabel для гарантированного CSS-цвета) ==========
             status = emp.get('status', 'активный')
             status_item = QTableWidgetItem(status)
-            
-            if status == 'активный':
-                status_item.setForeground(Qt.darkGreen)
-            elif status == 'уволен':
-                status_item.setForeground(Qt.red)
-            elif status == 'в резерве':
-                status_item.setForeground(Qt.darkYellow)
-            
             self.employees_table.setItem(row, 6, status_item)
-            # ===================================
+            self.employees_table.setCellWidget(row, 6, self._create_status_widget(status))
+            # ===================================================================
 
             # Кнопки действий (в колонке 7)
             actions_widget = QWidget()
@@ -332,23 +326,21 @@ class EmployeesTab(QWidget):
         # Снимаем выделение со всех кнопок
         for btn in self.filter_buttons.values():
             btn.setChecked(False)
-        
+
         # Выделяем нажатую кнопку
         self.filter_buttons[department_key].setChecked(True)
-        
+
+        # Сохраняем текущий фильтр
+        self.current_department = None if department_key == 'all' else department_key
+
         # Загружаем данные
-        if department_key == 'all':
-            self.load_employees()
-        else:
-            self.load_employees(department=department_key)
+        self.load_employees(department=self.current_department)
 
     def ensure_data_loaded(self):
         """Ленивая загрузка: данные загружаются при первом показе таба"""
         if not self._data_loaded:
             self._data_loaded = True
-            self.data.prefer_local = True
-            self.load_employees()
-            self.data.prefer_local = False
+            self._reload_employees(prefer_local=True)
 
     def load_employees(self, department=None):
         """Загрузка списка сотрудников с фильтрацией по отделу"""
@@ -398,20 +390,12 @@ class EmployeesTab(QWidget):
             self.employees_table.setItem(row, 5, QTableWidgetItem(formatted_date))
             # ==========================================
             
-            # ========== НОВОЕ: СТАТУС ==========
+            # ========== СТАТУС (QLabel для гарантированного CSS-цвета) ==========
             status = emp.get('status', 'активный')
             status_item = QTableWidgetItem(status)
-            
-            # Цветовая индикация статуса
-            if status == 'активный':
-                status_item.setForeground(Qt.darkGreen)
-            elif status == 'уволен':
-                status_item.setForeground(Qt.red)
-            elif status == 'в резерве':
-                status_item.setForeground(Qt.darkYellow)
-            
             self.employees_table.setItem(row, 6, status_item)
-            # ===================================
+            self.employees_table.setCellWidget(row, 6, self._create_status_widget(status))
+            # ===================================================================
 
             # Кнопки действий (теперь в колонке 7)
             actions_widget = QWidget()
@@ -472,6 +456,34 @@ class EmployeesTab(QWidget):
             
         self.employees_table.setSortingEnabled(True)
 
+    @staticmethod
+    def _create_status_widget(status):
+        """Создать виджет статуса с цветом (CSS гарантирует цвет, в отличие от setForeground)"""
+        color_map = {
+            'активный': '#2E7D32',    # Зелёный
+            'уволен': '#D32F2F',       # Красный
+            'в резерве': '#F57F17',    # Тёмно-жёлтый
+        }
+        color = color_map.get(status, '#333333')
+        label = QLabel(status)
+        label.setStyleSheet(f"color: {color}; background-color: #FFFFFF; padding-left: 4px; font-weight: bold;")
+        return label
+
+    def _reload_employees(self, prefer_local=False):
+        """Перезагрузить таблицу с сохранением текущего фильтра отдела.
+
+        Args:
+            prefer_local: Если True, читать из локальной БД (после локального сохранения,
+                         чтобы не получить устаревшие данные с сервера).
+        """
+        if prefer_local:
+            self.data.prefer_local = True
+        try:
+            self.load_employees(department=self.current_department)
+        finally:
+            if prefer_local:
+                self.data.prefer_local = False
+
     def _refresh_dashboard(self):
         """Обновить дашборд после изменения данных"""
         mw = self.window()
@@ -482,7 +494,7 @@ class EmployeesTab(QWidget):
         """Открытие диалога добавления сотрудника"""
         dialog = EmployeeDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            self.load_employees()
+            self._reload_employees(prefer_local=True)
             self._refresh_dashboard()
             
     def view_employee(self, employee_data):
@@ -511,7 +523,7 @@ class EmployeesTab(QWidget):
         
         dialog = EmployeeDialog(self, employee_data)
         if dialog.exec_() == QDialog.Accepted:
-            self.load_employees()
+            self._reload_employees(prefer_local=True)
             self._refresh_dashboard()
 
     def delete_employee(self, employee_data):
@@ -555,7 +567,7 @@ class EmployeesTab(QWidget):
                     'success'
                 ).exec_()
 
-                self.load_employees()
+                self._reload_employees(prefer_local=True)
                 self._refresh_dashboard()
 
             except Exception as e:
@@ -589,8 +601,8 @@ class EmployeesTab(QWidget):
                 return
 
             print(f"[SYNC] Получено обновление сотрудников: {len(updated_employees)} записей")
-            # Перезагружаем таблицу сотрудников
-            self.load_employees()
+            # Обновляем из локальной БД (данные уже синхронизированы), не блокируя UI
+            self._reload_employees(prefer_local=True)
         except Exception as e:
             print(f"[ERROR] Ошибка синхронизации сотрудников: {e}")
 
@@ -767,15 +779,22 @@ class EmployeeDialog(QDialog):
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
         
-        # Кнопка "Права доступа" (только при редактировании, только для Руководителя)
-        if self.employee_data and not self.view_only:
+        # Кнопка "Администрирование" (только для Руководителя студии / admin / director)
+        if not self.view_only:
             current_role = self.current_user.get('role', '') if isinstance(self.current_user, dict) else getattr(self.current_user, 'role', '')
             current_pos = self.current_user.get('position', '') if isinstance(self.current_user, dict) else getattr(self.current_user, 'position', '')
             if current_role in ('admin', 'director') or current_pos == 'Руководитель студии':
-                perm_btn = QPushButton('Права доступа...')
-                perm_btn.setStyleSheet('padding: 8px 20px; color: #1565C0;')
-                perm_btn.clicked.connect(self._open_permissions_dialog)
-                layout.addWidget(perm_btn)
+                admin_btn = QPushButton('Администрирование')
+                admin_btn.setStyleSheet("""
+                    QPushButton {
+                        padding: 8px 20px; color: #FFFFFF;
+                        background-color: #7B1FA2; border-radius: 4px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover { background-color: #6A1B9A; }
+                """)
+                admin_btn.clicked.connect(self._open_admin_dialog)
+                layout.addWidget(admin_btn)
 
         # Кнопки
         if not self.view_only:
@@ -913,6 +932,22 @@ class EmployeeDialog(QDialog):
             return
         dlg = PermissionsDialog(self, self.employee_data, self.api_client)
         dlg.exec_()
+
+    def _open_admin_dialog(self):
+        """Открыть диалог администрирования"""
+        try:
+            from ui.admin_dialog import AdminDialog
+            data_access = getattr(self.parent(), 'data', None) if self.parent() else None
+            dlg = AdminDialog(
+                parent=self,
+                api_client=self.api_client,
+                data_access=data_access,
+                employee=self.current_user,
+            )
+            dlg.exec_()
+        except Exception as e:
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', f'Не удалось открыть администрирование: {e}', 'warning').exec_()
 
     def fill_data(self):
         """Заполнение формы данными сотрудника"""
@@ -1056,22 +1091,6 @@ class EmployeeDialog(QDialog):
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить сотрудника:\n{str(e)}', 'error').exec_()
             
-    def update_employee(self, employee_id, employee_data):
-        """Обновление сотрудника"""
-        conn = self.connect()
-        cursor = conn.cursor()
-        
-        # Динамически формируем SET clause
-        set_clause = ', '.join([f'{key} = ?' for key in employee_data.keys()])
-        values = list(employee_data.values()) + [employee_id]
-        
-        cursor.execute(
-            f'UPDATE employees SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', 
-            values
-        )
-        conn.commit()
-        self.close()
-    
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
@@ -1221,11 +1240,18 @@ class EmployeeSearchDialog(QDialog):
         self.phone_input.clear()
         self.email_input.clear()
         self.login_input.clear()
-        
-        self.parent().load_employees()
-        
+
+        # Сбрасываем фильтр отдела на "Все отделы"
+        parent_tab = self.parent()
+        if hasattr(parent_tab, 'current_department'):
+            parent_tab.current_department = None
+            for btn in parent_tab.filter_buttons.values():
+                btn.setChecked(False)
+            parent_tab.filter_buttons['all'].setChecked(True)
+        parent_tab.load_employees()
+
         CustomMessageBox(
-            self, 
+            self,
             'Сброс',
             'Фильтры сброшены, показаны все сотрудники',
             'success'
@@ -1346,6 +1372,7 @@ class PermissionsDialog(QDialog):
         'Платежи': ['payments.delete'],
         'Зарплаты': ['salaries.delete'],
         'Агенты': ['agents.create'],
+        'Мессенджер': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat'],
     }
 
     def __init__(self, parent, employee_data, api_client):
