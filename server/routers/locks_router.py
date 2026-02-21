@@ -9,7 +9,7 @@ from schemas import LockRequest
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/locks", tags=["locks"])
+router = APIRouter(tags=["locks"])
 
 
 # =========================
