@@ -133,6 +133,33 @@ Stacktrace:
 **Причина:** Отсутствует `__init__.py`
 **Решение:** Проверить database/, ui/, utils/
 
+## CI Failures (GitHub Actions)
+
+Debugger также анализирует и исправляет CI failures. CI запускается автоматически при push.
+
+### Получение логов CI
+```bash
+export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
+
+RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
+gh run view $RUN_ID --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+gh run view $RUN_ID --log-failed 2>&1 | tail -100
+```
+
+### Типичные CI-специфичные проблемы
+- **429 Too Many Requests** — rate limiter (отключен через `CI=true`)
+- **UniqueViolation session_token** — дублирование JWT (решено через jti)
+- **500 Yandex Disk** — нет токена / soft delete
+- **404 на endpoint** — дублированный prefix в роутере
+- **422 body required** — данные в params вместо json body
+- **SQL type error** — VARCHAR → DateTime cast
+
+### Цикл CI-Fix (макс 3 итерации)
+```
+CI FAILED → получить логи → найти root cause → fix → push → ждать CI
+```
+
 ## Диагностические команды
 
 ```bash
@@ -156,3 +183,4 @@ curl -s https://crm.festivalcolor.ru/api/ | python -m json.tool
 - [ ] Нет emoji в UI
 - [ ] Нет регрессии (новые тесты не упали)
 - [ ] Упавшие тесты теперь проходят
+- [ ] CI (GitHub Actions) пройден успешно после исправлений

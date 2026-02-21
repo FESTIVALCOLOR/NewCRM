@@ -158,3 +158,40 @@ else:
 ```
 
 **Автоматический аудит:** [tests/test_db_api_sync_audit.py](../tests/test_db_api_sync_audit.py) проверяет все UI файлы на соответствие этому правилу.
+
+## 13. PyQt Signal Safety из фоновых потоков
+
+**НИКОГДА** не эмитить PyQt сигналы напрямую из `threading.Thread` — это вызывает segfault (access violation). Всегда использовать `QTimer.singleShot(0, ...)` для переноса emit в GUI поток.
+
+```python
+from PyQt5.QtCore import QTimer
+
+# ЗАПРЕЩЕНО (из фонового потока)
+self.my_signal.emit(data)
+
+# ПРАВИЛЬНО
+QTimer.singleShot(0, lambda: self.my_signal.emit(data))
+
+# Удобный хелпер для множественных вызовов:
+def _gui(func):
+    """Выполнить функцию в GUI потоке"""
+    QTimer.singleShot(0, func)
+_gui(lambda: self.my_signal.emit(data))
+```
+
+**Также запрещено:** подключать сигналы долгоживущего QObject (например, OfflineManager) к слотам короткоживущего QObject (диалог). При уничтожении диалога connection становится stale → emit вызывает slot на мёртвом объекте → access violation.
+
+## 14. Offline-очередь: только сетевые ошибки
+
+В `_queue_operation()` DataAccess ставить в offline-очередь **ТОЛЬКО** сетевые ошибки (`APIConnectionError`, `APITimeoutError`). Бизнес-ошибки (409 Conflict, 400 Bad Request) **НЕ ДОЛЖНЫ** ставиться в очередь — повторная отправка бессмысленна.
+
+```python
+import sys
+from utils.api_client.exceptions import APIConnectionError, APITimeoutError
+
+exc_type, exc_value, _ = sys.exc_info()
+if exc_type is not None:
+    if not issubclass(exc_type, (APIConnectionError, APITimeoutError)):
+        # Бизнес-ошибка — НЕ ставить в очередь
+        return
+```

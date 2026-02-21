@@ -1,6 +1,6 @@
 # Оркестратор субагентов Interior Studio CRM
 
-Ты — оркестратор, управляющий конвейером из 16 субагентов.
+Ты — оркестратор, управляющий конвейером из 17 субагентов.
 Твоя задача: выполнить запрос пользователя, проведя его через нужные фазы конвейера.
 
 ## Задача пользователя
@@ -15,12 +15,14 @@ $ARGUMENTS
 
 | Режим | Ключевые слова | Фазы |
 |-------|---------------|------|
-| **full** | добавить, реализовать, создать, новый, внедрить | Planner → Worker → Test → Reviewer → Compat → Security? → Doc → SeniorReview? → Refactor? |
-| **fix** | исправь, баг, не работает, ошибка, падает, сломалось | Planner(lite) → Debugger → Test → Reviewer? → Compat? |
-| **test** | тесты, проверь, запусти тесты, покрытие | Test-Runner → Debugger? → Doc(отчёт) |
-| **refactor** | рефакторинг, улучши, упрости, структура | Planner → SeniorReview → Refactor → Test → Reviewer → Doc |
-| **security** | безопасность, аудит, security, уязвимость | SecurityAuditor → Planner → Worker → Test → Doc |
-| **deploy** | деплой, deploy, обнови сервер, выложи | Compat → Test(critical) → Deploy → Test(smoke) → Doc |
+| **full** | добавить, реализовать, создать, новый, внедрить | Planner → Worker → **QA Monitor** → Test → **CI Push** → Reviewer → Compat → Security? → Doc → SeniorReview? → Refactor? |
+| **fix** | исправь, баг, не работает, ошибка, падает, сломалось | Planner(lite) → Debugger → **QA Monitor?** → Test → **CI Push** → Reviewer? → Compat? |
+| **test** | тесты, проверь, запусти тесты, покрытие | Test-Runner → Debugger? → **CI Push** → Doc(отчёт) |
+| **refactor** | рефакторинг, улучши, упрости, структура | Planner → SeniorReview → Refactor → **QA Monitor** → Test → **CI Push** → Reviewer → Doc |
+| **security** | безопасность, аудит, security, уязвимость | SecurityAuditor → Planner → Worker → Test → **CI Push** → Doc |
+| **deploy** | деплой, deploy, обнови сервер, выложи | Compat → Test(critical) → **CI Push** → Deploy → Test(smoke) → Doc |
+| **docker** | docker, контейнер, логи сервера, healthcheck, мониторинг | Docker Monitor → Debugger? → Deploy? → Doc |
+| **qa** | проверь руками, ручное тестирование, qa, покликай | QA Monitor → Debugger? → Doc(отчёт) |
 
 Если пользователь указал `--mode=X`, использовать указанный режим.
 Если не указал — определить автоматически по тексту задачи.
@@ -81,6 +83,72 @@ $ARGUMENTS
 
 В режиме **fix** — вместо Worker вызвать Debugger.
 В режиме **test** — пропустить Worker.
+
+---
+
+## ШАГ 2.5: QA MONITOR (модель: sonnet) — УСЛОВНЫЙ
+
+Активируется если изменения затрагивают `ui/` файлы или `utils/data_access.py`.
+Обязателен в режимах: **full**, **refactor** (если затронут UI).
+Обязателен в режиме **qa**.
+Пропустить в: **test**, **deploy**, **security**, **docker**.
+
+Вызови субагент `.claude/agents/qa-monitor-agent.md` через Task tool.
+
+### 2.5.1: Запуск CRM с логированием
+```bash
+# Лог-файл для мониторинга
+LOG_FILE="tests/qa_monitor_$(date +%Y%m%d_%H%M%S).log"
+
+# Запуск CRM клиента с перехватом логов
+.venv/Scripts/python.exe main.py 2>&1 | tee "$LOG_FILE" &
+CRM_PID=$!
+```
+
+### 2.5.2: Инструкции пользователю
+На основе изменённых файлов агент генерирует пошаговые инструкции:
+```
+=== РУЧНОЕ ТЕСТИРОВАНИЕ ===
+Изменения: [список файлов]
+
+Шаги:
+1. [Действие] — "Откройте вкладку X"
+2. [Проверка] — "Нажмите кнопку Y"
+3. [Ожидание] — "Должно произойти Z"
+
+Когда закончите — скажите "готово" или опишите проблему.
+=== КОНЕЦ ===
+```
+
+### 2.5.3: Мониторинг логов
+```bash
+# Проверить ошибки
+grep -i "traceback\|error\|exception\|crash\|critical" "$LOG_FILE" | tail -20
+
+# Проверить процесс
+kill -0 $CRM_PID 2>/dev/null && echo "CRM работает" || echo "CRM УПАЛ!"
+```
+
+### 2.5.4: Реакция на результат
+```
+CRM СТАБИЛЕН (нет ошибок):
+  → Продолжить конвейер (Test-Runner)
+
+ОШИБКИ В ЛОГАХ:
+  → Извлечь traceback → Debugger анализирует → исправляет
+  → Перезапуск CRM для повторной проверки
+
+CRM КРАШНУЛСЯ:
+  → Извлечь crash traceback → Debugger анализирует → исправляет
+  → Перезапуск CRM → повторные инструкции пользователю
+```
+
+### Цикл QA-Debug (макс 3 итерации):
+```
+1. Запуск CRM → Инструкции → Мониторинг
+2. Ошибка → Debugger исправляет → Перезапуск CRM
+3. Если 3 итерации → ЭСКАЛАЦИЯ пользователю
+```
 
 ---
 
@@ -147,7 +215,95 @@ Stacktrace: [последний]
 
 ---
 
-## ШАГ 5: REVIEWER (модель: sonnet)
+## ШАГ 5: CI PUSH & VERIFY — ОБЯЗАТЕЛЬНЫЙ
+
+После прохождения локальных тестов — автоматически закоммитить, запушить и дождаться результатов CI (GitHub Actions).
+
+### 5.1: Коммит и пуш
+```bash
+# Определить изменённые файлы
+git status --short
+
+# Добавить изменённые файлы (НЕ git add -A, только конкретные файлы)
+git add <список_изменённых_файлов>
+
+# Коммит (использовать HEREDOC для сообщения)
+git commit -m "$(cat <<'EOF'
+описание изменений
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"
+
+# Пуш
+git push origin main
+```
+
+### 5.2: Ожидание CI результатов
+```bash
+# Получить GH_TOKEN
+export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
+
+# Подождать 30 секунд для инициализации CI
+sleep 30
+
+# Дождаться завершения CI (макс 10 минут)
+for i in $(seq 1 20); do
+  STATUS=$(gh run list -L 1 --json status -q '.[0].status')
+  if [ "$STATUS" = "completed" ]; then
+    break
+  fi
+  sleep 30
+done
+
+# Получить результат
+gh run list -L 1 --json conclusion,displayTitle -q '.[0] | "\(.conclusion): \(.displayTitle)"'
+```
+
+### 5.3: Проверка результатов CI
+```bash
+# Получить ID последнего запуска
+RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
+
+# Проверить все jobs
+gh run view $RUN_ID --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+
+# Если есть failures — получить логи
+gh run view $RUN_ID --log-failed 2>&1 | tail -100
+```
+
+### 5.4: Реакция на результат CI
+```
+CI PASSED (conclusion=success):
+  → Продолжить конвейер (Reviewer)
+  → Записать в отчёт: "CI: ✓ все 5 jobs passed"
+
+CI FAILED (conclusion=failure):
+  → Получить логи упавших jobs
+  → Debugger анализирует и исправляет
+  → Повторный коммит + пуш + ожидание CI
+  → Максимум 3 итерации
+  → Если 3 итерации не помогли → ЭСКАЛАЦИЯ пользователю
+
+CI TIMEOUT (10 мин без ответа):
+  → Записать предупреждение
+  → Продолжить конвейер с пометкой "CI: не дождались ответа"
+```
+
+### Цикл CI-Fix (макс 3 итерации):
+```
+1. Push → CI запускается
+2. Ожидание результата (макс 10 мин)
+3. CI FAILED → Debugger анализирует логи → исправляет
+4. Повторный push → CI перезапускается
+5. Если OK → продолжить
+6. Если 3 итерации → ЭСКАЛАЦИЯ
+```
+
+---
+
+## ШАГ 6: REVIEWER (модель: sonnet)
 
 Обязателен в режимах: **full**, **refactor**.
 Пропустить в: **test**, **deploy**.
@@ -179,7 +335,7 @@ INFO → передаётся в Documenter для tech_debt
 
 ---
 
-## ШАГ 6: COMPATIBILITY CHECKER (модель: haiku)
+## ШАГ 7: COMPATIBILITY CHECKER (модель: haiku)
 
 Пропустить если не затронуты server/ или utils/api_client.py.
 
@@ -200,7 +356,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 7: SECURITY AUDITOR (модель: sonnet) — УСЛОВНЫЙ
+## ШАГ 8: SECURITY AUDITOR (модель: sonnet) — УСЛОВНЫЙ
 
 Активируется если изменения затрагивают `server/` файлы.
 Обязателен в режиме **security**.
@@ -214,7 +370,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 8: DOCUMENTER (модель: haiku) — ВСЕГДА
+## ШАГ 9: DOCUMENTER (модель: haiku) — ВСЕГДА
 
 Вызови субагент `.claude/agents/documenter-agent.md` через Task tool.
 
@@ -226,7 +382,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 9: SENIOR REVIEWER (модель: opus) — УСЛОВНЫЙ
+## ШАГ 10: SENIOR REVIEWER (модель: opus) — УСЛОВНЫЙ
 
 Активировать если:
 - Изменено 3+ файлов в разных модулях
@@ -247,7 +403,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 10: REFACTOR (модель: sonnet) — УСЛОВНЫЙ
+## ШАГ 11: REFACTOR (модель: sonnet) — УСЛОВНЫЙ
 
 Активируется по решению Senior Reviewer.
 
@@ -257,7 +413,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 11: DEPLOY (модель: opus) — ТОЛЬКО ПО ЗАПРОСУ
+## ШАГ 12: DEPLOY (модель: opus) — ТОЛЬКО ПО ЗАПРОСУ
 
 **НИКОГДА** не запускать автоматически!
 Только если пользователь явно запросил деплой или режим **deploy**.
@@ -270,6 +426,82 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 3. Deploy (scp / git pull + docker rebuild)
 4. Verify (ps + logs + curl)
 5. Smoke test
+
+---
+
+## ШАГ 13: DOCKER MONITOR — РЕЖИМ docker
+
+Активируется в режиме **docker** (ключевые слова: docker, контейнер, логи сервера, healthcheck, мониторинг).
+
+### Инструмент
+Docker CLI установлен локально (`C:\Docker\docker.exe`) с контекстом `interior-studio-server`, подключён к серверу `147.45.154.193:2222` через SSH. Все docker-команды выполняются **локально** без необходимости `ssh timeweb`.
+
+### 13.1: Диагностика (всегда)
+```bash
+# Статус контейнеров
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Healthcheck для каждого контейнера
+docker inspect crm_api --format='{{json .State.Health.Status}}'
+docker inspect crm_postgres --format='{{json .State.Health.Status}}'
+
+# Ресурсы (CPU/RAM/NET)
+docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+```
+
+### 13.2: Анализ логов (по запросу или при unhealthy)
+```bash
+# Последние логи API
+docker logs crm_api --tail 50
+
+# Логи с фильтрацией ошибок
+docker logs crm_api --tail 200 2>&1 | grep -i "error\|traceback\|critical\|500\|unhealthy"
+
+# Логи nginx
+docker logs crm_nginx --tail 50
+
+# Логи postgres
+docker logs crm_postgres --tail 50
+```
+
+### 13.3: Реакция на проблемы
+```
+HEALTHY (все контейнеры):
+  → Вывести статистику, завершить
+
+UNHEALTHY (контейнер):
+  → Анализ healthcheck деталей: docker inspect <name> --format='{{json .State.Health}}'
+  → Анализ логов контейнера
+  → Debugger Agent анализирует root cause
+  → Если проблема в коде → Worker исправляет → Deploy перестраивает
+  → Если проблема в конфигурации → исправить docker-compose.yml → пересобрать
+
+EXITED/RESTARTING (контейнер):
+  → docker logs <name> --tail 100 для диагностики
+  → Попытка перезапуска: docker-compose restart <service>
+  → Если повторяется → полная пересборка: docker-compose down && docker-compose build --no-cache <service> && docker-compose up -d
+```
+
+### 13.4: Доступные Docker-команды
+```bash
+# Управление контейнерами
+docker ps                              # Статус
+docker logs <name> --tail N            # Логи
+docker inspect <name>                  # Детали
+docker stats --no-stream               # Ресурсы
+docker exec <name> <cmd>               # Команда внутри контейнера
+docker-compose restart <service>       # Перезапуск
+docker-compose down && up -d           # Полный перезапуск
+
+# Управление образами
+docker images                          # Список образов
+docker-compose pull                    # Обновить образы
+docker-compose build --no-cache <svc>  # Пересобрать
+
+# Управление данными
+docker volume ls                       # Тома
+docker exec crm_postgres pg_dump ...   # Бэкап БД
+```
 
 ---
 
@@ -286,8 +518,10 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 Фазы:
   [V] Planner — план создан, N подзадач
   [V] Worker — N файлов изменено
+  [V] QA Monitor — ручное тестирование OK, 0 крашей
   [V] Test-Runner — N тестов, все прошли
   [-] Debugger — не потребовался
+  [V] CI Push & Verify — pushed, 5/5 jobs passed, 360 tests
   [V] Reviewer — 0 BLOCK, 2 WARN, 1 INFO
   [V] Compatibility — OK
   [-] Security — не затронуто
@@ -295,12 +529,14 @@ MISMATCH → Worker исправляет → Checker перепроверяет
   [-] Senior Reviewer — не требовался
   [-] Refactor — не требовался
   [-] Deploy — не запрашивался
+  [-] Docker Monitor — не запрашивался
 
 Изменённые файлы:
   - path/to/file1.py (+N строк)
   - path/to/file2.py (+M строк)
 
-Тесты: XX passed, 0 failed, YY skipped
+Тесты (локальные): XX passed, 0 failed, YY skipped
+CI (GitHub Actions): 5/5 jobs passed, XX e2e tests
 Tech debt: [список INFO замечаний]
 === КОНЕЦ ОТЧЁТА ===
 ```
@@ -316,6 +552,7 @@ Tech debt: [список INFO замечаний]
 |-------|-----------------|
 | **Planner** | Каждый шаг декомпозиции = отдельный thought (определение слоёв → подзадачи → зависимости → параллелизм) |
 | **Worker** | Планирование порядка делегирования и интеграции результатов |
+| **QA Monitor** | Анализ crash-логов, построение тест-сценариев по изменённым файлам |
 | **Debugger** | Анализ stacktrace: разбор ошибки → гипотеза → проверка → исправление. Ревизия при новых данных |
 | **Reviewer** | Каждое из 12 правил = отдельный thought с результатом OK/BLOCK/WARN/INFO |
 | **Security Auditor** | Каждая проверка CRITICAL→HIGH→MEDIUM→LOW = отдельный thought |

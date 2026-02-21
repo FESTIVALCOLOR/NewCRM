@@ -55,6 +55,51 @@ COPY . .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
+## Docker CLI (локальный доступ)
+
+Docker CLI v27.5.1 установлен в `C:\Docker\docker.exe` с контекстом `interior-studio-server`, подключённым к серверу через SSH (порт 2222). Все docker-команды выполняются **локально без ssh timeweb**.
+
+```bash
+# Статус контейнеров
+docker ps
+
+# Логи
+docker logs crm_api --tail 50
+docker logs crm_nginx --tail 50
+docker logs crm_postgres --tail 50
+
+# Ресурсы (CPU/RAM/NET)
+docker stats --no-stream
+
+# Healthcheck
+docker inspect crm_api --format='{{json .State.Health.Status}}'
+
+# Выполнить команду внутри контейнера
+docker exec crm_postgres psql -U crm_user -d interior_studio_crm -c "SELECT count(*) FROM contracts"
+
+# Образы
+docker images
+```
+
+**Примечание:** `docker-compose` команды (build, up, down) требуют выполнения через SSH для корректных путей к build context:
+```bash
+ssh timeweb "cd /opt/interior_studio && docker-compose down && docker-compose build --no-cache api && docker-compose up -d"
+```
+
+### VS Code Container Tools
+
+Расширение `ms-azuretools.vscode-containers` настроено на работу с Docker CLI. Настройки в `settings.json`:
+```json
+{
+    "containers.containerCommand": "C:\\Docker\\docker.exe",
+    "containers.composeCommand": "C:\\Docker\\docker.exe compose",
+    "containers.environment": {
+        "DOCKER_HOST": "ssh://root@147.45.154.193:2222",
+        "DOCKER_CONTEXT": "interior-studio-server"
+    }
+}
+```
+
 ## Управление сервером
 
 ### SSH подключение
@@ -67,9 +112,10 @@ cd /opt/interior_studio
 ### Статус
 
 ```bash
-docker-compose ps              # статус контейнеров
-docker-compose logs -f api     # логи API в реальном времени
-docker-compose logs --tail=50 api  # последние 50 строк
+docker ps                              # через Docker CLI (предпочтительно)
+docker-compose ps                      # через SSH
+docker-compose logs -f api             # логи API в реальном времени
+docker-compose logs --tail=50 api      # последние 50 строк
 ```
 
 ### Перезапуск (НЕ применяет изменения!)
@@ -190,22 +236,43 @@ dir dist\InteriorStudio.exe
 
 ## Мониторинг
 
-### Ручной мониторинг
+### Docker CLI мониторинг (предпочтительно)
 
 ```bash
-# Логи в реальном времени
-docker-compose logs -f api
+# Статус и здоровье контейнеров
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-# Использование ресурсов
-docker stats
+# Ресурсы (CPU/RAM/NET/IO)
+docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
 
-# Свободное место
-df -h
+# Healthcheck детали
+docker inspect crm_api --format='{{json .State.Health}}'
+
+# Поиск ошибок в логах API
+docker logs crm_api --tail 200 2>&1 | grep -i "error\|traceback\|500\|critical"
+
+# Логи nginx (4xx/5xx)
+docker logs crm_nginx --tail 200 2>&1 | grep -E " (4|5)[0-9]{2} "
 ```
 
-### Автоматический мониторинг (рекомендуется)
+### Через SSH
 
-На текущий момент автоматический мониторинг не настроен. Рекомендации:
-- Добавить Docker health checks
-- Настроить Prometheus + Grafana
-- Добавить alerting при падении контейнера
+```bash
+ssh timeweb "cd /opt/interior_studio && docker-compose logs -f api"
+ssh timeweb "docker stats --no-stream"
+ssh timeweb "df -h"
+```
+
+### Оркестратор
+
+```
+/orkester --mode=docker проверить здоровье контейнеров
+/orkester --mode=docker анализ логов API за последний час
+```
+
+### Docker Health Checks
+
+Все контейнеры имеют healthcheck:
+- **postgres:** `pg_isready -U crm_user` (каждые 10с)
+- **api:** `python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"` (каждые 30с)
+- **nginx:** нет (зависит от api)

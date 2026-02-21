@@ -67,11 +67,14 @@
 - [x] Кастомный CustomTitleBar (Frameless окна)
 - [x] Единая система стилей (unified_styles.py)
 - [x] SVG иконки через IconLoader
-- [x] 10 субагентов Claude Code
+- [x] 17 субагентов Claude Code (оркестратор + 16 специализированных)
 - [x] Hooks для валидации кода
 - [x] GitHub Actions CI/CD (lint, test-db, docker-build, e2e)
 - [x] `.env.example` шаблон переменных окружения
 - [x] Секреты вынесены в переменные окружения
+- [x] faulthandler для crash-диагностики (Python traceback при segfault)
+- [x] Thread-safe PyQt signals (QTimer.singleShot для фоновых потоков)
+- [x] Фильтрация offline-очереди (только сетевые ошибки)
 
 ## Планируемые улучшения
 
@@ -107,6 +110,10 @@
 | ~~Docker~~ | ~~Нет health checks~~ — **Реализовано** в `docker-compose.yml` | ~~Средний~~ | **DONE** |
 | ~~Безопасность~~ | ~~Хардкод admin/admin123~~ — **Секреты вынесены в env** | ~~Высокий~~ | **DONE** |
 | ~~Offline~~ | ~~Write-операции без offline-fallback~~ — **Все 34 write-метода: local-first + offline queue, 18 entity types** | ~~Высокий~~ | **DONE Phase 6.3** |
+| ~~Offline~~ | ~~Бизнес-ошибки (409/400) попадают в offline-очередь~~ — **Фильтрация по sys.exc_info(): только сетевые ошибки** | ~~Высокий~~ | **DONE Phase 7.5** |
+| ~~Стабильность~~ | ~~Segfault при drag-and-drop карточек CRM~~ — **CopyAction + deferred dialog + thread-safe signals** | ~~Критический~~ | **DONE Phase 7.5** |
+| ~~Стабильность~~ | ~~Stale signal connections DataAccess→OfflineManager~~ — **Удалены мёртвые подключения** | ~~Высокий~~ | **DONE Phase 7.5** |
+| ~~Авторизация~~ | ~~401 loop при длительной работе~~ — **Token 24h + auto-relogin + redirect header fix** | ~~Высокий~~ | **DONE Phase 7.5** |
 | ~~Производительность~~ | ~~N+1 в statistics, нет пагинации, нет кэша~~ | ~~Высокий~~ | **DONE Phase 5** |
 | Стиль | border-color без токена (#E0E0E0 вместо переменной) | Низкий | WARN Phase 5 |
 | ~~Стиль~~ | ~~Неиспользуемый импорт в messenger_router.py~~ | ~~Низкий~~ | **DONE Phase 5.1** |

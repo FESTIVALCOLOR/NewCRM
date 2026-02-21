@@ -149,6 +149,43 @@ tests/
   └── visual/       # Визуальные (pywinauto)
 ```
 
+## CI интеграция (GitHub Actions)
+
+После прохождения локальных тестов — код автоматически пушится и проверяется через CI.
+
+### CI Workflow (5 jobs)
+1. **syntax-check** — py_compile серверных файлов
+2. **lint** — flake8 линтинг
+3. **test-db** — SQLite тесты (без сервера)
+4. **docker-build** — Сборка Docker образа
+5. **test-e2e** — E2E тесты в полном окружении (PostgreSQL + API сервер)
+
+### Как проверить CI результаты
+```bash
+# Настройка gh CLI
+export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
+
+# Последний запуск
+gh run list -L 1
+
+# Детали по jobs
+RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
+gh run view $RUN_ID --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+
+# Логи упавших jobs
+gh run view $RUN_ID --log-failed 2>&1 | tail -100
+```
+
+### Реакция на CI failures
+- CI failure → Debugger анализирует → исправляет → повторный push
+- Максимум 3 итерации CI-Fix цикла
+- Типичные CI-специфичные проблемы:
+  - **429 Too Many Requests** — rate limiter в CI (уже отключен через `CI=true`)
+  - **UniqueViolation** — дублирование JWT токенов (решено через jti)
+  - **500 на Yandex Disk** — soft delete (решено)
+  - **Порядок роутеров** — статические перед динамическими
+
 ## Чеклист
 - [ ] Все категории тестов определены
 - [ ] Critical тесты запущены
@@ -156,3 +193,4 @@ tests/
 - [ ] UI логи обработаны через парсер (не Read)
 - [ ] Результаты оформлены в отчёт
 - [ ] Если FAIL — передать stacktrace в Debugger
+- [ ] CI (GitHub Actions) пройден успешно

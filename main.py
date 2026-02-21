@@ -2,6 +2,10 @@
 import sys
 import os
 import ctypes
+import faulthandler
+
+# Включаем вывод Python traceback при segfault (SIGSEGV)
+faulthandler.enable()
 
 # Принудительная UTF-8 кодировка для вывода (Windows charmap fix)
 # PyInstaller windowed (console=False) может иметь stdout=None

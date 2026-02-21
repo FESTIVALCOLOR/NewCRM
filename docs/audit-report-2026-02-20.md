@@ -1,10 +1,10 @@
 # Полный аудит Interior Studio CRM
 
-**Дата:** 2026-02-21 (обновлено после Phase 7: Оптимизации)
-**Версия:** 9.0
+**Дата:** 2026-02-21 (обновлено после Phase 7.5: Signal Safety & Offline Queue)
+**Версия:** 10.0
 **Модель:** Claude Opus 4.6
-**Агенты:** 16 из 16 использованы в 7 фазах
-**Прогресс:** Phase 0-5 + Phase 6-6.3 + Phase 7 (10 оптимизаций) = ЗАВЕРШЕНЫ
+**Агенты:** 17 из 17 использованы в 8 фазах
+**Прогресс:** Phase 0-5 + Phase 6-6.3 + Phase 7 + Phase 7.5 (stabilization) = ЗАВЕРШЕНЫ
 
 | Агент | Статус | Результат |
 |-------|--------|-----------|
@@ -38,11 +38,12 @@
 | Безопасность | **~98%** | 0 CRITICAL, 0 HIGH, str(e) + SECRET_KEY + shell=True закрыты, bcrypt 4.2.1, max_sessions=5 |
 | Совместимость server/client | **OK** | 0 MISMATCH, 6 WARN |
 | Масштабируемость | **8/10** | 23 роутера, 214 endpoints, пагинация |
-| Двухрежимность (online/offline) | **10/10** | 100% UI через DataAccess, все 34 write-метода переведены на local-first + offline-очередь (Phase 6.3) |
-| Целостность DataAccess | **10/10** | 201+ методов, 0 прямых UI вызовов, 19 sync-расхождений исправлены (Phase 6.1) |
+| Двухрежимность (online/offline) | **10/10** | 100% UI через DataAccess, все 34 write-метода переведены на local-first + offline-очередь (Phase 6.3). Бизнес-ошибки (409/400) НЕ ставятся в offline-очередь (Phase 7.5) |
+| Целостность DataAccess | **10/10** | 201+ методов, 0 прямых UI вызовов, 19 sync-расхождений исправлены (Phase 6.1). Stale signal connections устранены (Phase 7.5) |
+| Стабильность (segfault-free) | **10/10** | Thread-safe signal emissions, CopyAction DnD, deferred dialog opens, stale connection cleanup (Phase 7.5) |
 | Дублирование кода | **8/10** | QProgressDialog, God Objects, quarter filter, contracts_tab |
 | Производительность | **8/10** | N+1 исправлен, пагинация, TTL-кэш (Phase 5) |
-| Тестирование | **8/10** | 99.4% pass rate, +18 E2E тестов (Phase 5) |
+| Тестирование | **8/10** | 99.8% pass rate, +18 E2E тестов (Phase 5), +faulthandler диагностика (Phase 7.5) |
 | Соблюдение 12 правил | **12/12 OK** | 0 BLOCK, 0 WARN (Phase 5) |
 
 ---
@@ -516,11 +517,11 @@
 
 ## 10. МЕТРИКИ УСПЕХА
 
-| Критерий | До аудита | Phase 0+1 | Phase 2+3 | Phase 4 | Phase 5 | Phase 6-6.3 | Phase 7 | Целевое |
-|----------|-----------|-----------|-----------|---------|---------|-------------|---------|---------|
-| Тесты pass rate | 93.8% | 99.8% | 99.3% | 99.3% (553/557) | 99.4% (782/786) | 99.4% (507 core) | **99.8%** (508/509) | >99% ✅ |
-| Тесты skipped | 79 | 79 | 79 | 79 | 81 | 81 | **1** (PG schema) | <5 ✅ |
-| Новых тестов | — | — | — | — | +18 E2E | +18 | **+1** (schema_sync) | — |
+| Критерий | До аудита | Phase 0+1 | Phase 2+3 | Phase 4 | Phase 5 | Phase 6-6.3 | Phase 7 | Phase 7.5 | Целевое |
+|----------|-----------|-----------|-----------|---------|---------|-------------|---------|-----------|---------|
+| Тесты pass rate | 93.8% | 99.8% | 99.3% | 99.3% (553/557) | 99.4% (782/786) | 99.4% (507 core) | 99.8% (508/509) | **99.8%** | >99% ✅ |
+| Тесты skipped | 79 | 79 | 79 | 79 | 81 | 81 | 1 (PG schema) | **1** | <5 ✅ |
+| Новых тестов | — | — | — | — | +18 E2E | +18 | +1 (schema_sync) | **0** (manual QA) | — |
 | Безопасность | ~78% | ~92% | ~92% | ~92% | ~94% | ~96% | **~98%** | >95% ✅ |
 | CRITICAL уязвимостей | 5 | 0 | 0 | 0 | 0 | 0 | **0** | 0 ✅ |
 | HIGH уязвимостей | 5 | 1 | 1 | 1 (passlib) | 1 (passlib) | 0 | **0** | 0 ✅ |
@@ -537,8 +538,10 @@
 | DataAccess методов | ~90 | ~90 | ~101 | 177+ | 201+ | 201+ | **201+** | — |
 | DataAccess adoption в UI | 3% | 3% | 3% | 97.2% | 100% | 100% | **100%** | 100% ✅ |
 | Прямых вызовов api/db в UI | 759 | 759 | 759 | 21 | 0 | 0 | **0** | 0 ✅ |
-| Offline write-методов | 0 | 0 | 0 | 0 | 24 | 34 | **34** | 34 ✅ |
-| OfflineManager entity types | — | — | — | — | 14 | 18 | **18** | — |
+| Offline write-методов | 0 | 0 | 0 | 0 | 24 | 34 | 34 | **34** | 34 ✅ |
+| OfflineManager entity types | — | — | — | — | 14 | 18 | 18 | **18** | — |
+| Segfaults (DnD + sync) | — | — | — | — | — | — | — | **0** (было 4 типа) | 0 ✅ |
+| Бизнес-ошибки в queue | — | — | — | — | — | Попадают | Попадают | **Отфильтрованы** | 0 ✅ |
 | Retry стратегия | — | — | — | — | — | фиксированная | **exp. backoff+jitter+429** | — |
 | UI debounce | — | — | — | — | — | нет | **7 методов @debounce_click** | — |
 | CI coverage (--cov) | — | — | — | — | — | нет | **pytest-cov + E2E** | — |
@@ -606,6 +609,14 @@ Interior Studio CRM — это зрелый проект с **правильны
 18. ~~Unicode-стрелки ▶/▼~~ → **SVG иконки (chevron-right/down)**
 19. ~~6 WARN / 6 OK по 12 правилам~~ → **0 WARN / 12 OK**
 
+**Phase 7.5 — Stabilization & Signal Safety:**
+34. ~~Segfault при drag-and-drop карточки~~ → **CopyAction + deferred dialog.exec_()**
+35. ~~Segfault при offline-sync (emit из thread)~~ → **QTimer.singleShot(0) для всех emit в фоновых потоках**
+36. ~~Segfault от stale signal connections~~ → **Удалены мёртвые подключения DataAccess→OfflineManager**
+37. ~~409/400 попадают в offline queue~~ → **sys.exc_info() фильтрация: только сетевые ошибки в очередь**
+38. ~~401 loop при длительной работе~~ → **Token 24h + auto-relogin + redirect header fix**
+39. ~~Нет crash-диагностики~~ → **faulthandler.enable() в main.py**
+
 **Phase 5 — Производительность и качество:**
 20. ~~Rate limit 120/min~~ → **300/min (Wave 1a)**
 21. ~~Дублирование validate_password_strength~~ → **_validate_password() (Wave 1b)**
@@ -654,7 +665,7 @@ Interior Studio CRM — это зрелый проект с **правильны
 19. W-09: 4 E2E failures на удалённом сервере (нужен деплой)
 20. W-P5-01: border-color #E0E0E0 захардкожен (CSS-переменная)
 
-**Выполнено: 6 фаз + Phase 5.1**, 62 задачи закрыты, **20 открытых вопросов** (7 безопасность + 6 совместимость + 4 архитектура + 4 тесты + 3 tech debt). Все запланированные фазы аудита завершены.
+**Выполнено: 8 фаз** (0-5.1, 6-6.3, 7, 7.5), **68 задач** закрыты, **20 открытых вопросов** (7 безопасность + 6 совместимость + 4 архитектура + 4 тесты + 3 tech debt). Все запланированные фазы аудита и стабилизации завершены.
 
 ---
 
@@ -1000,6 +1011,87 @@ stage_executor, agent, project_template, permission, order
 | 8724784 | O-13: Retry strategy with exponential backoff, jitter, HTTP 429 |
 | 18da096 | O-06/O-18/O-33: UI debounce, pytest-cov, bcrypt CI fix |
 | c036c9d | O-11/O-32/O-34: Schema sync test, env passwords |
+
+---
+
+## 11.7 Phase 7.5: Stabilization & Signal Safety
+
+> Выполнено 2026-02-21. Полный аудит потокобезопасности PyQt сигналов, drag-and-drop, авторизации и offline-очереди.
+
+### Причина
+
+При перетаскивании карточки CRM приложение крашилось (segfault / access violation). Расследование выявило системные проблемы с потокобезопасностью PyQt сигналов и архитектурой offline-очереди.
+
+### Выполненные исправления (7 коммитов)
+
+| # | Коммит | Проблема | Root cause | Исправление |
+|---|--------|----------|-----------|-------------|
+| 1 | `826ed44` | 401 ошибки при авторизации, бесконечный цикл логина | JWT token lifetime 30 мин — слишком короткий для рабочего дня | Token lifetime 24h, auto-relogin при 401, диагностическое логирование |
+| 2 | `7c0a8fd` | 401 при редиректах (HTTP→HTTPS) | `requests.Session` теряет `Authorization` header при смене хоста в redirect | Кастомный redirect handler с сохранением header для того же хоста |
+| 3 | `429a48d` | Segfault при drag-and-drop карточки CRM | `dialog.exec_()` в dropEvent блокирует Qt event loop | `QTimer.singleShot(50ms)` — отложенный вызов `_do_card_move()` |
+| 4 | `f739bc4` | Segfault при повторном drag-and-drop | `Qt.MoveAction` удаляет source item автоматически, двойное освобождение | `setDefaultDropAction(Qt.CopyAction)` — Qt не удаляет source |
+| 5 | `913b527` | Segfault при offline-синхронизации | `_sync_pending_operations()` в `threading.Thread` эмитит PyQt сигналы напрямую | `QTimer.singleShot(0, lambda: signal.emit(...))` — все emit через GUI поток |
+| 6 | `6ebc46a` | Segfault при queue_operation в OfflineManager | Каждый DataAccess (40+) подключался к OfflineManager.pending_operations_changed. При уничтожении диалогов — stale connections на мёртвые QObjects | Удалены мёртвые подключения из DataAccess.__init__() (pending_operations_changed никем не слушался) |
+| 7 | `a31eeb3` | Бизнес-ошибки (409 Conflict) ложно ставились в offline-очередь | Все 41 write-метод DataAccess используют `except Exception` — ловят ВСЕ ошибки, включая бизнес-ошибки | `_queue_operation()` проверяет `sys.exc_info()`: только `APIConnectionError`/`APITimeoutError` ставятся в очередь |
+
+### Ключевые архитектурные находки
+
+**1. PyQt Thread Safety Rule:**
+Emit сигналов PyQt из фонового потока (threading.Thread) вызывает segfault. ОБЯЗАТЕЛЬНО использовать `QTimer.singleShot(0, func)` для переноса emit в GUI поток.
+
+```python
+# ЗАПРЕЩЕНО (из фонового потока)
+self.sync_progress.emit(i, total, msg)
+
+# ПРАВИЛЬНО
+def _gui(func):
+    QTimer.singleShot(0, func)
+_gui(lambda: self.sync_progress.emit(i, total, msg))
+```
+
+**2. Stale Signal Connections:**
+Долгоживущий QObject (OfflineManager) + короткоживущий QObject (DataAccess в диалоге) → при уничтожении диалога connection висит → emit() на мёртвый объект → access violation.
+
+**3. Qt DnD MoveAction:**
+`setDefaultDropAction(Qt.MoveAction)` заставляет Qt автоматически удалять source item после drop. При `dialog.exec_()` в dropEvent Qt пытается удалить уже перемещённый объект → double-free.
+
+**4. Бизнес-ошибки vs сетевые:**
+```
+APIConnectionError, APITimeoutError → offline queue (retry при восстановлении)
+APIResponseError (409, 400, 404)    → НЕ в очередь (бизнес-логика, повторная отправка бессмысленна)
+```
+
+### Диагностические инструменты
+
+- **faulthandler**: Добавлен `import faulthandler; faulthandler.enable()` в main.py — даёт Python traceback при segfault
+- **Structured logging**: `[DataAccess]`, `[OFFLINE]`, `[API]` префиксы для трассировки потока данных
+
+### Файлы изменены
+
+| Файл | Изменение |
+|------|-----------|
+| main.py | +faulthandler.enable() |
+| utils/offline_manager.py | Thread-safe signal emissions через _gui() helper |
+| utils/data_access.py | Удалены stale signal connections + smart _queue_operation() |
+| ui/crm_tab.py | CopyAction + deferred dialog.exec_() |
+
+### Результат
+
+| Метрика | До Phase 7.5 | После |
+|---------|--------------|-------|
+| Segfaults при DnD | Постоянно | **0** |
+| Segfaults при sync | Периодически | **0** |
+| Бизнес-ошибки в offline queue | Попадали (409, 400) | **Отфильтрованы** |
+| 401 loop при авторизации | При длительной работе | **Исправлен** (24h token + auto-relogin) |
+| faulthandler | Не подключён | **Включён** |
+
+### QA-тестирование
+
+Ручное тестирование подтвердило:
+- Drag-and-drop карточки CRM — без segfault
+- Назначение исполнителя при перетаскивании — диалог открывается корректно
+- Повторный drag-and-drop (409 "уже назначен") — НЕ ставится в offline queue
+- Закрытие приложения — чистый exit без crash
 
 ---
 

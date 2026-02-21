@@ -58,6 +58,48 @@ Worker: "Добавить CRUD для сущности X"
 4. Собрать список всех изменённых файлов для Test-Runner
 ```
 
+### Шаг 5: CI Push & Verify (после прохождения локальных тестов)
+
+**После завершения всех задач из todo списка — автоматически запушить и дождаться CI.**
+
+```bash
+# 1. Коммит изменённых файлов
+git add <конкретные_файлы>
+git commit -m "$(cat <<'EOF'
+описание изменений
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"
+
+# 2. Пуш
+git push origin main
+
+# 3. Настройка gh CLI
+export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
+
+# 4. Ожидание CI (макс 10 мин)
+sleep 30
+for i in $(seq 1 20); do
+  STATUS=$(gh run list -L 1 --json status -q '.[0].status')
+  if [ "$STATUS" = "completed" ]; then break; fi
+  sleep 30
+done
+
+# 5. Проверка результата
+CONCLUSION=$(gh run list -L 1 --json conclusion -q '.[0].conclusion')
+if [ "$CONCLUSION" = "success" ]; then
+  echo "CI PASSED"
+else
+  RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
+  gh run view $RUN_ID --log-failed 2>&1 | tail -100
+  # Исправить → повторный push → макс 3 итерации
+fi
+```
+
+**ВАЖНО:** НЕ сообщать пользователю результаты, пока CI не завершится. Результат CI включается в финальный отчёт.
+
 ## Критические правила проекта (12 шт.)
 
 **Нарушение любого = BLOCK от Reviewer:**
@@ -150,3 +192,5 @@ class SomeDialog(QDialog):
 - [ ] 1px border для frameless
 - [ ] DataAccess используется в UI
 - [ ] Список изменённых файлов передан Test-Runner
+- [ ] Код запушен и CI (GitHub Actions) прошёл успешно
+- [ ] Результат CI включён в отчёт
