@@ -1,6 +1,6 @@
 # Roadmap — Дорожная карта Interior Studio CRM
 
-> Последнее обновление: 2026-02-20
+> Последнее обновление: 2026-02-21
 
 ## Текущая версия
 
@@ -106,9 +106,11 @@
 | Sync | QTimer polling → WebSocket | Средний | — |
 | ~~Docker~~ | ~~Нет health checks~~ — **Реализовано** в `docker-compose.yml` | ~~Средний~~ | **DONE** |
 | ~~Безопасность~~ | ~~Хардкод admin/admin123~~ — **Секреты вынесены в env** | ~~Высокий~~ | **DONE** |
-| ~~Offline~~ | ~~Write-операции без offline-fallback~~ — **24 метода покрыты очередью** | ~~Высокий~~ | **DONE Phase 5** |
+| ~~Offline~~ | ~~Write-операции без offline-fallback~~ — **Все 34 write-метода: local-first + offline queue, 18 entity types** | ~~Высокий~~ | **DONE Phase 6.3** |
 | ~~Производительность~~ | ~~N+1 в statistics, нет пагинации, нет кэша~~ | ~~Высокий~~ | **DONE Phase 5** |
 | Стиль | border-color без токена (#E0E0E0 вместо переменной) | Низкий | WARN Phase 5 |
-| Стиль | Неиспользуемый импорт в messenger_router.py | Низкий | WARN Phase 5 |
-| БД | f-string WHERE в db_manager.py (не whitelist) | Средний | WARN Phase 5 |
-| Тесты | Дублирование в conftest.py после добавления пагинации | Низкий | WARN Phase 5 |
+| ~~Стиль~~ | ~~Неиспользуемый импорт в messenger_router.py~~ | ~~Низкий~~ | **DONE Phase 5.1** |
+| ~~БД~~ | ~~f-string WHERE в db_manager.py (не whitelist)~~ — **_validate_columns + _build_set_clause** | ~~Средний~~ | **DONE Phase 5.1** |
+| ~~Тесты~~ | ~~Дублирование в conftest.py~~ — **_factory_teardown helper** | ~~Низкий~~ | **DONE Phase 5.1** |
+| ~~DataAccess~~ | ~~19 расхождений параметров DataAccess↔API↔DB~~ | ~~Высокий~~ | **DONE Phase 6.1** |
+| ~~DataAccess~~ | ~~34 write-метода без local-first / offline queue~~ | ~~Высокий~~ | **DONE Phase 6.3** |
