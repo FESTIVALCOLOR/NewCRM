@@ -12,12 +12,33 @@ import random
 import threading
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from urllib.parse import urlparse
 
 from .exceptions import APIError, APITimeoutError, APIConnectionError, APIAuthError, APIResponseError
 
 # Подавление предупреждений для самоподписанных сертификатов
 # SECURITY NOTE: В production с валидным SSL сертификатом установить API_VERIFY_SSL=true
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class _AuthSession(requests.Session):
+    """Session, сохраняющая Authorization при same-host redirect.
+
+    Стандартный requests.Session удаляет Authorization header при изменении
+    scheme (https→http). Это ломает работу за reverse proxy (nginx SSL → backend HTTP),
+    где FastAPI redirect_slashes генерирует http:// redirect URL.
+    """
+
+    def rebuild_auth(self, prepared_request, response):
+        """Сохраняем Authorization при redirect на тот же хост (даже при https→http)."""
+        headers = prepared_request.headers
+        if 'Authorization' not in headers:
+            return
+        original_parsed = urlparse(response.request.url)
+        redirect_parsed = urlparse(prepared_request.url)
+        # Удаляем auth ТОЛЬКО при redirect на ДРУГОЙ хост (cross-origin)
+        if original_parsed.hostname != redirect_parsed.hostname:
+            del headers['Authorization']
 
 
 class APIClientBase:
@@ -68,7 +89,7 @@ class APIClientBase:
         self._first_request = True  # Флаг для первого запроса (увеличенный таймаут)
         self._relogin_callback = None  # Callback для перелогинивания при невалидном токене
         self._relogin_signaled = False  # Флаг чтобы не сигналить повторно
-        self.session = requests.Session()  # Переиспользуемая сессия
+        self.session = _AuthSession()  # Сессия с сохранением auth при same-host redirect
         # Отключаем прокси для API запросов (избегаем задержек через VPN/Clash)
         self.session.trust_env = False
 
