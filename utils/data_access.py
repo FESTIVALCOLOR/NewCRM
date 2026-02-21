@@ -6,6 +6,7 @@
 from typing import Optional, List, Dict, Any
 from database.db_manager import DatabaseManager
 from PyQt5.QtCore import QObject, pyqtSignal
+from utils.api_client import APIAuthError
 
 
 def _safe_log(msg):
@@ -639,8 +640,11 @@ class DataAccess(QObject):
     def get_contract_id_by_crm_card(self, card_id: int) -> Optional[int]:
         """Получить ID договора по ID CRM карточки"""
         if self._should_use_api():
-            card = self.api_client.get_crm_card(card_id)
-            return card.get('contract_id') if card else None
+            try:
+                card = self.api_client.get_crm_card(card_id)
+                return card.get('contract_id') if card else None
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_contract_id_by_crm_card, fallback: {e}")
         return self.db.get_contract_id_by_crm_card(card_id)
 
     # ==================== SUPERVISION КАРТОЧКИ ====================

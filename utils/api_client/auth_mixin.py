@@ -52,7 +52,9 @@ class AuthMixin:
 
             if response.status_code == 200:
                 data = response.json()
-                self.set_token(data["access_token"], self.refresh_token)
+                # Сохраняем новый refresh_token если сервер его вернул (ротация токенов)
+                new_refresh = data.get("refresh_token", self.refresh_token)
+                self.set_token(data["access_token"], new_refresh)
                 self.employee_id = data.get("employee_id", self.employee_id)
                 return True
             else:

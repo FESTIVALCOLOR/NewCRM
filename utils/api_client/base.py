@@ -8,6 +8,7 @@ import urllib3
 import time
 import json
 import base64
+import threading
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -59,6 +60,7 @@ class APIClientBase:
         self._is_online = True  # Флаг статуса соединения
         self._last_offline_time = None  # Время последнего перехода в offline
         self._is_refreshing = False  # Флаг для предотвращения рекурсивного refresh
+        self._refresh_lock = threading.Lock()  # Потокобезопасный lock для refresh
         self._offline_message_shown = False  # Флаг для подавления повторных сообщений об offline
         self._first_request = True  # Флаг для первого запроса (увеличенный таймаут)
         self.session = requests.Session()  # Переиспользуемая сессия
@@ -139,11 +141,15 @@ class APIClientBase:
                         and not self._is_refreshing
                         and not url.endswith('/api/auth/refresh')
                         and not url.endswith('/api/auth/login')):
-                    if self.refresh_access_token():
-                        # Обновляем заголовки для повторного запроса
-                        kwargs['headers'] = self.headers
-                        retry_response = self.session.request(method, url, **kwargs)
-                        return retry_response
+                    with self._refresh_lock:
+                        if self._is_refreshing:
+                            # Другой поток уже обновляет — подождём и повторим с новым токеном
+                            pass
+                        elif self.refresh_access_token():
+                            # Обновляем заголовки для повторного запроса
+                            kwargs['headers'] = self.headers
+                            retry_response = self.session.request(method, url, **kwargs)
+                            return retry_response
 
                 return response
 
@@ -286,11 +292,7 @@ class APIClientBase:
         error_detail = self._extract_error_detail(response)
 
         if response.status_code == 401:
-            # Пробуем обновить токен через refresh_token
-            if self.refresh_token and not self._is_refreshing:
-                if self.refresh_access_token():
-                    # Токен обновлен, но нужно повторить запрос в вызывающем коде
-                    raise APIAuthError("Токен обновлен, повторите запрос")
+            # 401 retry уже обработан в _request() — сюда попадаем только если retry не помог
             raise APIAuthError("Требуется авторизация")
         elif response.status_code == 403:
             raise APIAuthError(error_detail or "Доступ запрещён")
@@ -345,7 +347,10 @@ class APIClientBase:
         if not self.token or not self.refresh_token:
             return
         if self._is_token_expiring_soon() and not self._is_refreshing:
-            self.refresh_access_token()
+            with self._refresh_lock:
+                # Повторная проверка под lock (double-checked locking)
+                if self._is_token_expiring_soon() and not self._is_refreshing:
+                    self.refresh_access_token()
 
     def set_token(self, token: str, refresh_token: str = None):
         """Установить JWT токен для аутентификации"""

@@ -33,8 +33,7 @@ class CrmMixin:
         # Пробуем получить через специальный endpoint
         try:
             response = self._request('GET', f"{self.base_url}/api/crm/cards/{card_id}")
-            if response.status_code == 200:
-                return self._handle_response(response)
+            return self._handle_response(response)
         except Exception as e:
             print(f"[API] get_crm_card endpoint error: {e}")
 
