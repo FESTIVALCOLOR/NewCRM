@@ -69,7 +69,7 @@ class TestLockCRUD:
         try:
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": employee_id,
@@ -96,7 +96,7 @@ class TestLockCRUD:
             # Создаём блокировку
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": employee_id,
@@ -131,7 +131,7 @@ class TestLockCRUD:
             # Создаём блокировку
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": employee_id,
@@ -142,7 +142,7 @@ class TestLockCRUD:
             # Продлеваем (повторный POST от того же пользователя)
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": employee_id,
@@ -164,7 +164,7 @@ class TestLockCRUD:
         # Создаём блокировку
         resp = api_post(
             api_base, "/api/locks", admin_headers,
-            params={
+            json={
                 "entity_type": LOCK_ENTITY_TYPE,
                 "entity_id": LOCK_ENTITY_ID,
                 "employee_id": employee_id,
@@ -204,7 +204,7 @@ class TestLockCRUD:
         # Создаём и снимаем блокировку
         api_post(
             api_base, "/api/locks", admin_headers,
-            params={
+            json={
                 "entity_type": LOCK_ENTITY_TYPE,
                 "entity_id": LOCK_ENTITY_ID,
                 "employee_id": employee_id,
@@ -248,7 +248,7 @@ class TestLockConflict:
             # Админ создаёт блокировку
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": admin_emp['id'],
@@ -259,7 +259,7 @@ class TestLockConflict:
             # СДП пытается заблокировать ту же сущность
             resp = api_post(
                 api_base, "/api/locks", role_tokens['sdp'],
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": sdp_emp['id'],
@@ -289,7 +289,7 @@ class TestLockConflict:
             # Админ создаёт блокировку
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": admin_emp['id'],
@@ -322,7 +322,7 @@ class TestLockConflict:
             # СДП создаёт блокировку
             resp = api_post(
                 api_base, "/api/locks", role_tokens['sdp'],
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": sdp_emp['id'],
@@ -362,7 +362,7 @@ class TestClearUserLocks:
             for entity_id in [999991, 999992, 999993]:
                 resp = api_post(
                     api_base, "/api/locks", admin_headers,
-                    params={
+                    json={
                         "entity_type": LOCK_ENTITY_TYPE,
                         "entity_id": entity_id,
                         "employee_id": employee_id,
@@ -410,7 +410,7 @@ class TestClearUserLocks:
             # Админ создаёт блокировку
             resp = api_post(
                 api_base, "/api/locks", admin_headers,
-                params={
+                json={
                     "entity_type": LOCK_ENTITY_TYPE,
                     "entity_id": LOCK_ENTITY_ID,
                     "employee_id": employee_id,
