@@ -141,16 +141,28 @@ class APIClientBase:
                 # Авторетрай на 401: обновляем токен и повторяем запрос однократно
                 if (response.status_code == 401
                         and self.refresh_token
-                        and not self._is_refreshing
                         and not url.endswith('/api/auth/refresh')
                         and not url.endswith('/api/auth/login')):
+                    refreshed = False
                     with self._refresh_lock:
                         if self._is_refreshing:
+                            # Другой поток уже обновляет — ждём завершения
                             pass
-                        elif self.refresh_access_token():
-                            kwargs['headers'] = self.headers
-                            retry_response = self.session.request(method, url, **kwargs)
-                            return retry_response
+                        else:
+                            refreshed = self.refresh_access_token()
+                    if not refreshed and self._is_refreshing:
+                        # Ждём завершения refresh из другого потока (макс 5 сек)
+                        for _ in range(50):
+                            time.sleep(0.1)
+                            if not self._is_refreshing:
+                                refreshed = self.token is not None
+                                break
+                    if refreshed or (self.token and not self._is_refreshing):
+                        kwargs['headers'] = self.headers
+                        retry_response = self.session.request(method, url, **kwargs)
+                        return retry_response
+                    else:
+                        print(f"[API] 401 retry: refresh не удался для {url}")
 
                 # HTTP 429 Too Many Requests — ждём Retry-After и повторяем
                 if response.status_code == 429 and attempt < max_attempts - 1:

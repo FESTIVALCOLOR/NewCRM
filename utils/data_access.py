@@ -1451,13 +1451,23 @@ class DataAccess(QObject):
         return self.db.get_all_agents()
 
     def get_agent_color(self, agent_name: str) -> Optional[str]:
-        """Получить цвет агента"""
+        """Получить цвет агента.
+        Сначала ищем в локальной БД (кешированный lookup, мгновенно).
+        Fallback на API только если в локальной БД нет данных.
+        Причина: SQLite agents.name хранит краткое имя (ФЕСТИВАЛЬ),
+        а API возвращает full_name сотрудника — они могут не совпадать.
+        """
+        # Сначала локальная БД (кешированный dict, O(1))
+        color = self.db.get_agent_color(agent_name)
+        if color:
+            return color
+        # Fallback на API только если локально не нашли
         if self.api_client:
             try:
                 return self.api_client.get_agent_color(agent_name)
             except Exception:
                 pass
-        return self.db.get_agent_color(agent_name)
+        return None
 
     def add_agent(self, name: str, color: str = None) -> Optional[Dict]:
         """Добавить агента"""

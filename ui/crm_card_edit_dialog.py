@@ -7047,6 +7047,9 @@ class CardEditDialog(QDialog):
             project_data_widget = self.create_project_data_widget()
             self.tabs.removeTab(self.project_data_tab_index)
             self.tabs.insertTab(self.project_data_tab_index, project_data_widget, 'Данные по проекту')
+            # После создания виджета — обновляем labels файлов из кэшированного контракта
+            # (load_data() выполнился ДО создания виджетов, hasattr возвращал False)
+            self._update_project_data_file_labels()
             app.processEvents()
 
             # История по проекту
@@ -7081,6 +7084,69 @@ class CardEditDialog(QDialog):
 
         # Фоновая загрузка превью
         QTimer.singleShot(300, self._start_background_preview_loading)
+
+    def _update_project_data_file_labels(self):
+        """Обновить labels файлов ТЗ/замер/референсов из кэшированного контракта.
+        Вызывается после создания project_data_widget в _init_deferred_step2,
+        т.к. load_data() выполняется ДО создания виджетов."""
+        contract = self._cached_contract
+        if not contract:
+            return
+
+        # ТЗ файл
+        tech_task_link = contract.get('tech_task_link')
+        tech_task_file_name = contract.get('tech_task_file_name')
+        if tech_task_link and hasattr(self, 'project_data_tz_file_label'):
+            file_name = tech_task_file_name or 'ТехЗадание.pdf'
+            truncated_name = self.truncate_filename(file_name)
+            self.project_data_tz_file_label.setText(
+                f'<a href="{tech_task_link}" title="{file_name}">{truncated_name}</a>')
+            if hasattr(self, 'upload_tz_btn'):
+                self.upload_tz_btn.setEnabled(False)
+
+        # Дата ТЗ
+        if self.card_data.get('tech_task_date') and hasattr(self, 'project_data_tz_date_label'):
+            from datetime import datetime
+            try:
+                td = datetime.strptime(self.card_data['tech_task_date'], '%Y-%m-%d')
+                self.project_data_tz_date_label.setText(td.strftime('%d.%m.%Y'))
+            except Exception:
+                pass
+
+        # Замер файл
+        measurement_link = contract.get('measurement_image_link')
+        measurement_file_name = contract.get('measurement_file_name')
+        if measurement_link and hasattr(self, 'project_data_survey_file_label'):
+            file_name = measurement_file_name or 'Замер'
+            truncated_name = self.truncate_filename(file_name)
+            self.project_data_survey_file_label.setText(
+                f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>')
+            if hasattr(self, 'upload_survey_btn'):
+                self.upload_survey_btn.setEnabled(False)
+
+        # Дата замера
+        survey_date_val = self.card_data.get('survey_date', '')
+        if not survey_date_val:
+            survey_date_val = contract.get('measurement_date', '')
+        if survey_date_val and hasattr(self, 'project_data_survey_date_label'):
+            from datetime import datetime
+            try:
+                sd = datetime.strptime(survey_date_val, '%Y-%m-%d')
+                self.project_data_survey_date_label.setText(sd.strftime('%d.%m.%Y'))
+            except Exception:
+                pass
+
+        # Референсы
+        ref_path = contract.get('references_yandex_path')
+        if ref_path and hasattr(self, 'project_data_references_label'):
+            self.project_data_references_label.setText(
+                f'<a href="{ref_path}">Открыть папку с референсами</a>')
+
+        # Фотофиксация
+        photo_path = contract.get('photo_documentation_yandex_path')
+        if photo_path and hasattr(self, 'project_data_photo_doc_label'):
+            self.project_data_photo_doc_label.setText(
+                f'<a href="{photo_path}">Открыть папку с фотофиксацией</a>')
 
     def reject(self):
         """ИСПРАВЛЕНИЕ: Обновляем канбан при закрытии диалога"""
