@@ -523,6 +523,14 @@ class OfflineManager(QObject):
                 return self._sync_timeline_entry_operation(op_type, entity_id, data)
             elif entity_type == 'supervision_timeline_entry':
                 return self._sync_supervision_timeline_entry_operation(op_type, entity_id, data)
+            elif entity_type == 'stage_executor':
+                return self._sync_stage_executor_operation(op_type, entity_id, data)
+            elif entity_type == 'agent':
+                return self._sync_agent_operation(op_type, entity_id, data)
+            elif entity_type == 'project_template':
+                return self._sync_project_template_operation(op_type, entity_id, data)
+            elif entity_type == 'permission':
+                return self._sync_permission_operation(op_type, entity_id, data)
             else:
                 return {'success': False, 'error': f'Unknown entity type: {entity_type}'}
 
@@ -842,6 +850,128 @@ class OfflineManager(QObject):
                 return {'success': False, 'error': str(e)}
 
         return {'success': False, 'error': 'Unknown operation type for supervision_timeline_entry'}
+
+    def _sync_stage_executor_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции с исполнителем стадии"""
+        card_id = data.get('card_id', entity_id)
+        stage_name = data.get('stage_name', '')
+        action = data.get('_action', op_type)
+
+        if action == 'assign' or op_type == OperationType.CREATE.value:
+            try:
+                result = self.api_client.assign_stage_executor(card_id, data)
+                if result:
+                    return {'success': True, 'server_id': entity_id}
+                return {'success': False, 'error': 'Failed to assign stage executor'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        elif action == 'complete':
+            try:
+                executor_id = data.get('executor_id')
+                result = self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
+                return {'success': result is not None, 'server_id': entity_id,
+                        'error': None if result is not None else 'Failed to complete stage'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        elif action == 'accept':
+            try:
+                executor_name = data.get('executor_name', '')
+                manager_id = data.get('manager_id')
+                result = self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+                return {'success': result is not None, 'server_id': entity_id,
+                        'error': None if result is not None else 'Failed to save acceptance'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        elif action in ('reset', 'reset_designer', 'reset_draftsman', 'reset_approval'):
+            try:
+                method_map = {
+                    'reset': 'reset_stage_completion',
+                    'reset_designer': 'reset_designer_completion',
+                    'reset_draftsman': 'reset_draftsman_completion',
+                    'reset_approval': 'reset_approval_stages',
+                }
+                method = getattr(self.api_client, method_map[action])
+                result = method(card_id)
+                return {'success': result is not None, 'server_id': entity_id,
+                        'error': None if result is not None else f'Failed to {action}'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        elif op_type == OperationType.UPDATE.value:
+            try:
+                update_data = {k: v for k, v in data.items() if k not in ('card_id', 'stage_name', '_action')}
+                result = self.api_client.update_stage_executor(card_id, stage_name, update_data)
+                return {'success': result is not None, 'server_id': entity_id,
+                        'error': None if result is not None else 'Failed to update stage executor'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': f'Unknown action for stage_executor: {action}'}
+
+    def _sync_agent_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции с агентом"""
+        if op_type == OperationType.CREATE.value:
+            try:
+                name = data.get('name', '')
+                color = data.get('color')
+                result = self.api_client.add_agent(name, color)
+                if result:
+                    return {'success': True, 'server_id': result.get('id', entity_id)}
+                return {'success': False, 'error': 'Failed to create agent'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        elif op_type == OperationType.UPDATE.value:
+            try:
+                name = data.get('name', '')
+                color = data.get('color', '')
+                result = self.api_client.update_agent_color(name, color)
+                return {'success': bool(result), 'server_id': entity_id,
+                        'error': None if result else 'Failed to update agent color'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': f'Unknown operation type for agent: {op_type}'}
+
+    def _sync_project_template_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции с шаблоном проекта"""
+        if op_type == OperationType.CREATE.value:
+            try:
+                contract_id = data.get('contract_id')
+                url = data.get('url', '')
+                result = self.api_client.add_project_template(contract_id, url)
+                if result is not None:
+                    return {'success': True, 'server_id': entity_id}
+                return {'success': False, 'error': 'Failed to add project template'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        elif op_type == OperationType.DELETE.value:
+            try:
+                result = self.api_client.delete_project_template(entity_id)
+                return {'success': bool(result), 'server_id': entity_id,
+                        'error': None if result else 'Failed to delete project template'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': f'Unknown operation type for project_template: {op_type}'}
+
+    def _sync_permission_operation(self, op_type: str, entity_id: int, data: Dict) -> Dict:
+        """Синхронизация операции с правами сотрудника"""
+        if op_type == OperationType.UPDATE.value:
+            try:
+                employee_id = data.get('employee_id', entity_id)
+                permissions = data.get('permissions', [])
+                result = self.api_client.set_employee_permissions(employee_id, permissions)
+                return {'success': bool(result), 'server_id': entity_id,
+                        'error': None if result else 'Failed to set permissions'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+        return {'success': False, 'error': f'Unknown operation type for permission: {op_type}'}
 
     def _update_operation_status(self, operation_id: int, status: OperationStatus,
                                  error_message: str = None, server_entity_id: int = None):

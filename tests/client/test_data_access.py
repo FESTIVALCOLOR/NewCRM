@@ -382,11 +382,12 @@ class TestPreferLocalMode:
 class TestDirectOperations:
     """Операции, которые идут напрямую через API или DB без fallback"""
 
-    def test_create_crm_card_api_only(self, mock_api, mock_db):
+    def test_create_crm_card_local_first(self, mock_api, mock_db):
         da = _make_data_access(mock_api, mock_db)
         result = da.create_crm_card({'contract_id': 1})
         assert result == mock_api.create_crm_card.return_value
-        mock_db.add_crm_card.assert_not_called()
+        # local-first: всегда сохраняем локально перед API
+        mock_db.add_crm_card.assert_called_once()
 
     def test_create_crm_card_db_only(self, mock_db):
         da = _make_data_access(None, mock_db)

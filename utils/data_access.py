@@ -485,25 +485,23 @@ class DataAccess(QObject):
 
     def create_crm_card(self, card_data: Dict) -> Optional[Dict]:
         """Создать CRM карточку"""
+        # Сначала сохраняем локально
+        card_id = self.db.add_crm_card(card_data)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.create_crm_card(card_data)
+                result = self.api_client.create_crm_card(card_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != card_id:
+                        self._update_local_id('crm_cards', card_id, server_id)
+                    return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_crm_card: {e}")
-                # Сохраняем локально и добавляем в очередь
-                card_id = self.db.add_crm_card(card_data)
-                if card_id:
-                    self._queue_operation('create', 'crm_card', card_id, card_data)
-                    return {'id': card_id, **card_data}
-                return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            card_id = self.db.add_crm_card(card_data)
-            if card_id:
                 self._queue_operation('create', 'crm_card', card_id, card_data)
-                return {'id': card_id, **card_data}
-            return None
-        card_id = self.db.add_crm_card(card_data)
+        elif self.api_client:
+            self._queue_operation('create', 'crm_card', card_id, card_data)
+
         return {'id': card_id, **card_data} if card_id else None
 
     def update_crm_card(self, card_id: int, updates: Dict) -> bool:
@@ -525,21 +523,22 @@ class DataAccess(QObject):
 
     def delete_crm_card(self, card_id: int) -> bool:
         """Удалить CRM карточку"""
+        # Сначала удаляем локально
+        contract_id = self.db.get_contract_id_by_crm_card(card_id)
+        if contract_id:
+            self.db.delete_order(contract_id, card_id)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.delete_crm_card(card_id)
+                self.api_client.delete_crm_card(card_id)
+                return True
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_crm_card: {e}")
                 self._queue_operation('delete', 'crm_card', card_id, {})
-                contract_id = self.db.get_contract_id_by_crm_card(card_id)
-                return self.db.delete_order(contract_id, card_id) if contract_id else False
         elif self.api_client:
-            # Offline-режим: удаляем локально и ставим в очередь
             self._queue_operation('delete', 'crm_card', card_id, {})
-            contract_id = self.db.get_contract_id_by_crm_card(card_id)
-            return self.db.delete_order(contract_id, card_id) if contract_id else False
-        contract_id = self.db.get_contract_id_by_crm_card(card_id)
-        return self.db.delete_order(contract_id, card_id) if contract_id else False
+
+        return True
 
     def update_crm_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку в другую колонку"""
@@ -562,13 +561,20 @@ class DataAccess(QObject):
 
     def move_crm_card(self, card_id: int, column: str) -> bool:
         """Переместить CRM карточку в другую колонку (через workflow или напрямую)"""
-        if self.api_client:
+        # Сначала обновляем локально
+        self.db.update_crm_card_column(card_id, column)
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.move_crm_card(card_id, column)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API move_crm_card: {e}")
-        return self.db.update_crm_card_column(card_id, column)
+                self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+        elif self.api_client:
+            self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+
+        return True
 
     def get_workflow_state(self, card_id: int) -> Optional[Dict]:
         """Получить состояние workflow карточки (только API)"""
@@ -682,25 +688,23 @@ class DataAccess(QObject):
         """Создать карточку надзора (принимает Dict или int contract_id)"""
         if isinstance(card_data, int):
             card_data = {'contract_id': card_data, 'column_name': 'Новый заказ'}
+        # Сначала сохраняем локально
+        card_id = self.db.add_supervision_card(card_data)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.create_supervision_card(card_data)
+                result = self.api_client.create_supervision_card(card_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != card_id:
+                        self._update_local_id('supervision_cards', card_id, server_id)
+                    return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_supervision_card: {e}")
-                # Сохраняем локально и добавляем в очередь
-                card_id = self.db.add_supervision_card(card_data)
-                if card_id:
-                    self._queue_operation('create', 'supervision_card', card_id, card_data)
-                    return {'id': card_id, **card_data}
-                return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            card_id = self.db.add_supervision_card(card_data)
-            if card_id:
                 self._queue_operation('create', 'supervision_card', card_id, card_data)
-                return {'id': card_id, **card_data}
-            return None
-        card_id = self.db.add_supervision_card(card_data)
+        elif self.api_client:
+            self._queue_operation('create', 'supervision_card', card_id, card_data)
+
         return {'id': card_id, **card_data} if card_id else None
 
     def update_supervision_card(self, card_id: int, updates: Dict) -> bool:
@@ -741,86 +745,134 @@ class DataAccess(QObject):
 
     def move_supervision_card(self, card_id: int, column: str) -> bool:
         """Переместить карточку надзора через специализированный метод"""
-        if self.api_client:
+        # Сначала обновляем локально
+        try:
+            self.db.update_supervision_card_column(card_id, column)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB move_supervision_card: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.move_supervision_card(card_id, column)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API move_supervision_card: {e}")
-        try:
-            return self.db.update_supervision_card_column(card_id, column)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB move_supervision_card: {e}")
-            return False
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'column_name': column, '_action': 'move'})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_card', card_id,
+                                  {'column_name': column, '_action': 'move'})
+
+        return True
 
     def complete_supervision_stage(self, card_id: int, **kwargs) -> Optional[Dict]:
         """Завершить стадию надзора"""
-        if self.api_client:
+        # Сначала сохраняем локально
+        stage_name = kwargs.get('stage_name')
+        try:
+            self.db.complete_supervision_stage(card_id, stage_name=stage_name)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB complete_supervision_stage: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 return self.api_client.complete_supervision_stage(card_id, **kwargs)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API complete_supervision_stage: {e}")
-        try:
-            stage_name = kwargs.get('stage_name')
-            return self.db.complete_supervision_stage(card_id, stage_name=stage_name)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB complete_supervision_stage: {e}")
-            return None
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'_action': 'complete_stage', 'stage_name': stage_name})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_card', card_id,
+                                  {'_action': 'complete_stage', 'stage_name': stage_name})
+
+        return {'success': True}
 
     def reset_supervision_stage_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения стадии надзора"""
-        if self.api_client:
+        # Сначала сбрасываем локально
+        try:
+            self.db.reset_supervision_stage_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_supervision_stage_completion: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_supervision_stage_completion(card_id)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_supervision_stage_completion: {e}")
-        try:
-            return self.db.reset_supervision_stage_completion(card_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB reset_supervision_stage_completion: {e}")
-            return False
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'_action': 'reset_stage_completion'})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_card', card_id,
+                                  {'_action': 'reset_stage_completion'})
+
+        return True
 
     def pause_supervision_card(self, card_id: int, reason: str = None, employee_id: int = None) -> Optional[Dict]:
         """Поставить карточку надзора на паузу.
         employee_id — используется только в offline (DB). В online сервер определяет из JWT."""
-        if self.api_client:
+        # Сначала сохраняем локально
+        try:
+            self.db.pause_supervision_card(card_id, reason or '', employee_id or 0)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB pause_supervision_card: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 return self.api_client.pause_supervision_card(card_id, reason or '')
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API pause_supervision_card: {e}")
-        try:
-            return self.db.pause_supervision_card(card_id, reason or '', employee_id or 0)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB pause_supervision_card: {e}")
-            return None
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'_action': 'pause', 'reason': reason or ''})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_card', card_id,
+                                  {'_action': 'pause', 'reason': reason or ''})
+
+        return {'success': True}
 
     def resume_supervision_card(self, card_id: int, employee_id: int = None) -> Optional[Dict]:
         """Возобновить карточку надзора после паузы"""
-        if self.api_client:
+        # Сначала возобновляем локально
+        try:
+            self.db.resume_supervision_card(card_id, employee_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB resume_supervision_card: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 return self.api_client.resume_supervision_card(card_id, employee_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API resume_supervision_card: {e}")
-        try:
-            return self.db.resume_supervision_card(card_id, employee_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB resume_supervision_card: {e}")
-            return None
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'_action': 'resume', 'employee_id': employee_id})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_card', card_id,
+                                  {'_action': 'resume', 'employee_id': employee_id})
+
+        return {'success': True}
 
     def delete_supervision_order(self, contract_id: int, supervision_card_id: int = None) -> bool:
         """Удалить выезд из карточки надзора"""
-        if self.api_client:
+        # Сначала удаляем локально
+        try:
+            self.db.delete_supervision_order(contract_id, supervision_card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB delete_supervision_order: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.delete_supervision_order(contract_id, supervision_card_id)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_supervision_order: {e}")
-        try:
-            return self.db.delete_supervision_order(contract_id, supervision_card_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB delete_supervision_order: {e}")
-            return False
+                self._queue_operation('delete', 'supervision_card', supervision_card_id or contract_id,
+                                      {'contract_id': contract_id, '_action': 'delete_order'})
+        elif self.api_client:
+            self._queue_operation('delete', 'supervision_card', supervision_card_id or contract_id,
+                                  {'contract_id': contract_id, '_action': 'delete_order'})
+
+        return True
 
     def get_contract_id_by_supervision_card(self, card_id: int) -> Optional[int]:
         """Получить ID договора по ID карточки надзора"""
@@ -880,25 +932,23 @@ class DataAccess(QObject):
 
     def create_payment(self, payment_data: Dict) -> Optional[Dict]:
         """Создать платёж"""
+        # Сначала сохраняем локально
+        payment_id = self.db.add_payment(payment_data)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.create_payment(payment_data)
+                result = self.api_client.create_payment(payment_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != payment_id:
+                        self._update_local_id('payments', payment_id, server_id)
+                    return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_payment: {e}")
-                # Сохраняем локально и добавляем в очередь
-                payment_id = self.db.add_payment(payment_data)
-                if payment_id:
-                    self._queue_operation('create', 'payment', payment_id, payment_data)
-                    return {'id': payment_id, **payment_data}
-                return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            payment_id = self.db.add_payment(payment_data)
-            if payment_id:
                 self._queue_operation('create', 'payment', payment_id, payment_data)
-                return {'id': payment_id, **payment_data}
-            return None
-        payment_id = self.db.add_payment(payment_data)
+        elif self.api_client:
+            self._queue_operation('create', 'payment', payment_id, payment_data)
+
         return {'id': payment_id, **payment_data} if payment_id else None
 
     def update_payment(self, payment_id: int, payment_data: Dict) -> bool:
@@ -1013,22 +1063,38 @@ class DataAccess(QObject):
                              report_month: str = None, crm_card_id: int = None,
                              supervision_card_id: int = None) -> Optional[Dict]:
         """Создать платёж с расширенными параметрами"""
-        if self.api_client:
-            try:
-                return self.api_client.create_payment_record(
-                    contract_id, employee_id, role, stage_name=stage_name,
-                    payment_type=payment_type, report_month=report_month,
-                    crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
-            except Exception as e:
-                _safe_log(f"[DataAccess] API error create_payment_record: {e}")
+        payment_data = {
+            'contract_id': contract_id, 'employee_id': employee_id, 'role': role,
+            'stage_name': stage_name, 'payment_type': payment_type,
+            'report_month': report_month, 'crm_card_id': crm_card_id,
+            'supervision_card_id': supervision_card_id
+        }
+        # Сначала сохраняем локально
+        local_result = None
         try:
-            return self.db.create_payment_record(
+            local_result = self.db.create_payment_record(
                 contract_id, employee_id, role, stage_name=stage_name,
                 payment_type=payment_type, report_month=report_month,
                 crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
         except Exception as e:
             _safe_log(f"[DataAccess] DB error create_payment_record: {e}")
-            return None
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.create_payment_record(
+                    contract_id, employee_id, role, stage_name=stage_name,
+                    payment_type=payment_type, report_month=report_month,
+                    crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
+                return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error create_payment_record: {e}")
+                payment_id = local_result.get('id') if isinstance(local_result, dict) else 0
+                self._queue_operation('create', 'payment', payment_id, payment_data)
+        elif self.api_client:
+            payment_id = local_result.get('id') if isinstance(local_result, dict) else 0
+            self._queue_operation('create', 'payment', payment_id, payment_data)
+
+        return local_result
 
     def update_payment_manual(self, payment_id: int, amount: float, report_month: str = None) -> bool:
         """Обновить сумму платежа вручную"""
@@ -1109,22 +1175,19 @@ class DataAccess(QObject):
             'entity_id': entity_id,
             'description': description
         }
+        # Сначала сохраняем локально
+        self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
+
         if self.is_online and self.api_client:
             try:
-                result = self.api_client.create_action_history(history_data)
-                return result is not None
+                self.api_client.create_action_history(history_data)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API add_action_history: {e}")
-                # Сохраняем локально и добавляем в очередь
-                self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
                 self._queue_operation('create', 'action_history', entity_id, history_data)
-                return True
         elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
             self._queue_operation('create', 'action_history', entity_id, history_data)
-            return True
-        return self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
+
+        return True
 
     # ==================== ИСТОРИЯ НАДЗОРА ====================
 
@@ -1140,37 +1203,27 @@ class DataAccess(QObject):
     def add_supervision_history(self, card_id: int, user_id: int, action_type: str,
                                description: str = None) -> bool:
         """Добавить запись в историю надзора"""
+        history_data = {
+            'card_id': card_id,
+            'entry_type': action_type,
+            'message': description or "",
+            'employee_id': user_id
+        }
+        # Сначала сохраняем локально
+        self.db.add_supervision_history(card_id, action_type, description or "", user_id)
+
         if self.is_online and self.api_client:
             try:
-                result = self.api_client.add_supervision_history(
-                    card_id,
-                    entry_type=action_type,
-                    message=description or "",
-                    employee_id=user_id
-                )
-                return result is not None
+                self.api_client.add_supervision_history(
+                    card_id, entry_type=action_type,
+                    message=description or "", employee_id=user_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API add_supervision_history: {e}")
-                # Сохраняем локально и добавляем в очередь
-                self.db.add_supervision_history(card_id, action_type, description or "", user_id)
-                self._queue_operation('create', 'supervision_history', card_id, {
-                    'card_id': card_id,
-                    'entry_type': action_type,
-                    'message': description or "",
-                    'employee_id': user_id
-                })
-                return True
+                self._queue_operation('create', 'supervision_history', card_id, history_data)
         elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            self.db.add_supervision_history(card_id, action_type, description or "", user_id)
-            self._queue_operation('create', 'supervision_history', card_id, {
-                'card_id': card_id,
-                'entry_type': action_type,
-                'message': description or "",
-                'employee_id': user_id
-            })
-            return True
-        return self.db.add_supervision_history(card_id, action_type, description or "", user_id)
+            self._queue_operation('create', 'supervision_history', card_id, history_data)
+
+        return True
 
     # ==================== СТАВКИ ====================
 
@@ -1194,25 +1247,23 @@ class DataAccess(QObject):
 
     def create_rate(self, rate_data: Dict) -> Optional[Dict]:
         """Создать ставку"""
+        # Сначала сохраняем локально
+        rate_id = self.db.add_rate(rate_data)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.create_rate(rate_data)
+                result = self.api_client.create_rate(rate_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != rate_id:
+                        self._update_local_id('rates', rate_id, server_id)
+                    return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_rate: {e}")
-                # Сохраняем локально и добавляем в очередь
-                rate_id = self.db.add_rate(rate_data)
-                if rate_id:
-                    self._queue_operation('create', 'rate', rate_id, rate_data)
-                    return {'id': rate_id, **rate_data}
-                return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            rate_id = self.db.add_rate(rate_data)
-            if rate_id:
                 self._queue_operation('create', 'rate', rate_id, rate_data)
-                return {'id': rate_id, **rate_data}
-            return None
-        rate_id = self.db.add_rate(rate_data)
+        elif self.api_client:
+            self._queue_operation('create', 'rate', rate_id, rate_data)
+
         return {'id': rate_id, **rate_data} if rate_id else None
 
     def update_rate(self, rate_id: int, rate_data: Dict) -> bool:
@@ -1336,25 +1387,23 @@ class DataAccess(QObject):
 
     def create_salary(self, salary_data: Dict) -> Optional[Dict]:
         """Создать запись о зарплате"""
+        # Сначала сохраняем локально
+        salary_id = self.db.add_salary(salary_data)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.create_salary(salary_data)
+                result = self.api_client.create_salary(salary_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != salary_id:
+                        self._update_local_id('salaries', salary_id, server_id)
+                    return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_salary: {e}")
-                # Сохраняем локально и добавляем в очередь
-                salary_id = self.db.add_salary(salary_data)
-                if salary_id:
-                    self._queue_operation('create', 'salary', salary_id, salary_data)
-                    return {'id': salary_id, **salary_data}
-                return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            salary_id = self.db.add_salary(salary_data)
-            if salary_id:
                 self._queue_operation('create', 'salary', salary_id, salary_data)
-                return {'id': salary_id, **salary_data}
-            return None
-        salary_id = self.db.add_salary(salary_data)
+        elif self.api_client:
+            self._queue_operation('create', 'salary', salary_id, salary_data)
+
         return {'id': salary_id, **salary_data} if salary_id else None
 
     def update_salary(self, salary_id: int, salary_data: Dict) -> bool:
@@ -1412,31 +1461,42 @@ class DataAccess(QObject):
 
     def add_agent(self, name: str, color: str = None) -> Optional[Dict]:
         """Добавить агента"""
-        if self.api_client:
+        # Сначала сохраняем локально
+        local_result = None
+        try:
+            local_result = self.db.add_agent(name, color)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB add_agent: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 return self.api_client.add_agent(name, color)
             except Exception as e:
                 _safe_log(f"[DataAccess] API add_agent: {e}")
-        if self.db:
-            try:
-                return self.db.add_agent(name, color)
-            except Exception as e:
-                _safe_log(f"[DataAccess] DB add_agent: {e}")
-        return None
+                self._queue_operation('create', 'agent', 0, {'name': name, 'color': color})
+        elif self.api_client:
+            self._queue_operation('create', 'agent', 0, {'name': name, 'color': color})
+
+        return local_result
 
     def update_agent_color(self, name: str, color: str) -> bool:
         """Обновить цвет агента"""
-        if self.api_client:
+        # Сначала обновляем локально
+        try:
+            self.db.update_agent_color(name, color)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB update_agent_color: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 return self.api_client.update_agent_color(name, color)
             except Exception as e:
                 _safe_log(f"[DataAccess] API update_agent_color: {e}")
-        if self.db:
-            try:
-                return self.db.update_agent_color(name, color)
-            except Exception as e:
-                _safe_log(f"[DataAccess] DB update_agent_color: {e}")
-        return False
+                self._queue_operation('update', 'agent', 0, {'name': name, 'color': color})
+        elif self.api_client:
+            self._queue_operation('update', 'agent', 0, {'name': name, 'color': color})
+
+        return True
 
     def get_agent_types(self) -> List[str]:
         """Получить типы агентов"""
@@ -1507,8 +1567,15 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_stage_executor_deadline: {e}")
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, 'stage_name': stage_name,
+                                       'deadline': deadline, 'executor_id': executor_id,
+                                       '_action': 'update'})
         elif self.api_client:
-            _safe_log("[DataAccess] update_stage_executor_deadline: offline, сохранено локально")
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, 'stage_name': stage_name,
+                                   'deadline': deadline, 'executor_id': executor_id,
+                                   '_action': 'update'})
 
         return True
 
@@ -1516,13 +1583,9 @@ class DataAccess(QObject):
 
     def assign_stage_executor(self, card_id: int, data: Dict) -> Optional[Dict]:
         """Назначить исполнителя на стадию"""
-        if self.api_client:
-            try:
-                return self.api_client.assign_stage_executor(card_id, data)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка API assign_stage_executor: {e}")
+        # Сначала сохраняем локально
         try:
-            return self.db.assign_stage_executor(
+            self.db.assign_stage_executor(
                 card_id,
                 data.get('stage_name', ''),
                 data.get('executor_id'),
@@ -1530,98 +1593,162 @@ class DataAccess(QObject):
                 data.get('deadline'))
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
-            return None
+
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.assign_stage_executor(card_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API assign_stage_executor: {e}")
+                self._queue_operation('create', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'assign', **data})
+        elif self.api_client:
+            self._queue_operation('create', 'stage_executor', card_id,
+                                  {'card_id': card_id, '_action': 'assign', **data})
+
+        return {'success': True}
 
     def complete_stage_for_executor(self, card_id: int, stage_name: str, executor_id: int = None) -> Optional[Dict]:
         """Отметить стадию выполненной для исполнителя"""
-        if self.api_client:
+        # Сначала сохраняем локально
+        try:
+            self.db.complete_stage_for_executor(card_id, stage_name, executor_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB complete_stage_for_executor: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
-                # API возвращает bool — нормализуем в Dict
                 if isinstance(result, bool):
                     return {'success': result} if result else None
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API complete_stage_for_executor: {e}")
-        try:
-            return self.db.complete_stage_for_executor(card_id, stage_name, executor_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB complete_stage_for_executor: {e}")
-            return None
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, 'stage_name': stage_name,
+                                       'executor_id': executor_id, '_action': 'complete'})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, 'stage_name': stage_name,
+                                   'executor_id': executor_id, '_action': 'complete'})
+
+        return {'success': True}
 
     def reset_stage_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения стадии"""
-        if self.api_client:
+        # Сначала сбрасываем локально
+        try:
+            self.db.reset_stage_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_stage_completion: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_stage_completion(card_id)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_stage_completion: {e}")
-        try:
-            return self.db.reset_stage_completion(card_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB reset_stage_completion: {e}")
-            return False
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'reset'})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, '_action': 'reset'})
+
+        return True
 
     def reset_designer_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения дизайнера"""
-        if self.api_client:
+        # Сначала сбрасываем локально
+        try:
+            self.db.reset_designer_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_designer_completion: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_designer_completion(card_id)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_designer_completion: {e}")
-        try:
-            return self.db.reset_designer_completion(card_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB reset_designer_completion: {e}")
-            return False
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'reset_designer'})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, '_action': 'reset_designer'})
+
+        return True
 
     def reset_draftsman_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения чертёжника"""
-        if self.api_client:
+        # Сначала сбрасываем локально
+        try:
+            self.db.reset_draftsman_completion(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_draftsman_completion: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_draftsman_completion(card_id)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_draftsman_completion: {e}")
-        try:
-            return self.db.reset_draftsman_completion(card_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB reset_draftsman_completion: {e}")
-            return False
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'reset_draftsman'})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, '_action': 'reset_draftsman'})
+
+        return True
 
     def reset_approval_stages(self, card_id: int) -> bool:
         """Сбросить стадии согласования"""
-        if self.api_client:
+        # Сначала сбрасываем локально
+        try:
+            self.db.reset_approval_stages(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB reset_approval_stages: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_approval_stages(card_id)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_approval_stages: {e}")
-        try:
-            return self.db.reset_approval_stages(card_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB reset_approval_stages: {e}")
-            return False
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'reset_approval'})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, '_action': 'reset_approval'})
+
+        return True
 
     def save_manager_acceptance(self, card_id: int, stage_name: str,
                                executor_name: str, manager_id: int) -> Optional[Dict]:
         """Сохранить приёмку менеджера"""
-        if self.api_client:
+        # Сначала сохраняем локально
+        try:
+            self.db.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка DB save_manager_acceptance: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 result = self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
-                # API возвращает bool — нормализуем в Dict
                 if isinstance(result, bool):
                     return {'success': result} if result else None
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API save_manager_acceptance: {e}")
-        try:
-            return self.db.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB save_manager_acceptance: {e}")
-            return None
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, 'stage_name': stage_name,
+                                       'executor_name': executor_name, 'manager_id': manager_id,
+                                       '_action': 'accept'})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, 'stage_name': stage_name,
+                                   'executor_name': executor_name, 'manager_id': manager_id,
+                                   '_action': 'accept'})
+
+        return {'success': True}
 
     def get_previous_executor_by_position(self, card_id: int, position: str) -> Optional[Dict]:
         """Получить предыдущего исполнителя по должности (только локальная БД)"""
@@ -1664,25 +1791,23 @@ class DataAccess(QObject):
 
     def create_file_record(self, file_data: Dict) -> Optional[Dict]:
         """Создать запись о файле"""
+        # Сначала сохраняем локально
+        file_id = self.db.add_contract_file(file_data)
+
         if self.is_online and self.api_client:
             try:
-                return self.api_client.create_file_record(file_data)
+                result = self.api_client.create_file_record(file_data)
+                if result:
+                    server_id = result.get('id')
+                    if server_id and server_id != file_id:
+                        self._update_local_id('project_files', file_id, server_id)
+                    return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_file_record: {e}")
-                # Сохраняем локально и добавляем в очередь
-                file_id = self.db.add_contract_file(file_data)
-                if file_id:
-                    self._queue_operation('create', 'project_file', file_id, file_data)
-                    return {'id': file_id, **file_data}
-                return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            file_id = self.db.add_contract_file(file_data)
-            if file_id:
                 self._queue_operation('create', 'project_file', file_id, file_data)
-                return {'id': file_id, **file_data}
-            return None
-        file_id = self.db.add_contract_file(file_data)
+        elif self.api_client:
+            self._queue_operation('create', 'project_file', file_id, file_data)
+
         return {'id': file_id, **file_data} if file_id else None
 
     def delete_file_record(self, file_id: int) -> bool:
@@ -1714,37 +1839,26 @@ class DataAccess(QObject):
         """Добавить файл проекта (принимает Dict или именованные аргументы)"""
         if data is None:
             data = kwargs
-        if self.is_online and self.api_client:
-            try:
-                return self.api_client.add_project_file(**data)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка API add_project_file: {e}")
-                # Сохраняем локально и добавляем в очередь
-                try:
-                    result = self.db.add_project_file(**data)
-                    if result:
-                        file_id = result.get('id') if isinstance(result, dict) else result
-                        self._queue_operation('create', 'project_file', file_id, data)
-                    return result
-                except Exception as db_e:
-                    _safe_log(f"[DataAccess] DB error add_project_file: {db_e}")
-                    return None
-        elif self.api_client:
-            # Offline-режим: сохраняем локально и ставим в очередь
-            try:
-                result = self.db.add_project_file(**data)
-                if result:
-                    file_id = result.get('id') if isinstance(result, dict) else result
-                    self._queue_operation('create', 'project_file', file_id, data)
-                return result
-            except Exception as e:
-                _safe_log(f"[DataAccess] DB error add_project_file: {e}")
-                return None
+        # Сначала сохраняем локально
+        local_result = None
         try:
-            return self.db.add_project_file(**data)
+            local_result = self.db.add_project_file(**data)
         except Exception as e:
             _safe_log(f"[DataAccess] DB error add_project_file: {e}")
-            return None
+
+        file_id = (local_result.get('id') if isinstance(local_result, dict) else local_result) if local_result else 0
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.add_project_file(**data)
+                return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API add_project_file: {e}")
+                self._queue_operation('create', 'project_file', file_id, data)
+        elif self.api_client:
+            self._queue_operation('create', 'project_file', file_id, data)
+
+        return local_result
 
     def scan_contract_files(self, contract_id: int, scope: str = None) -> Optional[Dict]:
         """Сканировать файлы договора на Яндекс.Диске (только API)"""
@@ -1811,42 +1925,45 @@ class DataAccess(QObject):
 
     def add_project_template(self, contract_id: int, url: str) -> bool:
         """Добавить шаблон проекта"""
-        if self.api_client:
-            try:
-                result = self.api_client.add_project_template(contract_id, url)
-                if result is not None:
-                    # Синхронизируем в локальную БД
-                    try:
-                        self.db.add_project_template(contract_id, url)
-                    except Exception:
-                        pass
-                    return True
-            except Exception as e:
-                _safe_log(f"[DataAccess] API add_project_template: {e}")
+        # Сначала сохраняем локально
         try:
-            return self.db.add_project_template(contract_id, url)
+            self.db.add_project_template(contract_id, url)
         except Exception as e:
             _safe_log(f"[DataAccess] DB add_project_template: {e}")
-            return False
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.add_project_template(contract_id, url)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] API add_project_template: {e}")
+                self._queue_operation('create', 'project_template', contract_id,
+                                      {'contract_id': contract_id, 'url': url})
+        elif self.api_client:
+            self._queue_operation('create', 'project_template', contract_id,
+                                  {'contract_id': contract_id, 'url': url})
+
+        return True
 
     def delete_project_template(self, template_id: int) -> bool:
         """Удалить шаблон проекта"""
-        if self.api_client:
-            try:
-                result = self.api_client.delete_project_template(template_id)
-                if result:
-                    try:
-                        self.db.delete_project_template(template_id)
-                    except Exception:
-                        pass
-                    return True
-            except Exception as e:
-                _safe_log(f"[DataAccess] API delete_project_template: {e}")
+        # Сначала удаляем локально
         try:
-            return self.db.delete_project_template(template_id)
+            self.db.delete_project_template(template_id)
         except Exception as e:
             _safe_log(f"[DataAccess] DB delete_project_template: {e}")
-            return False
+
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.delete_project_template(template_id)
+                return bool(result)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_project_template: {e}")
+                self._queue_operation('delete', 'project_template', template_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'project_template', template_id, {})
+
+        return True
 
     # ==================== СТАТИСТИКА ====================
 
@@ -2509,17 +2626,25 @@ class DataAccess(QObject):
         # Нормализация: извлекаем список из dict если передан dict
         if isinstance(permissions, dict):
             permissions = permissions.get('permissions', list(permissions.values()))
-        if self.api_client:
+
+        # Сначала сохраняем локально
+        try:
+            self.db.set_employee_permissions(employee_id, permissions)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB set_employee_permissions: {e}")
+
+        if self.is_online and self.api_client:
             try:
                 return self.api_client.set_employee_permissions(employee_id, permissions)
             except Exception as e:
                 _safe_log(f"[DataAccess] API set_employee_permissions: {e}")
-        if self.db:
-            try:
-                return self.db.set_employee_permissions(employee_id, permissions)
-            except Exception as e:
-                _safe_log(f"[DataAccess] DB set_employee_permissions: {e}")
-        return False
+                self._queue_operation('update', 'permission', employee_id,
+                                      {'employee_id': employee_id, 'permissions': permissions})
+        elif self.api_client:
+            self._queue_operation('update', 'permission', employee_id,
+                                  {'employee_id': employee_id, 'permissions': permissions})
+
+        return True
 
     def reset_employee_permissions(self, employee_id: int) -> bool:
         """Сбросить персональные права сотрудника к ролевым (только API)"""
@@ -2621,7 +2746,10 @@ class DataAccess(QObject):
 
     def delete_order(self, contract_id: int, crm_card_id: int = None) -> bool:
         """Полное удаление заказа (договор + CRM карточка)"""
-        if self.api_client:
+        # Сначала удаляем локально
+        self.db.delete_order(contract_id, crm_card_id)
+
+        if self.is_online and self.api_client:
             try:
                 if crm_card_id:
                     self.api_client.delete_crm_card(crm_card_id)
@@ -2629,16 +2757,32 @@ class DataAccess(QObject):
                 return True
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_order: {e}")
-        return self.db.delete_order(contract_id, crm_card_id)
+                if crm_card_id:
+                    self._queue_operation('delete', 'crm_card', crm_card_id, {})
+                self._queue_operation('delete', 'contract', contract_id, {})
+        elif self.api_client:
+            if crm_card_id:
+                self._queue_operation('delete', 'crm_card', crm_card_id, {})
+            self._queue_operation('delete', 'contract', contract_id, {})
+
+        return True
 
     def delete_project_file(self, file_id: int) -> Optional[Dict]:
         """Удалить файл стадии проекта. Возвращает данные файла (yandex_path и т.д.)"""
-        if self.api_client:
+        # Сначала удаляем локально (получаем данные файла для возврата)
+        local_result = self.db.delete_project_file(file_id)
+
+        if self.is_online and self.api_client:
             try:
-                return self.api_client.delete_project_file(file_id)
+                result = self.api_client.delete_project_file(file_id)
+                return result or local_result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_project_file: {e}")
-        return self.db.delete_project_file(file_id)
+                self._queue_operation('delete', 'project_file', file_id, {})
+        elif self.api_client:
+            self._queue_operation('delete', 'project_file', file_id, {})
+
+        return local_result
 
     def get_projects_by_type(self, project_type: str) -> List[Dict]:
         """Получить список проектов по типу для статистики"""
@@ -2662,12 +2806,7 @@ class DataAccess(QObject):
 
     def update_stage_executor(self, card_id: int, stage_name: str, update_data: Dict) -> Optional[Dict]:
         """Обновить исполнителя стадии (переназначение)"""
-        if self.api_client:
-            try:
-                return self.api_client.update_stage_executor(card_id, stage_name, update_data)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка API update_stage_executor: {e}")
-        # Локальный fallback через прямой SQL
+        # Сначала обновляем локально
         executor_id = update_data.get('executor_id')
         deadline = update_data.get('deadline')
         completed = update_data.get('completed', False)
@@ -2676,13 +2815,29 @@ class DataAccess(QObject):
             cursor = conn.cursor()
             cursor.execute(
                 '''UPDATE stage_executors SET executor_id=?, deadline=?, completed=?, completed_date=NULL
-                   WHERE crm_card_id=? AND stage_name LIKE ? ORDER BY id DESC LIMIT 1''',
+                   WHERE crm_card_id=? AND stage_name LIKE ?''',
                 (executor_id, deadline, 1 if completed else 0, card_id, f'%{stage_name}%')
             )
             conn.commit()
             self.db.close()
-            return {'success': True}
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка локального update_stage_executor: {e}")
-            self.db.close()
-        return None
+            try:
+                self.db.close()
+            except Exception:
+                pass
+
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.update_stage_executor(card_id, stage_name, update_data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API update_stage_executor: {e}")
+                self._queue_operation('update', 'stage_executor', card_id,
+                                      {'card_id': card_id, 'stage_name': stage_name,
+                                       '_action': 'update', **update_data})
+        elif self.api_client:
+            self._queue_operation('update', 'stage_executor', card_id,
+                                  {'card_id': card_id, 'stage_name': stage_name,
+                                   '_action': 'update', **update_data})
+
+        return {'success': True}
