@@ -5,7 +5,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -27,6 +27,20 @@ from schemas import (
     CompleteStageExecutorRequest, ManagerAcceptanceRequest,
 )
 from services.notification_service import trigger_messenger_notification
+
+
+def _add_business_days(start_date, days: int):
+    """Добавить рабочие дни (пн-пт) к дате."""
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    current = start_date
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            added += 1
+    return current
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["crm"])

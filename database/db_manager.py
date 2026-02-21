@@ -2,7 +2,10 @@ import sqlite3
 from datetime import datetime
 import json
 import threading
-from PyQt5.QtCore import QDate
+try:
+    from PyQt5.QtCore import QDate
+except ImportError:
+    QDate = None
 from utils.password_utils import hash_password, verify_password
 from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
@@ -857,8 +860,7 @@ class DatabaseManager(DatabaseMigrations):
                                     balance_amount = full_amount / 2
 
                                     # Создаем аванс
-                                    from PyQt5.QtCore import QDate
-                                    current_month = QDate.currentDate().toString('yyyy-MM')
+                                    current_month = datetime.now().strftime('%Y-%m')
 
                                     conn_inner = self.connect()
                                     cursor_inner = conn_inner.cursor()
