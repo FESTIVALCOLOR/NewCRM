@@ -159,6 +159,18 @@ class APIClient:
                 self._first_request = False  # Первый запрос успешен, дальше обычные таймауты
                 self._last_offline_time = None  # Сбрасываем время offline
                 self._offline_message_shown = False  # Разрешаем показ следующего offline сообщения
+
+                # Авторетрай на 401: обновляем токен и повторяем запрос однократно
+                if (response.status_code == 401
+                        and self.refresh_token
+                        and not self._is_refreshing
+                        and not url.endswith('/api/auth/refresh')
+                        and not url.endswith('/api/auth/login')):
+                    if self.refresh_access_token():
+                        kwargs['headers'] = self.headers
+                        retry_response = self.session.request(method, url, **kwargs)
+                        return retry_response
+
                 return response
 
             except requests.exceptions.Timeout as e:
