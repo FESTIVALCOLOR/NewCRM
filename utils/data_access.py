@@ -53,18 +53,11 @@ class DataAccess(QObject):
         # API используется только для записи. Устанавливается при первом показе табов.
         self.prefer_local = False
 
-        # Подключаем сигналы OfflineManager если доступен
-        om = get_offline_manager()
-        if om:
-            om.connection_status_changed.connect(self._on_offline_manager_status_changed)
-            om.pending_operations_changed.connect(self.pending_operations_changed.emit)
-
-    def _on_offline_manager_status_changed(self, status: str):
-        """Обработчик изменения статуса от OfflineManager"""
-        is_online = status == 'online'
-        if self._is_online != is_online:
-            self._is_online = is_online
-            self.connection_status_changed.emit(is_online)
+        # ПРИМЕЧАНИЕ: Ранее каждый DataAccess подключался к OfflineManager.pending_operations_changed
+        # и connection_status_changed. Это создавало десятки stale-коннекций от уничтоженных
+        # DataAccess (диалоги и т.д.), что приводило к segfault при emit() — access violation
+        # на удалённых QObject. Удалено: is_online проверяет OfflineManager напрямую (line ~77),
+        # а pending_operations_changed DataAccess никем не слушается.
 
     @property
     def is_multi_user(self) -> bool:
