@@ -1024,14 +1024,14 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] DB error create_payment_record: {e}")
             return None
 
-    def update_payment_manual(self, payment_id: int, amount: float) -> bool:
+    def update_payment_manual(self, payment_id: int, amount: float, report_month: str = None) -> bool:
         """Обновить сумму платежа вручную"""
         # Сначала обновляем локально
         self.db.update_payment_manual(payment_id, amount)
 
         if self.is_online and self.api_client:
             try:
-                result = self.api_client.update_payment_manual(payment_id, amount)
+                result = self.api_client.update_payment_manual(payment_id, amount, report_month)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_payment_manual: {e}")
@@ -1061,7 +1061,7 @@ class DataAccess(QObject):
         """Пересчитать платежи (только API)"""
         if self.api_client:
             try:
-                return self.api_client.recalculate_payments(role)
+                return self.api_client.recalculate_payments(role=role)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error recalculate_payments: {e}")
                 return None
@@ -1773,7 +1773,8 @@ class DataAccess(QObject):
         """Получить статистику для дашборда"""
         if self._should_use_api():
             try:
-                return self.api_client.get_dashboard_statistics(year, month, quarter, project_type)
+                return self.api_client.get_dashboard_statistics(
+                    year=year, month=month, quarter=quarter, agent_type=project_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
         return self.db.get_dashboard_statistics()

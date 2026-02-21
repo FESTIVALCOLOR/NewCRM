@@ -213,11 +213,14 @@ class PaymentsMixin:
             print(f"[API] Ошибка пересчета выплат: {e}")
             return {'status': 'error', 'error': str(e)}
 
-    def update_payment_manual(self, payment_id: int, amount: float, report_month: str) -> Dict[str, Any]:
+    def update_payment_manual(self, payment_id: int, amount: float, report_month: str = None) -> Dict[str, Any]:
         """Обновить платеж вручную"""
+        data = {'amount': amount}
+        if report_month is not None:
+            data['report_month'] = report_month
         response = self._request(
             'PATCH',
             f"{self.base_url}/api/payments/{payment_id}/manual",
-            json={'amount': amount, 'report_month': report_month}
+            json=data
         )
         return self._handle_response(response)

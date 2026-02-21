@@ -2789,7 +2789,7 @@ class ReassignExecutorDialog(QDialog):
                     for ah in action_history:
                         if ah.get('action_type') == 'reassign':
                             description = ah.get('description', '')
-                            created_at = ah.get('created_at', '')
+                            created_at = ah.get('action_date', '')
                             history_records.append({
                                 'description': description,
                                 'created_at': created_at
