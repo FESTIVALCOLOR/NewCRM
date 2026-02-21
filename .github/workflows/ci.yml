@@ -71,6 +71,7 @@ jobs:
       DATABASE_URL: postgresql://crm_user:test_password@localhost:5432/interior_studio_crm
       SECRET_KEY: test-secret-key-for-ci
       API_BASE_URL: http://localhost:8000
+      YANDEX_DISK_TOKEN: ${{ secrets.YANDEX_DISK_TOKEN }}
     services:
       postgres:
         image: postgres:15-alpine
