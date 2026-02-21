@@ -131,14 +131,17 @@ class DraggableListWidget(BaseDraggableList):
             event.accept()
             return
         
-        source_column.card_moved.emit(
+        event.accept()
+
+        # Отложенный emit: dropEvent должен полностью завершиться
+        # ПЕРЕД вызовом on_card_moved() → load_cards_for_type() → QListWidget.clear()
+        # Иначе Qt обращается к удалённым виджетам → Segfault
+        QTimer.singleShot(0, lambda: source_column.card_moved.emit(
             card_id,
             source_column.column_name,
             target_column.column_name,
             source_column.project_type
-        )
-        
-        event.accept()
+        ))
             
 class CRMTab(QWidget):
     def __init__(self, employee, can_edit=True, api_client=None, parent=None):
