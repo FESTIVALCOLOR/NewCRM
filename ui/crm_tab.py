@@ -130,13 +130,16 @@ class DraggableListWidget(BaseDraggableList):
             super().dropEvent(event)
             event.accept()
             return
-        
+
+        # CopyAction вместо MoveAction: запрещаем Qt автоматически удалять
+        # source item. Мы перестроим карточки полностью через load_cards_for_type().
+        # Без этого: MoveAction удаляет item → clear() пытается удалить снова → segfault
+        event.setDropAction(Qt.CopyAction)
         event.accept()
 
-        # Отложенный emit: dropEvent должен полностью завершиться
+        # Отложенный emit: dropEvent + DnD cleanup должны полностью завершиться
         # ПЕРЕД вызовом on_card_moved() → load_cards_for_type() → QListWidget.clear()
-        # Иначе Qt обращается к удалённым виджетам → Segfault
-        QTimer.singleShot(0, lambda: source_column.card_moved.emit(
+        QTimer.singleShot(50, lambda: source_column.card_moved.emit(
             card_id,
             source_column.column_name,
             target_column.column_name,
