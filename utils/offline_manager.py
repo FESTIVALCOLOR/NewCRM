@@ -376,16 +376,24 @@ class OfflineManager(QObject):
         sync_thread.start()
 
     def _sync_pending_operations(self):
-        """Синхронизировать отложенные операции с сервером"""
+        """Синхронизировать отложенные операции с сервером.
+        ВНИМАНИЕ: Этот метод работает в фоновом потоке (threading.Thread).
+        ВСЕ emit сигналов и изменения status ДОЛЖНЫ быть через QTimer.singleShot(0)
+        для выполнения в GUI потоке. Прямой emit из не-GUI потока → segfault.
+        """
+
+        def _gui(func):
+            """Выполнить функцию в GUI потоке"""
+            QTimer.singleShot(0, func)
 
         try:
-            self.status = ConnectionStatus.SYNCING
+            _gui(lambda: setattr(self, 'status', ConnectionStatus.SYNCING))
 
             operations = self.get_pending_operations()
             total = len(operations)
 
             if total == 0:
-                self.sync_completed.emit(True, "Нет операций для синхронизации")
+                _gui(lambda: self.sync_completed.emit(True, "Нет операций для синхронизации"))
                 return
 
             print(f"[OFFLINE] Начало синхронизации {total} операций")
@@ -394,7 +402,8 @@ class OfflineManager(QObject):
             failed = 0
 
             for i, op in enumerate(operations):
-                self.sync_progress.emit(i + 1, total, f"Синхронизация {op['entity_type']}...")
+                _idx, _total, _type = i + 1, total, op['entity_type']
+                _gui(lambda idx=_idx, t=_total, tp=_type: self.sync_progress.emit(idx, t, f"Синхронизация {tp}..."))
 
                 success = self._sync_single_operation(op)
 
@@ -411,25 +420,23 @@ class OfflineManager(QObject):
 
             # Улучшенная логика: не переходим в offline если хотя бы часть операций прошла
             if synced > 0:
-                # Часть операций прошла - остаемся online
-                self.sync_completed.emit(failed == 0, message)
-                # Неудачные операции останутся в очереди и будут повторены позже
+                _gui(lambda: self.sync_completed.emit(failed == 0, message))
             elif failed > 0 and failed >= self.MAX_SYNC_ERRORS:
-                # Все операции провалились - возможно проблема с сетью
                 print(f"[OFFLINE] Все {failed} операций провалились, проверяем соединение...")
-                self.sync_completed.emit(False, message)
+                _gui(lambda: self.sync_completed.emit(False, message))
             else:
-                self.sync_completed.emit(failed == 0, message)
+                _gui(lambda: self.sync_completed.emit(failed == 0, message))
 
-            self.pending_operations_changed.emit(self.get_pending_operations_count())
+            _gui(lambda: self.pending_operations_changed.emit(self.get_pending_operations_count()))
 
         except Exception as e:
             print(f"[OFFLINE] Ошибка синхронизации: {e}")
-            self.sync_completed.emit(False, str(e))
+            _gui(lambda: self.sync_completed.emit(False, str(e)))
 
         finally:
             self._is_syncing = False
-            self._check_connection()
+            # _check_connection тоже меняет status → emit, нужно в GUI потоке
+            _gui(lambda: self._check_connection())
 
     def _sync_single_operation(self, operation: Dict[str, Any]) -> bool:
         """
