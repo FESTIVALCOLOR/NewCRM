@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, cast, DateTime
 from typing import List, Optional
 
 from database import (
@@ -228,7 +228,7 @@ async def get_employee_report_by_type(
             Employee.full_name.label('employee_name'),
             func.count().label('overdue_count'),
             func.avg(
-                func.extract('epoch', StageExecutor.completed_date - StageExecutor.deadline) / 86400.0
+                func.extract('epoch', StageExecutor.completed_date - cast(StageExecutor.deadline, DateTime)) / 86400.0
             ).label('avg_overdue_days')
         ).join(
             StageExecutor, StageExecutor.executor_id == Employee.id
@@ -239,7 +239,7 @@ async def get_employee_report_by_type(
         ).filter(
             Contract.project_type == project_type,
             StageExecutor.completed == True,
-            StageExecutor.completed_date > StageExecutor.deadline
+            StageExecutor.completed_date > cast(StageExecutor.deadline, DateTime)
         )
 
         # Добавляем фильтр по периоду
