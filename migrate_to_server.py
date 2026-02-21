@@ -2,6 +2,7 @@
 Скрипт миграции данных из локальной SQLite в PostgreSQL на сервере
 Переносит все данные через REST API
 """
+import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -436,8 +437,8 @@ def main():
 
     # Настройки
     SQLITE_PATH = "interior_studio.db"
-    ADMIN_LOGIN = "admin"
-    ADMIN_PASSWORD = "admin123"
+    ADMIN_LOGIN = os.environ.get("ADMIN_LOGIN", "admin")
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
     print(f"\nSettings:")
     print(f"  SQLite database: {SQLITE_PATH}")

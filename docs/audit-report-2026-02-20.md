@@ -200,12 +200,12 @@
 7. ~~Endpoints без granular permissions~~ → **33 permissions (Phase 1)** ✅
 8. ~~Ошибки раскрывают внутренние детали (str(e))~~ → **"Внутренняя ошибка сервера" + logger.exception (Phase 5.1, 94 места)** ✅
 
-### LOW (6) — 2 исправлены, 4 открыты
-1. admin/admin123 — слабые дефолтные учётные данные — **ОТКРЫТ**
+### LOW (6) — 4 исправлены, 2 открыты
+1. ~~admin/admin123 — слабые дефолтные учётные данные~~ → **env ADMIN_DEFAULT_PASSWORD** ✅
 2. Токены в памяти без шифрования — **ОТКРЫТ**
 3. Info-endpoints без авторизации (версия приложения) — **ОТКРЫТ**
 4. ~~bcrypt 3.2.2 устаревший~~ → **bcrypt 4.2.1 (server/requirements.txt + CI)** ✅
-5. Hardcoded пароли в migrate_to_server.py — **ОТКРЫТ**
+5. ~~Hardcoded пароли в migrate_to_server.py~~ → **env ADMIN_PASSWORD** ✅
 6. ~~print() с SQL-параметрами~~ → **Удалены print(WHERE/PARAMS) (Phase 5.1)** ✅
 
 ### Что реализовано хорошо (15 пунктов)
@@ -979,7 +979,7 @@ stage_executor, agent, project_template, permission, order
 | O-08 | **response_model для enriched-dict endpoints** (W-07) | Аудит WARN | Средняя | |
 | O-09 | **Service layer: crm_service.py + payment_service.py** | Opt 3.3 | Высокая | |
 | O-10 | **WebSocket вместо polling** (QTimer 30 сек → real-time) | Roadmap P1, Opt 4.2 | Высокая | |
-| O-11 | **CI-тест: сравнение колонок SQLite vs PostgreSQL** | Opt 3.4.2 | Средняя | |
+| O-11 | **CI-тест: сравнение колонок SQLite vs PostgreSQL** | Opt 3.4.2 | Средняя | **DONE** (test_schema_sync.py) |
 | O-12 | **Типизация API ответов** (Dict → @dataclass на клиенте) | Opt 3.5 | Высокая | |
 | O-13 | **Retry стратегия api_client** (429 + exponential backoff + jitter) | Opt 3.7 | Средняя | **DONE** (backoff+jitter+429) |
 | O-14 | **db_manager.py 5 203 строк** (цель <3000, дальнейшая декомпозиция) | Аудит §10 | Средняя | |
@@ -1015,9 +1015,9 @@ stage_executor, agent, project_template, permission, order
 | O-29 | **PostgreSQL индексы** (pg_stat_statements анализ) | Opt 4.5 | Средняя | |
 | O-30 | **Staging окружение** (docker-compose.staging.yml) | Opt 4.6 | Средняя | |
 | O-31 | **API версионирование /api/v1/** | Аудит, DEFERRED | Высокая | |
-| O-32 | **admin/admin123 дефолтные учётки** | Аудит LOW | Низкая | |
+| O-32 | **admin/admin123 дефолтные учётки** | Аудит LOW | Низкая | **DONE** (env ADMIN_DEFAULT_PASSWORD) |
 | O-33 | **bcrypt 3.2.2 устаревший** | Аудит LOW | Низкая | **DONE** (4.2.1 + CI обновлён) |
-| O-34 | **Hardcoded пароли в migrate_to_server.py** | Аудит LOW | Низкая | |
+| O-34 | **Hardcoded пароли в migrate_to_server.py** | Аудит LOW | Низкая | **DONE** (env ADMIN_PASSWORD) |
 | O-35 | **Серверное кэширование** (Redis/memcached для 210+ endpoints) | Аудит §7 | Высокая | |
 | O-36 | **JWT secret key ротация** | Opt 1.5.2 | Средняя | |
 

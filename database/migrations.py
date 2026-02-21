@@ -2,6 +2,7 @@
 """Миграции БД — выделены из db_manager.py для уменьшения размера файла."""
 
 import json
+import os
 from utils.password_utils import hash_password
 
 
@@ -465,8 +466,9 @@ class DatabaseMigrations:
         ''')
 
         # Создание администратора по умолчанию
-        # ВАЖНО: Пароль теперь хэшируется!
-        default_password_hash = hash_password('admin')
+        # Пароль из переменной окружения или 'admin' как fallback
+        default_admin_password = os.environ.get('ADMIN_DEFAULT_PASSWORD', 'admin')
+        default_password_hash = hash_password(default_admin_password)
         cursor.execute('''
         INSERT OR IGNORE INTO employees
         (full_name, phone, position, department, login, password, role, status)
