@@ -435,6 +435,11 @@ class RatesDialog(QDialog):
                     cities.append(c)
         except Exception as e:
             print(f"[WARN] Ошибка получения городов из БД: {e}")
+        finally:
+            try:
+                self.db.close()
+            except Exception:
+                pass
         return cities
 
     def create_surveyor_rates_tab(self):
@@ -623,140 +628,144 @@ class RatesDialog(QDialog):
             except Exception as e:
                 print(f"[WARN] Ошибка загрузки тарифов через DataAccess: {e}, fallback на локальную БД")
 
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            
-            # === 1. ИНДИВИДУАЛЬНЫЕ ===
-            print("\n1⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов:")
-            table_individual = self.findChild(QTableWidget, 'individual_rates_table')
-            
-            if table_individual:
-                loaded_count = 0
-                for row in range(table_individual.rowCount()):
-                    role_item = table_individual.item(row, 0)
-                    stage_item = table_individual.item(row, 1)
-                    
-                    if not role_item:
-                        continue
-                    
-                    role = role_item.text()
-                    stage = stage_item.text() if stage_item.text() != '-' else None
-                    
-                    # Ищем тариф в БД
-                    if stage:
+            try:
+                conn = self.db.connect()
+                cursor = conn.cursor()
+
+                # === 1. ИНДИВИДУАЛЬНЫЕ ===
+                print("\n1⃣ Загрузка ИНДИВИДУАЛЬНЫХ тарифов:")
+                table_individual = self.findChild(QTableWidget, 'individual_rates_table')
+
+                if table_individual:
+                    loaded_count = 0
+                    for row in range(table_individual.rowCount()):
+                        role_item = table_individual.item(row, 0)
+                        stage_item = table_individual.item(row, 1)
+
+                        if not role_item:
+                            continue
+
+                        role = role_item.text()
+                        stage = stage_item.text() if stage_item.text() != '-' else None
+
+                        # Ищем тариф в БД
+                        if stage:
+                            cursor.execute('''
+                            SELECT rate_per_m2 FROM rates
+                            WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name = ?
+                            ''', (role, stage))
+                        else:
+                            cursor.execute('''
+                            SELECT rate_per_m2 FROM rates
+                            WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name IS NULL
+                            ''', (role,))
+
+                        rate = cursor.fetchone()
+
+                        if rate and rate['rate_per_m2']:
+                            spin = table_individual.cellWidget(row, 2)
+                            if spin:
+                                spin.blockSignals(True)  # Блокируем сигналы
+                                spin.setValue(rate['rate_per_m2'])
+                                spin.blockSignals(False)
+
+                                stage_text = f" ({stage})" if stage else ""
+                                print(f"   {role}{stage_text}: {rate['rate_per_m2']:.0f} ₽/м²")
+                                loaded_count += 1
+
+                    print(f"   Итого загружено: {loaded_count} тарифов")
+
+                # === 2. ЗАМЕРЩИКИ ===
+                print("\n2⃣ Загрузка тарифов ЗАМЕРЩИКОВ:")
+                table_surveyor = self.findChild(QTableWidget, 'surveyor_rates_table')
+
+                if table_surveyor:
+                    loaded_count = 0
+                    for row in range(table_surveyor.rowCount()):
+                        city_item = table_surveyor.item(row, 0)
+
+                        if not city_item:
+                            continue
+
+                        city = city_item.text()
+
+                        cursor.execute('''
+                        SELECT surveyor_price FROM rates
+                        WHERE role = 'Замерщик' AND city = ?
+                        ''', (city,))
+
+                        rate = cursor.fetchone()
+
+                        if rate and rate['surveyor_price']:
+                            spin = table_surveyor.cellWidget(row, 1)
+                            if spin:
+                                spin.blockSignals(True)
+                                spin.setValue(rate['surveyor_price'])
+                                spin.blockSignals(False)
+
+                                print(f"   {city}: {rate['surveyor_price']:.0f} ₽")
+                                loaded_count += 1
+
+                    print(f"   Итого загружено: {loaded_count} тарифов")
+
+                # === 3. АВТОРСКИЙ НАДЗОР ===
+                print("\n3⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА:")
+                table_supervision = self.findChild(QTableWidget, 'supervision_rates_table')
+
+                if table_supervision:
+                    loaded_count = 0
+                    for row in range(table_supervision.rowCount()):
+                        stage_item = table_supervision.item(row, 0)
+
+                        if not stage_item:
+                            continue
+
+                        stage = stage_item.text()
+
+                        # ДАН
                         cursor.execute('''
                         SELECT rate_per_m2 FROM rates
-                        WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name = ?
-                        ''', (role, stage))
-                    else:
+                        WHERE project_type = 'Авторский надзор' AND role = 'ДАН' AND stage_name = ?
+                        ''', (stage,))
+
+                        rate_dan = cursor.fetchone()
+
+                        if rate_dan and rate_dan['rate_per_m2']:
+                            spin = table_supervision.cellWidget(row, 1)
+                            if spin:
+                                spin.blockSignals(True)
+                                spin.setValue(rate_dan['rate_per_m2'])
+                                spin.blockSignals(False)
+                                loaded_count += 1
+
+                        # Старший менеджер
                         cursor.execute('''
                         SELECT rate_per_m2 FROM rates
-                        WHERE project_type = 'Индивидуальный' AND role = ? AND stage_name IS NULL
-                        ''', (role,))
-                    
-                    rate = cursor.fetchone()
-                    
-                    if rate and rate['rate_per_m2']:
-                        spin = table_individual.cellWidget(row, 2)
-                        if spin:
-                            spin.blockSignals(True)  # Блокируем сигналы
-                            spin.setValue(rate['rate_per_m2'])
-                            spin.blockSignals(False)
-                            
-                            stage_text = f" ({stage})" if stage else ""
-                            print(f"   {role}{stage_text}: {rate['rate_per_m2']:.0f} ₽/м²")
-                            loaded_count += 1
-                
-                print(f"   Итого загружено: {loaded_count} тарифов")
-            
-            # === 2. ЗАМЕРЩИКИ ===
-            print("\n2⃣ Загрузка тарифов ЗАМЕРЩИКОВ:")
-            table_surveyor = self.findChild(QTableWidget, 'surveyor_rates_table')
-            
-            if table_surveyor:
-                loaded_count = 0
-                for row in range(table_surveyor.rowCount()):
-                    city_item = table_surveyor.item(row, 0)
-                    
-                    if not city_item:
-                        continue
-                    
-                    city = city_item.text()
-                    
-                    cursor.execute('''
-                    SELECT surveyor_price FROM rates
-                    WHERE role = 'Замерщик' AND city = ?
-                    ''', (city,))
-                    
-                    rate = cursor.fetchone()
-                    
-                    if rate and rate['surveyor_price']:
-                        spin = table_surveyor.cellWidget(row, 1)
-                        if spin:
-                            spin.blockSignals(True)
-                            spin.setValue(rate['surveyor_price'])
-                            spin.blockSignals(False)
-                            
-                            print(f"   {city}: {rate['surveyor_price']:.0f} ₽")
-                            loaded_count += 1
-                
-                print(f"   Итого загружено: {loaded_count} тарифов")
-            
-            # === 3. АВТОРСКИЙ НАДЗОР ===
-            print("\n3⃣ Загрузка тарифов АВТОРСКОГО НАДЗОРА:")
-            table_supervision = self.findChild(QTableWidget, 'supervision_rates_table')
-            
-            if table_supervision:
-                loaded_count = 0
-                for row in range(table_supervision.rowCount()):
-                    stage_item = table_supervision.item(row, 0)
-                    
-                    if not stage_item:
-                        continue
-                    
-                    stage = stage_item.text()
-                    
-                    # ДАН
-                    cursor.execute('''
-                    SELECT rate_per_m2 FROM rates
-                    WHERE project_type = 'Авторский надзор' AND role = 'ДАН' AND stage_name = ?
-                    ''', (stage,))
-                    
-                    rate_dan = cursor.fetchone()
-                    
-                    if rate_dan and rate_dan['rate_per_m2']:
-                        spin = table_supervision.cellWidget(row, 1)
-                        if spin:
-                            spin.blockSignals(True)
-                            spin.setValue(rate_dan['rate_per_m2'])
-                            spin.blockSignals(False)
-                            loaded_count += 1
-                    
-                    # Старший менеджер
-                    cursor.execute('''
-                    SELECT rate_per_m2 FROM rates
-                    WHERE project_type = 'Авторский надзор' 
-                      AND role = 'Старший менеджер проектов' 
-                      AND stage_name = ?
-                    ''', (stage,))
-                    
-                    rate_manager = cursor.fetchone()
-                    
-                    if rate_manager and rate_manager['rate_per_m2']:
-                        spin = table_supervision.cellWidget(row, 2)
-                        if spin:
-                            spin.blockSignals(True)
-                            spin.setValue(rate_manager['rate_per_m2'])
-                            spin.blockSignals(False)
-                            
-                    if rate_dan or rate_manager:
-                        dan_price = rate_dan['rate_per_m2'] if rate_dan else 0
-                        mgr_price = rate_manager['rate_per_m2'] if rate_manager else 0
-                        print(f"   {stage}: ДАН={dan_price:.0f}, Менеджер={mgr_price:.0f} ₽/м²")
-                
-                print(f"   Итого загружено: {loaded_count} значений")
-            
-            self.db.close()
+                        WHERE project_type = 'Авторский надзор'
+                          AND role = 'Старший менеджер проектов'
+                          AND stage_name = ?
+                        ''', (stage,))
+
+                        rate_manager = cursor.fetchone()
+
+                        if rate_manager and rate_manager['rate_per_m2']:
+                            spin = table_supervision.cellWidget(row, 2)
+                            if spin:
+                                spin.blockSignals(True)
+                                spin.setValue(rate_manager['rate_per_m2'])
+                                spin.blockSignals(False)
+
+                        if rate_dan or rate_manager:
+                            dan_price = rate_dan['rate_per_m2'] if rate_dan else 0
+                            mgr_price = rate_manager['rate_per_m2'] if rate_manager else 0
+                            print(f"   {stage}: ДАН={dan_price:.0f}, Менеджер={mgr_price:.0f} ₽/м²")
+
+                    print(f"   Итого загружено: {loaded_count} значений")
+            finally:
+                try:
+                    self.db.close()
+                except Exception:
+                    pass
             
             # === 4. ШАБЛОННЫЕ (ВЫЗЫВАЕМ ОТДЕЛЬНО) ===
             print("\n4⃣ Загрузка ШАБЛОННЫХ диапазонов:")

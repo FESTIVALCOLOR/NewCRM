@@ -851,7 +851,8 @@ class DataAccess(QObject):
         if self.api_client:
             try:
                 return self.api_client.get_supervision_statistics_filtered(
-                    year=year, quarter=quarter, month=month)
+                    year=year, quarter=quarter, month=month,
+                    agent_type=stage, city=None, address=None)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API get_supervision_statistics_filtered: {e}")
         try:
@@ -945,7 +946,7 @@ class DataAccess(QObject):
                 return self.api_client.get_payments_by_type(payment_type, project_type_filter=project_type_filter)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_payments_by_type, fallback: {e}")
-        return self.db.get_payments_by_type(payment_type)
+        return self.db.get_payments_by_type(payment_type, project_type_filter)
 
     def get_payments_by_supervision_card(self, card_id: int) -> List[Dict]:
         """Получить платежи по карточке надзора"""
@@ -981,7 +982,7 @@ class DataAccess(QObject):
                 return self.api_client.get_year_payments(year, include_null_month=include_null_month)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_year_payments, fallback: {e}")
-        return self.db.get_year_payments(year)
+        return self.db.get_year_payments(year, include_null_month)
 
     def mark_payment_as_paid(self, payment_id: int, employee_id: int = None) -> bool:
         """Отметить платёж как оплаченный"""
@@ -1057,11 +1058,11 @@ class DataAccess(QObject):
             contract_id, employee_id, role,
             stage_name=stage_name, supervision_card_id=supervision_card_id)
 
-    def recalculate_payments(self, role: str = None) -> Optional[Dict]:
+    def recalculate_payments(self, contract_id: int = None, role: str = None) -> Optional[Dict]:
         """Пересчитать платежи (только API)"""
         if self.api_client:
             try:
-                return self.api_client.recalculate_payments(role=role)
+                return self.api_client.recalculate_payments(contract_id=contract_id, role=role)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error recalculate_payments: {e}")
                 return None
@@ -1454,13 +1455,19 @@ class DataAccess(QObject):
 
     def get_accepted_stages(self, card_id: int) -> List[Dict]:
         """Получить принятые стадии"""
-        # Этот метод специфичен для локальной БД
-        return self.db.get_accepted_stages(card_id)
+        try:
+            return self.db.get_accepted_stages(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB get_accepted_stages: {e}")
+            return []
 
     def get_submitted_stages(self, card_id: int) -> List[Dict]:
         """Получить сданные стадии"""
-        # Этот метод специфичен для локальной БД
-        return self.db.get_submitted_stages(card_id)
+        try:
+            return self.db.get_submitted_stages(card_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB get_submitted_stages: {e}")
+            return []
 
     def update_stage_executor_deadline(self, card_id: int, stage_name: str,
                                        deadline: str = None, executor_id: int = None) -> bool:
@@ -1753,18 +1760,27 @@ class DataAccess(QObject):
 
     def get_project_templates(self, contract_id: int) -> List[Dict]:
         """Получить шаблоны проекта"""
-        # API пока не поддерживает, используем локальную БД
-        return self.db.get_project_templates(contract_id)
+        try:
+            return self.db.get_project_templates(contract_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB get_project_templates: {e}")
+            return []
 
     def add_project_template(self, contract_id: int, url: str) -> bool:
         """Добавить шаблон проекта"""
-        # API пока не поддерживает, используем локальную БД
-        return self.db.add_project_template(contract_id, url)
+        try:
+            return self.db.add_project_template(contract_id, url)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB add_project_template: {e}")
+            return False
 
     def delete_project_template(self, template_id: int) -> bool:
         """Удалить шаблон проекта"""
-        # API пока не поддерживает, используем локальную БД
-        return self.db.delete_project_template(template_id)
+        try:
+            return self.db.delete_project_template(template_id)
+        except Exception as e:
+            _safe_log(f"[DataAccess] DB delete_project_template: {e}")
+            return False
 
     # ==================== СТАТИСТИКА ====================
 
@@ -1932,7 +1948,10 @@ class DataAccess(QObject):
     def get_employee_report_data(self, employee_id: int = None, project_type: str = None,
                                 period: str = None, year: int = None,
                                 quarter: int = None, month: int = None) -> Dict:
-        """Получить данные отчёта по сотруднику"""
+        """Получить данные отчёта по сотруднику
+
+        Примечание: employee_id пока не поддерживается ни API, ни DB — зарезервирован для будущего
+        """
         if self.api_client:
             try:
                 return self.api_client.get_employee_report_data(
@@ -2413,16 +2432,24 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_employee_permissions: {e}")
         return None
 
-    def set_employee_permissions(self, employee_id: int, data: Dict) -> bool:
-        """Установить персональные права сотрудника"""
+    def set_employee_permissions(self, employee_id: int, permissions) -> bool:
+        """Установить персональные права сотрудника
+
+        Args:
+            employee_id: ID сотрудника
+            permissions: Список прав (List[str]) или Dict с ключом 'permissions'
+        """
+        # Нормализация: извлекаем список из dict если передан dict
+        if isinstance(permissions, dict):
+            permissions = permissions.get('permissions', list(permissions.values()))
         if self.api_client:
             try:
-                return self.api_client.set_employee_permissions(employee_id, data)
+                return self.api_client.set_employee_permissions(employee_id, permissions)
             except Exception as e:
                 _safe_log(f"[DataAccess] API set_employee_permissions: {e}")
         if self.db:
             try:
-                return self.db.set_employee_permissions(employee_id, data)
+                return self.db.set_employee_permissions(employee_id, permissions)
             except Exception as e:
                 _safe_log(f"[DataAccess] DB set_employee_permissions: {e}")
         return False
@@ -2454,8 +2481,8 @@ class DataAccess(QObject):
         if self.api_client:
             try:
                 return self.api_client.get_norm_days_template(project_type, project_subtype)
-            except Exception:
-                pass
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_norm_days_template: {e}")
         return {"entries": []}
 
     def save_norm_days_template(self, data: Dict[str, Any]) -> Optional[Dict]:

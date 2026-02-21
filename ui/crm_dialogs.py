@@ -586,23 +586,20 @@ class ExecutorSelectionDialog(QDialog):
         self.executor_combo.setFixedHeight(28)
 
         # ИСПРАВЛЕНИЕ 30.01.2026: Получаем сотрудников включая двойные должности (secondary_position)
-        if self.api_client:
-            try:
-                all_employees = self.api_client.get_employees()
-                # Фильтруем по основной ИЛИ дополнительной должности
-                executors = [e for e in all_employees
-                            if e.get('position') == position
-                            or e.get('secondary_position') == position]
-                print(f"[OK] Поиск сотрудников с должностью '{position}' (включая secondary_position):")
-                for e in executors:
-                    secondary = e.get('secondary_position', '')
-                    secondary_text = f" + {secondary}" if secondary else ""
-                    print(f"  [OK] {e['full_name']} ({e['position']}{secondary_text})")
-            except Exception as e:
-                print(f"[API ERROR] Ошибка получения сотрудников: {e}")
-                executors = self.db.get_employees_by_position(position)
-        else:
-            executors = self.db.get_employees_by_position(position)
+        try:
+            all_employees = self.data.get_all_employees()
+            # Фильтруем по основной ИЛИ дополнительной должности
+            executors = [e for e in all_employees
+                        if e.get('position') == position
+                        or e.get('secondary_position') == position]
+            print(f"[OK] Поиск сотрудников с должностью '{position}' (включая secondary_position):")
+            for e in executors:
+                secondary = e.get('secondary_position', '')
+                secondary_text = f" + {secondary}" if secondary else ""
+                print(f"  [OK] {e['full_name']} ({e['position']}{secondary_text})")
+        except Exception as e:
+            print(f"[DataAccess ERROR] Ошибка получения сотрудников: {e}")
+            executors = []
 
         if not executors:
             # ========== ЗАМЕНИЛИ QMessageBox ==========
@@ -614,27 +611,23 @@ class ExecutorSelectionDialog(QDialog):
             self.executor_combo.addItem(executor['full_name'], executor['id'])
 
         # ИСПРАВЛЕНИЕ: Предлагаем исполнителя из предыдущих стадий
-        # Получаем предыдущего исполнителя через API или локально
+        # Получаем предыдущего исполнителя через DataAccess
         previous_executor_id = None
-        if self.api_client:
-            try:
-                # Получаем stage_executors для карточки
-                card_data = self.api_client.get_crm_card(self.card_id)
-                stage_executors = card_data.get('stage_executors', [])
-                for se in stage_executors:
-                    exec_id = se.get('executor_id')
-                    if exec_id:
-                        # Проверяем, что этот исполнитель в списке доступных
-                        for executor in executors:
-                            if executor['id'] == exec_id:
-                                previous_executor_id = exec_id
-                                break
-                    if previous_executor_id:
-                        break
-            except Exception as e:
-                print(f"[API] Ошибка получения предыдущего исполнителя: {e}")
-        else:
-            previous_executor_id = self.db.get_previous_executor_by_position(self.card_id, position)
+        try:
+            card_data = self.data.get_crm_card(self.card_id)
+            stage_executors = card_data.get('stage_executors', [])
+            for se in stage_executors:
+                exec_id = se.get('executor_id')
+                if exec_id:
+                    # Проверяем, что этот исполнитель в списке доступных
+                    for executor in executors:
+                        if executor['id'] == exec_id:
+                            previous_executor_id = exec_id
+                            break
+                if previous_executor_id:
+                    break
+        except Exception as e:
+            print(f"[DataAccess] Ошибка получения предыдущего исполнителя: {e}")
 
         if previous_executor_id:
             for i in range(self.executor_combo.count()):
@@ -732,40 +725,31 @@ class ExecutorSelectionDialog(QDialog):
 
         current_user_id = self.parent().employee['id']
 
-        # Назначаем исполнителя через API или локально
-        if self.api_client:
-            try:
-                stage_data = {
-                    'stage_name': self.stage_name,
-                    'executor_id': executor_id,
-                    'deadline': deadline,
-                    'assigned_by': current_user_id
-                }
-                self.api_client.assign_stage_executor(self.card_id, stage_data)
-                print(f"[API] Исполнитель назначен на стадию {self.stage_name}")
-            except Exception as e:
-                print(f"[API ERROR] Ошибка назначения исполнителя: {e}")
-                CustomMessageBox(self, 'Ошибка', f'Не удалось назначить исполнителя: {e}', 'error').exec_()
-                return
-        else:
-            self.db.assign_stage_executor(
-                self.card_id,
-                self.stage_name,
-                executor_id,
-                current_user_id,
-                deadline
-            )
+        # Назначаем исполнителя через DataAccess
+        try:
+            stage_data = {
+                'stage_name': self.stage_name,
+                'executor_id': executor_id,
+                'deadline': deadline,
+                'assigned_by': current_user_id
+            }
+            self.data.assign_stage_executor(self.card_id, stage_data)
+            print(f"[DataAccess] Исполнитель назначен на стадию {self.stage_name}")
+        except Exception as e:
+            print(f"[DataAccess ERROR] Ошибка назначения исполнителя: {e}")
+            CustomMessageBox(self, 'Ошибка', f'Не удалось назначить исполнителя: {e}', 'error').exec_()
+            return
         
         # ========== СОЗДАЕМ ВЫПЛАТЫ (АВАНС + ДОПЛАТА) ==========
         try:
-            contract_id = self.db.get_contract_id_by_crm_card(self.card_id)
+            contract_id = self.data.get_contract_id_by_crm_card(self.card_id)
 
             # ИСПРАВЛЕНИЕ 30.01.2026: Проверка наличия contract_id
             if not contract_id:
                 print(f"[ERROR] contract_id не найден для crm_card_id={self.card_id}")
                 raise Exception(f"Договор не найден для карточки {self.card_id}")
 
-            contract = self.db.get_contract_by_id(contract_id)
+            contract = self.data.get_contract(contract_id)
 
             # ИСПРАВЛЕНИЕ 30.01.2026: Проверка наличия контракта
             if not contract:
@@ -782,7 +766,7 @@ class ExecutorSelectionDialog(QDialog):
             # ИСПРАВЛЕНИЕ: Для индивидуальных - создаем АВАНС (50%) и ДОПЛАТУ (50%)
             if contract['project_type'] == 'Индивидуальный':
                 # Рассчитываем полную сумму
-                full_amount = self.db.calculate_payment_amount(
+                full_amount = self.data.calculate_payment_amount(
                     contract_id, executor_id, role, self.stage_name
                 )
 
@@ -792,64 +776,33 @@ class ExecutorSelectionDialog(QDialog):
 
                 current_month = QDate.currentDate().toString('yyyy-MM')
 
-                if self.api_client:
-                    # Создаем через API
-                    advance_data = {
-                        'contract_id': contract_id,
-                        'crm_card_id': self.card_id,
-                        'employee_id': executor_id,
-                        'role': role,
-                        'stage_name': self.stage_name,
-                        'calculated_amount': advance_amount,
-                        'final_amount': advance_amount,
-                        'payment_type': 'Аванс',
-                        'report_month': current_month
-                    }
-                    self.api_client.create_payment(advance_data)
+                # Создаем аванс через DataAccess
+                advance_data = {
+                    'contract_id': contract_id,
+                    'crm_card_id': self.card_id,
+                    'employee_id': executor_id,
+                    'role': role,
+                    'stage_name': self.stage_name,
+                    'calculated_amount': advance_amount,
+                    'final_amount': advance_amount,
+                    'payment_type': 'Аванс',
+                    'report_month': current_month
+                }
+                self.data.create_payment(advance_data)
 
-                    balance_data = {
-                        'contract_id': contract_id,
-                        'crm_card_id': self.card_id,
-                        'employee_id': executor_id,
-                        'role': role,
-                        'stage_name': self.stage_name,
-                        'calculated_amount': balance_amount,
-                        'final_amount': balance_amount,
-                        'payment_type': 'Доплата',
-                        'report_month': ''
-                    }
-                    self.api_client.create_payment(balance_data)
-                    print(f"[API] Индивидуальный проект: созданы аванс и доплата для {role}")
-                else:
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-
-                    # Создаем аванс (50%) - с отчетным месяцем назначения
-                    cursor.execute('''
-                    INSERT INTO payments
-                    (contract_id, crm_card_id, employee_id, role, stage_name, calculated_amount,
-                     final_amount, payment_type, report_month)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (contract_id, self.card_id, executor_id, role, self.stage_name, advance_amount,
-                          advance_amount, 'Аванс', current_month))
-
-                    advance_id = cursor.lastrowid
-
-                    # Создаем доплату (50%) - без отчетного месяца (установится при принятии)
-                    cursor.execute('''
-                    INSERT INTO payments
-                    (contract_id, crm_card_id, employee_id, role, stage_name, calculated_amount,
-                     final_amount, payment_type, report_month)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (contract_id, self.card_id, executor_id, role, self.stage_name, balance_amount,
-                          balance_amount, 'Доплата', ''))
-
-                    balance_id = cursor.lastrowid
-
-                    conn.commit()
-                    self.db.close()
-
-                    print(f"Индивидуальный проект: создан аванс (ID={advance_id}, {advance_amount:.2f}) и доплата (ID={balance_id}, {balance_amount:.2f}) для {role}")
+                balance_data = {
+                    'contract_id': contract_id,
+                    'crm_card_id': self.card_id,
+                    'employee_id': executor_id,
+                    'role': role,
+                    'stage_name': self.stage_name,
+                    'calculated_amount': balance_amount,
+                    'final_amount': balance_amount,
+                    'payment_type': 'Доплата',
+                    'report_month': ''
+                }
+                self.data.create_payment(balance_data)
+                print(f"[DataAccess] Индивидуальный проект: созданы аванс и доплата для {role}")
             else:
                 # ========== ИСПРАВЛЕНИЕ 06.02.2026: ШАБЛОННЫЕ ПРОЕКТЫ - СПЕЦИАЛЬНАЯ ЛОГИКА (#16) ==========
                 # Для стадии 1 (планировочные) создаём выплату с суммой 0.00
@@ -862,54 +815,28 @@ class ExecutorSelectionDialog(QDialog):
                     final_amount = 0.00
                     print(f"[INFO] Стадия 1: создаём выплату с суммой 0.00 для {role}")
                 else:
-                    # ИСПРАВЛЕНИЕ 06.02.2026: Используем API для расчёта суммы (#16)
-                    if self.api_client:
-                        try:
-                            result = self.api_client.calculate_payment_amount(
-                                contract_id, executor_id, role, self.stage_name
-                            )
-                            calculated_amount = float(result) if result else 0
-                            print(f"[API] Шаблонный проект: рассчитана сумма {calculated_amount:.2f} для {role}")
-                        except Exception as e:
-                            print(f"[WARN] Ошибка API расчета суммы: {e}, fallback на локальную БД")
-                            calculated_amount = self.db.calculate_payment_amount(
-                                contract_id, executor_id, role, self.stage_name
-                            )
-                    else:
-                        calculated_amount = self.db.calculate_payment_amount(
-                            contract_id, executor_id, role, self.stage_name
-                        )
+                    # Расчёт суммы через DataAccess
+                    result = self.data.calculate_payment_amount(
+                        contract_id, executor_id, role, self.stage_name
+                    )
+                    calculated_amount = float(result) if result else 0
                     final_amount = calculated_amount
                     print(f"[INFO] Стадия 2+: создаём выплату с тарифом {calculated_amount:.2f} для {role}")
 
-                if self.api_client:
-                    payment_data = {
-                        'contract_id': contract_id,
-                        'crm_card_id': self.card_id,
-                        'employee_id': executor_id,
-                        'role': role,
-                        'stage_name': self.stage_name,
-                        'calculated_amount': calculated_amount,
-                        'final_amount': final_amount,
-                        'payment_type': 'Полная оплата',
-                        'report_month': ''
-                    }
-                    self.api_client.create_payment(payment_data)
-                    print(f"[API] Шаблонный проект: создана выплата для {role}")
-                else:
-                    conn = self.db.connect()
-                    cursor = conn.cursor()
-
-                    cursor.execute('''
-                    INSERT INTO payments
-                    (contract_id, crm_card_id, employee_id, role, stage_name, calculated_amount,
-                     final_amount, payment_type, report_month)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (contract_id, self.card_id, executor_id, role, self.stage_name, calculated_amount,
-                          final_amount, 'Полная оплата', ''))  # Пустой месяц, установится при сдаче
-
-                    conn.commit()
-                    self.db.close()
+                # Создаём выплату через DataAccess
+                payment_data = {
+                    'contract_id': contract_id,
+                    'crm_card_id': self.card_id,
+                    'employee_id': executor_id,
+                    'role': role,
+                    'stage_name': self.stage_name,
+                    'calculated_amount': calculated_amount,
+                    'final_amount': final_amount,
+                    'payment_type': 'Полная оплата',
+                    'report_month': ''
+                }
+                self.data.create_payment(payment_data)
+                print(f"[DataAccess] Шаблонный проект: создана выплата для {role}")
                 # =========================================================================
 
             print(f"Выплаты созданы для {role} по стадии {self.stage_name}")
@@ -1076,7 +1003,7 @@ class ProjectCompletionDialog(QDialog):
             return
 
         try:
-            contract_id = self.db.get_contract_id_by_crm_card(self.card_id)
+            contract_id = self.data.get_contract_id_by_crm_card(self.card_id)
 
             # Формируем данные для обновления договора
             contract_status = status.replace('Проект ', '').replace('передан в ', '')
@@ -1088,43 +1015,33 @@ class ProjectCompletionDialog(QDialog):
             if 'РАСТОРГНУТ' in status:
                 updates['termination_reason'] = self.termination_reason.toPlainText().strip()
 
-            # ========== ИСПРАВЛЕНИЕ: Синхронизация с API ==========
+            # Обновляем через DataAccess
             supervision_card_id = None
 
-            if self.api_client and self.api_client.is_online:
-                try:
-                    # 1. Обновляем договор через API
-                    self.api_client.update_contract(contract_id, updates)
-                    print(f"[API] Договор {contract_id} обновлен: {updates}")
+            # 1. Обновляем договор
+            self.data.update_contract(contract_id, updates)
+            print(f"[DataAccess] Договор {contract_id} обновлен: {updates}")
 
-                    # 2. Создаём карточку надзора через API (если нужно)
-                    if 'АВТОРСКИЙ НАДЗОР' in status:
-                        print(f"\n▶ Создание карточки надзора для договора {contract_id}...")
-                        supervision_data = {
-                            'contract_id': contract_id,
-                            'column_name': 'Новый заказ'
-                        }
-                        result = self.api_client.create_supervision_card(supervision_data)
-                        supervision_card_id = result.get('id')
-                        print(f"[API] Создана карточка надзора ID={supervision_card_id}")
+            # 2. Создаём карточку надзора (если нужно)
+            if 'АВТОРСКИЙ НАДЗОР' in status:
+                print(f"\n Создание карточки надзора для договора {contract_id}...")
+                supervision_data = {
+                    'contract_id': contract_id,
+                    'column_name': 'Новый заказ'
+                }
+                result = self.data.create_supervision_card(supervision_data)
+                supervision_card_id = result.get('id') if isinstance(result, dict) else result
+                print(f"[DataAccess] Создана карточка надзора ID={supervision_card_id}")
 
-                    # 3. Устанавливаем отчетный месяц через API
-                    current_month = QDate.currentDate().toString('yyyy-MM')
-                    try:
-                        self.api_client.set_payments_report_month(contract_id, current_month)
-                        print(f"[API] Установлен отчетный месяц {current_month}")
-                    except Exception as e:
-                        print(f"[WARN] Ошибка установки отчетного месяца через API: {e}")
-                        # Fallback на локальную БД
-                        self._set_report_month_locally(contract_id, current_month)
-
-                except Exception as e:
-                    print(f"[WARN] Ошибка API: {e}, fallback на локальную БД")
-                    # Fallback на локальную БД
-                    self._complete_project_locally(contract_id, updates, status)
-            else:
-                # Offline режим - работаем только с локальной БД
-                self._complete_project_locally(contract_id, updates, status)
+            # 3. Устанавливаем отчетный месяц
+            current_month = QDate.currentDate().toString('yyyy-MM')
+            try:
+                self.data.set_payments_report_month(contract_id, current_month)
+                print(f"[DataAccess] Установлен отчетный месяц {current_month}")
+            except Exception as e:
+                print(f"[WARN] Ошибка установки отчетного месяца: {e}")
+                # Fallback на локальную БД
+                self._set_report_month_locally(contract_id, current_month)
 
             print(f"Проект завершен со статусом: {contract_status}")
             if supervision_card_id:
@@ -1141,11 +1058,11 @@ class ProjectCompletionDialog(QDialog):
 
     def _complete_project_locally(self, contract_id, updates, status):
         """Локальное завершение проекта (offline fallback)"""
-        self.db.update_contract(contract_id, updates)
+        self.data.update_contract(contract_id, updates)
 
         if 'АВТОРСКИЙ НАДЗОР' in status:
-            print(f"\n▶ [LOCAL] Создание карточки надзора для договора {contract_id}...")
-            supervision_card_id = self.db.create_supervision_card(contract_id)
+            print(f"\n [LOCAL] Создание карточки надзора для договора {contract_id}...")
+            supervision_card_id = self.data.create_supervision_card(contract_id)
             print(f"  [LOCAL] Результат: supervision_card_id = {supervision_card_id}")
 
         current_month = QDate.currentDate().toString('yyyy-MM')
@@ -1153,18 +1070,21 @@ class ProjectCompletionDialog(QDialog):
 
     def _set_report_month_locally(self, contract_id, current_month):
         """Установка отчетного месяца локально"""
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('''
-        UPDATE payments
-        SET report_month = ?
-        WHERE contract_id = ?
-          AND (report_month IS NULL OR report_month = '')
-        ''', (current_month, contract_id))
-        rows_updated = cursor.rowcount
-        conn.commit()
-        self.db.close()
-        print(f"[LOCAL] Установлен отчетный месяц {current_month} для {rows_updated} выплат")
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+            UPDATE payments
+            SET report_month = ?
+            WHERE contract_id = ?
+              AND (report_month IS NULL OR report_month = '')
+            ''', (current_month, contract_id))
+            rows_updated = cursor.rowcount
+            conn.commit()
+            self.db.close()
+            print(f"[LOCAL] Установлен отчетный месяц {current_month} для {rows_updated} выплат")
+        except Exception as e:
+            print(f"[ERROR] Ошибка установки отчетного месяца локально: {e}")
     
     def showEvent(self, event):
         """Центрирование при первом показе"""
@@ -1533,7 +1453,7 @@ class CRMStatisticsDialog(QDialog):
     def load_projects(self):
         """Загрузка списка проектов для текущего типа"""
         try:
-            projects = self.db.get_projects_by_type(self.project_type)
+            projects = self.data.get_projects_by_type(self.project_type)
             
             for project in projects:
                 display_text = f"{project['contract_number']} - {project['address']}"
@@ -1611,7 +1531,7 @@ class CRMStatisticsDialog(QDialog):
         stage_name = self.stage_combo.currentText() if self.stage_combo.currentIndex() > 0 else None
         status_filter = self.status_combo.currentText()
         
-        stats = self.db.get_crm_statistics_filtered(
+        stats = self.data.get_crm_statistics_filtered(
             self.project_type,
             period,
             year,
@@ -2662,25 +2582,23 @@ class ReassignExecutorDialog(QDialog):
         self.init_ui()
 
     def _get_real_executor_name(self):
-        """Получить реальное имя исполнителя из БД/API"""
+        """Получить реальное имя исполнителя из DataAccess"""
         try:
-            if self.api_client:
-                try:
-                    card_data = self.api_client.get_crm_card(self.card_id)
-                    stage_executors = card_data.get('stage_executors', [])
-                    for se in stage_executors:
-                        if self.stage_keyword.lower() in se.get('stage_name', '').lower():
-                            executor_id = se.get('executor_id')
-                            if executor_id:
-                                # Получаем имя сотрудника
-                                employees = self.api_client.get_employees()
-                                for emp in employees:
-                                    if emp.get('id') == executor_id:
-                                        return emp.get('full_name')
-                except Exception as e:
-                    print(f"[API] Ошибка получения исполнителя: {e}")
+            card_data = self.data.get_crm_card(self.card_id)
+            stage_executors = card_data.get('stage_executors', [])
+            for se in stage_executors:
+                if self.stage_keyword.lower() in se.get('stage_name', '').lower():
+                    executor_id = se.get('executor_id')
+                    if executor_id:
+                        employees = self.data.get_all_employees()
+                        for emp in employees:
+                            if emp.get('id') == executor_id:
+                                return emp.get('full_name')
+        except Exception as e:
+            print(f"[WARNING] Ошибка получения имени исполнителя: {e}")
 
-            # Fallback на локальную БД
+        # Fallback на raw SQL (если DataAccess не вернул результат)
+        try:
             conn = self.db.connect()
             cursor = conn.cursor()
             cursor.execute('''
@@ -2694,7 +2612,7 @@ class ReassignExecutorDialog(QDialog):
             self.db.close()
             return record['full_name'] if record else None
         except Exception as e:
-            print(f"[WARNING] Ошибка получения имени исполнителя: {e}")
+            print(f"[WARNING] Ошибка получения имени исполнителя (raw SQL): {e}")
             return None
 
     def init_ui(self):
@@ -2780,64 +2698,41 @@ class ReassignExecutorDialog(QDialog):
         try:
             history_records = []
 
-            # Сначала пробуем загрузить историю переназначений из API (action_history)
-            if self.api_client:
-                try:
-                    # Загружаем историю действий для этой карточки
-                    action_history = self.api_client.get_action_history('crm_card', self.card_id)
-                    # Фильтруем только переназначения
-                    for ah in action_history:
-                        if ah.get('action_type') == 'reassign':
-                            description = ah.get('description', '')
-                            created_at = ah.get('action_date', '')
-                            history_records.append({
-                                'description': description,
-                                'created_at': created_at
-                            })
-                    print(f"[API] Загружено записей истории переназначений: {len(history_records)}")
-                except Exception as e:
-                    print(f"[WARN] Ошибка загрузки истории из API: {e}")
-                    history_records = []
-
-            # Если API не вернул данные, fallback на локальную БД
-            if not history_records:
-                conn = self.db.connect()
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                SELECT description, action_date
-                FROM action_history
-                WHERE entity_type = 'crm_card' AND entity_id = ? AND action_type = 'reassign'
-                ORDER BY action_date DESC
-                ''', (self.card_id,))
-
-                for row in cursor.fetchall():
-                    history_records.append({
-                        'description': row['description'],
-                        'created_at': row['action_date']  # action_date в локальной БД
-                    })
-                self.db.close()
+            # Загружаем историю переназначений через DataAccess
+            try:
+                action_history = self.data.get_action_history('crm_card', self.card_id)
+                for ah in action_history:
+                    if ah.get('action_type') == 'reassign':
+                        description = ah.get('description', '')
+                        created_at = ah.get('action_date', '')
+                        history_records.append({
+                            'description': description,
+                            'created_at': created_at
+                        })
+                print(f"[DataAccess] Загружено записей истории переназначений: {len(history_records)}")
+            except Exception as e:
+                print(f"[WARN] Ошибка загрузки истории переназначений: {e}")
+                history_records = []
 
             # Также добавляем текущих исполнителей на других стадиях
             current_executors = []
-            if self.api_client:
-                try:
-                    card_data = self.api_client.get_crm_card(self.card_id)
-                    stage_executors = card_data.get('stage_executors', [])
-                    employees = self.api_client.get_employees()
-                    emp_map = {e.get('id'): e.get('full_name', 'Неизвестно') for e in employees}
+            try:
+                card_data = self.data.get_crm_card(self.card_id)
+                stage_executors = card_data.get('stage_executors', [])
+                employees = self.data.get_all_employees()
+                emp_map = {e.get('id'): e.get('full_name', 'Неизвестно') for e in employees}
 
-                    for se in stage_executors:
-                        emp_id = se.get('executor_id')
-                        emp_name = emp_map.get(emp_id, 'Неизвестно')
-                        assigned_date = se.get('assigned_date') or se.get('created_at', '')
-                        current_executors.append({
-                            'stage_name': se.get('stage_name'),
-                            'full_name': emp_name,
-                            'assigned_date': assigned_date
-                        })
-                except Exception as e:
-                    print(f"[WARN] Ошибка загрузки текущих исполнителей: {e}")
+                for se in stage_executors:
+                    emp_id = se.get('executor_id')
+                    emp_name = emp_map.get(emp_id, 'Неизвестно')
+                    assigned_date = se.get('assigned_date') or se.get('created_at', '')
+                    current_executors.append({
+                        'stage_name': se.get('stage_name'),
+                        'full_name': emp_name,
+                        'assigned_date': assigned_date
+                    })
+            except Exception as e:
+                print(f"[WARN] Ошибка загрузки текущих исполнителей: {e}")
 
             if history_records or current_executors:
                 history_frame = QFrame()
@@ -2913,19 +2808,16 @@ class ReassignExecutorDialog(QDialog):
         self.executor_combo = CustomComboBox()
 
         # ИСПРАВЛЕНИЕ 30.01.2026: Получаем сотрудников включая двойные должности (secondary_position)
-        if self.api_client:
-            try:
-                all_employees = self.api_client.get_employees()
-                # Фильтруем по основной ИЛИ дополнительной должности
-                executors = [e for e in all_employees
-                            if e.get('position') == self.position
-                            or e.get('secondary_position') == self.position]
-                print(f"[DEBUG] Найдено сотрудников для должности '{self.position}': {len(executors)} (включая secondary_position)")
-            except Exception as e:
-                print(f"[API ERROR] Ошибка получения сотрудников: {e}")
-                executors = self.db.get_employees_by_position(self.position)
-        else:
-            executors = self.db.get_employees_by_position(self.position)
+        try:
+            all_employees = self.data.get_all_employees()
+            # Фильтруем по основной ИЛИ дополнительной должности
+            executors = [e for e in all_employees
+                        if e.get('position') == self.position
+                        or e.get('secondary_position') == self.position]
+            print(f"[DEBUG] Найдено сотрудников для должности '{self.position}': {len(executors)} (включая secondary_position)")
+        except Exception as e:
+            print(f"[DataAccess ERROR] Ошибка получения сотрудников: {e}")
+            executors = []
 
         if not executors:
             CustomMessageBox(self, 'Внимание', f'Нет доступных сотрудников с должностью "{self.position}"', 'warning').exec_()
@@ -2935,18 +2827,17 @@ class ReassignExecutorDialog(QDialog):
         # Получаем ID текущего исполнителя для установки в combobox
         current_executor_id = None
         try:
-            if self.api_client:
-                card_data = self.api_client.get_crm_card(self.card_id)
-                stage_executors = card_data.get('stage_executors', [])
-                for se in stage_executors:
-                    if self.stage_keyword.lower() in se.get('stage_name', '').lower():
-                        current_executor_id = se.get('executor_id')
-                        # ИСПРАВЛЕНИЕ 25.01.2026: Сохраняем реальное имя стадии из БД
-                        self.real_stage_name = se.get('stage_name')
-                        break
+            card_data = self.data.get_crm_card(self.card_id)
+            stage_executors = card_data.get('stage_executors', [])
+            for se in stage_executors:
+                if self.stage_keyword.lower() in se.get('stage_name', '').lower():
+                    current_executor_id = se.get('executor_id')
+                    # ИСПРАВЛЕНИЕ 25.01.2026: Сохраняем реальное имя стадии из БД
+                    self.real_stage_name = se.get('stage_name')
+                    break
 
             if not current_executor_id:
-                # Fallback на локальную БД
+                # Fallback на raw SQL
                 conn = self.db.connect()
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -2957,7 +2848,6 @@ class ReassignExecutorDialog(QDialog):
                 record = cursor.fetchone()
                 if record:
                     current_executor_id = record['executor_id']
-                    # ИСПРАВЛЕНИЕ 25.01.2026: Сохраняем реальное имя стадии из БД
                     self.real_stage_name = record['stage_name']
                 self.db.close()
         except Exception as e:
@@ -2982,22 +2872,21 @@ class ReassignExecutorDialog(QDialog):
         self.deadline_edit.setDisplayFormat('dd.MM.yyyy')
         self.deadline_edit.setStyleSheet(CALENDAR_STYLE)
 
-        # Загружаем текущий дедлайн через API или БД
+        # Загружаем текущий дедлайн через DataAccess
         try:
             deadline_value = None
-            if self.api_client:
-                try:
-                    card_data = self.api_client.get_crm_card(self.card_id)
-                    stage_executors = card_data.get('stage_executors', [])
-                    for se in stage_executors:
-                        if self.stage_keyword.lower() in se.get('stage_name', '').lower():
-                            deadline_value = se.get('deadline')
-                            break
-                except Exception as e:
-                    print(f"[API] Ошибка получения дедлайна: {e}")
+            try:
+                card_data = self.data.get_crm_card(self.card_id)
+                stage_executors = card_data.get('stage_executors', [])
+                for se in stage_executors:
+                    if self.stage_keyword.lower() in se.get('stage_name', '').lower():
+                        deadline_value = se.get('deadline')
+                        break
+            except Exception as e:
+                print(f"[DataAccess] Ошибка получения дедлайна: {e}")
 
             if not deadline_value:
-                # Fallback на локальную БД
+                # Fallback на raw SQL
                 conn = self.db.connect()
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -3081,31 +2970,26 @@ class ReassignExecutorDialog(QDialog):
             old_executor_id = None
             contract_id = None
 
-            if self.api_client:
-                try:
-                    # Получаем информацию о карточке и текущем исполнителе через API
-                    card_data = self.api_client.get_crm_card(self.card_id)
-                    if card_data:
-                        contract_id = card_data.get('contract_id')
-                        # Ищем текущего исполнителя для этой стадии
-                        stage_name_to_use = self.real_stage_name or self.stage_name
-                        # ИСПРАВЛЕНИЕ: Используем stage_executors вместо stages
-                        stage_executors = card_data.get('stage_executors', [])
-                        print(f"[DEBUG] Ищем стадию: stage_name_to_use='{stage_name_to_use}', stage_keyword='{self.stage_keyword}'")
-                        print(f"[DEBUG] Доступные stage_executors: {[s.get('stage_name') for s in stage_executors]}")
-                        for se in stage_executors:
-                            stage_name_in_data = se.get('stage_name', '')
-                            # Используем более гибкое сравнение - по ключевому слову
-                            if (stage_name_in_data == stage_name_to_use or
-                                self.stage_keyword.lower() in stage_name_in_data.lower()):
-                                old_executor_id = se.get('executor_id')
-                                print(f"[DEBUG] Найден stage_executor '{stage_name_in_data}', executor_id={old_executor_id}")
-                                break
-                    print(f"[DEBUG] Старый исполнитель (API): {old_executor_id}, contract_id: {contract_id}")
-                except Exception as e:
-                    print(f"[WARN] Не удалось получить старого исполнителя через API: {e}")
+            try:
+                card_data = self.data.get_crm_card(self.card_id)
+                if card_data:
+                    contract_id = card_data.get('contract_id')
+                    stage_name_to_use = self.real_stage_name or self.stage_name
+                    stage_executors = card_data.get('stage_executors', [])
+                    print(f"[DEBUG] Ищем стадию: stage_name_to_use='{stage_name_to_use}', stage_keyword='{self.stage_keyword}'")
+                    print(f"[DEBUG] Доступные stage_executors: {[s.get('stage_name') for s in stage_executors]}")
+                    for se in stage_executors:
+                        stage_name_in_data = se.get('stage_name', '')
+                        if (stage_name_in_data == stage_name_to_use or
+                            self.stage_keyword.lower() in stage_name_in_data.lower()):
+                            old_executor_id = se.get('executor_id')
+                            print(f"[DEBUG] Найден stage_executor '{stage_name_in_data}', executor_id={old_executor_id}")
+                            break
+                print(f"[DEBUG] Старый исполнитель (DataAccess): {old_executor_id}, contract_id: {contract_id}")
+            except Exception as e:
+                print(f"[WARN] Не удалось получить старого исполнителя через DataAccess: {e}")
 
-            # Если не получили через API, пробуем локально
+            # Если не получили через DataAccess, пробуем raw SQL
             if old_executor_id is None:
                 conn = self.db.connect()
                 cursor = conn.cursor()
@@ -3123,36 +3007,33 @@ class ReassignExecutorDialog(QDialog):
                 self.db.close()
                 print(f"[DEBUG] Старый исполнитель (локально): {old_executor_id}, contract_id: {contract_id}")
 
-            # Используем API если доступен
-            if self.api_client:
-                try:
-                    # Обновляем исполнителя через API
-                    update_data = {
-                        'executor_id': new_executor_id,
-                        'deadline': new_deadline,
-                        'completed': False
-                    }
-                    # ИСПРАВЛЕНИЕ 25.01.2026: Используем real_stage_name из БД, а не stage_name из колонки
-                    stage_name_to_use = self.real_stage_name or self.stage_name
-                    print(f"[DEBUG] Переназначение: stage_name_to_use={stage_name_to_use}, real_stage_name={self.real_stage_name}")
-                    self.api_client.update_stage_executor(self.card_id, stage_name_to_use, update_data)
-                    print(f"[API] Исполнитель переназначен через API")
+            # Обновляем исполнителя через DataAccess
+            try:
+                update_data = {
+                    'executor_id': new_executor_id,
+                    'deadline': new_deadline,
+                    'completed': False
+                }
+                # ИСПРАВЛЕНИЕ 25.01.2026: Используем real_stage_name из БД, а не stage_name из колонки
+                stage_name_to_use = self.real_stage_name or self.stage_name
+                print(f"[DEBUG] Переназначение: stage_name_to_use={stage_name_to_use}, real_stage_name={self.real_stage_name}")
+                self.data.update_stage_executor(self.card_id, stage_name_to_use, update_data)
+                print(f"[DataAccess] Исполнитель переназначен")
 
-                    # ДОБАВЛЕНО 28.01.2026: Переназначение оплат после успешного API вызова
-                    if contract_id and old_executor_id and new_executor_id != old_executor_id:
-                        self._reassign_payments_via_api(contract_id, old_executor_id, new_executor_id, stage_name_to_use)
-                        # ДОБАВЛЕНО 28.01.2026: Запись в историю проекта
-                        self._add_reassignment_history(old_executor_id, new_executor_id, stage_name_to_use)
+                # Переназначение оплат после успешного вызова
+                if contract_id and old_executor_id and new_executor_id != old_executor_id:
+                    self._reassign_payments_via_api(contract_id, old_executor_id, new_executor_id, stage_name_to_use)
+                    # Запись в историю проекта
+                    self._add_reassignment_history(old_executor_id, new_executor_id, stage_name_to_use)
 
-                    # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех"
-                    self.accept()
-                    return
-                except Exception as e:
-                    print(f"[API ERROR] Ошибка переназначения через API: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Пробуем fallback на локальную БД
-                    print("[INFO] Пытаемся сохранить локально...")
+                self.accept()
+                return
+            except Exception as e:
+                print(f"[DataAccess ERROR] Ошибка переназначения: {e}")
+                import traceback
+                traceback.print_exc()
+                # Пробуем fallback на raw SQL
+                print("[INFO] Пытаемся сохранить локально...")
 
             # Fallback на локальную БД
             conn = self.db.connect()
@@ -3315,9 +3196,9 @@ class ReassignExecutorDialog(QDialog):
 
             # Получаем все платежи для этого контракта
             try:
-                all_payments = self.api_client.get_payments_for_contract(contract_id)
+                all_payments = self.data.get_payments_for_contract(contract_id)
             except Exception as e:
-                print(f"[WARN] Ошибка получения платежей через API: {e}")
+                print(f"[WARN] Ошибка получения платежей: {e}")
                 all_payments = []
 
             # Ищем ВСЕ платежи для этой стадии, старого исполнителя и роли (Аванс + Доплата)
@@ -3358,13 +3239,13 @@ class ReassignExecutorDialog(QDialog):
 
                     # 1. Помечаем старую запись как переназначенную
                     try:
-                        self.api_client.update_payment(old_payment_id, {
+                        self.data.update_payment(old_payment_id, {
                             'reassigned': True,
                             'report_month': current_month
                         })
-                        print(f"[API] Старый платеж {old_payment_id} ({payment_type}) помечен как переназначенный")
+                        print(f"[DataAccess] Старый платеж {old_payment_id} ({payment_type}) помечен как переназначенный")
                     except Exception as e:
-                        print(f"[WARN] Ошибка обновления старого платежа {old_payment_id} через API: {e}")
+                        print(f"[WARN] Ошибка обновления старого платежа {old_payment_id}: {e}")
 
                     # 2. Создаем новую запись для нового исполнителя
                     # ИСПРАВЛЕНИЕ 29.01.2026:
@@ -3388,24 +3269,14 @@ class ReassignExecutorDialog(QDialog):
                             full_amount = 0
                             stage_name_for_calc = old_payment.get('stage_name') or stage_name
 
-                            if self.api_client:
-                                try:
-                                    result = self.api_client.calculate_payment_amount(
-                                        contract_id, new_executor_id, role, stage_name_for_calc
-                                    )
-                                    full_amount = float(result) if result else 0
-                                    print(f"[API] Рассчитанная сумма: {full_amount}")
-                                except Exception as e:
-                                    print(f"[WARN] Ошибка API расчёта: {e}")
-
-                            if full_amount == 0:
-                                try:
-                                    full_amount = self.db.calculate_payment_amount(
-                                        contract_id, new_executor_id, role, stage_name_for_calc
-                                    )
-                                    print(f"[LOCAL] Рассчитанная сумма: {full_amount}")
-                                except Exception as e:
-                                    print(f"[WARN] Ошибка локального расчёта: {e}")
+                            try:
+                                result = self.data.calculate_payment_amount(
+                                    contract_id, new_executor_id, role, stage_name_for_calc
+                                )
+                                full_amount = float(result) if result else 0
+                                print(f"[DataAccess] Рассчитанная сумма: {full_amount}")
+                            except Exception as e:
+                                print(f"[WARN] Ошибка расчёта суммы: {e}")
 
                             # Аванс и Доплата - по 50%
                             half_amount = full_amount / 2 if full_amount > 0 else 0
@@ -3444,11 +3315,11 @@ class ReassignExecutorDialog(QDialog):
                             print(f"[IDEMPOTENT] Пропускаем создание - платеж уже существует: ID={existing.get('id')}")
                             continue
 
-                        result = self.api_client.create_payment(new_payment_data)
+                        result = self.data.create_payment(new_payment_data)
                         status_text = f"месяц: {new_report_month}" if new_report_month else "статус: В работе"
-                        print(f"[API] Создан новый платеж ({payment_type}) для исполнителя {new_executor_id}, сумма={old_final:.2f}, {status_text}")
+                        print(f"[DataAccess] Создан новый платеж ({payment_type}) для исполнителя {new_executor_id}, сумма={old_final:.2f}, {status_text}")
                     except Exception as e:
-                        print(f"[WARN] Ошибка создания нового платежа ({payment_type}) через API: {e}")
+                        print(f"[WARN] Ошибка создания нового платежа ({payment_type}): {e}")
             else:
                 # ИСПРАВЛЕНИЕ 29.01.2026: Если старых платежей нет - создаём новые для нового исполнителя
                 print(f"[INFO] Платежи для старого исполнителя не найдены, создаём новые для нового исполнителя")
@@ -3457,23 +3328,14 @@ class ReassignExecutorDialog(QDialog):
                 try:
                     full_amount = 0
 
-                    # Пробуем через API
-                    if self.api_client:
-                        try:
-                            print(f"[DEBUG] Вызов calculate_payment_amount: contract_id={contract_id}, employee_id={new_executor_id}, role={role}, stage_name={stage_name}")
-                            result = self.api_client.calculate_payment_amount(contract_id, new_executor_id, role, stage_name)
-                            print(f"[DEBUG] Результат API calculate_payment_amount: {result}")
-                            full_amount = float(result) if result else 0
-                        except Exception as e:
-                            print(f"[WARN] Ошибка API расчёта суммы: {e}")
-
-                    # Если API вернул 0 или ошибку - пробуем локальную БД
-                    if full_amount == 0:
-                        try:
-                            full_amount = self.db.calculate_payment_amount(contract_id, new_executor_id, role, stage_name)
-                            print(f"[DEBUG] Результат локальной БД calculate_payment_amount: {full_amount}")
-                        except Exception as e:
-                            print(f"[WARN] Ошибка локальной БД расчёта суммы: {e}")
+                    # Расчёт суммы через DataAccess
+                    try:
+                        print(f"[DEBUG] Вызов calculate_payment_amount: contract_id={contract_id}, employee_id={new_executor_id}, role={role}, stage_name={stage_name}")
+                        result = self.data.calculate_payment_amount(contract_id, new_executor_id, role, stage_name)
+                        print(f"[DEBUG] Результат calculate_payment_amount: {result}")
+                        full_amount = float(result) if result else 0
+                    except Exception as e:
+                        print(f"[WARN] Ошибка расчёта суммы: {e}")
 
                     print(f"[DEBUG] Итоговая рассчитанная сумма для {role}: {full_amount}")
 
@@ -3508,10 +3370,10 @@ class ReassignExecutorDialog(QDialog):
                         if existing_advance:
                             print(f"[IDEMPOTENT] Пропускаем создание Аванса - уже существует: ID={existing_advance.get('id')}")
                         else:
-                            self.api_client.create_payment(advance_data)
-                            print(f"[API] Создан новый платеж (Аванс) для исполнителя {new_executor_id}: {advance_amount:.2f}, месяц: {current_month}")
+                            self.data.create_payment(advance_data)
+                            print(f"[DataAccess] Создан новый платеж (Аванс) для исполнителя {new_executor_id}: {advance_amount:.2f}, месяц: {current_month}")
                     except Exception as e:
-                        print(f"[WARN] Ошибка создания Аванса через API: {e}")
+                        print(f"[WARN] Ошибка создания Аванса: {e}")
 
                     # Создаём Доплату - отчётный месяц ПУСТОЙ (статус "В работе")
                     # Заполнится автоматически при приёмке работы
@@ -3538,8 +3400,8 @@ class ReassignExecutorDialog(QDialog):
                         if existing_balance:
                             print(f"[IDEMPOTENT] Пропускаем создание Доплаты - уже существует: ID={existing_balance.get('id')}")
                         else:
-                            self.api_client.create_payment(balance_data)
-                            print(f"[API] Создан новый платеж (Доплата) для исполнителя {new_executor_id}: {balance_amount:.2f}, статус: В работе")
+                            self.data.create_payment(balance_data)
+                            print(f"[DataAccess] Создан новый платеж (Доплата) для исполнителя {new_executor_id}: {balance_amount:.2f}, статус: В работе")
                     except Exception as e:
                         print(f"[WARN] Ошибка создания Доплаты через API: {e}")
 
@@ -3556,65 +3418,38 @@ class ReassignExecutorDialog(QDialog):
     def _add_reassignment_history(self, old_executor_id, new_executor_id, stage_name):
         """Добавление записи в историю проекта о переназначении исполнителя"""
         try:
-            # Получаем имена исполнителей
+            # Получаем имена исполнителей через DataAccess
             old_name = "Неизвестно"
             new_name = "Неизвестно"
 
-            if self.api_client:
-                try:
-                    employees = self.api_client.get_employees()
-                    for emp in employees:
-                        if emp.get('id') == old_executor_id:
-                            old_name = emp.get('full_name', 'Неизвестно')
-                        if emp.get('id') == new_executor_id:
-                            new_name = emp.get('full_name', 'Неизвестно')
-                except Exception as e:
-                    print(f"[WARN] Не удалось получить имена сотрудников: {e}")
-
-            # Если не получили через API - пробуем локально
-            if old_name == "Неизвестно" or new_name == "Неизвестно":
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT id, full_name FROM employees WHERE id IN (?, ?)',
-                               (old_executor_id, new_executor_id))
-                for row in cursor.fetchall():
-                    if row['id'] == old_executor_id:
-                        old_name = row['full_name']
-                    if row['id'] == new_executor_id:
-                        new_name = row['full_name']
-                self.db.close()
+            try:
+                employees = self.data.get_all_employees()
+                for emp in employees:
+                    if emp.get('id') == old_executor_id:
+                        old_name = emp.get('full_name', 'Неизвестно')
+                    if emp.get('id') == new_executor_id:
+                        new_name = emp.get('full_name', 'Неизвестно')
+            except Exception as e:
+                print(f"[WARN] Не удалось получить имена сотрудников: {e}")
 
             # Формируем описание
             description = f"Переназначение стадии '{stage_name}': {old_name} -> {new_name}"
 
-            # Записываем в историю через API
-            if self.api_client:
-                try:
-                    # Получаем текущего пользователя
-                    user_data = self.api_client.get_current_user()
-                    user_id = user_data.get('id', 1) if user_data else 1
+            # Записываем в историю через DataAccess
+            try:
+                user_data = self.data.get_current_user()
+                user_id = user_data.get('id', 1) if user_data else 1
 
-                    self.api_client.add_action_history(
-                        user_id=user_id,
-                        action_type='reassign',
-                        entity_type='crm_card',
-                        entity_id=self.card_id,
-                        description=description
-                    )
-                    print(f"[API] Записано в историю: {description}")
-                except Exception as e:
-                    print(f"[WARN] Ошибка записи в историю через API: {e}")
-            else:
-                # Локальная запись
-                conn = self.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO action_history (user_id, action_type, entity_type, entity_id, description, action_date)
-                    VALUES (?, ?, ?, ?, ?, datetime('now'))
-                ''', (1, 'reassign', 'crm_card', self.card_id, description))
-                conn.commit()
-                self.db.close()
-                print(f"[LOCAL] Записано в историю: {description}")
+                self.data.add_action_history(
+                    user_id=user_id,
+                    action_type='reassign',
+                    entity_type='crm_card',
+                    entity_id=self.card_id,
+                    description=description
+                )
+                print(f"[DataAccess] Записано в историю: {description}")
+            except Exception as e:
+                print(f"[WARN] Ошибка записи в историю: {e}")
 
         except Exception as e:
             print(f"[ERROR] Ошибка добавления в историю: {e}")
@@ -3686,20 +3521,24 @@ class SurveyDateDialog(QDialog):
         self.survey_date.setCalendarPopup(True)
 
         # Загружаем существующую дату или устанавливаем текущую
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute("SELECT survey_date FROM crm_cards WHERE id = ?", (self.card_id,))
-        result = cursor.fetchone()
-        self.db.close()
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT survey_date FROM crm_cards WHERE id = ?", (self.card_id,))
+            result = cursor.fetchone()
+            self.db.close()
 
-        if result and result[0]:
-            from datetime import datetime
-            try:
-                existing_date = datetime.strptime(result[0], '%Y-%m-%d')
-                self.survey_date.setDate(QDate(existing_date.year, existing_date.month, existing_date.day))
-            except Exception:
+            if result and result[0]:
+                from datetime import datetime
+                try:
+                    existing_date = datetime.strptime(result[0], '%Y-%m-%d')
+                    self.survey_date.setDate(QDate(existing_date.year, existing_date.month, existing_date.day))
+                except Exception:
+                    self.survey_date.setDate(QDate.currentDate())
+            else:
                 self.survey_date.setDate(QDate.currentDate())
-        else:
+        except Exception as e:
+            print(f"[ERROR] Ошибка загрузки даты замера: {e}")
             self.survey_date.setDate(QDate.currentDate())
 
         self.survey_date.setDisplayFormat('dd.MM.yyyy')
@@ -4803,23 +4642,21 @@ class MeasurementDialog(QDialog):
                 if surveyor_id and contract_id:
                     try:
                         report_month = datetime.strptime(measurement_date, '%Y-%m-%d').strftime('%Y-%m')
-                        api = self.data.api_client
-                        if api:
-                            payments = api.get_payments_for_contract(contract_id)
-                            has_surveyor_payment = any(
-                                p.get('employee_id') == surveyor_id and p.get('role') == 'Замерщик'
-                                for p in (payments or [])
-                            )
-                            if not has_surveyor_payment:
-                                api.create_payment({
-                                    'contract_id': contract_id,
-                                    'employee_id': surveyor_id,
-                                    'role': 'Замерщик',
-                                    'payment_type': 'Полная оплата',
-                                    'report_month': report_month,
-                                    'crm_card_id': self.card_id
-                                })
-                                print(f"[OK] Выплата замерщику создана: {report_month}")
+                        payments = self.data.get_payments_for_contract(contract_id)
+                        has_surveyor_payment = any(
+                            p.get('employee_id') == surveyor_id and p.get('role') == 'Замерщик'
+                            for p in (payments or [])
+                        )
+                        if not has_surveyor_payment:
+                            self.data.create_payment({
+                                'contract_id': contract_id,
+                                'employee_id': surveyor_id,
+                                'role': 'Замерщик',
+                                'payment_type': 'Полная оплата',
+                                'report_month': report_month,
+                                'crm_card_id': self.card_id
+                            })
+                            print(f"[OK] Выплата замерщику создана: {report_month}")
                     except Exception as e:
                         print(f"[WARNING] Ошибка создания выплаты замерщику: {e}")
 

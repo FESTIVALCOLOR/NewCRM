@@ -1640,122 +1640,174 @@ class DatabaseManager(DatabaseMigrations):
         self.close()
         return payments
     
-    def get_year_payments(self, year):
-        """Получение выплат за год из всех источников с полными данными"""
+    def get_year_payments(self, year, include_null_month=False):
+        """Получение выплат за год из всех источников с полными данными
+
+        Args:
+            year: Год
+            include_null_month: Включить платежи с NULL report_month (В работе)
+        """
         conn = self.connect()
         cursor = conn.cursor()
 
-        # Выплаты из CRM (payments) с данными контрактов
-        cursor.execute('''
+        # Условие фильтрации по месяцу
+        if include_null_month:
+            month_cond_p = "(p.report_month LIKE ? OR p.report_month IS NULL)"
+            month_cond_s = "(s.report_month LIKE ? OR s.report_month IS NULL)"
+        else:
+            month_cond_p = "p.report_month LIKE ?"
+            month_cond_s = "s.report_month LIKE ?"
+
+        query = f'''
         SELECT
-            p.id,
-            p.contract_id,
-            p.crm_card_id,
-            p.supervision_card_id,
-            p.employee_id,
-            e.full_name as employee_name,
-            e.position,
-            p.role,
-            p.stage_name,
-            p.final_amount as amount,
-            p.payment_type as payment_subtype,
-            'CRM' as source,
-            p.report_month,
-            p.payment_status,
-            p.reassigned,
-            c.project_type,
-            c.agent_type,
-            c.address,
-            c.contract_number,
-            c.area,
-            c.city
+            p.id, p.contract_id, p.crm_card_id, p.supervision_card_id,
+            p.employee_id, e.full_name as employee_name, e.position,
+            p.role, p.stage_name, p.final_amount as amount,
+            p.payment_type as payment_subtype, 'CRM' as source,
+            p.report_month, p.payment_status, p.reassigned,
+            c.project_type, c.agent_type, c.address, c.contract_number, c.area, c.city
         FROM payments p
         LEFT JOIN employees e ON p.employee_id = e.id
         LEFT JOIN crm_cards cc ON p.crm_card_id = cc.id
         LEFT JOIN contracts c ON cc.contract_id = c.id
-        WHERE p.report_month LIKE ?
-        AND p.crm_card_id IS NOT NULL
+        WHERE {month_cond_p} AND p.crm_card_id IS NOT NULL
 
         UNION ALL
 
         SELECT
-            p.id,
-            p.contract_id,
-            p.crm_card_id,
-            p.supervision_card_id,
-            p.employee_id,
-            e.full_name as employee_name,
-            e.position,
-            p.role,
-            p.stage_name,
-            p.final_amount as amount,
-            p.payment_type as payment_subtype,
-            'CRM Надзор' as source,
-            p.report_month,
-            p.payment_status,
-            p.reassigned,
-            c.project_type,
-            c.agent_type,
-            c.address,
-            c.contract_number,
-            c.area,
-            c.city
+            p.id, p.contract_id, p.crm_card_id, p.supervision_card_id,
+            p.employee_id, e.full_name as employee_name, e.position,
+            p.role, p.stage_name, p.final_amount as amount,
+            p.payment_type as payment_subtype, 'CRM Надзор' as source,
+            p.report_month, p.payment_status, p.reassigned,
+            c.project_type, c.agent_type, c.address, c.contract_number, c.area, c.city
         FROM payments p
         LEFT JOIN employees e ON p.employee_id = e.id
         LEFT JOIN supervision_cards sc ON p.supervision_card_id = sc.id
         LEFT JOIN contracts c ON sc.contract_id = c.id
-        WHERE p.report_month LIKE ?
-        AND p.supervision_card_id IS NOT NULL
+        WHERE {month_cond_p} AND p.supervision_card_id IS NOT NULL
 
         UNION ALL
 
         SELECT
-            s.id,
-            s.contract_id,
-            NULL as crm_card_id,
-            NULL as supervision_card_id,
-            s.employee_id,
-            e.full_name as employee_name,
-            e.position,
-            s.payment_type as role,
-            s.stage_name,
-            s.amount,
-            'Оклад' as payment_subtype,
-            'Оклад' as source,
-            s.report_month,
-            s.payment_status,
-            0 as reassigned,
-            s.project_type,
-            c.agent_type,
-            c.address,
-            c.contract_number,
-            c.area,
-            c.city
+            s.id, s.contract_id, NULL as crm_card_id, NULL as supervision_card_id,
+            s.employee_id, e.full_name as employee_name, e.position,
+            s.payment_type as role, s.stage_name, s.amount,
+            'Оклад' as payment_subtype, 'Оклад' as source,
+            s.report_month, s.payment_status, 0 as reassigned,
+            s.project_type, c.agent_type, c.address, c.contract_number, c.area, c.city
         FROM salaries s
         LEFT JOIN employees e ON s.employee_id = e.id
         LEFT JOIN contracts c ON s.contract_id = c.id
-        WHERE s.report_month LIKE ?
-        ''', (f'{year}%', f'{year}%', f'{year}%'))
+        WHERE {month_cond_s}
+        '''
+
+        cursor.execute(query, (f'{year}%', f'{year}%', f'{year}%'))
 
         payments = [dict(row) for row in cursor.fetchall()]
         self.close()
         return payments
     
-    def get_payments_by_type(self, payment_type):
-        """Получение выплат по типу"""
+    def get_payments_by_type(self, payment_type, project_type_filter=None):
+        """Получение выплат по типу (UNION payments + salaries)
+
+        Args:
+            payment_type: Тип выплаты ('Индивидуальные проекты', 'Шаблонные проекты', 'Оклады', 'Авторский надзор')
+            project_type_filter: Фильтр типа проекта ('Индивидуальный', 'Шаблонный', 'Авторский надзор', None)
+        """
         conn = self.connect()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-        SELECT s.*, e.full_name as employee_name, e.position,
-               c.contract_number, c.address, c.area, c.city
-        FROM salaries s
-        JOIN employees e ON s.employee_id = e.id
-        LEFT JOIN contracts c ON s.contract_id = c.id
-        WHERE s.payment_type = ?
-        ORDER BY s.id DESC
-        ''', (payment_type,))
-        
+
+        if payment_type == 'Оклады':
+            # Для Окладов — только из salaries
+            cursor.execute('''
+            SELECT s.id, s.contract_id, s.employee_id, s.payment_type, s.stage_name,
+                   s.amount, s.report_month, s.created_at, s.project_type, s.payment_status,
+                   e.full_name as employee_name, e.position,
+                   c.contract_number, c.address, c.area, c.city, c.agent_type,
+                   'Оклад' as source
+            FROM salaries s
+            JOIN employees e ON s.employee_id = e.id
+            LEFT JOIN contracts c ON s.contract_id = c.id
+            ORDER BY s.id DESC
+            ''')
+        elif project_type_filter == 'Авторский надзор':
+            # Для Авторского надзора — payments (supervision) + salaries
+            cursor.execute('''
+            SELECT p.id, p.contract_id, p.employee_id, p.role, p.stage_name,
+                   p.final_amount, p.payment_type, p.report_month, p.payment_status,
+                   e.full_name as employee_name, e.position,
+                   c.contract_number, c.address, c.area, c.city, c.agent_type,
+                   sc.column_name as card_stage,
+                   'CRM Надзор' as source,
+                   p.reassigned, p.old_employee_id
+            FROM payments p
+            JOIN employees e ON p.employee_id = e.id
+            LEFT JOIN supervision_cards sc ON p.supervision_card_id = sc.id
+            LEFT JOIN contracts c ON sc.contract_id = c.id
+            WHERE p.supervision_card_id IS NOT NULL
+
+            UNION ALL
+
+            SELECT s.id, s.contract_id, s.employee_id, s.payment_type as role, s.stage_name,
+                   s.amount as final_amount, 'Оклад' as payment_type, s.report_month, s.payment_status,
+                   e.full_name as employee_name, e.position,
+                   c.contract_number, c.address, c.area, c.city, c.agent_type,
+                   NULL as card_stage,
+                   'Оклад' as source,
+                   0 as reassigned, NULL as old_employee_id
+            FROM salaries s
+            JOIN employees e ON s.employee_id = e.id
+            LEFT JOIN contracts c ON s.contract_id = c.id
+            WHERE s.project_type = ?
+
+            ORDER BY 1 DESC
+            ''', (project_type_filter,))
+        elif project_type_filter:
+            # Для Индивидуальных / Шаблонных — payments (crm) + salaries
+            cursor.execute('''
+            SELECT p.id, p.contract_id, p.employee_id, p.role, p.stage_name,
+                   p.final_amount, p.payment_type, p.report_month, p.payment_status,
+                   e.full_name as employee_name, e.position,
+                   c.contract_number, c.address, c.area, c.city, c.agent_type,
+                   cc.column_name as card_stage,
+                   'CRM' as source,
+                   p.reassigned, p.old_employee_id
+            FROM payments p
+            JOIN employees e ON p.employee_id = e.id
+            LEFT JOIN crm_cards cc ON p.crm_card_id = cc.id
+            LEFT JOIN contracts c ON cc.contract_id = c.id
+            WHERE c.project_type = ?
+
+            UNION ALL
+
+            SELECT s.id, s.contract_id, s.employee_id, s.payment_type as role, s.stage_name,
+                   s.amount as final_amount, 'Оклад' as payment_type, s.report_month, s.payment_status,
+                   e.full_name as employee_name, e.position,
+                   c.contract_number, c.address, c.area, c.city, c.agent_type,
+                   NULL as card_stage,
+                   'Оклад' as source,
+                   0 as reassigned, NULL as old_employee_id
+            FROM salaries s
+            JOIN employees e ON s.employee_id = e.id
+            LEFT JOIN contracts c ON s.contract_id = c.id
+            WHERE s.project_type = ?
+
+            ORDER BY 1 DESC
+            ''', (project_type_filter, project_type_filter))
+        else:
+            # Без фильтра — все платежи
+            cursor.execute('''
+            SELECT s.*, e.full_name as employee_name, e.position,
+                   c.contract_number, c.address, c.area, c.city, c.agent_type,
+                   'Оклад' as source
+            FROM salaries s
+            JOIN employees e ON s.employee_id = e.id
+            LEFT JOIN contracts c ON s.contract_id = c.id
+            WHERE s.payment_type = ?
+            ORDER BY s.id DESC
+            ''', (payment_type,))
+
         payments = [dict(row) for row in cursor.fetchall()]
         self.close()
         return payments

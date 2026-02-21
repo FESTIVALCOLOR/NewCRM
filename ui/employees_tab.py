@@ -928,9 +928,9 @@ class EmployeeDialog(QDialog):
 
     def _open_permissions_dialog(self):
         """Открыть диалог управления правами доступа"""
-        if not self.employee_data or not self.api_client:
+        if not self.employee_data or not self.data:
             return
-        dlg = PermissionsDialog(self, self.employee_data, self.api_client)
+        dlg = PermissionsDialog(self, self.employee_data, self.data)
         dlg.exec_()
 
     def _open_admin_dialog(self):
@@ -1375,10 +1375,10 @@ class PermissionsDialog(QDialog):
         'Мессенджер': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat'],
     }
 
-    def __init__(self, parent, employee_data, api_client):
+    def __init__(self, parent, employee_data, data_access):
         super().__init__(parent)
         self.employee_data = employee_data
-        self.api_client = api_client
+        self.data = data_access
         self.checkboxes = {}
         self.definitions = {}
 
@@ -1497,7 +1497,7 @@ class PermissionsDialog(QDialog):
     def _load_data(self):
         """Загрузить определения прав и текущие права сотрудника"""
         try:
-            defs = self.api_client.get_permission_definitions()
+            defs = self.data.get_permission_definitions()
             if isinstance(defs, list):
                 self.definitions = {d['name']: d['description'] for d in defs}
 
@@ -1506,7 +1506,7 @@ class PermissionsDialog(QDialog):
                 cb.setText(desc)
 
             emp_id = self.employee_data.get('id')
-            result = self.api_client.get_employee_permissions(emp_id)
+            result = self.data.get_employee_permissions(emp_id)
             if isinstance(result, dict):
                 current_perms = result.get('permissions', [])
                 is_superuser = result.get('is_superuser', False)
@@ -1522,6 +1522,7 @@ class PermissionsDialog(QDialog):
                         cb.setChecked(perm_name in current_perms)
 
         except Exception as e:
+            print(f"[PermissionsDialog] Ошибка загрузки прав: {e}")
             self.info_label.setText(f'Ошибка загрузки: {str(e)}')
 
     def _save_permissions(self):
@@ -1529,19 +1530,21 @@ class PermissionsDialog(QDialog):
         try:
             emp_id = self.employee_data.get('id')
             selected = [name for name, cb in self.checkboxes.items() if cb.isChecked()]
-            result = self.api_client.set_employee_permissions(emp_id, selected)
+            result = self.data.set_employee_permissions(emp_id, selected)
             if result:
                 CustomMessageBox(self, 'Успешно', 'Права доступа сохранены', 'info').exec_()
                 self.accept()
         except Exception as e:
+            print(f"[PermissionsDialog] Ошибка сохранения прав: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {str(e)}', 'warning').exec_()
 
     def _reset_to_defaults(self):
         """Сбросить права до дефолтных по роли"""
         try:
             emp_id = self.employee_data.get('id')
-            self.api_client.reset_employee_permissions(emp_id)
+            self.data.reset_employee_permissions(emp_id)
             self._load_data()
             CustomMessageBox(self, 'Успешно', 'Права сброшены по умолчанию', 'info').exec_()
         except Exception as e:
+            print(f"[PermissionsDialog] Ошибка сброса прав: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось сбросить: {str(e)}', 'warning').exec_()

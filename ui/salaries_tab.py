@@ -1069,22 +1069,26 @@ class SalariesTab(QWidget):
 
     def _update_payment_locally(self, payment_id: int, payment_data: dict):
         """Обновление платежа в локальной БД"""
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('''
-        UPDATE payments
-        SET final_amount = ?,
-            payment_type = ?,
-            report_month = ?
-        WHERE id = ?
-        ''', (
-            payment_data['amount'],
-            payment_data['payment_type'],
-            payment_data['report_month'],
-            payment_id
-        ))
-        conn.commit()
-        self.db.close()
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+            UPDATE payments
+            SET final_amount = ?,
+                payment_type = ?,
+                report_month = ?
+            WHERE id = ?
+            ''', (
+                payment_data['amount'],
+                payment_data['payment_type'],
+                payment_data['report_month'],
+                payment_id
+            ))
+            conn.commit()
+            self.db.close()
+        except Exception as e:
+            print(f"[SalariesTab] Ошибка локального обновления платежа ID={payment_id}: {e}")
+            raise
 
     def edit_payment_from_all(self, payment, is_salary):
         """Редактирование выплаты из таблицы 'Все выплаты'"""
@@ -1217,7 +1221,7 @@ class SalariesTab(QWidget):
     def _delete_payment_locally(self, payment_id: int, source: str):
         """Удаление платежа из локальной SQLite базы данных"""
         try:
-            self.db.delete_payment(payment_id)
+            self.data.delete_payment(payment_id)
             print(f"[LOCAL] Платеж удален локально: ID={payment_id}, Source={source}")
         except Exception as e:
             print(f"[ERROR] Ошибка локального удаления платежа: {e}")
@@ -1603,103 +1607,12 @@ class SalariesTab(QWidget):
         self.all_payments_table.setSortingEnabled(True)
 
     def _get_payments_by_type_from_db(self, payment_type, project_type_filter):
-        """Получение выплат по типу из локальной БД"""
-        conn = self.db.connect()
-        cursor = conn.cursor()
-
-        # Для Окладов загружаем только из salaries
-        if payment_type == 'Оклады':
-            cursor.execute('''
-            SELECT s.id, s.contract_id, s.employee_id, s.payment_type, s.stage_name,
-                   s.amount, s.report_month, s.created_at, s.project_type, s.payment_status,
-                   e.full_name as employee_name, e.position,
-                   c.contract_number, c.address, c.area, c.city, c.agent_type,
-                   'Оклад' as source
-            FROM salaries s
-            JOIN employees e ON s.employee_id = e.id
-            LEFT JOIN contracts c ON s.contract_id = c.id
-            ORDER BY s.id DESC
-            ''')
-        # Для остальных типов - объединяем payments и salaries
-        elif project_type_filter:
-            # Для Авторского надзора используем supervision_cards + salaries
-            if project_type_filter == 'Авторский надзор':
-                cursor.execute('''
-                SELECT p.id, p.contract_id, p.employee_id, p.role, p.stage_name,
-                       p.final_amount, p.payment_type, p.report_month, p.payment_status,
-                       e.full_name as employee_name, e.position,
-                       c.contract_number, c.address, c.area, c.city, c.agent_type,
-                       sc.column_name as card_stage,
-                       'CRM Надзор' as source,
-                       p.reassigned, p.old_employee_id
-                FROM payments p
-                JOIN employees e ON p.employee_id = e.id
-                LEFT JOIN supervision_cards sc ON p.supervision_card_id = sc.id
-                LEFT JOIN contracts c ON sc.contract_id = c.id
-                WHERE p.supervision_card_id IS NOT NULL
-
-                UNION ALL
-
-                SELECT s.id, s.contract_id, s.employee_id, s.payment_type as role, s.stage_name,
-                       s.amount as final_amount, 'Оклад' as payment_type, s.report_month, s.payment_status,
-                       e.full_name as employee_name, e.position,
-                       c.contract_number, c.address, c.area, c.city, c.agent_type,
-                       NULL as card_stage,
-                       'Оклад' as source,
-                       0 as reassigned, NULL as old_employee_id
-                FROM salaries s
-                JOIN employees e ON s.employee_id = e.id
-                LEFT JOIN contracts c ON s.contract_id = c.id
-                WHERE s.project_type = ?
-
-                ORDER BY 1 DESC
-                ''', (project_type_filter,))
-            else:
-                # Для индивидуальных и шаблонных используем crm_cards + salaries
-                cursor.execute('''
-                SELECT p.id, p.contract_id, p.employee_id, p.role, p.stage_name,
-                       p.final_amount, p.payment_type, p.report_month, p.payment_status,
-                       e.full_name as employee_name, e.position,
-                       c.contract_number, c.address, c.area, c.city, c.agent_type,
-                       cc.column_name as card_stage,
-                       'CRM' as source,
-                       p.reassigned, p.old_employee_id
-                FROM payments p
-                JOIN employees e ON p.employee_id = e.id
-                LEFT JOIN crm_cards cc ON p.crm_card_id = cc.id
-                LEFT JOIN contracts c ON cc.contract_id = c.id
-                WHERE c.project_type = ?
-
-                UNION ALL
-
-                SELECT s.id, s.contract_id, s.employee_id, s.payment_type as role, s.stage_name,
-                       s.amount as final_amount, 'Оклад' as payment_type, s.report_month, s.payment_status,
-                       e.full_name as employee_name, e.position,
-                       c.contract_number, c.address, c.area, c.city, c.agent_type,
-                       NULL as card_stage,
-                       'Оклад' as source,
-                       0 as reassigned, NULL as old_employee_id
-                FROM salaries s
-                JOIN employees e ON s.employee_id = e.id
-                LEFT JOIN contracts c ON s.contract_id = c.id
-                WHERE s.project_type = ?
-
-                ORDER BY 1 DESC
-                ''', (project_type_filter, project_type_filter))
-        else:
-            # Не должно сюда попасть
-            cursor.execute('''
-            SELECT p.*, e.full_name as employee_name, e.position,
-                   'CRM' as source
-            FROM payments p
-            JOIN employees e ON p.employee_id = e.id
-            WHERE p.contract_id IS NULL
-            ORDER BY p.id DESC
-            ''')
-
-        data = [dict(row) for row in cursor.fetchall()]
-        self.db.close()
-        return data
+        """Получение выплат по типу из локальной БД (через DataAccess fallback)"""
+        try:
+            return self.data.get_payments_by_type(payment_type, project_type_filter)
+        except Exception as e:
+            print(f"[SalariesTab] Ошибка получения выплат по типу: {e}")
+            return []
 
     def load_payment_type_data(self, payment_type):
         """Загрузка данных для конкретного типа оплаты"""
@@ -2543,25 +2456,29 @@ class SalariesTab(QWidget):
 
     def _update_status_locally(self, payment_id: int, update_data: dict, is_salary: bool):
         """Обновление статуса и report_month в локальной БД"""
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        table_name = 'salaries' if is_salary else 'payments'
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            table_name = 'salaries' if is_salary else 'payments'
 
-        # Формируем SET часть запроса динамически
-        set_parts = []
-        values = []
-        for key, value in update_data.items():
-            set_parts.append(f'{key} = ?')
-            values.append(value)
-        values.append(payment_id)
+            # Формируем SET часть запроса динамически
+            set_parts = []
+            values = []
+            for key, value in update_data.items():
+                set_parts.append(f'{key} = ?')
+                values.append(value)
+            values.append(payment_id)
 
-        cursor.execute(f'''
-        UPDATE {table_name}
-        SET {', '.join(set_parts)}
-        WHERE id = ?
-        ''', values)
-        conn.commit()
-        self.db.close()
+            cursor.execute(f'''
+            UPDATE {table_name}
+            SET {', '.join(set_parts)}
+            WHERE id = ?
+            ''', values)
+            conn.commit()
+            self.db.close()
+        except Exception as e:
+            print(f"[SalariesTab] Ошибка локального обновления статуса ID={payment_id}: {e}")
+            raise
 
     def apply_row_color(self, table, row, status, is_reassigned=False, employee_col=2):
         """Применение цвета к строке в зависимости от статуса и переназначения"""

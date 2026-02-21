@@ -21,9 +21,13 @@ from PyQt5.QtGui import QIcon
 def _mock_crm_msgbox():
     """Глобальный мок CustomMessageBox чтобы диалоги не блокировали тесты."""
     with patch('ui.crm_tab.CustomMessageBox') as mock_msg, \
-         patch('ui.crm_tab.CustomQuestionBox') as mock_q:
+         patch('ui.crm_tab.CustomQuestionBox') as mock_q, \
+         patch('ui.crm_dialogs.CustomMessageBox') as mock_msg2, \
+         patch('ui.crm_dialogs.CustomQuestionBox') as mock_q2:
         mock_msg.return_value.exec_.return_value = None
         mock_q.return_value.exec_.return_value = None
+        mock_msg2.return_value.exec_.return_value = None
+        mock_q2.return_value.exec_.return_value = None
         yield mock_msg
 
 
@@ -85,7 +89,16 @@ def _create_executor_dialog(qtbot, parent_widget, card_id=300,
         {'id': 7, 'full_name': 'Чертёжник Тест', 'position': 'Чертёжник', 'status': 'активный'},
         {'id': 6, 'full_name': 'Дизайнер Тест', 'position': 'Дизайнер', 'status': 'активный'},
     ]
-    # db.get_employees_by_position вызывается в init_ui — должен вернуть список
+    mock_da.get_employees_by_position.return_value = [
+        {'id': 7, 'full_name': 'Чертёжник Тест', 'position': 'Чертёжник', 'status': 'активный'},
+    ]
+    mock_da.get_crm_card.return_value = {'id': card_id, 'stage_executors': [], 'contract_id': 200}
+    mock_da.get_previous_executor_by_position.return_value = None
+    mock_da.get_contract_id_by_crm_card.return_value = 200
+    mock_da.get_contract.return_value = {'id': 200, 'area': 100, 'city': 'Москва', 'project_type': project_type}
+    mock_da.calculate_payment_amount.return_value = 10000
+    mock_da.create_payment.return_value = {'id': 1}
+    mock_da.assign_stage_executor.return_value = {'success': True}
     mock_da.db.get_employees_by_position.return_value = [
         {'id': 7, 'full_name': 'Чертёжник Тест', 'position': 'Чертёжник', 'status': 'активный'},
     ]
@@ -144,6 +157,14 @@ def _create_reassign_dialog(qtbot, parent_widget, card_id=300):
         {'id': 7, 'full_name': 'Чертёжник Тест', 'position': 'Чертёжник', 'status': 'активный'},
         {'id': 6, 'full_name': 'Дизайнер Тест', 'position': 'Дизайнер', 'status': 'активный'},
     ]
+    mock_da.get_employees_by_position.return_value = [
+        {'id': 7, 'full_name': 'Чертёжник Тест', 'position': 'Чертёжник', 'status': 'активный'},
+    ]
+    mock_da.get_crm_card.return_value = {'id': card_id, 'stage_executors': [], 'contract_id': 200}
+    mock_da.get_action_history.return_value = []
+    mock_da.get_previous_executor_by_position.return_value = None
+    mock_da.get_contract_id_by_crm_card.return_value = 200
+    mock_da.get_contract.return_value = {'id': 200, 'area': 100, 'city': 'Москва'}
     mock_da.db.get_employees_by_position.return_value = [
         {'id': 7, 'full_name': 'Чертёжник Тест', 'position': 'Чертёжник', 'status': 'активный'},
     ]
