@@ -190,7 +190,7 @@ def test_employees(api_base, admin_headers):
             headers=admin_headers,
             timeout=REQUEST_TIMEOUT
         )
-        if response.status_code == 200:
+        if response.status_code in (200, 201):
             emp = response.json()
             created[role_key] = emp
             print(f"  [+] Создан тестовый сотрудник: {role_key} (id={emp['id']})")

@@ -782,9 +782,9 @@ async def delete_file_record(
         except Exception as e:
             error_str = str(e)
             if "DiskNotFoundError" not in error_str and "not found" not in error_str.lower():
-                logger.error(f"Не удалось удалить файл с Яндекс.Диска: {e}")
-                raise HTTPException(status_code=500, detail=f"Не удалось удалить файл с Яндекс.Диска: {e}")
-            logger.info(f"Файл уже удалён с Яндекс.Диска: {yandex_path}")
+                logger.warning(f"Не удалось удалить файл с Яндекс.Диска (продолжаем удаление из БД): {e}")
+            else:
+                logger.info(f"Файл уже удалён с Яндекс.Диска: {yandex_path}")
 
     db.delete(file_record)
     db.commit()
