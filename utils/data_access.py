@@ -605,7 +605,9 @@ class DataAccess(QObject):
 
     def workflow_reject(self, card_id: int, stage_name: str = None, reason: str = None,
                         corrections_path: str = None) -> Optional[Dict]:
-        """Отклонить карточку (только API)"""
+        """Отклонить карточку (только API).
+        stage_name и reason — не передаются на сервер (сервер авто-определяет стадию из карточки).
+        corrections_path — путь к папке правок на Яндекс.Диске."""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_reject: API недоступен")
             return None
@@ -759,7 +761,8 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API complete_supervision_stage: {e}")
         try:
-            return self.db.complete_supervision_stage(card_id)
+            stage_name = kwargs.get('stage_name')
+            return self.db.complete_supervision_stage(card_id, stage_name=stage_name)
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB complete_supervision_stage: {e}")
             return None
@@ -779,7 +782,8 @@ class DataAccess(QObject):
             return False
 
     def pause_supervision_card(self, card_id: int, reason: str = None, employee_id: int = None) -> Optional[Dict]:
-        """Поставить карточку надзора на паузу"""
+        """Поставить карточку надзора на паузу.
+        employee_id — используется только в offline (DB). В online сервер определяет из JWT."""
         if self.api_client:
             try:
                 return self.api_client.pause_supervision_card(card_id, reason or '')
@@ -852,7 +856,8 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_supervision_statistics_filtered(
                     year=year, quarter=quarter, month=month,
-                    agent_type=stage, city=None, address=None)
+                    agent_type=stage, city=None, address=address_id,
+                    executor_id=executor_id, manager_id=manager_id, status=status)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API get_supervision_statistics_filtered: {e}")
         try:
@@ -987,11 +992,11 @@ class DataAccess(QObject):
     def mark_payment_as_paid(self, payment_id: int, employee_id: int = None) -> bool:
         """Отметить платёж как оплаченный"""
         # Сначала отмечаем локально
-        self.db.mark_payment_as_paid(payment_id, employee_id)
+        self.db.mark_payment_as_paid(payment_id, employee_id or 0)
 
         if self.is_online and self.api_client:
             try:
-                result = self.api_client.mark_payment_as_paid(payment_id, employee_id)
+                result = self.api_client.mark_payment_as_paid(payment_id, employee_id or 0)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API mark_payment_as_paid: {e}")
@@ -1027,8 +1032,8 @@ class DataAccess(QObject):
 
     def update_payment_manual(self, payment_id: int, amount: float, report_month: str = None) -> bool:
         """Обновить сумму платежа вручную"""
-        # Сначала обновляем локально
-        self.db.update_payment_manual(payment_id, amount)
+        # Сначала обновляем локально (включая report_month)
+        self.db.update_payment_manual(payment_id, amount, report_month=report_month)
 
         if self.is_online and self.api_client:
             try:
@@ -1037,10 +1042,12 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_payment_manual: {e}")
                 self._queue_operation('update', 'payment', payment_id,
-                                      {'_action': 'manual_amount', 'amount': amount})
+                                      {'_action': 'manual_amount', 'amount': amount,
+                                       'report_month': report_month})
         elif self.api_client:
             self._queue_operation('update', 'payment', payment_id,
-                                  {'_action': 'manual_amount', 'amount': amount})
+                                  {'_action': 'manual_amount', 'amount': amount,
+                                   'report_month': report_month})
 
         return True
 
@@ -1386,18 +1393,21 @@ class DataAccess(QObject):
     # ==================== АГЕНТЫ ====================
 
     def get_all_agents(self) -> List[Dict]:
-        """Получить всех агентов"""
+        """Получить всех агентов (с id, name, color)"""
         if self.api_client:
             try:
-                agent_types = self.api_client.get_agent_types()
-                return [{'name': a} for a in agent_types]
+                return self.api_client.get_all_agents()
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_agents, fallback: {e}")
         return self.db.get_all_agents()
 
     def get_agent_color(self, agent_name: str) -> Optional[str]:
         """Получить цвет агента"""
-        # API не поддерживает цвета агентов, используем локальную БД
+        if self.api_client:
+            try:
+                return self.api_client.get_agent_color(agent_name)
+            except Exception:
+                pass
         return self.db.get_agent_color(agent_name)
 
     def add_agent(self, name: str, color: str = None) -> Optional[Dict]:
@@ -1448,13 +1458,18 @@ class DataAccess(QObject):
         """Получить историю стадий"""
         if self._should_use_api():
             try:
-                return self.api_client.get_stage_executors(card_id)
+                return self.api_client.get_stage_history(card_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_stage_history, fallback: {e}")
         return self.db.get_stage_history(card_id)
 
     def get_accepted_stages(self, card_id: int) -> List[Dict]:
         """Получить принятые стадии"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_accepted_stages(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_accepted_stages, fallback: {e}")
         try:
             return self.db.get_accepted_stages(card_id)
         except Exception as e:
@@ -1463,6 +1478,11 @@ class DataAccess(QObject):
 
     def get_submitted_stages(self, card_id: int) -> List[Dict]:
         """Получить сданные стадии"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_submitted_stages(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_submitted_stages, fallback: {e}")
         try:
             return self.db.get_submitted_stages(card_id)
         except Exception as e:
@@ -1484,7 +1504,8 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_stage_executor_deadline: {e}")
                 return False
-        return self.db.update_stage_executor_deadline(card_id, stage_name, deadline)
+        return self.db.update_stage_executor_deadline(card_id, stage_name, deadline,
+                                                       executor_id=executor_id)
 
     # ==================== STAGE EXECUTORS ====================
 
@@ -1510,7 +1531,11 @@ class DataAccess(QObject):
         """Отметить стадию выполненной для исполнителя"""
         if self.api_client:
             try:
-                return self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
+                result = self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
+                # API возвращает bool — нормализуем в Dict
+                if isinstance(result, bool):
+                    return {'success': result} if result else None
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API complete_stage_for_executor: {e}")
         try:
@@ -1580,7 +1605,11 @@ class DataAccess(QObject):
         """Сохранить приёмку менеджера"""
         if self.api_client:
             try:
-                return self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+                result = self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+                # API возвращает bool — нормализуем в Dict
+                if isinstance(result, bool):
+                    return {'success': result} if result else None
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API save_manager_acceptance: {e}")
         try:
@@ -1727,7 +1756,11 @@ class DataAccess(QObject):
         """Получить публичную ссылку на файл Яндекс.Диска (только API)"""
         if self.api_client:
             try:
-                return self.api_client.get_yandex_public_link(path)
+                result = self.api_client.get_yandex_public_link(path)
+                # API возвращает Dict — извлекаем URL
+                if isinstance(result, dict):
+                    return result.get('public_url') or result.get('url') or result.get('href')
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_yandex_public_link: {e}")
                 return None
@@ -1760,6 +1793,11 @@ class DataAccess(QObject):
 
     def get_project_templates(self, contract_id: int) -> List[Dict]:
         """Получить шаблоны проекта"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_project_templates(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_project_templates, fallback: {e}")
         try:
             return self.db.get_project_templates(contract_id)
         except Exception as e:
@@ -1768,6 +1806,18 @@ class DataAccess(QObject):
 
     def add_project_template(self, contract_id: int, url: str) -> bool:
         """Добавить шаблон проекта"""
+        if self.api_client:
+            try:
+                result = self.api_client.add_project_template(contract_id, url)
+                if result is not None:
+                    # Синхронизируем в локальную БД
+                    try:
+                        self.db.add_project_template(contract_id, url)
+                    except Exception:
+                        pass
+                    return True
+            except Exception as e:
+                _safe_log(f"[DataAccess] API add_project_template: {e}")
         try:
             return self.db.add_project_template(contract_id, url)
         except Exception as e:
@@ -1776,6 +1826,17 @@ class DataAccess(QObject):
 
     def delete_project_template(self, template_id: int) -> bool:
         """Удалить шаблон проекта"""
+        if self.api_client:
+            try:
+                result = self.api_client.delete_project_template(template_id)
+                if result:
+                    try:
+                        self.db.delete_project_template(template_id)
+                    except Exception:
+                        pass
+                    return True
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_project_template: {e}")
         try:
             return self.db.delete_project_template(template_id)
         except Exception as e:
@@ -1793,7 +1854,8 @@ class DataAccess(QObject):
                     year=year, month=month, quarter=quarter, agent_type=project_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
-        return self.db.get_dashboard_statistics()
+        return self.db.get_dashboard_statistics(year=year, month=month,
+                                                quarter=quarter, project_type=project_type)
 
     def get_supervision_statistics(self, address: str = None, dan_id: int = None,
                                   manager_id: int = None) -> Dict:

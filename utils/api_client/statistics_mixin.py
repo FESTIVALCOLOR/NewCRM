@@ -167,7 +167,9 @@ class StatisticsMixin:
 
     def get_supervision_statistics_filtered(self, year: int = None, quarter: int = None,
                                             month: int = None, agent_type: str = None,
-                                            city: str = None, address: str = None) -> Dict[str, Any]:
+                                            city: str = None, address: str = None,
+                                            executor_id: int = None, manager_id: int = None,
+                                            status: str = None) -> Dict[str, Any]:
         """Получить отфильтрованную статистику надзора"""
         params = {}
         if year:
@@ -182,6 +184,12 @@ class StatisticsMixin:
             params['city'] = city
         if address:
             params['address'] = address
+        if executor_id:
+            params['executor_id'] = executor_id
+        if manager_id:
+            params['manager_id'] = manager_id
+        if status:
+            params['status'] = status
 
         response = self._request(
             'GET',

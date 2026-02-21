@@ -2064,12 +2064,12 @@ class DatabaseManager(DatabaseMigrations):
             print(f"Ошибка получения статистики согласований: {e}")
             return []
         
-    def update_stage_executor_deadline(self, crm_card_id, stage_keyword, deadline):
+    def update_stage_executor_deadline(self, crm_card_id, stage_keyword, deadline, executor_id=None):
         """Обновление дедлайна исполнителя"""
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            
+
             # Сначала найдем, какие записи есть для этой карточки (для отладки)
             cursor.execute('''
             SELECT id, stage_name, executor_id, completed, deadline
@@ -2077,34 +2077,41 @@ class DatabaseManager(DatabaseMigrations):
             WHERE crm_card_id = ?
             ORDER BY id DESC
             ''', (crm_card_id,))
-            
+
             records = cursor.fetchall()
             print(f"\n[UPDATE DEADLINE] Карточка {crm_card_id}, ищем ключевое слово: '{stage_keyword}'")
             print(f"[UPDATE DEADLINE] Найдено записей в stage_executors: {len(records)}")
             for rec in records:
                 print(f"  • ID={rec['id']}, Стадия='{rec['stage_name']}', Дедлайн={rec['deadline']}, Завершено={rec['completed']}")
-            
+
             # Обновляем дедлайн по ключевому слову
             search_pattern = f'%{stage_keyword}%'
-            
+
             cursor.execute('''
             UPDATE stage_executors
             SET deadline = ?
-            WHERE crm_card_id = ? 
+            WHERE crm_card_id = ?
               AND stage_name LIKE ?
               AND completed = 0
             ''', (deadline, crm_card_id, search_pattern))
-            
+
             rows_affected = cursor.rowcount
-            
+
+            # Обновляем executor_id если передан
+            if executor_id is not None:
+                cursor.execute('''
+                UPDATE stage_executors SET executor_id = ?
+                WHERE crm_card_id = ? AND stage_name LIKE ? AND completed = 0
+                ''', (executor_id, crm_card_id, search_pattern))
+
             conn.commit()
             self.close()
-            
+
             if rows_affected > 0:
                 print(f"[OK] Дедлайн исполнителя обновлен: {rows_affected} записей -> {deadline}")
             else:
                 print(f"[WARN] Не найдено активных записей для обновления (паттерн: {search_pattern})")
-            
+
             return rows_affected > 0
         except Exception as e:
             print(f"[ERROR] Ошибка обновления дедлайна исполнителя: {e}")
@@ -2417,20 +2424,20 @@ class DatabaseManager(DatabaseMigrations):
         
         return row['contract_id'] if row else None
     
-    def complete_supervision_stage(self, card_id):
+    def complete_supervision_stage(self, card_id, stage_name=None):
         """Отметка стадии надзора как сданной"""
         conn = self.connect()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
         UPDATE supervision_cards
         SET dan_completed = 1, updated_at = datetime("now")
         WHERE id = ?
         ''', (card_id,))
-        
+
         conn.commit()
         self.close()
-        print(f"[OK] Стадия надзора ID={card_id} отмечена как сданная")
+        print(f"[OK] Стадия надзора ID={card_id} отмечена как сданная (stage: {stage_name or 'all'})")
 
     def reset_supervision_stage_completion(self, card_id):
         """Сброс отметки о сдаче (при перемещении на новую стадию)"""
@@ -2802,40 +2809,61 @@ class DatabaseManager(DatabaseMigrations):
             print(f"[ERROR] Ошибка получения данных карточки: {e}")
             return None
 
-    def get_dashboard_statistics(self):
+    def get_dashboard_statistics(self, year=None, month=None, quarter=None, project_type=None):
         """Получение общей статистики для Dashboard за все время"""
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            
+
+            # Построение дополнительных WHERE-условий по дате и типу проекта
+            date_clauses = []
+            date_params = []
+
+            if year:
+                date_clauses.append("strftime('%Y', c.contract_date) = ?")
+                date_params.append(str(year))
+
+            if month:
+                date_clauses.append("CAST(strftime('%m', c.contract_date) AS INTEGER) = ?")
+                date_params.append(int(month))
+
+            if quarter:
+                q_months = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
+                q_key = int(quarter) if isinstance(quarter, str) and quarter.isdigit() else (
+                    int(quarter[1]) if isinstance(quarter, str) and quarter.startswith('Q') else int(quarter)
+                )
+                start, end = q_months.get(q_key, (1, 3))
+                date_clauses.append("CAST(strftime('%m', c.contract_date) AS INTEGER) BETWEEN ? AND ?")
+                date_params.extend([start, end])
+
+            if project_type and project_type != 'Все':
+                date_clauses.append("c.agent_type = ?")
+                date_params.append(project_type)
+
+            date_filter = (' AND ' + ' AND '.join(date_clauses)) if date_clauses else ''
+
             # Индивидуальные проекты
-            cursor.execute('''
-            SELECT 
-                COUNT(*) as count,
-                SUM(c.area) as total_area
-            FROM contracts c
-            WHERE c.project_type = 'Индивидуальный'
-            ''')
+            cursor.execute(
+                "SELECT COUNT(*) as count, SUM(c.area) as total_area FROM contracts c "
+                "WHERE c.project_type = 'Индивидуальный'" + date_filter,
+                date_params
+            )
             individual = cursor.fetchone()
-            
+
             # Шаблонные проекты
-            cursor.execute('''
-            SELECT 
-                COUNT(*) as count,
-                SUM(c.area) as total_area
-            FROM contracts c
-            WHERE c.project_type = 'Шаблонный'
-            ''')
+            cursor.execute(
+                "SELECT COUNT(*) as count, SUM(c.area) as total_area FROM contracts c "
+                "WHERE c.project_type = 'Шаблонный'" + date_filter,
+                date_params
+            )
             template = cursor.fetchone()
-            
+
             # Авторский надзор
-            cursor.execute('''
-            SELECT 
-                COUNT(DISTINCT c.id) as count,
-                SUM(c.area) as total_area
-            FROM contracts c
-            WHERE c.status = 'АВТОРСКИЙ НАДЗОР'
-            ''')
+            cursor.execute(
+                "SELECT COUNT(DISTINCT c.id) as count, SUM(c.area) as total_area FROM contracts c "
+                "WHERE c.status = 'АВТОРСКИЙ НАДЗОР'" + date_filter,
+                date_params
+            )
             supervision = cursor.fetchone()
             
             self.close()
@@ -3484,26 +3512,37 @@ class DatabaseManager(DatabaseMigrations):
             print(f"[ERROR] Ошибка получения выплат: {e}")
             return []
 
-    def update_payment_manual(self, payment_id, manual_amount):
+    def update_payment_manual(self, payment_id, manual_amount, report_month=None):
         """Обновление выплаты с ручным вводом"""
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            
-            cursor.execute('''
-            UPDATE payments
-            SET manual_amount = ?,
-                final_amount = ?,
-                is_manual = 1,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            ''', (manual_amount, manual_amount, payment_id))
-            
+
+            if report_month is not None:
+                cursor.execute('''
+                UPDATE payments
+                SET manual_amount = ?,
+                    final_amount = ?,
+                    is_manual = 1,
+                    report_month = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                ''', (manual_amount, manual_amount, report_month, payment_id))
+            else:
+                cursor.execute('''
+                UPDATE payments
+                SET manual_amount = ?,
+                    final_amount = ?,
+                    is_manual = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                ''', (manual_amount, manual_amount, payment_id))
+
             conn.commit()
             self.close()
-            
+
             print(f"[OK] Выплата ID={payment_id} обновлена вручную: {manual_amount:.2f} ₽")
-            
+
         except Exception as e:
             print(f"[ERROR] Ошибка обновления выплаты: {e}")
 

@@ -410,6 +410,9 @@ async def get_supervision_statistics_filtered(
     agent_type: Optional[str] = None,
     city: Optional[str] = None,
     address: Optional[str] = None,
+    executor_id: Optional[int] = None,
+    manager_id: Optional[int] = None,
+    status: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -429,6 +432,17 @@ async def get_supervision_statistics_filtered(
             query = query.filter(Contract.city == city)
         if address:
             query = query.filter(Contract.address.ilike(f'%{address}%'))
+        if executor_id:
+            query = query.filter(SupervisionCard.dan_id == executor_id)
+        if manager_id:
+            query = query.filter(SupervisionCard.senior_manager_id == manager_id)
+        if status:
+            if status == 'Приостановлено':
+                query = query.filter(SupervisionCard.is_paused == True)
+            elif status == 'Работа сдана':
+                query = query.filter(SupervisionCard.dan_completed == True)
+            elif status == 'В работе':
+                query = query.filter(SupervisionCard.is_paused == False, SupervisionCard.dan_completed == False)
 
         cards = query.all()
 
