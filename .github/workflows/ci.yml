@@ -50,7 +50,7 @@ jobs:
           python-version: '3.11'
       - name: Установка зависимостей
         run: |
-          pip install pytest pytest-timeout pytest-order requests urllib3
+          pip install pytest pytest-timeout pytest-order requests urllib3 pydantic pydantic-settings
       - name: Запуск DB тестов
         run: pytest tests/db/ -v --timeout=60 -p no:qt
 

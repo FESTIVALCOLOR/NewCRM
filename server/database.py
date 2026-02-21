@@ -167,7 +167,7 @@ class ActivityLog(Base):
     __tablename__ = "activity_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True, index=True)
     session_id = Column(Integer, ForeignKey("user_sessions.id"), index=True)
 
     action_type = Column(String, nullable=False)  # 'login', 'logout', 'create', 'update', 'delete', 'view'

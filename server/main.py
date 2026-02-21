@@ -119,10 +119,28 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"user_permissions migration note: {e}")
 
-    # Seed дефолтных прав
-    from database import SessionLocal
+    # Seed дефолтных прав и admin-пользователя
+    from database import SessionLocal, Employee
+    from auth import get_password_hash
     db = SessionLocal()
     try:
+        # Создаём admin если не существует (нужен для CI и первого запуска)
+        admin = db.query(Employee).filter(Employee.login == "admin").first()
+        if not admin:
+            admin = Employee(
+                full_name="Администратор",
+                phone="+70000000000",
+                login="admin",
+                password_hash=get_password_hash("admin123"),
+                role="Руководитель студии",
+                position="Руководитель студии",
+                department="Административный",
+                status="активный",
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("Admin user seeded")
+
         seed_permissions(db)
         logger.info("Permissions seeded")
 

@@ -94,7 +94,7 @@ async def login(
     if not employee:
         _login_attempts[client_ip].append(now)
         failed_log = ActivityLog(
-            employee_id=0,
+            employee_id=None,
             action_type="login_failed",
             entity_type="auth",
             entity_id=0,
