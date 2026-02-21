@@ -9,7 +9,7 @@ from permissions import require_permission
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/agents", tags=["agents"])
+router = APIRouter(tags=["agents"])
 
 
 # =========================
