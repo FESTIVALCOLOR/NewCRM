@@ -30,6 +30,7 @@ def _mock_icon_loader():
     mock.create_icon_button = MagicMock(
         side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else '')
     )
+    mock.create_action_button = MagicMock(side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else ''))
     mock.get_icon_path = MagicMock(return_value='')
     return mock
 

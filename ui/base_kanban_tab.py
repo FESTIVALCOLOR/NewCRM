@@ -61,8 +61,11 @@ class BaseDraggableList(QListWidget):
         self.setSelectionMode(QListWidget.SingleSelection)
 
     def startDrag(self, supportedActions):
-        """Начало перетаскивания — блокируем, если drag запрещён."""
+        """Начало перетаскивания — блокируем, если drag запрещён или нет выбранного элемента."""
         if not self.can_drag:
+            return
+        item = self.currentItem()
+        if not item:
             return
         super().startDrag(supportedActions)
 

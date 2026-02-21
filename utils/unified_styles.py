@@ -5,6 +5,10 @@
 
 from .resource_path import resource_path
 
+# Константы цветов для использования в inline-стилях UI
+BORDER_COLOR = "#E0E0E0"
+BORDER_STYLE = f"1px solid {BORDER_COLOR}"
+
 
 def get_unified_stylesheet():
     """

@@ -27,6 +27,7 @@ from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 from utils.resource_path import resource_path
 from utils.dialog_helpers import create_progress_dialog
+from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
 from functools import partial
 import json
 import os
@@ -95,38 +96,10 @@ def _has_perm(employee, api_client, perm_name):
 # =============================================================================
 
 
-class DraggableListWidget(QListWidget):
-    """Кастомный QListWidget с контролируемым Drag & Drop"""
-    item_dropped = pyqtSignal(int, object)
-    
-    def __init__(self, parent_column, can_drag=True):
-        super().__init__()
-        self.parent_column = parent_column
-        self.can_drag = can_drag
-        
-        if self.can_drag:
-            self.setDragDropMode(QListWidget.DragDrop)
-            self.setDefaultDropAction(Qt.MoveAction)
-            self.setAcceptDrops(True)
-            self.setDragEnabled(True)
-        else:
-            self.setDragDropMode(QListWidget.NoDragDrop)
-            self.setAcceptDrops(False)
-            self.setDragEnabled(False)
-        
-        self.setSelectionMode(QListWidget.SingleSelection)
-    
-    def startDrag(self, supportedActions):
-        """Начало перетаскивания"""
-        if not self.can_drag:
-            return
-        
-        item = self.currentItem()
-        if not item:
-            return
-        
-        super().startDrag(supportedActions)
-    
+class DraggableListWidget(BaseDraggableList):
+    """Кастомный QListWidget с контролируемым Drag & Drop.
+    __init__ и startDrag наследуются из BaseDraggableList."""
+
     def dropEvent(self, event):
         """Обработка drop"""
         if not self.can_drag:
@@ -1558,7 +1531,7 @@ class VerticalLabel(QWidget):
         return QSize(40, 200)
 
 
-class CRMColumn(QFrame):
+class CRMColumn(BaseKanbanColumn):
     card_moved = pyqtSignal(int, str, str, str)
 
     def __init__(self, column_name, project_type, employee, can_edit, db, api_client=None):
@@ -1570,18 +1543,8 @@ class CRMColumn(QFrame):
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
-        self.header_label = None
-        self.vertical_label = None
-        # ИСПРАВЛЕНИЕ 07.02.2026: Добавлено сворачивание колонок с сохранением состояния (#19)
-        self._is_collapsed = False
-        self._original_min_width = 300
-        self._original_max_width = 600
-        self._collapsed_width = 50
-        # Настройки для сохранения состояния
-        self._settings = TableSettings()
         self._board_name = f"crm_{project_type.lower().replace(' ', '_')}"
         self.init_ui()
-        # Загружаем сохранённое состояние или применяем умолчание
         self._apply_initial_collapse_state()
         
     def init_ui(self):
@@ -1682,67 +1645,17 @@ class CRMColumn(QFrame):
                 print(f"[CRM] Сворачиваю колонку по умолчанию: {self.column_name}")
                 self._collapse_column()
 
-    def _collapse_column(self):
-        """Свернуть колонку (без сохранения состояния)"""
-        self._is_collapsed = True
-        self.cards_list.hide()
-        self.header_label.hide()
-        self.collapse_btn.setIcon(IconLoader.load('arrow-right-circle'))
-        self.collapse_btn.setToolTip('Развернуть колонку')
-        self.setMinimumWidth(self._collapsed_width)
-        self.setMaximumWidth(self._collapsed_width)
+    # _collapse_column, _expand_column, toggle_collapse, update_header_count
+    # наследуются из BaseKanbanColumn
 
-        # Создаём вертикальный лейбл с названием
-        if self.vertical_label is None:
-            self.vertical_label = VerticalLabel()
-            self.layout().insertWidget(1, self.vertical_label, 1)
+    def _make_vertical_label(self):
+        """Создать вертикальный лейбл для свёрнутой колонки."""
+        return VerticalLabel()
 
-        # Показываем название вертикально со счётчиком
-        count = self.cards_list.count() if hasattr(self, 'cards_list') else 0
-        short_name = self.column_name.split(':')[0].strip() if ':' in self.column_name else self.column_name
-        self.vertical_label.setText(f"{short_name} ({count})")
-        self.vertical_label.show()
+    def _create_card_widget(self, card_data):
+        """Создать виджет CRM-карточки."""
+        return CRMCard(card_data, self.can_edit, self.db, self.employee, api_client=self.api_client)
 
-    def _expand_column(self):
-        """Развернуть колонку (без сохранения состояния)"""
-        self._is_collapsed = False
-        self.cards_list.show()
-        self.header_label.show()
-        self.collapse_btn.setIcon(IconLoader.load('arrow-left-circle'))
-        self.collapse_btn.setToolTip('Свернуть колонку')
-        self.setMinimumWidth(self._original_min_width)
-        self.setMaximumWidth(self._original_max_width)
-
-        if self.vertical_label:
-            self.vertical_label.hide()
-
-    # ИСПРАВЛЕНИЕ 07.02.2026: Метод сворачивания колонки с сохранением (#19)
-    def toggle_collapse(self):
-        """Переключение состояния сворачивания колонки"""
-        if self._is_collapsed:
-            self._expand_column()
-        else:
-            self._collapse_column()
-
-        # Сохраняем новое состояние
-        self._settings.save_column_collapsed_state(
-            self._board_name, self.column_name, self._is_collapsed
-        )
-
-    def update_header_count(self):
-        """Обновление счетчика карточек в заголовке"""
-        count = self.cards_list.count() if hasattr(self, 'cards_list') else 0
-
-        if count == 0:
-            self.header_label.setText(self.column_name)
-        else:
-            self.header_label.setText(f"{self.column_name} ({count})")
-
-        # Также обновляем вертикальный лейбл если колонка свёрнута
-        if self._is_collapsed and self.vertical_label:
-            short_name = self.column_name.split(':')[0].strip() if ':' in self.column_name else self.column_name
-            self.vertical_label.setText(f"{short_name} ({count})")
-    
     def add_card(self, card_data, bulk=False):
         """Добавление карточки в колонку. bulk=True пропускает updateGeometry/update_header_count."""
         card_id = card_data.get('id')
@@ -1795,10 +1708,7 @@ class CRMColumn(QFrame):
             except Exception:
                 pass
             
-    def clear_cards(self):
-        """Очистка всех карточек"""
-        self.cards_list.clear()
-        self.update_header_count()
+    # clear_cards наследуется из BaseKanbanColumn
 
 class CRMCard(QFrame):
     def __init__(self, card_data, can_edit, db, employee=None, api_client=None):

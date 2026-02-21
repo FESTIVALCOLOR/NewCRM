@@ -78,6 +78,22 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 # Дублирование middleware удалено в Phase 5 (W-04)
 
 
+# =========================
+# API VERSIONING (backward-compatible)
+# =========================
+# Все эндпоинты теперь под /api/v1/.
+# Middleware перезаписывает /api/... → /api/v1/... для обратной совместимости
+# со старыми клиентами, которые ещё используют /api/ без версии.
+
+@app.middleware("http")
+async def api_version_compat(request, call_next):
+    """Rewrite /api/xxx → /api/v1/xxx для backward-compat."""
+    path = request.scope["path"]
+    if path.startswith("/api/") and not path.startswith("/api/v1/"):
+        request.scope["path"] = "/api/v1/" + path[5:]  # len("/api/") = 5
+    return await call_next(request)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Инициализация при запуске"""
@@ -151,7 +167,7 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/api/version")
+@app.get("/api/v1/version")
 async def get_app_version():
     """Получить текущую версию серверного приложения для сверки клиентами"""
     return {
@@ -164,7 +180,7 @@ async def get_app_version():
 # ГЛОБАЛЬНЫЙ ПОИСК
 # =========================
 
-@app.get("/api/search")
+@app.get("/api/v1/search")
 async def global_search(
     q: str,
     limit: int = 50,
@@ -256,10 +272,10 @@ from routers.employees_router import router as employees_router
 from routers.clients_router import router as clients_router
 from routers.contracts_router import router as contracts_router
 
-app.include_router(auth_router, prefix="/api/auth")
-app.include_router(employees_router, prefix="/api")
-app.include_router(clients_router, prefix="/api/clients")
-app.include_router(contracts_router, prefix="/api/contracts")
+app.include_router(auth_router, prefix="/api/v1/auth")
+app.include_router(employees_router, prefix="/api/v1")
+app.include_router(clients_router, prefix="/api/v1/clients")
+app.include_router(contracts_router, prefix="/api/v1/contracts")
 
 from routers.rates_router import router as rates_router
 from routers.salaries_router import router as salaries_router
@@ -267,11 +283,11 @@ from routers.statistics_router import router as statistics_router
 from routers.dashboard_router import router as dashboard_router
 from routers.sync_router import router as sync_router
 
-app.include_router(rates_router, prefix="/api/rates")
-app.include_router(salaries_router, prefix="/api/salaries")
-app.include_router(statistics_router, prefix="/api/statistics")
-app.include_router(dashboard_router, prefix="/api/dashboard")
-app.include_router(sync_router, prefix="/api/sync")
+app.include_router(rates_router, prefix="/api/v1/rates")
+app.include_router(salaries_router, prefix="/api/v1/salaries")
+app.include_router(statistics_router, prefix="/api/v1/statistics")
+app.include_router(dashboard_router, prefix="/api/v1/dashboard")
+app.include_router(sync_router, prefix="/api/v1/sync")
 
 from routers.payments_router import router as payments_router
 from routers.files_router import router as files_router
@@ -279,11 +295,11 @@ from routers.agents_router import router as agents_router
 from routers.heartbeat_router import router as heartbeat_router
 from routers.locks_router import router as locks_router
 
-app.include_router(payments_router, prefix="/api/payments")
-app.include_router(files_router, prefix="/api/files")
-app.include_router(agents_router, prefix="/api/agents")
-app.include_router(heartbeat_router, prefix="/api")
-app.include_router(locks_router, prefix="/api/locks")
+app.include_router(payments_router, prefix="/api/v1/payments")
+app.include_router(files_router, prefix="/api/v1/files")
+app.include_router(agents_router, prefix="/api/v1/agents")
+app.include_router(heartbeat_router, prefix="/api/v1")
+app.include_router(locks_router, prefix="/api/v1/locks")
 
 from routers.timeline_router import router as timeline_router
 from routers.norm_days_router import router as norm_days_router
@@ -293,13 +309,13 @@ from routers.supervision_router import router as supervision_router
 from routers.action_history_router import router as action_history_router
 from routers.reports_router import router as reports_router
 
-app.include_router(timeline_router, prefix="/api/timeline")
-app.include_router(norm_days_router, prefix="/api/norm-days")
-app.include_router(supervision_timeline_router, prefix="/api/supervision-timeline")
-app.include_router(project_templates_router, prefix="/api/project-templates")
-app.include_router(supervision_router, prefix="/api/supervision")
-app.include_router(action_history_router, prefix="/api/action-history")
-app.include_router(reports_router, prefix="/api/reports")
+app.include_router(timeline_router, prefix="/api/v1/timeline")
+app.include_router(norm_days_router, prefix="/api/v1/norm-days")
+app.include_router(supervision_timeline_router, prefix="/api/v1/supervision-timeline")
+app.include_router(project_templates_router, prefix="/api/v1/project-templates")
+app.include_router(supervision_router, prefix="/api/v1/supervision")
+app.include_router(action_history_router, prefix="/api/v1/action-history")
+app.include_router(reports_router, prefix="/api/v1/reports")
 
 from routers.crm_router import router as crm_router
 from routers.messenger_router import (
@@ -307,16 +323,16 @@ from routers.messenger_router import (
     load_messenger_settings, seed_default_messenger_scripts,
 )
 
-app.include_router(crm_router, prefix="/api/crm")
-app.include_router(messenger_router, prefix="/api/messenger")
-app.include_router(sync_messenger_router, prefix="/api/sync")
+app.include_router(crm_router, prefix="/api/v1/crm")
+app.include_router(messenger_router, prefix="/api/v1/messenger")
+app.include_router(sync_messenger_router, prefix="/api/v1/sync")
 
 
 # =========================
 # СИНХРОНИЗАЦИЯ
 # =========================
 
-@app.post("/api/sync", response_model=SyncResponse)
+@app.post("/api/v1/sync", response_model=SyncResponse)
 async def sync_data(
     sync_request: SyncRequest,
     current_user: Employee = Depends(get_current_user),
@@ -363,7 +379,7 @@ async def sync_data(
 # УВЕДОМЛЕНИЯ
 # =========================
 
-@app.get("/api/notifications", response_model=List[NotificationResponse])
+@app.get("/api/v1/notifications", response_model=List[NotificationResponse])
 async def get_notifications(
     unread_only: bool = False,
     current_user: Employee = Depends(get_current_user),
@@ -379,7 +395,7 @@ async def get_notifications(
     return notifications
 
 
-@app.put("/api/notifications/{notification_id}/read")
+@app.put("/api/v1/notifications/{notification_id}/read")
 async def mark_notification_read(
     notification_id: int,
     current_user: Employee = Depends(get_current_user),

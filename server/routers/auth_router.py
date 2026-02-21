@@ -23,6 +23,7 @@ from auth import (
     verify_password,
     verify_refresh_token,
 )
+from config import get_settings
 from rate_limit import limiter
 from database import ActivityLog, Employee, UserSession, get_db
 from schemas import EmployeeResponse, LoginResponse, RefreshTokenResponse, MessageResponse
@@ -143,6 +144,28 @@ async def login(
 
     # Успешный вход — очищаем счётчик
     _login_attempts.pop(client_ip, None)
+
+    # Лимит одновременных сессий: деактивируем самые старые
+    settings = get_settings()
+    max_sessions = settings.max_sessions_per_user
+    active_sessions = (
+        db.query(UserSession)
+        .filter(
+            UserSession.employee_id == employee.id,
+            UserSession.is_active == True,
+        )
+        .order_by(UserSession.login_time.asc())
+        .all()
+    )
+    if len(active_sessions) >= max_sessions:
+        sessions_to_close = active_sessions[: len(active_sessions) - max_sessions + 1]
+        for old_session in sessions_to_close:
+            old_session.is_active = False
+            old_session.logout_time = datetime.utcnow()
+        logger.info(
+            f"Лимит сессий: закрыто {len(sessions_to_close)} старых "
+            f"сессий для employee_id={employee.id} (макс={max_sessions})"
+        )
 
     # Создание токенов
     access_token = create_access_token(data={"sub": str(employee.id)})

@@ -34,6 +34,7 @@ def _mock_icon_loader():
     mock.create_icon_button = MagicMock(
         side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else '')
     )
+    mock.create_action_button = MagicMock(side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else ''))
     mock.get_icon_path = MagicMock(return_value='')
     return mock
 
@@ -44,7 +45,9 @@ def _create_supervision_tab(qtbot, mock_data_access, employee):
          patch('ui.crm_supervision_tab.DatabaseManager', return_value=MagicMock()), \
          patch('ui.crm_supervision_tab.YandexDiskManager', return_value=None), \
          patch('ui.crm_supervision_tab.IconLoader', _mock_icon_loader()), \
-         patch('ui.crm_supervision_tab.TableSettings') as MockTS:
+         patch('ui.crm_supervision_tab.TableSettings') as MockTS, \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = mock_data_access
         MockTS.return_value.load_column_collapse_state.return_value = {}
         from ui.crm_supervision_tab import CRMSupervisionTab

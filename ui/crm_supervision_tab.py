@@ -20,6 +20,7 @@ from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 from utils.dialog_helpers import create_progress_dialog
 from utils.data_access import DataAccess
+from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
 from ui.crm_tab import _has_perm
 import os
 import threading
@@ -40,30 +41,10 @@ SUPERVISION_STAGE_MAPPING = {
     'Стадия 12: Закупка декора': 'STAGE_12_DECOR',
 }
 
-class SupervisionDraggableList(QListWidget):
-    """Draggable список для надзора"""
-    item_dropped = pyqtSignal(int, object)
-    
-    def __init__(self, parent_column, can_drag=True):
-        super().__init__()
-        self.parent_column = parent_column
-        self.can_drag = can_drag
-        
-        if self.can_drag:
-            self.setDragDropMode(QListWidget.DragDrop)
-            self.setDefaultDropAction(Qt.MoveAction)
-            self.setAcceptDrops(True)
-            self.setDragEnabled(True)
-        else:
-            self.setDragDropMode(QListWidget.NoDragDrop)
-        
-        self.setSelectionMode(QListWidget.SingleSelection)
-    
-    def startDrag(self, supportedActions):
-        if not self.can_drag:
-            return
-        super().startDrag(supportedActions)
-    
+class SupervisionDraggableList(BaseDraggableList):
+    """Draggable список для надзора.
+    __init__ и startDrag наследуются из BaseDraggableList."""
+
     def dropEvent(self, event):
         if not self.can_drag:
             event.ignore()
@@ -1164,7 +1145,7 @@ class VerticalLabelSupervision(QWidget):
         return QSize(40, 200)
 
 
-class SupervisionColumn(QFrame):
+class SupervisionColumn(BaseKanbanColumn):
     """Колонка для карточек надзора"""
     card_moved = pyqtSignal(int, str, str)
 
@@ -1177,18 +1158,10 @@ class SupervisionColumn(QFrame):
         _pos = employee.get('position', '') if employee else ''
         _sec = employee.get('secondary_position', '') if employee else ''
         self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
-        self.header_label = None
-        # ИСПРАВЛЕНИЕ 07.02.2026: Добавлено сворачивание колонок с сохранением состояния (#19)
-        self._is_collapsed = False
         self._original_min_width = 340
         self._original_max_width = 360
-        self._collapsed_width = 50
-        self.vertical_label = None
-        # Настройки для сохранения состояния
-        self._settings = TableSettings()
         self._board_name = "crm_supervision"
         self.init_ui()
-        # Загружаем сохранённое состояние
         self._apply_initial_collapse_state()
 
     def init_ui(self):
@@ -1263,95 +1236,17 @@ class SupervisionColumn(QFrame):
         layout.addWidget(self.cards_list, 1)
         self.setLayout(layout)
     
-    # ИСПРАВЛЕНИЕ 07.02.2026: Применение начального состояния сворачивания (#19)
-    def _apply_initial_collapse_state(self):
-        """Применить начальное состояние сворачивания (из настроек)"""
-        saved_state = self._settings.get_column_collapsed_state(
-            self._board_name, self.column_name, default=None
-        )
-        if saved_state:
-            self._collapse_column()
+    # _apply_initial_collapse_state, _collapse_column, _expand_column,
+    # toggle_collapse, update_header_count, add_card, clear_cards
+    # наследуются из BaseKanbanColumn
 
-    def _collapse_column(self):
-        """Свернуть колонку (без сохранения состояния)"""
-        self._is_collapsed = True
-        self.cards_list.hide()
-        self.header_label.hide()
-        self.collapse_btn.setIcon(IconLoader.load('arrow-right-circle'))
-        self.collapse_btn.setToolTip('Развернуть колонку')
-        self.setMinimumWidth(self._collapsed_width)
-        self.setMaximumWidth(self._collapsed_width)
+    def _make_vertical_label(self):
+        """Создать вертикальный лейбл для свёрнутой колонки надзора."""
+        return VerticalLabelSupervision()
 
-        if self.vertical_label is None:
-            self.vertical_label = VerticalLabelSupervision()
-            self.layout().insertWidget(1, self.vertical_label, 1)
-
-        count = self.cards_list.count() if hasattr(self, 'cards_list') else 0
-        short_name = self.column_name
-        self.vertical_label.setText(f"{short_name} ({count})")
-        self.vertical_label.show()
-
-    def _expand_column(self):
-        """Развернуть колонку (без сохранения состояния)"""
-        self._is_collapsed = False
-        self.cards_list.show()
-        self.header_label.show()
-        self.collapse_btn.setIcon(IconLoader.load('arrow-left-circle'))
-        self.collapse_btn.setToolTip('Свернуть колонку')
-        self.setMinimumWidth(self._original_min_width)
-        self.setMaximumWidth(self._original_max_width)
-
-        if self.vertical_label:
-            self.vertical_label.hide()
-
-    # ИСПРАВЛЕНИЕ 07.02.2026: Метод сворачивания колонки с сохранением (#19)
-    def toggle_collapse(self):
-        """Переключение состояния сворачивания колонки"""
-        if self._is_collapsed:
-            self._expand_column()
-        else:
-            self._collapse_column()
-
-        # Сохраняем новое состояние
-        self._settings.save_column_collapsed_state(
-            self._board_name, self.column_name, self._is_collapsed
-        )
-
-    def update_header_count(self):
-        """Обновление счетчика"""
-        count = self.cards_list.count() if hasattr(self, 'cards_list') else 0
-
-        if count == 0:
-            self.header_label.setText(self.column_name)
-        else:
-            self.header_label.setText(f"{self.column_name} ({count})")
-
-        # Также обновляем вертикальный лейбл если колонка свёрнута
-        if self._is_collapsed and self.vertical_label:
-            self.vertical_label.setText(f"{self.column_name} ({count})")
-    
-    def add_card(self, card_data, bulk=False):
-        """Добавление карточки. bulk=True пропускает update_header_count."""
-        card_widget = SupervisionCard(card_data, self.employee, self.db, self.api_client)
-
-        recommended_size = card_widget.sizeHint()
-        exact_height = recommended_size.height()
-        card_widget.setMinimumHeight(exact_height)
-
-        item = QListWidgetItem()
-        item.setData(Qt.UserRole, card_data.get('id'))
-        item.setSizeHint(QSize(200, exact_height + 10))
-
-        self.cards_list.addItem(item)
-        self.cards_list.setItemWidget(item, card_widget)
-
-        if not bulk:
-            self.update_header_count()
-    
-    def clear_cards(self):
-        """Очистка карточек"""
-        self.cards_list.clear()
-        self.update_header_count()
+    def _create_card_widget(self, card_data):
+        """Создать виджет карточки надзора."""
+        return SupervisionCard(card_data, self.employee, self.db, self.api_client)
 
 class SupervisionCard(QFrame):
     """Карточка авторского надзора"""

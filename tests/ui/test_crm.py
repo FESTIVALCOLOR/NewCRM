@@ -36,6 +36,7 @@ def _mock_icon_loader():
     mock.create_icon_button = MagicMock(
         side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else '')
     )
+    mock.create_action_button = MagicMock(side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else ''))
     mock.get_icon_path = MagicMock(return_value='')
     return mock
 
@@ -46,7 +47,9 @@ def _create_crm_tab(qtbot, mock_data_access, employee, can_edit=True):
          patch('ui.crm_tab.DatabaseManager', return_value=MagicMock()), \
          patch('ui.crm_tab.YandexDiskManager', return_value=None), \
          patch('ui.crm_tab.IconLoader', _mock_icon_loader()), \
-         patch('ui.crm_tab.TableSettings') as MockTS:
+         patch('ui.crm_tab.TableSettings') as MockTS, \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = mock_data_access
         MockTS.return_value.load_column_collapse_state.return_value = {}
         from ui.crm_tab import CRMTab
@@ -61,7 +64,9 @@ def _create_crm_card(qtbot, card_data, employee, can_edit=True):
     with patch('ui.crm_tab.DataAccess') as MockDA, \
          patch('ui.crm_tab.DatabaseManager', return_value=MagicMock()), \
          patch('ui.crm_tab.YandexDiskManager', return_value=None), \
-         patch('ui.crm_tab.IconLoader', _mock_icon_loader()):
+         patch('ui.crm_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = MagicMock()
         from ui.crm_tab import CRMCard
         card = CRMCard(card_data, can_edit, mock_db, employee=employee, api_client=None)
@@ -90,7 +95,9 @@ def _create_executor_dialog(qtbot, parent_widget, card_id=300,
 
     with patch('ui.crm_tab.DataAccess') as MockDA, \
          patch('ui.crm_tab.DatabaseManager', return_value=MagicMock()), \
-         patch('ui.crm_tab.IconLoader', _mock_icon_loader()):
+         patch('ui.crm_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = mock_da
         from ui.crm_tab import ExecutorSelectionDialog
         dlg = ExecutorSelectionDialog(
@@ -105,7 +112,9 @@ def _create_completion_dialog(qtbot, parent_widget, card_id=300):
     """Создать ProjectCompletionDialog."""
     with patch('ui.crm_tab.DataAccess') as MockDA, \
          patch('ui.crm_tab.DatabaseManager', return_value=MagicMock()), \
-         patch('ui.crm_tab.IconLoader', _mock_icon_loader()):
+         patch('ui.crm_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = parent_widget.data
         from ui.crm_tab import ProjectCompletionDialog
         dlg = ProjectCompletionDialog(parent_widget, card_id=card_id, api_client=None)
@@ -117,7 +126,9 @@ def _create_survey_date_dialog(qtbot, parent_widget, card_id=300):
     """Создать SurveyDateDialog."""
     with patch('ui.crm_tab.DataAccess') as MockDA, \
          patch('ui.crm_tab.DatabaseManager', return_value=MagicMock()), \
-         patch('ui.crm_tab.IconLoader', _mock_icon_loader()):
+         patch('ui.crm_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = parent_widget.data
         from ui.crm_tab import SurveyDateDialog
         dlg = SurveyDateDialog(parent_widget, card_id=card_id, api_client=None)
@@ -141,7 +152,9 @@ def _create_reassign_dialog(qtbot, parent_widget, card_id=300):
 
     with patch('ui.crm_tab.DataAccess') as MockDA, \
          patch('ui.crm_tab.DatabaseManager', return_value=MagicMock()), \
-         patch('ui.crm_tab.IconLoader', _mock_icon_loader()):
+         patch('ui.crm_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.IconLoader', _mock_icon_loader()), \
+         patch('ui.base_kanban_tab.TableSettings'):
         MockDA.return_value = mock_da
         from ui.crm_tab import ReassignExecutorDialog
         dlg = ReassignExecutorDialog(
