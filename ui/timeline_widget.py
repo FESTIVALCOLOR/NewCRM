@@ -329,7 +329,7 @@ class ProjectTimelineWidget(QWidget):
                     else:
                         entries = self.data.get_project_timeline(self.contract_id)
 
-            self.entries = entries or []
+            self.entries = sorted(entries or [], key=lambda e: e.get('sort_order', 0))
             # Сигнал в main thread для обновления UI
             try:
                 self._data_ready.emit()
@@ -392,7 +392,7 @@ class ProjectTimelineWidget(QWidget):
                     else:
                         entries = self.data.get_project_timeline(self.contract_id)
 
-            self.entries = entries or []
+            self.entries = sorted(entries or [], key=lambda e: e.get('sort_order', 0))
             self._auto_set_start_date()
             self._recalculate_days()
             self._populate_table()
@@ -402,7 +402,8 @@ class ProjectTimelineWidget(QWidget):
             self._loading = False
 
     def _auto_set_start_date(self):
-        """Авто-расчёт даты начала разработки из трёх дат (дата договора, замер, ТЗ).
+        """Авто-расчёт даты начала разработки из четырёх дат:
+        дата договора, замер, ТЗ, дата первого платежа (аванс).
         Также пересчитывает общий дедлайн = start_date + contract_period рабочих дней."""
         dates = []
         # Дата договора
@@ -417,6 +418,10 @@ class ProjectTimelineWidget(QWidget):
         td = self.card_data.get('tech_task_date', '')
         if td:
             dates.append(td)
+        # Дата первого платежа (аванс)
+        apd = self.contract_data.get('advance_payment_paid_date', '')
+        if apd:
+            dates.append(apd)
 
         if not dates:
             return
@@ -514,10 +519,12 @@ class ProjectTimelineWidget(QWidget):
                 **entry,
             })
 
-            # Накапливаем суммы (только рабочие строки, не заголовки)
+            # Накапливаем суммы (только рабочие строки в расчёте срока, не заголовки)
             if role != 'header':
+                is_in_scope = entry.get('is_in_contract_scope', True)
                 stage_actual_sum += (entry.get('actual_days', 0) or 0)
-                stage_norm_sum += (entry.get('norm_days', 0) or 0)
+                if is_in_scope:
+                    stage_norm_sum += (entry.get('norm_days', 0) or 0)
 
         # Итог последнего этапа
         if current_stage_group and current_stage_group != 'START':
@@ -528,7 +535,7 @@ class ProjectTimelineWidget(QWidget):
                 '_norm_sum': stage_norm_sum,
             })
 
-        # Общий итог
+        # Общий итог (только строки в расчёте срока для norm_days)
         total_actual = sum(
             (e.get('actual_days', 0) or 0)
             for e in self.entries
@@ -538,6 +545,7 @@ class ProjectTimelineWidget(QWidget):
             (e.get('norm_days', 0) or 0)
             for e in self.entries
             if e.get('executor_role', '') != 'header'
+            and e.get('is_in_contract_scope', True)
         )
         display_rows.append({
             '_type': 'grandtotal',
@@ -592,7 +600,7 @@ class ProjectTimelineWidget(QWidget):
                 if row_type == 'grandtotal':
                     self.table.setRowHeight(row, 36)
                     bg = '#FFF8E1'
-                    texts = ['ИТОГО:', '', str(dr['_actual_sum']),
+                    texts = ['Итого всех этапов:', '', str(dr['_actual_sum']),
                              str(dr['_norm_sum']), '', '', '']
                     aligns = ['left', 'center', 'center', 'center', 'center', 'center', 'center']
                     for col in range(num_cols):
@@ -679,10 +687,12 @@ class ProjectTimelineWidget(QWidget):
                     cd = self.contract_data.get('contract_date', '')
                     sd = self.card_data.get('survey_date', '')
                     td = self.card_data.get('tech_task_date', '')
+                    apd = self.contract_data.get('advance_payment_paid_date', '')
                     start_label.setToolTip(
                         f"Дата договора: {_fmt(cd)}\n"
                         f"Дата замера: {_fmt(sd)}\n"
-                        f"Дата тех. задания: {_fmt(td)}"
+                        f"Дата тех. задания: {_fmt(td)}\n"
+                        f"Дата аванса: {_fmt(apd)}"
                     )
                     self.table.setCellWidget(row, 1, start_label)
                 else:

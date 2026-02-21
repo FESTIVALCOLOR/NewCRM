@@ -32,8 +32,22 @@ _SUBTYPES = {
     ],
 }
 
-# Площади для превью
-_AREAS = [70, 100, 130, 160, 190, 220, 250, 300, 350, 400, 450, 500]
+# Площади для превью (зависят от типа/подтипа проекта — синхронизированы с таблицей сроков в договоре)
+_AREAS_INDIVIDUAL = [70, 100, 130, 160, 190, 220, 250, 300, 350, 400, 450, 500]
+_AREAS_TEMPLATE = [90, 140, 190, 240, 290, 340]
+_AREAS_BATHROOM = []  # фиксированный срок, площадь не влияет
+
+
+def _get_areas_for_subtype(project_type: str, project_subtype: str) -> list:
+    """Возвращает шкалу площадей для данного типа/подтипа проекта
+    (синхронизирована с таблицей сроков в диалоге договора)."""
+    if project_type == 'Индивидуальный':
+        return _AREAS_INDIVIDUAL
+    # Шаблонный
+    sub = project_subtype.lower()
+    if 'ванной' in sub:
+        return _AREAS_BATHROOM
+    return _AREAS_TEMPLATE
 
 
 # ================================================================
@@ -409,13 +423,11 @@ class NormDaysSettingsWidget(QWidget):
         self._combo_subtype.currentTextChanged.connect(self._on_filters_changed)
         filter_layout.addWidget(self._combo_subtype)
 
-        # Площадь (превью)
+        # Площадь (превью) — шкала обновляется динамически при смене типа/подтипа
         lbl_area = QLabel('Площадь:')
         lbl_area.setStyleSheet('font-size: 12px;')
         filter_layout.addWidget(lbl_area)
         self._combo_area = CustomComboBox()
-        for a in _AREAS:
-            self._combo_area.addItem(str(a))
         self._combo_area.setMinimumWidth(70)
         self._combo_area.setMaximumWidth(90)
         self._combo_area.currentTextChanged.connect(self._on_filters_changed)
@@ -430,8 +442,9 @@ class NormDaysSettingsWidget(QWidget):
 
         layout.addLayout(filter_layout)
 
-        # Заполняем подтипы для первого типа
+        # Заполняем подтипы и площади для первого типа
         self._fill_subtypes()
+        self._fill_areas()
 
         # --- Таблица ---
         self._table = QTableWidget()
@@ -577,21 +590,59 @@ class NormDaysSettingsWidget(QWidget):
         self._combo_subtype.addItems(subtypes)
         self._combo_subtype.blockSignals(False)
 
+    def _fill_areas(self):
+        """Обновить шкалу площадей в соответствии с типом/подтипом проекта."""
+        self._combo_area.blockSignals(True)
+        old_val = self._combo_area.currentText()
+        self._combo_area.clear()
+        project_type = self._combo_type.currentText()
+        project_subtype = self._combo_subtype.currentText()
+        areas = _get_areas_for_subtype(project_type, project_subtype)
+        if not areas:
+            # Фиксированный срок (ванная) — показываем одну запись
+            self._combo_area.addItem('--')
+        else:
+            for a in areas:
+                self._combo_area.addItem(str(a))
+            # Попытка восстановить предыдущий выбор
+            idx = self._combo_area.findText(old_val)
+            if idx >= 0:
+                self._combo_area.setCurrentIndex(idx)
+        self._combo_area.blockSignals(False)
+
     def _on_type_changed(self):
-        """При смене типа проекта — обновить подтипы и перезагрузить."""
+        """При смене типа проекта — обновить подтипы, площади и перезагрузить."""
         self._fill_subtypes()
+        self._fill_areas()
         self._on_filters_changed()
 
     def _on_filters_changed(self):
-        """При смене любого фильтра — обновить срок и загрузить данные."""
+        """При смене любого фильтра — обновить площади, срок и загрузить данные."""
         project_type = self._combo_type.currentText()
         project_subtype = self._combo_subtype.currentText()
         area_text = self._combo_area.currentText()
 
-        if not project_subtype or not area_text:
+        if not project_subtype:
             return
 
-        area = int(area_text)
+        # Обновляем шкалу площадей при смене подтипа
+        current_areas = _get_areas_for_subtype(project_type, project_subtype)
+        combo_count = self._combo_area.count()
+        # Перезаполняем площади только если шкала изменилась
+        needs_refill = False
+        if not current_areas and area_text != '--':
+            needs_refill = True
+        elif current_areas and (combo_count != len(current_areas)):
+            needs_refill = True
+        if needs_refill:
+            self._fill_areas()
+            area_text = self._combo_area.currentText()
+
+        if not area_text or area_text == '--':
+            # Фиксированный срок (ванная) — площадь не влияет на срок
+            area = 1  # минимальная площадь для корректной работы формул
+        else:
+            area = int(area_text)
 
         # Обновляем срок по договору
         self._contract_term = _calc_contract_term(project_type, project_subtype, area)

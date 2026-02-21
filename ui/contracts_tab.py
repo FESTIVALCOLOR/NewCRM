@@ -88,7 +88,7 @@ class ContractsTab(QWidget):
         add_btn = IconLoader.create_action_button(
             'add', 'Создать новый договор',
             bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
-        add_btn.clicked.connect(self.add_contract)
+        add_btn.clicked.connect(lambda checked: self.add_contract())
         header_layout.addWidget(add_btn)
 
         layout.addLayout(header_layout)
