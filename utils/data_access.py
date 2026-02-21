@@ -73,7 +73,22 @@ class DataAccess(QObject):
         return self._is_online and self.api_client is not None
 
     def _queue_operation(self, op_type: str, entity_type: str, entity_id: int, data: Dict):
-        """Добавить операцию в очередь для синхронизации"""
+        """Добавить операцию в очередь для синхронизации.
+
+        ВАЖНО: Если вызывается из except-блока, проверяет тип исключения.
+        В очередь попадают ТОЛЬКО сетевые ошибки (APIConnectionError, APITimeoutError).
+        Бизнес-ошибки (409 Conflict, 400 Bad Request и т.д.) НЕ ставятся в очередь,
+        т.к. при синхронизации они снова вернут ту же ошибку (бесконечный retry).
+        """
+        import sys
+        exc_type, exc_value, _ = sys.exc_info()
+        if exc_type is not None:
+            # Вызвано из except-блока — проверяем тип ошибки
+            from utils.api_client.exceptions import APIConnectionError, APITimeoutError
+            if not issubclass(exc_type, (APIConnectionError, APITimeoutError)):
+                _safe_log(f"[DataAccess] Бизнес-ошибка ({exc_type.__name__}), НЕ в очередь: {exc_value}")
+                return
+
         om = get_offline_manager()
         if om:
             from utils.offline_manager import OperationType
