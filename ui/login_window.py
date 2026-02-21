@@ -394,6 +394,16 @@ class LoginWindow(QWidget):
                 # Вход через API
                 result = self.api_client.login(login, password)
 
+                # Auto-relogin: сохраняем credentials для автоматического перелогинивания
+                _login, _password, _api = login, password, self.api_client
+                def _auto_relogin():
+                    try:
+                        _api.login(_login, _password)
+                        return True
+                    except Exception:
+                        return False
+                self.api_client.set_relogin_callback(_auto_relogin)
+
                 # Формируем данные пользователя
                 position = result.get('position', '') or result.get('role', '')
                 self.current_employee = {

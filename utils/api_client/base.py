@@ -66,6 +66,8 @@ class APIClientBase:
         self._refresh_lock = threading.Lock()  # Потокобезопасный lock для refresh
         self._offline_message_shown = False  # Флаг для подавления повторных сообщений об offline
         self._first_request = True  # Флаг для первого запроса (увеличенный таймаут)
+        self._relogin_callback = None  # Callback для перелогинивания при невалидном токене
+        self._relogin_signaled = False  # Флаг чтобы не сигналить повторно
         self.session = requests.Session()  # Переиспользуемая сессия
         # Отключаем прокси для API запросов (избегаем задержек через VPN/Clash)
         self.session.trust_env = False
@@ -143,26 +145,37 @@ class APIClientBase:
                         and self.refresh_token
                         and not url.endswith('/api/auth/refresh')
                         and not url.endswith('/api/auth/login')):
+                    old_token_tail = (self.token or '')[-20:]
                     refreshed = False
                     with self._refresh_lock:
                         if self._is_refreshing:
-                            # Другой поток уже обновляет — ждём завершения
                             pass
                         else:
                             refreshed = self.refresh_access_token()
                     if not refreshed and self._is_refreshing:
-                        # Ждём завершения refresh из другого потока (макс 5 сек)
                         for _ in range(50):
                             time.sleep(0.1)
                             if not self._is_refreshing:
-                                refreshed = self.token is not None
+                                refreshed = True
                                 break
-                    if refreshed or (self.token and not self._is_refreshing):
-                        kwargs['headers'] = self.headers
-                        retry_response = self.session.request(method, url, **kwargs)
+                    if refreshed and self.token:
+                        new_token_tail = self.token[-20:]
+                        # Принудительно обновляем headers с новым токеном
+                        retry_headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {self.token}"
+                        }
+                        retry_kwargs = {k: v for k, v in kwargs.items() if k != 'headers'}
+                        retry_kwargs['headers'] = retry_headers
+                        print(f"[API] 401→refresh OK, retry: ...{old_token_tail} → ...{new_token_tail}")
+                        retry_response = self.session.request(method, url, **retry_kwargs)
+                        if retry_response.status_code == 401:
+                            print(f"[API] 401 после refresh! Требуется перелогинивание")
+                            self._signal_relogin_needed()
                         return retry_response
                     else:
-                        print(f"[API] 401 retry: refresh не удался для {url}")
+                        print(f"[API] 401: refresh не удался, требуется перелогинивание")
+                        self._signal_relogin_needed()
 
                 # HTTP 429 Too Many Requests — ждём Retry-After и повторяем
                 if response.status_code == 429 and attempt < max_attempts - 1:
@@ -394,6 +407,7 @@ class APIClientBase:
         self.token = token
         self._token_exp = self._extract_token_expiry(token)
         self.headers["Authorization"] = f"Bearer {token}"
+        self._relogin_signaled = False  # Сбрасываем флаг при новом токене
         if refresh_token:
             self.refresh_token = refresh_token
 
@@ -404,3 +418,25 @@ class APIClientBase:
         self._token_exp = None
         if "Authorization" in self.headers:
             del self.headers["Authorization"]
+
+    def set_relogin_callback(self, callback):
+        """Установить callback для автоматического перелогинивания.
+        Вызывается когда refresh_token истёк и требуется полный re-login.
+        callback() должен вернуть True если перелогинивание удалось."""
+        self._relogin_callback = callback
+
+    def _signal_relogin_needed(self):
+        """Сигнал о необходимости перелогинивания"""
+        if self._relogin_signaled:
+            return  # Уже сигналили, не повторяем
+        self._relogin_signaled = True
+        if self._relogin_callback:
+            try:
+                result = self._relogin_callback()
+                if result:
+                    print("[API] Auto-relogin: успешно")
+                    self._relogin_signaled = False
+                else:
+                    print("[API] Auto-relogin: не удался")
+            except Exception as e:
+                print(f"[API] Auto-relogin ошибка: {e}")

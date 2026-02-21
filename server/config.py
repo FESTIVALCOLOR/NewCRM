@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     # JWT
     secret_key: str = secrets.token_hex(32)
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60  # 60 минут (auto-refresh на клиенте)
-    refresh_token_expire_days: int = 7  # 7 дней
+    access_token_expire_minutes: int = 1440  # 24 часа — минимизация 401 ошибок
+    refresh_token_expire_days: int = 30  # 30 дней
     max_sessions_per_user: int = 5  # Макс. одновременных сессий на пользователя
 
     # Яндекс.Диск
