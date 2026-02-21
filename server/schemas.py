@@ -1190,6 +1190,7 @@ class NormDaysTemplateRequest(BaseModel):
     """Запрос на сохранение шаблона нормо-дней"""
     project_type: str = Field(..., min_length=1, max_length=50)
     project_subtype: str = Field(..., min_length=1, max_length=100)
+    agent_type: str = Field(default='Все агенты', max_length=100)
     entries: List[NormDaysTemplateEntry] = Field(..., min_length=1)
 
 
@@ -1197,6 +1198,7 @@ class NormDaysTemplateResponse(BaseModel):
     """Ответ с шаблоном нормо-дней"""
     project_type: str
     project_subtype: str
+    agent_type: str = 'Все агенты'
     entries: List[NormDaysTemplateEntry]
     is_custom: bool = False  # True если из БД, False если из формул
 
@@ -1205,6 +1207,7 @@ class NormDaysPreviewRequest(BaseModel):
     """Запрос на предпросмотр расчёта нормо-дней"""
     project_type: str = Field(..., min_length=1, max_length=50)
     project_subtype: str = Field(..., min_length=1, max_length=100)
+    agent_type: str = Field(default='Все агенты', max_length=100)
     area: float = Field(..., gt=0, le=2000)
 
 

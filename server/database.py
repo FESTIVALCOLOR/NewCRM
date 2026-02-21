@@ -154,11 +154,12 @@ class NormDaysTemplate(Base):
     executor_role = Column(String, nullable=False)
     is_in_contract_scope = Column(Boolean, default=True)
     sort_order = Column(Integer, nullable=False)
+    agent_type = Column(String, default='Все агенты')  # 'Все агенты' / имя агента
     updated_at = Column(DateTime, default=datetime.utcnow)
     updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint('project_type', 'project_subtype', 'stage_code', name='uq_norm_template'),
+        UniqueConstraint('project_type', 'project_subtype', 'stage_code', 'agent_type', name='uq_norm_template'),
     )
 
 

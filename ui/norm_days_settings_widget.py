@@ -433,6 +433,15 @@ class NormDaysSettingsWidget(QWidget):
         self._combo_area.currentTextChanged.connect(self._on_filters_changed)
         filter_layout.addWidget(self._combo_area)
 
+        # Агент (Все агенты / конкретный)
+        lbl_agent = QLabel('Агент:')
+        lbl_agent.setStyleSheet('font-size: 12px;')
+        filter_layout.addWidget(lbl_agent)
+        self._combo_agent_type = CustomComboBox()
+        self._combo_agent_type.setMinimumWidth(140)
+        self._combo_agent_type.currentTextChanged.connect(self._on_filters_changed)
+        filter_layout.addWidget(self._combo_agent_type)
+
         # Срок по договору
         self._label_term = QLabel('Срок: -- дн.')
         self._label_term.setStyleSheet('font-weight: bold; font-size: 12px; color: #333;')
@@ -442,9 +451,10 @@ class NormDaysSettingsWidget(QWidget):
 
         layout.addLayout(filter_layout)
 
-        # Заполняем подтипы и площади для первого типа
+        # Заполняем подтипы, площади и агентов для первого типа
         self._fill_subtypes()
         self._fill_areas()
+        self._fill_agents()
 
         # --- Таблица ---
         self._table = QTableWidget()
@@ -610,6 +620,26 @@ class NormDaysSettingsWidget(QWidget):
                 self._combo_area.setCurrentIndex(idx)
         self._combo_area.blockSignals(False)
 
+    def _fill_agents(self):
+        """Заполнить ComboBox агентов: 'Все агенты' + список из БД."""
+        self._combo_agent_type.blockSignals(True)
+        old_val = self._combo_agent_type.currentText()
+        self._combo_agent_type.clear()
+        self._combo_agent_type.addItem('Все агенты')
+        try:
+            agents = self.data_access.get_all_agents()
+            for agent in agents:
+                name = agent.get('name', '')
+                if name:
+                    self._combo_agent_type.addItem(name)
+        except Exception:
+            pass
+        # Восстановить предыдущий выбор
+        idx = self._combo_agent_type.findText(old_val)
+        if idx >= 0:
+            self._combo_agent_type.setCurrentIndex(idx)
+        self._combo_agent_type.blockSignals(False)
+
     def _on_type_changed(self):
         """При смене типа проекта — обновить подтипы, площади и перезагрузить."""
         self._fill_subtypes()
@@ -621,6 +651,7 @@ class NormDaysSettingsWidget(QWidget):
         project_type = self._combo_type.currentText()
         project_subtype = self._combo_subtype.currentText()
         area_text = self._combo_area.currentText()
+        agent_type = self._combo_agent_type.currentText() or 'Все агенты'
 
         if not project_subtype:
             return
@@ -649,20 +680,20 @@ class NormDaysSettingsWidget(QWidget):
         self._label_term.setText(f'Срок: {self._contract_term} дней')
 
         # Загружаем данные
-        self._load_data(project_type, project_subtype, area)
+        self._load_data(project_type, project_subtype, area, agent_type)
 
     # ================================================================
     # Загрузка данных
     # ================================================================
 
-    def _load_data(self, project_type: str, project_subtype: str, area: int):
+    def _load_data(self, project_type: str, project_subtype: str, area: int, agent_type: str = 'Все агенты'):
         """Загрузить шаблон нормо-дней: сначала пробуем API, затем fallback на локальный расчет."""
         self._is_custom = False
 
         # 1. Попробовать загрузить кастомный шаблон через DataAccess
         if self.data_access.is_multi_user:
             try:
-                data = self.data_access.get_norm_days_template(project_type, project_subtype)
+                data = self.data_access.get_norm_days_template(project_type, project_subtype, agent_type)
                 if data and isinstance(data, dict) and data.get('is_custom'):
                     entries = data.get('entries', [])
                     if entries:
@@ -675,7 +706,7 @@ class NormDaysSettingsWidget(QWidget):
                         self._fill_table()
                         self._update_sum()
                         print(f"[NORM_DAYS] Загружен кастомный шаблон из API: "
-                              f"{project_type} / {project_subtype} ({len(entries)} записей)")
+                              f"{project_type} / {project_subtype} / {agent_type} ({len(entries)} записей)")
                         return
             except Exception as e:
                 print(f"[NORM_DAYS] Ошибка загрузки кастомного шаблона: {e}")
@@ -684,7 +715,7 @@ class NormDaysSettingsWidget(QWidget):
         if self.data_access.is_multi_user:
             try:
                 data = self.data_access.preview_norm_days_template(
-                    project_type, project_subtype, area
+                    project_type, project_subtype, area, agent_type
                 )
                 if data and isinstance(data, dict):
                     self._entries = data.get('entries', [])
@@ -693,7 +724,7 @@ class NormDaysSettingsWidget(QWidget):
                     self._fill_table()
                     self._update_sum()
                     print(f"[NORM_DAYS] Загружен preview из API: "
-                          f"{project_type} / {project_subtype}, площадь={area}")
+                          f"{project_type} / {project_subtype} / {agent_type}, площадь={area}")
                     return
             except Exception as e:
                 print(f"[NORM_DAYS] Ошибка preview API: {e}")
@@ -884,6 +915,7 @@ class NormDaysSettingsWidget(QWidget):
 
         project_type = self._combo_type.currentText()
         project_subtype = self._combo_subtype.currentText()
+        agent_type = self._combo_agent_type.currentText() or 'Все агенты'
 
         # Конвертируем entries для API: norm_days -> base_norm_days
         api_entries = []
@@ -904,6 +936,7 @@ class NormDaysSettingsWidget(QWidget):
         data = {
             'project_type': project_type,
             'project_subtype': project_subtype,
+            'agent_type': agent_type,
             'entries': api_entries,
         }
 
@@ -914,11 +947,11 @@ class NormDaysSettingsWidget(QWidget):
                 self,
                 'Успех',
                 f'Шаблон нормо-дней сохранен:\n\n'
-                f'{project_type} / {project_subtype}\n'
+                f'{project_type} / {project_subtype} / {agent_type}\n'
                 f'Сумма в сроке: {in_scope_sum} дней',
                 'success'
             ).exec_()
-            print(f"[NORM_DAYS] Шаблон сохранен: {project_type} / {project_subtype}")
+            print(f"[NORM_DAYS] Шаблон сохранен: {project_type} / {project_subtype} / {agent_type}")
         except Exception as e:
             print(f"[NORM_DAYS] Ошибка сохранения: {e}")
             import traceback
@@ -946,17 +979,18 @@ class NormDaysSettingsWidget(QWidget):
         project_type = self._combo_type.currentText()
         project_subtype = self._combo_subtype.currentText()
         area_text = self._combo_area.currentText()
+        agent_type = self._combo_agent_type.currentText() or 'Все агенты'
 
         if not project_subtype or not area_text:
             return
 
-        area = int(area_text)
+        area = 1 if area_text == '--' else int(area_text)
 
         # Сбрасываем кастомный шаблон через DataAccess
         if self.data_access.is_multi_user and self._is_custom:
             try:
-                self.data_access.reset_norm_days_template(project_type, project_subtype)
-                print(f"[NORM_DAYS] Кастомный шаблон сброшен: {project_type} / {project_subtype}")
+                self.data_access.reset_norm_days_template(project_type, project_subtype, agent_type)
+                print(f"[NORM_DAYS] Кастомный шаблон сброшен: {project_type} / {project_subtype} / {agent_type}")
             except Exception as e:
                 print(f"[NORM_DAYS] Ошибка сброса кастомного шаблона: {e}")
 

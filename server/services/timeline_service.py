@@ -29,9 +29,10 @@ def calc_area_coefficient(area: float) -> int:
     return max(0, int((area - 1) // 100))
 
 
-def build_project_timeline_template(project_type: str, area: float, project_subtype: str = None):
+def build_project_timeline_template(project_type: str, area: float, project_subtype: str = None, agent_type: str = 'Все агенты'):
     """Генерация полного шаблона подэтапов с формулами.
     project_subtype: 'Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный'
+    agent_type: имя агента или 'Все агенты' — для приоритетного выбора кастомных шаблонов
     """
     K = calc_area_coefficient(area)
     # Определяем pt_code из project_subtype (если задан)
@@ -197,13 +198,23 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     for i, e in enumerate(entries, 1):
         e['sort_order'] = i
 
-    # Проверяем кастомный шаблон нормо-дней в БД
+    # Проверяем кастомный шаблон нормо-дней в БД (приоритет: конкретный агент > "Все агенты")
     try:
         db_session = SessionLocal()
-        custom = db_session.query(NormDaysTemplate).filter(
-            NormDaysTemplate.project_type == 'Индивидуальный',
-            NormDaysTemplate.project_subtype == (project_subtype or 'Полный (с 3д визуализацией)'),
-        ).all()
+        sub = project_subtype or 'Полный (с 3д визуализацией)'
+        custom = None
+        if agent_type and agent_type != 'Все агенты':
+            custom = db_session.query(NormDaysTemplate).filter(
+                NormDaysTemplate.project_type == 'Индивидуальный',
+                NormDaysTemplate.project_subtype == sub,
+                NormDaysTemplate.agent_type == agent_type,
+            ).all()
+        if not custom:
+            custom = db_session.query(NormDaysTemplate).filter(
+                NormDaysTemplate.project_type == 'Индивидуальный',
+                NormDaysTemplate.project_subtype == sub,
+                NormDaysTemplate.agent_type.in_(['Все агенты', None]),
+            ).all()
         db_session.close()
         if custom:
             custom_map = {c.stage_code: c for c in custom}
@@ -281,7 +292,7 @@ def calc_template_contract_term(template_subtype: str, area: float, floors: int 
     return int(base_days)
 
 
-def build_template_project_timeline(template_subtype: str, area: float, floors: int = 1):
+def build_template_project_timeline(template_subtype: str, area: float, floors: int = 1, agent_type: str = 'Все агенты'):
     """Генерация шаблона таблицы сроков для шаблонных проектов.
     template_subtype: 'Стандарт', 'Стандарт с визуализацией',
                       'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией'
@@ -363,13 +374,22 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
     for i, e in enumerate(entries, 1):
         e['sort_order'] = i
 
-    # Проверяем кастомный шаблон нормо-дней в БД
+    # Проверяем кастомный шаблон нормо-дней в БД (приоритет: конкретный агент > "Все агенты")
     try:
         db_session = SessionLocal()
-        custom = db_session.query(NormDaysTemplate).filter(
-            NormDaysTemplate.project_type == 'Шаблонный',
-            NormDaysTemplate.project_subtype == template_subtype,
-        ).all()
+        custom = None
+        if agent_type and agent_type != 'Все агенты':
+            custom = db_session.query(NormDaysTemplate).filter(
+                NormDaysTemplate.project_type == 'Шаблонный',
+                NormDaysTemplate.project_subtype == template_subtype,
+                NormDaysTemplate.agent_type == agent_type,
+            ).all()
+        if not custom:
+            custom = db_session.query(NormDaysTemplate).filter(
+                NormDaysTemplate.project_type == 'Шаблонный',
+                NormDaysTemplate.project_subtype == template_subtype,
+                NormDaysTemplate.agent_type.in_(['Все агенты', None]),
+            ).all()
         db_session.close()
         if custom:
             custom_map = {c.stage_code: c for c in custom}

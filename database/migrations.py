@@ -115,6 +115,10 @@ class DatabaseMigrations:
                 self.create_norm_days_templates_table()
                 # ========================================================
 
+                # ========== МИГРАЦИЯ: agent_type в norm_days_templates ==========
+                self.add_agent_type_to_norm_days_templates()
+                # ==============================================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
 
@@ -266,15 +270,71 @@ class DatabaseMigrations:
                 executor_role TEXT NOT NULL,
                 is_in_contract_scope BOOLEAN DEFAULT 1,
                 sort_order INTEGER NOT NULL,
+                agent_type TEXT DEFAULT 'Все агенты',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_by INTEGER,
-                UNIQUE(project_type, project_subtype, stage_code)
+                UNIQUE(project_type, project_subtype, stage_code, agent_type)
             )''')
 
             conn.commit()
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции norm_days_templates: {e}")
+
+    def add_agent_type_to_norm_days_templates(self):
+        """Миграция: добавление колонки agent_type + обновление UNIQUE-constraint"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(norm_days_templates)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            if 'agent_type' not in columns:
+                # 1. Добавляем колонку
+                cursor.execute(
+                    "ALTER TABLE norm_days_templates ADD COLUMN agent_type TEXT DEFAULT 'Все агенты'"
+                )
+                # 2. Обновляем NULL → 'Все агенты'
+                cursor.execute(
+                    "UPDATE norm_days_templates SET agent_type = 'Все агенты' WHERE agent_type IS NULL"
+                )
+                # 3. Пересоздаём таблицу для обновления UNIQUE-constraint
+                # SQLite не поддерживает ALTER CONSTRAINT, поэтому нужен полный цикл
+                cursor.execute('''CREATE TABLE IF NOT EXISTS norm_days_templates_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_type TEXT NOT NULL,
+                    project_subtype TEXT NOT NULL,
+                    stage_code TEXT NOT NULL,
+                    stage_name TEXT NOT NULL,
+                    stage_group TEXT NOT NULL,
+                    substage_group TEXT,
+                    base_norm_days REAL NOT NULL,
+                    k_multiplier REAL DEFAULT 0,
+                    executor_role TEXT NOT NULL,
+                    is_in_contract_scope BOOLEAN DEFAULT 1,
+                    sort_order INTEGER NOT NULL,
+                    agent_type TEXT DEFAULT 'Все агенты',
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_by INTEGER,
+                    UNIQUE(project_type, project_subtype, stage_code, agent_type)
+                )''')
+                cursor.execute('''INSERT INTO norm_days_templates_new
+                    (id, project_type, project_subtype, stage_code, stage_name, stage_group,
+                     substage_group, base_norm_days, k_multiplier, executor_role,
+                     is_in_contract_scope, sort_order, agent_type, updated_at, updated_by)
+                    SELECT id, project_type, project_subtype, stage_code, stage_name, stage_group,
+                     substage_group, base_norm_days, k_multiplier, executor_role,
+                     is_in_contract_scope, sort_order, agent_type, updated_at, updated_by
+                    FROM norm_days_templates''')
+                cursor.execute("DROP TABLE norm_days_templates")
+                cursor.execute("ALTER TABLE norm_days_templates_new RENAME TO norm_days_templates")
+                conn.commit()
+                print("[OK] Миграция: добавлена колонка agent_type + обновлен UNIQUE в norm_days_templates")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции agent_type в norm_days_templates: {e}")
 
     def add_third_payment_field(self):
         """Миграция: добавление поля third_payment"""

@@ -24,15 +24,29 @@ router = APIRouter(tags=["norm-days"])
 async def get_norm_days_template(
     project_type: str,
     project_subtype: str,
+    agent_type: str = 'Все агенты',
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Получить шаблон нормо-дней. Если есть кастомный в БД — возвращаем его, иначе генерируем из формул."""
-    # Проверяем наличие кастомного шаблона в БД
-    custom = db.query(NormDaysTemplate).filter(
-        NormDaysTemplate.project_type == project_type,
-        NormDaysTemplate.project_subtype == project_subtype,
-    ).order_by(NormDaysTemplate.sort_order).all()
+    """Получить шаблон нормо-дней. Приоритет: конкретный агент > 'Все агенты' > формулы."""
+    # Приоритет: сначала ищем для конкретного агента, потом для "Все агенты"
+    custom = None
+    effective_agent = agent_type
+    if agent_type and agent_type != 'Все агенты':
+        custom = db.query(NormDaysTemplate).filter(
+            NormDaysTemplate.project_type == project_type,
+            NormDaysTemplate.project_subtype == project_subtype,
+            NormDaysTemplate.agent_type == agent_type,
+        ).order_by(NormDaysTemplate.sort_order).all()
+
+    if not custom:
+        # Fallback на "Все агенты"
+        effective_agent = 'Все агенты'
+        custom = db.query(NormDaysTemplate).filter(
+            NormDaysTemplate.project_type == project_type,
+            NormDaysTemplate.project_subtype == project_subtype,
+            NormDaysTemplate.agent_type.in_(['Все агенты', None]),
+        ).order_by(NormDaysTemplate.sort_order).all()
 
     if custom:
         entries = []
@@ -51,6 +65,7 @@ async def get_norm_days_template(
         return {
             "project_type": project_type,
             "project_subtype": project_subtype,
+            "agent_type": effective_agent,
             "entries": entries,
             "is_custom": True,
         }
@@ -60,6 +75,7 @@ async def get_norm_days_template(
         raw_entries, contract_term, K = build_template_project_timeline(project_subtype, 100)
     else:
         raw_entries, contract_term, K = build_project_timeline_template(project_type, 100, project_subtype)
+    effective_agent = 'Все агенты'
 
     entries = []
     for e in raw_entries:
@@ -79,6 +95,7 @@ async def get_norm_days_template(
     return {
         "project_type": project_type,
         "project_subtype": project_subtype,
+        "agent_type": effective_agent,
         "entries": entries,
         "is_custom": False,
     }
@@ -95,10 +112,11 @@ async def save_norm_days_template(
         raise HTTPException(status_code=400, detail="Список entries не может быть пустым")
 
     try:
-        # Удаляем старый шаблон для этого типа/подтипа
+        # Удаляем старый шаблон для этого типа/подтипа/агента
         db.query(NormDaysTemplate).filter(
             NormDaysTemplate.project_type == request.project_type,
             NormDaysTemplate.project_subtype == request.project_subtype,
+            NormDaysTemplate.agent_type == request.agent_type,
         ).delete()
         db.flush()
 
@@ -116,14 +134,15 @@ async def save_norm_days_template(
                 executor_role=entry.executor_role,
                 is_in_contract_scope=entry.is_in_contract_scope,
                 sort_order=entry.sort_order,
+                agent_type=request.agent_type,
                 updated_at=datetime.utcnow(),
                 updated_by=current_user.id,
             )
             db.add(record)
 
         db.commit()
-        logger.info(f"Шаблон нормо-дней сохранен: {request.project_type}/{request.project_subtype}, "
-                     f"{len(request.entries)} записей (user={current_user.id})")
+        logger.info(f"Шаблон нормо-дней сохранен: {request.project_type}/{request.project_subtype}"
+                     f"/{request.agent_type}, {len(request.entries)} записей (user={current_user.id})")
         return {"status": "saved", "count": len(request.entries)}
     except Exception as e:
         db.rollback()
@@ -147,9 +166,11 @@ async def preview_norm_days_template(
 
     try:
         if request.project_type == 'Шаблонный':
-            raw_entries, contract_term, K = build_template_project_timeline(request.project_subtype, area)
+            raw_entries, contract_term, K = build_template_project_timeline(
+                request.project_subtype, area, agent_type=request.agent_type)
         else:
-            raw_entries, contract_term, K = build_project_timeline_template(request.project_type, area, request.project_subtype)
+            raw_entries, contract_term, K = build_project_timeline_template(
+                request.project_type, area, request.project_subtype, agent_type=request.agent_type)
 
         entries = []
         for e in raw_entries:
@@ -189,6 +210,7 @@ async def reset_norm_days_template(
 
     project_type = body.get("project_type", "")
     project_subtype = body.get("project_subtype", "")
+    agent_type = body.get("agent_type", "Все агенты")
 
     if not project_type or not project_subtype:
         raise HTTPException(status_code=400, detail="Необходимо указать project_type и project_subtype")
@@ -197,9 +219,10 @@ async def reset_norm_days_template(
         deleted = db.query(NormDaysTemplate).filter(
             NormDaysTemplate.project_type == project_type,
             NormDaysTemplate.project_subtype == project_subtype,
+            NormDaysTemplate.agent_type == agent_type,
         ).delete()
         db.commit()
-        logger.info(f"Шаблон нормо-дней сброшен: {project_type}/{project_subtype}, "
+        logger.info(f"Шаблон нормо-дней сброшен: {project_type}/{project_subtype}/{agent_type}, "
                      f"удалено {deleted} записей (user={current_user.id})")
         return {"status": "reset", "deleted": deleted}
     except Exception as e:

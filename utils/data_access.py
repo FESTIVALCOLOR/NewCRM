@@ -2686,11 +2686,11 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] get_permission_definitions: API недоступен")
         return []
 
-    def get_norm_days_template(self, project_type: str, project_subtype: str) -> Dict[str, Any]:
+    def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Получить шаблон нормо-дней"""
         if self.api_client:
             try:
-                return self.api_client.get_norm_days_template(project_type, project_subtype)
+                return self.api_client.get_norm_days_template(project_type, project_subtype, agent_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API get_norm_days_template: {e}")
         return {"entries": []}
@@ -2704,20 +2704,20 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка save_norm_days_template: {e}")
         return None
 
-    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float) -> Dict[str, Any]:
+    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Превью нормо-дней для конкретной площади"""
         if self.api_client:
             try:
-                return self.api_client.preview_norm_days_template(project_type, project_subtype, area)
+                return self.api_client.preview_norm_days_template(project_type, project_subtype, area, agent_type)
             except Exception:
                 pass
         return {"entries": [], "contract_term": 0, "k_coefficient": 0}
 
-    def reset_norm_days_template(self, project_type: str, project_subtype: str) -> Optional[Dict]:
+    def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Optional[Dict]:
         """Сбросить шаблон нормо-дней к формулам"""
         if self._should_use_api():
             try:
-                return self.api_client.reset_norm_days_template(project_type, project_subtype)
+                return self.api_client.reset_norm_days_template(project_type, project_subtype, agent_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка reset_norm_days_template: {e}")
         return None

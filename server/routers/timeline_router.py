@@ -72,15 +72,18 @@ async def init_project_timeline(
     if existing > 0:
         return {"status": "already_initialized", "count": existing}
 
+    # Используем agent_type из договора для выбора кастомного шаблона нормо-дней
+    contract_agent = contract.agent_type or 'Все агенты'
+
     if request.project_type == 'Шаблонный':
         template_subtype = request.project_subtype or 'Стандарт'
         floors = getattr(request, 'floors', 1) or 1
         entries, contract_term, K = build_template_project_timeline(
-            template_subtype, request.area, floors
+            template_subtype, request.area, floors, agent_type=contract_agent
         )
     else:
         entries, contract_term, K = build_project_timeline_template(
-            request.project_type, request.area, request.project_subtype
+            request.project_type, request.area, request.project_subtype, agent_type=contract_agent
         )
 
     for e in entries:
@@ -126,15 +129,18 @@ async def reinit_project_timeline(
     ).delete()
     db.flush()
 
+    # Используем agent_type из договора для выбора кастомного шаблона нормо-дней
+    contract_agent = contract.agent_type or 'Все агенты'
+
     if request.project_type == 'Шаблонный':
         template_subtype = request.project_subtype or 'Стандарт'
         floors = getattr(request, 'floors', 1) or 1
         entries, contract_term, K = build_template_project_timeline(
-            template_subtype, request.area, floors
+            template_subtype, request.area, floors, agent_type=contract_agent
         )
     else:
         entries, contract_term, K = build_project_timeline_template(
-            request.project_type, request.area, request.project_subtype
+            request.project_type, request.area, request.project_subtype, agent_type=contract_agent
         )
 
     for e in entries:

@@ -263,9 +263,9 @@ class MiscMixin:
         )
         return self._handle_response(response)
 
-    def get_norm_days_template(self, project_type: str, project_subtype: str) -> Dict[str, Any]:
-        """Получить шаблон нормо-дней для типа/подтипа проекта"""
-        params = {"project_type": project_type, "project_subtype": project_subtype}
+    def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
+        """Получить шаблон нормо-дней для типа/подтипа/агента"""
+        params = {"project_type": project_type, "project_subtype": project_subtype, "agent_type": agent_type}
         response = self._request('GET', f"{self.base_url}/api/norm-days/templates", params=params)
         return self._handle_response(response)
 
@@ -274,14 +274,16 @@ class MiscMixin:
         response = self._request('PUT', f"{self.base_url}/api/norm-days/templates", json=data)
         return self._handle_response(response)
 
-    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float) -> Dict[str, Any]:
+    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Предпросмотр расчёта нормо-дней для указанной площади"""
         response = self._request('POST', f"{self.base_url}/api/norm-days/templates/preview",
-                                 json={"project_type": project_type, "project_subtype": project_subtype, "area": area})
+                                 json={"project_type": project_type, "project_subtype": project_subtype,
+                                        "area": area, "agent_type": agent_type})
         return self._handle_response(response)
 
-    def reset_norm_days_template(self, project_type: str, project_subtype: str) -> Dict[str, Any]:
+    def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Сбросить кастомный шаблон нормо-дней (возврат к формулам)"""
         response = self._request('POST', f"{self.base_url}/api/norm-days/templates/reset",
-                                 json={"project_type": project_type, "project_subtype": project_subtype})
+                                 json={"project_type": project_type, "project_subtype": project_subtype,
+                                        "agent_type": agent_type})
         return self._handle_response(response)
