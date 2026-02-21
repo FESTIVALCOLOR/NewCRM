@@ -8,6 +8,7 @@ import urllib3
 import time
 import json
 import base64
+import random
 import threading
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -30,8 +31,10 @@ class APIClientBase:
     DEFAULT_TIMEOUT = 10  # секунд для обычных запросов
     WRITE_TIMEOUT = 15  # секунд для операций записи (POST, PUT, PATCH, DELETE)
     FIRST_REQUEST_TIMEOUT = 10  # секунд для первого запроса (TCP cold start)
-    MAX_RETRIES = 2  # 2 попытки для надежности
-    RETRY_DELAY = 0.5  # секунд между попытками
+    MAX_RETRIES = 3  # 3 попытки для надежности
+    RETRY_DELAY = 0.5  # базовая задержка (секунд), растёт экспоненциально
+    RETRY_MAX_DELAY = 4.0  # максимальная задержка между попытками
+    RETRY_JITTER = 0.25  # случайное отклонение ±25% для предотвращения thundering herd
     # ИСПРАВЛЕНИЕ 04.02.2026: Кеш offline 10 сек
     # При нестабильной сети первый запрос после паузы может быть медленным (TCP cold start)
     # 10 сек дает достаточно времени для восстановления без лишних сообщений
@@ -131,9 +134,9 @@ class APIClientBase:
                 if not self._is_online:
                     print("[API] Соединение восстановлено")
                 self._is_online = True
-                self._first_request = False  # Первый запрос успешен, дальше обычные таймауты
-                self._last_offline_time = None  # Сбрасываем время offline
-                self._offline_message_shown = False  # Разрешаем показ следующего offline сообщения
+                self._first_request = False
+                self._last_offline_time = None
+                self._offline_message_shown = False
 
                 # Авторетрай на 401: обновляем токен и повторяем запрос однократно
                 if (response.status_code == 401
@@ -143,13 +146,23 @@ class APIClientBase:
                         and not url.endswith('/api/auth/login')):
                     with self._refresh_lock:
                         if self._is_refreshing:
-                            # Другой поток уже обновляет — подождём и повторим с новым токеном
                             pass
                         elif self.refresh_access_token():
-                            # Обновляем заголовки для повторного запроса
                             kwargs['headers'] = self.headers
                             retry_response = self.session.request(method, url, **kwargs)
                             return retry_response
+
+                # HTTP 429 Too Many Requests — ждём Retry-After и повторяем
+                if response.status_code == 429 and attempt < max_attempts - 1:
+                    retry_after = self._parse_retry_after(response)
+                    delay = retry_after if retry_after else self._calc_backoff(attempt)
+                    time.sleep(delay)
+                    continue
+
+                # HTTP 502/503/504 — серверные проблемы, retry с backoff
+                if response.status_code in (502, 503, 504) and attempt < max_attempts - 1:
+                    time.sleep(self._calc_backoff(attempt))
+                    continue
 
                 return response
 
@@ -158,37 +171,49 @@ class APIClientBase:
                     f"Таймаут запроса после {timeout} сек: {url}"
                 )
                 if attempt < max_attempts - 1:
-                    # Не выводим сообщение при каждой попытке - слишком много шума
-                    time.sleep(self.RETRY_DELAY * (attempt + 1))
-                    continue  # Повторяем попытку
+                    time.sleep(self._calc_backoff(attempt))
+                    continue
                 else:
                     if mark_offline:
                         self._mark_offline()
-                        # Сообщение выводится в _mark_offline() только при первом переходе
 
             except requests.exceptions.ConnectionError as e:
                 last_error = APIConnectionError(
                     f"Не удалось подключиться к серверу: {self.base_url}"
                 )
                 if attempt < max_attempts - 1:
-                    # Не выводим сообщение при каждой попытке
-                    time.sleep(self.RETRY_DELAY * (attempt + 1))
-                    continue  # Повторяем попытку
+                    time.sleep(self._calc_backoff(attempt))
+                    continue
                 else:
                     if mark_offline:
                         self._mark_offline()
-                        # Сообщение выводится в _mark_offline() только при первом переходе
 
             except requests.exceptions.RequestException as e:
                 last_error = APIError(f"Ошибка запроса: {e}")
-                # Не выводим сообщение - слишком много шума
                 if attempt < max_attempts - 1:
-                    time.sleep(self.RETRY_DELAY * (attempt + 1))
+                    time.sleep(self._calc_backoff(attempt))
 
         # Все попытки исчерпаны
         if mark_offline:
             self._is_online = False
         raise last_error
+
+    def _calc_backoff(self, attempt: int) -> float:
+        """Exponential backoff с jitter: 0.5 → 1.0 → 2.0 (±25%)"""
+        delay = min(self.RETRY_DELAY * (2 ** attempt), self.RETRY_MAX_DELAY)
+        jitter = delay * self.RETRY_JITTER * (2 * random.random() - 1)
+        return max(0.1, delay + jitter)
+
+    @staticmethod
+    def _parse_retry_after(response: requests.Response) -> Optional[float]:
+        """Парсинг заголовка Retry-After (секунды или HTTP-date)"""
+        retry_after = response.headers.get('Retry-After')
+        if not retry_after:
+            return None
+        try:
+            return float(retry_after)
+        except (ValueError, TypeError):
+            return None
 
     def _is_recently_offline(self) -> bool:
         """Проверить, были ли мы недавно offline (в пределах OFFLINE_CACHE_DURATION)"""
