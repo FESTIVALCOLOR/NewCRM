@@ -183,28 +183,28 @@
 4. **Нет валидации пароля в EmployeeUpdate** — обход политики паролей
 5. **Brute-force по Docker IP** — все пользователи делят один счётчик
 
-### HIGH (5) — 4 исправлены, 1 открыт
+### HIGH (5) — 5 исправлены, 0 открытых
 1. ~~**SSL verify=False по умолчанию**~~ → **verify=True (Phase 1)** ✅
 2. ~~**Нет rate limiting** на 140+ endpoints~~ → **300/min глобально (Phase 1+5)** ✅
-3. **passlib 1.7.4 unmaintained** — нет обновлений с 2020 — **ОТКРЫТ**
+3. ~~**passlib 1.7.4 unmaintained**~~ → **Удалён, bcrypt 4.2.1 напрямую (Phase 6.3)** ✅
 4. ~~**Нет whitelist типов файлов** при загрузке~~ → **30 расширений (Phase 1)** ✅
 5. ~~**subprocess shell=True** в update_manager.py~~ → **shell=False (Phase 5.1)** ✅
 
-### MEDIUM (8) — 7 исправлены, 1 открыт
+### MEDIUM (8) — 8 исправлены, 0 открытых
 1. ~~Нет Content-Security-Policy (CSP)~~ → **CSP в nginx (Phase 1)** ✅
 2. ~~Nginx — нет server_tokens off~~ → **server_tokens off + SSL ciphers (Phase 1)** ✅
 3. ~~f-strings в SQL~~ → **ALLOWED_TABLES + _validate_columns + _build_set_clause (Phase 5+5.1)** ✅
 4. ~~Дефолтный SECRET_KEY в config.py~~ → **secrets.token_hex(32) по умолчанию (Phase 5.1)** ✅
-5. Нет ограничения количества сессий — **ОТКРЫТ**
+5. ~~Нет ограничения количества сессий~~ → **max_sessions_per_user=5 + UserSession (Phase 6.3)** ✅
 6. ~~Refresh token в query parameters~~ → **В теле запроса (Phase 1)** ✅
 7. ~~Endpoints без granular permissions~~ → **33 permissions (Phase 1)** ✅
 8. ~~Ошибки раскрывают внутренние детали (str(e))~~ → **"Внутренняя ошибка сервера" + logger.exception (Phase 5.1, 94 места)** ✅
 
-### LOW (6) — 1 исправлен, 5 открыты
+### LOW (6) — 2 исправлены, 4 открыты
 1. admin/admin123 — слабые дефолтные учётные данные — **ОТКРЫТ**
 2. Токены в памяти без шифрования — **ОТКРЫТ**
 3. Info-endpoints без авторизации (версия приложения) — **ОТКРЫТ**
-4. bcrypt 3.2.2 устаревший — **ОТКРЫТ**
+4. ~~bcrypt 3.2.2 устаревший~~ → **bcrypt 4.2.1 (server/requirements.txt + CI)** ✅
 5. Hardcoded пароли в migrate_to_server.py — **ОТКРЫТ**
 6. ~~print() с SQL-параметрами~~ → **Удалены print(WHERE/PARAMS) (Phase 5.1)** ✅
 
@@ -523,7 +523,7 @@
 | Новых E2E тестов | — | — | — | — | +18 | **+18** | — |
 | Безопасность | ~78% | ~92% | ~92% | ~92% | ~94% | **~96%** | >95% ✅ |
 | CRITICAL уязвимостей | 5 | 0 | 0 | 0 | 0 | **0** | 0 ✅ |
-| HIGH уязвимостей | 5 | 1 | 1 | 1 (passlib) | 1 (passlib) | **1** (passlib) | 0 |
+| HIGH уязвимостей | 5 | 1 | 1 | 1 (passlib) | 1 (passlib) | **0** (passlib удалён) | 0 ✅ |
 | MISMATCH совместимости | 3 | 0 | 0 | 0 | 0 | **0** | 0 ✅ |
 | server/main.py строк | 11 077 | 11 077 | 424 | 424 | 424 | **424** | <2 000 ✅ |
 | Роутеры | 0 | 0 | 22 (212 ep) | 22 (212 ep) | 23 (214 ep) | **23 (214 ep)** | 15+ ✅ |
@@ -618,13 +618,13 @@ Interior Studio CRM — это зрелый проект с **правильны
 
 **Открытые вопросы (за рамками текущего аудита):**
 
-*Безопасность (7 открытых):*
-1. **passlib 1.7.4** unmaintained — HIGH (единственный HIGH)
-2. **Нет лимита сессий** — MEDIUM (единственный MEDIUM)
+*Безопасность (4 открытых, 3 закрыты):*
+1. ~~**passlib 1.7.4** unmaintained~~ → **bcrypt 4.2.1 напрямую** ✅
+2. ~~**Нет лимита сессий**~~ → **max_sessions_per_user=5** ✅
 3. **admin/admin123** дефолтные учётки — LOW
 4. **Токены в памяти** без шифрования — LOW
 5. **Info-endpoints** без авторизации — LOW
-6. **bcrypt 3.2.2** устаревший — LOW
+6. ~~**bcrypt 3.2.2** устаревший~~ → **4.2.1** ✅
 7. **Hardcoded пароли** в migrate_to_server.py — LOW
 
 *Совместимость (6 WARN):*
@@ -745,9 +745,9 @@ Interior Studio CRM — это зрелый проект с **правильны
 
 | Категория | Было | Стало |
 |-----------|------|-------|
-| HIGH открытых | 2 | **1** (passlib) |
-| MEDIUM открытых | 3 | **1** (лимит сессий) |
-| LOW открытых | 6 | **5** |
+| HIGH открытых | 2 | **0** (passlib удалён) |
+| MEDIUM открытых | 3 | **0** (лимит сессий реализован) |
+| LOW открытых | 6 | **4** (bcrypt обновлён) |
 | Tech debt WARN | 6 | **3** (W-07, W-09, W-P5-01) |
 | Серверные баги | 1 (B-02) | **0** |
 
@@ -968,8 +968,8 @@ stage_executor, agent, project_template, permission, order
 | O-02 | **Conflict resolution при offline-sync** (version field + UI диалог) | Opt 1.3 | Высокая | |
 | O-03 | **Лимит одновременных сессий** (единственный MEDIUM в безопасности) | Аудит §5 | Средняя | **DONE** (max_sessions=5) |
 | O-04 | **81 skipped E2E тест** (fixture-проблемы на удалённом сервере) | Аудит W-09 | Средняя | |
-| O-05 | **Brute-force в PostgreSQL** (сейчас в памяти, сбрасывается при restart) | Opt 1.6 | Средняя | |
-| O-06 | **Request deduplication** (idempotency key + button debounce) | Opt 1.4 | Средняя | |
+| O-05 | **Brute-force в PostgreSQL** (сейчас в памяти, сбрасывается при restart) | Opt 1.6 | Средняя | **DONE** (гибрид: memory+ActivityLog) |
+| O-06 | **Request deduplication** (idempotency key + button debounce) | Opt 1.4 | Средняя | **PARTIAL** (UI debounce Phase 1) |
 
 ### Приоритет 2 — Архитектура и качество (8 задач)
 
@@ -991,7 +991,7 @@ stage_executor, agent, project_template, permission, order
 | O-15 | **30+ модулей без тестов** (14 UI + 16 utils + server/permissions.py) | Аудит §2 | Высокая | |
 | O-16 | **pytest-qt для UI виджетов** (целевое покрытие 60%) | Opt 3.6 | Высокая | |
 | O-17 | **121 MagicMock pre-existing UI failures** | Аудит | Средняя | |
-| O-18 | **--cov в CI** (нет метрики покрытия) | Аудит | Низкая | |
+| O-18 | **--cov в CI** (нет метрики покрытия) | Аудит | Низкая | **DONE** (pytest-cov + E2E coverage) |
 
 ### Приоритет 4 — UX (6 задач)
 
@@ -1016,7 +1016,7 @@ stage_executor, agent, project_template, permission, order
 | O-30 | **Staging окружение** (docker-compose.staging.yml) | Opt 4.6 | Средняя | |
 | O-31 | **API версионирование /api/v1/** | Аудит, DEFERRED | Высокая | |
 | O-32 | **admin/admin123 дефолтные учётки** | Аудит LOW | Низкая | |
-| O-33 | **bcrypt 3.2.2 устаревший** | Аудит LOW | Низкая | |
+| O-33 | **bcrypt 3.2.2 устаревший** | Аудит LOW | Низкая | **DONE** (4.2.1 + CI обновлён) |
 | O-34 | **Hardcoded пароли в migrate_to_server.py** | Аудит LOW | Низкая | |
 | O-35 | **Серверное кэширование** (Redis/memcached для 210+ endpoints) | Аудит §7 | Высокая | |
 | O-36 | **JWT secret key ротация** | Opt 1.5.2 | Средняя | |

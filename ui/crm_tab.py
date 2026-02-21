@@ -29,6 +29,7 @@ from utils.resource_path import resource_path
 from utils.dialog_helpers import create_progress_dialog
 from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
 from functools import partial
+from utils.button_debounce import debounce_click
 import json
 import os
 import threading
@@ -2744,12 +2745,13 @@ class CRMCard(QFrame):
         print(f"    Результат: False (условия не выполнены)")
         return False
     
+    @debounce_click(delay_ms=2000)
     def submit_work(self):
         """Отметка о сдаче работы"""
         current_employee = self.employee
         if not current_employee:
             return
-        
+
         current_column = self.card_data.get('column_name', '')
         
         # ========== ЗАМЕНИЛИ стандартный QDialog ==========
@@ -2810,6 +2812,7 @@ class CRMCard(QFrame):
                 traceback.print_exc()
                 CustomMessageBox(self, 'Ошибка', f'Не удалось отметить работу: {e}', 'error').exec_()
     
+    @debounce_click(delay_ms=2000)
     def accept_work(self):
         """Принятие работы менеджером"""
         current_column = self.card_data.get('column_name', '')
@@ -2976,6 +2979,7 @@ class CRMCard(QFrame):
                 CustomMessageBox(self, 'Ошибка', f'Не удалось принять работу: {e}', 'error').exec_()
 
 
+    @debounce_click(delay_ms=2000)
     def reject_work(self):
         """Отправить работу на исправление с загрузкой файла правок на ЯД"""
         current_column = self.card_data.get('column_name', '')

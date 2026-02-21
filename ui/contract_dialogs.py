@@ -29,6 +29,7 @@ from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.dialog_helpers import create_progress_dialog
+from utils.button_debounce import debounce_click
 from utils.yandex_disk import YandexDiskManager
 from utils.table_settings import TableSettings, ProportionalResizeTable
 import json
@@ -3686,6 +3687,7 @@ class ContractDialog(QDialog):
         else:
             event.accept()
 
+    @debounce_click(delay_ms=2000)
     def save_contract(self):
         """Сохранение договора"""
         if not self.contract_number.text().strip():

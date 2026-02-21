@@ -23,6 +23,7 @@ from utils.table_settings import TableSettings, ProportionalResizeTable
 import json
 import os
 import threading
+from utils.button_debounce import debounce_click
 
 # ========== ИМПОРТ ДИАЛОГОВ (вынесены в contract_dialogs.py) ==========
 from ui.contract_dialogs import (
@@ -348,6 +349,7 @@ class ContractsTab(QWidget):
         if crm_tab and hasattr(crm_tab, '_data_loaded'):
             crm_tab._data_loaded = False
 
+    @debounce_click
     def add_contract(self):
         """Добавление договора"""
         dialog = ContractDialog(self)
@@ -369,6 +371,7 @@ class ContractsTab(QWidget):
             self._refresh_dashboard()
             self._invalidate_crm_cache()
 
+    @debounce_click(delay_ms=2000)
     def delete_contract(self, contract_data):
         """Удаление договора - ИСПРАВЛЕНО 01.02.2026: добавлен fallback и offline поддержка"""
         reply = CustomQuestionBox(

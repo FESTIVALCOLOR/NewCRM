@@ -81,7 +81,7 @@ token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 ### Хранение пароля
 
 ```python
-# Библиотека: bcrypt==3.2.2
+# Библиотека: bcrypt==4.2.1
 # Хэширование при создании сотрудника
 import bcrypt
 hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())

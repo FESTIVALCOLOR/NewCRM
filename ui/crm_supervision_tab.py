@@ -20,6 +20,7 @@ from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 from utils.dialog_helpers import create_progress_dialog
 from utils.data_access import DataAccess
+from utils.button_debounce import debounce_click
 from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
 from ui.crm_tab import _has_perm
 import os
@@ -1872,6 +1873,7 @@ class SupervisionCard(QFrame):
             )
             self.refresh_parent_tab()
             
+    @debounce_click(delay_ms=2000)
     def submit_work(self):
         """Сдача работы (для ДАН)"""
         column_name = self.card_data.get('column_name', 'N/A')
@@ -1995,6 +1997,7 @@ class SupervisionCard(QFrame):
                 break
             parent = parent.parent()
     
+    @debounce_click(delay_ms=2000)
     def accept_work(self):
         """Принятие работы менеджером"""
         column_name = self.card_data.get('column_name', 'N/A')

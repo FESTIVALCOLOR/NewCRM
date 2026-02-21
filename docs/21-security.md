@@ -81,7 +81,7 @@ def _auto_refresh_if_needed(self):
 - Обязательно буквы + цифры
 
 **Файлы:**
-- `server/auth.py` — bcrypt (passlib)
+- `server/auth.py` — bcrypt 4.2.1 (напрямую, без passlib)
 - `utils/password_utils.py` — PBKDF2 для offline
 
 ### 4. Сетевая безопасность

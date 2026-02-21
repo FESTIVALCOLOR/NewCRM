@@ -369,8 +369,7 @@ sqlalchemy
 psycopg2-binary
 pydantic
 python-jose[cryptography]
-passlib[bcrypt]
-bcrypt==3.2.2
+bcrypt==4.2.1
 python-multipart
 requests
 openpyxl
