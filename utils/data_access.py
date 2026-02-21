@@ -1387,8 +1387,11 @@ class DataAccess(QObject):
     def get_all_agents(self) -> List[Dict]:
         """Получить всех агентов"""
         if self.api_client:
-            agent_types = self.api_client.get_agent_types()
-            return [{'name': a} for a in agent_types]
+            try:
+                agent_types = self.api_client.get_agent_types()
+                return [{'name': a} for a in agent_types]
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_all_agents, fallback: {e}")
         return self.db.get_all_agents()
 
     def get_agent_color(self, agent_name: str) -> Optional[str]:
@@ -1463,13 +1466,17 @@ class DataAccess(QObject):
                                        deadline: str = None, executor_id: int = None) -> bool:
         """Обновить дедлайн исполнителя стадии"""
         if self.api_client:
-            update_data = {}
-            if deadline is not None:
-                update_data['deadline'] = deadline
-            if executor_id is not None:
-                update_data['executor_id'] = executor_id
-            result = self.api_client.update_stage_executor(card_id, stage_name, update_data)
-            return result is not None
+            try:
+                update_data = {}
+                if deadline is not None:
+                    update_data['deadline'] = deadline
+                if executor_id is not None:
+                    update_data['executor_id'] = executor_id
+                result = self.api_client.update_stage_executor(card_id, stage_name, update_data)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error update_stage_executor_deadline: {e}")
+                return False
         return self.db.update_stage_executor_deadline(card_id, stage_name, deadline)
 
     # ==================== STAGE EXECUTORS ====================
@@ -2033,13 +2040,19 @@ class DataAccess(QObject):
     def export_timeline_excel(self, contract_id: int) -> bytes:
         """Экспорт таблицы сроков в Excel"""
         if self.api_client:
-            return self.api_client.export_timeline_excel(contract_id)
+            try:
+                return self.api_client.export_timeline_excel(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error export_timeline_excel: {e}")
         return b''
 
     def export_timeline_pdf(self, contract_id: int) -> bytes:
         """Экспорт таблицы сроков в PDF"""
         if self.api_client:
-            return self.api_client.export_timeline_pdf(contract_id)
+            try:
+                return self.api_client.export_timeline_pdf(contract_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error export_timeline_pdf: {e}")
         return b''
 
     # ==================== ТАБЛИЦА СРОКОВ (НАДЗОР) ====================
@@ -2099,13 +2112,19 @@ class DataAccess(QObject):
     def export_supervision_timeline_excel(self, card_id: int) -> bytes:
         """Экспорт таблицы сроков надзора в Excel"""
         if self.api_client:
-            return self.api_client.export_supervision_timeline_excel(card_id)
+            try:
+                return self.api_client.export_supervision_timeline_excel(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error export_supervision_timeline_excel: {e}")
         return b''
 
     def export_supervision_timeline_pdf(self, card_id: int) -> bytes:
         """Экспорт таблицы сроков надзора в PDF"""
         if self.api_client:
-            return self.api_client.export_supervision_timeline_pdf(card_id)
+            try:
+                return self.api_client.export_supervision_timeline_pdf(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error export_supervision_timeline_pdf: {e}")
         return b''
 
     # ==================== ПРЯМОЙ ДОСТУП К БД (для сложных запросов) ====================
@@ -2320,25 +2339,41 @@ class DataAccess(QObject):
     def mtproto_send_code(self) -> Dict:
         """Шаг 1: Отправить код подтверждения для MTProto"""
         if self.api_client:
-            return self.api_client.mtproto_send_code()
+            try:
+                return self.api_client.mtproto_send_code()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error mtproto_send_code: {e}")
+                return {"error": str(e)}
         return {"error": "API не доступен"}
 
     def mtproto_resend_sms(self) -> Dict:
         """Переотправить код по SMS"""
         if self.api_client:
-            return self.api_client.mtproto_resend_sms()
+            try:
+                return self.api_client.mtproto_resend_sms()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error mtproto_resend_sms: {e}")
+                return {"error": str(e)}
         return {"error": "API не доступен"}
 
     def mtproto_verify_code(self, code: str) -> Dict:
         """Шаг 2: Подтвердить код MTProto"""
         if self.api_client:
-            return self.api_client.mtproto_verify_code(code)
+            try:
+                return self.api_client.mtproto_verify_code(code)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error mtproto_verify_code: {e}")
+                return {"error": str(e)}
         return {"error": "API не доступен"}
 
     def mtproto_session_status(self) -> Dict:
         """Проверить статус MTProto сессии"""
         if self.api_client:
-            return self.api_client.mtproto_session_status()
+            try:
+                return self.api_client.mtproto_session_status()
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error mtproto_session_status: {e}")
+                return {"valid": False}
         return {"valid": False}
 
     # =========================

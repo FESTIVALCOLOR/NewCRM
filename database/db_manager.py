@@ -2468,7 +2468,7 @@ class DatabaseManager(DatabaseMigrations):
             cursor.execute('''
                 SELECT * FROM action_history
                 WHERE entity_type = ? AND entity_id = ?
-                ORDER BY created_at DESC
+                ORDER BY action_date DESC
             ''', (entity_type, entity_id))
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
             rows = cursor.fetchall()

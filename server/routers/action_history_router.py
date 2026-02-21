@@ -60,8 +60,6 @@ async def get_action_history(
             'entity_type': item.entity_type,
             'entity_id': item.entity_id,
             'description': item.description,
-            'old_value': item.old_value,
-            'new_value': item.new_value,
             'action_date': item.action_date.strftime('%Y-%m-%d %H:%M:%S') if item.action_date else None
         })
     return result

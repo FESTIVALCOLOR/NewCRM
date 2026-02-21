@@ -3609,7 +3609,7 @@ class ReassignExecutorDialog(QDialog):
                 conn = self.db.connect()
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO action_history (user_id, action_type, entity_type, entity_id, description, created_at)
+                    INSERT INTO action_history (user_id, action_type, entity_type, entity_id, description, action_date)
                     VALUES (?, ?, ?, ?, ?, datetime('now'))
                 ''', (1, 'reassign', 'crm_card', self.card_id, description))
                 conn.commit()
