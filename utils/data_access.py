@@ -1492,7 +1492,11 @@ class DataAccess(QObject):
     def update_stage_executor_deadline(self, card_id: int, stage_name: str,
                                        deadline: str = None, executor_id: int = None) -> bool:
         """Обновить дедлайн исполнителя стадии"""
-        if self.api_client:
+        # Сначала сохраняем локально
+        self.db.update_stage_executor_deadline(card_id, stage_name, deadline,
+                                               executor_id=executor_id)
+
+        if self.is_online and self.api_client:
             try:
                 update_data = {}
                 if deadline is not None:
@@ -1503,9 +1507,10 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_stage_executor_deadline: {e}")
-                return False
-        return self.db.update_stage_executor_deadline(card_id, stage_name, deadline,
-                                                       executor_id=executor_id)
+        elif self.api_client:
+            _safe_log("[DataAccess] update_stage_executor_deadline: offline, сохранено локально")
+
+        return True
 
     # ==================== STAGE EXECUTORS ====================
 
