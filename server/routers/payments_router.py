@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, extract
 from typing import List, Optional
@@ -29,6 +29,9 @@ async def get_all_payments(
     payment_type: Optional[str] = None,
     month: Optional[int] = None,
     include_null_month: Optional[bool] = False,  # ДОБАВЛЕНО 06.02.2026: включить платежи без месяца
+    contract_id: Optional[int] = None,   # ДОБАВЛЕНО 21.02.2026: фильтр по договору
+    employee_id: Optional[int] = None,   # ДОБАВЛЕНО 21.02.2026: фильтр по сотруднику
+    is_paid: Optional[bool] = None,      # ДОБАВЛЕНО 21.02.2026: фильтр по статусу оплаты
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -54,6 +57,12 @@ async def get_all_payments(
             payments_query = payments_query.filter(Payment.report_month.like(f'{year}-{month:02d}%' if year else f'%-{month:02d}%'))
         if payment_type and payment_type != 'Оклад':
             payments_query = payments_query.filter(Payment.payment_type == payment_type)
+        if contract_id is not None:
+            payments_query = payments_query.filter(Payment.contract_id == contract_id)
+        if employee_id is not None:
+            payments_query = payments_query.filter(Payment.employee_id == employee_id)
+        if is_paid is not None:
+            payments_query = payments_query.filter(Payment.is_paid == is_paid)
 
         payments = payments_query.all()
 
@@ -153,6 +162,16 @@ async def get_all_payments(
                     salaries_query = salaries_query.filter(Salary.report_month.like(f'{year}%'))
             if month:
                 salaries_query = salaries_query.filter(Salary.report_month.like(f'{year}-{month:02d}%' if year else f'%-{month:02d}%'))
+            if employee_id is not None:
+                salaries_query = salaries_query.filter(Salary.employee_id == employee_id)
+            if contract_id is not None:
+                salaries_query = salaries_query.filter(Salary.contract_id == contract_id)
+            if is_paid is not None:
+                # В таблице salaries статус хранится как payment_status ('paid'/'pending')
+                if is_paid:
+                    salaries_query = salaries_query.filter(Salary.payment_status == 'paid')
+                else:
+                    salaries_query = salaries_query.filter(Salary.payment_status != 'paid')
 
             salaries = salaries_query.all()
 
@@ -1131,7 +1150,7 @@ async def update_payment_manual(
 @router.patch("/{payment_id}/mark-paid")
 async def mark_payment_as_paid(
     payment_id: int,
-    employee_id: int,
+    employee_id: int = Body(embed=True),
     current_user: Employee = Depends(require_permission("payments.update")),
     db: Session = Depends(get_db)
 ):

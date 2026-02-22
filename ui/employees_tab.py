@@ -768,7 +768,7 @@ class EmployeeDialog(QDialog):
             self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
             login_layout.addRow('Новый пароль:', self.password)
         else:
-            self.password.setPlaceholderText('Минимум 4 символа')
+            self.password.setPlaceholderText('Минимум 6 символов, буква + цифра')
             login_layout.addRow('Пароль*:', self.password)
         
         self.password_confirm = QLineEdit()
@@ -987,20 +987,32 @@ class EmployeeDialog(QDialog):
                 CustomMessageBox(self, 'Ошибка', 'Введите пароль', 'warning').exec_()
                 return
             
-            if len(self.password.text()) < 4:
-                CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать минимум 4 символа', 'warning').exec_()
+            if len(self.password.text()) < 6:
+                CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать минимум 6 символов', 'warning').exec_()
                 return
-            
+            if not any(c.isdigit() for c in self.password.text()):
+                CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать хотя бы одну цифру', 'warning').exec_()
+                return
+            if not any(c.isalpha() for c in self.password.text()):
+                CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать хотя бы одну букву', 'warning').exec_()
+                return
+
             if self.password.text() != self.password_confirm.text():
                 CustomMessageBox(self, 'Ошибка', 'Пароли не совпадают', 'warning').exec_()
                 return
         else:
             # При редактировании пароль опционален
             if self.password.text().strip():
-                if len(self.password.text()) < 4:
-                    CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать минимум 4 символа', 'warning').exec_()
+                if len(self.password.text()) < 6:
+                    CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать минимум 6 символов', 'warning').exec_()
                     return
-                
+                if not any(c.isdigit() for c in self.password.text()):
+                    CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать хотя бы одну цифру', 'warning').exec_()
+                    return
+                if not any(c.isalpha() for c in self.password.text()):
+                    CustomMessageBox(self, 'Ошибка', 'Пароль должен содержать хотя бы одну букву', 'warning').exec_()
+                    return
+
                 if self.password.text() != self.password_confirm.text():
                     CustomMessageBox(self, 'Ошибка', 'Пароли не совпадают', 'warning').exec_()
                     return
@@ -1021,6 +1033,7 @@ class EmployeeDialog(QDialog):
             'position': self.position.currentText(),
             'secondary_position': self.secondary_position.currentData() or '',
             'department': department,  # Добавлено для API
+            'role': self.position.currentText(),  # role совпадает с position (нет отдельного UI-поля)
             'status': self.status.currentText(),
             'birth_date': self.birth_date.date().toString('yyyy-MM-dd'),
             'phone': self.phone.text().strip(),
