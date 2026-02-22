@@ -43,6 +43,17 @@ def _add_business_days(start_date, days: int):
     return current
 
 
+def _count_business_days(start_date, end_date):
+    """Подсчёт рабочих дней между двумя датами (пн-пт)"""
+    days = 0
+    current = start_date
+    while current < end_date:
+        if current.weekday() < 5:  # пн=0, пт=4
+            days += 1
+        current += timedelta(days=1)
+    return days
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["crm"])
 
@@ -439,7 +450,7 @@ async def move_crm_card_to_column(
         if old_column == 'В ожидании' and new_column != 'В ожидании':
             # K1: Считаем дни паузы и сдвигаем дедлайн
             if card.paused_at:
-                pause_days = (datetime.utcnow() - card.paused_at).days
+                pause_days = _count_business_days(card.paused_at, datetime.utcnow())
                 card.total_pause_days = (card.total_pause_days or 0) + pause_days
                 # Сдвигаем дедлайн карточки
                 if card.deadline:
@@ -607,19 +618,10 @@ async def complete_stage(
 ):
     """Обновить статус выполнения стадии"""
     try:
-        # ИСПРАВЛЕНИЕ 25.01.2026: Сначала ищем точное совпадение
         stage_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
             StageExecutor.stage_name == stage_name
         ).order_by(StageExecutor.id.desc()).first()
-
-        # Fallback: поиск по LIKE если точное совпадение не найдено
-        if not stage_executor:
-            logger.debug(f"Точное совпадение не найдено для stage_name='{stage_name}', пробуем LIKE")
-            stage_executor = db.query(StageExecutor).filter(
-                StageExecutor.crm_card_id == card_id,
-                StageExecutor.stage_name.ilike(f'%{stage_name}%')
-            ).order_by(StageExecutor.id.desc()).first()
 
         if not stage_executor:
             raise HTTPException(status_code=404, detail=f"Назначение стадии не найдено: card_id={card_id}, stage_name={stage_name}")
@@ -1492,23 +1494,8 @@ async def complete_stage_for_executor(
             StageExecutor.executor_id == executor_id
         ).first()
 
-        # Fallback: поиск по подстроке stage_name
         if not stage_executor:
-            stage_executor = db.query(StageExecutor).filter(
-                StageExecutor.crm_card_id == card_id,
-                StageExecutor.stage_name.ilike(f'%{stage_name}%'),
-                StageExecutor.executor_id == executor_id
-            ).order_by(StageExecutor.id.desc()).first()
-
-        # Fallback 2: поиск только по card_id + executor_id (последнее назначение)
-        if not stage_executor:
-            stage_executor = db.query(StageExecutor).filter(
-                StageExecutor.crm_card_id == card_id,
-                StageExecutor.executor_id == executor_id
-            ).order_by(StageExecutor.id.desc()).first()
-
-        if not stage_executor:
-            raise HTTPException(status_code=404, detail="Назначение стадии не найдено")
+            raise HTTPException(status_code=404, detail=f"Назначение стадии не найдено: card_id={card_id}, stage_name={stage_name}, executor_id={executor_id}")
 
         stage_executor.completed = True
         stage_executor.completed_date = datetime.utcnow()

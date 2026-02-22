@@ -1220,6 +1220,7 @@ class NormDaysPreviewRequest(BaseModel):
     project_subtype: str = Field(..., min_length=1, max_length=100)
     agent_type: str = Field(default='Все агенты', max_length=100)
     area: float = Field(..., gt=0, le=2000)
+    floors: Optional[int] = 1
 
 
 # =========================

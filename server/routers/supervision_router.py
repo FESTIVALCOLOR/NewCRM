@@ -40,6 +40,19 @@ _SUPERVISION_COLUMN_TO_STAGE = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def _count_business_days(start_date, end_date):
+    """Подсчёт рабочих дней между двумя датами (пн-пт)"""
+    days = 0
+    current = start_date
+    while current < end_date:
+        if current.weekday() < 5:  # пн=0, пт=4
+            days += 1
+        current += timedelta(days=1)
+    return days
+
+
 router = APIRouter(tags=["supervision"])
 
 
@@ -88,6 +101,7 @@ async def get_supervision_cards(
                 'is_paused': card.is_paused,
                 'pause_reason': card.pause_reason,
                 'paused_at': card.paused_at.isoformat() if card.paused_at else None,
+                'total_pause_days': card.total_pause_days or 0,
                 'senior_manager_name': senior_manager_name,
                 'dan_name': dan_name,
                 'contract_number': contract.contract_number,
@@ -152,6 +166,7 @@ async def get_supervision_card(
             'is_paused': card.is_paused,
             'pause_reason': card.pause_reason,
             'paused_at': card.paused_at.isoformat() if card.paused_at else None,
+            'total_pause_days': card.total_pause_days or 0,
             'created_at': card.created_at.isoformat() if card.created_at else None,
             'updated_at': card.updated_at.isoformat() if card.updated_at else None,
         }
@@ -197,6 +212,7 @@ async def create_supervision_card(
             "is_paused": card.is_paused,
             "pause_reason": card.pause_reason,
             "paused_at": card.paused_at.isoformat() if card.paused_at else None,
+            "total_pause_days": card.total_pause_days or 0,
             "created_at": card.created_at.isoformat() if card.created_at else None,
         }
 
@@ -238,6 +254,7 @@ async def update_supervision_card(
             'is_paused': card.is_paused,
             'pause_reason': card.pause_reason,
             'paused_at': card.paused_at.isoformat() if card.paused_at else None,
+            'total_pause_days': card.total_pause_days or 0,
         }
 
     except HTTPException:
@@ -311,10 +328,11 @@ async def move_supervision_card_to_column(
             if card.is_paused:
                 pause_days = 0
                 if card.paused_at:
-                    pause_days = (datetime.utcnow() - card.paused_at).days
+                    pause_days = _count_business_days(card.paused_at, datetime.utcnow())
                 card.is_paused = False
                 card.pause_reason = None
                 card.paused_at = None
+                card.total_pause_days = (card.total_pause_days or 0) + pause_days
                 # Сдвигаем plan_dates в timeline на дни паузы
                 if pause_days > 0:
                     timeline_entries = db.query(SupervisionTimelineEntry).filter(
@@ -371,7 +389,7 @@ async def move_supervision_card_to_column(
                         try:
                             plan_dt = datetime.strptime(timeline_entry.plan_date, '%Y-%m-%d')
                             actual_dt = datetime.strptime(today_str, '%Y-%m-%d')
-                            timeline_entry.actual_days = (actual_dt - plan_dt).days
+                            timeline_entry.actual_days = max(0, (actual_dt - plan_dt).days)
                         except (ValueError, TypeError):
                             pass
                     logger.info(f"Timeline actual_date: card={card_id}, stage={stage_code}, date={today_str}")
@@ -468,11 +486,12 @@ async def resume_supervision_card(
         # K2: Считаем дни паузы и сдвигаем plan_dates в timeline
         pause_days = 0
         if card.paused_at:
-            pause_days = (datetime.utcnow() - card.paused_at).days
+            pause_days = _count_business_days(card.paused_at, datetime.utcnow())
 
         card.is_paused = False
         card.pause_reason = None
         card.paused_at = None
+        card.total_pause_days = (card.total_pause_days or 0) + pause_days
 
         # K2: Сдвигаем все plan_date в timeline на pause_days
         if pause_days > 0:

@@ -2726,11 +2726,38 @@ class DataAccess(QObject):
 
     def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Получить шаблон нормо-дней"""
-        if self.api_client:
+        if self._should_use_api():
             try:
                 return self.api_client.get_norm_days_template(project_type, project_subtype, agent_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API get_norm_days_template: {e}")
+        # Offline fallback — читаем из локальной SQLite
+        try:
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                '''SELECT * FROM norm_days_templates
+                   WHERE project_type = ? AND project_subtype = ? AND agent_type = ?
+                   ORDER BY sort_order''',
+                (project_type, project_subtype, agent_type)
+            )
+            rows = cursor.fetchall()
+            self.db.close()
+            entries = [dict(r) for r in rows]
+            if not entries and agent_type != 'Все агенты':
+                # Fallback на "Все агенты"
+                cursor2 = self.db.connect().cursor()
+                cursor2.execute(
+                    '''SELECT * FROM norm_days_templates
+                       WHERE project_type = ? AND project_subtype = ? AND agent_type = ?
+                       ORDER BY sort_order''',
+                    (project_type, project_subtype, 'Все агенты')
+                )
+                entries = [dict(r) for r in cursor2.fetchall()]
+                self.db.close()
+            return {"entries": entries}
+        except Exception as e:
+            _safe_log(f"[DataAccess] SQLite get_norm_days_template: {e}")
         return {"entries": []}
 
     def save_norm_days_template(self, data: Dict[str, Any]) -> Optional[Dict]:

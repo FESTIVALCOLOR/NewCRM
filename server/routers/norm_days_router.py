@@ -167,7 +167,7 @@ async def preview_norm_days_template(
     try:
         if request.project_type == 'Шаблонный':
             raw_entries, contract_term, K = build_template_project_timeline(
-                request.project_subtype, area, agent_type=request.agent_type)
+                request.project_subtype, area, floors=request.floors, agent_type=request.agent_type)
         else:
             raw_entries, contract_term, K = build_project_timeline_template(
                 request.project_type, area, request.project_subtype, agent_type=request.agent_type)

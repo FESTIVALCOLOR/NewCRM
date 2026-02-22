@@ -206,13 +206,13 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
         custom = None
         if agent_type and agent_type != 'Все агенты':
             custom = db_session.query(NormDaysTemplate).filter(
-                NormDaysTemplate.project_type == 'Индивидуальный',
+                NormDaysTemplate.project_type == project_type,
                 NormDaysTemplate.project_subtype == sub,
                 NormDaysTemplate.agent_type == agent_type,
             ).all()
         if not custom:
             custom = db_session.query(NormDaysTemplate).filter(
-                NormDaysTemplate.project_type == 'Индивидуальный',
+                NormDaysTemplate.project_type == project_type,
                 NormDaysTemplate.project_subtype == sub,
                 NormDaysTemplate.agent_type.in_(['Все агенты', None]),
             ).all()

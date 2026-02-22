@@ -495,6 +495,7 @@ class SupervisionCard(Base):
     is_paused = Column(Boolean, default=False)
     pause_reason = Column(Text)
     paused_at = Column(DateTime)
+    total_pause_days = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
