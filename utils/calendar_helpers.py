@@ -180,6 +180,29 @@ def add_working_days(start_date_str, working_days):
     return current.strftime('%Y-%m-%d')
 
 
+def working_days_between(start_date_str, end_date_str):
+    """Подсчитывает количество рабочих дней (Пн-Пт) между двумя датами.
+    start_date_str, end_date_str: 'YYYY-MM-DD'
+    Возвращает: int (количество рабочих дней, не считая start, считая end)
+    """
+    if not start_date_str or not end_date_str:
+        return 0
+    try:
+        start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return 0
+    if end <= start:
+        return 0
+    count = 0
+    current = start
+    while current < end:
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            count += 1
+    return count
+
+
 def add_today_button_to_dateedit(date_edit):
     """
     Добавляет кастомный календарь с кнопкой 'Сегодня' внизу к QDateEdit

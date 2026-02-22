@@ -2339,6 +2339,36 @@ class CRMCard(QFrame):
                 client_send_btn.clicked.connect(self.send_to_client)
                 layout.addWidget(client_send_btn, 0)
 
+                # Кнопка "Клиент согласовал" — показывается когда статус workflow = client_approval
+                try:
+                    wf_states = self.data.get_workflow_state(self.card_data['id']) or []
+                    is_client_approval = any(
+                        s.get('status') == 'client_approval'
+                        and s.get('stage_name') == current_column
+                        for s in wf_states
+                    )
+                except Exception:
+                    is_client_approval = False
+
+                if is_client_approval:
+                    client_ok_btn = QPushButton('Клиент согласовал')
+                    client_ok_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #27AE60;
+                            color: white;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 20px;
+                            max-height: 20px;
+                        }
+                        QPushButton:hover { background-color: #1E8449; }
+                    """)
+                    client_ok_btn.setFixedHeight(28)
+                    client_ok_btn.clicked.connect(self.client_approved)
+                    layout.addWidget(client_ok_btn, 0)
+
         # 7. КНОПКИ
         buttons_added = False
 

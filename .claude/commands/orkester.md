@@ -241,8 +241,7 @@ git push origin main
 
 ### 5.2: Ожидание CI результатов
 ```bash
-# Получить GH_TOKEN
-export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+# gh CLI авторизован через keyring (gh auth login), GH_TOKEN не нужен
 export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
 
 # Подождать 30 секунд для инициализации CI
@@ -507,6 +506,24 @@ docker exec crm_postgres pg_dump ...   # Бэкап БД
 
 ## ФИНАЛЬНЫЙ ОТЧЁТ
 
+### Telegram-уведомление
+Перед выводом отчёта — записать состояние задачи для Telegram-уведомления:
+```python
+import json, os
+state = {
+    "topic": "[описание задачи пользователя]",
+    "todos": [
+        {"content": "Задача 1", "status": "completed"},
+        {"content": "Задача 2", "status": "completed"},
+    ]
+}
+state_path = os.path.join(".claude", "hooks", "task_state.json")
+with open(state_path, "w", encoding="utf-8") as f:
+    json.dump(state, f, ensure_ascii=False, indent=2)
+```
+Хук `Stop` автоматически прочитает этот файл и отправит уведомление в Telegram.
+
+### Отчёт
 По завершении конвейера вывести:
 
 ```

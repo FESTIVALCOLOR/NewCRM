@@ -119,6 +119,10 @@ class DatabaseMigrations:
                 self.add_agent_type_to_norm_days_templates()
                 # ==============================================================
 
+                # ========== МИГРАЦИЯ: custom_norm_days в project_timeline_entries ==========
+                self.add_custom_norm_days_column()
+                # =====================================================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
 
@@ -335,6 +339,26 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции agent_type в norm_days_templates: {e}")
+
+    def add_custom_norm_days_column(self):
+        """Миграция: добавление колонки custom_norm_days в project_timeline_entries"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(project_timeline_entries)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            if 'custom_norm_days' not in columns:
+                cursor.execute(
+                    "ALTER TABLE project_timeline_entries ADD COLUMN custom_norm_days INTEGER"
+                )
+                conn.commit()
+                print("[OK] Миграция: добавлена колонка custom_norm_days в project_timeline_entries")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции custom_norm_days: {e}")
 
     def add_third_payment_field(self):
         """Миграция: добавление поля third_payment"""

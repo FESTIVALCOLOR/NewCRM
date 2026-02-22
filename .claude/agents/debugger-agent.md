@@ -139,7 +139,7 @@ Debugger также анализирует и исправляет CI failures. 
 
 ### Получение логов CI
 ```bash
-export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+# gh CLI авторизован через keyring (gh auth login), GH_TOKEN не нужен
 export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
 
 RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')

@@ -405,6 +405,7 @@ class ExecutorSelectionDialog(QDialog):
         """Загрузить norm_days первого незаполненного подэтапа текущей стадии
         и дату предыдущего подэтапа для расчёта дедлайна."""
         self._prev_actual_date = ''  # дата предыдущего подэтапа (для расчёта дедлайна)
+        self._current_stage_code = ''  # stage_code подэтапа для обновления custom_norm_days
         if not self.contract_id:
             return
         try:
@@ -439,6 +440,7 @@ class ExecutorSelectionDialog(QDialog):
                     # Нашли первый незаполненный подэтап в текущей стадии
                     self._norm_days = int(e.get('norm_days', 0))
                     self._current_substep = e.get('stage_name', '')
+                    self._current_stage_code = e.get('stage_code', '')
                     self._prev_actual_date = prev_date  # дата предыдущего заполненного
                     break
                 # Обновляем prev_date только для non-header строк с actual_date
@@ -755,7 +757,29 @@ class ExecutorSelectionDialog(QDialog):
             print(f"[DataAccess ERROR] Ошибка назначения исполнителя: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось назначить исполнителя: {e}', 'error').exec_()
             return
-        
+
+        # ========== СОХРАНЕНИЕ custom_norm_days (если СДП изменил дедлайн) ==========
+        if self._norm_days > 0 and self._current_stage_code and self.contract_id:
+            try:
+                from utils.calendar_helpers import add_working_days, working_days_between
+                base_date = self._prev_actual_date or ''
+                if not base_date:
+                    base_date = QDate.currentDate().toString('yyyy-MM-dd')
+                auto_deadline = add_working_days(base_date, self._norm_days)
+                if auto_deadline and deadline != auto_deadline:
+                    # СДП установил дату, отличную от авторасчёта — сохраняем custom_norm_days
+                    custom_days = working_days_between(base_date, deadline)
+                    if custom_days and custom_days != self._norm_days:
+                        self.data.update_timeline_entry(
+                            self.contract_id,
+                            self._current_stage_code,
+                            {'custom_norm_days': custom_days}
+                        )
+                        print(f"[Timeline] custom_norm_days={custom_days} для {self._current_stage_code} "
+                              f"(стандарт: {self._norm_days})")
+            except Exception as ex:
+                print(f"[Timeline] Ошибка сохранения custom_norm_days: {ex}")
+
         # ========== СОЗДАЕМ ВЫПЛАТЫ (АВАНС + ДОПЛАТА) ==========
         try:
             contract_id = self.data.get_contract_id_by_crm_card(self.card_id)

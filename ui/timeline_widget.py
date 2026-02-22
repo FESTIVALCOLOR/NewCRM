@@ -341,8 +341,9 @@ class ProjectTimelineWidget(QWidget):
         return entries
 
     def _sync_norm_days_from_template(self, entries):
-        """Применить norm_days из admin шаблона к записям, где norm_days=0.
-        Синхронизирует карточки, созданные до появления админки нормо-дней."""
+        """Односторонняя синхронизация norm_days: администрирование → карточка.
+        Всегда обновляет norm_days из шаблона, КРОМЕ записей с custom_norm_days
+        (которые были переопределены СДП/ГАП при назначении исполнителя)."""
         if not entries:
             return
         project_type = self.contract_data.get('project_type', 'Индивидуальный')
@@ -367,16 +368,19 @@ class ProjectTimelineWidget(QWidget):
                 nd = te.get('norm_days', 0) or te.get('base_norm_days', 0) or 0
                 if code and nd > 0:
                     tpl_map[code] = int(round(nd))
-            # Применить к записям с пустыми norm_days
+            # Применить norm_days из шаблона ко всем записям
             updated = []
             for entry in entries:
                 code = entry.get('stage_code', '')
                 role = entry.get('executor_role', '')
                 if role == 'header' or code == 'START':
                     continue
+                # Пропускаем записи с custom_norm_days (переопределены СДП/ГАП)
+                if entry.get('custom_norm_days'):
+                    continue
                 current_nd = entry.get('norm_days', 0) or 0
                 tpl_nd = tpl_map.get(code, 0)
-                if current_nd == 0 and tpl_nd > 0:
+                if tpl_nd > 0 and current_nd != tpl_nd:
                     entry['norm_days'] = tpl_nd
                     updated.append((code, tpl_nd))
             # Сохранить обновлённые norm_days на сервер
@@ -682,8 +686,12 @@ class ProjectTimelineWidget(QWidget):
                 status_text = ''
                 row_bg = '#FFFFFF'
 
+                entry_status = entry.get('status', '')
                 if not is_in_scope:
                     row_bg = '#E0E0E0'
+                elif entry_status == 'skipped':
+                    row_bg = '#F5F5F5'
+                    status_text = 'Пропущен'
                 elif actual_days > 0 and norm_days_val > 0:
                     if actual_days <= norm_days_val:
                         status_text = 'В срок'
@@ -801,11 +809,29 @@ class ProjectTimelineWidget(QWidget):
                 self.table.setCellWidget(row, 2,
                     self._make_cell_label(days_text, row_bg))
 
-                # Кол 3: Норма дней
-                norm_text = str(norm_days_val) if norm_days_val > 0 else ''
+                # Кол 3: Норма дней (с отображением превышения)
+                custom_norm = entry.get('custom_norm_days')
                 norm_bg = row_bg if row_bg != '#FFFFFF' else '#F2F2F2'
-                self.table.setCellWidget(row, 3,
-                    self._make_cell_label(norm_text, norm_bg))
+                if custom_norm and norm_days_val > 0 and custom_norm != norm_days_val:
+                    # Превышение: зачёркнутая стандартная + красная кастомная
+                    norm_label = QLabel()
+                    norm_label.setTextFormat(Qt.RichText)
+                    norm_label.setText(
+                        f'<s style="color:#999">{norm_days_val}</s> '
+                        f'<b style="color:#C62828">{custom_norm}</b>'
+                    )
+                    norm_label.setAlignment(Qt.AlignCenter)
+                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px;')
+                    norm_label.setToolTip(
+                        f'Превышение стандартного значения нормо-дней '
+                        f'(+{custom_norm - norm_days_val} дн.).\n'
+                        f'Стандарт: {norm_days_val}, Установлено: {custom_norm}'
+                    )
+                    self.table.setCellWidget(row, 3, norm_label)
+                else:
+                    norm_text = str(norm_days_val) if norm_days_val > 0 else ''
+                    self.table.setCellWidget(row, 3,
+                        self._make_cell_label(norm_text, norm_bg))
 
                 # Кол 4: Статус
                 status_color = '#333333'

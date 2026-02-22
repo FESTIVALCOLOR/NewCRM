@@ -528,6 +528,7 @@ class ProjectTimelineEntry(Base):
     actual_date = Column(String)
     actual_days = Column(Integer, default=0)
     norm_days = Column(Integer, default=0)
+    custom_norm_days = Column(Integer, nullable=True)  # Кастомная норма (если СДП изменил)
     status = Column(String(20), default='')
     executor_role = Column(String(50), nullable=False)
     is_in_contract_scope = Column(Boolean, default=True)

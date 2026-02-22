@@ -75,8 +75,7 @@ EOF
 # 2. Пуш
 git push origin main
 
-# 3. Настройка gh CLI
-export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n' | git credential fill | grep password | cut -d= -f2)
+# 3. Настройка gh CLI (авторизован через keyring, GH_TOKEN не нужен)
 export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
 
 # 4. Ожидание CI (макс 10 мин)

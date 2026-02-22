@@ -55,6 +55,7 @@ secrets.py
 server/.env
 .env
 .offline_hmac_key
+.claude/hooks/telegram_config.json
 
 # Тестовые скриншоты (генерируются автоматически)
 tests/visual/auto_captures/

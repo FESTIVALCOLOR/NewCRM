@@ -771,15 +771,21 @@ async def get_stage_history(
 # =========================
 
 def _resolve_stage_group(column_name: str) -> str:
-    """Определить stage_group по имени колонки канбана"""
+    """Определить stage_group по имени колонки канбана.
+    Маппинг гибкий: ищет паттерны 'стадия N' в названии колонки.
+    """
     col = column_name.lower()
-    if 'стадия 1' in col:
+    # Универсальный маппинг: 'стадия N' → STAGEN
+    import re
+    m = re.search(r'стадия\s*(\d+)', col)
+    if m:
+        return f'STAGE{m.group(1)}'
+    # Альтернативные маппинги для других названий колонок
+    if 'планировочн' in col:
         return 'STAGE1'
-    elif 'стадия 2' in col and ('концепция' in col or 'дизайн' in col):
+    elif 'концепция' in col or 'дизайн' in col:
         return 'STAGE2'
-    elif 'стадия 2' in col:
-        return 'STAGE2'
-    elif 'стадия 3' in col:
+    elif 'чертеж' in col or 'чертёж' in col:
         return 'STAGE3'
     return ''
 
@@ -915,6 +921,7 @@ async def workflow_reject_work(
     db: Session = Depends(get_db)
 ):
     """Отправить на исправление — обновляет workflow state и сбрасывает completed.
+    Записывает дату проверки СДП в timeline (первый незаполненный подэтап).
     Опционально принимает revision_file_path (путь к папке правок на ЯД)."""
     body = {}
     try:
@@ -926,7 +933,23 @@ async def workflow_reject_work(
         raise HTTPException(status_code=404, detail="Карточка не найдена")
 
     stage_name = card.column_name
+    contract_id = card.contract_id
     revision_file_path = body.get('revision_file_path', '')
+
+    # Записываем дату проверки СДП в timeline
+    # (первый незаполненный подэтап в текущей стадии = дата проверки)
+    stage_group = _resolve_stage_group(stage_name)
+    if stage_group and contract_id:
+        entries = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role != 'header',
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).all()
+        if entries:
+            entry = entries[0]
+            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+            entry.updated_at = datetime.utcnow()
 
     # Сбрасываем completed у исполнителя текущей стадии
     # чтобы он увидел кнопку "Сдать работу" снова
@@ -983,15 +1006,31 @@ async def workflow_client_send(
     contract_id = card.contract_id
     stage_group = _resolve_stage_group(stage_name)
 
-    # Записываем дату в timeline (Отправка клиенту) и вычисляем дедлайн
+    # Пропускаем промежуточные подэтапы (проверка СДП, правки) если они не заполнены
+    # и записываем дату "Отправка клиенту"
     deadline_str = ''
     if stage_group:
+        # Помечаем все незаполненные подэтапы ДО записи "Клиент" как пропущенные
         client_entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
             ProjectTimelineEntry.executor_role == 'Клиент',
             ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
         ).order_by(ProjectTimelineEntry.sort_order).first()
+
+        if client_entry:
+            # Пропускаем незаполненные подэтапы до клиентского
+            skipped_entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.sort_order < client_entry.sort_order,
+                ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+            ).all()
+            for se in skipped_entries:
+                se.status = 'skipped'
+                se.updated_at = datetime.utcnow()
+
         if client_entry:
             client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
 
@@ -1047,12 +1086,28 @@ async def workflow_client_approved(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Клиент согласовал — возобновляет дедлайн"""
+    """Клиент согласовал — записывает дату согласования в timeline, возобновляет дедлайн"""
     card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Карточка не найдена")
 
     stage_name = card.column_name
+    contract_id = card.contract_id
+
+    # Записываем дату согласования клиента в timeline
+    # (первый незаполненный подэтап после записи "Клиент")
+    stage_group = _resolve_stage_group(stage_name)
+    if stage_group and contract_id:
+        entries = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role != 'header',
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).all()
+        if entries:
+            entry = entries[0]
+            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+            entry.updated_at = datetime.utcnow()
 
     wf = db.query(StageWorkflowState).filter(
         StageWorkflowState.crm_card_id == card_id,

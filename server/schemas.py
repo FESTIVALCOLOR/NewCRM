@@ -1042,6 +1042,7 @@ class TimelineEntryBase(BaseModel):
     executor_role: str
     is_in_contract_scope: bool = True
     sort_order: int
+    custom_norm_days: Optional[int] = None
     raw_norm_days: float = 0
     cumulative_days: float = 0
 
@@ -1052,6 +1053,7 @@ class TimelineEntryUpdate(BaseModel):
     actual_date: Optional[str] = None
     actual_days: Optional[int] = None
     norm_days: Optional[int] = None
+    custom_norm_days: Optional[int] = None
     status: Optional[str] = None
 
 class TimelineEntryResponse(TimelineEntryBase):
