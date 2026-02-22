@@ -3573,14 +3573,14 @@ class DatabaseManager(DatabaseMigrations):
     # ========== МЕТОДЫ ДЛЯ РАБОТЫ С АГЕНТАМИ ==========
 
     def get_all_agents(self):
-        """Получение всех агентов с цветами"""
+        """Получение всех агентов с цветами (возвращает list[dict])"""
         try:
             conn = self.connect()
             cursor = conn.cursor()
             cursor.execute('SELECT id, name, color FROM agents ORDER BY name')
-            agents = cursor.fetchall()
+            rows = cursor.fetchall()
             self.close()
-            return agents
+            return [{'id': r[0], 'name': r[1], 'color': r[2]} for r in rows]
         except Exception as e:
             print(f"[ERROR] Ошибка получения агентов: {e}")
             return []

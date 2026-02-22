@@ -246,13 +246,19 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
             if in_scope[-1]['norm_days'] < 1:
                 in_scope[-1]['norm_days'] = 1
 
-    # Не в сроке: norm = max(1, round(raw))
+    # Инициализация norm_days для ВСЕХ записей
     for e in entries:
         if e['executor_role'] == 'header':
             e['norm_days'] = 0
             continue
+        if 'norm_days' in e and e['norm_days'] and e['norm_days'] > 0:
+            continue  # Уже рассчитано (in-scope пропорциональный расчёт)
         if not e['is_in_contract_scope'] and e['raw_norm_days'] > 0:
             e['norm_days'] = max(1, round(e['raw_norm_days']))
+        elif e.get('raw_norm_days', 0) > 0:
+            e['norm_days'] = max(1, round(e['raw_norm_days']))
+        else:
+            e.setdefault('norm_days', 0)
 
     return entries, contract_term, K
 

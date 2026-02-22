@@ -737,6 +737,8 @@ class ProjectTimelineWidget(QWidget):
                     date_layout.setAlignment(Qt.AlignVCenter)
 
                     # Определяем текст и стиль
+                    # Ячейка показывает ТОЛЬКО actual_date (факт)
+                    # planned_date — только в tooltip (как подсказка)
                     if actual_date:
                         try:
                             d = QDate.fromString(actual_date, 'yyyy-MM-dd')
@@ -744,19 +746,28 @@ class ProjectTimelineWidget(QWidget):
                         except Exception:
                             date_text = ''
                         date_bg = '#E8F5E9'  # зелёный фон — факт заполнен
-                        tooltip = 'Фактическая дата (нажмите карандаш для изменения)'
-                    elif planned:
-                        try:
-                            pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
-                            date_text = pd_q.toString('dd.MM.yyyy') if pd_q.isValid() else ''
-                        except Exception:
-                            date_text = ''
-                        date_bg = '#FFF2CC'  # жёлтый фон — планируемая
-                        tooltip = 'Планируемая дата (нажмите карандаш для ввода фактической)'
+                        plan_hint = ''
+                        if planned:
+                            try:
+                                pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
+                                if pd_q.isValid():
+                                    plan_hint = f'\nПланировалось: {pd_q.toString("dd.MM.yyyy")}'
+                            except Exception:
+                                pass
+                        tooltip = f'Фактическая дата{plan_hint}\nНажмите карандаш для изменения'
                     else:
+                        # Стадия НЕ завершена — ячейка ПУСТАЯ
                         date_text = ''
                         date_bg = '#FFFFFF'
-                        tooltip = 'Нажмите карандаш для ввода даты'
+                        if planned:
+                            try:
+                                pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
+                                plan_fmt = pd_q.toString('dd.MM.yyyy') if pd_q.isValid() else ''
+                                tooltip = f'Планируемая дата: {plan_fmt}\nНажмите карандаш для ввода фактической'
+                            except Exception:
+                                tooltip = 'Нажмите карандаш для ввода даты'
+                        else:
+                            tooltip = 'Нажмите карандаш для ввода даты'
 
                     date_label = QLabel(date_text)
                     date_label.setAlignment(Qt.AlignCenter)
