@@ -45,6 +45,8 @@
 - [x] 11-колоночная таблица для надзора (Бюджет, Поставщик, Комиссия)
 - [x] Авто-расчёт START = max(contract_date, survey_date, tech_task_date)
 - [x] Пропорциональное распределение norm_days по contract_term
+- [x] Дедлайн исполнителя от предыдущей actual_date (не от today)
+- [x] Планируемые даты цепочкой (prev_date + norm_days) с tooltip
 - [x] Экспорт в Excel и PDF
 
 ### Файлы и интеграции
