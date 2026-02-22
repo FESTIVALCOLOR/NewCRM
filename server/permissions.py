@@ -247,37 +247,64 @@ def require_permission(permission_name: str):
 
 def seed_permissions(db: Session):
     """
-    Заполнить дефолтные права для сотрудников, у которых нет записей.
+    Заполнить/дополнить дефолтные права для сотрудников.
     Вызывается при старте сервера.
+    Если у сотрудника уже есть записи — добавляем только недостающие дефолтные права
+    (не удаляем кастомные, не трогаем уже выданные). Это защищает от ситуации,
+    когда новые permissions добавляются в DEFAULT_ROLE_PERMISSIONS, но у
+    существующих пользователей они не появляются при перезапуске сервера.
     """
     employees = db.query(Employee).all()
     seeded_count = 0
+    updated_count = 0
 
     for emp in employees:
         # Пропускаем системных пользователей
         if emp.role in SUPERUSER_ROLES:
             continue
 
-        # Проверяем есть ли уже записи
-        existing = db.query(UserPermission).filter(
-            UserPermission.employee_id == emp.id
-        ).count()
-
-        if existing > 0:
+        # Получаем дефолтные права для роли сотрудника
+        default_perms = _get_default_permissions(emp)
+        if not default_perms:
             continue
 
-        # Записываем дефолтные права
-        default_perms = _get_default_permissions(emp)
-        for perm_name in default_perms:
-            db.add(UserPermission(
-                employee_id=emp.id,
-                permission_name=perm_name,
-            ))
-        seeded_count += 1
+        # Получаем уже существующие права из БД
+        existing_perms = {
+            p.permission_name
+            for p in db.query(UserPermission).filter(
+                UserPermission.employee_id == emp.id
+            ).all()
+        }
 
-    if seeded_count > 0:
+        if not existing_perms:
+            # Нет записей — записываем все дефолтные права
+            for perm_name in default_perms:
+                db.add(UserPermission(
+                    employee_id=emp.id,
+                    permission_name=perm_name,
+                ))
+            seeded_count += 1
+        else:
+            # Есть записи — добавляем только недостающие дефолтные права
+            missing_perms = default_perms - existing_perms
+            if missing_perms:
+                for perm_name in missing_perms:
+                    db.add(UserPermission(
+                        employee_id=emp.id,
+                        permission_name=perm_name,
+                    ))
+                updated_count += 1
+                logger.info(
+                    f"Added {len(missing_perms)} missing permissions for "
+                    f"employee {emp.id} ({emp.role}): {sorted(missing_perms)}"
+                )
+
+    if seeded_count > 0 or updated_count > 0:
         db.commit()
-        logger.info(f"Seeded permissions for {seeded_count} employees")
+        if seeded_count > 0:
+            logger.info(f"Seeded permissions for {seeded_count} employees")
+        if updated_count > 0:
+            logger.info(f"Updated missing permissions for {updated_count} employees")
 
 
 # =========================
