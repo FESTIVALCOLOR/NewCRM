@@ -142,10 +142,11 @@ class TestFileCRUD:
         file_rec = self.factory.create_file_record(
             self.contract_id, "Стадия 1", "Чертёж", "test_order.pdf"
         )
-        # file_order — query parameter, не JSON body
+        # file_order передаётся как JSON body (Body(embed=True) на сервере)
         resp = api_patch(self.api_base,
-                         f"/api/files/{file_rec['id']}/order?file_order=5",
-                         self.headers)
+                         f"/api/files/{file_rec['id']}/order",
+                         self.headers,
+                         json={"file_order": 5})
         assert resp.status_code == 200
 
     def test_delete_file_record(self):
