@@ -410,6 +410,7 @@ class CRMCard(Base):
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False, index=True)
 
     column_name = Column(String, nullable=False, default="Новый заказ")
+    previous_column = Column(String)  # Предыдущий столбец (для возврата из "В ожидании")
     deadline = Column(String)
     tags = Column(String)
 
@@ -480,6 +481,7 @@ class SupervisionCard(Base):
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
 
     column_name = Column(String, nullable=False, default="Новый заказ")
+    previous_column = Column(String)  # Предыдущий столбец (для возврата из "В ожидании")
     start_date = Column(String)  # Дата начала надзора
     deadline = Column(String)
     tags = Column(String)

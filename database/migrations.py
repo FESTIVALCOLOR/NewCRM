@@ -723,7 +723,8 @@ class DatabaseMigrations:
                     'is_paused': 'BOOLEAN DEFAULT 0',
                     'pause_reason': 'TEXT',
                     'paused_at': 'TIMESTAMP',
-                    'start_date': 'TEXT'
+                    'start_date': 'TEXT',
+                    'previous_column': 'TEXT',
                 }
 
                 for field, field_type in new_fields.items():
@@ -966,6 +967,12 @@ class DatabaseMigrations:
                 print("[OK] Поле survey_date добавлено")
             else:
                 print("[OK] Поле survey_date уже существует")
+
+            if 'previous_column' not in columns:
+                print("[>] Выполняется миграция: добавление previous_column в crm_cards...")
+                cursor.execute("ALTER TABLE crm_cards ADD COLUMN previous_column TEXT")
+                conn.commit()
+                print("[OK] Поле previous_column добавлено в crm_cards")
 
             self.close()
         except Exception as e:

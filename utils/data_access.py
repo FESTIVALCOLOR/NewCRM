@@ -947,7 +947,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_payment(payment_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != payment_id:
                         self._update_local_id('payments', payment_id, server_id)
                     return result

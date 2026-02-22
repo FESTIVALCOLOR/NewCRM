@@ -275,12 +275,23 @@ class SupervisionCardEditDialog(QDialog):
 
             form_layout.addRow('Дата начала:', start_date_row)
 
-            # Дедлайн
+            # Дедлайн (read-only, рассчитывается из таблицы сроков)
+            deadline_container = QWidget()
+            deadline_layout = QHBoxLayout(deadline_container)
+            deadline_layout.setContentsMargins(0, 0, 0, 0)
+            self.deadline_label = QLabel('—')
+            self.deadline_label.setStyleSheet('font-weight: bold; font-size: 13px; padding: 4px 8px;')
+            deadline_layout.addWidget(self.deadline_label)
+            deadline_hint = QLabel('(из таблицы сроков, обновляется автоматически)')
+            deadline_hint.setStyleSheet('color: #888; font-size: 11px; padding-left: 8px;')
+            deadline_layout.addWidget(deadline_hint)
+            deadline_layout.addStretch()
+            form_layout.addRow('Дедлайн проекта:', deadline_container)
+            # Скрытый виджет для совместимости (сохранение)
             self.deadline = CustomDateEdit()
             self.deadline.setCalendarPopup(True)
             self.deadline.setDate(QDate.currentDate())
-            add_today_button_to_dateedit(self.deadline)
-            form_layout.addRow('Дедлайн:', self.deadline)
+            self.deadline.setVisible(False)
 
             # Теги
             self.tags = QLineEdit()
@@ -2592,9 +2603,19 @@ class SupervisionCardEditDialog(QDialog):
             if sd.isValid():
                 self.start_date_edit.setDate(sd)
 
-        # Дедлайн
+        # Дедлайн (read-only label + скрытый виджет для совместимости)
         if self.card_data.get('deadline'):
-            self.deadline.setDate(QDate.fromString(self.card_data['deadline'], 'yyyy-MM-dd'))
+            deadline_str = self.card_data['deadline']
+            if 'T' in deadline_str:
+                deadline_str = deadline_str.split('T')[0]
+            dl = QDate.fromString(deadline_str, 'yyyy-MM-dd')
+            if dl.isValid():
+                self.deadline.setDate(dl)
+                self.deadline_label.setText(dl.toString('dd.MM.yyyy'))
+            else:
+                self.deadline_label.setText(deadline_str)
+        else:
+            self.deadline_label.setText('Не установлен')
 
         # Теги
         self.tags.setText(self.card_data.get('tags', ''))
@@ -2606,7 +2627,7 @@ class SupervisionCardEditDialog(QDialog):
         self.senior_manager.currentIndexChanged.connect(self.auto_save_field)
         self.dan.currentIndexChanged.connect(self.auto_save_field)
         self.start_date_edit.dateChanged.connect(self.auto_save_field)
-        self.deadline.dateChanged.connect(self.auto_save_field)
+        # deadline теперь read-only (рассчитывается из таблицы сроков)
         self.tags.textChanged.connect(self.auto_save_field)
 
     def auto_save_field(self):
@@ -2785,7 +2806,10 @@ class SupervisionCardEditDialog(QDialog):
 
                         self.card_data['deadline'] = new_deadline_str
                         self._loading_data = True
-                        self.deadline.setDate(QDate.fromString(new_deadline_str, 'yyyy-MM-dd'))
+                        dl = QDate.fromString(new_deadline_str, 'yyyy-MM-dd')
+                        self.deadline.setDate(dl)
+                        if hasattr(self, 'deadline_label'):
+                            self.deadline_label.setText(dl.toString('dd.MM.yyyy'))
                         self._loading_data = False
                     except Exception as e:
                         print(f"[WARN] Ошибка продления дедлайна: {e}")

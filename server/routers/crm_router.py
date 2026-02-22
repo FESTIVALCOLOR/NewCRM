@@ -411,6 +411,30 @@ async def move_crm_card_to_column(
         old_column = card.column_name
         new_column = move_request.column_name
 
+        # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
+        if new_column == 'Новый заказ' and old_column != 'Новый заказ':
+            raise HTTPException(
+                status_code=422,
+                detail='Нельзя вернуть карточку в "Новый заказ". Используйте столбец "В ожидании".'
+            )
+
+        # === ПРАВИЛО: Из "В ожидании" — только в previous_column или "Выполненный проект" ===
+        if old_column == 'В ожидании' and new_column != 'В ожидании':
+            allowed_return = card.previous_column or 'Новый заказ'
+            if new_column not in [allowed_return, 'Выполненный проект']:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".'
+                )
+
+        # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column ===
+        if new_column == 'В ожидании' and old_column != 'В ожидании':
+            card.previous_column = old_column
+
+        # === ПРАВИЛО: При возврате из "В ожидании" — очищаем previous_column ===
+        if old_column == 'В ожидании' and new_column != 'В ожидании':
+            card.previous_column = None
+
         # Валидация последовательности переходов (руководство может перемещать свободно)
         free_move_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
         if current_user.role not in free_move_roles:
@@ -451,6 +475,7 @@ async def move_crm_card_to_column(
             'contract_id': card.contract_id,
             'column_name': card.column_name,
             'old_column_name': old_column,
+            'previous_column': card.previous_column,
         }
 
     except HTTPException:

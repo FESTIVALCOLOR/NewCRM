@@ -12,7 +12,7 @@ from typing import List, Optional
 from database import (
     get_db, Employee, Contract, ActivityLog,
     SupervisionCard, SupervisionProjectHistory, StageExecutor,
-    Payment,
+    Payment, SupervisionTimelineEntry,
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -22,6 +22,22 @@ from schemas import (
     SupervisionHistoryCreate, SupervisionHistoryResponse,
 )
 from services.notification_service import trigger_supervision_notification
+
+# Маппинг column_name → stage_code для таблицы сроков надзора
+_SUPERVISION_COLUMN_TO_STAGE = {
+    'Стадия 1: Закупка керамогранита': 'STAGE_1_CERAMIC',
+    'Стадия 2: Закупка сантехники': 'STAGE_2_PLUMBING',
+    'Стадия 3: Закупка оборудования': 'STAGE_3_EQUIPMENT',
+    'Стадия 4: Закупка дверей и окон': 'STAGE_4_DOORS',
+    'Стадия 5: Закупка настенных материалов': 'STAGE_5_WALL',
+    'Стадия 6: Закупка напольных материалов': 'STAGE_6_FLOOR',
+    'Стадия 7: Лепного декора': 'STAGE_7_STUCCO',
+    'Стадия 8: Освещения': 'STAGE_8_LIGHTING',
+    'Стадия 9: бытовой техники': 'STAGE_9_APPLIANCES',
+    'Стадия 10: Закупка заказной мебели': 'STAGE_10_CUSTOM_FURNITURE',
+    'Стадия 11: Закупка фабричной мебели': 'STAGE_11_FACTORY_FURNITURE',
+    'Стадия 12: Закупка декора': 'STAGE_12_DECOR',
+}
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["supervision"])
@@ -259,15 +275,63 @@ async def move_supervision_card_to_column(
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
         old_column = card.column_name
-        card.column_name = move_request.column_name
+        new_column = move_request.column_name
+
+        # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
+        if new_column == 'Новый заказ' and old_column != 'Новый заказ':
+            raise HTTPException(
+                status_code=422,
+                detail='Нельзя вернуть карточку в "Новый заказ". Используйте столбец "В ожидании".'
+            )
+
+        # === ПРАВИЛО: Из "В ожидании" — только в previous_column или "Выполненный проект" ===
+        if old_column == 'В ожидании' and new_column != 'В ожидании':
+            allowed_return = card.previous_column or 'Новый заказ'
+            if new_column not in [allowed_return, 'Выполненный проект']:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".'
+                )
+
+        # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column ===
+        if new_column == 'В ожидании' and old_column != 'В ожидании':
+            card.previous_column = old_column
+
+        # === ПРАВИЛО: При возврате из "В ожидании" — очищаем previous_column ===
+        if old_column == 'В ожидании' and new_column != 'В ожидании':
+            card.previous_column = None
+
+        card.column_name = new_column
+
+        # === Установка actual_date в timeline при УХОДЕ из стадии ===
+        if old_column != new_column and old_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+            stage_code = _SUPERVISION_COLUMN_TO_STAGE.get(old_column)
+            if stage_code:
+                timeline_entry = db.query(SupervisionTimelineEntry).filter(
+                    SupervisionTimelineEntry.supervision_card_id == card_id,
+                    SupervisionTimelineEntry.stage_code == stage_code
+                ).first()
+                if timeline_entry and not timeline_entry.actual_date:
+                    today_str = datetime.utcnow().strftime('%Y-%m-%d')
+                    timeline_entry.actual_date = today_str
+                    timeline_entry.status = 'Закуплено'
+                    # Рассчитываем дней (план → факт)
+                    if timeline_entry.plan_date:
+                        try:
+                            plan_dt = datetime.strptime(timeline_entry.plan_date, '%Y-%m-%d')
+                            actual_dt = datetime.strptime(today_str, '%Y-%m-%d')
+                            timeline_entry.actual_days = (actual_dt - plan_dt).days
+                        except (ValueError, TypeError):
+                            pass
+                    logger.info(f"Timeline actual_date: card={card_id}, stage={stage_code}, date={today_str}")
 
         db.commit()
         db.refresh(card)
 
         # Хук: уведомление в чат надзора при перемещении
-        if old_column != move_request.column_name:
+        if old_column != new_column:
             asyncio.create_task(trigger_supervision_notification(
-                db, card_id, 'supervision_move', stage_name=move_request.column_name
+                db, card_id, 'supervision_move', stage_name=new_column
             ))
 
         return {
@@ -275,6 +339,7 @@ async def move_supervision_card_to_column(
             'contract_id': card.contract_id,
             'column_name': card.column_name,
             'old_column_name': old_column,
+            'previous_column': card.previous_column,
         }
 
     except HTTPException:

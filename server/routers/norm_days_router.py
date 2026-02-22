@@ -72,10 +72,10 @@ async def get_norm_days_template(
 
     # Генерируем из формул (area=100 для дефолтных значений)
     if project_type == 'Шаблонный':
-        raw_entries, contract_term, K = build_template_project_timeline(project_subtype, 100)
+        raw_entries, contract_term, K = build_template_project_timeline(project_subtype, 100, agent_type=agent_type)
     else:
-        raw_entries, contract_term, K = build_project_timeline_template(project_type, 100, project_subtype)
-    effective_agent = 'Все агенты'
+        raw_entries, contract_term, K = build_project_timeline_template(project_type, 100, project_subtype, agent_type=agent_type)
+    effective_agent = agent_type or 'Все агенты'
 
     entries = []
     for e in raw_entries:

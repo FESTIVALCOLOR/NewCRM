@@ -582,6 +582,30 @@ class CRMTab(QWidget):
 
     def _do_card_move(self, card_id, from_column, to_column, project_type, sync):
         """Внутренняя логика перемещения карточки (выделена для try/finally)"""
+        # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
+        if to_column == 'Новый заказ' and from_column != 'Новый заказ':
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, 'Перемещение запрещено',
+                'Нельзя вернуть карточку в "Новый заказ".\n'
+                'Используйте столбец "В ожидании" для приостановки.'
+            )
+            self.load_cards_for_type(project_type)
+            return
+
+        # === ПРАВИЛО: Из "В ожидании" — только в прежний столбец или "Выполненный проект" ===
+        if from_column == 'В ожидании' and to_column not in ['В ожидании', 'Выполненный проект']:
+            card_info = self.data.get_crm_card(card_id)
+            prev_col = card_info.get('previous_column') if card_info else None
+            if prev_col and to_column != prev_col:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self, 'Перемещение запрещено',
+                    f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".'
+                )
+                self.load_cards_for_type(project_type)
+                return
+
         # Проверяем нужен ли выбор исполнителя ПЕРЕД перемещением
         if self.requires_executor_selection(to_column):
             # Получаем contract_id для передачи в диалог (для norm_days)

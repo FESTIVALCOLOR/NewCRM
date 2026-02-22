@@ -382,7 +382,12 @@ class APIClientBase:
         """Извлечь детали ошибки из ответа"""
         try:
             if 'application/json' in response.headers.get('content-type', ''):
-                return response.json().get('detail', 'Неизвестная ошибка')
+                data = response.json()
+                if isinstance(data, dict):
+                    return data.get('detail', 'Неизвестная ошибка')
+                elif isinstance(data, list):
+                    return str(data)
+                return str(data)
         except (ValueError, AttributeError):
             pass
         return response.text or 'Неизвестная ошибка'
