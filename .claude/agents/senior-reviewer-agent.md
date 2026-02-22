@@ -139,22 +139,9 @@ DataAccess: OK / ПРОБЛЕМА
 === КОНЕЦ ===
 ```
 
-## Справочник: Архитектура проекта
+## Справочник
 
-```
-Слои:
-  Server (FastAPI + PostgreSQL)
-    → server/main.py (8675 строк, 144+ endpoints)
-    → server/database.py (686 строк, 25 моделей)
-    → server/schemas.py (819 строк, 45+ схем)
-    → server/permissions.py (система прав)
-
-  Client (PyQt5 + SQLite)
-    → ui/*.py (28 файлов, 47K+ строк)
-    → utils/api_client.py (3068 строк)
-    → utils/data_access.py (914 строк)
-    → database/db_manager.py (6285 строк, 50+ миграций)
-```
+> Архитектура, правила и ключевые компоненты: `.claude/agents/shared-rules.md`
 
 ## Критические правила
 1. Senior Reviewer НЕ пишет код, только анализирует

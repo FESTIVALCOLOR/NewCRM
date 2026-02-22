@@ -151,39 +151,8 @@ tests/
 
 ## CI интеграция (GitHub Actions)
 
-После прохождения локальных тестов — код автоматически пушится и проверяется через CI.
-
-### CI Workflow (5 jobs)
-1. **syntax-check** — py_compile серверных файлов
-2. **lint** — flake8 линтинг
-3. **test-db** — SQLite тесты (без сервера)
-4. **docker-build** — Сборка Docker образа
-5. **test-e2e** — E2E тесты в полном окружении (PostgreSQL + API сервер)
-
-### Как проверить CI результаты
-```bash
-# gh CLI авторизован через keyring (gh auth login), GH_TOKEN не нужен
-export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
-
-# Последний запуск
-gh run list -L 1
-
-# Детали по jobs
-RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
-gh run view $RUN_ID --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
-
-# Логи упавших jobs
-gh run view $RUN_ID --log-failed 2>&1 | tail -100
-```
-
-### Реакция на CI failures
-- CI failure → Debugger анализирует → исправляет → повторный push
-- Максимум 3 итерации CI-Fix цикла
-- Типичные CI-специфичные проблемы:
-  - **429 Too Many Requests** — rate limiter в CI (уже отключен через `CI=true`)
-  - **UniqueViolation** — дублирование JWT токенов (решено через jti)
-  - **500 на Yandex Disk** — soft delete (решено)
-  - **Порядок роутеров** — статические перед динамическими
+CI команды и процесс: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
+CI failure → Debugger → повторный push (макс 3 итерации).
 
 ## Чеклист
 - [ ] Все категории тестов определены

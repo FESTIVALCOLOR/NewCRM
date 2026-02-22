@@ -260,7 +260,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 ### SSH
 ```
 Host timeweb
-    HostName 147.45.154.193
+    HostName crm.festivalcolor.ru
     Port 2222
     User root
     IdentityFile ~/.ssh/id_ed25519
@@ -272,7 +272,7 @@ Host timeweb
 
 ```
 ┌─────────────────────────────────────────────┐
-│            147.45.154.193                    │
+│            crm.festivalcolor.ru                    │
 │            crm.festivalcolor.ru              │
 ├─────────────────────────────────────────────┤
 │                                              │

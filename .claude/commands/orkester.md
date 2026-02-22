@@ -433,7 +433,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 Активируется в режиме **docker** (ключевые слова: docker, контейнер, логи сервера, healthcheck, мониторинг).
 
 ### Инструмент
-Docker CLI установлен локально (`C:\Docker\docker.exe`) с контекстом `interior-studio-server`, подключён к серверу `147.45.154.193:2222` через SSH. Все docker-команды выполняются **локально** без необходимости `ssh timeweb`.
+Docker CLI установлен локально (`C:\Docker\docker.exe`) с контекстом `interior-studio-server`, подключён к серверу через SSH (`ssh timeweb`). Все docker-команды выполняются **локально** без необходимости `ssh timeweb`.
 
 ### 13.1: Диагностика (всегда)
 ```bash
@@ -507,21 +507,21 @@ docker exec crm_postgres pg_dump ...   # Бэкап БД
 ## ФИНАЛЬНЫЙ ОТЧЁТ
 
 ### Telegram-уведомление
-Перед выводом отчёта — записать состояние задачи для Telegram-уведомления:
+Перед выводом отчёта — отправить Telegram-уведомление НАПРЯМУЮ:
 ```python
-import json, os
-state = {
-    "topic": "[описание задачи пользователя]",
-    "todos": [
+import sys
+sys.path.insert(0, ".claude/hooks")
+from telegram_notify import send_task_notification
+send_task_notification(
+    topic="[описание задачи пользователя]",
+    todos=[
         {"content": "Задача 1", "status": "completed"},
         {"content": "Задача 2", "status": "completed"},
     ]
-}
-state_path = os.path.join(".claude", "hooks", "task_state.json")
-with open(state_path, "w", encoding="utf-8") as f:
-    json.dump(state, f, ensure_ascii=False, indent=2)
+)
 ```
-Хук `Stop` автоматически прочитает этот файл и отправит уведомление в Telegram.
+Функция отправит сообщение и поставит маркер — Stop hook НЕ отправит дубликат.
+**НЕ писать в task_state.json** — устаревший механизм.
 
 ### Отчёт
 По завершении конвейера вывести:

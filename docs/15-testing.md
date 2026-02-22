@@ -101,8 +101,8 @@ pytest tests/client/ -v
 pytest tests/ --cov=. --cov-report=html --cov-report=term-missing
 
 # Нагрузочные тесты (отдельно, нужен locust + сервер)
-locust -f tests/load/locustfile.py --host http://147.45.154.193:8000
-locust -f tests/load/locustfile.py --host http://147.45.154.193:8000 --headless -u 10 -r 2 -t 30s
+locust -f tests/load/locustfile.py --host http://crm.festivalcolor.ru:8000
+locust -f tests/load/locustfile.py --host http://crm.festivalcolor.ru:8000 --headless -u 10 -r 2 -t 30s
 ```
 
 ## Тестовые данные
@@ -270,10 +270,10 @@ tests/load/
 
 ```bash
 # Web UI (локальный дашборд)
-locust -f tests/load/locustfile.py --host http://147.45.154.193:8000
+locust -f tests/load/locustfile.py --host http://crm.festivalcolor.ru:8000
 
 # Headless (CI/CD)
-locust -f tests/load/locustfile.py --host http://147.45.154.193:8000 --headless -u 10 -r 2 -t 30s
+locust -f tests/load/locustfile.py --host http://crm.festivalcolor.ru:8000 --headless -u 10 -r 2 -t 30s
 ```
 
 Зависимость: `locust>=2.29.0` в `requirements-dev.txt`.

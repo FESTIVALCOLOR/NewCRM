@@ -1,5 +1,7 @@
 # API Client Agent
 
+> Общие правила проекта: `.claude/agents/shared-rules.md`
+
 ## Описание
 Специализированный агент для REST клиента, offline режима, синхронизации и слоя доступа к данным (DataAccess).
 

@@ -6,7 +6,7 @@
 
 ```
 ┌────────────────────────── VPS (Timeweb) ──────────────────────────┐
-│ IP: 147.45.154.193                                                │
+│ IP: crm.festivalcolor.ru                                                │
 │ SSH: ssh timeweb (алиас в ~/.ssh/config, ключ ed25519)            │
 │ Путь: /opt/interior_studio/                                       │
 │                                                                    │
@@ -94,7 +94,7 @@ ssh timeweb "cd /opt/interior_studio && docker-compose down && docker-compose bu
     "containers.containerCommand": "C:\\Docker\\docker.exe",
     "containers.composeCommand": "C:\\Docker\\docker.exe compose",
     "containers.environment": {
-        "DOCKER_HOST": "ssh://root@147.45.154.193:2222",
+        "DOCKER_HOST": "ssh://root@crm.festivalcolor.ru:2222",
         "DOCKER_CONTEXT": "interior-studio-server"
     }
 }
@@ -171,7 +171,7 @@ tar -czf backup_server_$(date +%Y%m%d_%H%M%S).tar.gz server/
 
 ```bash
 # Копировать файлы
-scp -r server/ root@147.45.154.193:/opt/interior_studio/server/
+scp -r server/ root@crm.festivalcolor.ru:/opt/interior_studio/server/
 
 # Пересборка
 docker-compose down && docker-compose build --no-cache api && docker-compose up -d
@@ -193,7 +193,7 @@ curl -s http://localhost:8000/
 ### 5. Smoke test (с клиента)
 
 ```bash
-curl -s http://147.45.154.193:8000/
+curl -s http://crm.festivalcolor.ru:8000/
 # Ожидается: {"message": "Interior Studio CRM API", ...}
 ```
 

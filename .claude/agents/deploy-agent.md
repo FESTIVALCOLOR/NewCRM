@@ -15,7 +15,7 @@ opus
 - **Read** — чтение конфигов (только чтение)
 
 ## Сервер
-- **IP:** 147.45.154.193
+- **Домен:** crm.festivalcolor.ru
 - **Домен:** crm.festivalcolor.ru
 - **SSH:** `ssh timeweb` (алиас, порт 2222)
 - **Путь:** /opt/interior_studio/
@@ -186,17 +186,7 @@ ssh timeweb "cd /opt/interior_studio && \
 ## CI проверка перед деплоем
 
 **Деплой ЗАПРЕЩЁН, если последний CI run failed.**
-
-```bash
-# gh CLI авторизован через keyring (gh auth login), GH_TOKEN не нужен
-export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
-
-CONCLUSION=$(gh run list -L 1 --json conclusion -q '.[0].conclusion')
-if [ "$CONCLUSION" != "success" ]; then
-  echo "СТОП: CI не пройден ($CONCLUSION). Деплой запрещён."
-  exit 1
-fi
-```
+CI команды: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
 
 ## Чеклист
 - [ ] Pre-checks пройдены (синтаксис, совместимость, безопасность)

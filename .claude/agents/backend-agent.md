@@ -1,5 +1,7 @@
 # Backend Agent
 
+> Общие правила проекта: `.claude/agents/shared-rules.md`
+
 ## Описание
 Специализированный агент для разработки серверной части: FastAPI endpoints, SQLAlchemy модели, Pydantic схемы, JWT авторизация, система прав.
 

@@ -60,61 +60,15 @@ Worker: "Добавить CRUD для сущности X"
 
 ### Шаг 5: CI Push & Verify (после прохождения локальных тестов)
 
-**После завершения всех задач из todo списка — автоматически запушить и дождаться CI.**
+После завершения всех задач — автоматически коммит, пуш, ожидание CI.
+Команды и процесс: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
+CI failed → Debugger исправляет → повторный push (макс 3 итерации).
+**ВАЖНО:** НЕ сообщать пользователю результаты, пока CI не завершится.
 
-```bash
-# 1. Коммит изменённых файлов
-git add <конкретные_файлы>
-git commit -m "$(cat <<'EOF'
-описание изменений
+## Критические правила проекта
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-EOF
-)"
-
-# 2. Пуш
-git push origin main
-
-# 3. Настройка gh CLI (авторизован через keyring, GH_TOKEN не нужен)
-export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
-
-# 4. Ожидание CI (макс 10 мин)
-sleep 30
-for i in $(seq 1 20); do
-  STATUS=$(gh run list -L 1 --json status -q '.[0].status')
-  if [ "$STATUS" = "completed" ]; then break; fi
-  sleep 30
-done
-
-# 5. Проверка результата
-CONCLUSION=$(gh run list -L 1 --json conclusion -q '.[0].conclusion')
-if [ "$CONCLUSION" = "success" ]; then
-  echo "CI PASSED"
-else
-  RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
-  gh run view $RUN_ID --log-failed 2>&1 | tail -100
-  # Исправить → повторный push → макс 3 итерации
-fi
-```
-
-**ВАЖНО:** НЕ сообщать пользователю результаты, пока CI не завершится. Результат CI включается в финальный отчёт.
-
-## Критические правила проекта (12 шт.)
-
-**Нарушение любого = BLOCK от Reviewer:**
-
-1. **`__init__.py` обязательны** в database/, ui/, utils/
-2. **Запрет emoji в UI** — только SVG через IconLoader
-3. **`resource_path()`** для всех ресурсов (иконки, шрифты, логотипы)
-4. **Рамки диалогов = 1px** (`border: 1px solid #E0E0E0`)
-5. **Docker rebuild** после серверных изменений (не restart!)
-6. **Совместимость API/DB** ключей ответов (total_orders, position, source)
-7. **Статические пути ПЕРЕД динамическими** в FastAPI
-8. **Двухрежимная архитектура** (online API + offline SQLite)
-9. **DataAccess** для всех CRUD в UI (не api_client/db напрямую)
-10. **API-first с fallback** на локальную БД при записи
-11. **Параметризованные SQL** (не f-strings, не format)
-12. **snake_case** переменные, **PascalCase** классы, **UPPER_CASE** константы
+> Полный список (14 правил), архитектура, шаблоны кода: `.claude/agents/shared-rules.md`
+> Нарушение любого = BLOCK от Reviewer.
 
 ## Шаблоны кода
 

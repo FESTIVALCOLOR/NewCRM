@@ -135,30 +135,9 @@ Stacktrace:
 
 ## CI Failures (GitHub Actions)
 
-Debugger также анализирует и исправляет CI failures. CI запускается автоматически при push.
-
-### Получение логов CI
-```bash
-# gh CLI авторизован через keyring (gh auth login), GH_TOKEN не нужен
-export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
-
-RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
-gh run view $RUN_ID --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
-gh run view $RUN_ID --log-failed 2>&1 | tail -100
-```
-
-### Типичные CI-специфичные проблемы
-- **429 Too Many Requests** — rate limiter (отключен через `CI=true`)
-- **UniqueViolation session_token** — дублирование JWT (решено через jti)
-- **500 Yandex Disk** — нет токена / soft delete
-- **404 на endpoint** — дублированный prefix в роутере
-- **422 body required** — данные в params вместо json body
-- **SQL type error** — VARCHAR → DateTime cast
-
-### Цикл CI-Fix (макс 3 итерации)
-```
-CI FAILED → получить логи → найти root cause → fix → push → ждать CI
-```
+Debugger также анализирует CI failures.
+CI команды: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
+Цикл: CI FAILED → логи → root cause → fix → push → ждать CI (макс 3 итерации).
 
 ## Диагностические команды
 

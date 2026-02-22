@@ -56,6 +56,9 @@ server/.env
 .env
 .offline_hmac_key
 .claude/hooks/telegram_config.json
+_auth_state.json
+.claude/settings.json
+telegram_session.session
 
 # Тестовые скриншоты (генерируются автоматически)
 tests/visual/auto_captures/

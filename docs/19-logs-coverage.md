@@ -51,7 +51,7 @@ docker-compose logs -f postgres     # логи PostgreSQL
 ### Формат логов сервера
 
 ```
-INFO:     147.45.154.193:0 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     crm.festivalcolor.ru:0 - "GET /api/clients HTTP/1.1" 200 OK
 WARNING:  Payment calculation failed for contract 42
 ERROR:    Database connection lost, reconnecting...
 ```

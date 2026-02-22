@@ -94,22 +94,8 @@ Grep по проекту для поиска:
 1. Planner НЕ пишет код, только анализирует и планирует
 2. Всегда проверять docs/02-project-rules.md на применимые правила
 3. Всегда проверять docs/18-agent-skills.md на существующие шаблоны
-4. Учитывать двухрежимную архитектуру (online + offline)
-5. Статические пути ПЕРЕД динамическими в FastAPI
-6. DataAccess для CRUD в UI (не прямой api_client/db)
 
-## Справочник: Архитектура проекта
-
-```
-Server (FastAPI)           API Client              UI (PyQt5)
-server/main.py      →    utils/api_client.py   →  ui/*.py
-server/database.py        utils/data_access.py
-server/schemas.py         utils/sync_manager.py
-server/permissions.py     utils/offline_manager.py
-
-Database (SQLite)
-database/db_manager.py
-```
+> Архитектура, правила и шаблоны: `.claude/agents/shared-rules.md`
 
 ## Чеклист
 - [ ] Все затронутые слои определены
