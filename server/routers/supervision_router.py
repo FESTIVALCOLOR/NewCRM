@@ -4,7 +4,7 @@
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -277,6 +277,13 @@ async def move_supervision_card_to_column(
         old_column = card.column_name
         new_column = move_request.column_name
 
+        # С4: Блокируем перемещение приостановленной карточки
+        if card.is_paused and new_column != old_column:
+            raise HTTPException(
+                status_code=422,
+                detail='Карточка приостановлена. Сначала возобновите проект.'
+            )
+
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
         if new_column == 'Новый заказ' and old_column != 'Новый заказ':
             raise HTTPException(
@@ -303,6 +310,16 @@ async def move_supervision_card_to_column(
             card.previous_column = None
 
         card.column_name = new_column
+
+        # K11: Запись перемещения в историю
+        if old_column != new_column:
+            history = SupervisionProjectHistory(
+                supervision_card_id=card_id,
+                entry_type="card_moved",
+                message=f'Карточка перемещена: "{old_column}" → "{new_column}"',
+                created_by=current_user.id
+            )
+            db.add(history)
 
         # === Установка actual_date в timeline при УХОДЕ из стадии ===
         if old_column != new_column and old_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
@@ -364,6 +381,10 @@ async def pause_supervision_card(
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
+        # С5: Проверка — уже приостановлена?
+        if card.is_paused:
+            raise HTTPException(status_code=422, detail="Карточка уже приостановлена")
+
         card.is_paused = True
         card.pause_reason = pause_request.pause_reason
         card.paused_at = datetime.utcnow()
@@ -407,15 +428,40 @@ async def resume_supervision_card(
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
+        # С5: Проверка — не приостановлена?
+        if not card.is_paused:
+            raise HTTPException(status_code=422, detail="Карточка не приостановлена")
+
+        # K2: Считаем дни паузы и сдвигаем plan_dates в timeline
+        pause_days = 0
+        if card.paused_at:
+            pause_days = (datetime.utcnow() - card.paused_at).days
+
         card.is_paused = False
         card.pause_reason = None
         card.paused_at = None
+
+        # K2: Сдвигаем все plan_date в timeline на pause_days
+        if pause_days > 0:
+            timeline_entries = db.query(SupervisionTimelineEntry).filter(
+                SupervisionTimelineEntry.supervision_card_id == card_id,
+                SupervisionTimelineEntry.actual_date.is_(None)
+            ).all()
+            for te in timeline_entries:
+                if te.plan_date:
+                    try:
+                        plan_dt = datetime.strptime(te.plan_date, '%Y-%m-%d')
+                        plan_dt += timedelta(days=pause_days)
+                        te.plan_date = plan_dt.strftime('%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        pass
+            logger.info(f"K2: Supervision card {card_id} resumed, pause_days={pause_days}, shifted {len(timeline_entries)} entries")
 
         # Добавляем запись в историю
         history = SupervisionProjectHistory(
             supervision_card_id=card_id,
             entry_type="resume",
-            message="Возобновлено",
+            message=f"Возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Возобновлено",
             created_by=current_user.id
         )
         db.add(history)

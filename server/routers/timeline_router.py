@@ -123,6 +123,18 @@ async def reinit_project_timeline(
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
+    # K10: Проверяем наличие заполненных actual_date перед reinit
+    filled_entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.actual_date.isnot(None),
+        ProjectTimelineEntry.actual_date != ''
+    ).count()
+    if filled_entries > 0 and not request.force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Невозможно пересоздать таблицу сроков: {filled_entries} записей имеют фактические даты. Используйте force=true для принудительного сброса."
+        )
+
     # Удаляем старые записи
     db.query(ProjectTimelineEntry).filter(
         ProjectTimelineEntry.contract_id == contract_id

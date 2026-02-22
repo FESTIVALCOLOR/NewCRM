@@ -412,6 +412,8 @@ class CRMCard(Base):
     column_name = Column(String, nullable=False, default="Новый заказ")
     previous_column = Column(String)  # Предыдущий столбец (для возврата из "В ожидании")
     deadline = Column(String)
+    paused_at = Column(DateTime)  # K1: Время постановки на паузу (для пересчёта дедлайна)
+    total_pause_days = Column(Integer, default=0)  # K1: Суммарные дни паузы
     tags = Column(String)
 
     is_approved = Column(Boolean, default=False)

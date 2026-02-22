@@ -10,6 +10,7 @@ from database import (
     Employee, Client, Contract,
     CRMCard, SupervisionCard,
     MessengerChat, MessengerChatMember, MessengerScript, MessengerMessageLog,
+    SessionLocal,
 )
 from telegram_service import get_telegram_service
 from email_service import get_email_service
@@ -169,9 +170,11 @@ async def trigger_messenger_notification(
     Вызывается из workflow-эндпоинтов через asyncio.create_task().
     script_type: 'project_start' | 'stage_complete' | 'project_end'
     """
+    # С7: Создаём собственную сессию — переданная db может быть закрыта
+    own_db = SessionLocal()
     try:
         # Найти активный чат для карточки
-        chat = db.query(MessengerChat).filter(
+        chat = own_db.query(MessengerChat).filter(
             MessengerChat.crm_card_id == crm_card_id,
             MessengerChat.is_active == True
         ).first()
@@ -179,7 +182,7 @@ async def trigger_messenger_notification(
             return  # Чат не создан или не привязан к Telegram
 
         # Найти подходящий скрипт
-        scripts_query = db.query(MessengerScript).filter(
+        scripts_query = own_db.query(MessengerScript).filter(
             MessengerScript.script_type == script_type,
             MessengerScript.is_enabled == True
         )
@@ -201,14 +204,14 @@ async def trigger_messenger_notification(
             return  # Нет включённого скрипта для этого события
 
         # Собрать контекст
-        card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+        card = own_db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
         if not card:
             return
-        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        contract = own_db.query(Contract).filter(Contract.id == card.contract_id).first()
         if not contract:
             return
 
-        ctx = build_script_context(db, card, contract)
+        ctx = build_script_context(own_db, card, contract)
         ctx['stage_name'] = stage_name or card.column_name or ''
         if extra_context:
             ctx.update(extra_context)
@@ -231,14 +234,16 @@ async def trigger_messenger_notification(
                 telegram_message_id=msg_id,
                 delivery_status='sent',
             )
-            db.add(log_entry)
-            db.commit()
+            own_db.add(log_entry)
+            own_db.commit()
             logger.info(
                 f"Автоуведомление отправлено: card={crm_card_id}, "
                 f"type={script_type}, stage={stage_name}"
             )
     except Exception as e:
         logger.error(f"Ошибка автоуведомления (card={crm_card_id}): {e}")
+    finally:
+        own_db.close()
 
 
 async def trigger_supervision_notification(
@@ -251,9 +256,11 @@ async def trigger_supervision_notification(
     Хук автоуведомлений для надзора: найти чат -> скрипт -> отправить.
     script_type: 'supervision_stage_complete' | 'supervision_move'
     """
+    # С7: Создаём собственную сессию — переданная db может быть закрыта
+    own_db = SessionLocal()
     try:
         # Найти активный чат для карточки надзора
-        chat = db.query(MessengerChat).filter(
+        chat = own_db.query(MessengerChat).filter(
             MessengerChat.supervision_card_id == supervision_card_id,
             MessengerChat.is_active == True
         ).first()
@@ -261,7 +268,7 @@ async def trigger_supervision_notification(
             return
 
         # Найти подходящий скрипт
-        scripts_query = db.query(MessengerScript).filter(
+        scripts_query = own_db.query(MessengerScript).filter(
             MessengerScript.script_type == script_type,
             MessengerScript.is_enabled == True
         )
@@ -282,10 +289,10 @@ async def trigger_supervision_notification(
             return
 
         # Собрать контекст
-        sv_card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
+        sv_card = own_db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
         if not sv_card:
             return
-        contract = db.query(Contract).filter(Contract.id == sv_card.contract_id).first()
+        contract = own_db.query(Contract).filter(Contract.id == sv_card.contract_id).first()
         if not contract:
             return
 
@@ -303,19 +310,19 @@ async def trigger_supervision_notification(
 
         # Клиент
         if contract.client_id:
-            client = db.query(Client).filter(Client.id == contract.client_id).first()
+            client = own_db.query(Client).filter(Client.id == contract.client_id).first()
             if client:
                 ctx['client_name'] = client.full_name or ''
 
         # Ст. менеджер
         if sv_card.senior_manager_id:
-            sm = db.query(Employee).filter(Employee.id == sv_card.senior_manager_id).first()
+            sm = own_db.query(Employee).filter(Employee.id == sv_card.senior_manager_id).first()
             if sm:
                 ctx['senior_manager'] = sm.full_name or ''
 
         # ДАН
         if sv_card.dan_id:
-            dan = db.query(Employee).filter(Employee.id == sv_card.dan_id).first()
+            dan = own_db.query(Employee).filter(Employee.id == sv_card.dan_id).first()
             if dan:
                 ctx['dan'] = dan.full_name or ''
 
@@ -336,11 +343,13 @@ async def trigger_supervision_notification(
                 telegram_message_id=msg_id,
                 delivery_status='sent',
             )
-            db.add(log_entry)
-            db.commit()
+            own_db.add(log_entry)
+            own_db.commit()
             logger.info(
                 f"Автоуведомление надзора: sv_card={supervision_card_id}, "
                 f"type={script_type}, stage={stage_name}"
             )
     except Exception as e:
         logger.error(f"Ошибка автоуведомления надзора (sv_card={supervision_card_id}): {e}")
+    finally:
+        own_db.close()

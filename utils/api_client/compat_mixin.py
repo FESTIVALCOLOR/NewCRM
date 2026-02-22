@@ -200,19 +200,7 @@ class CompatMixin:
             print(f"[API] Ошибка получения предыдущего исполнителя: {e}")
             return None
 
-    def update_stage_executor_deadline(self, crm_card_id: int, stage_name: str, deadline: str) -> bool:
-        """Обновить дедлайн исполнителя стадии"""
-        try:
-            response = self._request(
-                'PATCH',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/stage-executor-deadline",
-                json={'stage_name': stage_name, 'deadline': deadline}
-            )
-            self._handle_response(response)
-            return True
-        except Exception as e:
-            print(f"[API] Ошибка обновления дедлайна: {e}")
-            return False
+    # С12: update_stage_executor_deadline удалён — дублирует crm_mixin.update_stage_executor
 
     def assign_stage_executor_db(self, card_id: int, stage_name: str, executor_id: int,
                                   assigned_by: int, deadline: str = None) -> bool:
@@ -240,16 +228,7 @@ class CompatMixin:
             print(f"[API] Ошибка получения contract_id: {e}")
             return None
 
-    def get_crm_card_by_contract_id(self, contract_id: int) -> Optional[Dict[str, Any]]:
-        """Получить CRM карточку по ID договора"""
-        try:
-            response = self._request(
-                'GET',
-                f"{self.base_url}/api/crm/cards/by-contract/{contract_id}"
-            )
-            return self._handle_response(response)
-        except Exception:
-            return None
+    # K9: get_crm_card_by_contract_id удалён — endpoint не существует на сервере
 
     def get_contracts_by_project_type(self, project_type: str) -> List[Dict[str, Any]]:
         """Получить договоры по типу проекта"""

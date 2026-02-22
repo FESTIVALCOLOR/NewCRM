@@ -2216,7 +2216,15 @@ class DataAccess(QObject):
             try:
                 return self.api_client.init_project_timeline(contract_id, data)
             except Exception as e:
-                _safe_log(f"[DataAccess] API error init_project_timeline: {e}")
+                _safe_log(f"[DataAccess] API error init_project_timeline, fallback local: {e}")
+        # K5: Offline fallback — сохраняем в локальную БД
+        try:
+            entries = data.get('entries', [])
+            if entries:
+                self.db.init_project_timeline(contract_id, entries)
+                return {"status": "ok_local", "count": len(entries)}
+        except Exception as e:
+            _safe_log(f"[DataAccess] Local fallback init_project_timeline error: {e}")
         return None
 
     def reinit_project_timeline(self, contract_id: int, data: Dict) -> Optional[Dict]:
@@ -2259,7 +2267,16 @@ class DataAccess(QObject):
             try:
                 return self.api_client.get_timeline_summary(contract_id)
             except Exception as e:
-                _safe_log(f"[DataAccess] API error get_timeline_summary: {e}")
+                _safe_log(f"[DataAccess] API error get_timeline_summary, fallback: {e}")
+        # M1: Offline fallback — строим сводку из локальных данных
+        try:
+            entries = self.db.get_project_timeline(contract_id)
+            if entries:
+                total = len([e for e in entries if e.get('executor_role') != 'header'])
+                filled = len([e for e in entries if e.get('actual_date')])
+                return {'total_entries': total, 'filled_entries': filled, 'progress': round(filled / total * 100, 1) if total else 0}
+        except Exception:
+            pass
         return {}
 
     def export_timeline_excel(self, contract_id: int) -> bytes:
@@ -2297,7 +2314,15 @@ class DataAccess(QObject):
             try:
                 return self.api_client.init_supervision_timeline(card_id, data)
             except Exception as e:
-                _safe_log(f"[DataAccess] API error init_supervision_timeline: {e}")
+                _safe_log(f"[DataAccess] API error init_supervision_timeline, fallback local: {e}")
+        # K5: Offline fallback — сохраняем в локальную БД
+        try:
+            entries = (data or {}).get('entries', [])
+            if entries:
+                self.db.init_supervision_timeline(card_id, entries)
+                return {"status": "ok_local", "count": len(entries)}
+        except Exception as e:
+            _safe_log(f"[DataAccess] Local fallback init_supervision_timeline error: {e}")
         return None
 
     def update_supervision_timeline_entry(self, card_id: int, stage_code: str, data: Dict) -> bool:
@@ -2834,10 +2859,11 @@ class DataAccess(QObject):
         try:
             conn = self.db.connect()
             cursor = conn.cursor()
+            # M3: Точное совпадение stage_name вместо LIKE
             cursor.execute(
                 '''UPDATE stage_executors SET executor_id=?, deadline=?, completed=?, completed_date=NULL
-                   WHERE crm_card_id=? AND stage_name LIKE ?''',
-                (executor_id, deadline, 1 if completed else 0, card_id, f'%{stage_name}%')
+                   WHERE crm_card_id=? AND stage_name=?''',
+                (executor_id, deadline, 1 if completed else 0, card_id, stage_name)
             )
             conn.commit()
             self.db.close()

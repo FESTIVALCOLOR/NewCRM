@@ -428,12 +428,40 @@ async def move_crm_card_to_column(
                     detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".'
                 )
 
-        # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column ===
+        # === ПРАВИЛО: При переходе в "В ожидании" — сохраняем previous_column + ставим на паузу ===
         if new_column == 'В ожидании' and old_column != 'В ожидании':
             card.previous_column = old_column
+            # K1: Запоминаем время постановки на паузу для пересчёта дедлайна
+            card.paused_at = datetime.utcnow()
 
-        # === ПРАВИЛО: При возврате из "В ожидании" — очищаем previous_column ===
+        # === ПРАВИЛО: При возврате из "В ожидании" — пересчитываем дедлайн ===
         if old_column == 'В ожидании' and new_column != 'В ожидании':
+            # K1: Считаем дни паузы и сдвигаем дедлайн
+            if card.paused_at:
+                pause_days = (datetime.utcnow() - card.paused_at).days
+                card.total_pause_days = (card.total_pause_days or 0) + pause_days
+                # Сдвигаем дедлайн карточки
+                if card.deadline:
+                    try:
+                        dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                        dl += timedelta(days=pause_days)
+                        card.deadline = dl.strftime('%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        pass
+                # Сдвигаем дедлайны исполнителей стадий
+                executors = db.query(StageExecutor).filter(
+                    StageExecutor.crm_card_id == card_id
+                ).all()
+                for ex in executors:
+                    if ex.deadline:
+                        try:
+                            ex_dl = datetime.strptime(str(ex.deadline), '%Y-%m-%d')
+                            ex_dl += timedelta(days=pause_days)
+                            ex.deadline = ex_dl.strftime('%Y-%m-%d')
+                        except (ValueError, TypeError):
+                            pass
+                logger.info(f"K1: CRM card {card_id} resumed, pause_days={pause_days}, total={card.total_pause_days}")
+            card.paused_at = None
             card.previous_column = None
 
         # Валидация последовательности переходов (руководство может перемещать свободно)
@@ -456,6 +484,26 @@ async def move_crm_card_to_column(
                     )
 
         card.column_name = new_column
+
+        # K11: Запись перемещения в историю проекта
+        if old_column != new_column:
+            if new_column == 'В ожидании':
+                action_type = 'card_paused'
+                desc = f'Карточка приостановлена (из "{old_column}")'
+            elif old_column == 'В ожидании':
+                action_type = 'card_resumed'
+                desc = f'Карточка возобновлена (в "{new_column}")'
+            else:
+                action_type = 'card_moved'
+                desc = f'Карточка перемещена: "{old_column}" → "{new_column}"'
+            history = ActionHistory(
+                user_id=current_user.id,
+                action_type=action_type,
+                entity_type='crm_card',
+                entity_id=card_id,
+                description=desc
+            )
+            db.add(history)
 
         db.commit()
         db.refresh(card)
@@ -839,63 +887,78 @@ async def workflow_submit_work(
     db: Session = Depends(get_db)
 ):
     """Сдача работы исполнителем — записывает дату в timeline"""
-    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Карточка не найдена")
+    try:
+        card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=404, detail="Карточка не найдена")
 
-    contract_id = card.contract_id
-    stage_name = card.column_name
+        contract_id = card.contract_id
+        stage_name = card.column_name
 
-    # Находим текущий подэтап (первый без actual_date, is_in_contract_scope, не header)
-    stage_group = _resolve_stage_group(stage_name)
-    if not stage_group:
-        return {"status": "no_stage_group"}
+        # Находим текущий подэтап (первый без actual_date, is_in_contract_scope, не header)
+        stage_group = _resolve_stage_group(stage_name)
+        if not stage_group:
+            return {"status": "no_stage_group"}
 
-    entries = db.query(ProjectTimelineEntry).filter(
-        ProjectTimelineEntry.contract_id == contract_id,
-        ProjectTimelineEntry.stage_group == stage_group,
-        ProjectTimelineEntry.executor_role != 'header',
-        ProjectTimelineEntry.actual_date.is_(None)
-    ).order_by(ProjectTimelineEntry.sort_order).all()
-
-    # Также check entries with empty string
-    if not entries:
         entries = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
             ProjectTimelineEntry.executor_role != 'header',
-            ProjectTimelineEntry.actual_date == ''
+            ProjectTimelineEntry.actual_date.is_(None)
         ).order_by(ProjectTimelineEntry.sort_order).all()
 
-    if entries:
-        entry = entries[0]
-        entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-        entry.updated_at = datetime.utcnow()
+        # Также check entries with empty string
+        if not entries:
+            entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.actual_date == ''
+            ).order_by(ProjectTimelineEntry.sort_order).all()
 
-    # Обновляем workflow state
-    wf = db.query(StageWorkflowState).filter(
-        StageWorkflowState.crm_card_id == card_id,
-        StageWorkflowState.stage_name == stage_name
-    ).first()
-    if not wf:
-        wf = StageWorkflowState(
-            crm_card_id=card_id,
-            stage_name=stage_name,
-            current_substep_code=entries[0].stage_code if entries else None,
-            status='in_progress'
-        )
-        db.add(wf)
-    wf.current_substep_code = entries[0].stage_code if entries else wf.current_substep_code
-    wf.updated_at = datetime.utcnow()
+        if entries:
+            entry = entries[0]
+            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+            entry.updated_at = datetime.utcnow()
 
-    db.commit()
+        # Обновляем workflow state
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if not wf:
+            wf = StageWorkflowState(
+                crm_card_id=card_id,
+                stage_name=stage_name,
+                current_substep_code=entries[0].stage_code if entries else None,
+                status='in_progress'
+            )
+            db.add(wf)
+        wf.current_substep_code = entries[0].stage_code if entries else wf.current_substep_code
+        wf.updated_at = datetime.utcnow()
 
-    # Хук: уведомление в чат о сдаче работы
-    asyncio.create_task(trigger_messenger_notification(
-        db, card_id, 'stage_complete', stage_name=stage_name
-    ))
+        # K11: Запись в историю
+        db.add(ActionHistory(
+            user_id=current_user.id, action_type='work_submitted',
+            entity_type='crm_card', entity_id=card_id,
+            description=f'Сдача работы: {stage_name}'
+        ))
 
-    return {"status": "submitted", "substep": entries[0].stage_code if entries else None}
+        db.commit()
+
+        # Хук: уведомление в чат о сдаче работы
+        asyncio.create_task(trigger_messenger_notification(
+            db, card_id, 'stage_complete', stage_name=stage_name
+        ))
+
+        return {"status": "submitted", "substep": entries[0].stage_code if entries else None}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка в workflow/submit: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.post("/cards/{card_id}/workflow/accept")
@@ -905,38 +968,53 @@ async def workflow_accept_work(
     db: Session = Depends(get_db)
 ):
     """Приемка работы — записывает дату проверки в timeline"""
-    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Карточка не найдена")
+    try:
+        card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=404, detail="Карточка не найдена")
 
-    contract_id = card.contract_id
-    stage_name = card.column_name
-    stage_group = _resolve_stage_group(stage_name)
+        contract_id = card.contract_id
+        stage_name = card.column_name
+        stage_group = _resolve_stage_group(stage_name)
 
-    if stage_group:
-        entries = db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.contract_id == contract_id,
-            ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role != 'header',
-            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).all()
+        if stage_group:
+            entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+            ).order_by(ProjectTimelineEntry.sort_order).all()
 
-        if entries:
-            entry = entries[0]
-            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-            entry.updated_at = datetime.utcnow()
+            if entries:
+                entry = entries[0]
+                entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                entry.updated_at = datetime.utcnow()
 
-    # Обновляем workflow state
-    wf = db.query(StageWorkflowState).filter(
-        StageWorkflowState.crm_card_id == card_id,
-        StageWorkflowState.stage_name == stage_name
-    ).first()
-    if wf:
-        wf.status = 'in_progress'
-        wf.updated_at = datetime.utcnow()
+        # Обновляем workflow state
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if wf:
+            wf.status = 'in_progress'
+            wf.updated_at = datetime.utcnow()
 
-    db.commit()
-    return {"status": "accepted"}
+        # K11: Запись в историю
+        db.add(ActionHistory(
+            user_id=current_user.id, action_type='work_accepted',
+            entity_type='crm_card', entity_id=card_id,
+            description=f'Работа принята: {stage_name}'
+        ))
+
+        db.commit()
+        return {"status": "accepted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка в workflow/accept: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.post("/cards/{card_id}/workflow/reject")
@@ -949,72 +1027,83 @@ async def workflow_reject_work(
     """Отправить на исправление — обновляет workflow state и сбрасывает completed.
     Записывает дату проверки СДП в timeline (первый незаполненный подэтап).
     Опционально принимает revision_file_path (путь к папке правок на ЯД)."""
-    body = {}
     try:
-        body = await request.json()
-    except Exception:
-        pass
-    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Карточка не найдена")
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=404, detail="Карточка не найдена")
 
-    stage_name = card.column_name
-    contract_id = card.contract_id
-    revision_file_path = body.get('revision_file_path', '')
+        stage_name = card.column_name
+        contract_id = card.contract_id
+        revision_file_path = body.get('revision_file_path', '')
 
-    # Записываем дату проверки СДП в timeline
-    # (первый незаполненный подэтап в текущей стадии = дата проверки)
-    stage_group = _resolve_stage_group(stage_name)
-    if stage_group and contract_id:
-        entries = db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.contract_id == contract_id,
-            ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role != 'header',
-            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).all()
-        if entries:
-            entry = entries[0]
-            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-            entry.updated_at = datetime.utcnow()
+        # Записываем дату проверки СДП в timeline
+        # (первый незаполненный подэтап в текущей стадии = дата проверки)
+        stage_group = _resolve_stage_group(stage_name)
+        if stage_group and contract_id:
+            entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+            ).order_by(ProjectTimelineEntry.sort_order).all()
+            if entries:
+                entry = entries[0]
+                entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                entry.updated_at = datetime.utcnow()
 
-    # Сбрасываем completed у исполнителя текущей стадии
-    # чтобы он увидел кнопку "Сдать работу" снова
-    executors = db.query(StageExecutor).filter(
-        StageExecutor.crm_card_id == card_id,
-        StageExecutor.completed == True
-    ).all()
-    for ex in executors:
-        # Сбрасываем только если stage_name совпадает с текущей стадией
-        if ex.stage_name and (
-            ex.stage_name == stage_name or
-            stage_name.lower() in ex.stage_name.lower() or
-            ex.stage_name.lower() in stage_name.lower()
-        ):
-            ex.completed = False
-            ex.completed_date = None
+        # Сбрасываем completed у исполнителя текущей стадии
+        # чтобы он увидел кнопку "Сдать работу" снова
+        executors = db.query(StageExecutor).filter(
+            StageExecutor.crm_card_id == card_id,
+            StageExecutor.completed == True
+        ).all()
+        for ex in executors:
+            # С2: Точное совпадение stage_name (вместо нечёткого ILIKE-подобного)
+            if ex.stage_name and ex.stage_name == stage_name:
+                ex.completed = False
+                ex.completed_date = None
 
-    wf = db.query(StageWorkflowState).filter(
-        StageWorkflowState.crm_card_id == card_id,
-        StageWorkflowState.stage_name == stage_name
-    ).first()
-    if not wf:
-        wf = StageWorkflowState(
-            crm_card_id=card_id,
-            stage_name=stage_name,
-            status='revision',
-            revision_count=1,
-            revision_file_path=revision_file_path or None
-        )
-        db.add(wf)
-    else:
-        wf.status = 'revision'
-        wf.revision_count = (wf.revision_count or 0) + 1
-        if revision_file_path:
-            wf.revision_file_path = revision_file_path
-        wf.updated_at = datetime.utcnow()
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if not wf:
+            wf = StageWorkflowState(
+                crm_card_id=card_id,
+                stage_name=stage_name,
+                status='revision',
+                revision_count=1,
+                revision_file_path=revision_file_path or None
+            )
+            db.add(wf)
+        else:
+            wf.status = 'revision'
+            wf.revision_count = (wf.revision_count or 0) + 1
+            if revision_file_path:
+                wf.revision_file_path = revision_file_path
+            wf.updated_at = datetime.utcnow()
 
-    db.commit()
-    return {"status": "rejected", "revision_count": wf.revision_count, "revision_file_path": wf.revision_file_path}
+        # K11: Запись в историю
+        db.add(ActionHistory(
+            user_id=current_user.id, action_type='work_rejected',
+            entity_type='crm_card', entity_id=card_id,
+            description=f'Отправлено на правки: {stage_name} (итерация {wf.revision_count})'
+        ))
+
+        db.commit()
+        return {"status": "rejected", "revision_count": wf.revision_count, "revision_file_path": wf.revision_file_path}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка в workflow/reject: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
 @router.post("/cards/{card_id}/workflow/client-send")
@@ -1095,6 +1184,13 @@ async def workflow_client_send(
         wf.client_approval_deadline_paused = True
         wf.updated_at = datetime.utcnow()
 
+    # K11: Запись в историю
+    db.add(ActionHistory(
+        user_id=current_user.id, action_type='client_send',
+        entity_type='crm_card', entity_id=card_id,
+        description=f'Отправлено клиенту: {stage_name}'
+    ))
+
     db.commit()
 
     # Хук: уведомление в чат об отправке клиенту (с дедлайном)
@@ -1140,9 +1236,29 @@ async def workflow_client_approved(
         StageWorkflowState.stage_name == stage_name
     ).first()
     if wf:
+        # K7: Пересчёт дедлайна — считаем дни паузы на согласовании клиента
+        if wf.client_approval_deadline_paused and wf.client_approval_started_at:
+            approval_pause_days = (datetime.utcnow() - wf.client_approval_started_at).days
+            if approval_pause_days > 0 and card.deadline:
+                try:
+                    dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                    dl += timedelta(days=approval_pause_days)
+                    card.deadline = dl.strftime('%Y-%m-%d')
+                    card.total_pause_days = (card.total_pause_days or 0) + approval_pause_days
+                    logger.info(f"K7: Client approval pause {approval_pause_days} days, card {card_id}")
+                except (ValueError, TypeError):
+                    pass
+
         wf.status = 'in_progress'
         wf.client_approval_deadline_paused = False
         wf.updated_at = datetime.utcnow()
+
+    # K11: Запись в историю
+    db.add(ActionHistory(
+        user_id=current_user.id, action_type='client_approved',
+        entity_type='crm_card', entity_id=card_id,
+        description=f'Клиент согласовал: {stage_name}'
+    ))
 
     db.commit()
 
@@ -1300,9 +1416,10 @@ async def update_stage_executor_deadline(
         stage_name = body.stage_name
         deadline = body.deadline
 
+        # С1: Точное совпадение stage_name вместо ILIKE
         stage_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
-            StageExecutor.stage_name.ilike(f'%{stage_name}%')
+            StageExecutor.stage_name == stage_name
         ).order_by(StageExecutor.id.desc()).first()
 
         if not stage_executor:
@@ -1405,7 +1522,10 @@ async def save_manager_acceptance(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Сохранить принятие работы менеджером"""
+    """Сохранить принятие работы менеджером.
+    K3: Фасадный endpoint — только записывает ActionHistory.
+    Обновление StageExecutor.completed и ProjectTimelineEntry.actual_date
+    выполняется на стороне UI (crm_tab.py)."""
     try:
         stage_name = body.stage_name
         executor_name = body.executor_name

@@ -919,16 +919,36 @@ class DatabaseManager(DatabaseMigrations):
         print(f"[OK] Карточка {card_id} обновлена: {updates}")
     
     def update_crm_card_column(self, card_id, column_name):
-        """Обновление колонки карточки"""
+        """Обновление колонки карточки (с поддержкой previous_column)"""
         conn = self.connect()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-        UPDATE crm_cards 
-        SET column_name = ?, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-        ''', (column_name, card_id))
-        
+
+        # K4: Читаем текущую колонку для логики previous_column
+        cursor.execute('SELECT column_name FROM crm_cards WHERE id = ?', (card_id,))
+        row = cursor.fetchone()
+        old_column = row['column_name'] if row else None
+
+        if column_name == 'В ожидании' and old_column and old_column != 'В ожидании':
+            # При переходе в "В ожидании" — сохраняем previous_column
+            cursor.execute('''
+            UPDATE crm_cards
+            SET column_name = ?, previous_column = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (column_name, old_column, card_id))
+        elif old_column == 'В ожидании' and column_name != 'В ожидании':
+            # При возврате из "В ожидании" — очищаем previous_column
+            cursor.execute('''
+            UPDATE crm_cards
+            SET column_name = ?, previous_column = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (column_name, card_id))
+        else:
+            cursor.execute('''
+            UPDATE crm_cards
+            SET column_name = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (column_name, card_id))
+
         conn.commit()
         self.close()
     
@@ -2343,16 +2363,34 @@ class DatabaseManager(DatabaseMigrations):
         self.close()
 
     def update_supervision_card_column(self, card_id, column_name):
-        """Обновление колонки карточки надзора"""
+        """Обновление колонки карточки надзора (с поддержкой previous_column)"""
         conn = self.connect()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-        UPDATE supervision_cards 
-        SET column_name = ?, updated_at = datetime("now")
-        WHERE id = ?
-        ''', (column_name, card_id))
-        
+
+        # K4: Читаем текущую колонку для логики previous_column
+        cursor.execute('SELECT column_name FROM supervision_cards WHERE id = ?', (card_id,))
+        row = cursor.fetchone()
+        old_column = row['column_name'] if row else None
+
+        if column_name == 'В ожидании' and old_column and old_column != 'В ожидании':
+            cursor.execute('''
+            UPDATE supervision_cards
+            SET column_name = ?, previous_column = ?, updated_at = datetime("now")
+            WHERE id = ?
+            ''', (column_name, old_column, card_id))
+        elif old_column == 'В ожидании' and column_name != 'В ожидании':
+            cursor.execute('''
+            UPDATE supervision_cards
+            SET column_name = ?, previous_column = NULL, updated_at = datetime("now")
+            WHERE id = ?
+            ''', (column_name, card_id))
+        else:
+            cursor.execute('''
+            UPDATE supervision_cards
+            SET column_name = ?, updated_at = datetime("now")
+            WHERE id = ?
+            ''', (column_name, card_id))
+
         conn.commit()
         self.close()
         

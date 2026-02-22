@@ -974,6 +974,19 @@ class DatabaseMigrations:
                 conn.commit()
                 print("[OK] Поле previous_column добавлено в crm_cards")
 
+            # K1: Поля для паузы дедлайна CRM
+            if 'paused_at' not in columns:
+                print("[>] Выполняется миграция: добавление paused_at в crm_cards...")
+                cursor.execute("ALTER TABLE crm_cards ADD COLUMN paused_at TIMESTAMP")
+                conn.commit()
+                print("[OK] Поле paused_at добавлено в crm_cards")
+
+            if 'total_pause_days' not in columns:
+                print("[>] Выполняется миграция: добавление total_pause_days в crm_cards...")
+                cursor.execute("ALTER TABLE crm_cards ADD COLUMN total_pause_days INTEGER DEFAULT 0")
+                conn.commit()
+                print("[OK] Поле total_pause_days добавлено в crm_cards")
+
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка добавления survey_date: {e}")

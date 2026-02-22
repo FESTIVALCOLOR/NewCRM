@@ -1069,6 +1069,7 @@ class TimelineInitRequest(BaseModel):
     project_subtype: Optional[str] = None
     area: float
     floors: Optional[int] = 1
+    force: Optional[bool] = False  # K10: Принудительный reinit (удаляет actual_date)
 
 
 # =========================
