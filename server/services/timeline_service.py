@@ -384,6 +384,7 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
         e['sort_order'] = i
 
     # Проверяем кастомный шаблон нормо-дней в БД (приоритет: конкретный агент > "Все агенты")
+    db_session = None
     try:
         db_session = SessionLocal()
         custom = None
@@ -399,7 +400,6 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
                 NormDaysTemplate.project_subtype == template_subtype,
                 NormDaysTemplate.agent_type.in_(['Все агенты', None]),
             ).all()
-        db_session.close()
         if custom:
             custom_map = {c.stage_code: c for c in custom}
             for e in entries:
@@ -409,6 +409,9 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
                     e['raw_norm_days'] = c.base_norm_days + 0 * c.k_multiplier
     except Exception:
         pass  # Fallback на хардкод-формулы
+    finally:
+        if db_session:
+            db_session.close()
 
     # Пропорциональный расчёт норм
     in_scope = [e for e in entries if e['is_in_contract_scope'] and e['executor_role'] != 'header' and e['raw_norm_days'] > 0]

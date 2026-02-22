@@ -123,6 +123,14 @@ class DatabaseMigrations:
                 self.add_custom_norm_days_column()
                 # =====================================================================
 
+                # ========== МИГРАЦИЯ: multiuser поля для employees ==========
+                self.add_employee_multiuser_fields()
+                # ===========================================================
+
+                # ========== МИГРАЦИЯ: поле status для agents ==========
+                self.add_agents_status_field()
+                # ======================================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
 
@@ -359,6 +367,61 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[ERROR] Ошибка миграции custom_norm_days: {e}")
+
+    def add_employee_multiuser_fields(self):
+        """Миграция: добавление multiuser полей в таблицу employees"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(employees)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            new_cols = {
+                'is_online': 'INTEGER DEFAULT 0',
+                'last_login': 'TIMESTAMP',
+                'last_activity': 'TIMESTAMP',
+                'current_session_token': 'TEXT',
+                'agent_color': 'TEXT',
+            }
+
+            added = []
+            for col_name, col_def in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE employees ADD COLUMN {col_name} {col_def}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция employee_multiuser: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля employee_multiuser уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции employee_multiuser: {e}")
+
+    def add_agents_status_field(self):
+        """Миграция: добавление поля status в таблицу agents"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(agents)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            if 'status' not in columns:
+                cursor.execute(
+                    "ALTER TABLE agents ADD COLUMN status TEXT DEFAULT 'активный'"
+                )
+                conn.commit()
+                print("[OK] Миграция: добавлена колонка status в agents")
+            else:
+                print("[OK] Поле status в agents уже существует")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции agents status: {e}")
 
     def add_third_payment_field(self):
         """Миграция: добавление поля third_payment"""

@@ -1063,18 +1063,6 @@ class DatabaseManager(DatabaseMigrations):
         self.close()
         return cards
     
-    def update_supervision_card(self, card_id, updates):
-        """Обновление карточки надзора"""
-        conn = self.connect()
-        cursor = conn.cursor()
-        
-        set_clause, values = self._build_set_clause(updates)
-        values = values + [card_id]
-
-        cursor.execute(f'UPDATE crm_supervision SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', values)
-        conn.commit()
-        self.close()
-    
     def get_general_statistics(self, year, quarter, month):
         """Получение общей статистики"""
         conn = self.connect()
@@ -2106,16 +2094,14 @@ class DatabaseManager(DatabaseMigrations):
             for rec in records:
                 print(f"  • ID={rec['id']}, Стадия='{rec['stage_name']}', Дедлайн={rec['deadline']}, Завершено={rec['completed']}")
 
-            # Обновляем дедлайн по ключевому слову
-            search_pattern = f'%{stage_keyword}%'
-
+            # Обновляем дедлайн по точному совпадению имени стадии
             cursor.execute('''
             UPDATE stage_executors
             SET deadline = ?
             WHERE crm_card_id = ?
-              AND stage_name LIKE ?
+              AND stage_name = ?
               AND completed = 0
-            ''', (deadline, crm_card_id, search_pattern))
+            ''', (deadline, crm_card_id, stage_keyword))
 
             rows_affected = cursor.rowcount
 
@@ -2123,8 +2109,8 @@ class DatabaseManager(DatabaseMigrations):
             if executor_id is not None:
                 cursor.execute('''
                 UPDATE stage_executors SET executor_id = ?
-                WHERE crm_card_id = ? AND stage_name LIKE ? AND completed = 0
-                ''', (executor_id, crm_card_id, search_pattern))
+                WHERE crm_card_id = ? AND stage_name = ? AND completed = 0
+                ''', (executor_id, crm_card_id, stage_keyword))
 
             conn.commit()
             self.close()
@@ -2132,7 +2118,7 @@ class DatabaseManager(DatabaseMigrations):
             if rows_affected > 0:
                 print(f"[OK] Дедлайн исполнителя обновлен: {rows_affected} записей -> {deadline}")
             else:
-                print(f"[WARN] Не найдено активных записей для обновления (паттерн: {search_pattern})")
+                print(f"[WARN] Не найдено активных записей для обновления (stage_name: {stage_keyword})")
 
             return rows_affected > 0
         except Exception as e:

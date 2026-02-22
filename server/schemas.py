@@ -442,7 +442,10 @@ class SyncResponse(BaseModel):
 class CRMCardBase(BaseModel):
     contract_id: int
     column_name: str = "Новый заказ"
+    previous_column: Optional[str] = None
     deadline: Optional[str] = None
+    paused_at: Optional[datetime] = None
+    total_pause_days: int = 0
     tags: Optional[str] = None
     is_approved: bool = False
     approval_deadline: Optional[str] = None
@@ -478,7 +481,10 @@ class CRMCardCreate(CRMCardBase):
 
 class CRMCardUpdate(BaseModel):
     column_name: Optional[str] = None
+    previous_column: Optional[str] = None
     deadline: Optional[str] = None
+    paused_at: Optional[datetime] = None
+    total_pause_days: Optional[int] = None
     tags: Optional[str] = None
     is_approved: Optional[bool] = None
     approval_deadline: Optional[str] = None
@@ -571,6 +577,7 @@ class StageExecutorResponse(BaseModel):
 class SupervisionCardBase(BaseModel):
     contract_id: int
     column_name: str = "Новый заказ"
+    previous_column: Optional[str] = None
     start_date: Optional[str] = None
     deadline: Optional[str] = None
     tags: Optional[str] = None
@@ -598,6 +605,7 @@ class SupervisionCardCreate(SupervisionCardBase):
 
 class SupervisionCardUpdate(BaseModel):
     column_name: Optional[str] = None
+    previous_column: Optional[str] = None
     start_date: Optional[str] = None
     deadline: Optional[str] = None
     tags: Optional[str] = None

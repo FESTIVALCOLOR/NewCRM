@@ -16,6 +16,7 @@ from database import (
     CRMCard, StageExecutor, SupervisionCard,
     ApprovalStageDeadline, ProjectTimelineEntry,
     StageWorkflowState, Payment, ActionHistory,
+    MessengerChat,
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -670,6 +671,27 @@ async def delete_crm_card(
         # Удаляем связанные платежи
         db.query(Payment).filter(Payment.crm_card_id == card_id).delete()
 
+        # Удаляем дедлайны стадий согласования
+        db.query(ApprovalStageDeadline).filter(
+            ApprovalStageDeadline.crm_card_id == card_id
+        ).delete()
+
+        # Удаляем записи timeline проекта
+        db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.crm_card_id == card_id
+        ).delete()
+
+        # Удаляем историю действий
+        db.query(ActionHistory).filter(
+            ActionHistory.entity_type.in_(['crm_card', 'stage', 'stage_executor']),
+            ActionHistory.entity_id == card_id
+        ).delete(synchronize_session='fetch')
+
+        # Удаляем привязанные чаты мессенджера
+        db.query(MessengerChat).filter(
+            MessengerChat.crm_card_id == card_id
+        ).delete()
+
         # Лог перед удалением
         log = ActivityLog(
             employee_id=current_user.id,
@@ -826,15 +848,14 @@ async def get_stage_history(
     """Получить историю стадий карточки"""
     # История из ActionHistory для данной карточки
     history = db.query(ActionHistory).filter(
-        ActionHistory.entity_type == 'stage_executor',
+        ActionHistory.entity_type.in_(['crm_card', 'stage', 'stage_executor']),
         ActionHistory.entity_id == card_id
     ).order_by(ActionHistory.action_date.desc()).all()
 
     return [{
         'id': h.id,
         'action_type': h.action_type,
-        'old_value': h.old_value,
-        'new_value': h.new_value,
+        'description': h.description,
         'action_date': h.action_date.isoformat() if h.action_date else None,
         'user_id': h.user_id
     } for h in history]
@@ -1248,6 +1269,20 @@ async def workflow_client_approved(
                     logger.info(f"K7: Client approval pause {approval_pause_days} days, card {card_id}")
                 except (ValueError, TypeError):
                     pass
+
+            # Сдвигаем дедлайны исполнителей стадий
+            if approval_pause_days > 0:
+                executors = db.query(StageExecutor).filter(
+                    StageExecutor.crm_card_id == card_id
+                ).all()
+                for ex in executors:
+                    if ex.deadline:
+                        try:
+                            ex_dl = datetime.strptime(str(ex.deadline), '%Y-%m-%d')
+                            ex_dl += timedelta(days=approval_pause_days)
+                            ex.deadline = ex_dl.strftime('%Y-%m-%d')
+                        except (ValueError, TypeError):
+                            pass
 
         wf.status = 'in_progress'
         wf.client_approval_deadline_paused = False

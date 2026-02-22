@@ -2357,6 +2357,16 @@ class DataAccess(QObject):
                 return self.api_client.get_supervision_timeline_summary(card_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_supervision_timeline_summary: {e}")
+        # Offline fallback: строим сводку из локальных данных
+        try:
+            entries = self.db.get_supervision_timeline(card_id)
+            if entries:
+                total = len(entries)
+                filled = sum(1 for e in entries if e.get('actual_date'))
+                progress = round(filled / total * 100) if total > 0 else 0
+                return {'total_stages': total, 'completed_stages': filled, 'progress': progress}
+        except Exception:
+            pass
         return {}
 
     def export_supervision_timeline_excel(self, card_id: int) -> bytes:

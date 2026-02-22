@@ -862,9 +862,6 @@ class CRMTab(QWidget):
                 try:
                     self.data.move_crm_card(card_id, to_column)
                     api_success = True
-                    # Синхронизируем локальную БД напрямую (без повторного API вызова)
-                    if self.db:
-                        self.data.update_crm_card_column(card_id, to_column)
                 except Exception as api_error:
                     print(f"! [API ERROR] {api_error}")
 

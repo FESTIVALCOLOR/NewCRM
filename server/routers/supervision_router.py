@@ -330,6 +330,16 @@ async def move_supervision_card_to_column(
                             except (ValueError, TypeError):
                                 pass
                     logger.info(f"Supervision card {card_id} auto-resumed from 'В ожидании', pause_days={pause_days}")
+
+                # Сдвигаем deadline карточки
+                if card.deadline:
+                    try:
+                        dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                        dl += timedelta(days=pause_days)
+                        card.deadline = dl.strftime('%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        pass
+
             card.previous_column = None
 
         card.column_name = new_column
@@ -479,6 +489,15 @@ async def resume_supervision_card(
                     except (ValueError, TypeError):
                         pass
             logger.info(f"K2: Supervision card {card_id} resumed, pause_days={pause_days}, shifted {len(timeline_entries)} entries")
+
+        # Сдвигаем deadline карточки
+        if pause_days > 0 and card.deadline:
+            try:
+                dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                dl += timedelta(days=pause_days)
+                card.deadline = dl.strftime('%Y-%m-%d')
+            except (ValueError, TypeError):
+                pass
 
         # Добавляем запись в историю
         history = SupervisionProjectHistory(
@@ -659,6 +678,11 @@ async def delete_supervision_order(
 
         # Удаляем связанные платежи
         db.query(Payment).filter(Payment.supervision_card_id == supervision_card_id).delete()
+
+        # Удаляем записи timeline
+        db.query(SupervisionTimelineEntry).filter(
+            SupervisionTimelineEntry.supervision_card_id == supervision_card_id
+        ).delete()
 
         # Удаляем карточку
         db.delete(card)

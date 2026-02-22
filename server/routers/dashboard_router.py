@@ -67,7 +67,7 @@ async def get_clients_dashboard(
         if year:
             year_str = str(year)
             clients_by_year = db.query(Contract.client_id).filter(
-                Contract.contract_date.like(f'%{year_str}%')
+                Contract.contract_date.like(f'{year_str}-%')
             ).distinct().count()
 
         # 5. Клиенты агента (всего)
@@ -83,7 +83,7 @@ async def get_clients_dashboard(
             year_str = str(year)
             agent_clients_by_year = db.query(Contract.client_id).filter(
                 Contract.agent_type == agent_type,
-                Contract.contract_date.like(f'%{year_str}%')
+                Contract.contract_date.like(f'{year_str}-%')
             ).distinct().count()
 
         return {
@@ -130,7 +130,7 @@ async def get_contracts_dashboard(
             year_str = str(year)
             agent_orders_by_year = db.query(Contract).filter(
                 Contract.agent_type == agent_type,
-                Contract.contract_date.like(f'%{year_str}%')
+                Contract.contract_date.like(f'{year_str}-%')
             ).count()
 
         # 6. Площадь агента за год
@@ -141,7 +141,7 @@ async def get_contracts_dashboard(
                 func.coalesce(func.sum(Contract.area), 0)
             ).filter(
                 Contract.agent_type == agent_type,
-                Contract.contract_date.like(f'%{year_str}%')
+                Contract.contract_date.like(f'{year_str}-%')
             ).scalar()
             agent_area_by_year = float(result) if result else 0
 
