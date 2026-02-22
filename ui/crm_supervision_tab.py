@@ -1013,15 +1013,20 @@ class CRMSupervisionTab(QWidget):
             self.data.move_supervision_card(card_id, to_column)
             print(f"   + Карточка перемещена")
 
-            # Сбрасываем приостановку при перемещении
+            # Сбрасываем приостановку при перемещении (только если карточка была приостановлена)
             if to_column != from_column:
-                self.data.resume_supervision_card(card_id, self.employee['id'])
+                if from_column == 'В ожидании':
+                    try:
+                        self.data.resume_supervision_card(card_id, self.employee['id'])
+                        print(f"   + Карточка возобновлена из 'В ожидании'")
+                    except Exception as e:
+                        print(f"   Ошибка resume: {e}")
                 self.data.reset_supervision_stage_completion(card_id)
                 print(f"   + Отметка о сдаче сброшена")
                 
             # Запрос дедлайна при перемещении (только для менеджеров)
             if not self.is_dan_role:
-                skip_deadline_columns = ['Новый заказ', 'Выполненный проект']
+                skip_deadline_columns = ['Новый заказ', 'В ожидании', 'Выполненный проект']
                 
                 if to_column not in skip_deadline_columns and from_column != to_column:
                     dialog = SupervisionStageDeadlineDialog(self, card_id, to_column, api_client=self.api_client)

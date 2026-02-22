@@ -951,19 +951,23 @@ async def get_contract_years(
     """
     try:
         from datetime import datetime
-        from sqlalchemy import extract
+        from sqlalchemy import func
 
-        # Получаем все уникальные годы из дат договоров
+        # Получаем все уникальные годы из дат договоров (contract_date — VARCHAR формата YYYY-MM-DD)
         years_query = db.query(
-            extract('year', Contract.contract_date).label('year')
+            func.substr(Contract.contract_date, 1, 4).label('year')
         ).filter(
-            Contract.contract_date.isnot(None)
+            Contract.contract_date.isnot(None),
+            Contract.contract_date != ''
         ).distinct().all()
 
         db_years = set()
         for row in years_query:
             if row.year:
-                db_years.add(int(row.year))
+                try:
+                    db_years.add(int(row.year))
+                except (ValueError, TypeError):
+                    pass
 
         # Добавляем текущий год и следующий год
         current_year = datetime.now().year

@@ -278,7 +278,8 @@ async def move_supervision_card_to_column(
         new_column = move_request.column_name
 
         # С4: Блокируем перемещение приостановленной карточки
-        if card.is_paused and new_column != old_column:
+        # Исключение: выход из "В ожидании" разрешён (это и есть возобновление)
+        if card.is_paused and new_column != old_column and old_column != 'В ожидании':
             raise HTTPException(
                 status_code=422,
                 detail='Карточка приостановлена. Сначала возобновите проект.'
@@ -292,7 +293,6 @@ async def move_supervision_card_to_column(
             )
 
         # === ПРАВИЛО: Из "В ожидании" — только в previous_column или "Выполненный проект" ===
-        # Если previous_column == "Новый заказ" — разрешаем любой столбец (кроме "Новый заказ", что уже блокировано выше)
         if old_column == 'В ожидании' and new_column != 'В ожидании':
             allowed_return = card.previous_column or 'Новый заказ'
             if allowed_return != 'Новый заказ' and new_column not in [allowed_return, 'Выполненный проект']:
@@ -305,8 +305,31 @@ async def move_supervision_card_to_column(
         if new_column == 'В ожидании' and old_column != 'В ожидании':
             card.previous_column = old_column
 
-        # === ПРАВИЛО: При возврате из "В ожидании" — очищаем previous_column ===
+        # === ПРАВИЛО: При возврате из "В ожидании" — автоматически возобновляем ===
         if old_column == 'В ожидании' and new_column != 'В ожидании':
+            # Авто-resume: снимаем is_paused и пересчитываем дедлайны
+            if card.is_paused:
+                pause_days = 0
+                if card.paused_at:
+                    pause_days = (datetime.utcnow() - card.paused_at).days
+                card.is_paused = False
+                card.pause_reason = None
+                card.paused_at = None
+                # Сдвигаем plan_dates в timeline на дни паузы
+                if pause_days > 0:
+                    timeline_entries = db.query(SupervisionTimelineEntry).filter(
+                        SupervisionTimelineEntry.supervision_card_id == card_id,
+                        SupervisionTimelineEntry.actual_date.is_(None)
+                    ).all()
+                    for te in timeline_entries:
+                        if te.plan_date:
+                            try:
+                                plan_dt = datetime.strptime(te.plan_date, '%Y-%m-%d')
+                                plan_dt += timedelta(days=pause_days)
+                                te.plan_date = plan_dt.strftime('%Y-%m-%d')
+                            except (ValueError, TypeError):
+                                pass
+                    logger.info(f"Supervision card {card_id} auto-resumed from 'В ожидании', pause_days={pause_days}")
             card.previous_column = None
 
         card.column_name = new_column
