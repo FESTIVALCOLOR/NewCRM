@@ -121,8 +121,8 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
     "ДАН": {"supervision.complete_stage", "messenger.view_chat"},
 }
 
-# Системные роли с полным доступом (не настраиваются)
-SUPERUSER_ROLES = {"admin", "director"}
+# Системные роли/логины с полным доступом (не настраиваются)
+SUPERUSER_ROLES = {"admin", "director", "Руководитель студии"}
 
 # =========================
 # КЭШ ПРАВ
@@ -212,7 +212,7 @@ def check_permission(employee: Employee, permission_name: str, db: Session) -> b
     Проверить конкретное право у сотрудника.
     admin/director имеют полный доступ всегда.
     """
-    if employee.role in SUPERUSER_ROLES:
+    if employee.role in SUPERUSER_ROLES or employee.login in SUPERUSER_ROLES:
         return True
 
     perms = load_permissions(employee.id, db)
