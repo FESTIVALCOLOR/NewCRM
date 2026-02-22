@@ -31,7 +31,7 @@ class TestProjectTemplates:
             self.api_base,
             "/api/project-templates",
             self.headers,
-            params={
+            json={
                 "contract_id": self.contract["id"],
                 "template_url": "https://example.com/template/1"
             }
@@ -44,8 +44,8 @@ class TestProjectTemplates:
         """GET /api/project-templates/{contract_id} — получить шаблоны"""
         # Сначала создаём
         api_post(self.api_base, "/api/project-templates", self.headers,
-                 params={"contract_id": self.contract["id"],
-                         "template_url": "https://example.com/template/2"})
+                 json={"contract_id": self.contract["id"],
+                       "template_url": "https://example.com/template/2"})
         resp = api_get(
             self.api_base,
             f"/api/project-templates/{self.contract['id']}",
@@ -61,8 +61,8 @@ class TestProjectTemplates:
         # Создаём
         create_resp = api_post(
             self.api_base, "/api/project-templates", self.headers,
-            params={"contract_id": self.contract["id"],
-                    "template_url": "https://example.com/template/3"})
+            json={"contract_id": self.contract["id"],
+                  "template_url": "https://example.com/template/3"})
         assert create_resp.status_code == 200
         template_id = create_resp.json()["id"]
         # Удаляем
