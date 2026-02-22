@@ -590,4 +590,4 @@ ui/crm/
 - [02-project-rules.md](02-project-rules.md) — правила проекта (14 правил, включая signal safety)
 - [07-server.md](07-server.md) — серверная документация
 - [21-security.md](21-security.md) — безопасность
-- [audit-report-2026-02-20.md](audit-report-2026-02-20.md) — полный аудит (Phase 0-7.5)
+- [audit-report-20-02-2026.md](audit-report-20-02-2026.md) — полный аудит (Phase 0-7.5)
