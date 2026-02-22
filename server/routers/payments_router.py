@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, extract
 from typing import List, Optional
@@ -1150,7 +1150,7 @@ async def update_payment_manual(
 @router.patch("/{payment_id}/mark-paid")
 async def mark_payment_as_paid(
     payment_id: int,
-    employee_id: int = Body(embed=True),
+    employee_id: int,
     current_user: Employee = Depends(require_permission("payments.update")),
     db: Session = Depends(get_db)
 ):
