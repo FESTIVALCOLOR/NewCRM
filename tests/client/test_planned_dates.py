@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Тесты каскадного расчёта планируемых дат (Phase 5).
-Проверяем логику _calc_planned_dates() из timeline_widget.py.
+Тестируем calc_planned_dates() из utils/timeline_calc.py.
 """
 import sys
 from pathlib import Path
@@ -11,33 +11,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.calendar_helpers import add_working_days
-
-
-def calc_planned_dates(entries):
-    """Копия логики _calc_planned_dates() из timeline_widget.py
-    для тестирования без создания QWidget."""
-    prev_date = ''
-    for entry in entries:
-        role = entry.get('executor_role', '')
-        if role == 'header':
-            continue
-        stage_code = entry.get('stage_code', '')
-        if stage_code == 'START':
-            prev_date = entry.get('actual_date', '')
-            entry['_planned_date'] = prev_date
-            continue
-        norm = entry.get('norm_days', 0) or 0
-        actual = entry.get('actual_date', '')
-        if prev_date and norm > 0:
-            entry['_planned_date'] = add_working_days(prev_date, norm)
-        else:
-            entry['_planned_date'] = ''
-        if actual:
-            prev_date = actual
-        elif entry.get('_planned_date'):
-            prev_date = entry['_planned_date']
-    return entries
+from utils.timeline_calc import calc_planned_dates
 
 
 # ============================================================================

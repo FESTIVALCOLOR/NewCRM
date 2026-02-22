@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QBrush
 from utils.calendar_helpers import add_today_button_to_dateedit, add_working_days
+from utils.timeline_calc import calc_planned_dates
 from datetime import datetime, timedelta
 import threading
 
@@ -290,47 +291,51 @@ class ProjectTimelineWidget(QWidget):
         thread = threading.Thread(target=self._load_data_background, daemon=True)
         thread.start()
 
+    def _fetch_entries(self):
+        """Загрузить/инициализировать entries таймлайна (без UI).
+        Возвращает отсортированный список entries."""
+        project_type = self.contract_data.get('project_type', 'Индивидуальный')
+        project_subtype = self.contract_data.get('project_subtype', '')
+        area = float(self.contract_data.get('area', 0) or 0)
+        floors = int(self.contract_data.get('floors', 1) or 1)
+
+        entries = self.data.get_project_timeline(self.contract_id)
+
+        if entries:
+            has_template_codes = any(
+                e.get('stage_code', '').startswith('T') for e in entries
+                if e.get('executor_role') != 'header' and e.get('stage_code', '') != 'START'
+            )
+            is_template = (project_type == 'Шаблонный')
+            if is_template != has_template_codes and area > 0:
+                result = self.data.reinit_project_timeline(self.contract_id, {
+                    'project_type': project_type,
+                    'project_subtype': project_subtype,
+                    'area': area,
+                    'floors': floors
+                })
+                if result:
+                    entries = self.data.get_project_timeline(self.contract_id)
+
+        if not entries:
+            if area > 0:
+                result = self.data.init_project_timeline(self.contract_id, {
+                    'project_type': project_type,
+                    'project_subtype': project_subtype,
+                    'area': area,
+                    'floors': floors
+                })
+                if result and 'entries' in result:
+                    entries = result['entries']
+                else:
+                    entries = self.data.get_project_timeline(self.contract_id)
+
+        return sorted(entries or [], key=lambda e: e.get('sort_order', 0))
+
     def _load_data_background(self):
         """Загрузка данных таблицы сроков в фоновом потоке (не блокирует UI)"""
         try:
-            project_type = self.contract_data.get('project_type', 'Индивидуальный')
-            project_subtype = self.contract_data.get('project_subtype', '')
-            area = float(self.contract_data.get('area', 0) or 0)
-            floors = int(self.contract_data.get('floors', 1) or 1)
-
-            entries = self.data.get_project_timeline(self.contract_id)
-
-            if entries:
-                has_template_codes = any(
-                    e.get('stage_code', '').startswith('T') for e in entries
-                    if e.get('executor_role') != 'header' and e.get('stage_code', '') != 'START'
-                )
-                is_template = (project_type == 'Шаблонный')
-                if is_template != has_template_codes and area > 0:
-                    result = self.data.reinit_project_timeline(self.contract_id, {
-                        'project_type': project_type,
-                        'project_subtype': project_subtype,
-                        'area': area,
-                        'floors': floors
-                    })
-                    if result:
-                        entries = self.data.get_project_timeline(self.contract_id)
-
-            if not entries:
-                if area > 0:
-                    result = self.data.init_project_timeline(self.contract_id, {
-                        'project_type': project_type,
-                        'project_subtype': project_subtype,
-                        'area': area,
-                        'floors': floors
-                    })
-                    if result and 'entries' in result:
-                        entries = result['entries']
-                    else:
-                        entries = self.data.get_project_timeline(self.contract_id)
-
-            self.entries = sorted(entries or [], key=lambda e: e.get('sort_order', 0))
-            # Сигнал в main thread для обновления UI
+            self.entries = self._fetch_entries()
             try:
                 self._data_ready.emit()
             except RuntimeError:
@@ -356,43 +361,7 @@ class ProjectTimelineWidget(QWidget):
 
         self._loading = True
         try:
-            project_type = self.contract_data.get('project_type', 'Индивидуальный')
-            project_subtype = self.contract_data.get('project_subtype', '')
-            area = float(self.contract_data.get('area', 0) or 0)
-            floors = int(self.contract_data.get('floors', 1) or 1)
-
-            entries = self.data.get_project_timeline(self.contract_id)
-
-            if entries:
-                has_template_codes = any(
-                    e.get('stage_code', '').startswith('T') for e in entries
-                    if e.get('executor_role') != 'header' and e.get('stage_code', '') != 'START'
-                )
-                is_template = (project_type == 'Шаблонный')
-                if is_template != has_template_codes and area > 0:
-                    result = self.data.reinit_project_timeline(self.contract_id, {
-                        'project_type': project_type,
-                        'project_subtype': project_subtype,
-                        'area': area,
-                        'floors': floors
-                    })
-                    if result:
-                        entries = self.data.get_project_timeline(self.contract_id)
-
-            if not entries:
-                if area > 0:
-                    result = self.data.init_project_timeline(self.contract_id, {
-                        'project_type': project_type,
-                        'project_subtype': project_subtype,
-                        'area': area,
-                        'floors': floors
-                    })
-                    if result and 'entries' in result:
-                        entries = result['entries']
-                    else:
-                        entries = self.data.get_project_timeline(self.contract_id)
-
-            self.entries = sorted(entries or [], key=lambda e: e.get('sort_order', 0))
+            self.entries = self._fetch_entries()
             self._auto_set_start_date()
             self._recalculate_days()
             self._populate_table()
@@ -571,32 +540,8 @@ class ProjectTimelineWidget(QWidget):
         return lbl
 
     def _calc_planned_dates(self):
-        """Рассчитать планируемые даты для каждого подэтапа.
-        Логика: planned[0] = START_date + norm_days[0]
-                planned[N] = prev_actual_date (или prev_planned) + norm_days[N]
-        Результат сохраняется в entry['_planned_date'] (строка 'YYYY-MM-DD').
-        """
-        prev_date = ''  # Предыдущая дата (actual или planned)
-        for entry in self.entries:
-            role = entry.get('executor_role', '')
-            if role == 'header':
-                continue
-            stage_code = entry.get('stage_code', '')
-            if stage_code == 'START':
-                prev_date = entry.get('actual_date', '')
-                entry['_planned_date'] = prev_date
-                continue
-            norm = entry.get('norm_days', 0) or 0
-            actual = entry.get('actual_date', '')
-            if prev_date and norm > 0:
-                entry['_planned_date'] = add_working_days(prev_date, norm)
-            else:
-                entry['_planned_date'] = ''
-            # Для следующего подэтапа: actual_date (если есть), иначе planned_date
-            if actual:
-                prev_date = actual
-            elif entry.get('_planned_date'):
-                prev_date = entry['_planned_date']
+        """Рассчитать планируемые даты (делегирует в utils/timeline_calc.py)."""
+        calc_planned_dates(self.entries)
 
     def _populate_table(self):
         """Заполнение таблицы данными (QLabel для цветных ячеек — обход global stylesheet)"""
