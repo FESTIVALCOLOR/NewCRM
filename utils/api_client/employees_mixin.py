@@ -32,7 +32,7 @@ class EmployeesMixin:
             f"{self.base_url}/api/employees",
             json=employee_data
         )
-        return self._handle_response(response)
+        return self._handle_response(response, success_codes=[200, 201])
 
     def update_employee(self, employee_id: int, employee_data: Dict[str, Any]) -> Dict[str, Any]:
         """Обновить сотрудника"""

@@ -16,7 +16,6 @@ opus
 
 ## Сервер
 - **Домен:** crm.festivalcolor.ru
-- **Домен:** crm.festivalcolor.ru
 - **SSH:** `ssh timeweb` (алиас, порт 2222)
 - **Путь:** /opt/interior_studio/
 - **Docker:** postgres (внутренний), api (127.0.0.1:8000), nginx (80→443 SSL)

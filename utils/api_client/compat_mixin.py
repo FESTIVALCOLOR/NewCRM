@@ -375,7 +375,11 @@ class CompatMixin:
         return self._handle_response(response)
 
     def get_file_templates(self) -> List[Dict[str, Any]]:
-        """Получить шаблоны файлов"""
+        """Получить шаблоны файлов
+
+        DEAD CODE: endpoint /api/file-templates не существует на сервере,
+        метод не используется в UI. Оставлен для обратной совместимости.
+        """
         try:
             response = self._request(
                 'GET',

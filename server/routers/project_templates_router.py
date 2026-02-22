@@ -4,6 +4,7 @@
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db, Employee, Contract, ProjectFile
@@ -13,34 +14,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["project-templates"])
 
 
+class ProjectTemplateCreate(BaseModel):
+    contract_id: int
+    template_url: str
+
+
 @router.post("/")
 async def add_project_template(
-    contract_id: int,
-    template_url: str,
+    data: ProjectTemplateCreate,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Добавить ссылку на шаблон проекта"""
     try:
         # Проверяем существование договора
-        contract = db.query(Contract).filter(Contract.id == contract_id).first()
+        contract = db.query(Contract).filter(Contract.id == data.contract_id).first()
         if not contract:
             raise HTTPException(status_code=404, detail="Договор не найден")
 
         # Сохраняем шаблон как файл проекта
         file_record = ProjectFile(
-            contract_id=contract_id,
+            contract_id=data.contract_id,
             stage='template',
             file_type='template_url',
-            public_link=template_url,
+            public_link=data.template_url,
             yandex_path='',
-            file_name=template_url
+            file_name=data.template_url
         )
         db.add(file_record)
         db.commit()
         db.refresh(file_record)
 
-        return {'id': file_record.id, 'contract_id': contract_id, 'template_url': template_url}
+        return {'id': file_record.id, 'contract_id': data.contract_id, 'template_url': data.template_url}
 
     except HTTPException:
         raise

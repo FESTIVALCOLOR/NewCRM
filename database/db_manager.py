@@ -2391,7 +2391,7 @@ class DatabaseManager(DatabaseMigrations):
         updates = {
             'is_paused': 1,
             'pause_reason': reason,
-            'paused_at': 'datetime("now")'
+            'paused_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         self.update_supervision_card(card_id, updates)
         
@@ -3587,6 +3587,7 @@ class DatabaseManager(DatabaseMigrations):
             cursor.execute('''
             UPDATE payments
             SET is_paid = 1,
+                payment_status = 'paid',
                 paid_date = CURRENT_TIMESTAMP,
                 paid_by = ?
             WHERE id = ?
@@ -4109,7 +4110,7 @@ class DatabaseManager(DatabaseMigrations):
             row = cursor.fetchone()
             self.close()
             if row:
-                return {'id': row['id'], 'contract_id': contract_id}
+                return row['id']
             return None
         except Exception as e:
             print(f"[WARN] add_crm_card: {e}")

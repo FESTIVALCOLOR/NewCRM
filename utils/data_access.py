@@ -205,8 +205,11 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_client(client_data)
                 if result:
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
                     # Обновляем локальный ID на серверный если отличается
-                    server_id = result.get('id')
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != client_id:
                         self._update_local_id('clients', client_id, server_id)
                     return result
@@ -319,7 +322,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_contract(contract_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != contract_id:
                         self._update_local_id('contracts', contract_id, server_id)
                     return result
@@ -419,7 +425,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_employee(employee_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != employee_id:
                         self._update_local_id('employees', employee_id, server_id)
                     return result
@@ -500,7 +509,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_crm_card(card_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != card_id:
                         self._update_local_id('crm_cards', card_id, server_id)
                     return result
@@ -703,7 +715,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_supervision_card(card_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != card_id:
                         self._update_local_id('supervision_cards', card_id, server_id)
                     return result
@@ -1265,7 +1280,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_rate(rate_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != rate_id:
                         self._update_local_id('rates', rate_id, server_id)
                     return result
@@ -1405,7 +1423,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_salary(salary_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != salary_id:
                         self._update_local_id('salaries', salary_id, server_id)
                     return result
@@ -1819,7 +1840,10 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.create_file_record(file_data)
                 if result:
-                    server_id = result.get('id')
+                    # Защита: API может вернуть list вместо dict
+                    if isinstance(result, list):
+                        result = result[0] if result else {}
+                    server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != file_id:
                         self._update_local_id('project_files', file_id, server_id)
                     return result

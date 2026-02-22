@@ -69,6 +69,25 @@ async def add_agent(
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
+@router.get("/{agent_id}")
+async def get_agent(
+    agent_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить агента по ID"""
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "full_name": agent.name,
+        "color": agent.color or "#FFFFFF",
+        "status": agent.status or "активный"
+    }
+
+
 @router.patch("/{name}/color")
 async def update_agent_color(
     name: str,

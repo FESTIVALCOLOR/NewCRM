@@ -8,7 +8,7 @@ import os
 import logging
 import threading
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -795,7 +795,7 @@ async def delete_file_record(
 @router.patch("/{file_id}/order")
 async def update_file_order(
     file_id: int,
-    file_order: int,
+    file_order: int = Body(embed=True),
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

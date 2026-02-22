@@ -30,6 +30,10 @@ def debounce_click(func=None, *, delay_ms=1000):
             if key in _last_click_time and (now - _last_click_time[key]) < delay_ms / 1000:
                 return None
             _last_click_time[key] = now
+            # Qt clicked-сигнал передаёт bool checked как единственный аргумент.
+            # Если args состоит только из одного bool — это Qt-артефакт, отбрасываем.
+            if len(args) == 1 and isinstance(args[0], bool):
+                return f()
             return f(*args, **kwargs)
         return wrapper
 

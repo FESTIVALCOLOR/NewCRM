@@ -90,7 +90,16 @@ async def api_version_compat(request, call_next):
     """Rewrite /api/xxx → /api/v1/xxx для backward-compat."""
     path = request.scope["path"]
     if path.startswith("/api/") and not path.startswith("/api/v1/"):
-        request.scope["path"] = "/api/v1/" + path[5:]  # len("/api/") = 5
+        new_path = "/api/v1/" + path[5:]  # len("/api/") = 5
+        # Добавляем trailing slash чтобы избежать 307 redirect
+        # (redirect теряет Authorization header при HTTPS→HTTP)
+        if not new_path.endswith("/"):
+            new_path += "/"
+        request.scope["path"] = new_path
+    # Передаём scheme от X-Forwarded-Proto (nginx → app через HTTP)
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    if forwarded_proto:
+        request.scope["scheme"] = forwarded_proto
     return await call_next(request)
 
 

@@ -138,7 +138,7 @@ class PaymentsMixin:
         response = self._request(
             'PATCH',
             f"{self.base_url}/api/payments/{payment_id}/mark-paid",
-            json={'employee_id': employee_id}
+            params={'employee_id': employee_id}
         )
         return self._handle_response(response)
 

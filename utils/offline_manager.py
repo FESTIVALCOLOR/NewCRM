@@ -643,6 +643,17 @@ class OfflineManager(QObject):
             return {'success': False, 'error': 'Failed to create payment'}
 
         elif op_type == OperationType.UPDATE.value:
+            # Специальный случай: отметить платёж как оплаченный
+            action = data.get('_action')
+            if action == 'mark_paid':
+                result = self.api_client.mark_payment_as_paid(
+                    entity_id,
+                    data.get('employee_id', 0)
+                )
+                if result is not None:
+                    return {'success': True, 'server_id': entity_id}
+                return {'success': False, 'error': 'Failed to mark payment as paid'}
+
             result = self.api_client.update_payment(entity_id, data)
             if result:
                 return {'success': True, 'server_id': entity_id}
