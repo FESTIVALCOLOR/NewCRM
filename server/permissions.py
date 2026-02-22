@@ -249,41 +249,57 @@ def seed_permissions(db: Session):
     """
     Заполнить/дополнить дефолтные права для сотрудников.
     Вызывается при старте сервера.
-    Использует INSERT...ON CONFLICT DO NOTHING для атомарности
-    (безопасно при параллельных uvicorn workers).
+    Использует advisory lock для предотвращения deadlock между workers.
     """
     from sqlalchemy import text
 
-    employees = db.query(Employee).all()
-    total_added = 0
+    try:
+        # PostgreSQL advisory lock — только один worker выполняет seed
+        db.execute(text("SELECT pg_advisory_lock(42)"))
 
-    for emp in employees:
-        # Пропускаем системных пользователей без роли в DEFAULT_ROLE_PERMISSIONS
-        if emp.role in SUPERUSER_ROLES and emp.role not in DEFAULT_ROLE_PERMISSIONS:
-            continue
+        employees = db.query(Employee).all()
+        total_added = 0
 
-        default_perms = _get_default_permissions(emp)
-        if not default_perms:
-            continue
+        for emp in employees:
+            if emp.role in SUPERUSER_ROLES and emp.role not in DEFAULT_ROLE_PERMISSIONS:
+                continue
 
-        # INSERT...ON CONFLICT DO NOTHING — атомарно, без race condition
-        for perm_name in default_perms:
-            result = db.execute(
-                text("""
-                    INSERT INTO user_permissions (employee_id, permission_name)
-                    VALUES (:emp_id, :perm)
-                    ON CONFLICT (employee_id, permission_name) DO NOTHING
-                """),
-                {"emp_id": emp.id, "perm": perm_name}
-            )
-            if result.rowcount > 0:
+            default_perms = _get_default_permissions(emp)
+            if not default_perms:
+                continue
+
+            # Получаем существующие права
+            existing = {
+                r[0] for r in db.execute(
+                    text("SELECT permission_name FROM user_permissions WHERE employee_id = :eid"),
+                    {"eid": emp.id}
+                ).fetchall()
+            }
+
+            missing = default_perms - existing
+            for perm_name in missing:
+                db.execute(
+                    text("""
+                        INSERT INTO user_permissions (employee_id, permission_name)
+                        VALUES (:emp_id, :perm)
+                        ON CONFLICT (employee_id, permission_name) DO NOTHING
+                    """),
+                    {"emp_id": emp.id, "perm": perm_name}
+                )
                 total_added += 1
 
-    if total_added > 0:
         db.commit()
-        logger.info(f"Seeded {total_added} missing permissions")
-    else:
-        db.commit()
+        if total_added > 0:
+            logger.info(f"Seeded {total_added} missing permissions")
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"seed_permissions error (non-fatal): {e}")
+    finally:
+        try:
+            db.execute(text("SELECT pg_advisory_unlock(42)"))
+            db.commit()
+        except Exception:
+            pass
 
 
 # =========================
