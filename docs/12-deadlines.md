@@ -153,15 +153,16 @@ _on_date_changed() → _recalculate_days() → _populate_table() → _calc_plann
 ```python
 def add_working_days(start_date_str, working_days):
     """Добавляет N рабочих дней (Пн-Пт) к дате.
-
-    Args:
-        start_date_str: дата в формате 'yyyy-MM-dd'
-        working_days: количество рабочих дней
-    Returns:
-        дата в формате 'yyyy-MM-dd'
+    Args: start_date_str 'yyyy-MM-dd', working_days int
+    Returns: 'yyyy-MM-dd'
     """
-    # Пропускает субботы (5) и воскресенья (6)
-    # Не учитывает государственные праздники
+
+def working_days_between(start_date_str, end_date_str):
+    """Подсчитывает рабочие дни (Пн-Пт) между двумя датами.
+    Args: start_date_str, end_date_str 'yyyy-MM-dd'
+    Returns: int (не считая start, считая end)
+    """
+# Обе функции: Пн-Пт, без государственных праздников
 ```
 
 ## Project Timeline — детально
@@ -313,11 +314,11 @@ budget_savings = budget_planned - budget_actual
 ```python
 _load_data()                    # загрузка entries, auto-init если пусто
 _fetch_entries()                # загрузка/инициализация + синхронизация norm_days из шаблона
-_sync_norm_days_from_template() # применение admin шаблона к записям с norm_days=0 (односторонняя)
+_sync_norm_days_from_template() # односторонняя sync admin → карточка (пропускает custom_norm_days)
 _populate_table()               # построение строк с заголовками, подытогами
 _calc_planned_dates()           # расчёт планируемых дат цепочкой (prev + norm_days)
 _recalculate_days()             # пересчёт actual_days между датами
-_auto_set_start_date()          # авто-расчёт START
+_auto_set_start_date()          # авто-расчёт START, emit deadline_updated signal
 _enable_date_edit()             # переключение ячейки даты в режим QDateEdit (по клику карандаша)
 _on_date_changed()              # обработка QDateEdit, обновление сервера
 ```

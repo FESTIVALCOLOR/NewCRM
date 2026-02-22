@@ -1,7 +1,7 @@
 # Interior Studio CRM — Документация
 
 > Полная документация по проекту Interior Studio CRM.
-> Версия: 1.0 | Дата: 2026-02-14
+> Версия: 1.1 | Дата: 2026-02-22
 
 ## Содержание
 
@@ -29,7 +29,7 @@
 | 20 | [UI тесты (pytest-qt)](20-ui-testing.md) | 460 тестов pytest-qt offscreen, 13 модулей, ролевое тестирование | `docs/20-ui-testing.md` |
 | 21 | [Безопасность](21-security.md) | SSL, JWT, fail2ban, бэкапы, сетевая защита (~82%) | `docs/21-security.md` |
 | 22 | [Оптимизация (Roadmap)](22-optimization-roadmap.md) | 4 фазы: защита данных, UX, архитектура, инфраструктура | `docs/22-optimization-roadmap.md` |
-| 23 | [Дорожная карта дедлайнов](23-deadline-roadmap.md) | Полный аудит, баги, план реализации Фазы 8 | `docs/23-deadline-roadmap.md` |
+| 23 | [Дорожная карта дедлайнов](23-deadline-roadmap.md) | Аудит, история реализации Фазы 8, архитектура | `docs/23-deadline-roadmap.md` |
 
 ## Быстрые ссылки
 
