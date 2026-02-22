@@ -163,6 +163,17 @@ class NormDaysTemplate(Base):
     )
 
 
+class Agent(Base):
+    """Агенты (типы агентов: ПЕТРОВИЧ, ФЕСТИВАЛЬ и т.д.)"""
+    __tablename__ = "agents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    color = Column(String, nullable=False, default='#FFFFFF')
+    status = Column(String, default='активный')
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ActivityLog(Base):
     """Расширенный лог действий"""
     __tablename__ = "activity_log"

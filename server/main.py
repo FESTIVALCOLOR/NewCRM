@@ -144,6 +144,20 @@ async def startup_event():
         seed_permissions(db)
         logger.info("Permissions seeded")
 
+        # Seed агентов по умолчанию (ПЕТРОВИЧ, ФЕСТИВАЛЬ)
+        from database import Agent
+        try:
+            if db.query(Agent).count() == 0:
+                db.add_all([
+                    Agent(name='ПЕТРОВИЧ', color='#FFA500'),
+                    Agent(name='ФЕСТИВАЛЬ', color='#FF69B4'),
+                ])
+                db.commit()
+                logger.info("Default agents seeded (ПЕТРОВИЧ, ФЕСТИВАЛЬ)")
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Agents seed: {e}")
+
         # Инициализация Telegram и Email сервисов из настроек БД
         try:
             messenger_settings = load_messenger_settings(db)
