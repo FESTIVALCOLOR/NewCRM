@@ -40,7 +40,9 @@ planned[N] = prev_date + norm_days[N]
 # prev_date = actual_date (если заполнена) или planned_date предыдущего
 ```
 
-Отображаются как tooltip на date_edit виджетах: "Планируемая дата: dd.MM.yyyy"
+Отображаются в ячейке даты таймлайна (жёлтый фон `#FFF2CC`).
+Фактические даты — зелёный фон (`#E8F5E9`).
+Ячейки заблокированы (read-only QLabel), редактирование через кнопку-карандаш (edit.svg).
 
 ### 6. Каскадный пересчёт
 
@@ -213,12 +215,15 @@ budget_savings = budget_planned - budget_actual
 ### ProjectTimelineWidget
 
 ```python
-_load_data()              # загрузка entries, auto-init если пусто
-populate_table()          # построение строк с заголовками, подытогами
-_calc_planned_dates()     # расчёт планируемых дат цепочкой (prev + norm_days)
-_recalculate_days()       # пересчёт actual_days между датами
-_auto_set_start_date()    # авто-расчёт START
-_on_date_changed()        # обработка QDateEdit, обновление сервера
+_load_data()                    # загрузка entries, auto-init если пусто
+_fetch_entries()                # загрузка/инициализация + синхронизация norm_days из шаблона
+_sync_norm_days_from_template() # применение admin шаблона к записям с norm_days=0
+_populate_table()               # построение строк с заголовками, подытогами
+_calc_planned_dates()           # расчёт планируемых дат цепочкой (prev + norm_days)
+_recalculate_days()             # пересчёт actual_days между датами
+_auto_set_start_date()          # авто-расчёт START
+_enable_date_edit()             # переключение ячейки даты в режим QDateEdit (по клику карандаша)
+_on_date_changed()              # обработка QDateEdit, обновление сервера
 ```
 
 ### ExecutorSelectionDialog
