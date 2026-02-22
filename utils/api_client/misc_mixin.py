@@ -187,7 +187,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/agents"
+                f"{self.base_url}/api/v1/agents"
             )
             return self._handle_response(response)
         except Exception:
@@ -200,7 +200,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/agents",
+                f"{self.base_url}/api/v1/agents",
                 json={'name': name, 'color': color}
             )
             self._handle_response(response)
@@ -214,7 +214,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'PATCH',
-                f"{self.base_url}/api/agents/{name}/color",
+                f"{self.base_url}/api/v1/agents/{name}/color",
                 json={'color': color}
             )
             self._handle_response(response)
@@ -239,7 +239,7 @@ class MiscMixin:
         """Получить список агентов"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/agents"
+            f"{self.base_url}/api/v1/agents"
         )
         return self._handle_response(response)
 
@@ -247,7 +247,7 @@ class MiscMixin:
         """Получить агента по ID"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/agents/{agent_id}"
+            f"{self.base_url}/api/v1/agents/{agent_id}"
         )
         return self._handle_response(response)
 

@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt, QDate, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QBrush
 from utils.calendar_helpers import add_today_button_to_dateedit, add_working_days
 from utils.timeline_calc import calc_planned_dates
+from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
 import threading
 
@@ -330,7 +331,63 @@ class ProjectTimelineWidget(QWidget):
                 else:
                     entries = self.data.get_project_timeline(self.contract_id)
 
-        return sorted(entries or [], key=lambda e: e.get('sort_order', 0))
+        entries = sorted(entries or [], key=lambda e: e.get('sort_order', 0))
+
+        # Синхронизация norm_days из admin шаблона для записей с norm_days=0
+        self._sync_norm_days_from_template(entries)
+
+        return entries
+
+    def _sync_norm_days_from_template(self, entries):
+        """Применить norm_days из admin шаблона к записям, где norm_days=0.
+        Синхронизирует карточки, созданные до появления админки нормо-дней."""
+        if not entries:
+            return
+        project_type = self.contract_data.get('project_type', 'Индивидуальный')
+        project_subtype = self.contract_data.get('project_subtype', '')
+        area = float(self.contract_data.get('area', 0) or 0)
+        agent_type = self.contract_data.get('agent_type', 'Все агенты') or 'Все агенты'
+        if area <= 0:
+            return
+        try:
+            template_data = self.data.preview_norm_days_template(
+                project_type, project_subtype, area, agent_type
+            )
+            if not template_data or not isinstance(template_data, dict):
+                return
+            tpl_entries = template_data.get('entries', [])
+            if not tpl_entries:
+                return
+            # Маппинг stage_code → norm_days из шаблона
+            tpl_map = {}
+            for te in tpl_entries:
+                code = te.get('stage_code', '')
+                nd = te.get('norm_days', 0) or te.get('base_norm_days', 0) or 0
+                if code and nd > 0:
+                    tpl_map[code] = int(round(nd))
+            # Применить к записям с пустыми norm_days
+            updated = []
+            for entry in entries:
+                code = entry.get('stage_code', '')
+                role = entry.get('executor_role', '')
+                if role == 'header' or code == 'START':
+                    continue
+                current_nd = entry.get('norm_days', 0) or 0
+                tpl_nd = tpl_map.get(code, 0)
+                if current_nd == 0 and tpl_nd > 0:
+                    entry['norm_days'] = tpl_nd
+                    updated.append((code, tpl_nd))
+            # Сохранить обновлённые norm_days на сервер
+            if updated and self.contract_id:
+                for code, nd in updated:
+                    try:
+                        self.data.update_timeline_entry(
+                            self.contract_id, code, {'norm_days': nd}
+                        )
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[TimelineWidget] Ошибка синхронизации norm_days: {e}")
 
     def _load_data_background(self):
         """Загрузка данных таблицы сроков в фоновом потоке (не блокирует UI)"""
@@ -670,86 +727,59 @@ class ProjectTimelineWidget(QWidget):
                     )
                     self.table.setCellWidget(row, 1, start_label)
                 else:
-                    # Обычная строка — QDateEdit
+                    # Обычная строка — QLabel (read-only) + кнопка-карандаш
+                    planned = entry.get('_planned_date', '')
                     date_container = QWidget()
                     date_container.setStyleSheet('background-color: transparent;')
                     date_layout = QHBoxLayout(date_container)
                     date_layout.setContentsMargins(2, 0, 2, 0)
-                    date_layout.setSpacing(0)
+                    date_layout.setSpacing(2)
                     date_layout.setAlignment(Qt.AlignVCenter)
 
-                    date_edit = QDateEdit()
-                    date_edit.setCalendarPopup(True)
-                    date_edit.setDisplayFormat('dd.MM.yyyy')
-                    date_edit.setSpecialValueText(' ')
-                    date_edit.setMinimumDate(QDate(2020, 1, 1))
-
+                    # Определяем текст и стиль
                     if actual_date:
                         try:
                             d = QDate.fromString(actual_date, 'yyyy-MM-dd')
-                            if d.isValid():
-                                date_edit.setDate(d)
-                            else:
-                                date_edit.setDate(date_edit.minimumDate())
+                            date_text = d.toString('dd.MM.yyyy') if d.isValid() else ''
                         except Exception:
-                            date_edit.setDate(date_edit.minimumDate())
+                            date_text = ''
+                        date_bg = '#E8F5E9'  # зелёный фон — факт заполнен
+                        tooltip = 'Фактическая дата (нажмите карандаш для изменения)'
+                    elif planned:
+                        try:
+                            pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
+                            date_text = pd_q.toString('dd.MM.yyyy') if pd_q.isValid() else ''
+                        except Exception:
+                            date_text = ''
+                        date_bg = '#FFF2CC'  # жёлтый фон — планируемая
+                        tooltip = 'Планируемая дата (нажмите карандаш для ввода фактической)'
                     else:
-                        date_edit.setDate(date_edit.minimumDate())
+                        date_text = ''
+                        date_bg = '#FFFFFF'
+                        tooltip = 'Нажмите карандаш для ввода даты'
 
-                    # Календарь открывается на текущем месяце через CustomCalendarWidget.showEvent()
+                    date_label = QLabel(date_text)
+                    date_label.setAlignment(Qt.AlignCenter)
+                    date_label.setStyleSheet(
+                        f'background-color: {date_bg}; color: #333333; padding: 2px 4px; '
+                        f'font-size: 12px; border-radius: 2px; border: 1px solid #E0E0E0;'
+                    )
+                    date_label.setToolTip(tooltip)
+                    date_label.setMinimumWidth(80)
 
-                    date_edit.setStyleSheet('''
-                        QDateEdit {
-                            background-color: #FFF2CC;
-                            border: 1px solid #CCCCCC;
-                            border-radius: 2px;
-                            padding: 0px 4px;
-                            min-height: 20px;
-                            max-height: 20px;
-                            font-size: 12px;
-                        }
-                        QDateEdit::drop-down {
-                            border: none;
-                            width: 20px;
-                        }
-                        QCalendarWidget QWidget {
-                            background-color: #ffffff;
-                        }
-                        QCalendarWidget QWidget#qt_calendar_navigationbar {
-                            background-color: #ffffff;
-                            border-radius: 0px;
-                        }
-                        QCalendarWidget QToolButton {
-                            background-color: #ffffff;
-                            color: #333333;
-                            border-radius: 2px;
-                            padding: 4px;
-                        }
-                        QCalendarWidget QSpinBox {
-                            background-color: #ffffff;
-                            border-radius: 0px;
-                        }
-                    ''')
-
-                    custom_cal = add_today_button_to_dateedit(date_edit)
-                    custom_cal.setStyleSheet('QWidget { background-color: #ffffff; }')
-
-                    date_edit.dateChanged.connect(
-                        lambda d, ei=entry_idx, sc=stage_code: self._on_date_changed(ei, sc, d)
+                    # Кнопка-карандаш для перехода в режим редактирования
+                    pencil_btn = IconLoader.create_action_button(
+                        'edit', tooltip='Редактировать дату',
+                        bg_color='transparent', hover_color='#E3F2FD',
+                        icon_size=14, button_size=22, icon_color='#666666'
+                    )
+                    pencil_btn.clicked.connect(
+                        lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date:
+                            self._enable_date_edit(r, ei, sc, ad)
                     )
 
-                    # Tooltip с планируемой датой
-                    planned = entry.get('_planned_date', '')
-                    if planned:
-                        try:
-                            pd = QDate.fromString(planned, 'yyyy-MM-dd')
-                            if pd.isValid():
-                                planned_fmt = pd.toString('dd.MM.yyyy')
-                                date_edit.setToolTip(f"Планируемая дата: {planned_fmt}")
-                        except Exception:
-                            pass
-
-                    date_layout.addWidget(date_edit)
+                    date_layout.addWidget(date_label, 1)
+                    date_layout.addWidget(pencil_btn, 0)
                     self.table.setCellWidget(row, 1, date_container)
 
                 # Кол 2: Кол-во дней
@@ -785,6 +815,94 @@ class ProjectTimelineWidget(QWidget):
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
+
+    def _enable_date_edit(self, row, entry_idx, stage_code, current_actual_date):
+        """Переключить ячейку даты в режим редактирования (QDateEdit)"""
+        date_container = QWidget()
+        date_container.setStyleSheet('background-color: transparent;')
+        date_layout = QHBoxLayout(date_container)
+        date_layout.setContentsMargins(2, 0, 2, 0)
+        date_layout.setSpacing(0)
+        date_layout.setAlignment(Qt.AlignVCenter)
+
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        date_edit.setDisplayFormat('dd.MM.yyyy')
+        date_edit.setSpecialValueText(' ')
+        date_edit.setMinimumDate(QDate(2020, 1, 1))
+
+        # Блокируем сигнал dateChanged при начальной установке даты
+        date_edit.blockSignals(True)
+        if current_actual_date:
+            try:
+                d = QDate.fromString(current_actual_date, 'yyyy-MM-dd')
+                if d.isValid():
+                    date_edit.setDate(d)
+                else:
+                    date_edit.setDate(date_edit.minimumDate())
+            except Exception:
+                date_edit.setDate(date_edit.minimumDate())
+        else:
+            # Предзаполнение планируемой датой (для удобства)
+            if entry_idx < len(self.entries):
+                planned = self.entries[entry_idx].get('_planned_date', '')
+                if planned:
+                    pd_q = QDate.fromString(planned, 'yyyy-MM-dd')
+                    if pd_q.isValid():
+                        date_edit.setDate(pd_q)
+                    else:
+                        date_edit.setDate(date_edit.minimumDate())
+                else:
+                    date_edit.setDate(date_edit.minimumDate())
+            else:
+                date_edit.setDate(date_edit.minimumDate())
+        date_edit.blockSignals(False)
+
+        date_edit.setStyleSheet('''
+            QDateEdit {
+                background-color: #FFF2CC;
+                border: 1px solid #CCCCCC;
+                border-radius: 2px;
+                padding: 0px 4px;
+                min-height: 20px;
+                max-height: 20px;
+                font-size: 12px;
+            }
+            QDateEdit::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QCalendarWidget QWidget {
+                background-color: #ffffff;
+            }
+            QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: #ffffff;
+                border-radius: 0px;
+            }
+            QCalendarWidget QToolButton {
+                background-color: #ffffff;
+                color: #333333;
+                border-radius: 2px;
+                padding: 4px;
+            }
+            QCalendarWidget QSpinBox {
+                background-color: #ffffff;
+                border-radius: 0px;
+            }
+        ''')
+
+        custom_cal = add_today_button_to_dateedit(date_edit)
+        custom_cal.setStyleSheet('QWidget { background-color: #ffffff; }')
+
+        date_edit.dateChanged.connect(
+            lambda d, ei=entry_idx, sc=stage_code: self._on_date_changed(ei, sc, d)
+        )
+
+        date_layout.addWidget(date_edit)
+        self.table.setCellWidget(row, 1, date_container)
+
+        # Автоматически открыть календарь
+        date_edit.setFocus()
 
     def _on_date_changed(self, entry_idx, stage_code, new_date):
         """Обработка изменения даты"""

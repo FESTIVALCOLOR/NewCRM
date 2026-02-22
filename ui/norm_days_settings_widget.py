@@ -812,8 +812,10 @@ class NormDaysSettingsWidget(QWidget):
             self._table.setItem(row, 1, executor_item)
 
             # --- Колонка 2: Норма дней ---
-            if is_header:
-                # Заголовки — пустая ячейка с фоном
+            stage_code = entry.get('stage_code', '')
+            is_start = (stage_code == 'START')
+            if is_header or is_start:
+                # Заголовки и START — пустая ячейка (START определяется автоматически)
                 empty_item = QTableWidgetItem('')
                 empty_item.setFlags(empty_item.flags() & ~Qt.ItemIsEditable)
                 if is_stage_header:
