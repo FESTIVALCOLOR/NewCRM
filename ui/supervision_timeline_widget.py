@@ -2,16 +2,19 @@
 """
 Виджет «Таблица сроков надзора» для карточки CRM надзора.
 Содержит 12 стадий закупки с бюджетами, статусами, экспортом.
+Все редактируемые поля: QLabel + кнопка-карандаш → inline-редактор → автосохранение.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
     QTableWidgetItem, QPushButton, QHeaderView, QDateEdit,
-    QAbstractItemView, QFileDialog, QComboBox
+    QAbstractItemView, QFileDialog, QComboBox, QLineEdit,
+    QTextEdit, QDialog, QDialogButtonBox
 )
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QColor, QFont, QBrush
+from PyQt5.QtCore import Qt, QDate, pyqtSignal, QTimer
+from PyQt5.QtGui import QColor, QFont, QBrush, QDoubleValidator
 from utils.calendar_helpers import add_today_button_to_dateedit
+from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
 
 
@@ -61,6 +64,9 @@ class SupervisionTimelineWidget(QWidget):
         'Поставщик', 'Комиссия', 'Статус', 'Примечания'
     ]
 
+    # Минимальные ширины столбцов
+    COLUMN_WIDTHS = [220, 130, 130, 60, 110, 110, 100, 150, 100, 120, 180]
+
     def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None):
         super().__init__(parent)
         self.card_data = card_data
@@ -105,6 +111,282 @@ class SupervisionTimelineWidget(QWidget):
         lbl.setAlignment(qt_align)
         return lbl
 
+    def _create_pencil_btn(self, tooltip='Редактировать'):
+        """Создать кнопку-карандаш для ячейки"""
+        pencil_btn = IconLoader.create_action_button(
+            'edit', tooltip=tooltip,
+            bg_color='transparent', hover_color='#E3F2FD',
+            icon_size=14, button_size=22, icon_color='#666666'
+        )
+        return pencil_btn
+
+    def _create_editable_cell(self, text, bg_color, row, stage_code, field_name,
+                              align='center', is_date=False, is_number=False,
+                              is_multiline=False, tooltip_text=None):
+        """Создать ячейку QLabel + кнопка-карандаш для редактирования.
+
+        При нажатии карандаша → переключается в inline-редактор.
+        При потере фокуса или Enter → автосохранение.
+        """
+        container = QWidget()
+        container.setStyleSheet('background-color: transparent;')
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(2, 0, 2, 0)
+        layout.setSpacing(2)
+        layout.setAlignment(Qt.AlignVCenter)
+
+        # QLabel с текущим значением
+        lbl = QLabel(text)
+        qt_align = Qt.AlignCenter if align == 'center' else (Qt.AlignLeft | Qt.AlignVCenter)
+        if align == 'right':
+            qt_align = Qt.AlignRight | Qt.AlignVCenter
+        lbl.setAlignment(qt_align)
+        lbl.setStyleSheet(
+            f'background-color: {bg_color}; color: #333333; padding: 2px 4px; '
+            f'font-size: 12px; border-radius: 2px; border: 1px solid #E0E0E0;'
+        )
+        lbl.setMinimumWidth(40)
+
+        # Tooltip для примечаний
+        if tooltip_text:
+            lbl.setToolTip(tooltip_text)
+        elif is_date and text:
+            lbl.setToolTip('Нажмите карандаш для изменения даты')
+        elif not text:
+            lbl.setToolTip('Нажмите карандаш для ввода')
+
+        # Кнопка-карандаш
+        pencil_btn = self._create_pencil_btn()
+
+        if is_date:
+            pencil_btn.clicked.connect(
+                lambda checked, r=row, sc=stage_code, fn=field_name, cur=text:
+                    self._edit_date_cell(r, sc, fn, cur)
+            )
+        elif is_multiline:
+            pencil_btn.clicked.connect(
+                lambda checked, r=row, sc=stage_code, fn=field_name, cur=text:
+                    self._edit_multiline_cell(r, sc, fn, cur)
+            )
+        else:
+            pencil_btn.clicked.connect(
+                lambda checked, r=row, sc=stage_code, fn=field_name, cur=text, num=is_number:
+                    self._edit_text_cell(r, sc, fn, cur, num)
+            )
+
+        layout.addWidget(lbl, 1)
+        layout.addWidget(pencil_btn, 0)
+        return container
+
+    def _edit_date_cell(self, row, stage_code, field_name, current_text):
+        """Переключить ячейку даты в режим редактирования (QDateEdit)"""
+        col = 1 if field_name == 'plan_date' else 2
+
+        date_container = QWidget()
+        date_container.setStyleSheet('background-color: transparent;')
+        date_layout = QHBoxLayout(date_container)
+        date_layout.setContentsMargins(2, 0, 2, 0)
+        date_layout.setSpacing(0)
+        date_layout.setAlignment(Qt.AlignVCenter)
+
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        date_edit.setDisplayFormat('dd.MM.yyyy')
+        date_edit.setSpecialValueText(' ')
+        date_edit.setMinimumDate(QDate(2020, 1, 1))
+
+        date_edit.blockSignals(True)
+        # Парсим текст даты (формат dd.MM.yyyy)
+        if current_text:
+            d = QDate.fromString(current_text, 'dd.MM.yyyy')
+            if d.isValid():
+                date_edit.setDate(d)
+            else:
+                date_edit.setDate(QDate.currentDate())
+        else:
+            date_edit.setDate(QDate.currentDate())
+        date_edit.blockSignals(False)
+
+        date_edit.setStyleSheet('''
+            QDateEdit {
+                background-color: #FFF2CC;
+                border: 1px solid #CCCCCC;
+                border-radius: 2px;
+                padding: 0px 4px;
+                min-height: 20px;
+                max-height: 20px;
+                font-size: 12px;
+            }
+            QDateEdit::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QCalendarWidget QWidget {
+                background-color: #ffffff;
+            }
+            QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: #ffffff;
+                border-radius: 0px;
+            }
+            QCalendarWidget QToolButton {
+                background-color: #ffffff;
+                color: #333333;
+                border-radius: 2px;
+                padding: 4px;
+            }
+            QCalendarWidget QSpinBox {
+                background-color: #ffffff;
+                border-radius: 0px;
+            }
+        ''')
+
+        custom_cal = add_today_button_to_dateedit(date_edit)
+        custom_cal.setStyleSheet('QWidget { background-color: #ffffff; }')
+
+        date_edit.dateChanged.connect(
+            lambda d, r=row, sc=stage_code, fn=field_name:
+                self._on_date_edited(r, sc, fn, d)
+        )
+
+        date_layout.addWidget(date_edit)
+        self.table.setCellWidget(row, col, date_container)
+        date_edit.setFocus()
+
+    def _on_date_edited(self, row, stage_code, field_name, new_date):
+        """Обработка изменения даты через карандаш"""
+        if self._loading:
+            return
+        date_str = new_date.toString('yyyy-MM-dd') if new_date.isValid() and new_date > QDate(2020, 1, 1) else ''
+
+        if row < len(self.entries):
+            self.entries[row][field_name] = date_str
+
+        if field_name == 'actual_date':
+            self._recalculate_all_days()
+            self._save_entry(stage_code, {
+                'actual_date': date_str,
+                'actual_days': self.entries[row].get('actual_days', 0) if row < len(self.entries) else 0
+            })
+        else:
+            self._save_entry(stage_code, {'plan_date': date_str})
+
+        # Перестроить таблицу
+        self._populate_table()
+        self._update_summary()
+
+    def _edit_text_cell(self, row, stage_code, field_name, current_text, is_number=False):
+        """Переключить ячейку в inline QLineEdit"""
+        col = self._field_to_col(field_name)
+        if col < 0:
+            return
+
+        line_edit = QLineEdit()
+        # Убираем форматирование числа (запятые)
+        clean_text = current_text.replace(',', '').replace(' ', '') if current_text else ''
+        line_edit.setText(clean_text)
+        if is_number:
+            line_edit.setValidator(QDoubleValidator(0, 999999999, 2))
+
+        line_edit.setStyleSheet('''
+            QLineEdit {
+                background-color: #FFF2CC;
+                border: 1px solid #CCCCCC;
+                border-radius: 2px;
+                padding: 2px 4px;
+                font-size: 12px;
+            }
+        ''')
+
+        def save_and_close():
+            text = line_edit.text().strip()
+            value = None
+            if is_number:
+                try:
+                    value = float(text) if text else 0
+                except ValueError:
+                    value = 0
+            else:
+                value = text
+
+            if row < len(self.entries):
+                self.entries[row][field_name] = value
+
+            updates = {field_name: value}
+
+            # Автоподсчёт экономии при изменении бюджета
+            if field_name in ('budget_planned', 'budget_actual'):
+                bp = self.entries[row].get('budget_planned', 0) or 0
+                ba = self.entries[row].get('budget_actual', 0) or 0
+                savings = bp - ba
+                self.entries[row]['budget_savings'] = savings
+                updates['budget_savings'] = savings
+
+            self._save_entry(stage_code, updates)
+            self._populate_table()
+            self._update_summary()
+
+        line_edit.editingFinished.connect(save_and_close)
+
+        self.table.setCellWidget(row, col, line_edit)
+        line_edit.setFocus()
+        line_edit.selectAll()
+
+    def _edit_multiline_cell(self, row, stage_code, field_name, current_text):
+        """Открыть диалог для многострочного ввода (примечания)"""
+        # Получаем полный текст из entries (не обрезанный display_text)
+        full_text = ''
+        if row < len(self.entries):
+            full_text = self.entries[row].get(field_name, '') or ''
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Редактировать примечание')
+        dlg.setMinimumSize(400, 200)
+        dlg.setStyleSheet('QDialog { background-color: white; border: 1px solid #E0E0E0; }')
+
+        dlg_layout = QVBoxLayout(dlg)
+        text_edit = QTextEdit()
+        text_edit.setPlainText(full_text)
+        text_edit.setStyleSheet('''
+            QTextEdit {
+                border: 1px solid #CCCCCC;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 12px;
+            }
+        ''')
+        dlg_layout.addWidget(text_edit)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        btn_box.button(QDialogButtonBox.Save).setText('Сохранить')
+        btn_box.button(QDialogButtonBox.Cancel).setText('Отмена')
+        btn_box.accepted.connect(dlg.accept)
+        btn_box.rejected.connect(dlg.reject)
+        dlg_layout.addWidget(btn_box)
+
+        if dlg.exec_() == QDialog.Accepted:
+            text = text_edit.toPlainText().strip()
+            if row < len(self.entries):
+                self.entries[row][field_name] = text
+            self._save_entry(stage_code, {field_name: text})
+            self._populate_table()
+            self._update_summary()
+
+    def _field_to_col(self, field_name):
+        """Маппинг имени поля → номер столбца"""
+        mapping = {
+            'plan_date': 1,
+            'actual_date': 2,
+            'actual_days': 3,
+            'budget_planned': 4,
+            'budget_actual': 5,
+            'budget_savings': 6,
+            'supplier': 7,
+            'commission': 8,
+            'status': 9,
+            'notes': 10,
+        }
+        return mapping.get(field_name, -1)
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 15, 20, 20)
@@ -139,21 +421,17 @@ class SupervisionTimelineWidget(QWidget):
         self.table.setShowGrid(True)
         self.table.setAlternatingRowColors(False)
 
+        # Все столбцы — Interactive (пользователь может растягивать)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        for col in range(1, len(self.COLUMNS)):
-            header.setSectionResizeMode(col, QHeaderView.Fixed)
+        for col in range(len(self.COLUMNS)):
+            header.setSectionResizeMode(col, QHeaderView.Interactive)
 
-        self.table.setColumnWidth(1, 120)   # План. дата
-        self.table.setColumnWidth(2, 120)   # Факт. дата
-        self.table.setColumnWidth(3, 60)    # Дней
-        self.table.setColumnWidth(4, 100)   # Бюджет план
-        self.table.setColumnWidth(5, 100)   # Бюджет факт
-        self.table.setColumnWidth(6, 90)    # Экономия
-        self.table.setColumnWidth(7, 120)   # Поставщик
-        self.table.setColumnWidth(8, 90)    # Комиссия
-        self.table.setColumnWidth(9, 110)   # Статус
-        self.table.setColumnWidth(10, 150)  # Примечания
+        # Установить начальные ширины
+        for col, width in enumerate(self.COLUMN_WIDTHS):
+            self.table.setColumnWidth(col, width)
+
+        # Последний столбец занимает оставшееся пространство
+        header.setStretchLastSection(True)
 
         self.table.setStyleSheet("""
             QTableWidget {
@@ -288,84 +566,8 @@ class SupervisionTimelineWidget(QWidget):
         except Exception as e:
             print(f"[SupervisionTimelineWidget] Ошибка локальной инициализации: {e}")
 
-    def _create_date_edit(self, date_str, row, stage_code, is_plan=True):
-        """Создать QDateEdit в контейнере для центрирования"""
-        date_container = QWidget()
-        date_container.setStyleSheet('background-color: transparent;')
-        date_layout = QHBoxLayout(date_container)
-        date_layout.setContentsMargins(2, 0, 2, 0)
-        date_layout.setSpacing(0)
-        date_layout.setAlignment(Qt.AlignVCenter)
-
-        date_edit = QDateEdit()
-        date_edit.setCalendarPopup(True)
-        date_edit.setDisplayFormat('dd.MM.yyyy')
-        date_edit.setSpecialValueText(' ')
-        date_edit.setMinimumDate(QDate(2020, 1, 1))
-
-        if date_str:
-            d = QDate.fromString(date_str, 'yyyy-MM-dd')
-            if d.isValid():
-                date_edit.setDate(d)
-            else:
-                date_edit.setDate(date_edit.minimumDate())
-        else:
-            date_edit.setDate(date_edit.minimumDate())
-
-        # Календарь открывается на текущем месяце через CustomCalendarWidget.showEvent()
-
-        date_edit.setStyleSheet('''
-            QDateEdit {
-                background-color: #FFF2CC;
-                border: 1px solid #CCCCCC;
-                border-radius: 2px;
-                padding: 0px 4px;
-                min-height: 20px;
-                max-height: 20px;
-                font-size: 12px;
-            }
-            QDateEdit::drop-down {
-                border: none;
-                width: 20px;
-            }
-            QCalendarWidget QWidget {
-                background-color: #ffffff;
-            }
-            QCalendarWidget QWidget#qt_calendar_navigationbar {
-                background-color: #ffffff;
-                border-radius: 0px;
-            }
-            QCalendarWidget QToolButton {
-                background-color: #ffffff;
-                color: #333333;
-                border-radius: 2px;
-                padding: 4px;
-            }
-            QCalendarWidget QSpinBox {
-                background-color: #ffffff;
-                border-radius: 0px;
-            }
-        ''')
-
-        # CustomCalendarWidget с защитой от мелькания popup при конструировании
-        # (showEvent guard: if not self.window().isVisible(): return)
-        custom_cal = add_today_button_to_dateedit(date_edit)
-        custom_cal.setStyleSheet('QWidget { background-color: #ffffff; }')
-
-        if is_plan:
-            date_edit.dateChanged.connect(
-                lambda d, r=row, sc=stage_code: self._on_plan_date_changed(r, sc, d)
-            )
-        else:
-            date_edit.dateChanged.connect(
-                lambda d, r=row, sc=stage_code: self._on_fact_date_changed(r, sc, d)
-            )
-
-        date_layout.addWidget(date_edit)
-        return date_container
-
     def _populate_table(self):
-        """Заполнение таблицы (QLabel для цветных ячеек — обход global stylesheet)"""
+        """Заполнение таблицы: QLabel + карандаш для всех редактируемых полей"""
         self._loading = True
         self.table.setUpdatesEnabled(False)
         try:
@@ -373,41 +575,67 @@ class SupervisionTimelineWidget(QWidget):
             self.table.setRowCount(len(self.entries))
 
             for row, entry in enumerate(self.entries):
-                self.table.setRowHeight(row, 32)
+                self.table.setRowHeight(row, 36)
                 stage_code = entry.get('stage_code', '')
                 status = entry.get('status', 'Не начато')
                 bg = STATUS_COLORS.get(status, '#FFFFFF')
 
-                # Кол 0: Стадия
+                # Кол 0: Стадия (только чтение)
                 self.table.setCellWidget(row, 0,
                     self._make_cell_label(entry.get('stage_name', ''), bg, 'left'))
 
-                # Кол 1: План. дата
+                # Кол 1: План. дата (карандаш → QDateEdit)
                 plan_date = entry.get('plan_date', '')
+                plan_text = ''
+                if plan_date:
+                    try:
+                        d = QDate.fromString(plan_date, 'yyyy-MM-dd')
+                        plan_text = d.toString('dd.MM.yyyy') if d.isValid() else ''
+                    except Exception:
+                        pass
                 self.table.setCellWidget(row, 1,
-                    self._create_date_edit(plan_date, row, stage_code, is_plan=True))
+                    self._create_editable_cell(
+                        plan_text, bg, row, stage_code, 'plan_date',
+                        align='center', is_date=True))
 
-                # Кол 2: Факт. дата
+                # Кол 2: Факт. дата (карандаш → QDateEdit)
                 fact_date = entry.get('actual_date', '')
+                fact_text = ''
+                fact_bg = bg
+                if fact_date:
+                    try:
+                        d = QDate.fromString(fact_date, 'yyyy-MM-dd')
+                        fact_text = d.toString('dd.MM.yyyy') if d.isValid() else ''
+                        fact_bg = '#E8F5E9'  # зелёный — факт заполнен
+                    except Exception:
+                        pass
                 self.table.setCellWidget(row, 2,
-                    self._create_date_edit(fact_date, row, stage_code, is_plan=False))
+                    self._create_editable_cell(
+                        fact_text, fact_bg, row, stage_code, 'actual_date',
+                        align='center', is_date=True))
 
-                # Кол 3: Дней
+                # Кол 3: Дней (авто-расчёт, только чтение)
                 days_val = entry.get('actual_days', '') or ''
                 self.table.setCellWidget(row, 3,
                     self._make_cell_label(str(days_val) if days_val else '', bg))
 
-                # Кол 4: Бюджет план
+                # Кол 4: Бюджет план (карандаш → число)
                 bp = entry.get('budget_planned', 0) or 0
+                bp_text = f'{bp:,.0f}' if bp else ''
                 self.table.setCellWidget(row, 4,
-                    self._make_cell_label(f'{bp:,.0f}' if bp else '', bg, 'right'))
+                    self._create_editable_cell(
+                        bp_text, bg, row, stage_code, 'budget_planned',
+                        align='right', is_number=True))
 
-                # Кол 5: Бюджет факт
+                # Кол 5: Бюджет факт (карандаш → число)
                 ba = entry.get('budget_actual', 0) or 0
+                ba_text = f'{ba:,.0f}' if ba else ''
                 self.table.setCellWidget(row, 5,
-                    self._make_cell_label(f'{ba:,.0f}' if ba else '', bg, 'right'))
+                    self._create_editable_cell(
+                        ba_text, bg, row, stage_code, 'budget_actual',
+                        align='right', is_number=True))
 
-                # Кол 6: Экономия
+                # Кол 6: Экономия (авто-расчёт, только чтение)
                 savings = entry.get('budget_savings', 0) or 0
                 savings_color = '#333333'
                 if savings > 0:
@@ -418,16 +646,22 @@ class SupervisionTimelineWidget(QWidget):
                     self._make_cell_label(f'{savings:,.0f}' if savings else '', bg,
                                           'right', color=savings_color))
 
-                # Кол 7: Поставщик
+                # Кол 7: Поставщик (карандаш → текст)
+                supplier = entry.get('supplier', '') or ''
                 self.table.setCellWidget(row, 7,
-                    self._make_cell_label(entry.get('supplier', '') or '', bg, 'left'))
+                    self._create_editable_cell(
+                        supplier, bg, row, stage_code, 'supplier',
+                        align='left'))
 
-                # Кол 8: Комиссия
+                # Кол 8: Комиссия (карандаш → число)
                 commission = entry.get('commission', 0) or 0
+                comm_text = f'{commission:,.0f}' if commission else ''
                 self.table.setCellWidget(row, 8,
-                    self._make_cell_label(f'{commission:,.0f}' if commission else '', bg, 'right'))
+                    self._create_editable_cell(
+                        comm_text, bg, row, stage_code, 'commission',
+                        align='right', is_number=True))
 
-                # Кол 9: Статус (QComboBox)
+                # Кол 9: Статус (QComboBox — оставляем как есть)
                 status_combo = QComboBox()
                 status_combo.addItems(STATUS_OPTIONS)
                 idx = STATUS_OPTIONS.index(status) if status in STATUS_OPTIONS else 0
@@ -443,38 +677,28 @@ class SupervisionTimelineWidget(QWidget):
                 )
                 self.table.setCellWidget(row, 9, status_combo)
 
-                # Кол 10: Примечания
+                # Кол 10: Примечания (карандаш → многострочный диалог, tooltip)
+                notes = entry.get('notes', '') or ''
+                # Обрезаем для отображения, полный текст — в tooltip
+                display_notes = notes[:40] + '...' if len(notes) > 40 else notes
                 self.table.setCellWidget(row, 10,
-                    self._make_cell_label(entry.get('notes', '') or '', bg, 'left'))
+                    self._create_editable_cell(
+                        display_notes, bg, row, stage_code, 'notes',
+                        align='left', is_multiline=True,
+                        tooltip_text=notes if notes else 'Нажмите карандаш для ввода примечания'))
 
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
 
-    def _on_plan_date_changed(self, row, stage_code, new_date):
-        """Изменение плановой даты"""
+    def _on_status_changed(self, row, stage_code, new_status):
+        """Изменение статуса"""
         if self._loading:
             return
-        date_str = new_date.toString('yyyy-MM-dd') if new_date.isValid() and new_date > QDate(2020, 1, 1) else ''
         if row < len(self.entries):
-            self.entries[row]['plan_date'] = date_str
-        self._save_entry(stage_code, {'plan_date': date_str})
-
-    def _on_fact_date_changed(self, row, stage_code, new_date):
-        """Изменение фактической даты"""
-        if self._loading:
-            return
-        date_str = new_date.toString('yyyy-MM-dd') if new_date.isValid() and new_date > QDate(2020, 1, 1) else ''
-        if row < len(self.entries):
-            self.entries[row]['actual_date'] = date_str
-        # Пересчитываем дни для всех стадий (т.к. изменение одной стадии влияет на следующую)
-        self._recalculate_all_days()
-        # Сохраняем текущую запись
-        self._save_entry(stage_code, {
-            'actual_date': date_str,
-            'actual_days': self.entries[row].get('actual_days', 0) if row < len(self.entries) else 0
-        })
-        # Перестроить таблицу для обновления QLabel дней
+            self.entries[row]['status'] = new_status
+        self._save_entry(stage_code, {'status': new_status})
+        # Перестроить таблицу для обновления цветов QLabel
         self._populate_table()
 
     def _recalculate_all_days(self):
@@ -503,16 +727,6 @@ class SupervisionTimelineWidget(QWidget):
             if fact_date:
                 prev_date = fact_date
 
-    def _on_status_changed(self, row, stage_code, new_status):
-        """Изменение статуса"""
-        if self._loading:
-            return
-        if row < len(self.entries):
-            self.entries[row]['status'] = new_status
-        self._save_entry(stage_code, {'status': new_status})
-        # Перестроить таблицу для обновления цветов QLabel
-        self._populate_table()
-
     def _save_entry(self, stage_code, updates):
         """Сохранение изменений на сервер"""
         if self.card_id and stage_code:
@@ -532,6 +746,15 @@ class SupervisionTimelineWidget(QWidget):
 
         self.lbl_budget_plan.setText(f'Бюджет план: {total_plan:,.0f}')
         self.lbl_budget_fact.setText(f'Бюджет факт: {total_fact:,.0f}')
+
+        savings_style = 'font-size: 11px; font-weight: bold; padding: 0 8px;'
+        if total_savings > 0:
+            savings_style += ' color: #4CAF50;'
+        elif total_savings < 0:
+            savings_style += ' color: #F44336;'
+        else:
+            savings_style += ' color: #333;'
+        self.lbl_savings.setStyleSheet(savings_style)
         self.lbl_savings.setText(f'Экономия: {total_savings:,.0f}')
         self.lbl_defects.setText(f'Дефекты: {total_defects}/{total_resolved}')
         self.lbl_visits.setText(f'Визиты: {total_visits}')
