@@ -1346,7 +1346,13 @@ class DatabaseManager(DatabaseMigrations):
                c.measurement_image_link,
                c.measurement_file_name,
                c.measurement_yandex_path,
-               c.measurement_date
+               c.measurement_date,
+               c.project_subtype,
+               c.floors,
+               c.contract_period,
+               cc.order_position,
+               cc.created_at,
+               cc.updated_at
 
         FROM crm_cards cc
         JOIN contracts c ON cc.contract_id = c.id

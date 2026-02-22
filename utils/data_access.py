@@ -486,7 +486,7 @@ class DataAccess(QObject):
         """Получить архивные CRM карточки"""
         if self._should_use_api():
             try:
-                return self.api_client.get_crm_cards(project_type)  # API фильтрует сам
+                return self.api_client.get_archived_crm_cards(project_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_archived_crm_cards, fallback: {e}")
         return self.db.get_archived_crm_cards(project_type)
