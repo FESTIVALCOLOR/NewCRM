@@ -42,6 +42,16 @@ planned[N] = prev_date + norm_days[N]
 
 Отображаются как tooltip на date_edit виджетах: "Планируемая дата: dd.MM.yyyy"
 
+### 6. Каскадный пересчёт
+
+При ручном изменении любой даты в таймлайне:
+```
+_on_date_changed() → _recalculate_days() → _populate_table() → _calc_planned_dates()
+```
+Все planned_date пересчитываются автоматически, tooltip обновляются.
+
+**Тесты:** `tests/client/test_planned_dates.py` — 13 тестов (цепочка, каскад, кросс-стадия, edge cases)
+
 ### 4. Даты в таймлайне
 
 ```sql

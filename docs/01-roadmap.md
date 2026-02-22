@@ -47,6 +47,7 @@
 - [x] Пропорциональное распределение norm_days по contract_term
 - [x] Дедлайн исполнителя от предыдущей actual_date (не от today)
 - [x] Планируемые даты цепочкой (prev_date + norm_days) с tooltip
+- [x] Каскадный пересчёт planned_date при ручном изменении даты (автоматический)
 - [x] Экспорт в Excel и PDF
 
 ### Файлы и интеграции
@@ -123,3 +124,5 @@
 | ~~Тесты~~ | ~~Дублирование в conftest.py~~ — **_factory_teardown helper** | ~~Низкий~~ | **DONE Phase 5.1** |
 | ~~DataAccess~~ | ~~19 расхождений параметров DataAccess↔API↔DB~~ | ~~Высокий~~ | **DONE Phase 6.1** |
 | ~~DataAccess~~ | ~~34 write-метода без local-first / offline queue~~ | ~~Высокий~~ | **DONE Phase 6.3** |
+| Timeline | `_calc_planned_dates` копируется в тест вместо импорта — вынести в `utils/timeline_calc.py` | Низкий | WARN Deadline Phase 5 |
+| Timeline | Дублирование `_load_data` / `_load_data_background` (~35 строк) — вынести `_fetch_entries()` | Низкий | WARN Deadline Phase 5 |
