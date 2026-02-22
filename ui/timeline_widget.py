@@ -105,6 +105,8 @@ class ProjectTimelineWidget(QWidget):
 
     # Сигнал для обновления таблицы из фонового потока
     _data_ready = pyqtSignal()
+    # Сигнал об обновлении дедлайна проекта (строка 'yyyy-MM-dd')
+    deadline_updated = pyqtSignal(str)
 
     def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None):
         super().__init__(parent)
@@ -485,6 +487,7 @@ class ProjectTimelineWidget(QWidget):
                         try:
                             self.data.update_crm_card(card_id, {'deadline': new_deadline})
                             self.card_data['deadline'] = new_deadline
+                            self.deadline_updated.emit(new_deadline)
                         except Exception:
                             pass
 

@@ -725,26 +725,60 @@ class CardEditDialog(QDialog):
 
                 designer_layout.addLayout(name_row)
 
-                # Строка с дедлайном
+                # Строка с дедлайном (read-only + кнопка изменить)
                 deadline_row = QHBoxLayout()
                 deadline_row.addWidget(QLabel('Дедлайн:'))
 
-                self.designer_deadline = CustomDateEdit()
-                self.designer_deadline.setCalendarPopup(True)
-                add_today_button_to_dateedit(self.designer_deadline)
-                self.designer_deadline.setDate(QDate.currentDate())
-                self.designer_deadline.setDisplayFormat('dd.MM.yyyy')
+                # Сохраняем значение дедлайна
+                self.designer_deadline_value = self.card_data.get('designer_deadline', '')
+                self.designer_deadline_display = QLabel('Не установлен')
+                self.designer_deadline_display.setStyleSheet('''
+                    background-color: #FFFFFF;
+                    padding: 0px 8px;
+                    border: 1px solid #E0E0E0;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    color: #555;
+                    max-height: 28px;
+                    min-height: 28px;
+                ''')
+                self.designer_deadline_display.setFixedHeight(28)
+                if self.designer_deadline_value:
+                    d = QDate.fromString(self.designer_deadline_value, 'yyyy-MM-dd')
+                    if d.isValid():
+                        self.designer_deadline_display.setText(d.toString('dd.MM.yyyy'))
 
-                if self.card_data.get('designer_deadline'):
-                    self.designer_deadline.setDate(QDate.fromString(self.card_data['designer_deadline'], 'yyyy-MM-dd'))
+                deadline_row.addWidget(self.designer_deadline_display, 1)
 
-                deadline_row.addWidget(self.designer_deadline, 1)
+                if has_full_access:
+                    edit_designer_deadline_btn = QPushButton('Изменить')
+                    edit_designer_deadline_btn.setFixedHeight(28)
+                    edit_designer_deadline_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #E0E0E0;
+                            color: #333333;
+                            padding: 0px 12px;
+                            border-radius: 4px;
+                            border: none;
+                            font-weight: bold;
+                            max-height: 28px;
+                            min-height: 28px;
+                        }
+                        QPushButton:hover { background-color: #D0D0D0; }
+                        QPushButton:pressed { background-color: #C0C0C0; }
+                    """)
+                    edit_designer_deadline_btn.clicked.connect(
+                        lambda: self.change_executor_deadline('designer')
+                    )
+                    deadline_row.addWidget(edit_designer_deadline_btn)
+
                 designer_layout.addLayout(deadline_row)
 
                 designer_group.setLayout(designer_layout)
                 team_layout.addWidget(designer_group)
             else:
-                self.designer_deadline = None
+                self.designer_deadline_value = ''
+                self.designer_deadline_display = None
 
             # ========== БЛОК ЧЕРТЁЖНИКА ==========
             if self.card_data.get('draftsman_name'):
@@ -814,27 +848,60 @@ class CardEditDialog(QDialog):
 
                 draftsman_layout.addLayout(name_row)
 
-                # Строка с дедлайном
+                # Строка с дедлайном (read-only + кнопка изменить)
                 deadline_row = QHBoxLayout()
                 deadline_row.addWidget(QLabel('Дедлайн:'))
 
-                self.draftsman_deadline = CustomDateEdit()
-                self.draftsman_deadline.setCalendarPopup(True)
-                add_today_button_to_dateedit(self.draftsman_deadline)
-                self.draftsman_deadline.setDate(QDate.currentDate())
-                self.draftsman_deadline.setDisplayFormat('dd.MM.yyyy')
-                self.draftsman_deadline.setStyleSheet(CALENDAR_STYLE)
+                # Сохраняем значение дедлайна
+                self.draftsman_deadline_value = self.card_data.get('draftsman_deadline', '')
+                self.draftsman_deadline_display = QLabel('Не установлен')
+                self.draftsman_deadline_display.setStyleSheet('''
+                    background-color: #FFFFFF;
+                    padding: 0px 8px;
+                    border: 1px solid #E0E0E0;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    color: #555;
+                    max-height: 28px;
+                    min-height: 28px;
+                ''')
+                self.draftsman_deadline_display.setFixedHeight(28)
+                if self.draftsman_deadline_value:
+                    d = QDate.fromString(self.draftsman_deadline_value, 'yyyy-MM-dd')
+                    if d.isValid():
+                        self.draftsman_deadline_display.setText(d.toString('dd.MM.yyyy'))
 
-                if self.card_data.get('draftsman_deadline'):
-                    self.draftsman_deadline.setDate(QDate.fromString(self.card_data['draftsman_deadline'], 'yyyy-MM-dd'))
+                deadline_row.addWidget(self.draftsman_deadline_display, 1)
 
-                deadline_row.addWidget(self.draftsman_deadline, 1)
+                if has_full_access:
+                    edit_draftsman_deadline_btn = QPushButton('Изменить')
+                    edit_draftsman_deadline_btn.setFixedHeight(28)
+                    edit_draftsman_deadline_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #E0E0E0;
+                            color: #333333;
+                            padding: 0px 12px;
+                            border-radius: 4px;
+                            border: none;
+                            font-weight: bold;
+                            max-height: 28px;
+                            min-height: 28px;
+                        }
+                        QPushButton:hover { background-color: #D0D0D0; }
+                        QPushButton:pressed { background-color: #C0C0C0; }
+                    """)
+                    edit_draftsman_deadline_btn.clicked.connect(
+                        lambda: self.change_executor_deadline('draftsman')
+                    )
+                    deadline_row.addWidget(edit_draftsman_deadline_btn)
+
                 draftsman_layout.addLayout(deadline_row)
 
                 draftsman_group.setLayout(draftsman_layout)
                 team_layout.addWidget(draftsman_group)
             else:
-                self.draftsman_deadline = None
+                self.draftsman_deadline_value = ''
+                self.draftsman_deadline_display = None
 
             hint_executor_deadlines = QLabel('Эти дедлайны отображаются исполнителям на карточке')
             hint_executor_deadlines.setWordWrap(True)
@@ -1829,6 +1896,241 @@ class CardEditDialog(QDialog):
                 CustomMessageBox(dialog, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()
 
         save_btn.clicked.connect(save_deadline)
+
+        buttons_layout.addWidget(save_btn)
+        buttons_layout.addWidget(cancel_btn)
+        content_layout.addLayout(buttons_layout)
+
+        layout.addLayout(content_layout)
+
+        dialog.exec_()
+
+    def change_executor_deadline(self, executor_type):
+        """Открывает диалог для изменения дедлайна исполнителя (дизайнера/чертёжника) с причиной"""
+        from PyQt5.QtCore import QDate
+        from utils.calendar_helpers import add_today_button_to_dateedit
+
+        if executor_type == 'designer':
+            title = 'Изменить дедлайн дизайнера'
+            current_value = getattr(self, 'designer_deadline_value', '')
+            search_key = 'концепция'
+        else:
+            title = 'Изменить дедлайн чертёжника'
+            current_value = getattr(self, 'draftsman_deadline_value', '')
+            current_column = self.card_data.get('column_name', '').lower()
+            search_key = 'планировочные' if 'планировочные' in current_column else 'чертежи'
+
+        dialog = QDialog()
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.FramelessWindowHint)
+        dialog.setModal(True)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: white;
+                border: 1px solid #2C3E50;
+                border-radius: 8px;
+            }
+        """)
+        dialog.setFixedWidth(450)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(dialog, title, simple_mode=True)
+        layout.addWidget(title_bar)
+
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(20, 20, 20, 20)
+        content_layout.setSpacing(15)
+
+        # Текущий дедлайн
+        current_label = QLabel('Текущий дедлайн:')
+        current_label.setStyleSheet('font-size: 11px; font-weight: bold; color: #2C3E50;')
+        content_layout.addWidget(current_label)
+
+        current_text = QLabel()
+        if current_value:
+            try:
+                from datetime import datetime
+                d = datetime.strptime(current_value, '%Y-%m-%d')
+                current_text.setText(d.strftime('%d.%m.%Y'))
+            except Exception:
+                current_text.setText('Не установлен')
+        else:
+            current_text.setText('Не установлен')
+        current_text.setFixedHeight(28)
+        current_text.setStyleSheet('''
+            background-color: #F8F9FA;
+            padding: 0px 8px;
+            border: 1px solid #E0E0E0;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #555;
+            max-height: 28px;
+            min-height: 28px;
+        ''')
+        content_layout.addWidget(current_text)
+
+        # Новый дедлайн
+        new_label = QLabel('Новый дедлайн:')
+        new_label.setStyleSheet('font-size: 11px; font-weight: bold; color: #2C3E50;')
+        content_layout.addWidget(new_label)
+
+        date_input = CustomDateEdit()
+        date_input.setCalendarPopup(True)
+        date_input.setDisplayFormat('dd.MM.yyyy')
+        date_input.setFixedHeight(28)
+        date_input.setStyleSheet("""
+            QDateEdit {
+                padding: 0px 8px;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                font-size: 11px;
+                background-color: white;
+                max-height: 28px;
+                min-height: 28px;
+            }
+            QDateEdit:focus {
+                border: 1px solid #2C3E50;
+            }
+        """)
+        add_today_button_to_dateedit(date_input)
+
+        if current_value:
+            try:
+                from datetime import datetime
+                d = datetime.strptime(current_value, '%Y-%m-%d')
+                date_input.setDate(QDate(d.year, d.month, d.day))
+            except Exception:
+                date_input.setDate(QDate.currentDate())
+        else:
+            date_input.setDate(QDate.currentDate())
+        content_layout.addWidget(date_input)
+
+        # Причина
+        reason_label = QLabel('Причина изменения:')
+        reason_label.setStyleSheet('font-size: 11px; font-weight: bold; color: #2C3E50;')
+        content_layout.addWidget(reason_label)
+
+        reason_input = QLineEdit()
+        reason_input.setPlaceholderText('Укажите причину изменения дедлайна...')
+        reason_input.setFixedHeight(28)
+        reason_input.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                font-size: 11px;
+                background-color: white;
+                max-height: 28px;
+                min-height: 28px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #2C3E50;
+            }
+        """)
+        content_layout.addWidget(reason_input)
+
+        # Кнопки
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+
+        save_btn = QPushButton('Сохранить')
+        save_btn.setFixedHeight(28)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+                max-height: 28px;
+                min-height: 28px;
+            }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
+        """)
+
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+                max-height: 28px;
+                min-height: 28px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        def save_executor_deadline():
+            try:
+                reason = reason_input.text().strip()
+                if not reason:
+                    CustomMessageBox(dialog, 'Ошибка', 'Необходимо указать причину изменения дедлайна', 'warning').exec_()
+                    return
+
+                selected_date = date_input.date()
+                new_deadline_str = selected_date.toString('yyyy-MM-dd')
+
+                if new_deadline_str == current_value:
+                    CustomMessageBox(dialog, 'Информация', 'Дедлайн не изменился', 'warning').exec_()
+                    return
+
+                # Сохраняем дедлайн через stage_executors
+                success = self.data.update_stage_executor_deadline(
+                    self.card_data['id'], search_key, new_deadline_str)
+
+                if not success:
+                    CustomMessageBox(dialog, 'Ошибка', 'Не удалось сохранить дедлайн', 'error').exec_()
+                    return
+
+                # Обновляем локальные данные и отображение
+                if executor_type == 'designer':
+                    self.designer_deadline_value = new_deadline_str
+                    self.card_data['designer_deadline'] = new_deadline_str
+                    if self.designer_deadline_display:
+                        self.designer_deadline_display.setText(selected_date.toString('dd.MM.yyyy'))
+                else:
+                    self.draftsman_deadline_value = new_deadline_str
+                    self.card_data['draftsman_deadline'] = new_deadline_str
+                    if self.draftsman_deadline_display:
+                        self.draftsman_deadline_display.setText(selected_date.toString('dd.MM.yyyy'))
+
+                # История действий
+                old_fmt = 'Не установлен'
+                if current_value:
+                    try:
+                        from datetime import datetime
+                        old_d = datetime.strptime(current_value, '%Y-%m-%d')
+                        old_fmt = old_d.strftime('%d.%m.%Y')
+                    except Exception:
+                        old_fmt = current_value
+
+                role_name = 'дизайнера' if executor_type == 'designer' else 'чертёжника'
+                description = f"Дедлайн {role_name} изменен с {old_fmt} на {selected_date.toString('dd.MM.yyyy')}. Причина: {reason}"
+                self._add_action_history('executor_deadline_changed', description)
+                self.reload_project_history()
+
+                from PyQt5.QtWidgets import QApplication
+                QApplication.processEvents()
+
+                dialog.accept()
+
+            except Exception as e:
+                print(f" Ошибка изменения дедлайна исполнителя: {e}")
+                import traceback
+                traceback.print_exc()
+                CustomMessageBox(dialog, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()
+
+        save_btn.clicked.connect(save_executor_deadline)
 
         buttons_layout.addWidget(save_btn)
         buttons_layout.addWidget(cancel_btn)
@@ -5594,50 +5896,8 @@ class CardEditDialog(QDialog):
         if updates:
             self.data.update_crm_card(self.card_data["id"], updates)
 
-        try:
-            if hasattr(self, 'designer_deadline') and self.designer_deadline and self.card_data.get('designer_name'):
-                deadline = self.designer_deadline.date().toString('yyyy-MM-dd')
-                print(f"\n[SAVE] Сохранение дедлайна дизайнера: {deadline}")
-                success = False
-                if self.data.is_multi_user:
-                    try:
-                        success = self.data.update_stage_executor_deadline(
-                            self.card_data['id'], 'концепция', deadline)
-                    except Exception as e:
-                        print(f"[API] Ошибка обновления дедлайна дизайнера: {e}")
-                if not success:
-                    success = self.data.update_stage_executor_deadline(
-                        self.card_data['id'], 'концепция', deadline)
-                print(f"  Дедлайн дизайнера {'сохранен' if success else 'НЕ сохранен'}")
-
-            if hasattr(self, 'draftsman_deadline') and self.draftsman_deadline and self.card_data.get('draftsman_name'):
-                deadline = self.draftsman_deadline.date().toString('yyyy-MM-dd')
-                print(f"\n[SAVE] Сохранение дедлайна чертёжника: {deadline}")
-
-                current_column = self.card_data.get('column_name', '').lower()
-
-                if 'планировочные' in current_column:
-                    search_key = 'планировочные'
-                else:
-                    search_key = 'чертежи'
-
-                print(f"[SAVE] Используем ключевое слово: '{search_key}'")
-                success = False
-                if self.data.is_multi_user:
-                    try:
-                        success = self.data.update_stage_executor_deadline(
-                            self.card_data['id'], search_key, deadline)
-                    except Exception as e:
-                        print(f"[API] Ошибка обновления дедлайна чертёжника: {e}")
-                if not success:
-                    success = self.data.update_stage_executor_deadline(
-                        self.card_data['id'], search_key, deadline)
-                print(f"  Дедлайн чертёжника {'сохранен' if success else 'НЕ сохранен'}")
-
-        except Exception as e:
-            print(f" Ошибка обновления дедлайнов исполнителей: {e}")
-            import traceback
-            traceback.print_exc()
+        # Дедлайны исполнителей сохраняются через change_executor_deadline()
+        # (read-only QLabel, изменение только через диалог с причиной)
 
         contract_id = self.card_data.get('contract_id')
         if contract_id and hasattr(self, 'status_combo'):
@@ -5977,13 +6237,19 @@ class CardEditDialog(QDialog):
             # Обновляем блоки дизайнера и чертежника
             if hasattr(self, 'designer_name_label') and self.card_data.get('designer_name'):
                 self.designer_name_label.setText(self.card_data['designer_name'])
-            if hasattr(self, 'designer_deadline') and self.card_data.get('designer_deadline'):
-                self.designer_deadline.setDate(QDate.fromString(self.card_data['designer_deadline'], 'yyyy-MM-dd'))
+            if hasattr(self, 'designer_deadline_display') and self.designer_deadline_display and self.card_data.get('designer_deadline'):
+                self.designer_deadline_value = self.card_data['designer_deadline']
+                d = QDate.fromString(self.designer_deadline_value, 'yyyy-MM-dd')
+                if d.isValid():
+                    self.designer_deadline_display.setText(d.toString('dd.MM.yyyy'))
 
             if hasattr(self, 'draftsman_name_label') and self.card_data.get('draftsman_name'):
                 self.draftsman_name_label.setText(self.card_data['draftsman_name'])
-            if hasattr(self, 'draftsman_deadline') and self.card_data.get('draftsman_deadline'):
-                self.draftsman_deadline.setDate(QDate.fromString(self.card_data['draftsman_deadline'], 'yyyy-MM-dd'))
+            if hasattr(self, 'draftsman_deadline_display') and self.draftsman_deadline_display and self.card_data.get('draftsman_deadline'):
+                self.draftsman_deadline_value = self.card_data['draftsman_deadline']
+                d = QDate.fromString(self.draftsman_deadline_value, 'yyyy-MM-dd')
+                if d.isValid():
+                    self.draftsman_deadline_display.setText(d.toString('dd.MM.yyyy'))
 
             self._loading_data = False  # Включаем обратно автосохранение
 
@@ -7075,6 +7341,8 @@ class CardEditDialog(QDialog):
                 card_data=self.card_data, data=self.data, db=self.db,
                 api_client=self.api_client, employee=self.employee, parent=self
             )
+            # Подписываемся на обновление дедлайна из таймлайна
+            self.timeline_widget.deadline_updated.connect(self._on_timeline_deadline_updated)
             self.tabs.removeTab(self._timeline_tab_index)
             self.tabs.insertTab(self._timeline_tab_index, self.timeline_widget, 'Таблица сроков')
         except Exception as e:
@@ -7084,6 +7352,13 @@ class CardEditDialog(QDialog):
 
         # Фоновая загрузка превью
         QTimer.singleShot(300, self._start_background_preview_loading)
+
+    def _on_timeline_deadline_updated(self, deadline_str):
+        """Обновить отображение дедлайна проекта когда timeline пересчитал"""
+        if hasattr(self, 'deadline_display') and deadline_str:
+            d = QDate.fromString(deadline_str, 'yyyy-MM-dd')
+            if d.isValid():
+                self.deadline_display.setText(d.toString('dd.MM.yyyy'))
 
     def _update_project_data_file_labels(self):
         """Обновить labels файлов ТЗ/замер/референсов из кэшированного контракта.
