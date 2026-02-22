@@ -128,6 +128,16 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"user_permissions migration note: {e}")
 
+    # Миграция activity_log: employee_id должен быть nullable (для login_failed без сотрудника)
+    try:
+        from sqlalchemy import text as _text
+        with engine.begin() as conn:
+            conn.execute(_text("ALTER TABLE activity_log ALTER COLUMN employee_id DROP NOT NULL"))
+            logger.info("Migrated activity_log: employee_id is now nullable")
+    except Exception as e:
+        if "already" not in str(e).lower() and "no such" not in str(e).lower():
+            logger.debug(f"activity_log migration note: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from database import SessionLocal, Employee
     from auth import get_password_hash
