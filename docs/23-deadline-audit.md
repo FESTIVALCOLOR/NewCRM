@@ -240,6 +240,7 @@ Supervision (SupervisionProjectHistory):
 | Фаза 2: Бизнес-логика | Завершена | 21.02.2026 |
 | Фаза 3: Архитектурная | Завершена (частично) | 21.02.2026 |
 | Фаза 4: Перспективная | Планируется | — |
+| Фаза 5: Оркестрованный аудит | Завершена | 22.02.2026 |
 
 ### Реализованные исправления
 
@@ -268,3 +269,44 @@ Supervision (SupervisionProjectHistory):
 - С12: Удалён дублирующий update_stage_executor_deadline из compat_mixin
 - M1: Offline fallback для get_timeline_summary
 - M3: LIKE → exact match для update_stage_executor в data_access.py
+
+**Фаза 5 — Оркестрованный аудит (22.02.2026):**
+
+PostgreSQL миграции:
+- paused_at, total_pause_days в crm_cards (PostgreSQL ALTER TABLE)
+- agent_type в norm_days_templates (PostgreSQL ALTER TABLE)
+- total_pause_days в supervision_cards (PostgreSQL ALTER TABLE)
+
+CRITICAL (2):
+- stage-history: заменены несуществующие h.old_value/h.new_value на h.description
+- stage-history: фильтр entity_type расширен с 'stage_executor' на ['crm_card', 'stage', 'stage_executor']
+
+HIGH (7):
+- client-ok: добавлен сдвиг StageExecutor.deadline при возобновлении
+- supervision resume + auto-resume: добавлен сдвиг card.deadline на pause_days
+- supervision delete: добавлено удаление SupervisionTimelineEntry
+- CRM delete: добавлено удаление ApprovalStageDeadline, ProjectTimelineEntry, ActionHistory, MessengerChat
+- dashboard: LIKE '%year%' заменён на 'year-%' (prefix match для contract_date)
+- UI crm_tab: убран дублирующий вызов update_crm_card_column при перемещении
+- UI supervision: resume только из "В ожидании", skip deadline dialog для "В ожидании"
+
+MEDIUM (10):
+- Pydantic schemas: добавлены previous_column, paused_at, total_pause_days в CRM/Supervision
+- db_manager: LIKE → exact match в update_stage_executor_deadline
+- timeline_service: утечка DB session — добавлен finally
+- SQLite миграции: 5 полей employee multiuser + agents.status
+- db_manager: удалён мёртвый update_supervision_card с таблицей crm_supervision
+- data_access: offline fallback для supervision_timeline_summary
+- data_access: get_archived_crm_cards → правильный API метод
+- db_manager: добавлены project_subtype, floors, contract_period в CRM cards SELECT
+- supervision_router: С4 разрешает выход из "В ожидании" при is_paused=True
+
+LOW (8):
+- crm_router + supervision_router: calendar → business days в расчёте pause_days
+- timeline_service: хардкод 'Индивидуальный' → переданный project_type
+- database: total_pause_days добавлен в SupervisionCard модель
+- supervision_router: actual_days = max(0, ...) предотвращает отрицательные значения
+- schemas: floors добавлен в NormDaysPreviewRequest
+- norm_days_router: floors пробрасывается в build_template_project_timeline
+- crm_router: убран опасный ILIKE fallback в complete_stage и complete_stage_for_executor
+- data_access: offline fallback для get_norm_days_template
