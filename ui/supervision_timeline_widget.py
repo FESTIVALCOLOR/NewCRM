@@ -7,12 +7,12 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
-    QTableWidgetItem, QPushButton, QHeaderView, QDateEdit,
+    QPushButton, QHeaderView, QDateEdit,
     QAbstractItemView, QFileDialog, QComboBox, QLineEdit,
     QTextEdit, QDialog, QDialogButtonBox
 )
-from PyQt5.QtCore import Qt, QDate, pyqtSignal, QTimer
-from PyQt5.QtGui import QColor, QFont, QBrush, QDoubleValidator
+from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtGui import QDoubleValidator
 from utils.calendar_helpers import add_today_button_to_dateedit
 from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
@@ -581,8 +581,8 @@ class SupervisionTimelineWidget(QWidget):
                 bg = STATUS_COLORS.get(status, '#FFFFFF')
 
                 # Кол 0: Стадия (только чтение)
-                self.table.setCellWidget(row, 0,
-                    self._make_cell_label(entry.get('stage_name', ''), bg, 'left'))
+                stage_lbl = self._make_cell_label(entry.get('stage_name', ''), bg, 'left')
+                self.table.setCellWidget(row, 0, stage_lbl)
 
                 # Кол 1: План. дата (карандаш → QDateEdit)
                 plan_date = entry.get('plan_date', '')
@@ -593,10 +593,10 @@ class SupervisionTimelineWidget(QWidget):
                         plan_text = d.toString('dd.MM.yyyy') if d.isValid() else ''
                     except Exception:
                         pass
-                self.table.setCellWidget(row, 1,
-                    self._create_editable_cell(
-                        plan_text, bg, row, stage_code, 'plan_date',
-                        align='center', is_date=True))
+                plan_cell = self._create_editable_cell(
+                    plan_text, bg, row, stage_code, 'plan_date',
+                    align='center', is_date=True)
+                self.table.setCellWidget(row, 1, plan_cell)
 
                 # Кол 2: Факт. дата (карандаш → QDateEdit)
                 fact_date = entry.get('actual_date', '')
@@ -609,31 +609,31 @@ class SupervisionTimelineWidget(QWidget):
                         fact_bg = '#E8F5E9'  # зелёный — факт заполнен
                     except Exception:
                         pass
-                self.table.setCellWidget(row, 2,
-                    self._create_editable_cell(
-                        fact_text, fact_bg, row, stage_code, 'actual_date',
-                        align='center', is_date=True))
+                fact_cell = self._create_editable_cell(
+                    fact_text, fact_bg, row, stage_code, 'actual_date',
+                    align='center', is_date=True)
+                self.table.setCellWidget(row, 2, fact_cell)
 
                 # Кол 3: Дней (авто-расчёт, только чтение)
                 days_val = entry.get('actual_days', '') or ''
-                self.table.setCellWidget(row, 3,
-                    self._make_cell_label(str(days_val) if days_val else '', bg))
+                days_lbl = self._make_cell_label(str(days_val) if days_val else '', bg)
+                self.table.setCellWidget(row, 3, days_lbl)
 
                 # Кол 4: Бюджет план (карандаш → число)
                 bp = entry.get('budget_planned', 0) or 0
                 bp_text = f'{bp:,.0f}' if bp else ''
-                self.table.setCellWidget(row, 4,
-                    self._create_editable_cell(
-                        bp_text, bg, row, stage_code, 'budget_planned',
-                        align='right', is_number=True))
+                bp_cell = self._create_editable_cell(
+                    bp_text, bg, row, stage_code, 'budget_planned',
+                    align='right', is_number=True)
+                self.table.setCellWidget(row, 4, bp_cell)
 
                 # Кол 5: Бюджет факт (карандаш → число)
                 ba = entry.get('budget_actual', 0) or 0
                 ba_text = f'{ba:,.0f}' if ba else ''
-                self.table.setCellWidget(row, 5,
-                    self._create_editable_cell(
-                        ba_text, bg, row, stage_code, 'budget_actual',
-                        align='right', is_number=True))
+                ba_cell = self._create_editable_cell(
+                    ba_text, bg, row, stage_code, 'budget_actual',
+                    align='right', is_number=True)
+                self.table.setCellWidget(row, 5, ba_cell)
 
                 # Кол 6: Экономия (авто-расчёт, только чтение)
                 savings = entry.get('budget_savings', 0) or 0
@@ -642,50 +642,47 @@ class SupervisionTimelineWidget(QWidget):
                     savings_color = '#4CAF50'
                 elif savings < 0:
                     savings_color = '#F44336'
-                self.table.setCellWidget(row, 6,
-                    self._make_cell_label(f'{savings:,.0f}' if savings else '', bg,
-                                          'right', color=savings_color))
+                savings_text = f'{savings:,.0f}' if savings else ''
+                savings_lbl = self._make_cell_label(
+                    savings_text, bg, 'right', color=savings_color)
+                self.table.setCellWidget(row, 6, savings_lbl)
 
                 # Кол 7: Поставщик (карандаш → текст)
                 supplier = entry.get('supplier', '') or ''
-                self.table.setCellWidget(row, 7,
-                    self._create_editable_cell(
-                        supplier, bg, row, stage_code, 'supplier',
-                        align='left'))
+                supplier_cell = self._create_editable_cell(
+                    supplier, bg, row, stage_code, 'supplier',
+                    align='left')
+                self.table.setCellWidget(row, 7, supplier_cell)
 
                 # Кол 8: Комиссия (карандаш → число)
                 commission = entry.get('commission', 0) or 0
                 comm_text = f'{commission:,.0f}' if commission else ''
-                self.table.setCellWidget(row, 8,
-                    self._create_editable_cell(
-                        comm_text, bg, row, stage_code, 'commission',
-                        align='right', is_number=True))
+                comm_cell = self._create_editable_cell(
+                    comm_text, bg, row, stage_code, 'commission',
+                    align='right', is_number=True)
+                self.table.setCellWidget(row, 8, comm_cell)
 
                 # Кол 9: Статус (QComboBox — оставляем как есть)
                 status_combo = QComboBox()
                 status_combo.addItems(STATUS_OPTIONS)
                 idx = STATUS_OPTIONS.index(status) if status in STATUS_OPTIONS else 0
                 status_combo.setCurrentIndex(idx)
-                status_combo.setStyleSheet("""
-                    QComboBox {
-                        border: 1px solid #E0E0E0; padding: 2px;
-                        font-size: 11px; background: white;
-                    }
-                """)
+                status_combo.setStyleSheet(
+                    "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
+                    " font-size: 11px; background: white; }")
                 status_combo.currentTextChanged.connect(
-                    lambda text, r=row, sc=stage_code: self._on_status_changed(r, sc, text)
-                )
+                    lambda text, r=row, sc=stage_code:
+                        self._on_status_changed(r, sc, text))
                 self.table.setCellWidget(row, 9, status_combo)
 
                 # Кол 10: Примечания (карандаш → многострочный диалог, tooltip)
                 notes = entry.get('notes', '') or ''
-                # Обрезаем для отображения, полный текст — в tooltip
                 display_notes = notes[:40] + '...' if len(notes) > 40 else notes
-                self.table.setCellWidget(row, 10,
-                    self._create_editable_cell(
-                        display_notes, bg, row, stage_code, 'notes',
-                        align='left', is_multiline=True,
-                        tooltip_text=notes if notes else 'Нажмите карандаш для ввода примечания'))
+                tip = notes if notes else 'Нажмите карандаш для ввода примечания'
+                notes_cell = self._create_editable_cell(
+                    display_notes, bg, row, stage_code, 'notes',
+                    align='left', is_multiline=True, tooltip_text=tip)
+                self.table.setCellWidget(row, 10, notes_cell)
 
         finally:
             self.table.setUpdatesEnabled(True)

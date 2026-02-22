@@ -1,7 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 from sqlalchemy.orm import Session
 
 from database import get_db, Agent, Employee
@@ -16,6 +15,7 @@ class AgentCreate(BaseModel):
 
 class AgentColorUpdate(BaseModel):
     color: str
+
 
 logger = logging.getLogger(__name__)
 

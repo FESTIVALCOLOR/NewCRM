@@ -28,7 +28,7 @@ class TestAgentsCrud:
         agent_name = f"{TEST_PREFIX}АГЕНТ"
         resp = api_post(
             api_base, "/api/agents", admin_headers,
-            params={"name": agent_name, "color": "#FF5733"}
+            json={"name": agent_name, "color": "#FF5733"}
         )
         assert resp.status_code in (200, 400)  # 400 если уже существует
         if resp.status_code == 200:
@@ -46,7 +46,7 @@ class TestAgentsCrud:
             agent_name = agents[0].get("full_name") or agents[0].get("name", "ФЕСТИВАЛЬ")
             patch_resp = api_patch(
                 api_base, f"/api/agents/{agent_name}/color", admin_headers,
-                params={"color": "#FFD93C"}
+                json={"color": "#FFD93C"}
             )
             assert patch_resp.status_code in (200, 404)
 
@@ -54,7 +54,7 @@ class TestAgentsCrud:
         """PATCH /api/agents/NONEXISTENT/color — несуществующий агент"""
         resp = api_patch(
             api_base, "/api/agents/NONEXISTENT_999/color", admin_headers,
-            params={"color": "#000000"}
+            json={"color": "#000000"}
         )
         assert resp.status_code in (404, 422)
 
