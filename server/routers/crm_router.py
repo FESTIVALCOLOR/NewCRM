@@ -419,9 +419,10 @@ async def move_crm_card_to_column(
             )
 
         # === ПРАВИЛО: Из "В ожидании" — только в previous_column или "Выполненный проект" ===
+        # Если previous_column == "Новый заказ" — разрешаем любой столбец (кроме "Новый заказ", что уже блокировано выше)
         if old_column == 'В ожидании' and new_column != 'В ожидании':
             allowed_return = card.previous_column or 'Новый заказ'
-            if new_column not in [allowed_return, 'Выполненный проект']:
+            if allowed_return != 'Новый заказ' and new_column not in [allowed_return, 'Выполненный проект']:
                 raise HTTPException(
                     status_code=422,
                     detail=f'Из "В ожидании" можно вернуть только в "{allowed_return}" или "Выполненный проект".'

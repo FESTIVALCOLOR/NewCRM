@@ -818,7 +818,7 @@ class CRMSupervisionTab(QWidget):
         if from_column == 'В ожидании' and to_column not in ['В ожидании', 'Выполненный проект']:
             card_info = self.data.get_supervision_card(card_id)
             prev_col = card_info.get('previous_column') if card_info else None
-            if prev_col and to_column != prev_col:
+            if prev_col and prev_col != 'Новый заказ' and to_column != prev_col:
                 from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.warning(
                     self, 'Перемещение запрещено',
