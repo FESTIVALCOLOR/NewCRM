@@ -570,12 +570,41 @@ class ProjectTimelineWidget(QWidget):
         lbl.setAlignment(qt_align)
         return lbl
 
+    def _calc_planned_dates(self):
+        """Рассчитать планируемые даты для каждого подэтапа.
+        Логика: planned[0] = START_date + norm_days[0]
+                planned[N] = prev_actual_date (или prev_planned) + norm_days[N]
+        Результат сохраняется в entry['_planned_date'] (строка 'YYYY-MM-DD').
+        """
+        prev_date = ''  # Предыдущая дата (actual или planned)
+        for entry in self.entries:
+            role = entry.get('executor_role', '')
+            if role == 'header':
+                continue
+            stage_code = entry.get('stage_code', '')
+            if stage_code == 'START':
+                prev_date = entry.get('actual_date', '')
+                entry['_planned_date'] = prev_date
+                continue
+            norm = entry.get('norm_days', 0) or 0
+            actual = entry.get('actual_date', '')
+            if prev_date and norm > 0:
+                entry['_planned_date'] = add_working_days(prev_date, norm)
+            else:
+                entry['_planned_date'] = ''
+            # Для следующего подэтапа: actual_date (если есть), иначе planned_date
+            if actual:
+                prev_date = actual
+            elif entry.get('_planned_date'):
+                prev_date = entry['_planned_date']
+
     def _populate_table(self):
         """Заполнение таблицы данными (QLabel для цветных ячеек — обход global stylesheet)"""
         self._loading = True
         self.table.setUpdatesEnabled(False)
         try:
             self.table.setRowCount(0)
+            self._calc_planned_dates()
             display_rows = self._build_display_rows()
             self.table.setRowCount(len(display_rows))
             num_cols = len(self.COLUMNS)
@@ -763,6 +792,18 @@ class ProjectTimelineWidget(QWidget):
                     date_edit.dateChanged.connect(
                         lambda d, ei=entry_idx, sc=stage_code: self._on_date_changed(ei, sc, d)
                     )
+
+                    # Tooltip с планируемой датой
+                    planned = entry.get('_planned_date', '')
+                    if planned:
+                        try:
+                            pd = QDate.fromString(planned, 'yyyy-MM-dd')
+                            if pd.isValid():
+                                planned_fmt = pd.toString('dd.MM.yyyy')
+                                date_edit.setToolTip(f"Планируемая дата: {planned_fmt}")
+                        except Exception:
+                            pass
+
                     date_layout.addWidget(date_edit)
                     self.table.setCellWidget(row, 1, date_container)
 

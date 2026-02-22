@@ -402,7 +402,9 @@ class ExecutorSelectionDialog(QDialog):
         self.init_ui()
 
     def _load_timeline_norm_days(self):
-        """Загрузить norm_days первого незаполненного подэтапа текущей стадии"""
+        """Загрузить norm_days первого незаполненного подэтапа текущей стадии
+        и дату предыдущего подэтапа для расчёта дедлайна."""
+        self._prev_actual_date = ''  # дата предыдущего подэтапа (для расчёта дедлайна)
         if not self.contract_id:
             return
         try:
@@ -414,24 +416,35 @@ class ExecutorSelectionDialog(QDialog):
             if 'Стадия 1' in self.stage_name:
                 stage_group = 'STAGE1'
             elif 'Стадия 2' in self.stage_name:
-                if 'концепция' in self.stage_name.lower() or 'дизайн' in self.stage_name.lower():
-                    stage_group = 'STAGE2'
-                else:
-                    stage_group = 'STAGE2'
+                stage_group = 'STAGE2'
             elif 'Стадия 3' in self.stage_name:
                 stage_group = 'STAGE3'
 
             if not stage_group:
                 return
 
-            for e in entries:
+            # Сортируем по sort_order для корректного определения предыдущего подэтапа
+            sorted_entries = sorted(entries, key=lambda x: x.get('sort_order', 0))
+
+            # prev_date сквозной по всем стадиям: дедлайн считается от
+            # последней заполненной actual_date в timeline (не только текущей стадии),
+            # т.к. стадии выполняются последовательно.
+            prev_date = ''
+            for e in sorted_entries:
+                if e.get('executor_role', '') == 'header':
+                    continue
                 if (e.get('stage_group') == stage_group
-                        and e.get('executor_role', '') != 'header'
                         and not e.get('actual_date')
                         and e.get('norm_days', 0) > 0):
+                    # Нашли первый незаполненный подэтап в текущей стадии
                     self._norm_days = int(e.get('norm_days', 0))
                     self._current_substep = e.get('stage_name', '')
+                    self._prev_actual_date = prev_date  # дата предыдущего заполненного
                     break
+                # Обновляем prev_date только для non-header строк с actual_date
+                ad = e.get('actual_date', '')
+                if ad:
+                    prev_date = ad
         except Exception as ex:
             print(f"[ExecutorDialog] Ошибка загрузки timeline: {ex}")
     
@@ -652,10 +665,13 @@ class ExecutorSelectionDialog(QDialog):
         self.stage_deadline = CustomDateEdit()
         self.stage_deadline.setCalendarPopup(True)
         # Авторасчёт дедлайна из norm_days
+        # База: дата предыдущего подэтапа (если есть), иначе сегодня
         if self._norm_days > 0:
             from utils.calendar_helpers import add_working_days
-            today_str = QDate.currentDate().toString('yyyy-MM-dd')
-            auto_deadline = add_working_days(today_str, self._norm_days)
+            base_date = getattr(self, '_prev_actual_date', '') or ''
+            if not base_date:
+                base_date = QDate.currentDate().toString('yyyy-MM-dd')
+            auto_deadline = add_working_days(base_date, self._norm_days)
             if auto_deadline:
                 d = QDate.fromString(auto_deadline, 'yyyy-MM-dd')
                 if d.isValid():
