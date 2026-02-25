@@ -315,7 +315,7 @@ class DataAccess(QObject):
 
     def create_contract(self, contract_data: Dict) -> Optional[Dict]:
         """Создать договор"""
-        # Сначала сохраняем локально
+        # Сначала сохраняем локально (add_contract также создаёт CRM карточку)
         contract_id = self.db.add_contract(contract_data)
 
         if self.is_online and self.api_client:
@@ -328,6 +328,11 @@ class DataAccess(QObject):
                     server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != contract_id:
                         self._update_local_id('contracts', contract_id, server_id)
+
+                    # Проверяем что CRM карточка была создана на сервере
+                    # (сервер создаёт её атомарно, но на всякий случай)
+                    self._ensure_crm_card_exists(result, contract_data)
+
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_contract: {e}")
@@ -336,6 +341,34 @@ class DataAccess(QObject):
             self._queue_operation('create', 'contract', contract_id, contract_data)
 
         return {'id': contract_id, **contract_data} if contract_id else None
+
+    def _ensure_crm_card_exists(self, contract_result: Dict, contract_data: Dict):
+        """Проверить что CRM карточка создана для договора, создать если нет"""
+        try:
+            project_type = contract_data.get('project_type', '')
+            if project_type == 'Авторский надзор':
+                return  # Для надзора используется SupervisionCard
+
+            contract_id = contract_result.get('id') if isinstance(contract_result, dict) else None
+            if not contract_id:
+                return
+
+            # Проверяем наличие CRM карточки через API
+            cards = self.api_client.get_crm_cards(project_type)
+            has_card = any(
+                (c.get('contract_id') == contract_id)
+                for c in (cards if isinstance(cards, list) else [])
+            )
+
+            if not has_card:
+                _safe_log(f"[DataAccess] CRM карточка для договора {contract_id} не найдена, создаём...")
+                self.api_client.create_crm_card({
+                    'contract_id': contract_id,
+                    'column_name': 'Новый заказ'
+                })
+                _safe_log(f"[DataAccess] CRM карточка для договора {contract_id} создана")
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка проверки CRM карточки: {e}")
 
     def update_contract(self, contract_id: int, contract_data: Dict) -> bool:
         """Обновить договор"""
@@ -455,6 +488,26 @@ class DataAccess(QObject):
             self._queue_operation('update', 'employee', employee_id, employee_data)
 
         return True
+
+    def get_employee_active_assignments(self, employee_id: int) -> List[Dict]:
+        """Получить список активных назначений сотрудника"""
+        try:
+            if self._should_use_api():
+                try:
+                    cards = self.api_client.get_crm_cards('Индивидуальный') + self.api_client.get_crm_cards('Шаблонный')
+                    result = []
+                    for card in cards:
+                        team = card.get('team', []) or []
+                        for member in team:
+                            if member.get('executor_id') == employee_id and member.get('status') != 'completed':
+                                result.append({'card_id': card.get('id'), 'contract_number': card.get('contract_number', ''), 'stage': member.get('stage_name', '')})
+                    return result
+                except Exception:
+                    pass
+            # Fallback: локальная БД
+            return self.db.get_employee_active_assignments(employee_id) if hasattr(self.db, 'get_employee_active_assignments') else []
+        except Exception:
+            return []
 
     def delete_employee(self, employee_id: int) -> bool:
         """Удалить сотрудника"""
@@ -1540,6 +1593,20 @@ class DataAccess(QObject):
 
         return True
 
+    def delete_agent(self, agent_id: int) -> bool:
+        """Удалить агента (мягкое удаление)"""
+        if self.api_client:
+            try:
+                return self.api_client.delete_agent(agent_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_agent error: {e}")
+        if self.db:
+            try:
+                return self.db.delete_agent(agent_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB delete_agent error: {e}")
+        return False
+
     def get_agent_types(self) -> List[str]:
         """Получить типы агентов"""
         if self.api_client:
@@ -1553,6 +1620,63 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] DB get_agent_types: {e}")
         return []
+
+    # ==================== ГОРОДА ====================
+
+    def get_all_cities(self) -> List[Dict]:
+        """Получить все города"""
+        if self.api_client:
+            try:
+                cities = self.api_client.get_all_cities()
+                if cities:
+                    return cities
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_all_cities error, fallback: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_all_cities()
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_all_cities error: {e}")
+        # Последний fallback — config.py
+        try:
+            from config import CITIES
+            return [{"id": i, "name": c, "status": "активный"} for i, c in enumerate(CITIES, 1)]
+        except Exception:
+            return []
+
+    def add_city(self, name: str) -> bool:
+        """Добавить город"""
+        result = False
+        if self.db:
+            try:
+                result = self.db.add_city(name)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB add_city error: {e}")
+        if self.api_client:
+            try:
+                api_result = self.api_client.add_city(name)
+                result = result or api_result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API add_city error: {e}")
+                if not result:
+                    self._queue_operation('create', 'city', None, {'name': name})
+                    result = True
+        return result
+
+    def delete_city(self, city_id: int) -> bool:
+        """Удалить город"""
+        if self.api_client:
+            try:
+                return self.api_client.delete_city(city_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_city error: {e}")
+        if self.db:
+            try:
+                return self.db.delete_city(city_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB delete_city error: {e}")
+        return False
 
     # ==================== СТАДИИ ====================
 
@@ -1674,6 +1798,30 @@ class DataAccess(QObject):
                                    'executor_id': executor_id, '_action': 'complete'})
 
         return {'success': True}
+
+    def get_incomplete_stage_executors(self, card_id: int, stage_name: str) -> list:
+        """S-05: Получить незавершённых исполнителей стадии"""
+        try:
+            return self.db.get_incomplete_stage_executors(card_id, stage_name)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка get_incomplete_stage_executors: {e}")
+            return []
+
+    def get_stage_completion_info(self, card_id: int, stage_name: str) -> dict:
+        """S-05: Получить информацию о завершении стадии"""
+        try:
+            return self.db.get_stage_completion_info(card_id, stage_name)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка get_stage_completion_info: {e}")
+            return {'stage': None, 'approval': None}
+
+    def auto_accept_stage(self, card_id: int, stage_name: str, accepted_by_id: int, project_type: str = None) -> int:
+        """S-05: Автоматическое принятие стадии руководителем"""
+        try:
+            return self.db.auto_accept_stage(card_id, stage_name, accepted_by_id, project_type)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка auto_accept_stage: {e}")
+            return 0
 
     def reset_stage_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения стадии"""

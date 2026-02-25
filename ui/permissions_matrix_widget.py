@@ -19,10 +19,11 @@ from utils.data_access import DataAccess
 # Группы прав (порядок отображения)
 # =========================
 
+# S-12: Синхронизировано с server/permissions.py PERMISSION_NAMES
 PERMISSION_GROUPS = {
     'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
     'Клиенты': ['clients.delete'],
-    'Договоры': ['contracts.delete'],
+    'Договоры': ['contracts.update', 'contracts.delete'],
     'CRM': [
         'crm_cards.update', 'crm_cards.move', 'crm_cards.delete',
         'crm_cards.assign_executor', 'crm_cards.delete_executor',
@@ -35,9 +36,10 @@ PERMISSION_GROUPS = {
         'supervision.reset_stages', 'supervision.complete_stage',
         'supervision.delete_order',
     ],
-    'Платежи': ['payments.delete'],
-    'Зарплаты': ['salaries.delete'],
-    'Агенты': ['agents.create'],
+    'Платежи': ['payments.create', 'payments.update', 'payments.delete'],
+    'Зарплаты': ['salaries.create', 'salaries.update', 'salaries.delete'],
+    'Ставки': ['rates.create', 'rates.delete'],
+    'Агенты': ['agents.create', 'agents.update'],
     'Мессенджер': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat'],
 }
 
@@ -58,7 +60,7 @@ ROLES = [
 DEFAULT_ROLE_PERMISSIONS = {
     "Руководитель студии": {
         "employees.create", "employees.update", "employees.delete",
-        "clients.delete", "contracts.delete",
+        "clients.delete", "contracts.update", "contracts.delete",
         "crm_cards.update", "crm_cards.move", "crm_cards.delete",
         "crm_cards.assign_executor", "crm_cards.delete_executor",
         "crm_cards.reset_stages", "crm_cards.reset_approval",
@@ -72,7 +74,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     },
     "Старший менеджер проектов": {
         "employees.update",
-        "clients.delete", "contracts.delete",
+        "clients.delete", "contracts.update", "contracts.delete",
         "crm_cards.update", "crm_cards.move", "crm_cards.delete",
         "crm_cards.assign_executor", "crm_cards.delete_executor",
         "crm_cards.reset_stages", "crm_cards.reset_approval",
@@ -96,6 +98,7 @@ PERMISSION_DESCRIPTIONS = {
     "employees.update": "Редактирование сотрудников",
     "employees.delete": "Удаление сотрудников",
     "clients.delete": "Удаление клиентов",
+    "contracts.update": "Редактирование договоров",
     "contracts.delete": "Удаление договоров",
     "crm_cards.update": "Редактирование CRM карточек",
     "crm_cards.move": "Перемещение CRM карточек",

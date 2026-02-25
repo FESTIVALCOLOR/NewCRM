@@ -174,6 +174,16 @@ class Agent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class City(Base):
+    """Города"""
+    __tablename__ = "cities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    status = Column(String, default='активный')
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ActivityLog(Base):
     """Расширенный лог действий"""
     __tablename__ = "activity_log"
@@ -455,10 +465,11 @@ class StageExecutor(Base):
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id"), nullable=False)
 
     stage_name = Column(String, nullable=False)
-    executor_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    # S-07: nullable для SET NULL при удалении сотрудника
+    executor_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     assigned_date = Column(DateTime, default=datetime.utcnow)
-    assigned_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    assigned_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     deadline = Column(String)
     submitted_date = Column(DateTime)
@@ -619,7 +630,8 @@ class Payment(Base):
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id"))
     supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id"))
 
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    # S-07: nullable чтобы сохранять платежи при удалении сотрудника (SET NULL)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     role = Column(String, nullable=False)
     stage_name = Column(String)
 
@@ -678,7 +690,8 @@ class Salary(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     contract_id = Column(Integer, ForeignKey("contracts.id"))
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    # S-07: nullable чтобы сохранять зарплаты при удалении сотрудника (SET NULL)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     payment_type = Column(String, nullable=False)
     stage_name = Column(String)

@@ -97,6 +97,10 @@ class AdminDialog(QDialog):
         self._tab_rates = self._create_rates_tab()
         self._tabs.addTab(self._tab_rates, "Тарифы")
 
+        # --- Вкладка 5: Агенты и города ---
+        self._tab_agents_cities = self._create_agents_cities_tab()
+        self._tabs.addTab(self._tab_agents_cities, "Агенты и города")
+
         content_layout.addWidget(self._tabs)
 
         # Нижняя панель
@@ -260,5 +264,39 @@ class AdminDialog(QDialog):
         except Exception as e:
             print(f"[WARN] Не удалось загрузить RatesSettingsWidget: {e}")
             lbl = self._tab_rates.findChild(QLabel)
+            if lbl:
+                lbl.setText(f"Ошибка загрузки: {e}")
+
+    # ================================================================
+    # Вкладка: Агенты и города
+    # ================================================================
+
+    def _create_agents_cities_tab(self):
+        """Вкладка управления агентами и городами"""
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.addWidget(QLabel("Загрузка..."))
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(300, self._init_agents_cities_widget)
+        return w
+
+    def _init_agents_cities_widget(self):
+        """Инициализация виджета агентов и городов"""
+        try:
+            from ui.agents_cities_widget import AgentsCitiesWidget
+            widget = AgentsCitiesWidget(
+                parent=self._tab_agents_cities,
+                api_client=self.api_client,
+                data_access=self.data_access,
+            )
+            layout = self._tab_agents_cities.layout()
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            layout.addWidget(widget)
+        except Exception as e:
+            print(f"[WARN] Не удалось загрузить AgentsCitiesWidget: {e}")
+            lbl = self._tab_agents_cities.findChild(QLabel)
             if lbl:
                 lbl.setText(f"Ошибка загрузки: {e}")

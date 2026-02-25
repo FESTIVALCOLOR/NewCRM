@@ -307,22 +307,26 @@ class DatabaseManager(DatabaseMigrations):
 
         cursor.execute('''
         INSERT INTO contracts
-        (client_id, project_type, agent_type, city, contract_number, contract_date,
-         address, area, total_amount, advance_payment, additional_payment,
+        (client_id, project_type, project_subtype, floors, agent_type, city,
+         contract_number, contract_date, address, area, total_amount,
+         advance_payment, additional_payment, third_payment,
          contract_period, comments, contract_file_link, tech_task_link, yandex_folder_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             contract_data['client_id'],
             contract_data['project_type'],
+            contract_data.get('project_subtype', ''),
+            contract_data.get('floors', 1),
             contract_data.get('agent_type', ''),
             contract_data.get('city', ''),
-            contract_data['contract_number'],
+            contract_data.get('contract_number', ''),
             contract_data.get('contract_date', datetime.now().date()),
             contract_data.get('address', ''),
             contract_data.get('area', 0),
             contract_data.get('total_amount', 0),
             contract_data.get('advance_payment', 0),
             contract_data.get('additional_payment', 0),
+            contract_data.get('third_payment', 0),
             contract_data.get('contract_period', 0),
             contract_data.get('comments', ''),
             contract_data.get('contract_file_link', ''),
@@ -966,6 +970,127 @@ class DatabaseManager(DatabaseMigrations):
         conn.commit()
         self.close()
     
+    def get_incomplete_stage_executors(self, card_id, stage_name):
+        """S-05: Получить незавершённых исполнителей стадии"""
+        conn = self.connect()
+        cursor = conn.cursor()
+        cursor.execute('''
+        SELECT se.executor_id, e.full_name as executor_name, e.position
+        FROM stage_executors se
+        JOIN employees e ON se.executor_id = e.id
+        WHERE se.crm_card_id = ? AND se.stage_name = ? AND se.completed = 0
+        ''', (card_id, stage_name))
+        result = [dict(row) for row in cursor.fetchall()]
+        self.close()
+        return result
+
+    def get_stage_completion_info(self, card_id, stage_name):
+        """S-05: Получить информацию о завершении стадии"""
+        conn = self.connect()
+        cursor = conn.cursor()
+        cursor.execute('''
+        SELECT submitted_date, completed
+        FROM stage_executors
+        WHERE crm_card_id = ? AND stage_name = ?
+        ORDER BY assigned_date DESC
+        LIMIT 1
+        ''', (card_id, stage_name))
+        row = cursor.fetchone()
+        stage_info = dict(row) if row else None
+
+        cursor.execute('''
+        SELECT is_approved
+        FROM approval_stages
+        WHERE crm_card_id = ? AND stage_name = ?
+        ''', (card_id, stage_name))
+        approval_row = cursor.fetchone()
+        approval_info = dict(approval_row) if approval_row else None
+        self.close()
+        return {'stage': stage_info, 'approval': approval_info}
+
+    def auto_accept_stage(self, card_id, stage_name, accepted_by_id, project_type=None):
+        """S-05: Автоматическое принятие стадии руководителем"""
+        from PyQt5.QtCore import QDate
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        # Получаем всех незавершённых исполнителей
+        cursor.execute('''
+        SELECT se.executor_id, e.full_name as executor_name, e.position
+        FROM stage_executors se
+        JOIN employees e ON se.executor_id = e.id
+        WHERE se.crm_card_id = ? AND se.stage_name = ? AND se.completed = 0
+        ''', (card_id, stage_name))
+        executors = cursor.fetchall()
+
+        if not executors:
+            self.close()
+            return 0
+
+        # Определяем тип проекта если не передан
+        if not project_type:
+            cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (card_id,))
+            card_row = cursor.fetchone()
+            if card_row and card_row['contract_id']:
+                cursor.execute('SELECT project_type FROM contracts WHERE id = ?', (card_row['contract_id'],))
+                contract_row = cursor.fetchone()
+                project_type = contract_row['project_type'] if contract_row else None
+
+        # Определяем contract_id
+        cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (card_id,))
+        card_row = cursor.fetchone()
+        contract_id = card_row['contract_id'] if card_row else None
+
+        current_month = QDate.currentDate().toString('yyyy-MM')
+
+        for executor in executors:
+            executor_id = executor['executor_id']
+            executor_name = executor['executor_name']
+            executor_position = executor['position'] or ''
+
+            # 1. Отмечаем стадию как сданную и принятую
+            cursor.execute('''
+            UPDATE stage_executors
+            SET submitted_date = CURRENT_TIMESTAMP,
+                completed = 1,
+                completed_date = CURRENT_TIMESTAMP
+            WHERE crm_card_id = ? AND stage_name = ? AND executor_id = ? AND completed = 0
+            ''', (card_id, stage_name, executor_id))
+
+            # 2. Запись в manager_stage_acceptance
+            cursor.execute('''
+            INSERT INTO manager_stage_acceptance
+            (crm_card_id, stage_name, executor_name, accepted_by)
+            VALUES (?, ?, ?, ?)
+            ''', (card_id, stage_name, executor_name, accepted_by_id))
+
+            # 3. Обновляем отчётный месяц в payments
+            if project_type and contract_id:
+                if project_type == 'Индивидуальный':
+                    cursor.execute('''
+                    UPDATE payments SET report_month = ?
+                    WHERE contract_id = ? AND employee_id = ? AND stage_name = ? AND payment_type = 'Доплата'
+                    ''', (current_month, contract_id, executor_id, stage_name))
+                elif project_type == 'Шаблонный':
+                    can_set_month = True
+                    if 'чертёжник' in executor_position.lower() or 'чертежник' in executor_position.lower():
+                        cursor.execute('''
+                        SELECT COUNT(*) as accepted_count FROM manager_stage_acceptance
+                        WHERE crm_card_id = ? AND executor_name = ?
+                        ''', (card_id, executor_name))
+                        result = cursor.fetchone()
+                        if result and result['accepted_count'] < 2:
+                            can_set_month = False
+                    if can_set_month:
+                        cursor.execute('''
+                        UPDATE payments SET report_month = ?
+                        WHERE contract_id = ? AND employee_id = ? AND stage_name = ? AND payment_type = 'Полная оплата'
+                        ''', (current_month, contract_id, executor_id, stage_name))
+
+        conn.commit()
+        self.close()
+        return len(executors)
+
     def get_contract_id_by_crm_card(self, crm_card_id):
         """Получение ID договора по ID карточки CRM"""
         conn = self.connect()
@@ -1135,13 +1260,12 @@ class DatabaseManager(DatabaseMigrations):
         if month and month != 'Все':
             return f" AND strftime('%Y-%m', contract_date) = '{year}-{month:02d}'"
         elif quarter and quarter != 'Все':
+            # S-15: Поддержка int (1-4) и строки ('Q1'-'Q4')
             q_months = {
-                'Q1': (1, 3),
-                'Q2': (4, 6),
-                'Q3': (7, 9),
-                'Q4': (10, 12)
+                'Q1': (1, 3), 'Q2': (4, 6), 'Q3': (7, 9), 'Q4': (10, 12),
+                1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12),
             }
-            start, end = q_months[quarter]
+            start, end = q_months.get(quarter, (1, 3))
             return f" AND strftime('%Y', contract_date) = '{year}' AND CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN {start} AND {end}"
         else:
             return f" AND strftime('%Y', contract_date) = '{year}'"
@@ -3631,6 +3755,23 @@ class DatabaseManager(DatabaseMigrations):
             print(f"[ERROR] Ошибка добавления агента: {e}")
             return False
 
+    def delete_agent(self, agent_id):
+        """Мягкое удаление агента в SQLite"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE agents SET status = 'удалён' WHERE id = ?",
+                (agent_id,)
+            )
+            conn.commit()
+            self.close()
+            DatabaseManager._agent_colors_cache = None
+            return True
+        except Exception as e:
+            print(f"[DB] Ошибка удаления агента: {e}")
+            return False
+
     def update_agent_color(self, name, color):
         """Обновление цвета агента"""
         try:
@@ -3674,6 +3815,60 @@ class DatabaseManager(DatabaseMigrations):
     def invalidate_agent_colors_cache(self):
         """Сброс кэша цветов агентов"""
         DatabaseManager._agent_colors_cache = None
+
+    # ========== МЕТОДЫ ДЛЯ РАБОТЫ С ГОРОДАМИ ==========
+
+    def get_all_cities(self):
+        """Получить все активные города"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, name, status FROM cities WHERE status = 'активный' ORDER BY name"
+            )
+            rows = cursor.fetchall()
+            self.close()
+            return [{"id": row[0], "name": row[1], "status": row[2]} for row in rows]
+        except Exception:
+            # Таблица может не существовать
+            try:
+                from config import CITIES
+                return [{"id": i, "name": c, "status": "активный"} for i, c in enumerate(CITIES, 1)]
+            except Exception:
+                return []
+
+    def add_city(self, name):
+        """Добавить город в SQLite"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR IGNORE INTO cities (name) VALUES (?)",
+                (name,)
+            )
+            conn.commit()
+            rowcount = cursor.rowcount
+            self.close()
+            return rowcount > 0
+        except Exception as e:
+            print(f"[DB] Ошибка добавления города: {e}")
+            return False
+
+    def delete_city(self, city_id):
+        """Мягкое удаление города в SQLite"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE cities SET status = 'удалён' WHERE id = ?",
+                (city_id,)
+            )
+            conn.commit()
+            self.close()
+            return True
+        except Exception as e:
+            print(f"[DB] Ошибка удаления города: {e}")
+            return False
 
     # ========== МЕТОДЫ ДЛЯ РАБОТЫ С ФАЙЛАМИ СТАДИЙ ПРОЕКТА ==========
 

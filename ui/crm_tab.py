@@ -106,7 +106,15 @@ class DraggableListWidget(BaseDraggableList):
         if not self.can_drag:
             event.ignore()
             return
-        
+
+        # S2.1: Проверка права crm.update перед перемещением карточки
+        column = self.parent_column
+        if hasattr(column, 'employee') and hasattr(column, 'api_client'):
+            if not _has_perm(column.employee, column.api_client, 'crm_cards.update'):
+                print("[DROP EVENT] Отказано: нет права crm.update")
+                event.ignore()
+                return
+
         source = event.source()
         
         print(f"\n[DROP EVENT] На QListWidget колонки '{self.parent_column.column_name}'")
@@ -507,23 +515,24 @@ class CRMTab(QWidget):
             print(f"[PERF] ИТОГО load_cards_for_type({project_type}): {(_t3-_t0)*1000:.0f}ms")
 
         except Exception as e:
+            # S3.2: Обработка ошибок без краша UI — traceback в лог, пустой список карточек
             try:
-                print(f" КРИТИЧЕСКАЯ ОШИБКА: {e}")
+                print(f"[load_cards_for_type] КРИТИЧЕСКАЯ ОШИБКА ({project_type}): {e}")
                 import traceback
                 traceback.print_exc()
             except (UnicodeEncodeError, OSError):
                 pass
 
-            # ========== АВАРИЙНОЕ СООБЩЕНИЕ ==========
+            # Восстанавливаем отрисовку колонок (могли быть заблокированы выше)
             try:
-                CustomMessageBox(
-                    self,
-                    'Ошибка загрузки',
-                    f'Не удалось загрузить карточки:\n\n{str(e)}\n\n'
-                    'Попробуйте перезапустить программу.\n'
-                    'Если ошибка повторяется - обратитесь к администратору.',
-                    'error'
-                ).exec_()
+                if project_type == 'Индивидуальный':
+                    bw = getattr(self, 'individual_widget', None)
+                else:
+                    bw = getattr(self, 'template_widget', None)
+                if bw and hasattr(bw, 'columns'):
+                    for col in bw.columns.values():
+                        col.cards_list.setUpdatesEnabled(True)
+                        col.update_header_count()
             except Exception:
                 pass
             # =========================================
@@ -647,141 +656,23 @@ class CRMTab(QWidget):
                 if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов'):
                     # Для руководителей: автоматически принимаем пропущенные стадии
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
-                        conn = self.data.db.connect()
-                        cursor = conn.cursor()
-
-                        # Получаем всех исполнителей данной стадии, которые еще не завершили работу
-                        cursor.execute('''
-                        SELECT se.executor_id, e.full_name as executor_name, e.position
-                        FROM stage_executors se
-                        JOIN employees e ON se.executor_id = e.id
-                        WHERE se.crm_card_id = ? AND se.stage_name = ? AND se.completed = 0
-                        ''', (card_id, from_column))
-
-                        executors = cursor.fetchall()
+                        # S-05: Используем DataAccess вместо прямого SQL
+                        executors = self.data.get_incomplete_stage_executors(card_id, from_column)
 
                         if executors:
                             print(f"\n[AUTO ACCEPT] Автоматическое принятие стадии '{from_column}'")
                             print(f"             Найдено исполнителей: {len(executors)}")
-
-                            # Получаем информацию о контракте для определения типа проекта
-                            cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (card_id,))
-                            card_row = cursor.fetchone()
-                            contract_id = card_row['contract_id'] if card_row else None
-
-                            contract = None
-                            if contract_id:
-                                cursor.execute('SELECT project_type FROM contracts WHERE id = ?', (contract_id,))
-                                contract_row = cursor.fetchone()
-                                contract = {'project_type': contract_row['project_type']} if contract_row else None
-
-                            current_month = QDate.currentDate().toString('yyyy-MM')
-
-                            # Обрабатываем каждого исполнителя
-                            for executor in executors:
-                                executor_id = executor['executor_id']
-                                executor_name = executor['executor_name']
-                                executor_position = executor['position']
-
-                                print(f"  → Обработка: {executor_name} ({executor_position})")
-
-                                # 1. Отмечаем стадию как сдану и принятую в stage_executors
-                                cursor.execute('''
-                                UPDATE stage_executors
-                                SET submitted_date = CURRENT_TIMESTAMP,
-                                    completed = 1,
-                                    completed_date = CURRENT_TIMESTAMP
-                                WHERE crm_card_id = ? AND stage_name = ? AND executor_id = ? AND completed = 0
-                                ''', (card_id, from_column, executor_id))
-
-                                # 2. Добавляем запись в manager_stage_acceptance (для информации о проекте)
-                                cursor.execute('''
-                                INSERT INTO manager_stage_acceptance
-                                (crm_card_id, stage_name, executor_name, accepted_by)
-                                VALUES (?, ?, ?, ?)
-                                ''', (card_id, from_column, executor_name, self.employee['id']))
-
-                                print(f"    Стадия отмечена как принятая")
-
-                                # 3. Обновляем отчетный месяц в payments
-                                if contract:
-                                    # Для индивидуальных проектов - обновляем ДОПЛАТУ
-                                    if contract['project_type'] == 'Индивидуальный':
-                                        cursor.execute('''
-                                        UPDATE payments
-                                        SET report_month = ?
-                                        WHERE contract_id = ?
-                                          AND employee_id = ?
-                                          AND stage_name = ?
-                                          AND payment_type = 'Доплата'
-                                        ''', (current_month, contract_id, executor_id, from_column))
-
-                                        if cursor.rowcount > 0:
-                                            print(f"    Отчетный месяц ДОПЛАТЫ установлен: {current_month}")
-
-                                    # Для шаблонных проектов - обновляем ПОЛНУЮ ОПЛАТУ
-                                    elif contract['project_type'] == 'Шаблонный':
-                                        can_set_month = True
-
-                                        # Для чертежника проверяем количество принятых стадий
-                                        if 'чертёжник' in executor_position.lower() or 'чертежник' in executor_position.lower():
-                                            cursor.execute('''
-                                            SELECT COUNT(*) as accepted_count
-                                            FROM manager_stage_acceptance
-                                            WHERE crm_card_id = ? AND executor_name = ?
-                                            ''', (card_id, executor_name))
-
-                                            result = cursor.fetchone()
-                                            accepted_count = result['accepted_count'] if result else 0
-
-                                            # Если это первая стадия, НЕ устанавливаем месяц
-                                            if accepted_count < 2:
-                                                can_set_month = False
-                                                print(f"     Первая стадия чертежника - месяц НЕ устанавливается")
-
-                                        if can_set_month:
-                                            cursor.execute('''
-                                            UPDATE payments
-                                            SET report_month = ?
-                                            WHERE contract_id = ?
-                                              AND employee_id = ?
-                                              AND stage_name = ?
-                                              AND payment_type = 'Полная оплата'
-                                            ''', (current_month, contract_id, executor_id, from_column))
-
-                                            if cursor.rowcount > 0:
-                                                print(f"    Отчетный месяц ПОЛНОЙ ОПЛАТЫ установлен: {current_month}")
-
-                            print(f"Стадия '{from_column}' автоматически принята для {len(executors)} исполнителей")
-
-                        conn.commit()
-                        self.data.db.close()
+                            count = self.data.auto_accept_stage(
+                                card_id, from_column, self.employee['id'], project_type
+                            )
+                            print(f"Стадия '{from_column}' автоматически принята для {count} исполнителей")
                 # ГАП/СДП/Менеджер могут перемещать если работа сдана, принята и согласована
                 elif _emp_has_pos(self.employee, 'ГАП', 'СДП', 'Менеджер'):
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
-                        # Проверяем что работа сдана, принята и согласована
-                        conn = self.data.db.connect()
-                        cursor = conn.cursor()
-
-                        # Проверяем состояние выполнения стадии
-                        cursor.execute('''
-                        SELECT submitted_date, completed
-                        FROM stage_executors
-                        WHERE crm_card_id = ? AND stage_name = ?
-                        ORDER BY assigned_date DESC
-                        LIMIT 1
-                        ''', (card_id, from_column))
-
-                        stage_info = cursor.fetchone()
-
-                        # Проверяем согласование стадии
-                        cursor.execute('''
-                        SELECT is_approved
-                        FROM approval_stages
-                        WHERE crm_card_id = ? AND stage_name = ?
-                        ''', (card_id, from_column))
-
-                        approval_info = cursor.fetchone()
+                        # S-05: Используем DataAccess вместо прямого SQL
+                        info = self.data.get_stage_completion_info(card_id, from_column)
+                        stage_info = info.get('stage')
+                        approval_info = info.get('approval')
                         self.data.db.close()
 
                         # Определяем статусы
@@ -808,20 +699,9 @@ class CRMTab(QWidget):
                 else:
                     # Для всех остальных пользователей: строгая проверка
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
-                        # Получаем информацию о текущей стадии
-                        conn = self.data.db.connect()
-                        cursor = conn.cursor()
-
-                        cursor.execute('''
-                        SELECT submitted_date, completed
-                        FROM stage_executors
-                        WHERE crm_card_id = ? AND stage_name = ?
-                        ORDER BY assigned_date DESC
-                        LIMIT 1
-                        ''', (card_id, from_column))
-
-                        stage_info = cursor.fetchone()
-                        self.data.db.close()
+                        # S-05: Используем DataAccess вместо прямого SQL
+                        info = self.data.get_stage_completion_info(card_id, from_column)
+                        stage_info = info.get('stage')
 
                         if stage_info:
                             submitted = stage_info['submitted_date'] is not None
@@ -873,6 +753,9 @@ class CRMTab(QWidget):
             print(f" Ошибка обновления БД: {e}")
             QMessageBox.critical(self, 'Ошибка', f'Не удалось переместить карточку: {e}')
             return
+
+        # S9.3: Уведомление об успешном перемещении карточки
+        print(f"[CRM] Карточка ID={card_id} успешно перемещена: '{from_column}' -> '{to_column}' ({project_type})")
 
         # ========== ИСПРАВЛЕННЫЙ БЛОК СБРОСА ==========
         # Полный сброс ТОЛЬКО при возврате из архива
@@ -2452,6 +2335,8 @@ class CRMCard(QFrame):
 
         # Кнопка "Редактирование карточки" для всех с правами редактирования (кроме замерщика)
         if self.can_edit and not is_surveyor:
+            # S2.2: Проверка права crm.update для кнопки редактирования
+            has_update_perm = _has_perm(self.employee, self.api_client, 'crm_cards.update')
             # ========== КНОПКА РЕДАКТИРОВАНИЯ (SVG) ==========
             edit_btn = IconLoader.create_icon_button('edit', 'Редактирование карточки', 'Редактировать данные карточки', icon_size=12)
             edit_btn.setStyleSheet("""
@@ -2469,6 +2354,9 @@ class CRMCard(QFrame):
                 QPushButton:hover { background-color: #D0D0D0; }
                 QPushButton:pressed { background-color: #C0C0C0; }
             """)
+            edit_btn.setEnabled(has_update_perm)
+            if not has_update_perm:
+                edit_btn.setStyleSheet(edit_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
             buttons_added = True
@@ -2519,6 +2407,11 @@ class CRMCard(QFrame):
                 QPushButton:hover { background-color: #E67E22; }
                 QPushButton:pressed { background-color: #D35400; }
             """)
+            # S2.2: Визуальный индикатор если нет права crm.update
+            has_update_perm_survey = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+            survey_btn.setEnabled(has_update_perm_survey)
+            if not has_update_perm_survey:
+                survey_btn.setStyleSheet(survey_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
             survey_btn.clicked.connect(self.add_survey_date)
             layout.addWidget(survey_btn, 0)
             buttons_added = True
@@ -2546,6 +2439,11 @@ class CRMCard(QFrame):
                 QPushButton:hover { background-color: #8E44AD; }
                 QPushButton:pressed { background-color: #7D3C98; }
             """)
+            # S2.2: Визуальный индикатор если нет права crm.update
+            has_update_perm_tz = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+            tz_btn.setEnabled(has_update_perm_tz)
+            if not has_update_perm_tz:
+                tz_btn.setStyleSheet(tz_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
             tz_btn.clicked.connect(self.add_tech_task)
             layout.addWidget(tz_btn, 0)
             buttons_added = True
@@ -3237,7 +3135,12 @@ class CRMCard(QFrame):
                 parent = parent.parent()
 
 class PreviewLoaderThread(threading.Thread):
-    """Фоновый поток для загрузки превью изображений с Яндекс.Диска"""
+    """Фоновый поток для загрузки превью изображений с Яндекс.Диска.
+
+    ИСПРАВЛЕНИЕ R-04: Добавлен флаг _stopped для защиты от SEGFAULT при обращении
+    к удалённому Qt-объекту. Callback вызывается через QTimer.singleShot(0, ...)
+    для гарантии выполнения в главном потоке.
+    """
 
     def __init__(self, files_to_load, callback, yandex_token):
         super().__init__(daemon=True)
@@ -3246,10 +3149,38 @@ class PreviewLoaderThread(threading.Thread):
         self.callback = callback  # Функция вызывается с (file_id, pixmap)
         self.yandex_token = yandex_token
         self._stop_event = threading.Event()
+        # ИСПРАВЛЕНИЕ R-04: быстрый флаг для предотвращения callback на удалённый объект
+        self._stopped = False
 
     def stop(self):
-        """Остановить загрузку"""
+        """Остановить загрузку и заблокировать дальнейшие callback"""
+        self._stopped = True
         self._stop_event.set()
+
+    def _safe_callback(self, file_id, pixmap):
+        """Безопасный вызов callback через QTimer в главном потоке.
+
+        ИСПРАВЛЕНИЕ R-04: Проверяем _stopped перед вызовом, чтобы не обращаться
+        к удалённому Qt-объекту. QTimer.singleShot гарантирует вызов в main thread.
+        """
+        if self._stopped:
+            return
+        from PyQt5.QtCore import QTimer
+        # Захватываем значения в замыкание
+        _fid = file_id
+        _pix = pixmap
+        _cb = self.callback
+        _self = self
+
+        def _do_callback():
+            if _self._stopped:
+                return
+            try:
+                _cb(_fid, _pix)
+            except RuntimeError:
+                pass  # Qt-объект уже удалён
+
+        QTimer.singleShot(0, _do_callback)
 
     def run(self):
         """Загрузка превью в фоновом потоке"""
@@ -3275,7 +3206,8 @@ class PreviewLoaderThread(threading.Thread):
                 if os.path.exists(cache_path):
                     pixmap = PreviewGenerator.load_preview_from_cache(cache_path)
                     if pixmap:
-                        self.callback(file_id, pixmap)
+                        # ИСПРАВЛЕНИЕ R-04: безопасный callback через main thread
+                        self._safe_callback(file_id, pixmap)
                         continue
 
                 # Если нет public_link, пробуем скачать через Яндекс API по yandex_path
@@ -3315,7 +3247,8 @@ class PreviewLoaderThread(threading.Thread):
                     if pixmap:
                         # Сохраняем в кэш
                         PreviewGenerator.save_preview_to_cache(pixmap, cache_path)
-                        self.callback(file_id, pixmap)
+                        # ИСПРАВЛЕНИЕ R-04: безопасный callback через main thread
+                        self._safe_callback(file_id, pixmap)
 
                 finally:
                     # Удаляем временный файл

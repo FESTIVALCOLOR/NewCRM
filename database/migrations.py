@@ -131,6 +131,10 @@ class DatabaseMigrations:
                 self.add_agents_status_field()
                 # ======================================================
 
+                # ========== МИГРАЦИЯ: таблица городов ==========
+                self.migrate_add_cities_table()
+                # ===============================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
 
@@ -423,6 +427,31 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции agents status: {e}")
 
+    def migrate_add_cities_table(self):
+        """Добавить таблицу городов"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    status TEXT DEFAULT 'активный',
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+            # Seed дефолтные города
+            for city_name in ['СПБ', 'МСК', 'ВН']:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO cities (name) VALUES (?)",
+                    (city_name,)
+                )
+            conn.commit()
+            self.close()
+            print("[OK] Таблица cities создана (с seed-данными)")
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции cities: {e}")
+
     def add_third_payment_field(self):
         """Миграция: добавление поля third_payment"""
         try:
@@ -500,6 +529,8 @@ class DatabaseMigrations:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER NOT NULL,
             project_type TEXT NOT NULL,
+            project_subtype TEXT,
+            floors INTEGER DEFAULT 1,
             agent_type TEXT,
             city TEXT,
             contract_number TEXT UNIQUE NOT NULL,

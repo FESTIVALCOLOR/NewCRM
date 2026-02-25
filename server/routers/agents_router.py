@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from database import get_db, Agent, Employee
+from database import get_db, Agent, Employee, Contract
 from auth import get_current_user
 from permissions import require_permission
 
@@ -28,18 +28,16 @@ router = APIRouter(tags=["agents"])
 
 @router.get("/")
 async def get_all_agents(
+    include_deleted: bool = False,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Получить список всех агентов"""
-    agents = db.query(Agent).order_by(Agent.name).all()
-    return [{
-        "id": a.id,
-        "name": a.name,
-        "full_name": a.name,
-        "color": a.color or "#FFFFFF",
-        "status": a.status or "активный"
-    } for a in agents]
+    query = db.query(Agent).order_by(Agent.name)
+    if not include_deleted:
+        query = query.filter(Agent.status != 'удалён')
+    agents = query.all()
+    return [{"id": a.id, "name": a.name, "full_name": a.name, "color": a.color or "#FFFFFF", "status": a.status or "активный"} for a in agents]
 
 
 @router.post("/")
@@ -112,4 +110,38 @@ async def update_agent_color(
     except Exception as e:
         db.rollback()
         logger.exception(f"Ошибка при обновлении цвета агента: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+@router.delete("/{agent_id}")
+async def delete_agent(
+    agent_id: int,
+    current_user: Employee = Depends(require_permission("agents.delete")),
+    db: Session = Depends(get_db)
+):
+    """Мягкое удаление агента"""
+    try:
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise HTTPException(status_code=404, detail="Агент не найден")
+
+        # Проверить активные договоры
+        active_contracts = db.query(Contract).filter(
+            Contract.agent_type == agent.name,
+            Contract.status.notin_(['СДАН', 'РАСТОРГНУТ'])
+        ).count()
+        if active_contracts > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Невозможно удалить агента: {active_contracts} активных договоров"
+            )
+
+        agent.status = 'удалён'
+        db.commit()
+        return {"status": "success", "message": f"Агент '{agent.name}' удалён"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка при удалении агента: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")

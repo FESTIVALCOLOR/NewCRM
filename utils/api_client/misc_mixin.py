@@ -209,6 +209,18 @@ class MiscMixin:
             print(f"[API] Ошибка добавления агента: {e}")
             return False
 
+    def delete_agent(self, agent_id: int) -> bool:
+        """Удалить агента (мягкое удаление)"""
+        try:
+            response = self._request(
+                'DELETE',
+                f"{self.base_url}/api/v1/agents/{agent_id}"
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"[API] Ошибка удаления агента: {e}")
+            return False
+
     def update_agent_color(self, name: str, color: str) -> bool:
         """Обновить цвет агента"""
         try:
@@ -250,6 +262,44 @@ class MiscMixin:
             f"{self.base_url}/api/v1/agents/{agent_id}"
         )
         return self._handle_response(response)
+
+    # ==================== ГОРОДА ====================
+
+    def get_all_cities(self) -> List[Dict[str, Any]]:
+        """Получить список всех городов"""
+        try:
+            response = self._request(
+                'GET',
+                f"{self.base_url}/api/v1/cities"
+            )
+            return self._handle_response(response)
+        except Exception:
+            return []
+
+    def add_city(self, name: str) -> bool:
+        """Добавить новый город"""
+        try:
+            response = self._request(
+                'POST',
+                f"{self.base_url}/api/v1/cities",
+                json={"name": name}
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"[API] Ошибка добавления города: {e}")
+            return False
+
+    def delete_city(self, city_id: int) -> bool:
+        """Удалить город (мягкое удаление)"""
+        try:
+            response = self._request(
+                'DELETE',
+                f"{self.base_url}/api/v1/cities/{city_id}"
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"[API] Ошибка удаления города: {e}")
+            return False
 
     def search(self, query: str, limit: int = 50, entity_types: str = None) -> Dict[str, Any]:
         """Полнотекстовый поиск по клиентам, договорам, CRM карточкам"""

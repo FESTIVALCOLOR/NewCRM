@@ -24,6 +24,7 @@ import json
 import os
 import threading
 from utils.button_debounce import debounce_click
+from ui.crm_tab import _has_perm
 
 # ========== ИМПОРТ ДИАЛОГОВ (вынесены в contract_dialogs.py) ==========
 from ui.contract_dialogs import (
@@ -304,6 +305,12 @@ class ContractsTab(QWidget):
             ''')
             edit_btn.clicked.connect(lambda checked, c=contract: self.edit_contract(c))
 
+            # Проверка прав на редактирование договоров
+            can_edit = _has_perm(self.employee, self.api_client, 'contracts.update')
+            if not can_edit:
+                edit_btn.setEnabled(False)
+                edit_btn.setToolTip('Нет прав на редактирование')
+
             actions_layout.addWidget(view_btn)
             actions_layout.addWidget(edit_btn)
 
@@ -478,7 +485,8 @@ class ContractsTab(QWidget):
 
     def reset_filters(self):
         """Сброс всех фильтров и перезагрузка всех договоров"""
-        self.load_contracts()
+        # S9.4: QTimer.singleShot предотвращает UI freeze при сбросе
+        QTimer.singleShot(0, self.load_contracts)
 
     def apply_search(self, params):
         """Применение фильтров поиска"""
@@ -648,6 +656,12 @@ class ContractsTab(QWidget):
                 }
             ''')
             edit_btn.clicked.connect(lambda checked, c=contract: self.edit_contract(c))
+
+            # Проверка прав на редактирование договоров
+            can_edit = _has_perm(self.employee, self.api_client, 'contracts.update')
+            if not can_edit:
+                edit_btn.setEnabled(False)
+                edit_btn.setToolTip('Нет прав на редактирование')
 
             actions_layout.addWidget(view_btn)
             actions_layout.addWidget(edit_btn)

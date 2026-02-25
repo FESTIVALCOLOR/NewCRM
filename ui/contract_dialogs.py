@@ -22,7 +22,7 @@ from PyQt5.QtGui import QValidator, QDesktopServices, QCursor
 from PyQt5.QtCore import QUrl
 from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
-from config import PROJECT_TYPES, PROJECT_SUBTYPES, TEMPLATE_SUBTYPES, AGENTS, CITIES, YANDEX_DISK_TOKEN
+from config import PROJECT_TYPES, PROJECT_SUBTYPES, TEMPLATE_SUBTYPES, AGENTS, YANDEX_DISK_TOKEN
 from utils.icon_loader import IconLoader
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
@@ -396,32 +396,15 @@ class ContractDialog(QDialog):
         self.floors_label.hide()
         self.floors_spin.hide()
 
-        # ИСПРАВЛЕНИЕ: Загрузка агентов из БД с цветами
-        agent_layout = QHBoxLayout()
         self.agent_combo = CustomComboBox()
         self.reload_agents()
-        agent_layout.addWidget(self.agent_combo)
-        add_agent_btn = IconLoader.create_icon_button('settings2', '', 'Добавить', icon_size=14)
-        add_agent_btn.setMaximumWidth(28)
-        add_agent_btn.setFixedHeight(28)
-        add_agent_btn.setStyleSheet('padding: 0px 0px; font-size: 14px;')
-        add_agent_btn.setToolTip('Управление агентами')
-        add_agent_btn.clicked.connect(self.add_agent)
-        agent_layout.addWidget(add_agent_btn)
-        main_layout_form.addRow('Агент:', agent_layout)
+        main_layout_form.addRow('Агент:', self.agent_combo)
 
-        city_layout = QHBoxLayout()
         self.city_combo = CustomComboBox()
-        self.city_combo.addItems(CITIES)
-        city_layout.addWidget(self.city_combo)
-        add_city_btn = IconLoader.create_icon_button('settings2', '', 'Добавить', icon_size=14)
-        add_city_btn.setMaximumWidth(28)
-        add_city_btn.setFixedHeight(28)
-        add_city_btn.setStyleSheet('padding: 0px 0px; font-size: 14px;')
-        add_city_btn.setToolTip('Управление городами')
-        add_city_btn.clicked.connect(self.add_city)
-        city_layout.addWidget(add_city_btn)
-        main_layout_form.addRow('Город:', city_layout)
+        cities = self.data.get_all_cities()
+        for city in cities:
+            self.city_combo.addItem(city.get('name', ''))
+        main_layout_form.addRow('Город:', self.city_combo)
 
         self.contract_number = QLineEdit()
         self.contract_number.setPlaceholderText('№001-2024')
@@ -1907,14 +1890,16 @@ class ContractDialog(QDialog):
                 except Exception as e:
                     print(f"[fill_data] Ошибка дополнения из локальной БД: {e}")
 
+        # R-10 FIX: .get() вместо ['key'] для защиты от KeyError при неполных данных
+        client_id = self.contract_data.get('client_id')
         for i in range(self.client_combo.count()):
-            if self.client_combo.itemData(i) == self.contract_data['client_id']:
+            if self.client_combo.itemData(i) == client_id:
                 self.client_combo.setCurrentIndex(i)
                 break
-        
-        self.project_type.setCurrentText(self.contract_data['project_type'])
+
+        self.project_type.setCurrentText(self.contract_data.get('project_type', ''))
         # Подтип: сначала переключаем набор элементов, потом выбираем значение
-        pt = self.contract_data['project_type']
+        pt = self.contract_data.get('project_type', '')
         self.project_subtype.blockSignals(True)
         self.project_subtype.clear()
         if pt == 'Шаблонный':
@@ -1935,7 +1920,7 @@ class ContractDialog(QDialog):
             self.floors_spin.setValue(self.contract_data.get('floors', 1) or 1)
         self.agent_combo.setCurrentText(self.contract_data.get('agent_type', ''))
         self.city_combo.setCurrentText(self.contract_data.get('city', ''))
-        self.contract_number.setText(self.contract_data['contract_number'])
+        self.contract_number.setText(self.contract_data.get('contract_number', ''))
         
         if self.contract_data.get('contract_date'):
             self.contract_date.setDate(QDate.fromString(self.contract_data['contract_date'], 'yyyy-MM-dd'))
@@ -2851,13 +2836,17 @@ class ContractDialog(QDialog):
         # Создаем прогресс-диалог
         progress = create_progress_dialog("Загрузка файла", "Подготовка к загрузке...", "Отмена", 3, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         # Загружаем файл на Яндекс.Диск асинхронно
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(step, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
@@ -2993,13 +2982,17 @@ class ContractDialog(QDialog):
         # Создаем прогресс-диалог
         progress = create_progress_dialog("Загрузка файла", "Подготовка к загрузке...", "Отмена", 3, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         # Загружаем файл на Яндекс.Диск асинхронно
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(step, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
@@ -3140,12 +3133,16 @@ class ContractDialog(QDialog):
 
         progress = create_progress_dialog("Загрузка файла", "Подготовка к загрузке...", "Отмена", 3, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(step, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
@@ -3351,12 +3348,16 @@ class ContractDialog(QDialog):
 
         progress = create_progress_dialog("Загрузка чека", "Подготовка к загрузке...", "Отмена", 3, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(step, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))

@@ -103,6 +103,17 @@ async def api_version_compat(request, call_next):
     return await call_next(request)
 
 
+def seed_cities(db):
+    """Заполнить таблицу городов дефолтными значениями"""
+    from database import City
+    defaults = ['СПБ', 'МСК', 'ВН']
+    for name in defaults:
+        existing = db.query(City).filter(City.name == name).first()
+        if not existing:
+            db.add(City(name=name))
+    db.commit()
+
+
 @app.on_event("startup")
 async def startup_event():
     """Инициализация при запуске"""
@@ -162,6 +173,14 @@ async def startup_event():
 
         seed_permissions(db)
         logger.info("Permissions seeded")
+
+        # Seed городов по умолчанию (СПБ, МСК, ВН)
+        try:
+            seed_cities(db)
+            logger.info("Cities seeded")
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Cities seed: {e}")
 
         # Seed агентов по умолчанию (ПЕТРОВИЧ, ФЕСТИВАЛЬ)
         from database import Agent
@@ -343,12 +362,14 @@ app.include_router(sync_router, prefix="/api/v1/sync")
 from routers.payments_router import router as payments_router
 from routers.files_router import router as files_router
 from routers.agents_router import router as agents_router
+from routers.cities_router import router as cities_router
 from routers.heartbeat_router import router as heartbeat_router
 from routers.locks_router import router as locks_router
 
 app.include_router(payments_router, prefix="/api/v1/payments")
 app.include_router(files_router, prefix="/api/v1/files")
 app.include_router(agents_router, prefix="/api/v1/agents")
+app.include_router(cities_router, prefix="/api/v1/cities")
 app.include_router(heartbeat_router, prefix="/api/v1")
 app.include_router(locks_router, prefix="/api/v1/locks")
 
