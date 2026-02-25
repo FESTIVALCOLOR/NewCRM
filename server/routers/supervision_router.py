@@ -9,8 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from sqlalchemy import or_
+
 from database import (
-    get_db, Employee, Contract, ActivityLog,
+    get_db, Employee, Contract, ActivityLog, ProjectFile, Rate,
     SupervisionCard, SupervisionProjectHistory, StageExecutor,
     Payment, SupervisionTimelineEntry,
 )
@@ -40,6 +42,55 @@ _SUPERVISION_COLUMN_TO_STAGE = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def _calc_supervision_payment_amount(db: "Session", contract_id: int, role: str, stage_name: str = None) -> float:
+    """Рассчитать сумму оплаты надзора: area * rate_per_m2"""
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        return 0
+    area = float(contract.area) if contract.area else 0
+    rate_query = db.query(Rate).filter(
+        Rate.project_type == 'Авторский надзор',
+        Rate.role == role
+    )
+    if stage_name:
+        rate_query = rate_query.filter(or_(Rate.stage_name == stage_name, Rate.stage_name.is_(None)))
+    rate = rate_query.order_by(Rate.stage_name.desc().nullslast()).first()
+    if rate and rate.rate_per_m2:
+        return area * float(rate.rate_per_m2)
+    return 0
+
+
+def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", stage_name: str, user_id: int):
+    """Авто-создание оплат ДАН и СМП при завершении стадии надзора"""
+    # Проверяем дубли
+    existing = db.query(Payment).filter(
+        Payment.supervision_card_id == card.id,
+        Payment.stage_name == stage_name
+    ).first()
+    if existing:
+        return
+
+    current_month = datetime.utcnow().strftime('%Y-%m')
+
+    for emp_id, role in [(card.dan_id, 'ДАН'), (card.senior_manager_id, 'Старший менеджер проектов')]:
+        if not emp_id:
+            continue
+        amount = _calc_supervision_payment_amount(db, card.contract_id, role, stage_name)
+        payment = Payment(
+            contract_id=card.contract_id,
+            employee_id=emp_id,
+            role=role,
+            stage_name=stage_name,
+            calculated_amount=amount,
+            final_amount=amount,
+            payment_type='Полная оплата',
+            report_month=current_month,
+            supervision_card_id=card.id,
+        )
+        db.add(payment)
+        logger.info(f"Авто-оплата: card={card.id}, role={role}, stage={stage_name}, amount={amount}")
 
 
 def _count_business_days(start_date, end_date):
@@ -251,6 +302,40 @@ async def update_supervision_card(
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
         update_data = updates.model_dump(exclude_unset=True)
+
+        # Валидация роли при назначении ДАН
+        DAN_ROLES = ['ДАН', 'Дизайнер авторского надзора']
+        if 'dan_id' in update_data and update_data['dan_id']:
+            dan_employee = db.query(Employee).filter(Employee.id == update_data['dan_id']).first()
+            if not dan_employee:
+                raise HTTPException(status_code=404, detail="Сотрудник (ДАН) не найден")
+            if dan_employee.role not in DAN_ROLES:
+                logger.warning(f"Назначен ДАН с ролью '{dan_employee.role}' (ожидается {DAN_ROLES})")
+
+        # Запись истории при смене назначенных сотрудников
+        for field_name, label in [('dan_id', 'ДАН'), ('senior_manager_id', 'Старший менеджер')]:
+            if field_name in update_data:
+                old_val = getattr(card, field_name)
+                new_val = update_data[field_name]
+                if old_val != new_val:
+                    # Получаем имена сотрудников
+                    old_name = ''
+                    new_name = ''
+                    if old_val:
+                        old_emp = db.query(Employee).filter(Employee.id == old_val).first()
+                        old_name = old_emp.full_name if old_emp else f'ID:{old_val}'
+                    if new_val:
+                        new_emp = db.query(Employee).filter(Employee.id == new_val).first()
+                        new_name = new_emp.full_name if new_emp else f'ID:{new_val}'
+                    msg = f'{label} изменён: {old_name or "—"} → {new_name or "—"}'
+                    history = SupervisionProjectHistory(
+                        supervision_card_id=card_id,
+                        entry_type="assignment_change",
+                        message=msg,
+                        created_by=current_user.id
+                    )
+                    db.add(history)
+
         for field, value in update_data.items():
             setattr(card, field, value)
 
@@ -364,6 +449,15 @@ async def move_supervision_card_to_column(
                                 pass
                     logger.info(f"Supervision card {card_id} auto-resumed from 'В ожидании', pause_days={pause_days}")
 
+                # Запись авто-resume в историю
+                resume_history = SupervisionProjectHistory(
+                    supervision_card_id=card_id,
+                    entry_type="resume",
+                    message=f"Авто-возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Авто-возобновлено",
+                    created_by=current_user.id
+                )
+                db.add(resume_history)
+
                 # Сдвигаем deadline карточки
                 if card.deadline:
                     try:
@@ -408,6 +502,9 @@ async def move_supervision_card_to_column(
                         except (ValueError, TypeError):
                             pass
                     logger.info(f"Timeline actual_date: card={card_id}, stage={stage_code}, date={today_str}")
+
+            # Авто-создание оплат при уходе из стадии
+            _auto_create_supervision_payments(db, card, old_column, current_user.id)
 
         db.commit()
         db.refresh(card)
@@ -704,6 +801,13 @@ async def delete_supervision_order(
         card = db.query(SupervisionCard).filter(SupervisionCard.id == supervision_card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
+
+        # Удаляем файлы проекта, привязанные к контракту надзора
+        if card.contract_id:
+            db.query(ProjectFile).filter(
+                ProjectFile.contract_id == card.contract_id,
+                ProjectFile.stage.like('Стадия%')
+            ).delete(synchronize_session=False)
 
         # Удаляем историю
         db.query(SupervisionProjectHistory).filter(

@@ -35,6 +35,7 @@ from telegram_service import get_telegram_service, PYROGRAM_AVAILABLE
 from email_service import get_email_service
 from services.notification_service import (
     send_invites_to_members, build_script_context, decline_name_dative,
+    trigger_messenger_notification, trigger_supervision_notification,
 )
 
 logger = logging.getLogger(__name__)
@@ -205,8 +206,6 @@ async def trigger_script_endpoint(
     db: Session = Depends(get_db)
 ):
     """Ручная отправка скрипта мессенджера"""
-    from services.notification_service import trigger_messenger_notification, trigger_supervision_notification
-
     if request.entity_type == 'supervision':
         await trigger_supervision_notification(db, request.card_id, request.script_type)
     else:
@@ -307,6 +306,15 @@ async def create_messenger_chat(
 
     # Рассылаем invite-ссылки асинхронно
     asyncio.create_task(send_invites_to_members(chat.id, db))
+
+    # Авто-триггер начального скрипта project_start
+    try:
+        if data.crm_card_id:
+            asyncio.create_task(
+                trigger_messenger_notification(db, data.crm_card_id, 'project_start')
+            )
+    except Exception as e:
+        logger.warning(f"Не удалось отправить project_start: {e}")
 
     return MessengerChatDetailResponse(
         chat=MessengerChatResponse.model_validate(chat),

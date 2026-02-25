@@ -43,7 +43,7 @@ def calc_area_coefficient(area: float) -> int:
 
 
 def networkdays(start_date, end_date):
-    """Расчёт рабочих дней между двумя датами (NETWORKDAYS аналог)"""
+    """Расчёт рабочих дней между двумя датами (с учётом праздников РФ)"""
     if not start_date or not end_date:
         return 0
     if isinstance(start_date, str):
@@ -60,18 +60,14 @@ def networkdays(start_date, end_date):
     if end_date < start_date:
         return 0
 
-    try:
-        import numpy as np
-        days = np.busday_count(start_date, end_date)
-        return int(days)
-    except Exception:
-        count = 0
-        current = start_date
-        while current < end_date:
-            if current.weekday() < 5:
-                count += 1
-            current += timedelta(days=1)
-        return count
+    from utils.date_utils import is_working_day
+    count = 0
+    current = start_date
+    while current < end_date:
+        if is_working_day(current):
+            count += 1
+        current += timedelta(days=1)
+    return count
 
 
 # Цвета
@@ -193,9 +189,11 @@ class ProjectTimelineWidget(QWidget):
         header_layout.addWidget(self.lbl_address)
 
         subtype_text = f'  |  Подтип: {project_subtype}' if project_subtype else ''
+        # k_multiplier (коэфф. площади) отображается только для индивидуальных проектов
+        k_text = f'  |  Коэфф. площади (K): {K}' if project_type == 'Индивидуальный' else ''
         info_line = QLabel(
             f'Тип: {project_type}{subtype_text}  |  Площадь: {area} м\u00b2  |  '
-            f'Срок по договору: {contract_term} р.д.  |  Коэфф. площади (K): {K}'
+            f'Срок по договору: {contract_term} р.д.{k_text}'
         )
         info_line.setStyleSheet('font-size: 11px; color: #666;')
         header_layout.addWidget(info_line)

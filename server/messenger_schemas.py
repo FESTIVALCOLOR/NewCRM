@@ -99,6 +99,7 @@ class MessengerScriptCreate(BaseModel):
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
     message_template: str = Field(..., min_length=1)
+    memo_file_path: Optional[str] = None
     use_auto_deadline: bool = True
     is_enabled: bool = True
     sort_order: int = 0
@@ -110,6 +111,7 @@ class MessengerScriptUpdate(BaseModel):
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
     message_template: Optional[str] = None
+    memo_file_path: Optional[str] = None
     use_auto_deadline: Optional[bool] = None
     is_enabled: Optional[bool] = None
     sort_order: Optional[int] = None
@@ -122,6 +124,7 @@ class MessengerScriptResponse(BaseModel):
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
     message_template: str
+    memo_file_path: Optional[str] = None
     use_auto_deadline: bool
     is_enabled: bool
     sort_order: int

@@ -825,6 +825,7 @@ class MessengerScript(Base):
     stage_name = Column(String, nullable=True)
 
     message_template = Column(Text, nullable=False)
+    memo_file_path = Column(String, nullable=True)  # Путь к PDF-памятке на Яндекс.Диске
     use_auto_deadline = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)

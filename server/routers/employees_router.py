@@ -223,7 +223,7 @@ async def get_permission_definitions(
 
 @router.get("/permissions/role-matrix", response_model=RoleMatrixResponse)
 async def get_role_matrix(
-    current_user: Employee = Depends(require_permission("employees.update")),
+    current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Получить текущую матрицу прав по ролям"""

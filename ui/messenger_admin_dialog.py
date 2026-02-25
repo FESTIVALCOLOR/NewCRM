@@ -697,6 +697,51 @@ class MessengerAdminDialog(QDialog):
         opts_row.addStretch()
         ed_layout.addLayout(opts_row)
 
+        # PDF-памятка клиенту
+        memo_row = QHBoxLayout()
+        memo_row.setSpacing(8)
+        memo_label = QLabel("PDF-памятка:")
+        memo_label.setStyleSheet("font-size: 11px; color: #555;")
+        memo_row.addWidget(memo_label)
+
+        self._memo_file_label = QLabel("Не загружена")
+        self._memo_file_label.setStyleSheet(
+            "font-size: 11px; color: #888; padding: 4px 8px; "
+            "background: #F5F5F5; border: 1px solid #E0E0E0; border-radius: 3px;"
+        )
+        self._memo_file_label.setMinimumWidth(200)
+        memo_row.addWidget(self._memo_file_label, 1)
+
+        self._memo_upload_btn = QPushButton("Загрузить PDF")
+        self._memo_upload_btn.setFixedHeight(28)
+        self._memo_upload_btn.setCursor(Qt.PointingHandCursor)
+        self._memo_upload_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E3F2FD; color: #1976D2;
+                border: 1px solid #1976D2; border-radius: 3px;
+                font-size: 11px; padding: 0 12px;
+            }
+            QPushButton:hover { background-color: #BBDEFB; }
+        """)
+        self._memo_upload_btn.clicked.connect(self._on_upload_memo)
+        memo_row.addWidget(self._memo_upload_btn)
+
+        self._memo_clear_btn = QPushButton("Убрать")
+        self._memo_clear_btn.setFixedHeight(28)
+        self._memo_clear_btn.setCursor(Qt.PointingHandCursor)
+        self._memo_clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFF; color: #999;
+                border: 1px solid #CCC; border-radius: 3px;
+                font-size: 11px; padding: 0 8px;
+            }
+            QPushButton:hover { background-color: #F5F5F5; }
+        """)
+        self._memo_clear_btn.clicked.connect(self._on_clear_memo)
+        memo_row.addWidget(self._memo_clear_btn)
+        ed_layout.addLayout(memo_row)
+        self._memo_file_path = None
+
         # Кнопки скрипта
         script_btns = QHBoxLayout()
         script_btns.setSpacing(8)
@@ -1098,6 +1143,23 @@ class MessengerAdminDialog(QDialog):
         self._script_enabled_cb.setChecked(script.get("is_enabled", True))
         self._script_auto_deadline_cb.setChecked(script.get("use_auto_deadline", True))
 
+        # PDF-памятка
+        memo = script.get("memo_file_path") or None
+        self._memo_file_path = memo
+        if memo:
+            import os
+            self._memo_file_label.setText(os.path.basename(memo))
+            self._memo_file_label.setStyleSheet(
+                "font-size: 11px; color: #1976D2; padding: 4px 8px; "
+                "background: #E3F2FD; border: 1px solid #1976D2; border-radius: 3px;"
+            )
+        else:
+            self._memo_file_label.setText("Не загружена")
+            self._memo_file_label.setStyleSheet(
+                "font-size: 11px; color: #888; padding: 4px 8px; "
+                "background: #F5F5F5; border: 1px solid #E0E0E0; border-radius: 3px;"
+            )
+
         self._on_script_type_changed()
 
     def _populate_stage_combo(self):
@@ -1264,10 +1326,28 @@ class MessengerAdminDialog(QDialog):
             CustomMessageBox(self, "Ошибка", "Текст скрипта не может быть пустым", "warning").exec_()
             return
 
+        # Загрузка PDF-памятки на Яндекс.Диск при необходимости
+        memo_path = getattr(self, '_memo_file_path', None)
+        memo_server_path = None
+        if memo_path and not memo_path.startswith('/'):
+            # Локальный файл — нужно загрузить на сервер
+            import os
+            file_name = os.path.basename(memo_path)
+            yandex_path = f"/CRM/memo/{file_name}"
+            try:
+                if self.data_access:
+                    self.data_access.upload_file(memo_path, yandex_path)
+                    memo_server_path = yandex_path
+            except Exception:
+                memo_server_path = memo_path  # fallback — сохраняем локальный путь
+        elif memo_path:
+            memo_server_path = memo_path
+
         data = {
             "script_type": self._script_type_combo.currentData(),
             "stage_name": self._script_stage_combo.currentData() or None,
             "message_template": text,
+            "memo_file_path": memo_server_path,
             "is_enabled": self._script_enabled_cb.isChecked(),
             "use_auto_deadline": self._script_auto_deadline_cb.isChecked(),
         }
@@ -1304,6 +1384,32 @@ class MessengerAdminDialog(QDialog):
                 CustomMessageBox(
                     self, "Ошибка", f"Не удалось удалить:\n{str(e)}", "error"
                 ).exec_()
+
+    def _on_upload_memo(self):
+        """Загрузить PDF-памятку для скрипта"""
+        from PyQt5.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите PDF-памятку", "",
+            "PDF файлы (*.pdf);;Все файлы (*)"
+        )
+        if file_path:
+            import os
+            file_name = os.path.basename(file_path)
+            self._memo_file_path = file_path
+            self._memo_file_label.setText(file_name)
+            self._memo_file_label.setStyleSheet(
+                "font-size: 11px; color: #1976D2; padding: 4px 8px; "
+                "background: #E3F2FD; border: 1px solid #1976D2; border-radius: 3px;"
+            )
+
+    def _on_clear_memo(self):
+        """Убрать PDF-памятку"""
+        self._memo_file_path = None
+        self._memo_file_label.setText("Не загружена")
+        self._memo_file_label.setStyleSheet(
+            "font-size: 11px; color: #888; padding: 4px 8px; "
+            "background: #F5F5F5; border: 1px solid #E0E0E0; border-radius: 3px;"
+        )
 
     # ================================================================
     # Сохранение настроек
