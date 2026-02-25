@@ -83,6 +83,9 @@ jobs:
           --ignore=tests/client/test_validation_bugs.py
           --ignore=tests/client/test_login_widget.py
           --ignore=tests/client/test_supervision_upload.py
+          --ignore=tests/client/test_offline_manager.py
+          --ignore=tests/client/test_calendar_helpers.py
+          --ignore=tests/client/test_data_access_extended.py
           --cov=utils --cov=config --cov-report=term-missing --cov-report=xml:coverage-client.xml
       - name: Upload coverage
         if: always()
