@@ -802,11 +802,12 @@ async def delete_supervision_order(
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
-        # Удаляем файлы проекта, привязанные к контракту надзора
+        # Удаляем файлы проекта, привязанные к стадиям надзора (не CRM-файлы)
         if card.contract_id:
+            supervision_stage_names = list(SUPERVISION_STAGES.keys())
             db.query(ProjectFile).filter(
                 ProjectFile.contract_id == card.contract_id,
-                ProjectFile.stage.like('Стадия%')
+                ProjectFile.stage.in_(supervision_stage_names)
             ).delete(synchronize_session=False)
 
         # Удаляем историю

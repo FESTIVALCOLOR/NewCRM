@@ -385,6 +385,18 @@ async def get_project_statistics(
             if c.agent_type:
                 by_agents[c.agent_type] = by_agents.get(c.agent_type, 0) + 1
 
+        # По стадиям (column_name CRM-карточек)
+        by_stages = {}
+        contract_ids = [c.id for c in contracts]
+        if contract_ids:
+            stage_rows = db.query(
+                CRMCard.column_name,
+                func.count(CRMCard.id).label("count")
+            ).filter(
+                CRMCard.contract_id.in_(contract_ids)
+            ).group_by(CRMCard.column_name).all()
+            by_stages = {row.column_name: row.count for row in stage_rows}
+
         return {
             'total_orders': total_orders,
             'total_area': float(total_area),
@@ -394,7 +406,7 @@ async def get_project_statistics(
             'overdue': overdue,
             'by_cities': by_cities,
             'by_agents': by_agents,
-            'by_stages': {}  # TODO: реализовать если нужно
+            'by_stages': by_stages,
         }
 
     except Exception as e:
@@ -523,10 +535,15 @@ async def get_supervision_statistics(
 
         # Просрочки (дедлайн прошел, статус АВТОРСКИЙ НАДЗОР)
         today = date_type.today()
-        overdue = len([
-            c for c in cards
-            if c.deadline and c.deadline < today and c.contract.status == 'АВТОРСКИЙ НАДЗОР'
-        ])
+        def _is_overdue(card):
+            if not card.deadline or card.contract.status != 'АВТОРСКИЙ НАДЗОР':
+                return False
+            try:
+                dl = date_type.fromisoformat(card.deadline) if isinstance(card.deadline, str) else card.deadline
+                return dl < today
+            except (ValueError, TypeError):
+                return False
+        overdue = len([c for c in cards if _is_overdue(c)])
 
         # По городам
         by_cities = {}
@@ -540,6 +557,12 @@ async def get_supervision_statistics(
             if c.contract.agent_type:
                 by_agents[c.contract.agent_type] = by_agents.get(c.contract.agent_type, 0) + 1
 
+        # По стадиям (column_name карточек надзора)
+        by_stages = {}
+        for c in cards:
+            stage = c.column_name or 'Не указана'
+            by_stages[stage] = by_stages.get(stage, 0) + 1
+
         return {
             'total_orders': total_orders,
             'total_area': float(total_area),
@@ -549,7 +572,7 @@ async def get_supervision_statistics(
             'overdue': overdue,
             'by_cities': by_cities,
             'by_agents': by_agents,
-            'by_stages': {}  # TODO: реализовать если нужно
+            'by_stages': by_stages,
         }
 
     except Exception as e:
