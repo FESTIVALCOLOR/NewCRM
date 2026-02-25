@@ -61,7 +61,7 @@ class AdminDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #CCCCCC;
+                border: 1px solid #E0E0E0;
                 border-radius: 10px;
             }
         """)

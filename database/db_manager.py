@@ -3732,10 +3732,10 @@ class DatabaseManager(DatabaseMigrations):
         try:
             conn = self.connect()
             cursor = conn.cursor()
-            cursor.execute('SELECT id, name, color FROM agents ORDER BY name')
+            cursor.execute('SELECT id, name, color, status FROM agents ORDER BY name')
             rows = cursor.fetchall()
             self.close()
-            return [{'id': r[0], 'name': r[1], 'color': r[2]} for r in rows]
+            return [{'id': r[0], 'name': r[1], 'color': r[2], 'full_name': r[1], 'status': r[3] if len(r) > 3 and r[3] else 'активный'} for r in rows]
         except Exception as e:
             print(f"[ERROR] Ошибка получения агентов: {e}")
             return []

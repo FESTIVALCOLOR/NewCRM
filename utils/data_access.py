@@ -1598,6 +1598,15 @@ class DataAccess(QObject):
         if self.api_client:
             try:
                 return self.api_client.delete_agent(agent_id)
+            except (ConnectionError, TimeoutError, OSError) as e:
+                _safe_log(f"[DataAccess] API delete_agent network error: {e}")
+                if self.db:
+                    try:
+                        self.db.delete_agent(agent_id)
+                    except Exception:
+                        pass
+                self._queue_operation('delete', 'agent', agent_id, {})
+                return True
             except Exception as e:
                 _safe_log(f"[DataAccess] API delete_agent error: {e}")
         if self.db:
@@ -1646,29 +1655,48 @@ class DataAccess(QObject):
             return []
 
     def add_city(self, name: str) -> bool:
-        """Добавить город"""
-        result = False
-        if self.db:
-            try:
-                result = self.db.add_city(name)
-            except Exception as e:
-                _safe_log(f"[DataAccess] DB add_city error: {e}")
+        """Добавить город (API-first с fallback)"""
         if self.api_client:
             try:
-                api_result = self.api_client.add_city(name)
-                result = result or api_result
+                result = self.api_client.add_city(name)
+                if result and self.db:
+                    try:
+                        self.db.add_city(name)
+                    except Exception:
+                        pass
+                return result
+            except (ConnectionError, TimeoutError, OSError) as e:
+                _safe_log(f"[DataAccess] API add_city network error: {e}")
+                if self.db:
+                    try:
+                        self.db.add_city(name)
+                    except Exception:
+                        pass
+                self._queue_operation('create', 'city', None, {'name': name})
+                return True
             except Exception as e:
                 _safe_log(f"[DataAccess] API add_city error: {e}")
-                if not result:
-                    self._queue_operation('create', 'city', None, {'name': name})
-                    result = True
-        return result
+        if self.db:
+            try:
+                return self.db.add_city(name)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB add_city error: {e}")
+        return False
 
     def delete_city(self, city_id: int) -> bool:
-        """Удалить город"""
+        """Удалить город (API-first с fallback)"""
         if self.api_client:
             try:
                 return self.api_client.delete_city(city_id)
+            except (ConnectionError, TimeoutError, OSError) as e:
+                _safe_log(f"[DataAccess] API delete_city network error: {e}")
+                if self.db:
+                    try:
+                        self.db.delete_city(city_id)
+                    except Exception:
+                        pass
+                self._queue_operation('delete', 'city', city_id, {})
+                return True
             except Exception as e:
                 _safe_log(f"[DataAccess] API delete_city error: {e}")
         if self.db:
