@@ -23,26 +23,26 @@
 - ✅ E2E-DEEP-06: Углубить test_e2e_notifications.py
 - ✅ E2E-DEEP-07: Углубить test_e2e_heartbeat.py
 - ✅ E2E-DEEP-08: Углубить test_e2e_project_templates.py
-- ⬜ REWRITE-01: Переписать фиктивные offline тесты
+- ✅ REWRITE-01: Переписать фиктивные offline тесты
 
 ### Часть 3: Этап 2 — Закрытие пробелов
-- ⬜ E2E-NEW-01: E2E тесты для cities_router
-- ⬜ UTIL-01: Unit тесты для db_security.py
-- ⬜ UTIL-02: Unit тесты для pdf_generator.py
-- ⬜ UTIL-03: Unit тесты для calendar_helpers.py
-- ⬜ UTIL-04: Unit тесты для button_debounce.py
-- ⬜ UTIL-05: Unit тесты для db_sync.py
-- ⬜ UTIL-06: Unit тесты для update_manager.py
+- ✅ E2E-NEW-01: E2E тесты для cities_router
+- ✅ UTIL-01: Unit тесты для db_security.py
+- ✅ UTIL-02: Unit тесты для pdf_generator.py
+- ✅ UTIL-03: Unit тесты для calendar_helpers.py
+- ✅ UTIL-04: Unit тесты для button_debounce.py
+- ✅ UTIL-05: Unit тесты для db_sync.py
+- ✅ UTIL-06: Unit тесты для update_manager.py
 - ⬜ UTIL-07: Unit тесты для остальных утилит (пакет)
-- ⬜ OFFLINE-01: Unit тесты для OfflineManager (реальные)
-- ⬜ CONTRACT-01: Contract тесты API-DB ключей
+- ✅ OFFLINE-01: Unit тесты для OfflineManager (реальные)
+- ✅ CONTRACT-01: Contract тесты API-DB ключей
 - ⬜ INFRA-06: CI job test-contract
-- ⬜ UI-01: Тесты admin_dialog.py
-- ⬜ UI-02: Тесты agents_cities_widget.py
-- ⬜ UI-03: Тесты permissions_matrix_widget.py
-- ⬜ UI-04: Тесты supervision_timeline_widget.py
-- ⬜ UI-05: Тесты timeline_widget.py
-- ⬜ UI-06: Тесты для остальных 15 UI модулей (пакет)
+- ✅ UI-01: Тесты admin_dialog.py
+- ✅ UI-02: Тесты agents_cities_widget.py
+- ✅ UI-03: Тесты permissions_matrix_widget.py
+- ✅ UI-04: Тесты supervision_timeline_widget.py
+- ✅ UI-05: Тесты timeline_widget.py
+- ✅ UI-06: Тесты для остальных 15 UI модулей (пакет)
 
 ### Часть 4: Этап 3 — Hardening
 - ⬜ MIGRATION-01: Тесты путей миграции БД
@@ -51,6 +51,10 @@
 - ⬜ DUAL-MODE-01: Тесты DataAccess двухрежимности
 - ⬜ UI-INTERACT-01: Расширенные UI тесты взаимодействий
 - ⬜ REGRESSION-01: Автоматизация regression suite
+
+### Дополнительные этапы (реализовано)
+- ✅ Этап 5: Полное покрытие data_access.py (+169 тестов)
+- ✅ Этап 6: Углублённые E2E роутеров — clients, contracts, action_history, reports, messenger, supervision, crm_lifecycle (+86 тестов)
 
 ### Часть 5: Целевые метрики
 ### Часть 6: Порядок реализации
