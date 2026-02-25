@@ -718,6 +718,18 @@ class PaymentBase(BaseModel):
             raise ValueError('Сумма не может быть отрицательной')
         return v
 
+    @field_validator('payment_type', mode='before')
+    @classmethod
+    def validate_payment_type(cls, v):
+        """Допустимые типы платежей"""
+        allowed = {'Наличные', 'Безналичные', 'Карта', None}
+        if v is not None and v not in allowed:
+            raise ValueError(
+                f"Недопустимый тип платежа '{v}'. "
+                f"Допустимые значения: Наличные, Безналичные, Карта"
+            )
+        return v
+
     @field_validator('report_month', mode='before')
     @classmethod
     def validate_report_month_format(cls, v):
@@ -743,6 +755,18 @@ class PaymentUpdate(BaseModel):
     paid_by: Optional[int] = None
     reassigned: Optional[bool] = None  # ДОБАВЛЕНО 28.01.2026: Флаг переназначения
     old_employee_id: Optional[int] = None  # ДОБАВЛЕНО 28.01.2026: ID старого исполнителя
+
+    @field_validator('payment_type', mode='before')
+    @classmethod
+    def validate_payment_type(cls, v):
+        """Допустимые типы платежей"""
+        allowed = {'Наличные', 'Безналичные', 'Карта', None}
+        if v is not None and v not in allowed:
+            raise ValueError(
+                f"Недопустимый тип платежа '{v}'. "
+                f"Допустимые значения: Наличные, Безналичные, Карта"
+            )
+        return v
 
     @field_validator('manual_amount', 'final_amount', mode='before')
     @classmethod

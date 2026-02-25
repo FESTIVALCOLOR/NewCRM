@@ -406,37 +406,37 @@ class SupervisionCardEditDialog(QDialog):
         buttons_layout.addWidget(self.sv_open_chat_btn)
         buttons_layout.addWidget(self.sv_delete_chat_btn)
 
-        # --- Кнопки скриптов мессенджера (надзор) ---
+        # --- Кнопки скриптов мессенджера (надзор, иконки без текста) ---
         self.sv_start_script_btn = IconLoader.create_icon_button(
-            'send', 'Начальный скрипт', 'Отправить начальный скрипт в чат', icon_size=14
+            'send', '', 'Начальный скрипт — отправить в чат', icon_size=16
         )
         self.sv_start_script_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff; color: #333333;
-                padding: 0px 16px; border-radius: 4px; border: 1px solid #d9d9d9;
-                font-weight: bold; max-height: 36px; min-height: 36px;
+                padding: 0px; border-radius: 4px; border: 1px solid #d9d9d9;
+                max-height: 36px; min-height: 36px;
             }
             QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
             QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
             QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
         """)
-        self.sv_start_script_btn.setFixedHeight(36)
+        self.sv_start_script_btn.setFixedSize(36, 36)
         self.sv_start_script_btn.clicked.connect(self._on_send_supervision_start_script)
 
         self.sv_end_script_btn = IconLoader.create_icon_button(
-            'check-circle', 'Завершающий скрипт', 'Отправить завершающий скрипт в чат', icon_size=14
+            'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
         )
         self.sv_end_script_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff; color: #333333;
-                padding: 0px 16px; border-radius: 4px; border: 1px solid #d9d9d9;
-                font-weight: bold; max-height: 36px; min-height: 36px;
+                padding: 0px; border-radius: 4px; border: 1px solid #d9d9d9;
+                max-height: 36px; min-height: 36px;
             }
             QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
             QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
             QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
         """)
-        self.sv_end_script_btn.setFixedHeight(36)
+        self.sv_end_script_btn.setFixedSize(36, 36)
         self.sv_end_script_btn.clicked.connect(self._on_send_supervision_end_script)
 
         buttons_layout.addWidget(self.sv_start_script_btn)

@@ -14,7 +14,7 @@ from sqlalchemy import or_
 from database import (
     get_db, Employee, Contract, ActivityLog, ProjectFile, Rate,
     SupervisionCard, SupervisionProjectHistory, StageExecutor,
-    Payment, SupervisionTimelineEntry,
+    Payment, SupervisionTimelineEntry, MessengerChat,
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -93,12 +93,27 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
         logger.info(f"Авто-оплата: card={card.id}, role={role}, stage={stage_name}, amount={amount}")
 
 
+RUSSIAN_HOLIDAYS = [
+    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+    (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4),
+]
+
+
+def _is_working_day(d):
+    """Рабочий ли день (учитывает выходные + праздники РФ)"""
+    if d.weekday() in [5, 6]:
+        return False
+    if (d.month, d.day) in RUSSIAN_HOLIDAYS:
+        return False
+    return True
+
+
 def _count_business_days(start_date, end_date):
-    """Подсчёт рабочих дней между двумя датами (пн-пт)"""
+    """Подсчёт рабочих дней между двумя датами (с учётом праздников РФ)"""
     days = 0
     current = start_date
     while current < end_date:
-        if current.weekday() < 5:  # пн=0, пт=4
+        if _is_working_day(current):
             days += 1
         current += timedelta(days=1)
     return days
@@ -452,7 +467,7 @@ async def move_supervision_card_to_column(
                 # Запись авто-resume в историю
                 resume_history = SupervisionProjectHistory(
                     supervision_card_id=card_id,
-                    entry_type="resume",
+                    entry_type="auto_resume",
                     message=f"Авто-возобновлено (пауза: {pause_days} дн.)" if pause_days > 0 else "Авто-возобновлено",
                     created_by=current_user.id
                 )
@@ -822,6 +837,11 @@ async def delete_supervision_order(
         db.query(SupervisionTimelineEntry).filter(
             SupervisionTimelineEntry.supervision_card_id == supervision_card_id
         ).delete()
+
+        # Удаляем привязанные чаты мессенджера
+        db.query(MessengerChat).filter(
+            MessengerChat.supervision_card_id == supervision_card_id
+        ).delete(synchronize_session=False)
 
         # Удаляем карточку
         db.delete(card)

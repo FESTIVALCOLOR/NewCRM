@@ -1071,18 +1071,17 @@ class CardEditDialog(QDialog):
             buttons_layout.addWidget(self.open_chat_btn)
             buttons_layout.addWidget(self.delete_chat_btn)
 
-            # --- Кнопки скриптов мессенджера ---
+            # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
             self.start_script_btn = IconLoader.create_icon_button(
-                'send', 'Начальный скрипт', 'Отправить начальный скрипт в чат', icon_size=14
+                'send', '', 'Начальный скрипт — отправить в чат', icon_size=16
             )
             self.start_script_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffffff;
                     color: #333333;
-                    padding: 0px 16px;
+                    padding: 0px;
                     border-radius: 4px;
                     border: 1px solid #d9d9d9;
-                    font-weight: bold;
                     max-height: 36px;
                     min-height: 36px;
                 }
@@ -1090,20 +1089,19 @@ class CardEditDialog(QDialog):
                 QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
                 QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
             """)
-            self.start_script_btn.setFixedHeight(36)
+            self.start_script_btn.setFixedSize(36, 36)
             self.start_script_btn.clicked.connect(self._on_send_start_script)
 
             self.end_script_btn = IconLoader.create_icon_button(
-                'check-circle', 'Завершающий скрипт', 'Отправить завершающий скрипт в чат', icon_size=14
+                'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
             )
             self.end_script_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffffff;
                     color: #333333;
-                    padding: 0px 16px;
+                    padding: 0px;
                     border-radius: 4px;
                     border: 1px solid #d9d9d9;
-                    font-weight: bold;
                     max-height: 36px;
                     min-height: 36px;
                 }
@@ -1111,7 +1109,7 @@ class CardEditDialog(QDialog):
                 QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
                 QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
             """)
-            self.end_script_btn.setFixedHeight(36)
+            self.end_script_btn.setFixedSize(36, 36)
             self.end_script_btn.clicked.connect(self._on_send_end_script)
 
             buttons_layout.addWidget(self.start_script_btn)

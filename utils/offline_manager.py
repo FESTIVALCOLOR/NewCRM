@@ -115,6 +115,7 @@ class OfflineManager(QObject):
         self._status = ConnectionStatus.OFFLINE
         self._check_timer = None
         self._sync_lock = threading.Lock()
+        self._db_lock = threading.RLock()  # Потокобезопасный lock для SQLite операций
         self._is_syncing = False
 
         # Инициализация таблицы очереди операций
@@ -132,44 +133,45 @@ class OfflineManager(QObject):
 
     def _init_operations_queue_table(self):
         """Создание таблицы очереди операций"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS offline_operations_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                operation_type TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id INTEGER,
-                data TEXT NOT NULL,
-                status TEXT DEFAULT 'pending',
-                created_at TEXT NOT NULL,
-                synced_at TEXT,
-                error_message TEXT,
-                retry_count INTEGER DEFAULT 0,
-                server_entity_id INTEGER,
-                signature TEXT
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS offline_operations_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_type TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id INTEGER,
+                    data TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    created_at TEXT NOT NULL,
+                    synced_at TEXT,
+                    error_message TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    server_entity_id INTEGER,
+                    signature TEXT
+                )
+            """)
 
-        # Миграция: добавить колонку signature если её нет
-        try:
-            cursor.execute("ALTER TABLE offline_operations_queue ADD COLUMN signature TEXT")
-        except sqlite3.OperationalError:
-            pass  # Колонка уже существует
+            # Миграция: добавить колонку signature если её нет
+            try:
+                cursor.execute("ALTER TABLE offline_operations_queue ADD COLUMN signature TEXT")
+            except sqlite3.OperationalError:
+                pass  # Колонка уже существует
 
-        # Индексы для быстрого поиска
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_offline_queue_status
-            ON offline_operations_queue(status)
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_offline_queue_entity
-            ON offline_operations_queue(entity_type, entity_id)
-        """)
+            # Индексы для быстрого поиска
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_offline_queue_status
+                ON offline_operations_queue(status)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_offline_queue_entity
+                ON offline_operations_queue(entity_type, entity_id)
+            """)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
         print("[OFFLINE] Таблица очереди операций инициализирована")
 
@@ -277,30 +279,31 @@ class OfflineManager(QObject):
         Returns:
             ID операции в очереди
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
         data_json = json.dumps(data, ensure_ascii=False, default=str)
         # Подписываем операцию HMAC для защиты от tampering
         signature = _sign_operation(data_json, operation_type.value, entity_type)
 
-        cursor.execute("""
-            INSERT INTO offline_operations_queue
-            (operation_type, entity_type, entity_id, data, status, created_at, signature)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            operation_type.value,
-            entity_type,
-            entity_id,
-            data_json,
-            OperationStatus.PENDING.value,
-            datetime.now().isoformat(),
-            signature
-        ))
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        operation_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+            cursor.execute("""
+                INSERT INTO offline_operations_queue
+                (operation_type, entity_type, entity_id, data, status, created_at, signature)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                operation_type.value,
+                entity_type,
+                entity_id,
+                data_json,
+                OperationStatus.PENDING.value,
+                datetime.now().isoformat(),
+                signature
+            ))
+
+            operation_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
 
         print(f"[OFFLINE] Операция добавлена в очередь: {operation_type.value} {entity_type} #{entity_id}")
 
@@ -311,54 +314,56 @@ class OfflineManager(QObject):
 
     def get_pending_operations_count(self) -> int:
         """Получить количество ожидающих операций"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT COUNT(*) FROM offline_operations_queue
-            WHERE status = ?
-        """, (OperationStatus.PENDING.value,))
+            cursor.execute("""
+                SELECT COUNT(*) FROM offline_operations_queue
+                WHERE status = ?
+            """, (OperationStatus.PENDING.value,))
 
-        count = cursor.fetchone()[0]
-        conn.close()
+            count = cursor.fetchone()[0]
+            conn.close()
 
         return count
 
     def get_pending_operations(self) -> List[Dict[str, Any]]:
         """Получить список ожидающих операций"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT * FROM offline_operations_queue
-            WHERE status = ?
-            ORDER BY created_at ASC
-        """, (OperationStatus.PENDING.value,))
+            cursor.execute("""
+                SELECT * FROM offline_operations_queue
+                WHERE status = ?
+                ORDER BY created_at ASC
+            """, (OperationStatus.PENDING.value,))
 
-        operations = []
-        for row in cursor.fetchall():
-            data_json = row['data']
-            signature = row['signature'] if 'signature' in row.keys() else None
+            operations = []
+            for row in cursor.fetchall():
+                data_json = row['data']
+                signature = row['signature'] if 'signature' in row.keys() else None
 
-            # Проверяем HMAC подпись для защиты от tampering
-            if signature and not _verify_operation_signature(
-                data_json, row['operation_type'], row['entity_type'], signature
-            ):
-                print(f"[OFFLINE] ВНИМАНИЕ: Операция #{row['id']} имеет невалидную подпись! Пропускаем.")
-                continue
+                # Проверяем HMAC подпись для защиты от tampering
+                if signature and not _verify_operation_signature(
+                    data_json, row['operation_type'], row['entity_type'], signature
+                ):
+                    print(f"[OFFLINE] ВНИМАНИЕ: Операция #{row['id']} имеет невалидную подпись! Пропускаем.")
+                    continue
 
-            operations.append({
-                'id': row['id'],
-                'operation_type': row['operation_type'],
-                'entity_type': row['entity_type'],
-                'entity_id': row['entity_id'],
-                'data': json.loads(data_json),
-                'status': row['status'],
-                'created_at': row['created_at'],
-                'retry_count': row['retry_count']
-            })
+                operations.append({
+                    'id': row['id'],
+                    'operation_type': row['operation_type'],
+                    'entity_type': row['entity_type'],
+                    'entity_id': row['entity_id'],
+                    'data': json.loads(data_json),
+                    'status': row['status'],
+                    'created_at': row['created_at'],
+                    'retry_count': row['retry_count']
+                })
 
-        conn.close()
+            conn.close()
         return operations
 
     def _start_sync(self):
@@ -994,35 +999,36 @@ class OfflineManager(QObject):
     def _update_operation_status(self, operation_id: int, status: OperationStatus,
                                  error_message: str = None, server_entity_id: int = None):
         """Обновить статус операции в очереди"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        update_fields = ["status = ?"]
-        params = [status.value]
+            update_fields = ["status = ?"]
+            params = [status.value]
 
-        if status == OperationStatus.SYNCED:
-            update_fields.append("synced_at = ?")
-            params.append(datetime.now().isoformat())
+            if status == OperationStatus.SYNCED:
+                update_fields.append("synced_at = ?")
+                params.append(datetime.now().isoformat())
 
-        if error_message:
-            update_fields.append("error_message = ?")
-            params.append(error_message)
-            update_fields.append("retry_count = retry_count + 1")
+            if error_message:
+                update_fields.append("error_message = ?")
+                params.append(error_message)
+                update_fields.append("retry_count = retry_count + 1")
 
-        if server_entity_id:
-            update_fields.append("server_entity_id = ?")
-            params.append(server_entity_id)
+            if server_entity_id:
+                update_fields.append("server_entity_id = ?")
+                params.append(server_entity_id)
 
-        params.append(operation_id)
+            params.append(operation_id)
 
-        cursor.execute(f"""
-            UPDATE offline_operations_queue
-            SET {', '.join(update_fields)}
-            WHERE id = ?
-        """, params)
+            cursor.execute(f"""
+                UPDATE offline_operations_queue
+                SET {', '.join(update_fields)}
+                WHERE id = ?
+            """, params)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
     def _update_local_entity_id(self, entity_type: str, local_id: int, server_id: int):
         """
@@ -1031,9 +1037,6 @@ class OfflineManager(QObject):
         """
         if local_id == server_id:
             return
-
-        conn = self._get_connection()
-        cursor = conn.cursor()
 
         table_map = {
             'client': 'clients',
@@ -1048,47 +1051,52 @@ class OfflineManager(QObject):
 
         table = table_map.get(entity_type)
         if table:
-            try:
-                cursor.execute(f"UPDATE {table} SET id = ? WHERE id = ?", (server_id, local_id))
-                conn.commit()
-                print(f"[OFFLINE] Обновлён ID {entity_type}: {local_id} -> {server_id}")
-            except Exception as e:
-                print(f"[OFFLINE] Ошибка обновления ID: {e}")
-
-        conn.close()
+            with self._db_lock:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(f"UPDATE {table} SET id = ? WHERE id = ?", (server_id, local_id))
+                    conn.commit()
+                    print(f"[OFFLINE] Обновлён ID {entity_type}: {local_id} -> {server_id}")
+                except Exception as e:
+                    print(f"[OFFLINE] Ошибка обновления ID: {e}")
+                finally:
+                    conn.close()
 
     def clear_synced_operations(self):
         """Очистить синхронизированные операции из очереди"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            DELETE FROM offline_operations_queue
-            WHERE status = ?
-        """, (OperationStatus.SYNCED.value,))
+            cursor.execute("""
+                DELETE FROM offline_operations_queue
+                WHERE status = ?
+            """, (OperationStatus.SYNCED.value,))
 
-        deleted = cursor.rowcount
-        conn.commit()
-        conn.close()
+            deleted = cursor.rowcount
+            conn.commit()
+            conn.close()
 
         print(f"[OFFLINE] Удалено {deleted} синхронизированных операций")
         return deleted
 
     def retry_failed_operations(self):
         """Повторить неудавшиеся операции"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        # Сбрасываем статус failed операций на pending (максимум 3 попытки)
-        cursor.execute("""
-            UPDATE offline_operations_queue
-            SET status = ?
-            WHERE status = ? AND retry_count < 3
-        """, (OperationStatus.PENDING.value, OperationStatus.FAILED.value))
+            # Сбрасываем статус failed операций на pending (максимум 3 попытки)
+            cursor.execute("""
+                UPDATE offline_operations_queue
+                SET status = ?
+                WHERE status = ? AND retry_count < 3
+            """, (OperationStatus.PENDING.value, OperationStatus.FAILED.value))
 
-        updated = cursor.rowcount
-        conn.commit()
-        conn.close()
+            updated = cursor.rowcount
+            conn.commit()
+            conn.close()
 
         print(f"[OFFLINE] {updated} операций поставлено на повтор")
 
@@ -1099,31 +1107,32 @@ class OfflineManager(QObject):
 
     def get_operation_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Получить историю операций"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._db_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT * FROM offline_operations_queue
-            ORDER BY created_at DESC
-            LIMIT ?
-        """, (limit,))
+            cursor.execute("""
+                SELECT * FROM offline_operations_queue
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (limit,))
 
-        operations = []
-        for row in cursor.fetchall():
-            operations.append({
-                'id': row['id'],
-                'operation_type': row['operation_type'],
-                'entity_type': row['entity_type'],
-                'entity_id': row['entity_id'],
-                'data': json.loads(row['data']) if row['data'] else {},
-                'status': row['status'],
-                'created_at': row['created_at'],
-                'synced_at': row['synced_at'],
-                'error_message': row['error_message'],
-                'retry_count': row['retry_count']
-            })
+            operations = []
+            for row in cursor.fetchall():
+                operations.append({
+                    'id': row['id'],
+                    'operation_type': row['operation_type'],
+                    'entity_type': row['entity_type'],
+                    'entity_id': row['entity_id'],
+                    'data': json.loads(row['data']) if row['data'] else {},
+                    'status': row['status'],
+                    'created_at': row['created_at'],
+                    'synced_at': row['synced_at'],
+                    'error_message': row['error_message'],
+                    'retry_count': row['retry_count']
+                })
 
-        conn.close()
+            conn.close()
         return operations
 
     def force_sync(self):

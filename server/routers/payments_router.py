@@ -749,9 +749,11 @@ async def recalculate_payments(
                 if new_amount != payment.calculated_amount:
                     old_amount = payment.calculated_amount
                     payment.calculated_amount = new_amount
-                    payment.final_amount = new_amount
+                    # S-08: Не перезаписывать final_amount для ручных платежей
+                    if not payment.is_manual:
+                        payment.final_amount = new_amount
                     updated += 1
-                    logger.debug(f"RECALC Payment ID={payment.id}: {old_amount} -> {new_amount}")
+                    logger.debug(f"RECALC Payment ID={payment.id}: {old_amount} -> {new_amount}, manual={payment.is_manual}")
 
             except Exception as e:
                 errors.append({'payment_id': payment.id, 'error': str(e)})

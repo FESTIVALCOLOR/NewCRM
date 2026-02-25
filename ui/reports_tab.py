@@ -34,6 +34,7 @@ class ReportsTab(QWidget):
         self.db = DatabaseManager()
         self.data_access = DataAccess(api_client=self.api_client, db=self.db)
         self._data_loaded = False
+        self._analytics_data_hash = None
         self.init_ui()
 
     def init_ui(self):
@@ -285,30 +286,69 @@ class ReportsTab(QWidget):
         scroll.setWidget(content)
         return scroll
 
-    def _load_analytics_charts(self):
-        """Загрузка данных для графиков аналитики"""
+    def _load_analytics_charts(self, year=None, quarter=None, month=None, agent_type=None, city=None):
+        """Загрузка данных для графиков аналитики с учётом фильтров"""
+        import hashlib
+        # Проверяем кэш: если параметры не изменились, не перерисовываем
+        params_key = f"{year}_{quarter}_{month}_{agent_type}_{city}"
+        params_hash = hashlib.md5(params_key.encode()).hexdigest()
+        if self._analytics_data_hash == params_hash:
+            return
+        self._analytics_data_hash = params_hash
+
         try:
-            # Типы проектов (из текущей статистики)
+            # Типы проектов (из текущей статистики с фильтрацией)
             contracts = self.data_access.get_all_contracts()
 
-            individual = sum(1 for c in contracts if c.get('project_type') == 'Индивидуальный')
-            template = sum(1 for c in contracts if c.get('project_type') == 'Шаблонный')
-            supervision = sum(1 for c in contracts if c.get('supervision'))
+            # Фильтрация контрактов по параметрам
+            filtered = contracts
+            if year:
+                filtered = [c for c in filtered if c.get('contract_date', '').startswith(str(year))]
+            if agent_type:
+                filtered = [c for c in filtered if c.get('agent_type') == agent_type]
+            if city:
+                filtered = [c for c in filtered if c.get('city') == city]
+            if quarter:
+                q = int(quarter) if isinstance(quarter, str) and quarter.isdigit() else quarter
+                if isinstance(q, int):
+                    q_months = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
+                    start_m, end_m = q_months.get(q, (1, 12))
+                    filtered = [c for c in filtered
+                                if self._contract_month_in_range(c, start_m, end_m)]
+            if month:
+                filtered = [c for c in filtered
+                            if self._contract_month_in_range(c, month, month)]
+
+            individual = sum(1 for c in filtered if c.get('project_type') == 'Индивидуальный')
+            template = sum(1 for c in filtered if c.get('project_type') == 'Шаблонный')
+            supervision = sum(1 for c in filtered if c.get('supervision'))
             self.pie_chart.set_data(individual, template, supervision)
 
             # Воронка
-            funnel_data = self.data_access.get_funnel_statistics()
+            funnel_data = self.data_access.get_funnel_statistics(year=year)
             funnel = funnel_data.get("funnel", {})
             if funnel:
                 self.funnel_chart.set_data(funnel)
 
             # Нагрузка исполнителей
-            executors = self.data_access.get_executor_load()
+            executors = self.data_access.get_executor_load(year=year, month=month)
             if executors:
                 self.executor_chart.set_data(executors)
 
         except Exception as e:
             print(f"Ошибка загрузки графиков аналитики: {e}")
+
+    @staticmethod
+    def _contract_month_in_range(contract, start_month, end_month):
+        """Проверяет, попадает ли месяц контракта в диапазон"""
+        contract_date = contract.get('contract_date', '')
+        if len(contract_date) >= 7:
+            try:
+                m = int(contract_date[5:7])
+                return start_month <= m <= end_month
+            except (ValueError, IndexError):
+                pass
+        return False
 
     def create_statistics_tab(self, project_type):
         """Создание вкладки статистики для типа проекта"""
@@ -482,7 +522,7 @@ class ReportsTab(QWidget):
         self.load_project_statistics('Индивидуальный', year, quarter, month, agent_type, city)
         self.load_project_statistics('Шаблонный', year, quarter, month, agent_type, city)
         self.load_supervision_statistics(year, quarter, month, agent_type, city)
-        self._load_analytics_charts()
+        self._load_analytics_charts(year=year, quarter=quarter, month=month, agent_type=agent_type, city=city)
     
     def load_project_statistics(self, project_type, year, quarter, month, agent_type, city):
         """Загрузка статистики для типа проекта"""

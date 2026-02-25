@@ -570,6 +570,12 @@ class CRMTab(QWidget):
                     self.load_archive_cards('Шаблонный')
         finally:
             self.data.prefer_local = False
+
+        # Переключаем дашборд в соответствии с выбранной вкладкой
+        mw = self.window()
+        if hasattr(mw, 'switch_dashboard'):
+            dashboard_key = 'СРМ (Индивидуальные)' if index == 0 else 'СРМ (Шаблонные)'
+            mw.switch_dashboard(dashboard_key)
     
     def _get_sync_manager(self):
         """Получить SyncManager из главного окна"""

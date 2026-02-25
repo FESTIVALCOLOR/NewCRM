@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, DateTime
+from sqlalchemy import func, cast, DateTime, or_
 from typing import List, Optional
 
 from database import (
@@ -286,12 +286,13 @@ async def get_employee_report_by_type(
         )
 
         # Фильтр по report_month
+        # S-09: Заменён PostgreSQL op('~') на кроссплатформенный or_ + like
         if period == 'За квартал' and quarter:
             start_month = (quarter - 1) * 3 + 1
             end_month = quarter * 3
-            months_pattern = '|'.join([f'{year}-{m:02d}' for m in range(start_month, end_month + 1)])
             salaries_query = salaries_query.filter(
-                Salary.report_month.op('~')(months_pattern)
+                or_(*[Salary.report_month.like(f'{year}-{m:02d}%')
+                      for m in range(start_month, end_month + 1)])
             )
         elif period == 'За месяц' and month:
             salaries_query = salaries_query.filter(

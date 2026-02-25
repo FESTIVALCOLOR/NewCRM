@@ -6,6 +6,27 @@ import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+
+class YandexDiskError(Exception):
+    """Базовая ошибка Яндекс.Диска"""
+    pass
+
+
+class YandexDiskTokenError(YandexDiskError):
+    """Токен невалиден или истёк (401)"""
+    pass
+
+
+class YandexDiskRateLimitError(YandexDiskError):
+    """Превышен лимит запросов (429)"""
+    pass
+
+
+class YandexDiskNetworkError(YandexDiskError):
+    """Сетевая ошибка (timeout, connection reset)"""
+    pass
+
+
 class YandexDiskManager:
     _instances = {}
 
@@ -46,11 +67,11 @@ class YandexDiskManager:
     def _check_response(self, response, operation_name="operation"):
         """Check API response status and raise appropriate errors"""
         if response.status_code == 401:
-            raise Exception(f"Yandex Disk: token expired or invalid ({operation_name})")
+            raise YandexDiskTokenError(f"Yandex Disk: token expired ({operation_name})")
         if response.status_code == 403:
-            raise Exception(f"Yandex Disk: access forbidden ({operation_name})")
+            raise YandexDiskTokenError(f"Yandex Disk: access forbidden ({operation_name})")
         if response.status_code == 429:
-            raise Exception(f"Yandex Disk: rate limit exceeded ({operation_name})")
+            raise YandexDiskRateLimitError(f"Yandex Disk: rate limit ({operation_name})")
         return response
     
     def upload_file(self, local_path, yandex_path):
@@ -83,7 +104,17 @@ class YandexDiskManager:
 
         # Используем data= вместо files= для streaming upload (меньше памяти)
         with open(local_path, 'rb') as f:
-            upload_response = self.session.put(upload_url, data=f, timeout=dynamic_timeout)
+            for attempt in range(3):
+                try:
+                    upload_response = self.session.put(upload_url, data=f, timeout=dynamic_timeout)
+                    break
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                    if attempt < 2:
+                        print(f"[WARN] Сетевая ошибка при загрузке (попытка {attempt+1}): {e}")
+                        time.sleep(2 ** attempt)
+                        f.seek(0)  # Перемотка файла
+                    else:
+                        raise YandexDiskNetworkError(f"Сетевая ошибка после 3 попыток: {e}")
 
         if upload_response.status_code not in [200, 201, 202]:
             raise Exception(f"Ошибка загрузки файла: {upload_response.status_code}")
@@ -116,57 +147,68 @@ class YandexDiskManager:
             for chunk in file_response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-    def get_public_link(self, yandex_path):
-        """Получение публичной ссылки"""
+    def get_public_link(self, yandex_path, max_retries=3):
+        """Получение публичной ссылки с retry"""
         headers = {'Authorization': f'OAuth {self.token}'}
 
-        try:
-            # Шаг 1: Публикуем файл
-            publish_url = f'{self.base_url}/resources/publish'
-            publish_params = {'path': yandex_path}
+        for attempt in range(max_retries):
+            try:
+                # Шаг 1: Публикуем файл
+                publish_url = f'{self.base_url}/resources/publish'
+                publish_params = {'path': yandex_path}
 
-            publish_response = self.session.put(publish_url, params=publish_params, headers=headers, timeout=10)
-            self._check_response(publish_response, "publish_file")
+                publish_response = self.session.put(publish_url, params=publish_params, headers=headers, timeout=15)
+                self._check_response(publish_response, "publish_file")
 
-            # Успешная публикация или уже опубликован
-            if publish_response.status_code in [200, 201, 409]:
-                # Шаг 2: Получаем метаданные с public_url
-                meta_url = f'{self.base_url}/resources'
-                meta_params = {'path': yandex_path, 'fields': 'public_url,public_key'}
+                # Успешная публикация или уже опубликован
+                if publish_response.status_code in [200, 201, 409]:
+                    # Задержка для обработки на стороне Яндекс.Диска
+                    time.sleep(1.0)
 
-                meta_response = self.session.get(meta_url, params=meta_params, headers=headers, timeout=10)
-                self._check_response(meta_response, "get_public_metadata")
+                    # Шаг 2: Получаем метаданные с public_url
+                    meta_url = f'{self.base_url}/resources'
+                    meta_params = {'path': yandex_path, 'fields': 'public_url,public_key'}
 
-                if meta_response.status_code == 200:
-                    meta_data = meta_response.json()
+                    meta_response = self.session.get(meta_url, params=meta_params, headers=headers, timeout=15)
+                    self._check_response(meta_response, "get_public_metadata")
 
-                    # Извлекаем public_url
-                    public_url = meta_data.get('public_url', '')
+                    if meta_response.status_code == 200:
+                        meta_data = meta_response.json()
 
-                    if public_url:
-                        print(f"[YD] Получена публичная ссылка: {public_url}")
-                        return public_url
+                        # Извлекаем public_url
+                        public_url = meta_data.get('public_url', '')
 
-                    # Если public_url нет, пробуем сформировать из public_key
-                    public_key = meta_data.get('public_key', '')
-                    if public_key:
-                        public_url = f"https://disk.yandex.ru/i/{public_key}"
-                        print(f"[YD] Сформирована ссылка из public_key: {public_url}")
-                        return public_url
+                        if public_url:
+                            print(f"[YD] Получена публичная ссылка: {public_url}")
+                            return public_url
+
+                        # Если public_url нет, пробуем сформировать из public_key
+                        public_key = meta_data.get('public_key', '')
+                        if public_key:
+                            public_url = f"https://disk.yandex.ru/i/{public_key}"
+                            print(f"[YD] Сформирована ссылка из public_key: {public_url}")
+                            return public_url
+
+                    else:
+                        print(f"[WARN] Ошибка получения метаданных (попытка {attempt+1}): {meta_response.status_code}")
 
                 else:
-                    print(f"[ERROR] Ошибка получения метаданных: {meta_response.status_code}")
+                    print(f"[WARN] Ошибка публикации (попытка {attempt+1}): {publish_response.status_code}")
 
-            else:
-                print(f"[ERROR] Ошибка публикации: {publish_response.status_code}")
+                # Retry с увеличивающейся задержкой
+                if attempt < max_retries - 1:
+                    time.sleep(2.0 * (attempt + 1))
 
-            return ''
+            except Exception as e:
+                print(f"[WARN] Ошибка получения публичной ссылки (попытка {attempt+1}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2.0 * (attempt + 1))
+                else:
+                    import traceback
+                    traceback.print_exc()
 
-        except Exception as e:
-            print(f"[ERROR] Ошибка получения публичной ссылки: {e}")
-            import traceback
-            traceback.print_exc()
-            return ''
+        print(f"[ERROR] Не удалось получить публичную ссылку после {max_retries} попыток")
+        return ''
 
     def upload_file_to_contract_folder(self, local_file_path, contract_folder_path, subfolder_name, file_name=None, progress_callback=None):
         """Загрузка файла в подпапку договора на Яндекс.Диске

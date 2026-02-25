@@ -15,6 +15,45 @@ except ImportError:
     REPORTLAB_AVAILABLE = False
     print("[WARN] reportlab не установлен. Генерация PDF отчетов будет недоступна.")
 
+# Единый стиль PDF отчётов FestivalColor
+PDF_STYLE = {
+    'header_bg': '#2C3E50',
+    'header_fg': '#FFFFFF',
+    'row_odd_bg': '#FFFFFF',
+    'row_even_bg': '#F8F9FA',
+    'border_color': '#DEE2E6',
+    'font_size_header': 10,
+    'font_size_body': 9,
+    'font_size_title': 14,
+    'margins': (15, 15, 15, 15),  # mm
+}
+
+
+def format_report_value(value, value_type='text'):
+    """Форматирование значений для отчётов"""
+    if value is None:
+        return ''
+    if value_type == 'currency':
+        try:
+            return f"{int(float(value)):,}".replace(',', ' ') + " руб."
+        except (ValueError, TypeError):
+            return str(value)
+    elif value_type == 'area':
+        try:
+            return f"{float(value):.1f} м²"
+        except (ValueError, TypeError):
+            return str(value)
+    elif value_type == 'date':
+        try:
+            from datetime import datetime
+            if isinstance(value, str) and '-' in value:
+                return datetime.strptime(value[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
+        except (ValueError, TypeError):
+            pass
+        return str(value)
+    return str(value)
+
+
 class PDFGenerator:
     def __init__(self):
         """Инициализация генератора PDF с поддержкой русских шрифтов"""
@@ -64,7 +103,7 @@ class PDFGenerator:
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
+            fontSize=PDF_STYLE['font_size_title'],
             textColor=colors.HexColor('#333333'),
             spaceAfter=30,
             alignment=1  # CENTER
@@ -91,21 +130,22 @@ class PDFGenerator:
             # Стили таблицы
             table.setStyle(TableStyle([
                 # Заголовок таблицы
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8F4F8')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_bg'])),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_fg'])),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                # S-10: Используем self.font вместо hardcoded Helvetica
+                ('FONTNAME', (0, 0), (-1, 0), self.font),
+                ('FONTSIZE', (0, 0), (-1, 0), PDF_STYLE['font_size_header']),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('TOPPADDING', (0, 0), (-1, 0), 12),
-                
+
                 # Тело таблицы
-                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor(PDF_STYLE['row_odd_bg'])),
+                ('FONTNAME', (0, 1), (-1, -1), self.font),
+                ('FONTSIZE', (0, 1), (-1, -1), PDF_STYLE['font_size_body']),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor(PDF_STYLE['border_color'])),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor(PDF_STYLE['row_odd_bg']), colors.HexColor(PDF_STYLE['row_even_bg'])]),
                 ('PADDING', (0, 0), (-1, -1), 6),
             ]))
             
@@ -170,14 +210,15 @@ class PDFGenerator:
         
         summary_table = Table(summary_data, colWidths=[10*cm, 8*cm])
         summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8F4F8')),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_bg'])),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_fg'])),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('FONTNAME', (0, 0), (-1, 0), self.font),
+            ('FONTSIZE', (0, 0), (-1, 0), PDF_STYLE['font_size_header']),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor(PDF_STYLE['border_color'])),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor(PDF_STYLE['row_odd_bg']), colors.HexColor(PDF_STYLE['row_even_bg'])]),
         ]))
         
         elements.append(summary_table)
@@ -194,9 +235,10 @@ class PDFGenerator:
             
             type_table = Table(type_data, colWidths=[10*cm, 8*cm])
             type_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F5E6D3')),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_bg'])),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_fg'])),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor(PDF_STYLE['border_color'])),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor(PDF_STYLE['row_odd_bg']), colors.HexColor(PDF_STYLE['row_even_bg'])]),
                 ('PADDING', (0, 0), (-1, -1), 8),
             ]))
             
@@ -214,9 +256,10 @@ class PDFGenerator:
             
             city_table = Table(city_data, colWidths=[10*cm, 8*cm])
             city_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D4E4BC')),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_bg'])),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor(PDF_STYLE['header_fg'])),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor(PDF_STYLE['border_color'])),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor(PDF_STYLE['row_odd_bg']), colors.HexColor(PDF_STYLE['row_even_bg'])]),
                 ('PADDING', (0, 0), (-1, -1), 8),
             ]))
             

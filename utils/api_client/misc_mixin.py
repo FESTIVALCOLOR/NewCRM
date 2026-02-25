@@ -284,7 +284,8 @@ class MiscMixin:
                 f"{self.base_url}/api/v1/cities",
                 json={"name": name}
             )
-            return response.status_code == 200
+            self._handle_response(response)
+            return True
         except Exception as e:
             print(f"[API] Ошибка добавления города: {e}")
             return False
@@ -296,7 +297,8 @@ class MiscMixin:
                 'DELETE',
                 f"{self.base_url}/api/v1/cities/{city_id}"
             )
-            return response.status_code == 200
+            self._handle_response(response)
+            return True
         except Exception as e:
             print(f"[API] Ошибка удаления города: {e}")
             return False

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from ui.custom_message_box import CustomMessageBox
+from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from utils.data_access import DataAccess
 from utils.icon_loader import IconLoader
 
@@ -352,12 +352,11 @@ class AgentsCitiesWidget(QWidget):
 
     def _delete_agent(self, agent_id, agent_name):
         """Удалить агента"""
-        msg = CustomMessageBox(
+        msg = CustomQuestionBox(
             self, 'Подтверждение',
             f'Удалить агента "{agent_name}"?\n\nАгент будет деактивирован. Существующие договоры сохранятся.',
-            'question'
         )
-        if msg.exec_() == msg.AcceptRole or msg.clickedButton() == msg.yes_button if hasattr(msg, 'yes_button') else False:
+        if msg.exec_() == msg.Accepted:
             if self.data.delete_agent(agent_id):
                 self._load_agents()
             else:
@@ -365,12 +364,11 @@ class AgentsCitiesWidget(QWidget):
 
     def _delete_city(self, city_id, city_name):
         """Удалить город"""
-        msg = CustomMessageBox(
+        msg = CustomQuestionBox(
             self, 'Подтверждение',
             f'Удалить город "{city_name}"?\n\nГород будет деактивирован. Существующие договоры сохранятся.',
-            'question'
         )
-        if msg.exec_() == msg.AcceptRole or msg.clickedButton() == msg.yes_button if hasattr(msg, 'yes_button') else False:
+        if msg.exec_() == msg.Accepted:
             if self.data.delete_city(city_id):
                 self._load_cities()
             else:

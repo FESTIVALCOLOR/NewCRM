@@ -1013,14 +1013,10 @@ class CRMSupervisionTab(QWidget):
             self.data.move_supervision_card(card_id, to_column)
             print(f"   + Карточка перемещена")
 
-            # Сбрасываем приостановку при перемещении (только если карточка была приостановлена)
+            # Сбрасываем отметку о сдаче при перемещении
+            # Примечание: resume при выходе из "В ожидании" выполняется автоматически
+            # на сервере в move_supervision_card_to_column, повторный вызов не нужен
             if to_column != from_column:
-                if from_column == 'В ожидании':
-                    try:
-                        self.data.resume_supervision_card(card_id, self.employee['id'])
-                        print(f"   + Карточка возобновлена из 'В ожидании'")
-                    except Exception as e:
-                        print(f"   Ошибка resume: {e}")
                 self.data.reset_supervision_stage_completion(card_id)
                 print(f"   + Отметка о сдаче сброшена")
                 

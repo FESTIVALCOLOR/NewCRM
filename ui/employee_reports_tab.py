@@ -91,7 +91,7 @@ class EmployeeReportsTab(QWidget):
 
         filters_layout.addWidget(QLabel('Тип периода:'))
         period_combo = CustomComboBox()
-        period_combo.addItems(['Месяц', 'Квартал', 'Год'])
+        period_combo.addItems(['За месяц', 'За квартал', 'За год'])
         period_combo.setObjectName(f'period_{project_type}')
         period_combo.currentTextChanged.connect(lambda: self.load_report_data(project_type))
         filters_layout.addWidget(period_combo)
@@ -302,8 +302,11 @@ class EmployeeReportsTab(QWidget):
             
             period = period_combo.currentText()
             year = year_spin.value()
-            quarter = quarter_combo.currentText() if period == 'Квартал' else None
-            month = month_combo.currentIndex() + 1 if period == 'Месяц' else None
+            # S-15: Конвертируем 'Q1'→1, 'Q2'→2 и т.д. — API ожидает int
+            quarter_text = quarter_combo.currentText() if period == 'За квартал' else None
+            quarter = int(quarter_text[1]) if quarter_text and len(quarter_text) > 1 and quarter_text[1].isdigit() else None
+            month_idx = month_combo.currentIndex() if period == 'За месяц' else -1
+            month = (month_idx + 1) if month_idx >= 0 else None
             
             # Получаем данные из API или БД через DataAccess
             try:
@@ -327,6 +330,16 @@ class EmployeeReportsTab(QWidget):
             print(f"Ошибка загрузки данных отчета: {e}")
             import traceback
             traceback.print_exc()
+            # S7.2: Уведомление пользователя об ошибке загрузки
+            try:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(
+                    self, 'Ошибка',
+                    f'Не удалось загрузить данные отчёта.\n{str(e)[:200]}',
+                    'error'
+                ).exec_()
+            except Exception:
+                pass
     
     def update_completed_table(self, tab_widget, project_type, data):
         """Обновление таблицы выполненных заказов"""
@@ -399,8 +412,11 @@ class EmployeeReportsTab(QWidget):
             
             period = period_combo.currentText()
             year = year_spin.value()
-            quarter = quarter_combo.currentText() if period == 'Квартал' else None
-            month = month_combo.currentIndex() + 1 if period == 'Месяц' else None
+            # S-15: Конвертируем 'Q1'→1, 'Q2'→2 и т.д. — API ожидает int
+            quarter_text = quarter_combo.currentText() if period == 'За квартал' else None
+            quarter = int(quarter_text[1]) if quarter_text and len(quarter_text) > 1 and quarter_text[1].isdigit() else None
+            month_idx = month_combo.currentIndex() if period == 'За месяц' else -1
+            month = (month_idx + 1) if month_idx >= 0 else None
             
             # Диалог сохранения
             filename, _ = QFileDialog.getSaveFileName(

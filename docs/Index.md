@@ -30,6 +30,8 @@
 | 21 | [Безопасность](21-security.md) | SSL, JWT, fail2ban, бэкапы, сетевая защита (~82%) | `docs/21-security.md` |
 | 22 | [Оптимизация (Roadmap)](22-optimization-roadmap.md) | 4 фазы: защита данных, UX, архитектура, инфраструктура | `docs/22-optimization-roadmap.md` |
 | 23 | [Дорожная карта дедлайнов](23-deadline-roadmap.md) | Аудит, история реализации Фазы 8, архитектура | `docs/23-deadline-roadmap.md` |
+| 24 | [Фаза Research](24-research.md) | Исследование контекста задачи, 3 направления, шаблон | `docs/24-research.md` |
+| 25 | [Фаза Design](25-design.md) | C4, DFD, ADR, стратегия тестирования, API контракты | `docs/25-design.md` |
 
 ## Быстрые ссылки
 

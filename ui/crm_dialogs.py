@@ -1429,7 +1429,7 @@ class CRMStatisticsDialog(QDialog):
         # ========== КНОПКИ ЭКСПОРТА (SVG) ==========
         buttons_layout = QHBoxLayout()
         
-        excel_btn = IconLoader.create_icon_button('export', 'Экспорт в Excel', icon_size=12)
+        excel_btn = IconLoader.create_icon_button('export', 'Экспорт в XLSX', icon_size=12)
         # ИСПРАВЛЕНИЕ 06.02.2026: Уменьшен padding для стандартной высоты 28px (#11)
         excel_btn.setStyleSheet("""
             QPushButton {
@@ -1441,7 +1441,7 @@ class CRMStatisticsDialog(QDialog):
             }
             QPushButton:hover { background-color: #229954; }
         """)
-        excel_btn.clicked.connect(self.export_to_excel)
+        excel_btn.clicked.connect(self.export_to_xlsx)
         buttons_layout.addWidget(excel_btn)
         
         pdf_btn = IconLoader.create_icon_button('export', 'Экспорт в PDF', icon_size=12)
@@ -1656,29 +1656,79 @@ class CRMStatisticsDialog(QDialog):
         except Exception:
             return False
     
+    def _get_current_filters_info(self):
+        """Получение текстового описания текущих фильтров"""
+        filters = []
+        filter_suffix = ''
+
+        period = self.period_combo.currentText()
+        if period != 'Все время':
+            year = self.year_spin.value()
+            if period == 'Год':
+                filters.append(f"Период: {year}")
+                filter_suffix += f'_{year}'
+            elif period == 'Квартал':
+                q = self.quarter_combo.currentText()
+                filters.append(f"Период: {q} {year}")
+                filter_suffix += f'_{year}_{q}'
+            elif period == 'Месяц':
+                m = self.month_combo.currentText()
+                filters.append(f"Период: {m} {year}")
+                filter_suffix += f'_{year}_{m}'
+
+        project_text = self.project_combo.currentText()
+        if self.project_combo.currentData() is not None:
+            filters.append(f"Проект: {project_text}")
+
+        executor_text = self.executor_combo.currentText()
+        if self.executor_combo.currentData() is not None:
+            filters.append(f"Исполнитель: {executor_text}")
+            filter_suffix += f'_{executor_text.split()[0]}'
+
+        stage_text = self.stage_combo.currentText()
+        if self.stage_combo.currentIndex() > 0:
+            filters.append(f"Стадия: {stage_text}")
+
+        status_text = self.status_combo.currentText()
+        if status_text != 'Все':
+            filters.append(f"Статус: {status_text}")
+
+        return filters, filter_suffix
+
     def export_to_excel(self):
-        """Экспорт статистики в Excel"""
+        """Экспорт статистики в CSV (S-13: переименовано для честности)"""
         try:
             from PyQt5.QtWidgets import QFileDialog
             import csv
-            
+
+            filters, filter_suffix = self._get_current_filters_info()
+            safe_suffix = filter_suffix.replace(' ', '_').replace(':', '')
+
             filename, _ = QFileDialog.getSaveFileName(
                 self,
                 'Сохранить статистику',
-                f'crm_statistics_{self.project_type}_{QDate.currentDate().toString("yyyy-MM-dd")}.csv',
+                f'crm_statistics_{self.project_type}{safe_suffix}_{QDate.currentDate().toString("yyyy-MM-dd")}.csv',
                 'CSV Files (*.csv)'
             )
-            
+
             if filename:
                 with open(filename, 'w', newline='', encoding='utf-8-sig') as file:
                     writer = csv.writer(file, delimiter=';')
-                    
+
+                    # Строка с параметрами фильтрации
+                    if filters:
+                        writer.writerow([f"Фильтры: {'; '.join(filters)}"])
+                    else:
+                        writer.writerow(["Фильтры: без фильтрации"])
+                    writer.writerow([f"Тип проекта: {self.project_type}"])
+                    writer.writerow([])  # пустая строка-разделитель
+
                     headers = [
                         'Дата назначения', 'Исполнитель', 'Стадия',
                         'Назначил', 'Дедлайн', 'Сдано', 'Статус', 'Проект'
                     ]
                     writer.writerow(headers)
-                    
+
                     for row in range(self.stats_table.rowCount()):
                         row_data = []
                         for col in range(self.stats_table.columnCount()):
@@ -1688,6 +1738,76 @@ class CRMStatisticsDialog(QDialog):
 
                 # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех"
                 pass
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать данные:\n{str(e)}', 'error').exec_()
+
+    def export_to_xlsx(self):
+        """Экспорт статистики в XLSX формат"""
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        except ImportError:
+            # Если openpyxl не установлен, fallback на CSV
+            self.export_to_excel()
+            return
+
+        from PyQt5.QtWidgets import QFileDialog
+        from datetime import datetime
+
+        filters, filter_suffix = self._get_current_filters_info()
+        safe_suffix = filter_suffix.replace(' ', '_').replace(':', '')
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self, 'Сохранить статистику',
+            f'crm_statistics_{self.project_type}{safe_suffix}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx',
+            'Excel Files (*.xlsx)'
+        )
+        if not filename:
+            return
+
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Статистика CRM"
+
+            # Стили
+            header_font = Font(bold=True, color='FFFFFF', size=10)
+            header_fill = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid')
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+
+            # Строка с фильтрами
+            start_row = 1
+            if filters:
+                ws.cell(row=1, column=1, value=f"Фильтры: {'; '.join(filters)}")
+                ws.cell(row=2, column=1, value=f"Тип проекта: {self.project_type}")
+                start_row = 4  # пропускаем строку-разделитель
+            else:
+                ws.cell(row=1, column=1, value=f"Тип проекта: {self.project_type}")
+                start_row = 3
+
+            # Заголовки
+            for col in range(self.stats_table.columnCount()):
+                header = self.stats_table.horizontalHeaderItem(col)
+                cell = ws.cell(row=start_row, column=col+1, value=header.text() if header else '')
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal='center')
+                cell.border = thin_border
+                # Авто-ширина колонок
+                col_letter = chr(65 + col) if col < 26 else chr(64 + col // 26) + chr(65 + col % 26)
+                ws.column_dimensions[col_letter].width = 18
+
+            # Записываем данные из таблицы
+            for row in range(self.stats_table.rowCount()):
+                for col in range(self.stats_table.columnCount()):
+                    item = self.stats_table.item(row, col)
+                    cell = ws.cell(row=row + start_row + 1, column=col+1, value=item.text() if item else '')
+                    cell.border = thin_border
+
+            wb.save(filename)
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать данные:\n{str(e)}', 'error').exec_()
                    
@@ -2865,7 +2985,9 @@ class ReassignExecutorDialog(QDialog):
             return
 
         # Получаем ID текущего исполнителя для установки в combobox
+        # S4.2: Сохраняем для проверки при сохранении
         current_executor_id = None
+        self._current_executor_id = None
         try:
             card_data = self.data.get_crm_card(self.card_id)
             stage_executors = card_data.get('stage_executors', [])
@@ -2899,6 +3021,7 @@ class ReassignExecutorDialog(QDialog):
 
         # Устанавливаем текущего исполнителя
         if current_executor_id:
+            self._current_executor_id = current_executor_id  # S4.2: для проверки дубликата
             for i in range(self.executor_combo.count()):
                 if self.executor_combo.itemData(i) == current_executor_id:
                     self.executor_combo.setCurrentIndex(i)
@@ -3003,6 +3126,11 @@ class ReassignExecutorDialog(QDialog):
 
         if not new_executor_id:
             CustomMessageBox(self, 'Ошибка', 'Выберите исполнителя', 'warning').exec_()
+            return
+
+        # S4.2: Предупреждение если выбран тот же исполнитель
+        if hasattr(self, '_current_executor_id') and new_executor_id == self._current_executor_id:
+            CustomMessageBox(self, 'Внимание', 'Выбранный исполнитель уже назначен на эту стадию.', 'warning').exec_()
             return
 
         try:

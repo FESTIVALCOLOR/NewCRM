@@ -423,24 +423,13 @@ class RatesDialog(QDialog):
         return widget
 
     def _get_all_cities(self):
-        """Получить все города: из конфига + уникальные из договоров"""
-        cities = list(CITIES)
+        """Получить все города через DataAccess (API → БД → config fallback)"""
         try:
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute("SELECT DISTINCT city FROM contracts WHERE city IS NOT NULL AND city != ''")
-            db_cities = [row['city'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
-            for c in db_cities:
-                if c and c not in cities:
-                    cities.append(c)
+            city_dicts = self.data_access.get_all_cities()
+            return [c['name'] for c in city_dicts if c.get('name')]
         except Exception as e:
-            print(f"[WARN] Ошибка получения городов из БД: {e}")
-        finally:
-            try:
-                self.db.close()
-            except Exception:
-                pass
-        return cities
+            print(f"[WARN] DataAccess get_all_cities error, fallback config: {e}")
+            return list(CITIES)
 
     def create_surveyor_rates_tab(self):
         """Тарифы замерщика по городам"""
