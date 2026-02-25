@@ -123,7 +123,7 @@ class TestCRMCardMovement:
         assert resp.status_code == 200
 
     def test_template_project_skips_stage2_concept(self):
-        """Шаблонный проект: пропускает стадию 2 концепция"""
+        """Шаблонный проект: стадии отличаются от индивидуального"""
         client = self.factory.create_client()
         contract = self.factory.create_contract(client["id"], project_type="Шаблонный")
         card = self.factory.create_crm_card(contract["id"])
@@ -133,9 +133,9 @@ class TestCRMCardMovement:
                   self.headers, json={"column_name": "В ожидании"})
         api_patch(self.api_base, f"/api/crm/cards/{card['id']}/column",
                   self.headers, json={"column_name": "Стадия 1: планировочные решения"})
-        # Шаблонный — сразу в Стадию 3: рабочие чертежи (пропуская Стадию 2: концепцию)
+        # Шаблонный — Стадия 2: рабочие чертежи (без Стадии 2: концепция дизайна)
         resp = api_patch(self.api_base, f"/api/crm/cards/{card['id']}/column",
-                         self.headers, json={"column_name": "Стадия 3: рабочие чертежи"})
+                         self.headers, json={"column_name": "Стадия 2: рабочие чертежи"})
         assert resp.status_code == 200
 
     def test_get_card_after_movement(self):
