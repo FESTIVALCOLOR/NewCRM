@@ -186,28 +186,39 @@ async def get_crm_dashboard(
         ).filter(contract_condition)
         total_orders, total_area = total_query.first()
 
-        # 3. Активные заказы в СРМ (исключаем архивные статусы)
-        active_orders = db.query(crm_table).join(
-            Contract, crm_table.contract_id == Contract.id
-        ).filter(
-            contract_condition,
-            ~Contract.status.in_(['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
-        ).count()
-
-        # 4. Архивные заказы (прямой запрос по архивным статусам)
-        archive_orders = db.query(crm_table).join(
-            Contract, crm_table.contract_id == Contract.id
-        ).filter(
-            contract_condition,
-            Contract.status.in_(['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
-        ).count()
+        # 3-4. Активные и архивные заказы в СРМ
+        archive_statuses = ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
+        if project_type == 'Авторский надзор':
+            # Для надзора: активные = контракт в статусе АВТОРСКИЙ НАДЗОР
+            active_orders = db.query(crm_table).join(
+                Contract, crm_table.contract_id == Contract.id
+            ).filter(contract_condition).count()
+            # Архивные = надзорные карточки с завершённым контрактом
+            archive_orders = db.query(crm_table).join(
+                Contract, crm_table.contract_id == Contract.id
+            ).filter(
+                Contract.status.in_(['СДАН', 'РАСТОРГНУТ'])
+            ).count()
+        else:
+            active_orders = db.query(crm_table).join(
+                Contract, crm_table.contract_id == Contract.id
+            ).filter(
+                contract_condition,
+                ~Contract.status.in_(archive_statuses)
+            ).count()
+            archive_orders = db.query(crm_table).join(
+                Contract, crm_table.contract_id == Contract.id
+            ).filter(
+                contract_condition,
+                Contract.status.in_(archive_statuses)
+            ).count()
 
         # 5. Активные заказы агента
         agent_active_orders = 0
         if agent_type:
             agent_active_orders = db.query(crm_table).join(
                 Contract, crm_table.contract_id == Contract.id
-            ).filter(Contract.agent_type == agent_type).count()
+            ).filter(contract_condition, Contract.agent_type == agent_type).count()
 
         # 6. Архивные заказы агента
         agent_archive_orders = 0

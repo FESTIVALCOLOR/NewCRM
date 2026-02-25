@@ -1616,6 +1616,22 @@ async def complete_stage_for_executor(
     try:
         executor_id = body.executor_id
 
+        # Проверка прав: назначенный на карточку, исполнитель стадии или суперпользователь
+        from permissions import SUPERUSER_ROLES
+        card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=404, detail="CRM карточка не найдена")
+        is_card_member = current_user.id in [
+            card.senior_manager_id, card.sdp_id, card.gap_id, card.manager_id
+        ]
+        is_stage_executor = db.query(StageExecutor).filter(
+            StageExecutor.crm_card_id == card_id,
+            StageExecutor.executor_id == current_user.id
+        ).first() is not None
+        is_superuser = current_user.role in SUPERUSER_ROLES
+        if not (is_card_member or is_stage_executor or is_superuser):
+            raise HTTPException(status_code=403, detail="Недостаточно прав для завершения стадии")
+
         stage_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
             StageExecutor.stage_name == stage_name,

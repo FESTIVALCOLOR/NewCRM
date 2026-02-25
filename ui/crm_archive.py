@@ -189,6 +189,15 @@ class ArchiveCard(QFrame):
                     font-size: 10px;
                     font-weight: bold;
                 ''')
+            elif 'НАДЗОР' in status:
+                status_label.setStyleSheet('''
+                    color: white;
+                    background-color: #2196F3;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                ''')
             info_layout.addWidget(status_label)
 
         layout.addLayout(info_layout)
