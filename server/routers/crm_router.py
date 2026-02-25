@@ -384,6 +384,8 @@ async def create_crm_card(
             "updated_at": card.updated_at.isoformat() if card.updated_at else None
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.exception(f"Ошибка при создании CRM карточки: {e}")

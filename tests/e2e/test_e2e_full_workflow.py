@@ -89,14 +89,28 @@ class TestFullBusinessWorkflow:
 
     @pytest.mark.order(3)
     def test_03_create_crm_card(self):
-        """Шаг 3: Создание CRM карточки"""
+        """Шаг 3: Получение или создание CRM карточки"""
+        # Контракт автоматически создаёт CRM карточку, поэтому пробуем создать
+        # и если 409 (дубль) — получаем существующую
         resp = api_post(self._api_base, "/api/crm/cards", self._headers, json={
             "contract_id": self._state['contract_id'],
             "column_name": "Новый заказ",
             "order_position": 0,
         })
-        assert resp.status_code == 200
-        card = resp.json()
+        if resp.status_code == 409:
+            # Карточка уже создана автоматически при создании контракта
+            cards_resp = api_get(
+                self._api_base,
+                "/api/crm/cards",
+                self._headers,
+                params={"project_type": "Индивидуальный"}
+            )
+            assert cards_resp.status_code == 200
+            cards = cards_resp.json()
+            card = next(c for c in cards if c["contract_id"] == self._state['contract_id'])
+        else:
+            assert resp.status_code == 200
+            card = resp.json()
         self._state['crm_card_id'] = card["id"]
         assert card["column_name"] == "Новый заказ"
 
