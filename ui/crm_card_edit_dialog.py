@@ -1071,6 +1071,52 @@ class CardEditDialog(QDialog):
             buttons_layout.addWidget(self.open_chat_btn)
             buttons_layout.addWidget(self.delete_chat_btn)
 
+            # --- Кнопки скриптов мессенджера ---
+            self.start_script_btn = IconLoader.create_icon_button(
+                'send', 'Начальный скрипт', 'Отправить начальный скрипт в чат', icon_size=14
+            )
+            self.start_script_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffffff;
+                    color: #333333;
+                    padding: 0px 16px;
+                    border-radius: 4px;
+                    border: 1px solid #d9d9d9;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+            """)
+            self.start_script_btn.setFixedHeight(36)
+            self.start_script_btn.clicked.connect(self._on_send_start_script)
+
+            self.end_script_btn = IconLoader.create_icon_button(
+                'check-circle', 'Завершающий скрипт', 'Отправить завершающий скрипт в чат', icon_size=14
+            )
+            self.end_script_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffffff;
+                    color: #333333;
+                    padding: 0px 16px;
+                    border-radius: 4px;
+                    border: 1px solid #d9d9d9;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+            """)
+            self.end_script_btn.setFixedHeight(36)
+            self.end_script_btn.clicked.connect(self._on_send_end_script)
+
+            buttons_layout.addWidget(self.start_script_btn)
+            buttons_layout.addWidget(self.end_script_btn)
+
             # Кнопка "Настройки чатов" перенесена в Администрирование (ui/admin_dialog.py)
 
             buttons_layout.addStretch()
@@ -1175,6 +1221,9 @@ class CardEditDialog(QDialog):
             self.create_chat_btn.setVisible(_can_create)
             self.open_chat_btn.setVisible(_can_view)
             self.delete_chat_btn.setVisible(_can_delete)
+            # Кнопки скриптов: видимы если есть право просмотра чатов
+            self.start_script_btn.setVisible(_can_view)
+            self.end_script_btn.setVisible(_can_view)
             self._messenger_chat_data = None
             self._load_messenger_chat_state()
 
@@ -1325,8 +1374,8 @@ class CardEditDialog(QDialog):
                 cursor.execute('''
                 INSERT INTO surveys (contract_id, surveyor_id, survey_date, created_by)
                 VALUES (?, ?, ?, ?)
-                ''', (contract_id, surveyor_id, survey_date.toString('yyyy-MM-dd'), 
-                      self.employee['id']))
+                ''', (contract_id, surveyor_id, survey_date.toString('yyyy-MM-dd'),
+                      self.employee['id'] if self.employee else None))
                 
                 print(f"Дата замера создана")
             
@@ -2187,13 +2236,17 @@ class CardEditDialog(QDialog):
         # Создаем прогресс-диалог
         progress = create_progress_dialog("Загрузка файла", "Подготовка к загрузке...", "Отмена", 3, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         # Загружаем файл на Яндекс.Диск асинхронно
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(step, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
@@ -2221,24 +2274,27 @@ class CardEditDialog(QDialog):
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    # Отправляем сигнал в главный поток с полными данными
-                    self.tech_task_upload_completed.emit(
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    QTimer.singleShot(0, lambda: self.tech_task_upload_completed.emit(
                         result['public_link'],
                         result['yandex_path'],
                         result['file_name'],
                         contract_id
-                    )
+                    ))
                 else:
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    self.tech_task_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    QTimer.singleShot(0, lambda: self.tech_task_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск"))
 
             except Exception as e:
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.tech_task_upload_error.emit(str(e))
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _err = str(e)
+                QTimer.singleShot(0, lambda: self.tech_task_upload_error.emit(_err))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -2357,13 +2413,17 @@ class CardEditDialog(QDialog):
         # Создаем прогресс-диалог
         progress = create_progress_dialog("Загрузка файлов", "Подготовка к загрузке...", "Отмена", len(file_paths), self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         # Загружаем файлы на Яндекс.Диск асинхронно
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(current, total, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
@@ -2391,19 +2451,24 @@ class CardEditDialog(QDialog):
                     folder_path = yd.get_stage_folder_path(contract_folder, 'references')
                     folder_link = yd.get_public_link(folder_path)
 
-                    # Отправляем сигнал в главный поток
-                    self.references_upload_completed.emit(folder_link if folder_link else folder_path, contract_id)
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    _link = folder_link if folder_link else folder_path
+                    _cid = contract_id
+                    QTimer.singleShot(0, lambda: self.references_upload_completed.emit(_link, _cid))
                 else:
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    self.references_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск")
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    QTimer.singleShot(0, lambda: self.references_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск"))
 
             except Exception as e:
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.references_upload_error.emit(str(e))
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _err = str(e)
+                QTimer.singleShot(0, lambda: self.references_upload_error.emit(_err))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -2476,13 +2541,17 @@ class CardEditDialog(QDialog):
         # Создаем прогресс-диалог
         progress = create_progress_dialog("Загрузка файлов", "Подготовка к загрузке...", "Отмена", len(file_paths), self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         # Загружаем файлы на Яндекс.Диск асинхронно
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
                 def update_progress(current, total, fname, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
@@ -2510,19 +2579,24 @@ class CardEditDialog(QDialog):
                     folder_path = yd.get_stage_folder_path(contract_folder, 'photo_documentation')
                     folder_link = yd.get_public_link(folder_path)
 
-                    # Отправляем сигнал в главный поток
-                    self.photo_doc_upload_completed.emit(folder_link if folder_link else folder_path, contract_id)
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    _link = folder_link if folder_link else folder_path
+                    _cid = contract_id
+                    QTimer.singleShot(0, lambda: self.photo_doc_upload_completed.emit(_link, _cid))
                 else:
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    self.photo_doc_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск")
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    QTimer.singleShot(0, lambda: self.photo_doc_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск"))
 
             except Exception as e:
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.photo_doc_upload_error.emit(str(e))
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _err = str(e)
+                QTimer.singleShot(0, lambda: self.photo_doc_upload_error.emit(_err))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -4820,6 +4894,29 @@ class CardEditDialog(QDialog):
         history_header.setStyleSheet('font-size: 12px; font-weight: bold; margin-bottom: 8px;')
         layout.addWidget(history_header)
 
+        # Фильтр по типу действия
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel('Фильтр:')
+        filter_label.setStyleSheet('font-size: 10px; color: #666;')
+        filter_layout.addWidget(filter_label)
+
+        self._history_filter_combo = QComboBox()
+        self._history_filter_combo.addItems([
+            'Все действия',
+            'Изменение дедлайна',
+            'Загрузка файлов',
+            'Удаление файлов',
+            'Замер',
+            'Дата ТЗ',
+            'Прочее',
+        ])
+        self._history_filter_combo.setStyleSheet('font-size: 10px; padding: 2px 5px;')
+        self._history_filter_combo.setFixedWidth(200)
+        self._history_filter_combo.currentTextChanged.connect(self._on_history_filter_changed)
+        filter_layout.addWidget(self._history_filter_combo)
+        filter_layout.addStretch()
+        layout.addLayout(filter_layout)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: 1px solid #DDD; border-radius: 4px; background: white; }")
@@ -4879,6 +4976,10 @@ class CardEditDialog(QDialog):
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки истории действий: {e}")
 
+        # Сохраняем исходные данные для фильтрации
+        self._all_history_items = action_history_items
+        self._history_stages = stages
+
         # Объединяем историю: сначала действия, потом стадии
         has_content = False
 
@@ -4889,7 +4990,7 @@ class CardEditDialog(QDialog):
                 from datetime import datetime
                 try:
                     action_date = datetime.strptime(action['action_date'], '%Y-%m-%d %H:%M:%S')
-                    date_str = action_date.strftime('%d-%m-%Y')
+                    date_str = action_date.strftime('%d.%m.%Y %H:%M')
                 except Exception:
                     date_str = action['action_date']
 
@@ -5077,7 +5178,7 @@ class CardEditDialog(QDialog):
                 from datetime import datetime
                 try:
                     action_date = datetime.strptime(action['action_date'], '%Y-%m-%d %H:%M:%S')
-                    date_str = action_date.strftime('%d-%m-%Y')
+                    date_str = action_date.strftime('%d.%m.%Y %H:%M')
                 except Exception:
                     date_str = action['action_date']
 
@@ -5105,6 +5206,87 @@ class CardEditDialog(QDialog):
 
         if not has_content:
             empty_label = QLabel('История проекта пуста')
+            empty_label.setStyleSheet('color: #999; font-size: 12px; padding: 20px;')
+            empty_label.setAlignment(Qt.AlignCenter)
+            self.info_layout.addWidget(empty_label)
+
+        self.info_layout.addStretch()
+
+    def _on_history_filter_changed(self, filter_text):
+        """Фильтрация истории по типу действия"""
+        if not hasattr(self, 'info_layout') or not hasattr(self, '_all_history_items'):
+            return
+
+        # Маппинг фильтров на action_type
+        filter_map = {
+            'Изменение дедлайна': ['deadline_changed', 'executor_deadline_changed'],
+            'Загрузка файлов': ['file_upload'],
+            'Удаление файлов': ['file_delete'],
+            'Замер': ['survey_complete', 'survey_date_changed'],
+            'Дата ТЗ': ['tech_task_date_changed'],
+        }
+
+        allowed_types = filter_map.get(filter_text)
+
+        # Определяем отфильтрованные элементы
+        if filter_text == 'Все действия':
+            filtered_items = self._all_history_items
+        elif filter_text == 'Прочее':
+            # Все типы, не входящие ни в один фильтр
+            all_known = set()
+            for types in filter_map.values():
+                all_known.update(types)
+            filtered_items = [a for a in self._all_history_items
+                              if a.get('action_type', '') not in all_known]
+        elif allowed_types:
+            filtered_items = [a for a in self._all_history_items
+                              if a.get('action_type', '') in allowed_types]
+        else:
+            filtered_items = self._all_history_items
+
+        # Очищаем текущий layout
+        while self.info_layout.count():
+            child = self.info_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        has_content = False
+
+        # Рендерим отфильтрованные действия
+        if filtered_items:
+            has_content = True
+            for action in filtered_items:
+                from datetime import datetime
+                try:
+                    action_date = datetime.strptime(action['action_date'], '%Y-%m-%d %H:%M:%S')
+                    date_str = action_date.strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    date_str = action['action_date']
+
+                action_text = f"{date_str} | {action['user_name']}: {action['description']}"
+
+                action_label = QLabel(action_text)
+                action_label.setStyleSheet('''
+                    color: #2C3E50;
+                    font-size: 10px;
+                    background-color: #EBF5FB;
+                    padding: 8px;
+                    border-radius: 4px;
+                    margin-bottom: 6px;
+                ''')
+                action_label.setWordWrap(True)
+                self.info_layout.addWidget(action_label)
+
+        # Стадии показываем всегда (не фильтруются)
+        stages = getattr(self, '_history_stages', [])
+        if stages:
+            has_content = True
+            for stage in stages:
+                stage_widget = self.create_stage_info_widget(stage)
+                self.info_layout.addWidget(stage_widget)
+
+        if not has_content:
+            empty_label = QLabel('Нет записей по выбранному фильтру')
             empty_label.setStyleSheet('color: #999; font-size: 12px; padding: 20px;')
             empty_label.setAlignment(Qt.AlignCenter)
             self.info_layout.addWidget(empty_label)
@@ -5454,7 +5636,9 @@ class CardEditDialog(QDialog):
                 print(f"[ERROR] Ошибка при проверке файлов на Яндекс.Диске: {e}")
                 traceback.print_exc()
             finally:
-                self._sync_ended.emit()
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, self._sync_ended.emit)
 
         thread = threading.Thread(target=check_files, daemon=True)
         thread.start()
@@ -5467,6 +5651,9 @@ class CardEditDialog(QDialog):
 
         self._show_sync_label()
 
+        # ИСПРАВЛЕНИЕ R-07: Кешируем is_online в main thread перед запуском фонового потока
+        is_online = self.data.is_online
+
         def validate():
             try:
                 from database.db_manager import DatabaseManager
@@ -5474,7 +5661,7 @@ class CardEditDialog(QDialog):
                 # Шаг 1: Сканируем ЯД на наличие новых файлов (не в БД)
                 new_files_found = False
                 contract_updated = False
-                if self.data.is_online:
+                if is_online:
                     try:
                         scan_result = self.data.scan_contract_files(contract_id)
                         new_count = scan_result.get('new_files_added', 0)
@@ -5497,7 +5684,7 @@ class CardEditDialog(QDialog):
 
                 # Шаг 2: Загружаем актуальный список файлов
                 all_files = []
-                if self.data.is_online:
+                if is_online:
                     try:
                         api_files = self.data.get_project_files(contract_id)
                         if api_files:
@@ -5512,7 +5699,9 @@ class CardEditDialog(QDialog):
                 if not all_files:
                     print(f"[VALIDATE] Нет файлов стадий для contract_id={contract_id}")
                     if new_files_found:
-                        self._reload_stage_files_signal.emit()
+                        # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(0, self._reload_stage_files_signal.emit)
                     return
 
                 print(f"[VALIDATE] Найдено {len(all_files)} файлов стадий, проверяем...")
@@ -5520,7 +5709,7 @@ class CardEditDialog(QDialog):
                 # Шаг 3: Серверная валидация (только если файлы загружены из API — ID серверные)
                 removed_ids = []
                 server_validated = False
-                if self.data.is_online:
+                if is_online:
                     file_ids = [f['id'] for f in all_files if f.get('id')]
                     if file_ids:
                         try:
@@ -5565,7 +5754,9 @@ class CardEditDialog(QDialog):
 
                 if ui_needs_update:
                     try:
-                        self._reload_stage_files_signal.emit()
+                        # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(0, self._reload_stage_files_signal.emit)
                     except RuntimeError:
                         pass  # Диалог уже закрыт
 
@@ -5575,7 +5766,9 @@ class CardEditDialog(QDialog):
                 traceback.print_exc()
             finally:
                 try:
-                    self._sync_ended.emit()
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    from PyQt5.QtCore import QTimer
+                    QTimer.singleShot(0, self._sync_ended.emit)
                 except RuntimeError:
                     pass  # Диалог уже закрыт
 
@@ -6367,6 +6560,11 @@ class CardEditDialog(QDialog):
             self.open_chat_btn.setEnabled(has_chat)
             self.delete_chat_btn.setEnabled(has_chat and is_online)
 
+            # Кнопки скриптов доступны только при наличии чата и подключении к серверу
+            if hasattr(self, 'start_script_btn'):
+                self.start_script_btn.setEnabled(has_chat and is_online)
+                self.end_script_btn.setEnabled(has_chat and is_online)
+
             if not is_online:
                 self.create_chat_btn.setToolTip("Требуется подключение к серверу")
                 self.delete_chat_btn.setToolTip("Требуется подключение к серверу")
@@ -6442,6 +6640,40 @@ class CardEditDialog(QDialog):
             except Exception as e:
                 from ui.custom_message_box import CustomMessageBox
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{str(e)}', 'error').exec_()
+
+    def _on_send_start_script(self):
+        """Отправить начальный скрипт в чат"""
+        card_id = self.card_data.get('id') if self.card_data else None
+        if not card_id:
+            return
+        try:
+            result = self.data.trigger_script(card_id, 'project_start')
+            if result:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Скрипт', 'Начальный скрипт отправлен в чат', 'success').exec_()
+            else:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Ошибка', 'Не удалось отправить скрипт', 'warning').exec_()
+        except Exception as e:
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', str(e), 'error').exec_()
+
+    def _on_send_end_script(self):
+        """Отправить завершающий скрипт в чат"""
+        card_id = self.card_data.get('id') if self.card_data else None
+        if not card_id:
+            return
+        try:
+            result = self.data.trigger_script(card_id, 'project_end')
+            if result:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Скрипт', 'Завершающий скрипт отправлен в чат', 'success').exec_()
+            else:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Ошибка', 'Не удалось отправить скрипт', 'warning').exec_()
+        except Exception as e:
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', str(e), 'error').exec_()
 
     def _on_chat_admin(self):
         """Обработчик кнопки 'Настройки чатов' (Директор)"""
@@ -7582,6 +7814,10 @@ class CardEditDialog(QDialog):
         total_steps = len(file_paths) * 2
         progress = create_progress_dialog("Загрузка файлов", "Подготовка к загрузке...", "Отмена", total_steps, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         def upload_thread():
             try:
                 from database.db_manager import DatabaseManager
@@ -7591,7 +7827,7 @@ class CardEditDialog(QDialog):
 
                 # Callback для обновления прогресса загрузки
                 def update_upload_progress(current, total, file_name, phase):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     step = current + 1
                     percent = int((step / total) * 50)  # первые 50% - загрузка
@@ -7606,7 +7842,7 @@ class CardEditDialog(QDialog):
                 thread_db = DatabaseManager()
 
                 for i, file_data in enumerate(uploaded_files):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         break
 
                     current = i + 1
@@ -7671,12 +7907,16 @@ class CardEditDialog(QDialog):
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.stage_files_uploaded.emit(stage)
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _stage = stage
+                QTimer.singleShot(0, lambda: self.stage_files_uploaded.emit(_stage))
             except Exception as e:
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.stage_upload_error.emit(str(e))
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _err = str(e)
+                QTimer.singleShot(0, lambda: self.stage_upload_error.emit(_err))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -7818,6 +8058,10 @@ class CardEditDialog(QDialog):
         total_steps = len(file_paths) * 2
         progress = create_progress_dialog("Загрузка файлов", "Подготовка к загрузке...", "Отмена", total_steps, self)
 
+        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         def upload_thread():
             try:
                 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
@@ -7826,7 +8070,7 @@ class CardEditDialog(QDialog):
 
                 def update_progress(index, total, fname, phase):
                     nonlocal current_step
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
                     current_step = index
                     # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
@@ -7848,12 +8092,13 @@ class CardEditDialog(QDialog):
                     # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, progress.close)
-                    self.stage_upload_error.emit("Не удалось загрузить файлы")
+                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                    QTimer.singleShot(0, lambda: self.stage_upload_error.emit("Не удалось загрузить файлы"))
                     return
 
                 # Генерируем превью и сохраняем в БД
                 for i, uploaded_file in enumerate(uploaded_files):
-                    if progress.wasCanceled():
+                    if cancel_event.is_set():
                         return
 
                     current_step = len(file_paths) + i
@@ -7912,7 +8157,9 @@ class CardEditDialog(QDialog):
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.stage_files_uploaded.emit(stage)
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _stage = stage
+                QTimer.singleShot(0, lambda: self.stage_files_uploaded.emit(_stage))
 
             except Exception as e:
                 print(f"[ERROR] Ошибка загрузки файлов: {e}")
@@ -7921,7 +8168,9 @@ class CardEditDialog(QDialog):
                 # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
                 from PyQt5.QtCore import QTimer
                 QTimer.singleShot(0, progress.close)
-                self.stage_upload_error.emit(str(e))
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                _err = str(e)
+                QTimer.singleShot(0, lambda: self.stage_upload_error.emit(_err))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -8261,9 +8510,10 @@ class CardEditDialog(QDialog):
         self._preview_loader_thread.start()
 
     def _on_preview_loaded_from_thread(self, file_id, pixmap):
-        """Callback из потока загрузки - переводит в главный поток через сигнал"""
-        # Вызываем сигнал для обновления UI в главном потоке
-        self.preview_loaded.emit(file_id, pixmap)
+        """Callback из потока загрузки - переводит в главный поток через QTimer"""
+        # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety (вызывается из PreviewLoaderThread)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self.preview_loaded.emit(file_id, pixmap))
 
     def _on_preview_loaded(self, file_id, pixmap):
         """Обработчик сигнала - обновляет превью в UI (выполняется в главном потоке)"""

@@ -193,8 +193,35 @@ class ArchiveCard(QFrame):
 
         layout.addLayout(info_layout)
 
-        # Добавляем stretch, чтобы кнопка всегда была внизу
+        # Добавляем stretch, чтобы кнопки всегда были внизу
         layout.addStretch(1)
+
+        # ========== КНОПКА "ПЕРЕВЕСТИ В АВТОРСКИЙ НАДЗОР" ==========
+        # Показываем только для карточек, статус которых НЕ "АВТОРСКИЙ НАДЗОР"
+        if 'АВТОРСКИЙ НАДЗОР' not in status and 'НАДЗОР' not in status:
+            supervision_btn = IconLoader.create_icon_button(
+                'shield', 'В авторский надзор', 'Перевести в авторский надзор', icon_size=12)
+            supervision_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    padding: 4px 20px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    max-height: 19px;
+                    min-height: 19px;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+                QPushButton:pressed {
+                    background-color: #1565C0;
+                }
+            """)
+            supervision_btn.clicked.connect(self._transfer_to_supervision)
+            layout.addWidget(supervision_btn, 0, Qt.AlignCenter)
 
         # ========== КНОПКА ПОДРОБНЕЕ (SVG) ==========
         details_btn = IconLoader.create_icon_button('info', 'Подробнее', 'Просмотр деталей', icon_size=12)
@@ -219,9 +246,47 @@ class ArchiveCard(QFrame):
         """)
         details_btn.clicked.connect(self.show_details)
         layout.addWidget(details_btn, 0, Qt.AlignCenter)
-        
+
         self.setLayout(layout)
         
+    def _transfer_to_supervision(self):
+        """Перевести карточку в статус 'АВТОРСКИЙ НАДЗОР'"""
+        reply = CustomQuestionBox(
+            self,
+            'Подтверждение',
+            'Перевести карточку в авторский надзор?'
+        ).exec_()
+
+        if reply == QDialog.Accepted:
+            try:
+                contract_id = self.card_data.get('contract_id')
+                if not contract_id:
+                    CustomMessageBox(self, 'Ошибка', 'Не найден contract_id', 'error').exec_()
+                    return
+
+                self.data.update_contract(contract_id, {'status': 'АВТОРСКИЙ НАДЗОР'})
+
+                CustomMessageBox(
+                    self, 'Успех',
+                    'Карточка переведена в авторский надзор',
+                    'success'
+                ).exec_()
+
+                # Обновляем список архива через родительский CRMTab
+                parent = self.parent()
+                while parent:
+                    from ui.crm_tab import CRMTab
+                    if isinstance(parent, CRMTab):
+                        parent.refresh_current_tab()
+                        break
+                    parent = parent.parent()
+
+            except Exception as e:
+                print(f"[ArchiveCard] Ошибка перевода в авторский надзор: {e}")
+                import traceback
+                traceback.print_exc()
+                CustomMessageBox(self, 'Ошибка', f'Не удалось перевести: {e}', 'error').exec_()
+
     def show_details(self):
         """Показать полную информацию о проекте"""
         # ИСПРАВЛЕНИЕ: Передаём api_client для возможности синхронизации
@@ -1369,7 +1434,9 @@ class ArchiveCardDetailsDialog(QDialog):
             except Exception as e:
                 print(f"[ARCHIVE-SYNC] Ошибка сканирования: {e}")
             finally:
-                self._sync_ended.emit()
+                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, self._sync_ended.emit)
 
         import threading
         t = threading.Thread(target=sync_thread, daemon=True)

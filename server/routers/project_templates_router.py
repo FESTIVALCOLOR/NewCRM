@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, Employee, Contract, ProjectFile
 from auth import get_current_user
+from permissions import require_permission
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["project-templates"])
@@ -22,7 +23,7 @@ class ProjectTemplateCreate(BaseModel):
 @router.post("/")
 async def add_project_template(
     data: ProjectTemplateCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.update")),
     db: Session = Depends(get_db)
 ):
     """Добавить ссылку на шаблон проекта"""
@@ -78,7 +79,7 @@ async def get_project_templates(
 @router.delete("/{template_id}")
 async def delete_project_template(
     template_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.delete")),
     db: Session = Depends(get_db)
 ):
     """Удалить шаблон проекта"""

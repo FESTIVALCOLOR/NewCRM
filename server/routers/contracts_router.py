@@ -96,8 +96,7 @@ async def create_contract(
     try:
         contract = Contract(**contract_data.model_dump())
         db.add(contract)
-        db.commit()
-        db.refresh(contract)
+        db.flush()  # Получаем ID без коммита — единая транзакция
 
         # Автоматически создаём CRM карточку для нового договора
         # (кроме Авторского надзора — для него создаётся SupervisionCard)
@@ -108,7 +107,6 @@ async def create_contract(
                 manager_id=current_user.id
             )
             db.add(crm_card)
-            db.commit()
             logger.info(f"Создана CRM карточка для договора {contract.id}")
 
         # Лог
@@ -119,7 +117,10 @@ async def create_contract(
             entity_id=contract.id
         )
         db.add(log)
+
+        # Единый коммит: договор + карточка + лог — атомарно
         db.commit()
+        db.refresh(contract)
 
         return contract
 
@@ -136,7 +137,7 @@ async def create_contract(
 async def update_contract(
     contract_id: int,
     contract_data: ContractUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("contracts.update")),
     db: Session = Depends(get_db)
 ):
     """Обновить договор"""
@@ -156,6 +157,10 @@ async def update_contract(
     # Обновление полей
     for field, value in update_data.items():
         setattr(contract, field, value)
+
+    # Auto-fill status_changed_date при смене статуса
+    if new_status and new_status != old_status:
+        contract.status_changed_date = datetime.utcnow().strftime('%Y-%m-%d')
 
     contract.updated_at = datetime.utcnow()
     db.commit()
@@ -193,7 +198,7 @@ async def update_contract(
 async def update_contract_files(
     contract_id: int,
     files_data: ContractFilesUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("contracts.update")),
     db: Session = Depends(get_db)
 ):
     """

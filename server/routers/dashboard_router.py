@@ -186,12 +186,21 @@ async def get_crm_dashboard(
         ).filter(contract_condition)
         total_orders, total_area = total_query.first()
 
-        # 3. Активные заказы в СРМ
-        active_orders = db.query(crm_table).count()
+        # 3. Активные заказы в СРМ (исключаем архивные статусы)
+        active_orders = db.query(crm_table).join(
+            Contract, crm_table.contract_id == Contract.id
+        ).filter(
+            contract_condition,
+            ~Contract.status.in_(['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
+        ).count()
 
-        # 4. Архивные заказы (считаем из истории или архивной таблицы)
-        # Для упрощения считаем как разницу между всеми договорами и активными
-        archive_orders = total_orders - active_orders if total_orders > active_orders else 0
+        # 4. Архивные заказы (прямой запрос по архивным статусам)
+        archive_orders = db.query(crm_table).join(
+            Contract, crm_table.contract_id == Contract.id
+        ).filter(
+            contract_condition,
+            Contract.status.in_(['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
+        ).count()
 
         # 5. Активные заказы агента
         agent_active_orders = 0

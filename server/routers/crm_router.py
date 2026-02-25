@@ -43,15 +43,44 @@ def _add_business_days(start_date, days: int):
     return current
 
 
+RUSSIAN_HOLIDAYS = [
+    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+    (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4),
+]
+
+
+def _is_working_day(d):
+    """Рабочий ли день (учитывает выходные + праздники)"""
+    if d.weekday() in [5, 6]:
+        return False
+    if (d.month, d.day) in RUSSIAN_HOLIDAYS:
+        return False
+    return True
+
+
 def _count_business_days(start_date, end_date):
-    """Подсчёт рабочих дней между двумя датами (пн-пт)"""
+    """Подсчёт рабочих дней между двумя датами (с учётом праздников)"""
     days = 0
     current = start_date
     while current < end_date:
-        if current.weekday() < 5:  # пн=0, пт=4
+        if _is_working_day(current):
             days += 1
         current += timedelta(days=1)
     return days
+
+
+def _add_working_days_to_date(start_date_str, working_days):
+    """Добавить рабочие дни к дате (строка YYYY-MM-DD → строка YYYY-MM-DD)"""
+    try:
+        current = datetime.strptime(start_date_str, '%Y-%m-%d')
+    except (ValueError, TypeError):
+        return start_date_str
+    added = 0
+    while added < working_days:
+        current += timedelta(days=1)
+        if _is_working_day(current):
+            added += 1
+    return current.strftime('%Y-%m-%d')
 
 
 logger = logging.getLogger(__name__)
@@ -306,6 +335,17 @@ async def create_crm_card(
 ):
     """Создать новую CRM карточку"""
     try:
+        # Защита от дублей: проверяем что CRM-карточка для этого договора ещё не существует
+        if card_data.contract_id:
+            existing_card = db.query(CRMCard).filter(
+                CRMCard.contract_id == card_data.contract_id
+            ).first()
+            if existing_card:
+                raise HTTPException(
+                    status_code=409,
+                    detail="CRM-карточка для этого договора уже существует"
+                )
+
         card = CRMCard(**card_data.model_dump())
         db.add(card)
         db.commit()
@@ -325,23 +365,23 @@ async def create_crm_card(
             "id": card.id,
             "contract_id": card.contract_id,
             "column_name": card.column_name,
-            "deadline": card.deadline,
+            "deadline": str(card.deadline) if card.deadline else None,
             "tags": card.tags,
             "is_approved": card.is_approved,
-            "approval_deadline": card.approval_deadline,
+            "approval_deadline": str(card.approval_deadline) if card.approval_deadline else None,
             "approval_stages": json.loads(card.approval_stages) if card.approval_stages else None,
             "project_data_link": card.project_data_link,
             "tech_task_file": card.tech_task_file,
-            "tech_task_date": card.tech_task_date,
-            "survey_date": card.survey_date,
+            "tech_task_date": str(card.tech_task_date) if card.tech_task_date else None,
+            "survey_date": str(card.survey_date) if card.survey_date else None,
             "senior_manager_id": card.senior_manager_id,
             "sdp_id": card.sdp_id,
             "gap_id": card.gap_id,
             "manager_id": card.manager_id,
             "surveyor_id": card.surveyor_id,
             "order_position": card.order_position,
-            "created_at": card.created_at,
-            "updated_at": card.updated_at
+            "created_at": card.created_at.isoformat() if card.created_at else None,
+            "updated_at": card.updated_at.isoformat() if card.updated_at else None
         }
 
     except Exception as e:
@@ -381,6 +421,7 @@ async def update_crm_card(
         db.commit()
         db.refresh(card)
 
+        # R-11 FIX: Унифицированный формат ответа (как в create)
         return {
             'id': card.id,
             'contract_id': card.contract_id,
@@ -388,6 +429,20 @@ async def update_crm_card(
             'deadline': str(card.deadline) if card.deadline else None,
             'tags': card.tags,
             'is_approved': card.is_approved,
+            'approval_deadline': str(card.approval_deadline) if card.approval_deadline else None,
+            'approval_stages': json.loads(card.approval_stages) if card.approval_stages else None,
+            'project_data_link': card.project_data_link,
+            'tech_task_file': card.tech_task_file,
+            'tech_task_date': str(card.tech_task_date) if card.tech_task_date else None,
+            'survey_date': str(card.survey_date) if card.survey_date else None,
+            'senior_manager_id': card.senior_manager_id,
+            'sdp_id': card.sdp_id,
+            'gap_id': card.gap_id,
+            'manager_id': card.manager_id,
+            'surveyor_id': card.surveyor_id,
+            'order_position': card.order_position,
+            'created_at': card.created_at.isoformat() if card.created_at else None,
+            'updated_at': card.updated_at.isoformat() if card.updated_at else None,
         }
 
     except HTTPException:
@@ -407,21 +462,42 @@ async def move_crm_card_to_column(
 ):
     """Переместить CRM карточку в другую колонку"""
     try:
-        VALID_CRM_COLUMNS = [
-            'Новый заказ', 'В ожидании',
-            'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
-            'Стадия 3: рабочие чертежи', 'Стадия 4: комплектация',
-            'Выполненный проект'
-        ]
-        if move_request.column_name not in VALID_CRM_COLUMNS:
-            raise HTTPException(status_code=422, detail=f"Недопустимая колонка: {move_request.column_name}")
-
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
 
+        # S-01: Определяем тип проекта для выбора допустимых колонок
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        project_type = contract.project_type if contract else 'Индивидуальный'
+
+        INDIVIDUAL_COLUMNS = [
+            'Новый заказ', 'В ожидании',
+            'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
+            'Стадия 3: рабочие чертежи',
+            'Выполненный проект'
+        ]
+        TEMPLATE_COLUMNS = [
+            'Новый заказ', 'В ожидании',
+            'Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи',
+            'Стадия 3: 3д визуализация (Дополнительная)',
+            'Выполненный проект'
+        ]
+        VALID_CRM_COLUMNS = TEMPLATE_COLUMNS if project_type == 'Шаблонный' else INDIVIDUAL_COLUMNS
+
+        if move_request.column_name not in VALID_CRM_COLUMNS:
+            raise HTTPException(status_code=422, detail=f"Недопустимая колонка: {move_request.column_name}")
+
         old_column = card.column_name
         new_column = move_request.column_name
+
+        # Ограничение для Планировочного проекта: только определённые колонки
+        project_subtype = contract.project_subtype if contract else None
+        if project_subtype and 'Планировочный' in project_subtype:
+            if 'Стадия 2' in new_column or 'Стадия 3' in new_column:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Планировочный проект не может перейти в эту стадию"
+                )
 
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
         if new_column == 'Новый заказ' and old_column != 'Новый заказ':
@@ -455,9 +531,7 @@ async def move_crm_card_to_column(
                 # Сдвигаем дедлайн карточки
                 if card.deadline:
                     try:
-                        dl = datetime.strptime(card.deadline, '%Y-%m-%d')
-                        dl += timedelta(days=pause_days)
-                        card.deadline = dl.strftime('%Y-%m-%d')
+                        card.deadline = _add_working_days_to_date(card.deadline, pause_days)
                     except (ValueError, TypeError):
                         pass
                 # Сдвигаем дедлайны исполнителей стадий
@@ -467,9 +541,7 @@ async def move_crm_card_to_column(
                 for ex in executors:
                     if ex.deadline:
                         try:
-                            ex_dl = datetime.strptime(str(ex.deadline), '%Y-%m-%d')
-                            ex_dl += timedelta(days=pause_days)
-                            ex.deadline = ex_dl.strftime('%Y-%m-%d')
+                            ex.deadline = _add_working_days_to_date(str(ex.deadline), pause_days)
                         except (ValueError, TypeError):
                             pass
                 logger.info(f"K1: CRM card {card_id} resumed, pause_days={pause_days}, total={card.total_pause_days}")
@@ -479,12 +551,21 @@ async def move_crm_card_to_column(
         # Валидация последовательности переходов (руководство может перемещать свободно)
         free_move_roles = ['admin', 'director', 'Руководитель студии', 'Старший менеджер проектов']
         if current_user.role not in free_move_roles:
-            CRM_COLUMN_ORDER = [
-                'Новый заказ',
-                'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
-                'Стадия 3: рабочие чертежи', 'Стадия 4: комплектация',
-                'Выполненный проект'
-            ]
+            # S-01: Порядок колонок зависит от типа проекта
+            if project_type == 'Шаблонный':
+                CRM_COLUMN_ORDER = [
+                    'Новый заказ',
+                    'Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи',
+                    'Стадия 3: 3д визуализация (Дополнительная)',
+                    'Выполненный проект'
+                ]
+            else:
+                CRM_COLUMN_ORDER = [
+                    'Новый заказ',
+                    'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
+                    'Стадия 3: рабочие чертежи',
+                    'Выполненный проект'
+                ]
             # "В ожидании" — специальная колонка, можно перемещать туда и обратно
             if old_column != 'В ожидании' and new_column != 'В ожидании':
                 old_idx = CRM_COLUMN_ORDER.index(old_column) if old_column in CRM_COLUMN_ORDER else -1
@@ -564,6 +645,30 @@ async def assign_stage_executor(
         if not executor:
             raise HTTPException(status_code=404, detail="Исполнитель не найден")
 
+        # Валидация stage_name по типу проекта
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if contract:
+            if contract.project_type == 'Шаблонный':
+                allowed_stages = [
+                    'Стадия 1: планировочные решения',
+                    'Стадия 2: рабочие чертежи',
+                    'Стадия 3: 3д визуализация (Дополнительная)',
+                ]
+            elif contract.project_type == 'Индивидуальный':
+                allowed_stages = [
+                    'Стадия 1: планировочные решения',
+                    'Стадия 2: концепция дизайна',
+                    'Стадия 3: рабочие чертежи',
+                ]
+            else:
+                allowed_stages = None
+
+            if allowed_stages and executor_data.stage_name not in allowed_stages:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Недопустимая стадия '{executor_data.stage_name}' для типа проекта '{contract.project_type}'"
+                )
+
         # Проверка дубликата: тот же исполнитель на ту же стадию
         existing = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
@@ -618,6 +723,27 @@ async def complete_stage(
 ):
     """Обновить статус выполнения стадии"""
     try:
+        # Проверка прав: только назначенные на карточку сотрудники, исполнители стадий или суперпользователи
+        from permissions import SUPERUSER_ROLES
+        card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=404, detail="CRM карточка не найдена")
+
+        is_card_member = current_user.id in [
+            card.senior_manager_id, card.sdp_id, card.gap_id, card.manager_id
+        ]
+        is_stage_executor = db.query(StageExecutor).filter(
+            StageExecutor.crm_card_id == card_id,
+            StageExecutor.executor_id == current_user.id
+        ).first() is not None
+        is_superuser = current_user.role in SUPERUSER_ROLES
+
+        if not (is_card_member or is_stage_executor or is_superuser):
+            raise HTTPException(
+                status_code=403,
+                detail="Недостаточно прав для завершения стадии"
+            )
+
         stage_executor = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
             StageExecutor.stage_name == stage_name

@@ -20,6 +20,8 @@ from database import (
     MessengerChat, MessengerChatMember, MessengerScript, MessengerSetting, MessengerMessageLog,
 )
 from auth import get_current_user
+from permissions import require_permission
+from pydantic import BaseModel
 from messenger_schemas import (
     MessengerChatCreate, MessengerChatBind, SupervisionChatCreate,
     MessengerChatResponse, MessengerChatDetailResponse,
@@ -187,6 +189,33 @@ def _add_chat_members(
 
 
 # =============================================
+# TRIGGER SCRIPT (ручная отправка скрипта)
+# =============================================
+
+class TriggerScriptRequest(BaseModel):
+    card_id: int
+    script_type: str  # project_start, project_end, stage_complete, supervision_start, supervision_end
+    entity_type: str = 'crm'  # 'crm' или 'supervision'
+
+
+@router.post("/trigger-script")
+async def trigger_script_endpoint(
+    request: TriggerScriptRequest,
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    db: Session = Depends(get_db)
+):
+    """Ручная отправка скрипта мессенджера"""
+    from services.notification_service import trigger_messenger_notification, trigger_supervision_notification
+
+    if request.entity_type == 'supervision':
+        await trigger_supervision_notification(db, request.card_id, request.script_type)
+    else:
+        await trigger_messenger_notification(db, request.card_id, request.script_type)
+
+    return {"status": "success"}
+
+
+# =============================================
 # MESSENGER CHATS ENDPOINTS
 # Порядок: статические пути ПЕРЕД динамическими
 # =============================================
@@ -194,7 +223,7 @@ def _add_chat_members(
 @router.post("/chats", response_model=MessengerChatDetailResponse)
 async def create_messenger_chat(
     data: MessengerChatCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
     db: Session = Depends(get_db)
 ):
     """Создать чат автоматически (MTProto) для CRM-карточки"""
@@ -288,7 +317,7 @@ async def create_messenger_chat(
 @router.post("/chats/bind", response_model=MessengerChatDetailResponse)
 async def bind_messenger_chat(
     data: MessengerChatBind,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
     db: Session = Depends(get_db)
 ):
     """Привязать существующий чат по invite-ссылке"""
@@ -357,7 +386,7 @@ async def bind_messenger_chat(
 @router.post("/chats/supervision", response_model=MessengerChatDetailResponse)
 async def create_supervision_chat(
     data: SupervisionChatCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
     db: Session = Depends(get_db)
 ):
     """Создать чат автоматически (MTProto) для карточки надзора"""
@@ -509,7 +538,7 @@ async def get_messenger_chat_by_supervision(
 @router.delete("/chats/{chat_id}")
 async def delete_messenger_chat(
     chat_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("messenger.delete_chat")),
     db: Session = Depends(get_db)
 ):
     """Удалить/отвязать чат"""

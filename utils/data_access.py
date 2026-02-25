@@ -2499,14 +2499,22 @@ class DataAccess(QObject):
 
     # ==================== ТАБЛИЦА СРОКОВ (НАДЗОР) ====================
 
-    def get_supervision_timeline(self, card_id: int) -> List[Dict]:
-        """Получить таблицу сроков надзора"""
+    def get_supervision_timeline(self, card_id: int) -> Dict:
+        """Получить таблицу сроков надзора.
+
+        Возвращает {"entries": [...], "totals": {...}}.
+        Обратная совместимость: если результат — список, оборачиваем.
+        """
         if self._should_use_api():
             try:
-                return self.api_client.get_supervision_timeline(card_id)
+                result = self.api_client.get_supervision_timeline(card_id)
+                # api_client уже возвращает dict с entries/totals
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_supervision_timeline, fallback: {e}")
-        return self.db.get_supervision_timeline(card_id)
+        # Локальная БД возвращает список
+        entries = self.db.get_supervision_timeline(card_id)
+        return {'entries': entries or [], 'totals': {}}
 
     def init_supervision_timeline(self, card_id: int, data: Dict = None) -> Optional[Dict]:
         """Инициализировать таблицу сроков надзора"""
@@ -2762,6 +2770,15 @@ class DataAccess(QObject):
             except Exception:
                 pass
         return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}
+
+    def trigger_script(self, card_id: int, script_type: str, entity_type: str = 'crm') -> bool:
+        """Отправить скрипт мессенджера (начальный/завершающий)"""
+        if self.api_client:
+            try:
+                return self.api_client.trigger_script(card_id, script_type, entity_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] trigger_script error: {e}")
+        return False
 
     def create_messenger_script(self, data: Dict) -> Optional[Dict]:
         """Создать скрипт мессенджера"""

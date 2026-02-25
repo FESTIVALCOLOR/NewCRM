@@ -68,13 +68,24 @@ class TimelineMixin:
         self._handle_response(response)
         return b''
 
-    def get_supervision_timeline(self, card_id: int) -> List[Dict[str, Any]]:
-        """Получить таблицу сроков надзора"""
+    def get_supervision_timeline(self, card_id: int) -> Dict[str, Any]:
+        """Получить таблицу сроков надзора.
+
+        API возвращает {"entries": [...], "totals": {...}}.
+        Для обратной совместимости: если ответ — список, оборачиваем в dict.
+        """
         response = self._request(
             'GET',
             f"{self.base_url}/api/supervision-timeline/{card_id}"
         )
-        return self._handle_response(response)
+        result = self._handle_response(response)
+        # Новый формат: dict с ключом "entries"
+        if isinstance(result, dict) and 'entries' in result:
+            return result
+        # Старый формат: просто список записей
+        if isinstance(result, list):
+            return {'entries': result, 'totals': {}}
+        return {'entries': [], 'totals': {}}
 
     def init_supervision_timeline(self, card_id: int, data: Dict[str, Any] = None) -> Dict[str, Any]:
         """Инициализировать таблицу сроков надзора"""

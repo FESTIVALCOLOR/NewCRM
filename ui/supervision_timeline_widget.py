@@ -75,6 +75,7 @@ class SupervisionTimelineWidget(QWidget):
         self.api_client = api_client
         self.employee = employee
         self.entries = []
+        self.totals = {}
         self._loading = False
 
         self.card_id = card_data.get('id')
@@ -523,20 +524,29 @@ class SupervisionTimelineWidget(QWidget):
 
         self._loading = True
         try:
-            entries = self.data.get_supervision_timeline(self.card_id)
+            timeline_result = self.data.get_supervision_timeline(self.card_id)
+            entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+            totals = timeline_result.get('totals', {}) if isinstance(timeline_result, dict) else {}
+
             if not entries:
                 # Автоинициализация через API
                 result = self.data.init_supervision_timeline(self.card_id)
                 if result and 'entries' in result:
                     entries = result['entries']
+                    totals = result.get('totals', {})
                 else:
                     # API мог вернуть ошибку (404) — пробуем локальную инициализацию
-                    entries = self.data.get_supervision_timeline(self.card_id)
+                    timeline_result = self.data.get_supervision_timeline(self.card_id)
+                    entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+                    totals = timeline_result.get('totals', {}) if isinstance(timeline_result, dict) else {}
                     if not entries:
                         self._init_timeline_locally()
-                        entries = self.data.get_supervision_timeline(self.card_id)
+                        timeline_result = self.data.get_supervision_timeline(self.card_id)
+                        entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+                        totals = timeline_result.get('totals', {}) if isinstance(timeline_result, dict) else {}
 
             self.entries = entries or []
+            self.totals = totals or {}
             self._recalculate_all_days()
             self._populate_table()
             self._update_summary()
@@ -572,7 +582,9 @@ class SupervisionTimelineWidget(QWidget):
         self.table.setUpdatesEnabled(False)
         try:
             self.table.setRowCount(0)
-            self.table.setRowCount(len(self.entries))
+            # +1 строка для "Итого"
+            total_rows = len(self.entries) + 1 if self.entries else 0
+            self.table.setRowCount(total_rows)
 
             for row, entry in enumerate(self.entries):
                 self.table.setRowHeight(row, 36)
@@ -684,9 +696,78 @@ class SupervisionTimelineWidget(QWidget):
                     align='left', is_multiline=True, tooltip_text=tip)
                 self.table.setCellWidget(row, 10, notes_cell)
 
+            # === СТРОКА "ИТОГО" ===
+            if self.entries:
+                self._add_totals_row(len(self.entries))
+
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
+
+    def _add_totals_row(self, row):
+        """Добавить строку 'Итого' в конец таблицы (не редактируемая, жирный шрифт, серый фон)"""
+        totals_bg = '#F5F5F5'
+        self.table.setRowHeight(row, 36)
+
+        # Кол 0: "Итого" (жирный)
+        totals_label = self._make_cell_label('Итого', totals_bg, 'left', bold=True)
+        self.table.setCellWidget(row, 0, totals_label)
+
+        # Кол 1-3: пустые
+        for col in (1, 2, 3):
+            empty_lbl = self._make_cell_label('', totals_bg)
+            self.table.setCellWidget(row, col, empty_lbl)
+
+        # Суммы: сначала пробуем из totals (от сервера), иначе считаем локально
+        totals = getattr(self, 'totals', {}) or {}
+        total_bp = totals.get('budget_planned', None)
+        total_ba = totals.get('budget_actual', None)
+        total_savings = totals.get('budget_savings', None)
+        total_commission = totals.get('commission', None)
+
+        # Если сервер не вернул totals — считаем из entries
+        if total_bp is None:
+            total_bp = sum(e.get('budget_planned', 0) or 0 for e in self.entries)
+        if total_ba is None:
+            total_ba = sum(e.get('budget_actual', 0) or 0 for e in self.entries)
+        if total_savings is None:
+            total_savings = sum(e.get('budget_savings', 0) or 0 for e in self.entries)
+        if total_commission is None:
+            total_commission = sum(e.get('commission', 0) or 0 for e in self.entries)
+
+        # Кол 4: Бюджет план
+        bp_text = f'{total_bp:,.0f}' if total_bp else ''
+        bp_lbl = self._make_cell_label(bp_text, totals_bg, 'right', bold=True)
+        self.table.setCellWidget(row, 4, bp_lbl)
+
+        # Кол 5: Бюджет факт
+        ba_text = f'{total_ba:,.0f}' if total_ba else ''
+        ba_lbl = self._make_cell_label(ba_text, totals_bg, 'right', bold=True)
+        self.table.setCellWidget(row, 5, ba_lbl)
+
+        # Кол 6: Экономия
+        savings_color = '#333333'
+        if total_savings > 0:
+            savings_color = '#4CAF50'
+        elif total_savings < 0:
+            savings_color = '#F44336'
+        savings_text = f'{total_savings:,.0f}' if total_savings else ''
+        savings_lbl = self._make_cell_label(savings_text, totals_bg, 'right', bold=True, color=savings_color)
+        self.table.setCellWidget(row, 6, savings_lbl)
+
+        # Кол 7: Поставщик — пусто
+        empty_supplier = self._make_cell_label('', totals_bg)
+        self.table.setCellWidget(row, 7, empty_supplier)
+
+        # Кол 8: Комиссия
+        comm_text = f'{total_commission:,.0f}' if total_commission else ''
+        comm_lbl = self._make_cell_label(comm_text, totals_bg, 'right', bold=True)
+        self.table.setCellWidget(row, 8, comm_lbl)
+
+        # Кол 9-10: пустые
+        for col in (9, 10):
+            empty_lbl = self._make_cell_label('', totals_bg)
+            self.table.setCellWidget(row, col, empty_lbl)
 
     def _on_status_changed(self, row, stage_code, new_status):
         """Изменение статуса"""

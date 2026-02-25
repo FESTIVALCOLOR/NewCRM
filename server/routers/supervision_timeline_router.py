@@ -63,10 +63,21 @@ async def get_supervision_timeline(
     entries = db.query(SupervisionTimelineEntry).filter(
         SupervisionTimelineEntry.supervision_card_id == card_id
     ).order_by(SupervisionTimelineEntry.sort_order).all()
-    return [
-        {c.name: getattr(e, c.name) for c in e.__table__.columns}
-        for e in entries
-    ]
+
+    totals = {
+        "budget_planned": sum(e.budget_planned or 0 for e in entries),
+        "budget_actual": sum(e.budget_actual or 0 for e in entries),
+        "budget_savings": sum(e.budget_savings or 0 for e in entries),
+        "commission": sum(e.commission or 0 for e in entries),
+    }
+
+    return {
+        "entries": [
+            {c.name: getattr(e, c.name) for c in e.__table__.columns}
+            for e in entries
+        ],
+        "totals": totals,
+    }
 
 
 @router.post("/{card_id}/init")

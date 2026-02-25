@@ -31,9 +31,9 @@ _SUPERVISION_COLUMN_TO_STAGE = {
     'Стадия 4: Закупка дверей и окон': 'STAGE_4_DOORS',
     'Стадия 5: Закупка настенных материалов': 'STAGE_5_WALL',
     'Стадия 6: Закупка напольных материалов': 'STAGE_6_FLOOR',
-    'Стадия 7: Лепного декора': 'STAGE_7_STUCCO',
-    'Стадия 8: Освещения': 'STAGE_8_LIGHTING',
-    'Стадия 9: бытовой техники': 'STAGE_9_APPLIANCES',
+    'Стадия 7: Лепной декор': 'STAGE_7_STUCCO',
+    'Стадия 8: Освещение': 'STAGE_8_LIGHTING',
+    'Стадия 9: Бытовая техника': 'STAGE_9_APPLIANCES',
     'Стадия 10: Закупка заказной мебели': 'STAGE_10_CUSTOM_FURNITURE',
     'Стадия 11: Закупка фабричной мебели': 'STAGE_11_FACTORY_FURNITURE',
     'Стадия 12: Закупка декора': 'STAGE_12_DECOR',
@@ -61,27 +61,40 @@ router = APIRouter(tags=["supervision"])
 @router.get("/cards")
 async def get_supervision_cards(
     status: str = "active",
+    skip: int = 0,
+    limit: int = 200,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
+    agent_type: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Получить список карточек авторского надзора"""
+    """Получить список карточек авторского надзора с фильтрацией"""
     try:
+        base_query = db.query(SupervisionCard).join(
+            Contract, SupervisionCard.contract_id == Contract.id
+        )
+
         if status == "active":
-            cards = db.query(SupervisionCard).join(
-                Contract, SupervisionCard.contract_id == Contract.id
-            ).filter(
-                Contract.status == 'АВТОРСКИЙ НАДЗОР'
-            ).order_by(
-                SupervisionCard.id.desc()
-            ).all()
+            base_query = base_query.filter(Contract.status == 'АВТОРСКИЙ НАДЗОР')
         else:
-            cards = db.query(SupervisionCard).join(
-                Contract, SupervisionCard.contract_id == Contract.id
-            ).filter(
-                Contract.status.in_(['СДАН', 'РАСТОРГНУТ'])
-            ).order_by(
-                SupervisionCard.id.desc()
-            ).all()
+            base_query = base_query.filter(Contract.status.in_(['СДАН', 'РАСТОРГНУТ']))
+
+        # Серверная фильтрация
+        if address:
+            base_query = base_query.filter(Contract.address.ilike(f"%{address}%"))
+        if city:
+            base_query = base_query.filter(Contract.city == city)
+        if agent_type:
+            base_query = base_query.filter(Contract.agent_type == agent_type)
+        if date_from:
+            base_query = base_query.filter(Contract.contract_date >= date_from)
+        if date_to:
+            base_query = base_query.filter(Contract.contract_date <= date_to)
+
+        cards = base_query.order_by(SupervisionCard.id.desc()).offset(skip).limit(limit).all()
 
         result = []
         for card in cards:
@@ -111,6 +124,8 @@ async def get_supervision_cards(
                 'agent_type': contract.agent_type,
                 'contract_status': contract.status,
                 'termination_reason': contract.termination_reason if status == "archived" else None,
+                # S-14: Добавлено status_changed_date для фильтрации в архиве
+                'status_changed_date': contract.status_changed_date.isoformat() if hasattr(contract, 'status_changed_date') and contract.status_changed_date else None,
                 'created_at': card.created_at.isoformat() if card.created_at else None,
                 'updated_at': card.updated_at.isoformat() if card.updated_at else None,
             }
@@ -279,8 +294,8 @@ async def move_supervision_card_to_column(
             'Стадия 1: Закупка керамогранита', 'Стадия 2: Закупка сантехники',
             'Стадия 3: Закупка оборудования', 'Стадия 4: Закупка дверей и окон',
             'Стадия 5: Закупка настенных материалов', 'Стадия 6: Закупка напольных материалов',
-            'Стадия 7: Лепного декора', 'Стадия 8: Освещения',
-            'Стадия 9: бытовой техники', 'Стадия 10: Закупка заказной мебели',
+            'Стадия 7: Лепной декор', 'Стадия 8: Освещение',
+            'Стадия 9: Бытовая техника', 'Стадия 10: Закупка заказной мебели',
             'Стадия 11: Закупка фабричной мебели', 'Стадия 12: Закупка декора',
             'Выполненный проект'
         ]
