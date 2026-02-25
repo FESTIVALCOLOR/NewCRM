@@ -862,10 +862,44 @@ class MessengerMessageLog(Base):
     delivery_status = Column(String, default="sent")  # sent/failed/pending
 
 
+def _auto_migrate_columns():
+    """Автоматически добавляет недостающие столбцы в существующие таблицы.
+
+    create_all() НЕ добавляет новые столбцы к уже существующим таблицам.
+    Эта функция сравнивает модель с БД и выполняет ALTER TABLE ADD COLUMN.
+    """
+    import logging
+    from sqlalchemy import inspect, text
+    logger = logging.getLogger(__name__)
+    try:
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # create_all() создаст таблицу целиком
+
+            db_columns = {col['name'] for col in inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in db_columns:
+                    col_type = col.type.compile(engine.dialect)
+                    nullable = "NULL" if col.nullable else "NOT NULL"
+                    default = ""
+                    if col.default is not None:
+                        default = f" DEFAULT {col.default.arg!r}"
+                    sql = f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type} {nullable}{default}'
+                    with engine.begin() as conn:
+                        conn.execute(text(sql))
+                    logger.info(f"auto-migrate: добавлен столбец {table.name}.{col.name} ({col_type})")
+    except Exception as e:
+        logger.warning(f"auto-migrate warning: {e}")
+
+
 def init_db():
     """Инициализация базы данных"""
     try:
         Base.metadata.create_all(bind=engine)
+        _auto_migrate_columns()
     except Exception as e:
         # Race condition при 2+ workers: один уже создал таблицы
         import logging
