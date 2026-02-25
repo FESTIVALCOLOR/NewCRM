@@ -11,7 +11,17 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+import pytest
+
 from utils.button_debounce import debounce_click, _last_click_time
+
+
+@pytest.fixture(autouse=True)
+def clear_debounce_state():
+    """Очищать глобальное состояние debounce перед каждым тестом."""
+    _last_click_time.clear()
+    yield
+    _last_click_time.clear()
 
 
 def test_debounce_click_basic_call():
