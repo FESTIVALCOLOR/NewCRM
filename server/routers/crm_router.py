@@ -806,10 +806,11 @@ async def delete_crm_card(
             ApprovalStageDeadline.crm_card_id == card_id
         ).delete()
 
-        # Удаляем записи timeline проекта
-        db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.crm_card_id == card_id
-        ).delete()
+        # Удаляем записи timeline проекта (по contract_id карточки)
+        if card.contract_id:
+            db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == card.contract_id
+            ).delete()
 
         # Удаляем историю действий
         db.query(ActionHistory).filter(

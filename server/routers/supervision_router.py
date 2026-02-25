@@ -819,10 +819,9 @@ async def delete_supervision_order(
 
         # Удаляем файлы проекта, привязанные к стадиям надзора (не CRM-файлы)
         if card.contract_id:
-            supervision_stage_names = list(SUPERVISION_STAGES.keys())
             db.query(ProjectFile).filter(
                 ProjectFile.contract_id == card.contract_id,
-                ProjectFile.stage.in_(supervision_stage_names)
+                ProjectFile.stage.like('Стадия%')
             ).delete(synchronize_session=False)
 
         # Удаляем историю

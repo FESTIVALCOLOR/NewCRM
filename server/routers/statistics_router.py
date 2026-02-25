@@ -344,7 +344,9 @@ async def get_project_statistics(
             ).filter(
                 Contract.project_type == project_type,
                 StageExecutor.completed == False,
-                StageExecutor.deadline < date_today.today()
+                StageExecutor.deadline.isnot(None),
+                StageExecutor.deadline != '',
+                cast(StageExecutor.deadline, Date) < date_today.today()
             )
             # Применяем те же фильтры
             if year or month or quarter:
