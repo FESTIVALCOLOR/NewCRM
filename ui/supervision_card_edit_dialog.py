@@ -408,7 +408,7 @@ class SupervisionCardEditDialog(QDialog):
 
         # --- Кнопки скриптов мессенджера (надзор, иконки без текста) ---
         self.sv_start_script_btn = IconLoader.create_icon_button(
-            'send', '', 'Начальный скрипт — отправить в чат', icon_size=16
+            'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
         )
         self.sv_start_script_btn.setStyleSheet("""
             QPushButton {

@@ -1073,7 +1073,7 @@ class CardEditDialog(QDialog):
 
             # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
             self.start_script_btn = IconLoader.create_icon_button(
-                'send', '', 'Начальный скрипт — отправить в чат', icon_size=16
+                'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
             )
             self.start_script_btn.setStyleSheet("""
                 QPushButton {

@@ -216,7 +216,8 @@ class MiscMixin:
                 'DELETE',
                 f"{self.base_url}/api/v1/agents/{agent_id}"
             )
-            return response.status_code == 200
+            self._handle_response(response)
+            return True
         except Exception as e:
             print(f"[API] Ошибка удаления агента: {e}")
             return False
