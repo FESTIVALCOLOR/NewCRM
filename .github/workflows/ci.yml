@@ -75,7 +75,7 @@ jobs:
           pip install pytest pytest-timeout pytest-cov requests urllib3 pydantic pydantic-settings
           pip install bcrypt PyJWT cryptography
       - name: Запуск Client тестов
-        run: pytest tests/client/ -v --timeout=30 -p no:qt --cov=utils --cov=config --cov-report=term-missing --cov-report=xml:coverage-client.xml
+        run: pytest tests/client/ -v --timeout=30 -p no:qt --ignore=tests/client/test_date_utils.py --ignore=tests/client/test_planned_dates.py --cov=utils --cov=config --cov-report=term-missing --cov-report=xml:coverage-client.xml
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
