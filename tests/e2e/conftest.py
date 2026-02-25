@@ -382,7 +382,7 @@ class TestDataFactory:
     # --- CRM карточки ---
 
     def create_crm_card(self, contract_id: int, **overrides) -> dict:
-        """Создать CRM карточку"""
+        """Создать или получить CRM карточку (контракт авто-создаёт карточку)"""
         data = {
             "contract_id": contract_id,
             "column_name": "Новый заказ",
@@ -395,8 +395,31 @@ class TestDataFactory:
             headers=self.headers,
             timeout=REQUEST_TIMEOUT
         )
-        assert resp.status_code == 200, f"Ошибка создания CRM карточки: {resp.status_code} {resp.text}"
-        card = resp.json()
+        if resp.status_code == 409:
+            # Карточка уже создана автоматически при создании контракта
+            cards_resp = _http_session.get(
+                f"{self.api_base}/api/crm/cards",
+                params={"project_type": "Индивидуальный"},
+                headers=self.headers,
+                timeout=REQUEST_TIMEOUT
+            )
+            assert cards_resp.status_code == 200, f"Ошибка получения CRM карточек: {cards_resp.status_code}"
+            cards = cards_resp.json()
+            card = next((c for c in cards if c["contract_id"] == contract_id), None)
+            if not card:
+                # Попробуем шаблонные
+                cards_resp = _http_session.get(
+                    f"{self.api_base}/api/crm/cards",
+                    params={"project_type": "Шаблонный"},
+                    headers=self.headers,
+                    timeout=REQUEST_TIMEOUT
+                )
+                cards = cards_resp.json() if cards_resp.status_code == 200 else []
+                card = next((c for c in cards if c["contract_id"] == contract_id), None)
+            assert card, f"Карточка для contract_id={contract_id} не найдена после 409"
+        else:
+            assert resp.status_code == 200, f"Ошибка создания CRM карточки: {resp.status_code} {resp.text}"
+            card = resp.json()
         self._created_crm_cards.append(card["id"])
         return card
 
