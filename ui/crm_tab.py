@@ -435,14 +435,11 @@ class CRMTab(QWidget):
             QTimer.singleShot(300, self._deferred_load_archive)
 
     def _deferred_load_archive(self):
-        """Отложенная загрузка архивных карточек"""
-        self.data.prefer_local = True
-        try:
-            self.load_archive_cards('Индивидуальный')
-            if hasattr(self, 'template_archive_widget'):
-                self.load_archive_cards('Шаблонный')
-        finally:
-            self.data.prefer_local = False
+        """Отложенная загрузка архивных карточек (через API, не prefer_local)"""
+        # Архив загружаем через API — локальная БД не содержит crm_cards
+        self.load_archive_cards('Индивидуальный')
+        if hasattr(self, 'template_archive_widget'):
+            self.load_archive_cards('Шаблонный')
 
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей активной вкладки"""
@@ -557,19 +554,22 @@ class CRMTab(QWidget):
         # Пропускаем если ensure_data_loaded уже загружает данные
         if getattr(self, '_loading_guard', False):
             return
-        # Используем локальные данные для мгновенного переключения
+        # Активные карточки — из локальной БД (мгновенно)
         self.data.prefer_local = True
         try:
             if index == 0:
                 self.load_cards_for_type('Индивидуальный')
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
-                    self.load_archive_cards('Индивидуальный')
             elif index == 1:
                 self.load_cards_for_type('Шаблонный')
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
-                    self.load_archive_cards('Шаблонный')
         finally:
             self.data.prefer_local = False
+
+        # Архив — через API (локальная БД не содержит crm_cards)
+        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+            if index == 0:
+                self.load_archive_cards('Индивидуальный')
+            elif index == 1:
+                self.load_archive_cards('Шаблонный')
 
         # Переключаем дашборд в соответствии с выбранной вкладкой
         mw = self.window()
@@ -852,20 +852,23 @@ class CRMTab(QWidget):
        
     def refresh_current_tab(self):
         """Обновление текущей активной вкладки"""
-        # Используем локальные данные — они уже обновлены через API при сохранении
+        current_index = self.project_tabs.currentIndex()
+        # Активные карточки — из локальной БД (мгновенно)
         self.data.prefer_local = True
         try:
-            current_index = self.project_tabs.currentIndex()
             if current_index == 0:
                 self.load_cards_for_type('Индивидуальный')
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
-                    self.load_archive_cards('Индивидуальный')
             elif current_index == 1:
                 self.load_cards_for_type('Шаблонный')
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
-                    self.load_archive_cards('Шаблонный')
         finally:
             self.data.prefer_local = False
+
+        # Архив — через API (локальная БД не содержит crm_cards)
+        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+            if current_index == 0:
+                self.load_archive_cards('Индивидуальный')
+            elif current_index == 1:
+                self.load_archive_cards('Шаблонный')
 
         self.update_project_tab_counters()
 

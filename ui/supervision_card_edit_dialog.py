@@ -413,8 +413,9 @@ class SupervisionCardEditDialog(QDialog):
         self.sv_start_script_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff; color: #333333;
-                padding: 0px; border-radius: 4px; border: 1px solid #d9d9d9;
-                max-height: 36px; min-height: 36px;
+                padding: 0px; border-radius: 2px; border: 1px solid #d9d9d9;
+                min-width: 36px; max-width: 36px;
+                min-height: 36px; max-height: 36px;
             }
             QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
             QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
@@ -429,8 +430,9 @@ class SupervisionCardEditDialog(QDialog):
         self.sv_end_script_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff; color: #333333;
-                padding: 0px; border-radius: 4px; border: 1px solid #d9d9d9;
-                max-height: 36px; min-height: 36px;
+                padding: 0px; border-radius: 2px; border: 1px solid #d9d9d9;
+                min-width: 36px; max-width: 36px;
+                min-height: 36px; max-height: 36px;
             }
             QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
             QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }

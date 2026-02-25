@@ -213,21 +213,40 @@ async def get_crm_dashboard(
                 Contract.status.in_(archive_statuses)
             ).count()
 
-        # 5. Активные заказы агента
+        # 5. Активные заказы агента (без архивных)
         agent_active_orders = 0
         if agent_type:
-            agent_active_orders = db.query(crm_table).join(
-                Contract, crm_table.contract_id == Contract.id
-            ).filter(contract_condition, Contract.agent_type == agent_type).count()
+            if project_type == 'Авторский надзор':
+                agent_active_orders = db.query(crm_table).join(
+                    Contract, crm_table.contract_id == Contract.id
+                ).filter(contract_condition, Contract.agent_type == agent_type).count()
+            else:
+                agent_active_orders = db.query(crm_table).join(
+                    Contract, crm_table.contract_id == Contract.id
+                ).filter(
+                    contract_condition,
+                    Contract.agent_type == agent_type,
+                    ~Contract.status.in_(archive_statuses)
+                ).count()
 
         # 6. Архивные заказы агента
         agent_archive_orders = 0
         if agent_type:
-            agent_total = db.query(Contract).filter(
-                contract_condition,
-                Contract.agent_type == agent_type
-            ).count()
-            agent_archive_orders = agent_total - agent_active_orders if agent_total > agent_active_orders else 0
+            if project_type == 'Авторский надзор':
+                agent_archive_orders = db.query(crm_table).join(
+                    Contract, crm_table.contract_id == Contract.id
+                ).filter(
+                    Contract.status.in_(['СДАН', 'РАСТОРГНУТ']),
+                    Contract.agent_type == agent_type
+                ).count()
+            else:
+                agent_archive_orders = db.query(crm_table).join(
+                    Contract, crm_table.contract_id == Contract.id
+                ).filter(
+                    contract_condition,
+                    Contract.agent_type == agent_type,
+                    Contract.status.in_(archive_statuses)
+                ).count()
 
         return {
             'total_orders': total_orders,

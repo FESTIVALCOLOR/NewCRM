@@ -8,7 +8,7 @@
 2. **Запрет emoji в UI** — только SVG через IconLoader
 3. **`resource_path()`** для всех ресурсов (иконки, шрифты, логотипы)
 4. **Рамки диалогов = 1px** (`border: 1px solid #E0E0E0; border-radius: 10px;`)
-5. **Docker rebuild** после серверных изменений (не restart!)
+5. **Docker rebuild** после серверных изменений (не restart!). Команда: `ssh timeweb "cd /opt/interior_studio && git pull origin <branch> && docker-compose down && docker-compose build --no-cache api && docker-compose up -d"`. Выполнять СРАЗУ после push с серверными изменениями. Проверить health check.
 6. **Совместимость API/DB** ключей ответов (total_orders, position, source)
 7. **Статические пути ПЕРЕД динамическими** в FastAPI
 8. **Двухрежимная архитектура** (online API + offline SQLite)
@@ -18,6 +18,13 @@
 12. **Offline-очередь** — только сетевые ошибки, НЕ бизнес-ошибки (409/400)
 13. **Параметризованные SQL** (не f-strings, не format)
 14. **Именование:** snake_case переменные, PascalCase классы, UPPER_CASE константы
+
+## Обязательная верификация после исправлений
+
+1. **CI green** — все 5 jobs (lint, syntax-check, test-db, docker-build, test-e2e)
+2. **Docker rebuild** — если изменены файлы в `server/`, СРАЗУ после push пересобрать Docker
+3. **API проверка** — проверить исправленные endpoint-ы через curl с JWT: `ssh timeweb 'docker exec crm_api python3 -c "from auth import create_access_token; print(create_access_token({\"sub\": \"1\"}))"'`
+4. **НЕ отмечать баг исправленным** без доказательства (curl ответ, лог, скриншот)
 
 ## Архитектура проекта
 
