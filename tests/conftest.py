@@ -89,7 +89,14 @@ def temp_db(temp_db_path) -> sqlite3.Connection:
             department TEXT,
             role TEXT DEFAULT 'user',
             is_active INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Дополнительные поля сотрудника
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            birth_date TEXT,
+            status TEXT DEFAULT 'active',
+            secondary_position TEXT
         );
 
         -- Clients table
@@ -116,7 +123,16 @@ def temp_db(temp_db_path) -> sqlite3.Connection:
             contract_amount REAL,
             status TEXT DEFAULT 'active',
             yandex_folder_path TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Дополнительные поля договора
+            city TEXT,
+            agent_type TEXT,
+            total_amount REAL,
+            advance_payment REAL,
+            additional_payment REAL,
+            third_payment REAL,
+            contract_period TEXT,
+            termination_reason TEXT
         );
 
         -- CRM Cards table
@@ -173,7 +189,10 @@ def temp_db(temp_db_path) -> sqlite3.Connection:
             payment_status TEXT DEFAULT 'pending',
             report_month TEXT,
             reassigned INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Дополнительные поля выплат
+            supervision_card_id INTEGER,
+            is_manual INTEGER DEFAULT 0
         );
 
         -- Rates table
@@ -226,6 +245,14 @@ def temp_db(temp_db_path) -> sqlite3.Connection:
             new_value TEXT,
             user_id INTEGER REFERENCES employees(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Cities table (справочник городов)
+        CREATE TABLE IF NOT EXISTS cities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            status TEXT DEFAULT 'активный',
+            created_at TEXT DEFAULT (datetime('now'))
         );
     ''')
     conn.commit()

@@ -50,9 +50,55 @@ jobs:
           python-version: '3.11'
       - name: Установка зависимостей
         run: |
-          pip install pytest pytest-timeout pytest-order requests urllib3 pydantic pydantic-settings
+          pip install pytest pytest-timeout pytest-order pytest-cov requests urllib3 pydantic pydantic-settings
       - name: Запуск DB тестов
-        run: pytest tests/db/ -v --timeout=60 -p no:qt
+        run: pytest tests/db/ -v --timeout=30 --cov=database --cov-report=term-missing --cov-report=xml:coverage-db.xml
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-test-db
+          path: coverage-*.xml
+          retention-days: 7
+
+  # Тесты клиентской логики (без PyQt, без сервера)
+  test-client:
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Установка зависимостей
+        run: |
+          pip install pytest pytest-timeout pytest-cov requests urllib3 pydantic pydantic-settings
+          pip install bcrypt PyJWT cryptography
+      - name: Запуск Client тестов
+        run: pytest tests/client/ -v --timeout=30 -p no:qt --cov=utils --cov=config --cov-report=term-missing --cov-report=xml:coverage-client.xml
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-test-client
+          path: coverage-*.xml
+          retention-days: 7
+
+  # Тесты бэкенда (unit/mock, без Docker)
+  test-backend:
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Установка зависимостей
+        run: |
+          pip install -r server/requirements.txt
+          pip install pytest pytest-timeout pytest-cov
+      - name: Запуск Backend тестов
+        run: pytest tests/backend/ tests/api_client/ -v --timeout=60 -p no:qt --cov=server --cov-report=term-missing || true
 
   # Сборка Docker образа
   docker-build:
@@ -94,7 +140,7 @@ jobs:
       - name: Установка зависимостей сервера
         run: pip install -r server/requirements.txt
       - name: Установка зависимостей тестов
-        run: pip install pytest pytest-timeout pytest-order requests urllib3
+        run: pip install pytest pytest-timeout pytest-order pytest-cov requests urllib3
       - name: Запуск API сервера
         run: |
           cd server
@@ -109,7 +155,14 @@ jobs:
           done
           curl -f http://localhost:8000/health || (echo "=== Лог сервера ===" && cat /tmp/server.log && exit 1)
       - name: Запуск E2E тестов
-        run: pytest tests/e2e/ -v --timeout=60 -x -p no:qt
+        run: pytest tests/e2e/ -v --timeout=60 -x -p no:qt --cov=server --cov-report=term-missing --cov-report=xml:coverage-e2e.xml
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-test-e2e
+          path: coverage-*.xml
+          retention-days: 7
       - name: Показать лог сервера при ошибке
         if: failure()
         run: cat /tmp/server.log 2>/dev/null || true
