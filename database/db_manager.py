@@ -310,8 +310,9 @@ class DatabaseManager(DatabaseMigrations):
         (client_id, project_type, project_subtype, floors, agent_type, city,
          contract_number, contract_date, address, area, total_amount,
          advance_payment, additional_payment, third_payment,
-         contract_period, comments, contract_file_link, tech_task_link, yandex_folder_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         contract_period, comments, contract_file_link, tech_task_link, yandex_folder_path,
+         status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             contract_data['client_id'],
             contract_data['project_type'],
@@ -331,7 +332,8 @@ class DatabaseManager(DatabaseMigrations):
             contract_data.get('comments', ''),
             contract_data.get('contract_file_link', ''),
             contract_data.get('tech_task_link', ''),
-            yandex_folder_path
+            yandex_folder_path,
+            contract_data.get('status', 'Новый заказ')
         ))
 
         conn.commit()

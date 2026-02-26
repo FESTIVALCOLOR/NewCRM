@@ -77,6 +77,7 @@ def db(temp_db_path):
     db_manager.create_project_files_table()
     db_manager.create_project_templates_table()
     db_manager.create_performance_indexes()
+    db_manager.add_missing_fields_rates_payments_salaries()
 
     yield db_manager
 

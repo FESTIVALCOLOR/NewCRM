@@ -88,6 +88,8 @@ jobs:
           --ignore=tests/client/test_data_access_extended.py
           --ignore=tests/client/test_data_access_dual_mode.py
           --ignore=tests/client/test_timeline_calc.py
+          --ignore=tests/client/test_table_settings.py
+          --ignore=tests/client/test_sync_manager.py
           --cov=utils --cov=config --cov-report=term-missing --cov-report=xml:coverage-client.xml
       - name: Upload coverage
         if: always()

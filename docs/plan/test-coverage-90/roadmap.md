@@ -52,12 +52,42 @@
 - ✅ UI-INTERACT-01: Расширенные UI тесты взаимодействий
 - ✅ REGRESSION-01: Автоматизация regression suite
 
-### Дополнительные этапы (реализовано)
-- ✅ Этап 5: Полное покрытие data_access.py (+169 тестов)
-- ✅ Этап 6: Углублённые E2E роутеров — clients, contracts, action_history, reports, messenger, supervision, crm_lifecycle (+86 тестов)
+### Часть 5: Дополнительные этапы (путь к 90%)
 
-### Часть 5: Целевые метрики
-### Часть 6: Порядок реализации
+#### Этап 4: Глубокие UI тесты
+- ⬜ UI-DEEP-01: Глубокие тесты crm_tab.py (QTest взаимодействия, фильтры, CRUD)
+- ⬜ UI-DEEP-02: Глубокие тесты salaries_tab.py (расчёт зарплат, фильтры, начисления)
+- ⬜ UI-DEEP-03: Глубокие тесты employees_tab.py (CRUD, права, фильтры)
+- ⬜ UI-DEEP-04: Глубокие тесты crm_card_edit_dialog.py (редактирование карточки CRM)
+- ⬜ UI-DEEP-05: Глубокие тесты supervision_card_edit_dialog.py (карточка авторского надзора)
+
+#### ✅ Этап 5: Полное покрытие data_access.py (реализовано)
+- ✅ DA-01: Полное покрытие data_access.py (+169 тестов)
+
+#### Этап 6: Расширенные E2E роутеров
+- ✅ E2E-ROUTER-01: Углублённые E2E — clients, contracts, action_history, reports, messenger, supervision, crm_lifecycle (+86 тестов)
+- ⬜ E2E-ROUTER-02: Углублённые E2E — dashboard_router (edge cases, пустые данные, фильтры)
+- ⬜ E2E-ROUTER-03: Углублённые E2E — statistics_router (все виды статистик, фильтры по периодам)
+- ⬜ E2E-ROUTER-04: Углублённые E2E — оставшиеся роутеры (agents, cities, payments, projects, templates)
+
+#### Этап 7: Полное покрытие database/db_manager.py
+- ⬜ DB-DEEP-01: Тесты CRUD операций db_manager.py (contracts, clients, agents)
+- ⬜ DB-DEEP-02: Тесты миграций и индексов db_manager.py
+- ⬜ DB-DEEP-03: Тесты offline-очереди и синхронизации db_manager.py
+
+#### Этап 8: Полное покрытие UI диалогов
+- ⬜ UI-DIALOG-01: Тесты contract_dialogs.py (все диалоги контрактов)
+- ⬜ UI-DIALOG-02: Тесты crm_dialogs.py (все диалоги CRM)
+- ⬜ UI-DIALOG-03: Тесты supervision_dialogs.py (диалоги авторского надзора)
+- ⬜ UI-DIALOG-04: Тесты остальных диалогов (payments, employees, settings)
+
+#### Этап 9: Покрытие мелких модулей + gaps
+- ⬜ SMALL-01: Покрытие config.py, constants.py, icon_loader.py
+- ⬜ SMALL-02: Покрытие api_client.py (все ветки, ошибки, retry)
+- ⬜ SMALL-03: Gaps — покрытие пропущенных веток в уже покрытых модулях
+
+### Часть 7: Целевые метрики
+### Часть 8: Порядок реализации
 ### Приложение A: Сводная таблица задач
 ### Приложение B: Чеклист Planner Agent
 
