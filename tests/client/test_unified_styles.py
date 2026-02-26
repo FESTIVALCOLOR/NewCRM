@@ -4,7 +4,9 @@
 
 Покрытие:
   - TestUnifiedStylesheet (9) — структура, селекторы, цвета
-ИТОГО: 9 тестов
+  - TestStyleConstants (3) — экспортируемые константы
+  - TestQSSContentDetails (4) — детальная проверка содержимого QSS
+ИТОГО: 16 тестов
 """
 
 import pytest
@@ -68,3 +70,54 @@ class TestUnifiedStylesheet:
     def test_contains_accent_color(self):
         """Содержит акцентный жёлтый цвет #ffd93c."""
         assert '#ffd93c' in self.stylesheet.lower() or '#FFD93C' in self.stylesheet
+
+
+class TestStyleConstants:
+    """Тесты экспортируемых констант стилей."""
+
+    def test_border_color_defined(self):
+        """Константа BORDER_COLOR определена и не пуста."""
+        with patch('utils.unified_styles.resource_path', return_value=''):
+            from utils.unified_styles import BORDER_COLOR
+            assert isinstance(BORDER_COLOR, str)
+            assert len(BORDER_COLOR) > 0
+            assert BORDER_COLOR.startswith('#')
+
+    def test_border_style_defined(self):
+        """Константа BORDER_STYLE определена и содержит '1px solid'."""
+        with patch('utils.unified_styles.resource_path', return_value=''):
+            from utils.unified_styles import BORDER_STYLE
+            assert isinstance(BORDER_STYLE, str)
+            assert '1px solid' in BORDER_STYLE
+
+    def test_border_style_uses_border_color(self):
+        """BORDER_STYLE содержит BORDER_COLOR."""
+        with patch('utils.unified_styles.resource_path', return_value=''):
+            from utils.unified_styles import BORDER_COLOR, BORDER_STYLE
+            assert BORDER_COLOR in BORDER_STYLE
+
+
+class TestQSSContentDetails:
+    """Детальная проверка содержимого QSS."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        with patch('utils.unified_styles.resource_path', return_value=''):
+            from utils.unified_styles import get_unified_stylesheet
+            self.stylesheet = get_unified_stylesheet()
+
+    def test_contains_scrollbar_styles(self):
+        """QSS содержит стили скроллбаров."""
+        assert 'QScrollBar' in self.stylesheet
+
+    def test_contains_checkbox_styles(self):
+        """QSS содержит стили чекбоксов."""
+        assert 'QCheckBox' in self.stylesheet
+
+    def test_contains_hover_states(self):
+        """QSS содержит состояния :hover."""
+        assert ':hover' in self.stylesheet
+
+    def test_contains_border_radius(self):
+        """QSS содержит border-radius для скруглённых углов."""
+        assert 'border-radius' in self.stylesheet
