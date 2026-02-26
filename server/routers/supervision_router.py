@@ -191,7 +191,7 @@ async def get_supervision_cards(
                 'contract_status': contract.status,
                 'termination_reason': contract.termination_reason if status == "archived" else None,
                 # S-14: Добавлено status_changed_date для фильтрации в архиве
-                'status_changed_date': contract.status_changed_date.isoformat() if hasattr(contract, 'status_changed_date') and contract.status_changed_date else None,
+                'status_changed_date': str(contract.status_changed_date) if hasattr(contract, 'status_changed_date') and contract.status_changed_date else None,
                 'created_at': card.created_at.isoformat() if card.created_at else None,
                 'updated_at': card.updated_at.isoformat() if card.updated_at else None,
             }

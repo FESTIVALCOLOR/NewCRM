@@ -32,108 +32,106 @@ class DatabaseMigrations:
     def run_migrations(self):
         """Запуск миграций базы данных"""
         try:
-            import os
-            if os.path.exists('database/migrations.py'):
-                # Проверяем, нужна ли миграция
-                conn = self.connect()
-                cursor = conn.cursor()
+            # Проверяем, нужна ли миграция
+            conn = self.connect()
+            cursor = conn.cursor()
 
-                # Миграция №1: status и termination_reason
-                cursor.execute("PRAGMA table_info(contracts)")
-                columns = [column[1] for column in cursor.fetchall()]
-                self.close()
+            # Миграция №1: status и termination_reason
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [column[1] for column in cursor.fetchall()]
+            self.close()
 
-                if 'status' not in columns or 'termination_reason' not in columns:
-                    add_contract_status_fields(self.db_path)
+            if 'status' not in columns or 'termination_reason' not in columns:
+                add_contract_status_fields(self.db_path)
 
-                # ========== НОВАЯ МИГРАЦИЯ №2 ==========
-                # Добавляем поле approval_deadline в crm_cards
-                self.add_approval_deadline_field()
-                # =======================================
+            # ========== НОВАЯ МИГРАЦИЯ №2 ==========
+            # Добавляем поле approval_deadline в crm_cards
+            self.add_approval_deadline_field()
+            # =======================================
 
-                # ========== МИГРАЦИЯ №3 ==========
-                self.add_approval_stages_field()
-                # =================================
+            # ========== МИГРАЦИЯ №3 ==========
+            self.add_approval_stages_field()
+            # =================================
 
-                # ========== МИГРАЦИЯ №4: Таблица дедлайнов согласования ==========
-                self.create_approval_deadlines_table()
-                # =================================================================
+            # ========== МИГРАЦИЯ №4: Таблица дедлайнов согласования ==========
+            self.create_approval_deadlines_table()
+            # =================================================================
 
-                # ========== МИГРАЦИЯ №5 ==========
-                self.add_project_data_link_field()
-                # =================================
+            # ========== МИГРАЦИЯ №5 ==========
+            self.add_project_data_link_field()
+            # =================================
 
-                # ========== МИГРАЦИЯ: third_payment =======
-                self.add_third_payment_field()
-                # ==========================================
+            # ========== МИГРАЦИЯ: third_payment =======
+            self.add_third_payment_field()
+            # ==========================================
 
-                # ========== МИГРАЦИЯ: birth_date ==========
-                self.add_birth_date_column()
-                # ==========================================
+            # ========== МИГРАЦИЯ: birth_date ==========
+            self.add_birth_date_column()
+            # ==========================================
 
-                # ========== МИГРАЦИЯ: address ==========
-                self.add_address_column()
-                # =======================================
+            # ========== МИГРАЦИЯ: address ==========
+            self.add_address_column()
+            # =======================================
 
-                # ========== МИГРАЦИЯ: secondary_position ==========
-                self.add_secondary_position_column()
-                # ==================================================
+            # ========== МИГРАЦИЯ: secondary_position ==========
+            self.add_secondary_position_column()
+            # ==================================================
 
-                # ========== МИГРАЦИЯ: status_changed_date ==========
-                self.add_status_changed_date_column()
-                # ===================================================
+            # ========== МИГРАЦИЯ: status_changed_date ==========
+            self.add_status_changed_date_column()
+            # ===================================================
 
-                # ========== МИГРАЦИЯ: tech_task fields ==========
-                self.add_tech_task_fields()
-                # ================================================
+            # ========== МИГРАЦИЯ: tech_task fields ==========
+            self.add_tech_task_fields()
+            # ================================================
 
-                # ========== МИГРАЦИЯ: survey_date ==========
-                self.add_survey_date_column()
-                # ===========================================
+            # ========== МИГРАЦИЯ: survey_date ==========
+            self.add_survey_date_column()
+            # ===========================================
 
-                # ========== МИГРАЦИЯ: project_files table ==========
-                self.create_project_files_table()
-                # ====================================================
+            # ========== МИГРАЦИЯ: project_files table ==========
+            self.create_project_files_table()
+            # ====================================================
 
-                # ========== МИГРАЦИЯ: payment tracking fields ==========
-                self.add_payment_tracking_fields()
-                # ======================================================
+            # ========== МИГРАЦИЯ: payment tracking fields ==========
+            self.add_payment_tracking_fields()
+            # ======================================================
 
-                # ========== МИГРАЦИЯ: signed acts fields ==========
-                self.add_signed_acts_fields()
-                # =================================================
+            # ========== МИГРАЦИЯ: signed acts fields ==========
+            self.add_signed_acts_fields()
+            # =================================================
 
-                # ========== МИГРАЦИЯ: user_permissions table ==========
-                self.create_user_permissions_table()
-                # =====================================================
+            # ========== МИГРАЦИЯ: user_permissions table ==========
+            self.create_user_permissions_table()
+            # =====================================================
 
-                # ========== МИГРАЦИЯ: role_default_permissions table ==========
-                self.create_role_default_permissions_table()
-                # ==============================================================
+            # ========== МИГРАЦИЯ: role_default_permissions table ==========
+            self.create_role_default_permissions_table()
+            # ==============================================================
 
-                # ========== МИГРАЦИЯ: norm_days_templates table ==========
-                self.create_norm_days_templates_table()
-                # ========================================================
+            # ========== МИГРАЦИЯ: norm_days_templates table ==========
+            self.create_norm_days_templates_table()
+            # ========================================================
 
-                # ========== МИГРАЦИЯ: agent_type в norm_days_templates ==========
-                self.add_agent_type_to_norm_days_templates()
-                # ==============================================================
+            # ========== МИГРАЦИЯ: agent_type в norm_days_templates ==========
+            self.add_agent_type_to_norm_days_templates()
+            # ==============================================================
 
-                # ========== МИГРАЦИЯ: custom_norm_days в project_timeline_entries ==========
-                self.add_custom_norm_days_column()
-                # =====================================================================
+            # ========== МИГРАЦИЯ: custom_norm_days в project_timeline_entries ==========
+            self.add_custom_norm_days_column()
+            # =====================================================================
 
-                # ========== МИГРАЦИЯ: multiuser поля для employees ==========
-                self.add_employee_multiuser_fields()
-                # ===========================================================
+            # ========== МИГРАЦИЯ: multiuser поля для employees ==========
+            self.add_employee_multiuser_fields()
+            # ===========================================================
 
-                # ========== МИГРАЦИЯ: поле status для agents ==========
-                self.add_agents_status_field()
-                # ======================================================
+            # ========== МИГРАЦИЯ: поле status для agents ==========
+            self.add_agents_status_field()
+            # ======================================================
 
-                # ========== МИГРАЦИЯ: таблица городов ==========
-                self.migrate_add_cities_table()
-                # ===============================================
+            # ========== МИГРАЦИЯ: таблица городов ==========
+            self.migrate_add_cities_table()
+            # ===============================================
 
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
@@ -494,6 +492,14 @@ class DatabaseMigrations:
             login TEXT UNIQUE,
             password TEXT,
             role TEXT,
+            birth_date TEXT,
+            address TEXT,
+            secondary_position TEXT,
+            is_online INTEGER DEFAULT 0,
+            last_login TIMESTAMP,
+            last_activity TIMESTAMP,
+            current_session_token TEXT,
+            agent_color TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -540,13 +546,64 @@ class DatabaseMigrations:
             total_amount REAL,
             advance_payment REAL,
             additional_payment REAL,
-            third_payment REAL,  -- ← НОВОЕ ПОЛЕ
+            third_payment REAL,
             contract_period INTEGER,
             comments TEXT,
             contract_file_link TEXT,
             tech_task_link TEXT,
             status TEXT DEFAULT 'Новый заказ',
             termination_reason TEXT,
+            status_changed_date DATE,
+            yandex_folder_path TEXT,
+            tech_task_file_name TEXT,
+            tech_task_yandex_path TEXT,
+            measurement_image_link TEXT,
+            measurement_file_name TEXT,
+            measurement_yandex_path TEXT,
+            measurement_date DATE,
+            contract_file_name TEXT,
+            contract_file_yandex_path TEXT,
+            template_contract_file_link TEXT,
+            template_contract_file_name TEXT,
+            template_contract_file_yandex_path TEXT,
+            references_yandex_path TEXT,
+            photo_documentation_yandex_path TEXT,
+            act_planning_link TEXT,
+            act_planning_yandex_path TEXT,
+            act_planning_file_name TEXT,
+            act_concept_link TEXT,
+            act_concept_yandex_path TEXT,
+            act_concept_file_name TEXT,
+            info_letter_link TEXT,
+            info_letter_yandex_path TEXT,
+            info_letter_file_name TEXT,
+            act_final_link TEXT,
+            act_final_yandex_path TEXT,
+            act_final_file_name TEXT,
+            act_planning_signed_link TEXT,
+            act_planning_signed_yandex_path TEXT,
+            act_planning_signed_file_name TEXT,
+            act_concept_signed_link TEXT,
+            act_concept_signed_yandex_path TEXT,
+            act_concept_signed_file_name TEXT,
+            info_letter_signed_link TEXT,
+            info_letter_signed_yandex_path TEXT,
+            info_letter_signed_file_name TEXT,
+            act_final_signed_link TEXT,
+            act_final_signed_yandex_path TEXT,
+            act_final_signed_file_name TEXT,
+            advance_payment_paid_date TEXT,
+            additional_payment_paid_date TEXT,
+            third_payment_paid_date TEXT,
+            advance_receipt_link TEXT,
+            advance_receipt_yandex_path TEXT,
+            advance_receipt_file_name TEXT,
+            additional_receipt_link TEXT,
+            additional_receipt_yandex_path TEXT,
+            additional_receipt_file_name TEXT,
+            third_receipt_link TEXT,
+            third_receipt_yandex_path TEXT,
+            third_receipt_file_name TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (client_id) REFERENCES clients(id)
@@ -562,6 +619,15 @@ class DatabaseMigrations:
             deadline DATE,
             tags TEXT,
             is_approved BOOLEAN DEFAULT 0,
+            approval_deadline DATE,
+            approval_stages TEXT,
+            project_data_link TEXT,
+            tech_task_file TEXT,
+            tech_task_date DATE,
+            survey_date DATE,
+            previous_column TEXT,
+            paused_at TIMESTAMP,
+            total_pause_days INTEGER DEFAULT 0,
             senior_manager_id INTEGER,
             sdp_id INTEGER,
             gap_id INTEGER,
@@ -586,6 +652,7 @@ class DatabaseMigrations:
             deadline DATE,
             completed BOOLEAN DEFAULT 0,
             completed_date TIMESTAMP,
+            submitted_date TIMESTAMP,
             FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id),
             FOREIGN KEY (executor_id) REFERENCES employees(id),
             FOREIGN KEY (assigned_by) REFERENCES employees(id)
@@ -617,13 +684,20 @@ class DatabaseMigrations:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contract_id INTEGER,
             employee_id INTEGER NOT NULL,
-            payment_type TEXT NOT NULL,
+            payment_type TEXT,
             stage_name TEXT,
-            amount REAL NOT NULL,
+            amount REAL,
             advance_payment REAL,
-            report_month TEXT NOT NULL,
+            salary_type TEXT,
+            period TEXT,
+            status TEXT,
+            payment_date TIMESTAMP,
+            report_month TEXT,
             comments TEXT,
+            project_type TEXT,
+            payment_status TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contract_id) REFERENCES contracts(id),
             FOREIGN KEY (employee_id) REFERENCES employees(id)
         )
@@ -1487,10 +1561,18 @@ class DatabaseMigrations:
             if 'payment_status' not in pay_cols:
                 cursor.execute("ALTER TABLE payments ADD COLUMN payment_status TEXT")
 
-            # salaries: project_type, payment_status
+            # salaries: salary_type, period, status, payment_date, updated_at, project_type, payment_status
             cursor.execute("PRAGMA table_info(salaries)")
             sal_cols = [col[1] for col in cursor.fetchall()]
-            for field, ftype in [('project_type', 'TEXT'), ('payment_status', 'TEXT')]:
+            for field, ftype in [
+                ('salary_type', 'TEXT'),
+                ('period', 'TEXT'),
+                ('status', 'TEXT'),
+                ('payment_date', 'TIMESTAMP'),
+                ('updated_at', 'TIMESTAMP'),
+                ('project_type', 'TEXT'),
+                ('payment_status', 'TEXT'),
+            ]:
                 if field not in sal_cols:
                     cursor.execute(f"ALTER TABLE salaries ADD COLUMN {field} {ftype}")
 

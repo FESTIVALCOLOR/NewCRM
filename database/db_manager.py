@@ -32,6 +32,8 @@ class DatabaseManager(DatabaseMigrations):
         # Выполняем миграции только один раз за сессию
         with _migrations_lock:
             if not _migrations_completed:
+                # КРИТИЧНО: сначала создаём таблицы, потом мигрируем
+                self.initialize_database()
                 self.run_migrations()
                 self.create_supervision_table_migration()
                 self.fix_supervision_cards_column_name()
