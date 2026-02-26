@@ -33,10 +33,10 @@
 - ✅ UTIL-04: Unit тесты для button_debounce.py
 - ✅ UTIL-05: Unit тесты для db_sync.py
 - ✅ UTIL-06: Unit тесты для update_manager.py
-- ⬜ UTIL-07: Unit тесты для остальных утилит (пакет)
+- ✅ UTIL-07: Unit тесты для остальных утилит (пакет)
 - ✅ OFFLINE-01: Unit тесты для OfflineManager (реальные)
 - ✅ CONTRACT-01: Contract тесты API-DB ключей
-- ⬜ INFRA-06: CI job test-contract
+- ✅ INFRA-06: CI job test-contract
 - ✅ UI-01: Тесты admin_dialog.py
 - ✅ UI-02: Тесты agents_cities_widget.py
 - ✅ UI-03: Тесты permissions_matrix_widget.py
@@ -45,12 +45,12 @@
 - ✅ UI-06: Тесты для остальных 15 UI модулей (пакет)
 
 ### Часть 4: Этап 3 — Hardening
-- ⬜ MIGRATION-01: Тесты путей миграции БД
-- ⬜ PROPERTY-01: Property-based тесты валидаторов
-- ⬜ ROLES-01: Негативные ролевые E2E тесты
-- ⬜ DUAL-MODE-01: Тесты DataAccess двухрежимности
-- ⬜ UI-INTERACT-01: Расширенные UI тесты взаимодействий
-- ⬜ REGRESSION-01: Автоматизация regression suite
+- ✅ MIGRATION-01: Тесты путей миграции БД
+- ✅ PROPERTY-01: Property-based тесты валидаторов
+- ✅ ROLES-01: Негативные ролевые E2E тесты
+- ✅ DUAL-MODE-01: Тесты DataAccess двухрежимности
+- ✅ UI-INTERACT-01: Расширенные UI тесты взаимодействий
+- ✅ REGRESSION-01: Автоматизация regression suite
 
 ### Дополнительные этапы (реализовано)
 - ✅ Этап 5: Полное покрытие data_access.py (+169 тестов)
