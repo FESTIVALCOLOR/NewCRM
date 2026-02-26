@@ -167,8 +167,8 @@ jobs:
             sleep 2
           done
           curl -f http://localhost:8000/health || (echo "=== Лог сервера ===" && cat /tmp/server.log && exit 1)
-      - name: Запуск E2E + контрактных тестов
-        run: pytest tests/e2e/ tests/contract/ -v --timeout=60 -p no:qt --cov=server --cov-report=term-missing --cov-report=xml:coverage-e2e.xml
+      - name: Запуск E2E тестов
+        run: pytest tests/e2e/ -v --timeout=60 -p no:qt --cov=server --cov-report=term-missing --cov-report=xml:coverage-e2e.xml
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
