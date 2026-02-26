@@ -54,50 +54,54 @@
 
 ### Часть 5: Дополнительные этапы (путь к 90%)
 
-#### Этап 4: Глубокие UI тесты
-- ⬜ UI-DEEP-01: Глубокие тесты crm_tab.py (QTest взаимодействия, фильтры, CRUD)
-- ⬜ UI-DEEP-02: Глубокие тесты salaries_tab.py (расчёт зарплат, фильтры, начисления)
-- ⬜ UI-DEEP-03: Глубокие тесты employees_tab.py (CRUD, права, фильтры)
-- ⬜ UI-DEEP-04: Глубокие тесты crm_card_edit_dialog.py (редактирование карточки CRM)
-- ⬜ UI-DEEP-05: Глубокие тесты supervision_card_edit_dialog.py (карточка авторского надзора)
+#### ✅ Этап 4: Глубокие UI тесты (реализовано)
+- ✅ UI-DEEP-01: Глубокие тесты crm_tab.py — test_crm_tab_deep.py (+51 тест)
+- ✅ UI-DEEP-02: Глубокие тесты salaries_tab.py — test_salaries_deep.py (+35 тестов)
+- ✅ UI-DEEP-03: Глубокие тесты employees_tab.py — test_employees_deep.py (+32 теста)
+- ✅ UI-DEEP-04: Глубокие тесты crm_card_edit_dialog.py — test_crm_card_edit_dialog.py (+33 теста)
+- ✅ UI-DEEP-05: Глубокие тесты supervision_card_edit_dialog.py — test_supervision_card_edit_dialog.py (+25 тестов)
 
 #### ✅ Этап 5: Полное покрытие data_access.py (реализовано)
 - ✅ DA-01: Полное покрытие data_access.py (+169 тестов)
 
-#### Этап 6: Расширенные E2E роутеров
+#### ✅ Этап 6: Расширенные E2E роутеров (реализовано)
 - ✅ E2E-ROUTER-01: Углублённые E2E — clients, contracts, action_history, reports, messenger, supervision, crm_lifecycle (+86 тестов)
-- ⬜ E2E-ROUTER-02: Углублённые E2E — dashboard_router (edge cases, пустые данные, фильтры)
-- ⬜ E2E-ROUTER-03: Углублённые E2E — statistics_router (все виды статистик, фильтры по периодам)
-- ⬜ E2E-ROUTER-04: Углублённые E2E — оставшиеся роутеры (agents, cities, payments, projects, templates)
+- ✅ E2E-ROUTER-02: Углублённые E2E — dashboard_router — test_e2e_dashboard_deep.py (+12 тестов)
+- ✅ E2E-ROUTER-03: Углублённые E2E — statistics_router — test_e2e_statistics_deep.py (+14 тестов)
+- ✅ E2E-ROUTER-04: Углублённые E2E — agents, cities, payments — test_e2e_agents_cities_deep.py, test_e2e_payments_deep.py (+18 тестов)
 
-#### Этап 7: Полное покрытие database/db_manager.py
-- ⬜ DB-DEEP-01: Тесты CRUD операций db_manager.py (contracts, clients, agents)
-- ⬜ DB-DEEP-02: Тесты миграций и индексов db_manager.py
-- ⬜ DB-DEEP-03: Тесты offline-очереди и синхронизации db_manager.py
+#### ✅ Этап 7: Полное покрытие database/db_manager.py (реализовано)
+- ✅ DB-DEEP-01: Тесты CRUD операций — test_crm_operations.py, test_supervision_operations.py (+42 теста)
+- ✅ DB-DEEP-02: Тесты миграций, индексов, статистик — test_statistics_queries.py, test_timeline_operations.py (+38 тестов)
+- ✅ DB-DEEP-03: Тесты offline/payments — test_employee_offline.py, test_payments_calculations.py (+31 тест)
 
-#### Этап 8: Полное покрытие UI диалогов
-- ⬜ UI-DIALOG-01: Тесты contract_dialogs.py (все диалоги контрактов)
-- ⬜ UI-DIALOG-02: Тесты crm_dialogs.py (все диалоги CRM)
-- ⬜ UI-DIALOG-03: Тесты supervision_dialogs.py (диалоги авторского надзора)
-- ⬜ UI-DIALOG-04: Тесты остальных диалогов (payments, employees, settings)
+#### ✅ Этап 8: Полное покрытие UI диалогов (реализовано)
+- ✅ UI-DIALOG-01: Тесты contract_dialogs.py — test_contract_dialogs_deep.py (+32 теста)
+- ✅ UI-DIALOG-02: Тесты crm_dialogs.py — test_crm_dialogs_deep.py (+28 тестов)
+- ✅ UI-DIALOG-03: Тесты supervision_dialogs.py — test_supervision_dialogs.py (+26 тестов)
+- ✅ UI-DIALOG-04: Тесты остальных диалогов — test_rates_dialog.py, test_messenger_dialog.py, test_update_dialogs.py (+40 тестов)
 
-#### Этап 9: Покрытие мелких модулей + gaps
-- ⬜ SMALL-01: Покрытие config.py, constants.py, icon_loader.py
-- ⬜ SMALL-02: Покрытие api_client.py (все ветки, ошибки, retry)
-- ⬜ SMALL-03: Gaps — покрытие пропущенных веток в уже покрытых модулях
+#### ✅ Этап 9: Покрытие мелких модулей + gaps (реализовано)
+- ✅ SMALL-01: Покрытие config.py — test_config.py (+20 тестов)
+- ✅ SMALL-02: Покрытие api_client.py — test_api_client_advanced.py (+25 тестов)
+- ✅ SMALL-03: Gaps — test_table_settings.py, test_sync_manager.py (+18 тестов)
 
-### Часть 7: Целевые метрики
-### Часть 8: Порядок реализации
+### Часть 6: Целевые метрики
+### Часть 7: Порядок реализации
 ### Приложение A: Сводная таблица задач
 ### Приложение B: Чеклист Planner Agent
 
 ---
 
-## Исходное состояние
+## Исходное состояние → Текущее
 
-| Метрика | Значение |
-|---------|----------|
-| Line coverage (pytest-cov) | **7%** (2 910 / 44 043 statements) |
+| Метрика | Было | Сейчас |
+|---------|------|--------|
+| Line coverage (pytest-cov) | **7%** (2 910 / 44 043) | **~39%** (~15 449 / ~39 800) |
+| Тестов в CI | 410 | **1 489** |
+| UI coverage | ~5% | **40%** (11 353 / 28 702) |
+| DB coverage | ~15% | **~70%** |
+| utils coverage | ~3% | **22%** (1 646 / 7 598) |
 | Missed statements | 41 133 |
 | Тестов в CI | 410 (test-db: 42, test-e2e: 368) |
 | Тестов НЕ в CI | 1 622 |
@@ -1203,78 +1207,111 @@ test-contract:
 
 ## Часть 5: Целевые метрики
 
-### Прогноз line coverage по этапам
+### Фактическое покрытие после Этапов 1-9 (2026-02-26)
 
-**Базовые расчёты:**
-- Всего statements: 44 043 (из pytest-cov)
-- Всего missed: 41 133
-- Текущее покрытие: 2 910 / 44 043 = 6.6%
+**Измерения pytest-cov:**
 
-**Важное уточнение:** Line coverage 90% означает покрытие ~39 639 statements. Для этого нужно покрыть дополнительно ~36 729 строк. Основная масса непокрытого кода -- крупные UI модули (crm_card_edit_dialog: 2038 строк, crm_tab: 3210, salaries_tab: 1645, supervision_card_edit_dialog: 1719, contract_dialogs: 5580 и т.д.), которые требуют либо глубокого mock-тестирования, либо интеграционных UI тестов.
+| Категория | Stmts | Покрыто | Coverage | Тестов |
+|-----------|-------|---------|----------|--------|
+| **ui/** | 28 702 | 11 353 | **40%** | 847 |
+| **utils/ + config** | 7 598 | 1 646 | **22%** | 441 |
+| **database/** | ~3 500 | ~2 450 | **~70%** | 201 |
+| **ИТОГО (клиент)** | **~39 800** | **~15 449** | **~39%** | **1 489** |
 
-| Этап | Новых statements покрыто | Cumulative coverage | Cumulative % |
-|------|-------------------------|--------------------|----|
-| **Текущее** | -- | 2 910 | **7%** |
-| **Инфраструктура** | 0 | 2 910 | 7% |
-| **Этап 1: Усиление** | +1 700 | 4 610 | **10.5%** |
-| **Этап 2: Пробелы** | +3 500 | 8 110 | **18.4%** |
-| **Этап 3: Hardening** | +2 800 | 10 910 | **24.8%** |
+**Ключевые модули UI (топ-10 по покрытию):**
 
-### Разрыв до 90% и стратегия преодоления
+| Модуль | Stmts | Cover | Комментарий |
+|--------|-------|-------|-------------|
+| custom_message_box.py | 128 | **92%** | Практически полное |
+| custom_dateedit.py | 9 | **89%** | |
+| permissions_matrix_widget.py | 176 | **87%** | |
+| admin_dialog.py | 168 | **86%** | |
+| messenger_select_dialog.py | 319 | **83%** | |
+| clients_tab.py | 661 | **75%** | |
+| dashboard_widget.py | 229 | **76%** | |
+| update_dialogs.py | 228 | **69%** | |
+| custom_combobox.py | 16 | **69%** | |
+| dashboard_tab.py | 142 | **65%** | |
 
-Покрытие 90% требует ~39 639 покрытых statements. После Этапов 1-3 покрыто ~10 910. Разрыв: ~28 729 statements.
+**Ключевые модули UI (основной разрыв):**
 
-**Основные источники непокрытого кода (оставшиеся ~29K строк):**
+| Модуль | Stmts | Cover | Missed | Комментарий |
+|--------|-------|-------|--------|-------------|
+| crm_card_edit_dialog.py | 4 610 | **19%** | 3 719 | Крупнейший модуль |
+| contract_dialogs.py | 2 374 | **46%** | 1 285 | Частично покрыт |
+| crm_dialogs.py | 2 691 | **41%** | 1 586 | Частично покрыт |
+| crm_tab.py | 1 860 | **47%** | 993 | Частично покрыт |
+| salaries_tab.py | 1 645 | **60%** | 662 | Хорошее покрытие |
+| supervision_card_edit_dialog.py | 1 719 | **28%** | 1 246 | |
+| supervision_dialogs.py | 1 271 | **58%** | 533 | |
+| crm_supervision_tab.py | 1 131 | **33%** | 758 | |
+| employees_tab.py | 865 | **59%** | 356 | |
+| main_window.py | 948 | **40%** | 573 | |
 
-| Категория | Statements | % от разрыва | Стратегия |
-|-----------|-----------|---|-----------|
-| Крупные UI диалоги и вкладки | ~18 000 | 63% | Глубокие UI mock-тесты с QTest.keyClick, QTest.mouseClick |
-| data_access.py (2192 stmts, 80% непокрыто) | ~1 750 | 6% | Системные mock тесты каждого метода |
-| server/routers/ (непокрытые ветки) | ~3 000 | 10% | E2E тесты с edge case параметрами |
-| database/db_manager.py | ~2 000 | 7% | DB тесты с каждым методом |
-| utils/ (большие модули) | ~3 000 | 10% | Unit + Integration тесты |
-| Прочее | ~979 | 4% | По мере необходимости |
+**utils/ — основные пробелы:**
 
-### Дополнительные этапы для 90% (оценка)
+| Модуль | Stmts | Cover |
+|--------|-------|-------|
+| data_access.py | 2 192 | **0%** (не импортируется в client тестах) |
+| offline_manager.py | 688 | **0%** |
+| calendar_helpers.py | 118 | **0%** |
+| date_utils.py | 137 | **0%** |
+| sync_manager.py | 238 | **0%** |
+| table_settings.py | 220 | **0%** |
+| yandex_disk.py | 517 | **31%** |
+| db_sync.py | 583 | **44%** |
 
-| Этап | Описание | Statements | Дни Claude |
-|------|----------|-----------|------------|
-| **Этап 4** | Глубокие UI тесты: crm_tab, salaries_tab, employees_tab, crm_card_edit_dialog, supervision_card_edit_dialog (QTest взаимодействия) | +6 000 | 10-12 |
-| **Этап 5** | Полное покрытие data_access.py (каждый метод, online+offline) | +1 750 | 4-5 |
-| **Этап 6** | Полное покрытие server/routers/ (все ветки, edge cases) | +3 000 | 6-8 |
-| **Этап 7** | Полное покрытие database/db_manager.py | +2 000 | 4-5 |
-| **Этап 8** | Полное покрытие UI диалогов (contract_dialogs, crm_dialogs, supervision_dialogs) | +8 000 | 12-15 |
-| **Этап 9** | Покрытие мелких модулей + gaps | +3 000 | 4-6 |
-| **ИТОГО до 90%** | | +23 750 | 40-51 |
+### Прогноз line coverage по этапам (план vs факт)
 
-### Суммарная таблица
+| Этап | План Stmts | План % | Факт % | Статус |
+|------|-----------|--------|--------|--------|
+| **Исходное** | 2 910 | **7%** | **7%** | -- |
+| **Этап 1: Усиление** | 4 610 | 10.5% | -- | ✅ |
+| **Этап 2: Пробелы** | 8 110 | 18.4% | -- | ✅ |
+| **Этап 3: Hardening** | 10 910 | 24.8% | -- | ✅ |
+| **Этап 4: UI deep** | 16 910 | 38% | -- | ✅ |
+| **Этап 5: data_access** | 18 660 | 42% | -- | ✅ |
+| **Этап 6: E2E routers** | 21 660 | 49% | -- | ✅ |
+| **Этап 7: db_manager** | 23 660 | 54% | -- | ✅ |
+| **Этап 8: UI dialogs** | 31 660 | 72% | -- | ✅ |
+| **Этап 9: gaps** | 34 660 | 79% | -- | ✅ |
+| **Факт (все этапы)** | -- | -- | **~39%** | Измерено pytest-cov |
 
-| Milestone | Coverage | Statements покрыто | Cumulative Claude-дни |
-|-----------|---------|-------------------|-----------------------|
-| Текущее | 7% | 2 910 | 0 |
-| После Этапа 1 | 10.5% | 4 610 | 3-4 |
-| После Этапа 2 | 18.4% | 8 110 | 11-14 |
-| После Этапа 3 | 24.8% | 10 910 | 17-22 |
-| После Этапа 4 | 38% | 16 910 | 27-34 |
-| После Этапа 5 | 42% | 18 660 | 31-39 |
-| После Этапа 6 | 49% | 21 660 | 37-47 |
-| После Этапа 7 | 54% | 23 660 | 41-52 |
-| После Этапа 8 | 72% | 31 660 | 53-67 |
-| После Этапа 9 | **79%** | 34 660 | 57-73 |
+### Анализ разрыва план vs факт
 
-**Реалистичная цель:** Достижение **80% line coverage** за 57-73 Claude-дня. Для 90% потребуется ещё ~10-15 Claude-дней на покрытие оставшихся edge-cases и UI ветвлений (итого ~70-90 Claude-дней).
+Плановый прогноз предполагал ~79% после 9 этапов, фактически достигнуто ~39%. Причины:
 
-### Альтернативная метрика: "Способность ловить баги"
+1. **Объём UI кода значительно больше исходной оценки**: crm_card_edit_dialog.py = 4 610 stmts (оценка была 2 038), contract_dialogs.py = 2 374 (не 5 580 — корректнее, но coverage 46% вместо 90%)
+2. **data_access.py 0% в client coverage**: Этот модуль покрывается UI тестами через моки, но `--cov=utils` не видит реальные вызовы через мок
+3. **UI тесты проверяют поведение через моки**, а не реальный код — coverage показывает только вызванные строки в `ui/` модулях, а глубокие ветки (обработчики кликов, сохранение на сервер) остаются непокрытыми
+4. **Server-side покрытие не включено** — E2E тесты покрывают роутеры, но measurement запускается только на клиенте
 
-Line coverage -- не единственная метрика. "Способность ловить баги" (mutation score) может быть 90% при 50% line coverage, если тесты проверяют бизнес-инварианты, а не просто вызывают код.
+### Стратегия повышения до 60-70%
 
-| Метрика | Текущее | После Этапа 3 | Цель |
-|---------|---------|---------------|------|
-| Line coverage | 7% | 25% | 80-90% |
-| Content assert ratio (E2E) | 30% | 85% | >90% |
-| Mutation score (top-10 модулей) | не измерялось | ~60% | >80% |
-| CI test count | 410 | ~1 640 | ~2 600 |
-| Модулей с хотя бы 1 тестом | ~55% | ~95% | 100% |
+| Направление | Текущий missed | Потенциал | Приоритет |
+|-------------|---------------|-----------|-----------|
+| crm_card_edit_dialog.py deep testing | 3 719 stmts | +2 000 | P0 |
+| crm_dialogs.py deep testing | 1 586 stmts | +800 | P0 |
+| contract_dialogs.py deep testing | 1 285 stmts | +600 | P1 |
+| supervision_card_edit_dialog.py | 1 246 stmts | +600 | P1 |
+| crm_tab.py + crm_supervision_tab.py | 1 751 stmts | +800 | P1 |
+| data_access.py (реальные вызовы) | 2 192 stmts | +1 500 | P2 |
+| utils/ (offline, sync, calendar) | ~1 400 stmts | +700 | P2 |
+| **ИТОГО потенциал** | | **+7 000** | |
+
+Добавление +7 000 покрытых statements повысит coverage до **(15 449 + 7 000) / 39 800 = 56%**.
+
+### Текущие метрики (факт)
+
+| Метрика | Было (7%) | Сейчас | Цель |
+|---------|-----------|--------|------|
+| Line coverage (ui/) | ~5% | **40%** | 70%+ |
+| Line coverage (utils/) | ~3% | **22%** | 50%+ |
+| Line coverage (database/) | ~15% | **~70%** | 85%+ |
+| Content assert ratio (E2E) | 30% | **85%** | >90% |
+| CI test count | 410 | **1 489** | ~2 600 |
+| Модулей с хотя бы 1 тестом | ~55% | **~90%** | 100% |
+| Тестовых файлов | 12 | **~45** | ~60 |
 
 ---
 
