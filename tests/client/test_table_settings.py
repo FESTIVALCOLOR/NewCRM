@@ -17,6 +17,10 @@ _qt_core_mock = MagicMock()
 _qt_widgets_mock = MagicMock()
 _qt_gui_mock = MagicMock()
 
+# Сохраняем оригинальные модули PyQt5 перед мокированием
+_pyqt5_keys = ['PyQt5', 'PyQt5.QtCore', 'PyQt5.QtWidgets', 'PyQt5.QtGui']
+_saved_pyqt5 = {k: sys.modules[k] for k in _pyqt5_keys if k in sys.modules}
+
 sys.modules['PyQt5'] = MagicMock()
 sys.modules['PyQt5.QtCore'] = _qt_core_mock
 sys.modules['PyQt5.QtWidgets'] = _qt_widgets_mock
@@ -27,6 +31,14 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.table_settings import TableSettings
+
+# Восстанавливаем оригинальные модули — импорт уже закеширован,
+# а остальные тесты в сессии получат настоящий PyQt5
+for _k in _pyqt5_keys:
+    if _k in _saved_pyqt5:
+        sys.modules[_k] = _saved_pyqt5[_k]
+    elif _k in sys.modules:
+        del sys.modules[_k]
 
 
 # ============================================================================

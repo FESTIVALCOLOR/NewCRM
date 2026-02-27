@@ -43,6 +43,10 @@ class MockQTimer:
 
 _mock_qtcore.QTimer = MockQTimer
 
+# Сохраняем оригинальные модули PyQt5 перед мокированием
+_pyqt5_keys = ['PyQt5', 'PyQt5.QtCore', 'PyQt5.QtWidgets', 'PyQt5.QtGui']
+_saved_pyqt5 = {k: sys.modules[k] for k in _pyqt5_keys if k in sys.modules}
+
 sys.modules['PyQt5'] = _mock_pyqt5
 sys.modules['PyQt5.QtCore'] = _mock_qtcore
 sys.modules['PyQt5.QtWidgets'] = _mock_qtwidgets
@@ -54,6 +58,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Импортируем ПОСЛЕ мокирования PyQt5
 from utils.sync_manager import SyncManager, EditLockContext
+
+# Восстанавливаем оригинальные модули — импорт уже закеширован,
+# а остальные тесты в сессии получат настоящий PyQt5
+for _k in _pyqt5_keys:
+    if _k in _saved_pyqt5:
+        sys.modules[_k] = _saved_pyqt5[_k]
+    elif _k in sys.modules:
+        del sys.modules[_k]
 
 
 # ============================================================================
