@@ -74,29 +74,54 @@ class FlowLayout(QLayout):
         return size
 
     def _do_layout(self, rect, test_only):
-        x = rect.x()
-        y = rect.y()
-        line_height = 0
+        """Раскладка с растяжкой: элементы заполняют всю ширину ряда"""
+        if not self._items:
+            return 0
+
         spacing = self._spacing
+        available_w = rect.width()
+
+        # Разбиваем элементы на ряды по минимальной ширине
+        rows = []
+        current_row = []
+        row_natural_w = 0
 
         for item in self._items:
-            w = item.sizeHint().width()
-            h = item.sizeHint().height()
+            item_w = item.sizeHint().width()
+            needed = row_natural_w + item_w + (spacing if current_row else 0)
 
-            next_x = x + w + spacing
-            if next_x - spacing > rect.right() and line_height > 0:
-                x = rect.x()
-                y = y + line_height + spacing
-                next_x = x + w + spacing
-                line_height = 0
+            if current_row and needed > available_w:
+                rows.append(current_row)
+                current_row = [item]
+                row_natural_w = item_w
+            else:
+                current_row.append(item)
+                row_natural_w = needed
 
-            if not test_only:
-                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+        if current_row:
+            rows.append(current_row)
 
-            x = next_x
-            line_height = max(line_height, h)
+        # Раскладываем ряды, растягивая элементы на всю ширину
+        y = rect.y()
+        for row in rows:
+            n = len(row)
+            total_spacing = spacing * (n - 1)
+            per_item_w = (available_w - total_spacing) // n if n else 0
 
-        return y + line_height - rect.y()
+            line_height = 0
+            x = rect.x()
+            for i, item in enumerate(row):
+                h = item.sizeHint().height()
+                # Последний элемент забирает остаток ширины (компенсация округления)
+                w = per_item_w if i < n - 1 else (rect.x() + available_w - x)
+                if not test_only:
+                    item.setGeometry(QRect(QPoint(x, y), QSize(w, h)))
+                x += w + spacing
+                line_height = max(line_height, h)
+
+            y += line_height + spacing
+
+        return y - spacing - rect.y()
 
 
 class ReportsTab(QWidget):
@@ -1218,10 +1243,10 @@ class ReportsTab(QWidget):
             if not filename:
                 return
 
-            printer = QPrinter(QPrinter.HighResolution)
+            printer = QPrinter(QPrinter.ScreenResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(filename)
-            printer.setPageMargins(12, 10, 12, 10, QPrinter.Millimeter)
+            printer.setPageMargins(15, 12, 15, 12, QPrinter.Millimeter)
 
             # Логотип в base64
             logo_b64 = ""
@@ -1242,85 +1267,90 @@ class ReportsTab(QWidget):
             ]:
                 val = combo.currentText()
                 if val and val != "Все":
-                    filters_info.append(f"{label}: {val}")
-            filter_text = ", ".join(filters_info) if filters_info else "Все данные (без фильтров)"
+                    filters_info.append(f"<b>{label}:</b> {val}")
+            filter_text = " | ".join(filters_info) if filters_info else "Все данные (без фильтров)"
 
             s = self._cache.get("summary", {})
 
-            # CSS-стили для PDF
+            # CSS-стили для PDF (увеличенные шрифты для читаемости)
             css = """
             <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; }
-                .header { text-align: center; margin-bottom: 12px; padding-bottom: 8px;
-                          border-bottom: 2px solid #ffd93c; }
-                .header img { height: 40px; margin-bottom: 4px; }
-                .header h1 { font-size: 18px; color: #333; margin: 4px 0 2px 0; }
-                .filter-bar { background: #F8F9FA; border: 1px solid #E0E0E0;
-                              border-radius: 4px; padding: 6px 10px; margin-bottom: 12px;
-                              font-size: 10px; color: #666; }
-                .section-title { font-size: 14px; font-weight: bold; color: #333;
-                                 border-left: 4px solid #ffd93c; padding-left: 8px;
-                                 margin: 14px 0 6px 0; }
-                .kpi-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-                .kpi-table td { padding: 5px 8px; border: 1px solid #E8E8E8;
-                                font-size: 10px; }
-                .kpi-table .kpi-label { color: #666; width: 45%; background: #FAFAFA; }
-                .kpi-table .kpi-value { color: #333; font-weight: bold; text-align: right; }
-                .data-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-                .data-table th { background: #F5F5F5; border: 1px solid #E0E0E0;
-                                 padding: 5px 8px; font-size: 9px; color: #666;
-                                 text-align: left; }
-                .data-table td { border: 1px solid #E8E8E8; padding: 4px 8px;
-                                 font-size: 10px; }
-                .data-table tr:nth-child(even) td { background: #FAFAFA; }
-                .accent-orange { border-left: 3px solid #F57C00; }
-                .accent-green { border-left: 3px solid #388E3C; }
-                .accent-blue { border-left: 3px solid #2196F3; }
-                .accent-red { border-left: 3px solid #C62828; }
-                .footer { margin-top: 12px; padding-top: 6px;
-                          border-top: 1px solid #E0E0E0; font-size: 8px;
+                body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; font-size: 14px; }
+                .header { text-align: center; margin-bottom: 16px; padding-bottom: 10px;
+                          border-bottom: 3px solid #ffd93c; }
+                .header h1 { font-size: 22px; color: #333; margin: 6px 0 4px 0; }
+                .filter-bar { background-color: #F8F9FA; border: 1px solid #E0E0E0;
+                              padding: 10px 14px; margin-bottom: 16px;
+                              font-size: 13px; color: #444; }
+                .section-title { font-size: 18px; font-weight: bold; color: #333;
+                                 border-left: 5px solid #ffd93c; padding-left: 10px;
+                                 margin: 20px 0 10px 0; }
+                .kpi-row { margin-bottom: 8px; }
+                .kpi-card { display: inline-block; border: 1px solid #E8E8E8;
+                            padding: 8px 14px; margin: 3px; min-width: 120px; }
+                .kpi-label { font-size: 11px; color: #888; }
+                .kpi-value { font-size: 18px; font-weight: bold; color: #333; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+                th { background-color: #F5F5F5; border: 1px solid #E0E0E0;
+                     padding: 7px 10px; font-size: 13px; color: #555;
+                     text-align: left; font-weight: bold; }
+                td { border: 1px solid #E8E8E8; padding: 6px 10px;
+                     font-size: 13px; }
+                .accent-orange { border-left-color: #F57C00; border-left-width: 5px; }
+                .accent-green { border-left-color: #388E3C; border-left-width: 5px; }
+                .accent-blue { border-left-color: #2196F3; border-left-width: 5px; }
+                .accent-red { border-left-color: #C62828; border-left-width: 5px; }
+                .footer { margin-top: 16px; padding-top: 8px;
+                          border-top: 1px solid #E0E0E0; font-size: 11px;
                           color: #999; text-align: center; }
             </style>
             """
 
-            # Шапка с логотипом
+            # Шапка с логотипом (фиксированный размер 60px)
             logo_html = ""
             if logo_b64:
-                logo_html = f'<img src="data:image/png;base64,{logo_b64}" /><br/>'
+                logo_html = f'<img src="data:image/png;base64,{logo_b64}" width="60" height="60" /><br/>'
             header = f"""
             <div class="header">
                 {logo_html}
                 <h1>Interior Studio - Отчёты и Статистика</h1>
             </div>
             <div class="filter-bar">
-                Фильтры: {filter_text}
-                &nbsp;&bull;&nbsp; Дата формирования: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+                <b>Фильтры:</b> {filter_text}<br/>
+                <b>Дата формирования:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}
             </div>
             """
 
-            # Секция 1: Ключевые показатели
+            # Секция 1: Ключевые показатели — KPI-карточки в таблице 4 в ряд
             amount = s.get("total_amount", 0) or 0
             avg = s.get("avg_amount", 0) or 0
             area = s.get("total_area", 0) or 0
             avg_area = s.get("avg_area", 0) or 0
 
-            kpi_html = """
-            <div class="section-title">Ключевые показатели</div>
-            <table class="kpi-table">
-            """
             kpi_items = [
-                ("Всего клиентов", str(s.get("total_clients", 0))),
-                ("Новых клиентов", str(s.get("new_clients", 0))),
-                ("Повторных клиентов", str(s.get("returning_clients", 0))),
-                ("Всего договоров", str(s.get("total_contracts", 0))),
-                ("Общая стоимость", self._format_number(amount, " руб")),
-                ("Средний чек", self._format_number(avg, " руб")),
-                ("Общая площадь", self._format_number(area, " м²")),
-                ("Средняя площадь", self._format_number(avg_area, " м²")),
+                ("Всего клиентов", str(s.get("total_clients", 0)), "#2196F3"),
+                ("Новых", str(s.get("new_clients", 0)), "#4CAF50"),
+                ("Повторных", str(s.get("returning_clients", 0)), "#9C27B0"),
+                ("Договоров", str(s.get("total_contracts", 0)), "#FF9800"),
+                ("Стоимость", self._format_number(amount, " руб"), "#F57C00"),
+                ("Средний чек", self._format_number(avg, " руб"), "#E91E63"),
+                ("Площадь", self._format_number(area, " м\u00b2"), "#00BCD4"),
+                ("Ср. площадь", self._format_number(avg_area, " м\u00b2"), "#607D8B"),
             ]
-            for label, val in kpi_items:
-                kpi_html += f'<tr><td class="kpi-label">{label}</td><td class="kpi-value">{val}</td></tr>'
-            kpi_html += "</table>"
+
+            kpi_html = '<div class="section-title">Ключевые показатели</div>'
+            kpi_html += '<table cellpadding="0" cellspacing="4"><tr>'
+            for i, (label, val, color) in enumerate(kpi_items):
+                kpi_html += (
+                    f'<td style="border-left: 4px solid {color}; border: 1px solid #E8E8E8;'
+                    f' padding: 8px 12px; min-width: 100px;">'
+                    f'<span style="font-size: 11px; color: #888;">{label}</span><br/>'
+                    f'<span style="font-size: 18px; font-weight: bold; color: #333;">{val}</span>'
+                    f'</td>'
+                )
+                if (i + 1) % 4 == 0 and i < len(kpi_items) - 1:
+                    kpi_html += '</tr><tr>'
+            kpi_html += '</tr></table>'
 
             # Секция 2: По агентам
             agents_html = ""

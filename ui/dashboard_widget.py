@@ -519,10 +519,9 @@ class KPICard(QFrame):
         self.border_color = border_color
         self.bg_color = bg_color
 
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFixedHeight(78)
         self.setMinimumWidth(150)
-        self.setMaximumWidth(280)
 
         # Стиль карточки — левый акцентный бордер
         self.setStyleSheet(f"""
@@ -659,10 +658,9 @@ class MiniKPICard(QFrame):
         super().__init__(parent)
         self.border_color = border_color
 
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFixedHeight(52)
         self.setMinimumWidth(90)
-        self.setMaximumWidth(220)
 
         # Стиль карточки — с тонкой нижней акцентной полосой
         self.setStyleSheet(f"""

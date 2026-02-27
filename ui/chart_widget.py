@@ -80,6 +80,12 @@ class FunnelBarChart(ChartBase):
         if not self.canvas or not funnel_dict:
             return
 
+        # Автовысота: 30px на каждый элемент + 80px на заголовок/отступы
+        n_items = len(funnel_dict)
+        fig_h = max(3.0, n_items * 0.35 + 0.8)
+        self.figure.set_size_inches(5, fig_h)
+        self.setMinimumHeight(int(fig_h * 100))
+
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('white')
@@ -356,6 +362,13 @@ class StackedBarChartWidget(ChartBase):
         if not self.canvas or not categories or not series:
             return
 
+        # Автовысота при большом количестве категорий с повёрнутыми подписями
+        n_cat = len(categories)
+        if n_cat > 10:
+            fig_h = max(3.2, 3.2 + (n_cat - 10) * 0.12)
+            self.figure.set_size_inches(5, fig_h)
+            self.setMinimumHeight(int(fig_h * 100))
+
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('white')
@@ -446,6 +459,12 @@ class HorizontalBarWidget(ChartBase):
         """
         if not self.canvas or not labels or not values:
             return
+
+        # Автовысота: 30px на элемент + отступы
+        n = len(labels)
+        fig_h = max(2.5, n * 0.35 + 0.8)
+        self.figure.set_size_inches(5, fig_h)
+        self.setMinimumHeight(int(fig_h * 100))
 
         self.figure.clear()
         ax = self.figure.add_subplot(111)
