@@ -7,7 +7,7 @@ import json
 from collections import defaultdict
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import extract, func, cast, Date, case
+from sqlalchemy import extract, func, cast, Date, case, and_
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -279,7 +279,7 @@ async def get_cities(
 
 @router.get("/projects")
 async def get_project_statistics(
-    project_type: str,
+    project_type: str = "Индивидуальный",
     year: Optional[int] = None,
     quarter: Optional[int] = None,
     month: Optional[int] = None,
@@ -324,8 +324,9 @@ async def get_project_statistics(
         total_orders = len(contracts)
         total_area = sum(c.area or 0 for c in contracts)
 
-        # Активные (не сданы и не расторгнуты)
-        active = len([c for c in contracts if c.status not in ['СДАН', 'АВТОРСКИЙ НАДЗОР', 'РАСТОРГНУТ'] or c.status is None or c.status == ''])
+        # Активные (не сданы и не расторгнуты; None и '' считаются активными)
+        _inactive_statuses = {'СДАН', 'АВТОРСКИЙ НАДЗОР', 'РАСТОРГНУТ'}
+        active = len([c for c in contracts if c.status is None or c.status == '' or c.status not in _inactive_statuses])
 
         # Выполненные (СДАН или АВТОРСКИЙ НАДЗОР)
         completed = len([c for c in contracts if c.status in ['СДАН', 'АВТОРСКИЙ НАДЗОР']])
@@ -344,8 +345,11 @@ async def get_project_statistics(
             ).filter(
                 Contract.project_type == project_type,
                 StageExecutor.completed == False,
-                StageExecutor.deadline.isnot(None),
-                StageExecutor.deadline != '',
+                and_(
+                    StageExecutor.deadline.isnot(None),
+                    StageExecutor.deadline != '',
+                    func.length(StageExecutor.deadline) >= 10
+                ),
                 cast(StageExecutor.deadline, Date) < date_today.today()
             )
             # Применяем те же фильтры

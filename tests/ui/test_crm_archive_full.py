@@ -4,7 +4,7 @@
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QLabel
 
 
 # ─── Патчи для импортов ─────────────────────────────────────────────────
@@ -104,7 +104,7 @@ class TestBaseKanbanColumn:
 
             class ConcreteColumn(BaseKanbanColumn):
                 def init_ui(self):
-                    from PyQt5.QtWidgets import QVBoxLayout, QLabel, QPushButton
+                    from PyQt5.QtWidgets import QVBoxLayout, QPushButton
                     layout = QVBoxLayout()
                     self.header_label = QLabel('Тест')
                     self.collapse_btn = QPushButton()

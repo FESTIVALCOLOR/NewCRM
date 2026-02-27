@@ -28,7 +28,12 @@ def test_db(tmp_path):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             login TEXT UNIQUE,
             full_name TEXT,
+            phone TEXT DEFAULT '',
             position TEXT,
+            department TEXT DEFAULT '',
+            password TEXT,
+            role TEXT,
+            status TEXT DEFAULT 'активный',
             is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -160,10 +165,10 @@ def test_db(tmp_path):
     ''')
 
     # Тестовые данные
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (1, 'admin', 'Admin', 'Administrator')")
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (2, 'designer1', 'Designer One', 'Дизайнер')")
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (3, 'designer2', 'Designer Two', 'Дизайнер')")
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (4, 'dan1', 'DAN One', 'ДАН')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (1, 'admin', 'Admin', '+7 (000) 000-00-00', 'Administrator', '')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (2, 'designer1', 'Designer One', '', 'Дизайнер', '')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (3, 'designer2', 'Designer Two', '', 'Дизайнер', '')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (4, 'dan1', 'DAN One', '', 'ДАН', '')")
 
     cursor.execute("INSERT INTO clients (id, client_type, full_name, phone) VALUES (1, 'Физическое лицо', 'Test Client', '+79001234567')")
 

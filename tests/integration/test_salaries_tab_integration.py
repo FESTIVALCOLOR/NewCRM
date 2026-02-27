@@ -46,7 +46,12 @@ def mock_db(tmp_path):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             login TEXT UNIQUE,
             full_name TEXT,
+            phone TEXT DEFAULT '',
             position TEXT,
+            department TEXT DEFAULT '',
+            password TEXT,
+            role TEXT,
+            status TEXT DEFAULT 'активный',
             is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -158,9 +163,9 @@ def mock_db(tmp_path):
     ''')
 
     # Insert test data
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (1, 'admin', 'Admin', 'Administrator')")
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (2, 'designer', 'Designer', 'Дизайнер')")
-    cursor.execute("INSERT INTO employees (id, login, full_name, position) VALUES (3, 'manager', 'Manager', 'Менеджер')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (1, 'admin', 'Admin', '+7 (000) 000-00-00', 'Administrator', '')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (2, 'designer', 'Designer', '', 'Дизайнер', '')")
+    cursor.execute("INSERT INTO employees (id, login, full_name, phone, position, department) VALUES (3, 'manager', 'Manager', '', 'Менеджер', '')")
 
     cursor.execute("""
         INSERT INTO contracts (id, contract_number, address, city, area, project_type, status)

@@ -538,8 +538,9 @@ class TestClientsOnline:
         api.create_client.return_value = []
         da = _make_da_online(db, api)
         result = da.create_client({'full_name': 'Новый'})
-        # Пустой list -> {} -> нет server_id
-        assert result == {}
+        # [] falsy → код возвращает локальную запись
+        assert result is not None
+        assert result['full_name'] == 'Новый'
 
     def test_update_client_api(self, db, api):
         da = _make_da_online(db, api)

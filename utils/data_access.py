@@ -96,6 +96,7 @@ class DataAccess(QObject):
         # Флаг: при True чтение идёт из локальной БД (мгновенно),
         # API используется только для записи. Устанавливается при первом показе табов.
         self.prefer_local = False
+        self._prev_api_mode = self._should_use_api() if api_client is not None else None
 
         # ПРИМЕЧАНИЕ: Ранее каждый DataAccess подключался к OfflineManager.pending_operations_changed
         # и connection_status_changed. Это создавало десятки stale-коннекций от уничтоженных
@@ -158,6 +159,18 @@ class DataAccess(QObject):
         Если prefer_local=True, читаем из локальной БД (мгновенно)."""
         return self.api_client is not None and not self.prefer_local
 
+    def _check_cache_on_mode_change(self):
+        """Инвалидировать кэш при смене режима online ↔ offline.
+        Предотвращает возврат устаревших API-данных при потере сети."""
+        try:
+            current = self._should_use_api()
+            prev = self.__dict__.get('_prev_api_mode')
+            if prev is not None and prev != current:
+                _global_cache.invalidate()
+            self._prev_api_mode = current
+        except RuntimeError:
+            pass
+
     # ==================== КЛИЕНТЫ ====================
 
     def get_all_clients(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
@@ -167,6 +180,7 @@ class DataAccess(QObject):
         По умолчанию limit=10000 для обратной совместимости (загрузка всех записей).
         """
         cache_key = f"clients:{skip}:{limit}"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -333,6 +347,7 @@ class DataAccess(QObject):
         По умолчанию limit=10000 для обратной совместимости (загрузка всех записей).
         """
         cache_key = f"contracts:{skip}:{limit}"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -491,6 +506,7 @@ class DataAccess(QObject):
     def get_all_employees(self) -> List[Dict]:
         """Получить всех сотрудников"""
         cache_key = "employees:all"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -604,6 +620,7 @@ class DataAccess(QObject):
     def get_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить CRM карточки по типу проекта"""
         cache_key = f"crm_cards:{project_type}"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -630,6 +647,7 @@ class DataAccess(QObject):
     def get_archived_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить архивные CRM карточки"""
         cache_key = f"crm_cards_archived:{project_type}"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key, ttl=60)  # архив меняется редко — 60 сек TTL
         if cached is not None:
             return cached
@@ -829,6 +847,7 @@ class DataAccess(QObject):
     def get_supervision_cards_active(self) -> List[Dict]:
         """Получить активные карточки надзора"""
         cache_key = "supervision:active"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -846,6 +865,7 @@ class DataAccess(QObject):
     def get_supervision_cards_archived(self) -> List[Dict]:
         """Получить архивные карточки надзора"""
         cache_key = "supervision:archived"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -1228,6 +1248,7 @@ class DataAccess(QObject):
     def get_year_payments(self, year: int, include_null_month: bool = False) -> List[Dict]:
         """Получить платежи за год"""
         cache_key = f"payments:year:{year}:{include_null_month}"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -1577,6 +1598,7 @@ class DataAccess(QObject):
     def get_salaries(self, report_month: str = None, employee_id: int = None) -> List[Dict]:
         """Получить зарплаты"""
         cache_key = f"salaries:{report_month}:{employee_id}"
+        self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)
         if cached is not None:
             return cached

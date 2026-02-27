@@ -340,7 +340,8 @@ class TestSalariesTabLoadAllPayments:
         mock_da = _make_mock_data_access(year_payments=payments)
         tab, _ = _create_salaries_tab(qtbot, mock_employee_admin, mock_da=mock_da)
         tab.load_all_payments()
-        assert tab.all_payments_warning.isVisible()
+        # isVisible() зависит от видимости родителя; isHidden() проверяет только собственный флаг
+        assert not tab.all_payments_warning.isHidden()
 
     def test_load_all_payments_hides_warning_no_reassigned(self, qtbot, mock_employee_admin):
         """load_all_payments скрывает предупреждение без переназначений."""
@@ -610,11 +611,12 @@ class TestSalariesTabDeletePayment:
             mock_da.delete_payment.assert_not_called()
 
     def test_delete_payment_legacy(self, qtbot, mock_employee_admin):
-        """delete_payment делегирует в delete_payment_universal."""
-        tab, _ = _create_salaries_tab(qtbot, mock_employee_admin)
-        with patch.object(tab, 'delete_payment_universal') as mock_del:
-            tab.delete_payment(1, 'Дизайнер', 'Тест')
-            mock_del.assert_called_once_with(1, 'CRM', 'Дизайнер', 'Тест')
+        """delete_payment при отмене подтверждения — не удаляет."""
+        tab, mock_da = _create_salaries_tab(qtbot, mock_employee_admin)
+        from PyQt5.QtWidgets import QMessageBox
+        with patch('ui.salaries_tab.QMessageBox.question', return_value=QMessageBox.No):
+            tab.delete_payment(1)
+            mock_da.delete_payment.assert_not_called()
 
     def test_delete_crm_payment(self, qtbot, mock_employee_admin):
         """delete_crm_payment делегирует в delete_payment_universal."""

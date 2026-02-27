@@ -127,19 +127,19 @@ class TestDistributeNormDays:
         with patch('ui.norm_days_settings_widget.resource_path', return_value='/fake'):
             from ui.norm_days_settings_widget import _distribute_norm_days
             entries = [
-                {'is_header': False, 'g': 10, 'norm_days': 0},
-                {'is_header': False, 'g': 20, 'norm_days': 0},
+                {'executor_role': 'designer', 'is_in_contract_scope': True, 'raw_norm_days': 10, 'norm_days': 0},
+                {'executor_role': 'designer', 'is_in_contract_scope': True, 'raw_norm_days': 20, 'norm_days': 0},
             ]
             _distribute_norm_days(entries, 30)
-            total = sum(e['norm_days'] for e in entries if not e['is_header'])
+            total = sum(e['norm_days'] for e in entries if e['executor_role'] != 'header')
             assert total == 30
 
     def test_headers_not_distributed(self):
         with patch('ui.norm_days_settings_widget.resource_path', return_value='/fake'):
             from ui.norm_days_settings_widget import _distribute_norm_days
             entries = [
-                {'is_header': True, 'g': 0, 'norm_days': 0},
-                {'is_header': False, 'g': 10, 'norm_days': 0},
+                {'executor_role': 'header', 'is_in_contract_scope': False, 'raw_norm_days': 0, 'norm_days': 0},
+                {'executor_role': 'designer', 'is_in_contract_scope': True, 'raw_norm_days': 10, 'norm_days': 0},
             ]
             _distribute_norm_days(entries, 20)
             assert entries[0]['norm_days'] == 0
@@ -158,17 +158,17 @@ class TestBuildIndividualTemplate:
     def test_returns_list(self, subtype):
         with patch('ui.norm_days_settings_widget.resource_path', return_value='/fake'):
             from ui.norm_days_settings_widget import _build_individual_template
-            result = _build_individual_template(subtype, 100)
-            assert isinstance(result, list)
-            assert len(result) > 0
+            entries, term = _build_individual_template(subtype, 100)
+            assert isinstance(entries, list)
+            assert len(entries) > 0
 
     def test_entries_have_required_keys(self):
         with patch('ui.norm_days_settings_widget.resource_path', return_value='/fake'):
             from ui.norm_days_settings_widget import _build_individual_template
-            result = _build_individual_template('Полный (с 3д визуализацией)', 100)
-            for entry in result:
-                assert 'name' in entry
-                assert 'is_header' in entry
+            entries, term = _build_individual_template('Полный (с 3д визуализацией)', 100)
+            for entry in entries:
+                assert 'stage_name' in entry
+                assert 'executor_role' in entry
 
 
 # ─── Чистая логика: _build_template_template ────────────────────────────
@@ -185,9 +185,9 @@ class TestBuildTemplateTemplate:
     def test_returns_list(self, subtype):
         with patch('ui.norm_days_settings_widget.resource_path', return_value='/fake'):
             from ui.norm_days_settings_widget import _build_template_template
-            result = _build_template_template(subtype, 90)
-            assert isinstance(result, list)
-            assert len(result) > 0
+            entries, term = _build_template_template(subtype, 90)
+            assert isinstance(entries, list)
+            assert len(entries) > 0
 
 
 # ─── Константы ───────────────────────────────────────────────────────────

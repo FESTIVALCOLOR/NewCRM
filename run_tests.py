@@ -22,8 +22,16 @@ Interior Studio CRM — Test Runner с прогрессбаром.
   python run_tests.py backend                — Backend (нужен сервер)
   python run_tests.py e2e                    — E2E (нужен сервер)
   python run_tests.py smoke                  — Smoke (нужен сервер)
+  python run_tests.py contract               — Contract (нужен сервер)
   python run_tests.py client ui db           — несколько групп
+  python run_tests.py --server               — только серверные тесты
+  python run_tests.py --all                  — локальные + серверные
   python run_tests.py --coverage             — с замером coverage
+
+Интерактивный режим:
+  python run_tests.py                        — открывает меню выбора
+  Клавиши 1-9, 0, a-b переключают группы
+  L/S/A/N — быстрый выбор, Enter — запуск, Q — выход
 """
 
 import subprocess
@@ -78,6 +86,122 @@ def progress_bar(current, total, width=40, elapsed=0, prefix=''):
     line = f"\r  {prefix} [{bar}] {pct:5.1f}% ({current}/{total}) {elapsed:.0f}s {eta_str}  "
     sys.stdout.write(line)
     sys.stdout.flush()
+
+
+# ===== ИНТЕРАКТИВНОЕ МЕНЮ =====
+def _get_key():
+    """Считать одну клавишу без ожидания Enter."""
+    if sys.platform == 'win32':
+        import msvcrt
+        return msvcrt.getwch()
+    else:
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            return sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def interactive_menu(local_suites, server_suites):
+    """Интерактивное меню выбора тестовых групп."""
+    items = []
+    for key, (label, path) in local_suites.items():
+        exists = Path(path).exists()
+        items.append({
+            'key': key, 'label': label, 'path': path,
+            'selected': exists, 'exists': exists, 'server': False
+        })
+    for key, (label, path) in server_suites.items():
+        exists = Path(path).exists()
+        items.append({
+            'key': key, 'label': label, 'path': path,
+            'selected': False, 'exists': exists, 'server': True
+        })
+
+    # Маппинг клавиш: '1'-'9' → 0-8, '0' → 9, 'a'-'z' → 10+
+    key_map = {}
+    for i in range(min(9, len(items))):
+        key_map[str(i + 1)] = i
+    if len(items) > 9:
+        key_map['0'] = 9
+    for i in range(10, len(items)):
+        key_map[chr(ord('a') + i - 10)] = i
+    display_keys = {v: k for k, v in key_map.items()}
+
+    def draw():
+        os.system('cls' if sys.platform == 'win32' else 'clear')
+        print()
+        print(f"  {colorize('═' * 56, Colors.CYAN)}")
+        print(f"  {colorize('  Interior Studio CRM — Test Runner', Colors.BOLD)}")
+        print(f"  {colorize('═' * 56, Colors.CYAN)}")
+        print(f"  {Colors.DIM}  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{Colors.RESET}")
+        print()
+        print(f"  {Colors.DIM}Нажмите цифру/букву для переключения группы{Colors.RESET}")
+        print()
+
+        # Локальные
+        print(f"  {colorize('ЛОКАЛЬНЫЕ', Colors.BOLD)} {Colors.DIM}(без сервера){Colors.RESET}")
+        for i, item in enumerate(items):
+            if item['server']:
+                break
+            dk = display_keys[i]
+            check = colorize('x', Colors.GREEN) if item['selected'] else ' '
+            suffix = colorize(' (нет)', Colors.RED) if not item['exists'] else ''
+            print(f"    [{check}] {colorize(dk, Colors.CYAN)}  {item['label']:12s}  {Colors.DIM}{item['path']}{Colors.RESET}{suffix}")
+
+        print()
+
+        # Серверные
+        print(f"  {colorize('СЕРВЕРНЫЕ', Colors.BOLD)} {Colors.DIM}(нужен запущенный сервер){Colors.RESET}")
+        for i, item in enumerate(items):
+            if not item['server']:
+                continue
+            dk = display_keys[i]
+            check = colorize('x', Colors.GREEN) if item['selected'] else ' '
+            suffix = colorize(' (нет)', Colors.RED) if not item['exists'] else ''
+            print(f"    [{check}] {colorize(dk, Colors.CYAN)}  {item['label']:12s}  {Colors.DIM}{item['path']}{Colors.RESET}{suffix}")
+
+        selected_count = sum(1 for item in items if item['selected'])
+        print()
+        print(f"  {colorize('─' * 56, Colors.DIM)}")
+        print(f"  {colorize('L', Colors.CYAN)} Локальные  "
+              f"{colorize('S', Colors.CYAN)} Серверные  "
+              f"{colorize('A', Colors.CYAN)} Все  "
+              f"{colorize('N', Colors.CYAN)} Снять  "
+              f"{colorize('Enter', Colors.CYAN)} Запуск  "
+              f"{colorize('Q', Colors.CYAN)} Выход")
+        print(f"  Выбрано: {colorize(str(selected_count), Colors.BOLD)} групп")
+        print()
+
+    while True:
+        draw()
+        ch = _get_key()
+
+        if ch in ('\r', '\n'):  # Enter → запуск
+            break
+        elif ch.lower() == 'q' or ch == '\x1b':  # Q или Esc → выход
+            return None
+        elif ch.lower() == 'l':
+            for item in items:
+                item['selected'] = not item['server'] and item['exists']
+        elif ch.lower() == 's':
+            for item in items:
+                item['selected'] = item['server'] and item['exists']
+        elif ch.lower() == 'a':
+            for item in items:
+                item['selected'] = item['exists']
+        elif ch.lower() == 'n':
+            for item in items:
+                item['selected'] = False
+        elif ch.lower() in key_map:
+            idx = key_map[ch.lower()]
+            if items[idx]['exists']:
+                items[idx]['selected'] = not items[idx]['selected']
+
+    return [(item['key'], item['label'], item['path']) for item in items if item['selected']]
 
 
 # ===== СБОР ТЕСТОВ =====
@@ -142,16 +266,18 @@ def run_with_progress(venv_python, test_dir, label, log_file, extra_args=None):
         log_lines.append(line)
 
         # Парсим результат теста
-        if 'PASSED' in line:
+        # Реальные pytest-строки имеют вид: "tests/foo.py::test_bar PASSED/FAILED"
+        # Условие '::' in line отсекает WARNING-строки вида "WARNING: Test FAILED: ..."
+        if ' PASSED' in line and '::' in line:
             passed += 1
             current += 1
-        elif 'FAILED' in line:
+        elif ' FAILED' in line and '::' in line:
             failed += 1
             current += 1
         elif 'ERROR' in line and '::' in line:
             errors += 1
             current += 1
-        elif 'SKIPPED' in line:
+        elif ' SKIPPED' in line and '::' in line:
             current += 1
 
         if current != prev_current:
@@ -212,11 +338,34 @@ def main():
         'backend':     ('Backend',     'tests/backend/'),
         'e2e':         ('E2E',         'tests/e2e/'),
         'smoke':       ('Smoke',       'tests/smoke/'),
+        'contract':    ('Contract',    'tests/contract/'),
     }
 
+    run_server = '--server' in sys.argv
+    run_everything = '--all' in sys.argv
+    has_flags = run_server or run_everything or use_coverage
+
     suites = []
-    if run_all:
-        # По умолчанию — только локальные тесты
+    if run_everything:
+        # --all: локальные + серверные
+        for key, (label, path) in {**LOCAL_SUITES, **SERVER_SUITES}.items():
+            if Path(path).exists():
+                suites.append((label, path, str(log_dir / f'{key}_{ts}.log'), []))
+    elif run_server:
+        # --server: только серверные
+        for key, (label, path) in SERVER_SUITES.items():
+            if Path(path).exists():
+                suites.append((label, path, str(log_dir / f'{key}_{ts}.log'), []))
+    elif run_all and not has_flags and sys.stdin.isatty():
+        # Интерактивное меню (терминал, без аргументов)
+        selected = interactive_menu(LOCAL_SUITES, SERVER_SUITES)
+        if selected is None:
+            print(f"\n  {Colors.DIM}Отменено.{Colors.RESET}\n")
+            return 0
+        for key, label, path in selected:
+            suites.append((label, path, str(log_dir / f'{key}_{ts}.log'), []))
+    elif run_all:
+        # Не-интерактивный режим (pipe/CI) — только локальные тесты
         for key, (label, path) in LOCAL_SUITES.items():
             if Path(path).exists():
                 suites.append((label, path, str(log_dir / f'{key}_{ts}.log'), []))
