@@ -83,7 +83,7 @@ def progress_bar(current, total, width=40, elapsed=0, prefix=''):
     else:
         eta_str = "ETA --"
 
-    line = f"\r  {prefix} [{bar}] {pct:5.1f}% ({current}/{total}) {elapsed:.0f}s {eta_str}  "
+    line = f"\r  {prefix} [{bar}] {pct:5.1f}% ({current}/{total}) {elapsed:.0f}s {eta_str}\033[K"
     sys.stdout.write(line)
     sys.stdout.flush()
 
@@ -212,6 +212,8 @@ def collect_tests(venv_python, test_dir, extra_args=None):
         cmd.extend(extra_args)
 
     env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'
+    env['COLUMNS'] = '300'
     if 'ui' in test_dir:
         env['QT_QPA_PLATFORM'] = 'offscreen'
 
@@ -240,12 +242,14 @@ def run_with_progress(venv_python, test_dir, label, log_file, extra_args=None):
         print(f"  {colorize('Тесты не найдены', Colors.YELLOW)}")
         return {'passed': 0, 'failed': 0, 'errors': 0, 'total': 0, 'duration': 0}
 
-    # Запуск pytest с verbose output
-    cmd = [venv_python, '-m', 'pytest', test_dir, '-v', '--tb=short', '--no-header']
+    # Запуск pytest с verbose output (--color=no чтобы ANSI-коды не ломали парсер)
+    cmd = [venv_python, '-m', 'pytest', test_dir, '-v', '--tb=short', '--no-header', '--color=no']
     if extra_args:
         cmd.extend(extra_args)
 
     env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'
+    env['COLUMNS'] = '300'
     if 'ui' in test_dir:
         env['QT_QPA_PLATFORM'] = 'offscreen'
 
@@ -274,7 +278,7 @@ def run_with_progress(venv_python, test_dir, label, log_file, extra_args=None):
         elif ' FAILED' in line and '::' in line:
             failed += 1
             current += 1
-        elif 'ERROR' in line and '::' in line:
+        elif ' ERROR' in line and '::' in line and '[ERROR]' not in line:
             errors += 1
             current += 1
         elif ' SKIPPED' in line and '::' in line:
@@ -402,8 +406,10 @@ def main():
     total_tests = sum(r['total'] for r in results.values())
 
     for label, r in results.items():
-        status = colorize('✓', Colors.GREEN) if r['failed'] == 0 else colorize('✗', Colors.RED)
-        print(f"  {status} {label:12s}: {r['passed']:4d} passed, {r['failed']:2d} failed ({r['duration']:.1f}s)")
+        suite_ok = r['failed'] == 0 and r['errors'] == 0
+        status = colorize('✓', Colors.GREEN) if suite_ok else colorize('✗', Colors.RED)
+        err_str = f", {r['errors']} errors" if r['errors'] > 0 else ""
+        print(f"  {status} {label:12s}: {r['passed']:4d} passed, {r['failed']:2d} failed{err_str} ({r['duration']:.1f}s)")
 
     print(f"  {'─' * 50}")
     all_ok = total_failed == 0 and total_errors == 0
