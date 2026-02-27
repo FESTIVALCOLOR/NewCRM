@@ -23,6 +23,7 @@ from ui.chart_widget import (
     HorizontalBarWidget, FunnelBarChart, ProjectTypePieChart
 )
 from utils.data_access import DataAccess
+from utils.resource_path import resource_path
 
 logger = logging.getLogger(__name__)
 
@@ -195,30 +196,32 @@ class ReportsTab(QWidget):
             "Все", "Индивидуальный", "Шаблонный", "Авторский надзор"
         ])
 
-        # Кнопка сброса фильтров
+        # Кнопка сброса фильтров — выровнена по нижнему краю с комбобоксами
         btn_reset = QPushButton("Сбросить")
+        btn_reset.setFixedHeight(26)
         btn_reset.setStyleSheet("""
             QPushButton {
                 background: #F5F5F5;
                 border: 1px solid #E0E0E0;
                 border-radius: 4px;
-                padding: 6px 14px;
+                padding: 0 14px;
                 color: #333;
                 font-size: 12px;
             }
             QPushButton:hover { background: #E0E0E0; }
         """)
         btn_reset.clicked.connect(self.reset_filters)
-        layout.addWidget(btn_reset)
+        layout.addWidget(btn_reset, 0, Qt.AlignBottom)
 
         # Кнопка экспорта в PDF
         btn_export = QPushButton("Экспорт PDF")
+        btn_export.setFixedHeight(26)
         btn_export.setStyleSheet("""
             QPushButton {
                 background: #ffd93c;
                 border: 1px solid #E0E0E0;
                 border-radius: 4px;
-                padding: 6px 14px;
+                padding: 0 14px;
                 color: #333;
                 font-weight: bold;
                 font-size: 12px;
@@ -226,7 +229,7 @@ class ReportsTab(QWidget):
             QPushButton:hover { background: #ffce00; }
         """)
         btn_export.clicked.connect(self.export_to_pdf)
-        layout.addWidget(btn_export)
+        layout.addWidget(btn_export, 0, Qt.AlignBottom)
 
         parent_layout.addWidget(filter_frame)
 
@@ -271,55 +274,42 @@ class ReportsTab(QWidget):
     # ===================================================================
 
     def _create_kpi_section(self):
-        """Создать секцию KPI-карточек с динамическими рядами по агентам"""
+        """Создать секцию KPI-карточек с FlowLayout для адаптивного распределения"""
         section = SectionWidget("Ключевые показатели", "Сводные KPI-метрики за выбранный период")
 
         self.kpi_layout = QVBoxLayout()
         self.kpi_layout.setSpacing(8)
 
-        # Ряд 1: Клиенты — QGridLayout для равномерного распределения
-        row1 = QHBoxLayout()
-        row1.setSpacing(8)
+        # Все фиксированные KPI-карточки в один FlowLayout — адаптивная раскладка
+        self.kpi_flow = FlowLayout(spacing=8)
         self._kpi_cards["total_clients"] = self._make_kpi("Всего клиентов", "users", "#2196F3")
         self._kpi_cards["new_clients"] = self._make_kpi("Новых клиентов", "user-plus", "#4CAF50")
         self._kpi_cards["returning_clients"] = self._make_kpi("Повторных клиентов", "users", "#9C27B0")
-        for key in ["total_clients", "new_clients", "returning_clients"]:
-            row1.addWidget(self._kpi_cards[key])
-        self.kpi_layout.addLayout(row1)
-
-        # Ряд 2: Клиенты по агентам (динамический)
-        self.kpi_agents_clients_layout = QHBoxLayout()
-        self.kpi_agents_clients_layout.setSpacing(8)
-        self.kpi_layout.addLayout(self.kpi_agents_clients_layout)
-
-        # Ряд 3: Договоры
-        row3 = QHBoxLayout()
-        row3.setSpacing(8)
         self._kpi_cards["total_contracts"] = self._make_kpi("Всего договоров", "clipboard1", "#FF9800")
         self._kpi_cards["total_amount"] = self._make_kpi("Общая стоимость", "money", "#F57C00")
         self._kpi_cards["avg_amount"] = self._make_kpi("Средний чек", "trending-up", "#E91E63")
-        for key in ["total_contracts", "total_amount", "avg_amount"]:
-            row3.addWidget(self._kpi_cards[key])
-        self.kpi_layout.addLayout(row3)
-
-        # Ряд 4: Договоры по агентам (динамический)
-        self.kpi_agents_contracts_layout = QHBoxLayout()
-        self.kpi_agents_contracts_layout.setSpacing(8)
-        self.kpi_layout.addLayout(self.kpi_agents_contracts_layout)
-
-        # Ряд 5: Площадь
-        row5 = QHBoxLayout()
-        row5.setSpacing(8)
         self._kpi_cards["total_area"] = self._make_kpi("Общая площадь", "codepen1", "#00BCD4")
         self._kpi_cards["avg_area"] = self._make_kpi("Средняя площадь", "codepen2", "#607D8B")
-        for key in ["total_area", "avg_area"]:
-            row5.addWidget(self._kpi_cards[key])
-        self.kpi_layout.addLayout(row5)
+        for key in ["total_clients", "new_clients", "returning_clients",
+                     "total_contracts", "total_amount", "avg_amount",
+                     "total_area", "avg_area"]:
+            self.kpi_flow.addWidget(self._kpi_cards[key])
 
-        # Ряд 6: Площадь по агентам (динамический)
-        self.kpi_agents_area_layout = QHBoxLayout()
-        self.kpi_agents_area_layout.setSpacing(8)
-        self.kpi_layout.addLayout(self.kpi_agents_area_layout)
+        kpi_flow_widget = QWidget()
+        kpi_flow_widget.setLayout(self.kpi_flow)
+        self.kpi_layout.addWidget(kpi_flow_widget)
+
+        # Динамические карточки по агентам — тоже FlowLayout
+        self.kpi_agents_clients_layout = FlowLayout(spacing=8)
+        self.kpi_agents_contracts_layout = FlowLayout(spacing=8)
+        self.kpi_agents_area_layout = FlowLayout(spacing=8)
+
+        for flow_lo in [self.kpi_agents_clients_layout,
+                        self.kpi_agents_contracts_layout,
+                        self.kpi_agents_area_layout]:
+            w = QWidget()
+            w.setLayout(flow_lo)
+            self.kpi_layout.addWidget(w)
 
         section.add_layout(self.kpi_layout)
         self.sections_layout.addWidget(section)
@@ -338,9 +328,8 @@ class ReportsTab(QWidget):
         """Создать секцию аналитики клиентов"""
         section = SectionWidget("Клиенты", "Статистика по клиентской базе")
 
-        # Мини-дашборд: 6 карточек в grid (3 на строку минимум)
-        mini_grid = QGridLayout()
-        mini_grid.setSpacing(8)
+        # Мини-дашборд: FlowLayout для адаптивного распределения
+        mini_flow = FlowLayout(spacing=8)
         self._mini_clients = {}
         items = [
             ("total", "Всего", "#2196F3"),
@@ -350,14 +339,14 @@ class ReportsTab(QWidget):
             ("returning", "Повторных", "#E91E63"),
             ("from_agents", "От агентов", "#00BCD4"),
         ]
-        for i, (key, title, color) in enumerate(items):
+        for key, title, color in items:
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_clients[key] = card
-            mini_grid.addWidget(card, i // 3, i % 3)
-        for col in range(3):
-            mini_grid.setColumnStretch(col, 1)
-        section.add_layout(mini_grid)
+            mini_flow.addWidget(card)
+        mini_flow_w = QWidget()
+        mini_flow_w.setLayout(mini_flow)
+        section.add_widget(mini_flow_w)
 
         # Графики 2x2 с равными колонками
         grid = QGridLayout()
@@ -386,9 +375,8 @@ class ReportsTab(QWidget):
         """Создать секцию аналитики договоров"""
         section = SectionWidget("Договоры", "Статистика по договорам и финансам")
 
-        # Мини-дашборд: 6 карточек в grid (3 на строку)
-        mini_grid = QGridLayout()
-        mini_grid.setSpacing(8)
+        # Мини-дашборд: FlowLayout для адаптивного распределения
+        mini_flow = FlowLayout(spacing=8)
         self._mini_contracts = {}
         items = [
             ("total", "Всего", "#FF9800"),
@@ -398,14 +386,14 @@ class ReportsTab(QWidget):
             ("amount", "Стоимость", "#F57C00"),
             ("avg", "Средний чек", "#E91E63"),
         ]
-        for i, (key, title, color) in enumerate(items):
+        for key, title, color in items:
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_contracts[key] = card
-            mini_grid.addWidget(card, i // 3, i % 3)
-        for col in range(3):
-            mini_grid.setColumnStretch(col, 1)
-        section.add_layout(mini_grid)
+            mini_flow.addWidget(card)
+        mini_flow_w = QWidget()
+        mini_flow_w.setLayout(mini_flow)
+        section.add_widget(mini_flow_w)
 
         # Графики 3x2 с равными колонками
         grid = QGridLayout()
@@ -476,9 +464,8 @@ class ReportsTab(QWidget):
         layout.setSpacing(12)
         layout.setContentsMargins(8, 8, 8, 8)
 
-        # Мини-KPI: 4 карточки в grid
-        mini_grid = QGridLayout()
-        mini_grid.setSpacing(8)
+        # Мини-KPI: FlowLayout для адаптивного распределения
+        mini_flow = FlowLayout(spacing=8)
         mini_cards = {}
         items = [
             ("on_time_pct", "Проектов в срок", "#4CAF50"),
@@ -486,27 +473,22 @@ class ReportsTab(QWidget):
             ("avg_deviation", "Ср. отклонение (дни)", "#FF9800"),
             ("paused", "На паузе", "#9E9E9E"),
         ]
-        for i, (key, title, color) in enumerate(items):
+        for key, title, color in items:
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             mini_cards[key] = card
-            mini_grid.addWidget(card, 0, i)
-        for col in range(4):
-            mini_grid.setColumnStretch(col, 1)
-        layout.addLayout(mini_grid)
+            mini_flow.addWidget(card)
+        mini_flow_w = QWidget()
+        mini_flow_w.setLayout(mini_flow)
+        layout.addWidget(mini_flow_w)
 
-        # Графики: воронка + время стадий с равными колонками
-        grid = QGridLayout()
-        grid.setSpacing(12)
-
+        # Воронка — в строку
         funnel = FunnelBarChart()
-        stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
+        layout.addWidget(funnel)
 
-        grid.addWidget(funnel, 0, 0)
-        grid.addWidget(stage_duration, 0, 1)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        layout.addLayout(grid)
+        # Время стадий vs норматив — на всю ширину (отдельный ряд)
+        stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
+        layout.addWidget(stage_duration)
 
         return {
             "widget": widget,
@@ -523,9 +505,8 @@ class ReportsTab(QWidget):
         """Создать секцию авторского надзора"""
         section = SectionWidget("Авторский надзор", "Стадии закупок, бюджет и качество")
 
-        # Мини-дашборд: 4 фиксированных + динамические по агентам
-        self._supervision_mini_bar_layout = QHBoxLayout()
-        self._supervision_mini_bar_layout.setSpacing(8)
+        # Мини-дашборд: 4 фиксированных + динамические по агентам — FlowLayout
+        self._supervision_mini_bar_layout = FlowLayout(spacing=8)
         self._mini_supervision = {}
         for key, title, color in [
             ("total", "Всего надзоров", "#388E3C"),
@@ -537,7 +518,9 @@ class ReportsTab(QWidget):
             card.set_value("—")
             self._mini_supervision[key] = card
             self._supervision_mini_bar_layout.addWidget(card)
-        section.add_layout(self._supervision_mini_bar_layout)
+        sv_mini_w = QWidget()
+        sv_mini_w.setLayout(self._supervision_mini_bar_layout)
+        section.add_widget(sv_mini_w)
 
         # Графики с равными колонками
         grid = QGridLayout()
@@ -557,25 +540,22 @@ class ReportsTab(QWidget):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
-        # Мини-KPI: экономия, дефекты, визиты — grid 1x3
+        # Мини-KPI: экономия, дефекты, визиты — FlowLayout
         self._mini_sv_kpi = {}
-        kpi_grid = QGridLayout()
-        kpi_grid.setSpacing(8)
+        sv_kpi_flow = FlowLayout(spacing=8)
         items = [
             ("savings", "Экономия бюджета", "#4CAF50"),
             ("defects", "Дефекты", "#FF9800"),
             ("visits", "Визиты на объект", "#2196F3"),
         ]
-        for i, (key, title, color) in enumerate(items):
+        for key, title, color in items:
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_sv_kpi[key] = card
-            kpi_grid.addWidget(card, 0, i)
-        for col in range(3):
-            kpi_grid.setColumnStretch(col, 1)
+            sv_kpi_flow.addWidget(card)
 
         kpi_widget = QWidget()
-        kpi_widget.setLayout(kpi_grid)
+        kpi_widget.setLayout(sv_kpi_flow)
         grid.addWidget(kpi_widget, 2, 1)
 
         section.add_layout(grid)
@@ -805,8 +785,9 @@ class ReportsTab(QWidget):
         # Удалить все старые карточки
         for cards_list in self._agent_kpi_cards:
             for card in cards_list:
-                card.setParent(None)
-                card.deleteLater()
+                if card is not None:
+                    card.setParent(None)
+                    card.deleteLater()
         self._agent_kpi_cards = []
 
         # Очистить все три layout-а агентских рядов
@@ -815,9 +796,10 @@ class ReportsTab(QWidget):
                    self.kpi_agents_area_layout]:
             while lo.count():
                 item = lo.takeAt(0)
-                w = item.widget()
-                if w:
-                    w.setParent(None)
+                if item is not None:
+                    w = item.widget()
+                    if w is not None:
+                        w.setParent(None)
 
         clients_cards = []
         contracts_cards = []
@@ -1100,9 +1082,11 @@ class ReportsTab(QWidget):
         # Удаляем старые (кроме первых 4 фиксированных виджетов)
         while self._supervision_mini_bar_layout.count() > 4:
             item = self._supervision_mini_bar_layout.takeAt(4)
-            if item and item.widget():
-                item.widget().setParent(None)
-                item.widget().deleteLater()
+            if item is not None:
+                w = item.widget()
+                if w is not None:
+                    w.setParent(None)
+                    w.deleteLater()
 
         for agent in sv.get("by_agent", []) or []:
             name = agent.get("agent_name", "")
@@ -1210,9 +1194,21 @@ class ReportsTab(QWidget):
                 labels.append(str(p))
         return labels
 
-    def export_to_pdf(self):
-        """Экспорт сводного отчёта в PDF"""
+    def _format_number(self, val, suffix=""):
+        """Форматировать число с разделителями тысяч"""
+        if val is None:
+            return "0" + suffix
         try:
+            return f"{float(val):,.0f}{suffix}".replace(",", " ")
+        except (ValueError, TypeError):
+            return str(val) + suffix
+
+    def export_to_pdf(self):
+        """Экспорт стилизованного сводного отчёта в PDF"""
+        try:
+            import os
+            import base64
+            from datetime import datetime
             from PyQt5.QtPrintSupport import QPrinter
             from PyQt5.QtGui import QTextDocument
 
@@ -1225,53 +1221,314 @@ class ReportsTab(QWidget):
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(filename)
+            printer.setPageMargins(12, 10, 12, 10, QPrinter.Millimeter)
 
-            doc = QTextDocument()
+            # Логотип в base64
+            logo_b64 = ""
+            logo_path = resource_path("resources/logo.png")
+            if os.path.exists(logo_path):
+                with open(logo_path, "rb") as f:
+                    logo_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+            # Собираем текущие фильтры для отображения
+            filters_info = []
+            for label, combo in [
+                ("Год", self.filter_year),
+                ("Квартал", self.filter_quarter),
+                ("Месяц", self.filter_month),
+                ("Тип агента", self.filter_agent),
+                ("Город", self.filter_city),
+                ("Тип проекта", self.filter_project_type),
+            ]:
+                val = combo.currentText()
+                if val and val != "Все":
+                    filters_info.append(f"{label}: {val}")
+            filter_text = ", ".join(filters_info) if filters_info else "Все данные (без фильтров)"
+
             s = self._cache.get("summary", {})
 
-            html = "<h1>Отчёт: Статистика Interior Studio</h1>"
-            html += "<h2>Ключевые показатели</h2>"
-            html += "<table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;'>"
-            html += f"<tr><td>Всего клиентов</td><td>{s.get('total_clients', 0)}</td></tr>"
-            html += f"<tr><td>Новых клиентов</td><td>{s.get('new_clients', 0)}</td></tr>"
-            html += f"<tr><td>Повторных клиентов</td><td>{s.get('returning_clients', 0)}</td></tr>"
-            html += f"<tr><td>Всего договоров</td><td>{s.get('total_contracts', 0)}</td></tr>"
-            amount = s.get("total_amount", 0) or 0
-            html += f"<tr><td>Общая стоимость</td><td>{amount:,.0f} руб</td></tr>"
-            avg = s.get("avg_amount", 0) or 0
-            html += f"<tr><td>Средний чек</td><td>{avg:,.0f} руб</td></tr>"
-            area = s.get("total_area", 0) or 0
-            html += f"<tr><td>Общая площадь</td><td>{area:,.0f} м&#178;</td></tr>"
-            html += "</table>"
+            # CSS-стили для PDF
+            css = """
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; }
+                .header { text-align: center; margin-bottom: 12px; padding-bottom: 8px;
+                          border-bottom: 2px solid #ffd93c; }
+                .header img { height: 40px; margin-bottom: 4px; }
+                .header h1 { font-size: 18px; color: #333; margin: 4px 0 2px 0; }
+                .filter-bar { background: #F8F9FA; border: 1px solid #E0E0E0;
+                              border-radius: 4px; padding: 6px 10px; margin-bottom: 12px;
+                              font-size: 10px; color: #666; }
+                .section-title { font-size: 14px; font-weight: bold; color: #333;
+                                 border-left: 4px solid #ffd93c; padding-left: 8px;
+                                 margin: 14px 0 6px 0; }
+                .kpi-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                .kpi-table td { padding: 5px 8px; border: 1px solid #E8E8E8;
+                                font-size: 10px; }
+                .kpi-table .kpi-label { color: #666; width: 45%; background: #FAFAFA; }
+                .kpi-table .kpi-value { color: #333; font-weight: bold; text-align: right; }
+                .data-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                .data-table th { background: #F5F5F5; border: 1px solid #E0E0E0;
+                                 padding: 5px 8px; font-size: 9px; color: #666;
+                                 text-align: left; }
+                .data-table td { border: 1px solid #E8E8E8; padding: 4px 8px;
+                                 font-size: 10px; }
+                .data-table tr:nth-child(even) td { background: #FAFAFA; }
+                .accent-orange { border-left: 3px solid #F57C00; }
+                .accent-green { border-left: 3px solid #388E3C; }
+                .accent-blue { border-left: 3px solid #2196F3; }
+                .accent-red { border-left: 3px solid #C62828; }
+                .footer { margin-top: 12px; padding-top: 6px;
+                          border-top: 1px solid #E0E0E0; font-size: 8px;
+                          color: #999; text-align: center; }
+            </style>
+            """
 
-            # Разбивка по агентам
+            # Шапка с логотипом
+            logo_html = ""
+            if logo_b64:
+                logo_html = f'<img src="data:image/png;base64,{logo_b64}" /><br/>'
+            header = f"""
+            <div class="header">
+                {logo_html}
+                <h1>Interior Studio - Отчёты и Статистика</h1>
+            </div>
+            <div class="filter-bar">
+                Фильтры: {filter_text}
+                &nbsp;&bull;&nbsp; Дата формирования: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+            </div>
+            """
+
+            # Секция 1: Ключевые показатели
+            amount = s.get("total_amount", 0) or 0
+            avg = s.get("avg_amount", 0) or 0
+            area = s.get("total_area", 0) or 0
+            avg_area = s.get("avg_area", 0) or 0
+
+            kpi_html = """
+            <div class="section-title">Ключевые показатели</div>
+            <table class="kpi-table">
+            """
+            kpi_items = [
+                ("Всего клиентов", str(s.get("total_clients", 0))),
+                ("Новых клиентов", str(s.get("new_clients", 0))),
+                ("Повторных клиентов", str(s.get("returning_clients", 0))),
+                ("Всего договоров", str(s.get("total_contracts", 0))),
+                ("Общая стоимость", self._format_number(amount, " руб")),
+                ("Средний чек", self._format_number(avg, " руб")),
+                ("Общая площадь", self._format_number(area, " м²")),
+                ("Средняя площадь", self._format_number(avg_area, " м²")),
+            ]
+            for label, val in kpi_items:
+                kpi_html += f'<tr><td class="kpi-label">{label}</td><td class="kpi-value">{val}</td></tr>'
+            kpi_html += "</table>"
+
+            # Секция 2: По агентам
+            agents_html = ""
             by_agent = s.get("by_agent", []) or []
             if by_agent:
-                html += "<h2>По агентам</h2>"
-                html += (
-                    "<table border='1' cellpadding='5' cellspacing='0'"
-                    " style='border-collapse:collapse;'>"
-                )
-                html += (
-                    "<tr>"
-                    "<th>Агент</th><th>Клиенты</th><th>Договоры</th>"
-                    "<th>Стоимость</th><th>Площадь</th>"
-                    "</tr>"
-                )
+                agents_html = """
+                <div class="section-title">Показатели по агентам</div>
+                <table class="data-table">
+                <tr><th>Агент</th><th>Клиенты</th><th>Договоры</th>
+                    <th>Стоимость</th><th>Площадь</th></tr>
+                """
                 for a in by_agent:
                     a_amount = a.get("amount", 0) or 0
                     a_area = a.get("area", 0) or 0
-                    html += (
+                    agents_html += (
                         f"<tr>"
-                        f"<td>{a.get('agent_name', '')}</td>"
+                        f"<td><b>{a.get('agent_name', '')}</b></td>"
                         f"<td>{a.get('clients', 0)}</td>"
                         f"<td>{a.get('contracts', 0)}</td>"
-                        f"<td>{a_amount:,.0f} руб</td>"
-                        f"<td>{a_area:,.0f} м&#178;</td>"
+                        f"<td>{self._format_number(a_amount, ' руб')}</td>"
+                        f"<td>{self._format_number(a_area, ' м²')}</td>"
                         f"</tr>"
                     )
-                html += "</table>"
+                agents_html += "</table>"
 
+            # Секция 3: Клиенты
+            dynamics = self._cache.get("clients_dynamics", [])
+            clients_html = '<div class="section-title accent-blue">Клиенты</div>'
+            if dynamics:
+                clients_html += """
+                <table class="data-table">
+                <tr><th>Период</th><th>Новых</th><th>Повторных</th>
+                    <th>Физлица</th><th>Юрлица</th></tr>
+                """
+                for d in dynamics:
+                    period = d.get("period", "")
+                    clients_html += (
+                        f"<tr><td>{period}</td>"
+                        f"<td>{d.get('new_clients', 0) or 0}</td>"
+                        f"<td>{d.get('returning_clients', 0) or 0}</td>"
+                        f"<td>{d.get('individual', 0) or 0}</td>"
+                        f"<td>{d.get('legal', 0) or 0}</td></tr>"
+                    )
+                clients_html += "</table>"
+
+            # Секция 4: Договоры
+            contracts_dyn = self._cache.get("contracts_dynamics", [])
+            contracts_html = '<div class="section-title accent-orange">Договоры</div>'
+            if contracts_dyn:
+                contracts_html += """
+                <table class="data-table">
+                <tr><th>Период</th><th>Индивид.</th><th>Шаблон.</th>
+                    <th>Надзор</th><th>Стоимость</th></tr>
+                """
+                for d in contracts_dyn:
+                    period = d.get("period", "")
+                    t_amount = d.get("total_amount", 0) or 0
+                    contracts_html += (
+                        f"<tr><td>{period}</td>"
+                        f"<td>{d.get('individual_count', 0) or 0}</td>"
+                        f"<td>{d.get('template_count', 0) or 0}</td>"
+                        f"<td>{d.get('supervision_count', 0) or 0}</td>"
+                        f"<td>{self._format_number(t_amount, ' руб')}</td></tr>"
+                    )
+                contracts_html += "</table>"
+
+            # Распределение по городам
+            dist_city = self._cache.get("dist_city", [])
+            cities_html = ""
+            if dist_city:
+                cities_html = '<div class="section-title">Распределение по городам</div>'
+                cities_html += '<table class="data-table"><tr><th>Город</th><th>Договоры</th></tr>'
+                for c in dist_city[:15]:
+                    cities_html += (
+                        f"<tr><td>{c.get('name', '')}</td>"
+                        f"<td>{c.get('count', 0) or 0}</td></tr>"
+                    )
+                cities_html += "</table>"
+
+            # Распределение по агентам
+            dist_agent = self._cache.get("dist_agent", [])
+            dist_agents_html = ""
+            if dist_agent:
+                dist_agents_html = '<div class="section-title">Распределение по типам агентов</div>'
+                dist_agents_html += '<table class="data-table"><tr><th>Агент</th><th>Клиенты</th></tr>'
+                for a in dist_agent:
+                    dist_agents_html += (
+                        f"<tr><td>{a.get('name', '')}</td>"
+                        f"<td>{a.get('count', 0) or 0}</td></tr>"
+                    )
+                dist_agents_html += "</table>"
+
+            # Секция 5: CRM аналитика
+            crm_html = ""
+            for cache_key, type_name in [
+                ("crm_individual", "Индивидуальные проекты"),
+                ("crm_template", "Шаблонные проекты"),
+            ]:
+                data = self._cache.get(cache_key, {})
+                if not data:
+                    continue
+                on_time = data.get("on_time_stats", {}) or {}
+                crm_html += f'<div class="section-title accent-green">CRM — {type_name}</div>'
+                crm_html += '<table class="kpi-table">'
+                crm_html += (
+                    f'<tr><td class="kpi-label">Проектов в срок</td>'
+                    f'<td class="kpi-value">{on_time.get("projects_pct", 0) or 0:.0f}%</td></tr>'
+                    f'<tr><td class="kpi-label">Стадий в срок</td>'
+                    f'<td class="kpi-value">{on_time.get("stages_pct", 0) or 0:.0f}%</td></tr>'
+                    f'<tr><td class="kpi-label">Ср. отклонение (дни)</td>'
+                    f'<td class="kpi-value">{on_time.get("avg_deviation_days", 0) or 0:.1f}</td></tr>'
+                    f'<tr><td class="kpi-label">На паузе</td>'
+                    f'<td class="kpi-value">{data.get("paused_count", 0) or 0}</td></tr>'
+                )
+                crm_html += "</table>"
+
+                # Воронка
+                funnel_list = data.get("funnel", []) or []
+                if funnel_list:
+                    crm_html += '<table class="data-table"><tr><th>Стадия</th><th>Кол-во</th></tr>'
+                    for f in funnel_list:
+                        crm_html += (
+                            f"<tr><td>{f.get('stage', '')}</td>"
+                            f"<td>{f.get('count', 0) or 0}</td></tr>"
+                        )
+                    crm_html += "</table>"
+
+                # Время стадий
+                durations = data.get("stage_durations", []) or []
+                if durations:
+                    crm_html += '<table class="data-table"><tr><th>Стадия</th><th>Факт (дни)</th><th>Норматив</th></tr>'
+                    for d in durations:
+                        actual = d.get("avg_actual_days", 0) or 0
+                        norm = d.get("norm_days", 0) or 0
+                        crm_html += (
+                            f"<tr><td>{d.get('stage', '')}</td>"
+                            f"<td>{actual:.1f}</td>"
+                            f"<td>{norm:.0f}</td></tr>"
+                        )
+                    crm_html += "</table>"
+
+            # Секция 6: Авторский надзор
+            sv = self._cache.get("supervision", {})
+            sv_html = ""
+            if sv:
+                sv_html = '<div class="section-title accent-red">Авторский надзор</div>'
+                by_pt = sv.get("by_project_type", {}) or {}
+                budget = sv.get("budget", {}) or {}
+                defects = sv.get("defects", {}) or {}
+                sv_html += '<table class="kpi-table">'
+                sv_html += (
+                    f'<tr><td class="kpi-label">Всего надзоров</td>'
+                    f'<td class="kpi-value">{sv.get("total", 0) or 0}</td></tr>'
+                    f'<tr><td class="kpi-label">Активных</td>'
+                    f'<td class="kpi-value">{sv.get("active", 0) or 0}</td></tr>'
+                    f'<tr><td class="kpi-label">По индивид.</td>'
+                    f'<td class="kpi-value">{by_pt.get("individual", 0) or 0}</td></tr>'
+                    f'<tr><td class="kpi-label">По шаблонным</td>'
+                    f'<td class="kpi-value">{by_pt.get("template", 0) or 0}</td></tr>'
+                    f'<tr><td class="kpi-label">Бюджет план</td>'
+                    f'<td class="kpi-value">{self._format_number(budget.get("total_planned", 0), " руб")}</td></tr>'
+                    f'<tr><td class="kpi-label">Бюджет факт</td>'
+                    f'<td class="kpi-value">{self._format_number(budget.get("total_actual", 0), " руб")}</td></tr>'
+                    f'<tr><td class="kpi-label">Экономия</td>'
+                    f'<td class="kpi-value">{self._format_number(budget.get("total_savings", 0), " руб")}'
+                    f' ({budget.get("savings_pct", 0) or 0:.0f}%)</td></tr>'
+                    f'<tr><td class="kpi-label">Дефекты (найдено / устранено)</td>'
+                    f'<td class="kpi-value">{defects.get("found", 0) or 0} / {defects.get("resolved", 0) or 0}</td></tr>'
+                    f'<tr><td class="kpi-label">Визиты на объект</td>'
+                    f'<td class="kpi-value">{sv.get("site_visits", 0) or 0}</td></tr>'
+                )
+                sv_html += "</table>"
+
+                # Надзоры по агентам
+                sv_by_agent = sv.get("by_agent", []) or []
+                if sv_by_agent:
+                    sv_html += '<table class="data-table"><tr><th>Агент</th><th>Надзоры</th></tr>'
+                    for a in sv_by_agent:
+                        sv_html += (
+                            f"<tr><td>{a.get('agent_name', '')}</td>"
+                            f"<td>{a.get('count', 0) or 0}</td></tr>"
+                        )
+                    sv_html += "</table>"
+
+            # Футер
+            footer = """
+            <div class="footer">
+                Interior Studio CRM &bull; Автоматически сгенерированный отчёт
+            </div>
+            """
+
+            # Собираем финальный HTML
+            html = f"""
+            <html><head>{css}</head><body>
+            {header}
+            {kpi_html}
+            {agents_html}
+            {clients_html}
+            {contracts_html}
+            {cities_html}
+            {dist_agents_html}
+            {crm_html}
+            {sv_html}
+            {footer}
+            </body></html>
+            """
+
+            doc = QTextDocument()
             doc.setHtml(html)
             doc.print_(printer)
             logger.info(f"PDF отчёт сохранён: {filename}")
