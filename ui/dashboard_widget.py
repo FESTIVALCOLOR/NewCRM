@@ -520,29 +520,40 @@ class KPICard(QFrame):
         self.bg_color = bg_color
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setFixedHeight(90)
+        self.setFixedHeight(88)
+        self.setMinimumWidth(160)
 
-        # Стиль карточки
+        # Стиль карточки — левый акцентный бордер
         self.setStyleSheet(f"""
             KPICard {{
                 background-color: {bg_color};
-                border: 2px solid {border_color};
-                border-radius: 12px;
-                padding: 10px;
+                border: 1px solid #E8E8E8;
+                border-left: 4px solid {border_color};
+                border-radius: 10px;
+                padding: 8px;
             }}
             KPICard:hover {{
-                border: 3px solid {border_color};
+                border: 1px solid {border_color};
+                border-left: 4px solid {border_color};
             }}
         """)
+
+        # Тень
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(12)
+        shadow.setOffset(0, 2)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        self.setGraphicsEffect(shadow)
 
         # Основной горизонтальный layout
         main_layout = QHBoxLayout()
         main_layout.setSpacing(8)
         main_layout.setContentsMargins(10, 6, 10, 6)
 
-        # Левая часть: иконка 32px
+        # Левая часть: иконка 28px
         icon_path = f"resources/icons/{icon_name}.svg"
-        icon_widget = ColoredSvgWidget(icon_path, border_color, size=32, parent=self)
+        icon_widget = ColoredSvgWidget(icon_path, border_color, size=28, parent=self)
         main_layout.addWidget(icon_widget, 0, Qt.AlignVCenter)
 
         # Центральная часть: заголовок + значение
@@ -553,8 +564,8 @@ class KPICard(QFrame):
         title_label = QLabel(title, self)
         title_label.setStyleSheet(f"""
             font-size: 10px;
-            color: {border_color};
-            font-weight: 600;
+            color: #666666;
+            font-weight: 500;
             background-color: transparent;
         """)
         title_label.setWordWrap(True)
@@ -562,9 +573,9 @@ class KPICard(QFrame):
 
         self.value_label = QLabel("—", self)
         self.value_label.setStyleSheet(f"""
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
-            color: {border_color};
+            color: #333333;
             background-color: transparent;
         """)
         self.value_label.setWordWrap(False)
@@ -576,9 +587,9 @@ class KPICard(QFrame):
         main_layout.addWidget(center_widget, 1, Qt.AlignVCenter)
 
         # Правая часть: тренд
-        self.trend_label = QLabel("—", self)
+        self.trend_label = QLabel("", self)
         self.trend_label.setStyleSheet("""
-            font-size: 12px;
+            font-size: 11px;
             color: #9E9E9E;
             background-color: transparent;
         """)
@@ -596,35 +607,33 @@ class KPICard(QFrame):
         Установить тренд.
         Положительный pct — зелёный (рост), отрицательный — красный (снижение).
         """
-        if pct is None:
-            self.trend_label.setText("—")
+        if pct is None or pct == 0:
+            self.trend_label.setText("")
             self.trend_label.setStyleSheet("""
-                font-size: 12px;
+                font-size: 11px;
                 color: #9E9E9E;
                 background-color: transparent;
             """)
         elif pct > 0:
-            self.trend_label.setText(f"↑{abs(pct):.1f}%")
+            self.trend_label.setText(f"+{abs(pct):.1f}%")
             self.trend_label.setStyleSheet("""
-                font-size: 12px;
+                font-size: 11px;
                 color: #4CAF50;
                 font-weight: 600;
                 background-color: transparent;
-            """)
-        elif pct < 0:
-            self.trend_label.setText(f"↓{abs(pct):.1f}%")
-            self.trend_label.setStyleSheet("""
-                font-size: 12px;
-                color: #E74C3C;
-                font-weight: 600;
-                background-color: transparent;
+                padding: 2px 6px;
+                border-radius: 4px;
+                background-color: #E8F5E9;
             """)
         else:
-            self.trend_label.setText("0%")
+            self.trend_label.setText(f"-{abs(pct):.1f}%")
             self.trend_label.setStyleSheet("""
-                font-size: 12px;
-                color: #9E9E9E;
-                background-color: transparent;
+                font-size: 11px;
+                color: #E74C3C;
+                font-weight: 600;
+                background-color: #FFEBEE;
+                padding: 2px 6px;
+                border-radius: 4px;
             """)
 
     def resizeEvent(self, event):
@@ -632,7 +641,7 @@ class KPICard(QFrame):
         super().resizeEvent(event)
         from PyQt5.QtGui import QPainterPath, QRegion
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 12, 12)
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
         self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
 
@@ -650,27 +659,37 @@ class MiniKPICard(QFrame):
         self.border_color = border_color
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setFixedHeight(60)
+        self.setFixedHeight(58)
+        self.setMinimumWidth(100)
 
-        # Стиль карточки
+        # Стиль карточки — с тонкой нижней акцентной полосой
         self.setStyleSheet(f"""
             MiniKPICard {{
                 background-color: #ffffff;
-                border: 1px solid {border_color};
+                border: 1px solid #E8E8E8;
+                border-bottom: 3px solid {border_color};
                 border-radius: 8px;
-                padding: 8px;
+                padding: 6px;
             }}
         """)
 
+        # Тень
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(8)
+        shadow.setOffset(0, 1)
+        shadow.setColor(QColor(0, 0, 0, 15))
+        self.setGraphicsEffect(shadow)
+
         # Вертикальный layout: заголовок + значение
         layout = QVBoxLayout()
-        layout.setSpacing(2)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(1)
+        layout.setContentsMargins(8, 4, 8, 4)
 
         title_label = QLabel(title, self)
         title_label.setStyleSheet("""
             font-size: 9px;
-            color: #666666;
+            color: #888888;
             background-color: transparent;
         """)
         title_label.setWordWrap(True)
@@ -678,9 +697,9 @@ class MiniKPICard(QFrame):
 
         self.value_label = QLabel("—", self)
         self.value_label.setStyleSheet(f"""
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
-            color: {border_color};
+            color: #333333;
             background-color: transparent;
         """)
         self.value_label.setWordWrap(False)

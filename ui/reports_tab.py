@@ -12,9 +12,9 @@ import threading
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
     QComboBox, QPushButton, QGridLayout, QTabWidget, QFrame,
-    QFileDialog, QSizePolicy
+    QFileDialog, QSizePolicy, QLayout
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRect, QSize, QPoint
 from PyQt5.QtGui import QFont
 
 from ui.dashboard_widget import KPICard, MiniKPICard
@@ -25,6 +25,77 @@ from ui.chart_widget import (
 from utils.data_access import DataAccess
 
 logger = logging.getLogger(__name__)
+
+
+class FlowLayout(QLayout):
+    """Адаптивный layout — виджеты переносятся на следующую строку при нехватке ширины"""
+
+    def __init__(self, parent=None, spacing=8):
+        super().__init__(parent)
+        self._items = []
+        self._spacing = spacing
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        size += QSize(m.left() + m.right(), m.top() + m.bottom())
+        return size
+
+    def _do_layout(self, rect, test_only):
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+        spacing = self._spacing
+
+        for item in self._items:
+            w = item.sizeHint().width()
+            h = item.sizeHint().height()
+
+            next_x = x + w + spacing
+            if next_x - spacing > rect.right() and line_height > 0:
+                x = rect.x()
+                y = y + line_height + spacing
+                next_x = x + w + spacing
+                line_height = 0
+
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+
+            x = next_x
+            line_height = max(line_height, h)
+
+        return y + line_height - rect.y()
 
 
 class ReportsTab(QWidget):
@@ -204,53 +275,50 @@ class ReportsTab(QWidget):
         section = SectionWidget("Ключевые показатели", "Сводные KPI-метрики за выбранный период")
 
         self.kpi_layout = QVBoxLayout()
-        self.kpi_layout.setSpacing(10)
+        self.kpi_layout.setSpacing(8)
 
-        # Ряд 1: Клиенты (фиксированный)
+        # Ряд 1: Клиенты — QGridLayout для равномерного распределения
         row1 = QHBoxLayout()
-        row1.setSpacing(10)
+        row1.setSpacing(8)
         self._kpi_cards["total_clients"] = self._make_kpi("Всего клиентов", "users", "#2196F3")
         self._kpi_cards["new_clients"] = self._make_kpi("Новых клиентов", "user-plus", "#4CAF50")
         self._kpi_cards["returning_clients"] = self._make_kpi("Повторных клиентов", "users", "#9C27B0")
         for key in ["total_clients", "new_clients", "returning_clients"]:
             row1.addWidget(self._kpi_cards[key])
-        row1.addStretch()
         self.kpi_layout.addLayout(row1)
 
-        # Ряд 2: Клиенты по агентам (динамический — заполнится при загрузке данных)
+        # Ряд 2: Клиенты по агентам (динамический)
         self.kpi_agents_clients_layout = QHBoxLayout()
-        self.kpi_agents_clients_layout.setSpacing(10)
+        self.kpi_agents_clients_layout.setSpacing(8)
         self.kpi_layout.addLayout(self.kpi_agents_clients_layout)
 
-        # Ряд 3: Договоры (фиксированный)
+        # Ряд 3: Договоры
         row3 = QHBoxLayout()
-        row3.setSpacing(10)
+        row3.setSpacing(8)
         self._kpi_cards["total_contracts"] = self._make_kpi("Всего договоров", "clipboard1", "#FF9800")
         self._kpi_cards["total_amount"] = self._make_kpi("Общая стоимость", "money", "#F57C00")
         self._kpi_cards["avg_amount"] = self._make_kpi("Средний чек", "trending-up", "#E91E63")
         for key in ["total_contracts", "total_amount", "avg_amount"]:
             row3.addWidget(self._kpi_cards[key])
-        row3.addStretch()
         self.kpi_layout.addLayout(row3)
 
         # Ряд 4: Договоры по агентам (динамический)
         self.kpi_agents_contracts_layout = QHBoxLayout()
-        self.kpi_agents_contracts_layout.setSpacing(10)
+        self.kpi_agents_contracts_layout.setSpacing(8)
         self.kpi_layout.addLayout(self.kpi_agents_contracts_layout)
 
-        # Ряд 5: Площадь (фиксированный)
+        # Ряд 5: Площадь
         row5 = QHBoxLayout()
-        row5.setSpacing(10)
+        row5.setSpacing(8)
         self._kpi_cards["total_area"] = self._make_kpi("Общая площадь", "codepen1", "#00BCD4")
         self._kpi_cards["avg_area"] = self._make_kpi("Средняя площадь", "codepen2", "#607D8B")
         for key in ["total_area", "avg_area"]:
             row5.addWidget(self._kpi_cards[key])
-        row5.addStretch()
         self.kpi_layout.addLayout(row5)
 
         # Ряд 6: Площадь по агентам (динамический)
         self.kpi_agents_area_layout = QHBoxLayout()
-        self.kpi_agents_area_layout.setSpacing(10)
+        self.kpi_agents_area_layout.setSpacing(8)
         self.kpi_layout.addLayout(self.kpi_agents_area_layout)
 
         section.add_layout(self.kpi_layout)
@@ -270,31 +338,32 @@ class ReportsTab(QWidget):
         """Создать секцию аналитики клиентов"""
         section = SectionWidget("Клиенты", "Статистика по клиентской базе")
 
-        # Мини-дашборд: 6 карточек
-        mini_layout = QHBoxLayout()
-        mini_layout.setSpacing(8)
+        # Мини-дашборд: 6 карточек в grid (3 на строку минимум)
+        mini_grid = QGridLayout()
+        mini_grid.setSpacing(8)
         self._mini_clients = {}
-        for key, title, color in [
+        items = [
             ("total", "Всего", "#2196F3"),
             ("individual", "Физлица", "#4CAF50"),
             ("legal", "Юрлица", "#FF9800"),
             ("new", "Новых", "#9C27B0"),
             ("returning", "Повторных", "#E91E63"),
             ("from_agents", "От агентов", "#00BCD4"),
-        ]:
+        ]
+        for i, (key, title, color) in enumerate(items):
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_clients[key] = card
-            mini_layout.addWidget(card)
-        section.add_layout(mini_layout)
+            mini_grid.addWidget(card, i // 3, i % 3)
+        for col in range(3):
+            mini_grid.setColumnStretch(col, 1)
+        section.add_layout(mini_grid)
 
-        # Графики 2x2
+        # Графики 2x2 с равными колонками
         grid = QGridLayout()
         grid.setSpacing(12)
 
         self.chart_clients_dynamics = LineChartWidget("Динамика новых клиентов")
-        # ProjectTypePieChart.set_data(individual_count, template_count, supervision_count)
-        # Для клиентов: физлица = individual, юрлица = template
         self.chart_clients_types = ProjectTypePieChart()
         self.chart_clients_by_agent = HorizontalBarWidget("Клиенты по агентам")
         self.chart_clients_new_vs_returning = StackedBarChartWidget("Новые vs Повторные")
@@ -303,6 +372,8 @@ class ReportsTab(QWidget):
         grid.addWidget(self.chart_clients_types, 0, 1)
         grid.addWidget(self.chart_clients_by_agent, 1, 0)
         grid.addWidget(self.chart_clients_new_vs_returning, 1, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
         section.add_layout(grid)
         self.sections_layout.addWidget(section)
@@ -315,31 +386,33 @@ class ReportsTab(QWidget):
         """Создать секцию аналитики договоров"""
         section = SectionWidget("Договоры", "Статистика по договорам и финансам")
 
-        # Мини-дашборд: 6 карточек
-        mini_layout = QHBoxLayout()
-        mini_layout.setSpacing(8)
+        # Мини-дашборд: 6 карточек в grid (3 на строку)
+        mini_grid = QGridLayout()
+        mini_grid.setSpacing(8)
         self._mini_contracts = {}
-        for key, title, color in [
+        items = [
             ("total", "Всего", "#FF9800"),
             ("individual", "Индивидуальных", "#F57C00"),
             ("template", "Шаблонных", "#C62828"),
             ("supervision", "Надзор", "#388E3C"),
             ("amount", "Стоимость", "#F57C00"),
             ("avg", "Средний чек", "#E91E63"),
-        ]:
+        ]
+        for i, (key, title, color) in enumerate(items):
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_contracts[key] = card
-            mini_layout.addWidget(card)
-        section.add_layout(mini_layout)
+            mini_grid.addWidget(card, i // 3, i % 3)
+        for col in range(3):
+            mini_grid.setColumnStretch(col, 1)
+        section.add_layout(mini_grid)
 
-        # Графики 3x2
+        # Графики 3x2 с равными колонками
         grid = QGridLayout()
         grid.setSpacing(12)
 
         self.chart_contracts_dynamics = StackedBarChartWidget("Договоры по месяцам")
         self.chart_contracts_amount = LineChartWidget("Стоимость по месяцам")
-        # ProjectTypePieChart.set_data(individual, template, supervision)
         self.chart_contracts_types = ProjectTypePieChart()
         self.chart_contracts_cities = HorizontalBarWidget("ТОП городов")
         self.chart_contracts_by_agent = StackedBarChartWidget("Договоры по агентам")
@@ -351,6 +424,8 @@ class ReportsTab(QWidget):
         grid.addWidget(self.chart_contracts_cities, 1, 1)
         grid.addWidget(self.chart_contracts_by_agent, 2, 0)
         grid.addWidget(self.chart_contracts_amount_by_agent, 2, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
         section.add_layout(grid)
         self.sections_layout.addWidget(section)
@@ -401,33 +476,36 @@ class ReportsTab(QWidget):
         layout.setSpacing(12)
         layout.setContentsMargins(8, 8, 8, 8)
 
-        # Мини-KPI: 4 карточки
-        mini_layout = QHBoxLayout()
-        mini_layout.setSpacing(8)
+        # Мини-KPI: 4 карточки в grid
+        mini_grid = QGridLayout()
+        mini_grid.setSpacing(8)
         mini_cards = {}
-        for key, title, color in [
+        items = [
             ("on_time_pct", "Проектов в срок", "#4CAF50"),
             ("stages_on_time_pct", "Стадий в срок", "#2196F3"),
             ("avg_deviation", "Ср. отклонение (дни)", "#FF9800"),
             ("paused", "На паузе", "#9E9E9E"),
-        ]:
+        ]
+        for i, (key, title, color) in enumerate(items):
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             mini_cards[key] = card
-            mini_layout.addWidget(card)
-        mini_layout.addStretch()
-        layout.addLayout(mini_layout)
+            mini_grid.addWidget(card, 0, i)
+        for col in range(4):
+            mini_grid.setColumnStretch(col, 1)
+        layout.addLayout(mini_grid)
 
-        # Графики: воронка + время стадий
+        # Графики: воронка + время стадий с равными колонками
         grid = QGridLayout()
         grid.setSpacing(12)
 
-        # FunnelBarChart.set_data(dict) принимает словарь {stage: count}
         funnel = FunnelBarChart()
         stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
 
         grid.addWidget(funnel, 0, 0)
         grid.addWidget(stage_duration, 0, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
         layout.addLayout(grid)
 
         return {
@@ -459,10 +537,9 @@ class ReportsTab(QWidget):
             card.set_value("—")
             self._mini_supervision[key] = card
             self._supervision_mini_bar_layout.addWidget(card)
-        # Динамические агентские карточки добавляются при обновлении данных
         section.add_layout(self._supervision_mini_bar_layout)
 
-        # Графики 3x2
+        # Графики с равными колонками
         grid = QGridLayout()
         grid.setSpacing(12)
 
@@ -470,7 +547,6 @@ class ReportsTab(QWidget):
         self.chart_sv_budget = StackedBarChartWidget("Бюджет: план vs факт")
         self.chart_sv_cities = HorizontalBarWidget("Надзоры по городам")
         self.chart_sv_agents = HorizontalBarWidget("Надзоры по агентам")
-        # ProjectTypePieChart.set_data(individual, template, supervision=0)
         self.chart_sv_project_types = ProjectTypePieChart()
 
         grid.addWidget(self.chart_sv_stages, 0, 0)
@@ -478,24 +554,28 @@ class ReportsTab(QWidget):
         grid.addWidget(self.chart_sv_cities, 1, 0)
         grid.addWidget(self.chart_sv_agents, 1, 1)
         grid.addWidget(self.chart_sv_project_types, 2, 0)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
-        # Мини-KPI: экономия, дефекты, визиты
+        # Мини-KPI: экономия, дефекты, визиты — grid 1x3
         self._mini_sv_kpi = {}
-        kpi_layout = QHBoxLayout()
-        kpi_layout.setSpacing(8)
-        for key, title, color in [
+        kpi_grid = QGridLayout()
+        kpi_grid.setSpacing(8)
+        items = [
             ("savings", "Экономия бюджета", "#4CAF50"),
             ("defects", "Дефекты", "#FF9800"),
             ("visits", "Визиты на объект", "#2196F3"),
-        ]:
+        ]
+        for i, (key, title, color) in enumerate(items):
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_sv_kpi[key] = card
-            kpi_layout.addWidget(card)
-        kpi_layout.addStretch()
+            kpi_grid.addWidget(card, 0, i)
+        for col in range(3):
+            kpi_grid.setColumnStretch(col, 1)
 
         kpi_widget = QWidget()
-        kpi_widget.setLayout(kpi_layout)
+        kpi_widget.setLayout(kpi_grid)
         grid.addWidget(kpi_widget, 2, 1)
 
         section.add_layout(grid)
@@ -781,11 +861,6 @@ class ReportsTab(QWidget):
             c3.set_value(f"{area_val:,.0f}\u00a0м\u00b2".replace(",", "\u00a0"))
             self.kpi_agents_area_layout.addWidget(c3)
             area_cards.append(c3)
-
-        # Stretch в конец каждого ряда
-        self.kpi_agents_clients_layout.addStretch()
-        self.kpi_agents_contracts_layout.addStretch()
-        self.kpi_agents_area_layout.addStretch()
 
         self._agent_kpi_cards = [clients_cards, contracts_cards, area_cards]
 
