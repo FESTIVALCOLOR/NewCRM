@@ -1,4 +1,6 @@
 import sqlite3
+import shutil
+import os
 from datetime import datetime
 import json
 import threading
@@ -23,6 +25,7 @@ class DatabaseManager(DatabaseMigrations):
 
         self.db_path = db_path
         self.connection = None
+        self._shared_conn = False  # Флаг: переиспользовать одно соединение
 
         # ========== КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ ==========
         # Создаем alias для совместимости со старым кодом
@@ -32,38 +35,134 @@ class DatabaseManager(DatabaseMigrations):
         # Выполняем миграции только один раз за сессию
         with _migrations_lock:
             if not _migrations_completed:
-                # КРИТИЧНО: сначала создаём таблицы, потом мигрируем
-                self.initialize_database()
-                self.run_migrations()
-                self.create_supervision_table_migration()
-                self.fix_supervision_cards_column_name()
-                self.create_supervision_history_table()
-                self.create_manager_acceptance_table()
-                self.create_payments_system_tables()
-                self.add_reassigned_field_to_payments()
-                self.add_submitted_date_to_stage_executors()
-                self.add_stage_field_to_payments()
-                self.add_contract_file_columns()
-                self.create_project_files_table()
-                self.create_project_templates_table()
-                self.create_timeline_tables()
-                self.add_project_subtype_to_contracts()
-                self.add_floors_to_contracts()
-                self.create_stage_workflow_state_table()
-                self.create_messenger_tables()
-                self.create_performance_indexes()
-                self.add_missing_fields_rates_payments_salaries()
+                # Бэкап SQLite перед миграциями (пока файл не заблокирован)
+                self._backup_before_migrations()
+
+                # Оптимизация: одно соединение для всех миграций
+                # вместо 40+ открытий/закрытий
+                self._shared_conn = True
+                self.connection = sqlite3.connect(self.db_path)
+                self.connection.row_factory = sqlite3.Row
+                self.conn = self.connection
+                try:
+                    # КРИТИЧНО: сначала создаём таблицы, потом мигрируем
+                    self.initialize_database()
+                    self.run_migrations()
+                    self.create_supervision_table_migration()
+                    self.fix_supervision_cards_column_name()
+                    self.create_supervision_history_table()
+                    self.create_manager_acceptance_table()
+                    self.create_payments_system_tables()
+                    self.add_reassigned_field_to_payments()
+                    self.add_submitted_date_to_stage_executors()
+                    self.add_stage_field_to_payments()
+                    self.add_contract_file_columns()
+                    self.create_project_files_table()
+                    self.create_project_templates_table()
+                    self.create_timeline_tables()
+                    self.add_project_subtype_to_contracts()
+                    self.add_floors_to_contracts()
+                    self.create_stage_workflow_state_table()
+                    self.create_messenger_tables()
+                    self.create_performance_indexes()
+                    self.add_missing_fields_rates_payments_salaries()
+                    self.fix_payments_contract_id_nullable()
+                finally:
+                    self._shared_conn = False
+                    if self.connection:
+                        self.connection.close()
+                        self.connection = None
+                        self.conn = None
                 _migrations_completed = True
+
+                # Выгрузка бэкапа на Яндекс.Диск (фоновый поток, не блокирует запуск)
+                self._upload_backup_async()
+
+    def _backup_before_migrations(self):
+        """Создаёт резервную копию SQLite перед миграциями.
+        Хранит до 3 последних бэкапов, удаляет старые."""
+        try:
+            if not os.path.exists(self.db_path):
+                return
+            # Размер файла — не бэкапим пустую БД
+            if os.path.getsize(self.db_path) < 1024:
+                return
+            backup_dir = os.path.join(os.path.dirname(self.db_path) or '.', 'backups')
+            os.makedirs(backup_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            db_name = os.path.splitext(os.path.basename(self.db_path))[0]
+            backup_path = os.path.join(backup_dir, f'{db_name}_{timestamp}.db')
+
+            shutil.copy2(self.db_path, backup_path)
+            print(f"[BACKUP] SQLite бэкап перед миграциями: {backup_path}")
+
+            # Ротация: храним только 3 последних бэкапа
+            pattern = f'{db_name}_'
+            backups = sorted([
+                f for f in os.listdir(backup_dir)
+                if f.startswith(pattern) and f.endswith('.db')
+            ])
+            while len(backups) > 3:
+                old = backups.pop(0)
+                try:
+                    os.remove(os.path.join(backup_dir, old))
+                except OSError:
+                    pass
+        except Exception as e:
+            print(f"[WARN] Не удалось создать бэкап SQLite: {e}")
+
+    def _upload_backup_async(self):
+        """Выгружает последний бэкап SQLite на Яндекс.Диск в фоновом потоке."""
+        try:
+            if not YANDEX_DISK_TOKEN:
+                return
+            backup_dir = os.path.join(os.path.dirname(self.db_path) or '.', 'backups')
+            if not os.path.isdir(backup_dir):
+                return
+            db_name = os.path.splitext(os.path.basename(self.db_path))[0]
+            backups = sorted([
+                f for f in os.listdir(backup_dir)
+                if f.startswith(f'{db_name}_') and f.endswith('.db')
+            ])
+            if not backups:
+                return
+            latest = os.path.join(backup_dir, backups[-1])
+
+            def _upload():
+                try:
+                    from config import YANDEX_DISK_BACKUPS
+                    yd = YandexDiskManager.get_instance(YANDEX_DISK_TOKEN)
+                    yd.create_folder(YANDEX_DISK_BACKUPS)
+                    yd_folder = f'{YANDEX_DISK_BACKUPS}/SQLite'
+                    yd.create_folder(yd_folder)
+                    yd_path = f'{yd_folder}/{backups[-1]}'
+                    yd.upload_file(latest, yd_path)
+                    print(f"[BACKUP] SQLite бэкап выгружен на Яндекс.Диск: {yd_path}")
+                except Exception as e:
+                    print(f"[WARN] Не удалось выгрузить бэкап на Яндекс.Диск: {e}")
+
+            t = threading.Thread(target=_upload, daemon=True)
+            t.start()
+        except Exception:
+            pass
 
     def connect(self):
         """Подключение к БД"""
+        # Если работаем в режиме shared connection (миграции) —
+        # возвращаем уже открытое соединение без переоткрытия
+        if self._shared_conn and self.connection:
+            return self.connection
         self.connection = sqlite3.connect(self.db_path)
         self.connection.row_factory = sqlite3.Row
         self.conn = self.connection  # Alias для совместимости
         return self.connection
-    
+
     def close(self):
         """Закрытие соединения"""
+        # В режиме shared connection — не закрываем (будет закрыто в __init__)
+        if self._shared_conn:
+            return
         if self.connection:
             self.connection.close()
 
