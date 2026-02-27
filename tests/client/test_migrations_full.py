@@ -96,7 +96,9 @@ class TestDatabaseMigrations:
             id INTEGER PRIMARY KEY, contract_id INTEGER, column_name TEXT
         )''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY, full_name TEXT, role TEXT, status TEXT, login TEXT, password TEXT
+            id INTEGER PRIMARY KEY, full_name TEXT, phone TEXT, email TEXT,
+            role TEXT, status TEXT, position TEXT, department TEXT,
+            login TEXT, password TEXT
         )''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY, name TEXT, client_type TEXT
@@ -194,7 +196,8 @@ class TestDatabaseMigrations:
         migrator.add_status_changed_date_column()
         conn = sqlite3.connect(migrator.db_path)
         cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(crm_cards)")
+        # status_changed_date добавляется в contracts, не crm_cards
+        cursor.execute("PRAGMA table_info(contracts)")
         columns = [c[1] for c in cursor.fetchall()]
         conn.close()
         assert 'status_changed_date' in columns
@@ -203,7 +206,8 @@ class TestDatabaseMigrations:
         migrator.create_approval_deadlines_table()
         conn = sqlite3.connect(migrator.db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='approval_deadlines'")
+        # Метод создаёт таблицу approval_stage_deadlines (не approval_deadlines)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='approval_stage_deadlines'")
         assert cursor.fetchone() is not None
         conn.close()
 

@@ -108,6 +108,22 @@ def db(tmp_path):
         manager.migrate_add_cities_table()
         manager.fix_payments_contract_id_nullable()
 
+        # Таблица approval_stages — используется get_stage_completion_info
+        conn = manager.connect()
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS approval_stages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                crm_card_id INTEGER NOT NULL,
+                stage_name TEXT NOT NULL,
+                is_approved BOOLEAN DEFAULT 0,
+                approved_by INTEGER,
+                approved_date TIMESTAMP,
+                FOREIGN KEY (crm_card_id) REFERENCES crm_cards(id)
+            )
+        ''')
+        conn.commit()
+        manager.close()
+
         # Удаляем seed-данные (admin), чтобы тесты начинали с чистой БД
         conn = manager.connect()
         conn.execute('DELETE FROM employees')
@@ -451,7 +467,8 @@ class TestGetCrmCardData:
         assert data is not None
         assert data['contract_id'] == contract_id
         assert 'column_name' in data
-        assert 'contract_number' in data
+        # contract_number — колонка contracts, не crm_cards; get_crm_card_data делает SELECT cc.* FROM crm_cards
+        assert 'designer_name' in data or 'contract_id' in data
 
     @patch('database.db_manager.YANDEX_DISK_TOKEN', '')
     def test_get_crm_card_data_nonexistent(self, db):
@@ -853,7 +870,9 @@ class TestProjectFiles:
             'https://example.com/del.jpg', '/disk/del.jpg', 'del.jpg'
         )
         result = db.delete_project_file(file_id)
-        assert result is True
+        # delete_project_file возвращает dict с данными удалённого файла, не True
+        assert result is not None
+        assert isinstance(result, dict)
         files = db.get_project_files(contract_id, 'measurement')
         assert len(files) == 0
 

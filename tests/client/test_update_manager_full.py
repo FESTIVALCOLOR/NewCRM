@@ -339,10 +339,8 @@ class TestInstallUpdate:
     """install_update — установка обновления."""
 
     def test_not_frozen_returns_false(self, um):
-        with patch('utils.update_manager.sys') as mock_sys:
-            mock_sys.frozen = False
-            type(mock_sys).frozen = property(lambda s: False)
-            delattr(mock_sys, 'frozen')
+        # getattr(sys, 'frozen', False) → False → return False
+        with patch('utils.update_manager.getattr', return_value=False):
             result = um.install_update('/path/to/update.exe')
             assert result is False
 

@@ -42,8 +42,11 @@ from utils.api_client.exceptions import (
 @pytest.fixture(autouse=True)
 def _patch_offline_manager():
     """Мокаем OfflineManager, чтобы тесты не зависели от реального модуля."""
+    from utils.data_access import _global_cache
+    _global_cache.invalidate()
     with patch("utils.data_access.get_offline_manager", return_value=None):
         yield
+    _global_cache.invalidate()
 
 
 def _make_da(api=None, db=None, online=True, prefer_local=False):
@@ -410,13 +413,16 @@ class TestMultipleConsecutiveErrors:
     """Несколько ошибок подряд — каждый раз корректный fallback."""
 
     def test_три_подряд_ошибки_api_все_fallback(self):
-        """Три вызова get_all_clients с ошибками → три fallback на DB."""
+        """Три вызова get_all_clients с ошибками → fallback на DB, кэш."""
+        from utils.data_access import _global_cache
         api, db = _mock_api(), _mock_db()
         api.get_clients.side_effect = APIConnectionError("Offline")
         da = _make_da(api, db)
 
         r1 = da.get_all_clients()
+        _global_cache.invalidate()  # сброс кэша для повторного вызова
         r2 = da.get_all_clients()
+        _global_cache.invalidate()
         r3 = da.get_all_clients()
 
         assert r1 == r2 == r3 == db.get_all_clients.return_value

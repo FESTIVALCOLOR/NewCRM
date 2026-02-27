@@ -12,8 +12,16 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from utils.data_access import DataAccess
+from utils.data_access import DataAccess, _global_cache
 from utils.api_client.exceptions import APIConnectionError, APITimeoutError
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Очистка глобального кэша DataAccess между тестами."""
+    _global_cache.invalidate()
+    yield
+    _global_cache.invalidate()
 
 
 # ==================== ФИКСТУРЫ ====================

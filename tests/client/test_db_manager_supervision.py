@@ -469,14 +469,24 @@ class TestSupervisionHistory:
         """История отсортирована по дате DESC (новые сверху)."""
         db, _, _, card_id = db_with_supervision
         emp_id = _make_employee(db, 'Хронолог', 'chronolog', 'Менеджер')
-        db.add_supervision_history(card_id, 'first', 'Первая', emp_id)
-        db.add_supervision_history(card_id, 'second', 'Вторая', emp_id)
+        # Вставляем с разными created_at для предсказуемой сортировки
+        conn = db.connect()
+        conn.execute(
+            "INSERT INTO supervision_project_history (supervision_card_id, entry_type, message, created_by, created_at) VALUES (?, ?, ?, ?, '2026-01-01 10:00:00')",
+            (card_id, 'first', 'Первая', emp_id)
+        )
+        conn.execute(
+            "INSERT INTO supervision_project_history (supervision_card_id, entry_type, message, created_by, created_at) VALUES (?, ?, ?, ?, '2026-02-01 10:00:00')",
+            (card_id, 'second', 'Вторая', emp_id)
+        )
+        conn.commit()
+        db.close()
 
         history = db.get_supervision_history(card_id)
         assert len(history) == 2
-        # Более новая запись имеет больший ID; ORDER BY created_at DESC
-        # при одинаковых created_at порядок зависит от rowid
-        assert history[0]['id'] > history[1]['id']
+        # ORDER BY created_at DESC — новая (февраль) сверху
+        assert history[0]['message'] == 'Вторая'
+        assert history[1]['message'] == 'Первая'
 
     def test_history_includes_employee_name(self, db_with_supervision):
         """История содержит имя сотрудника через JOIN."""

@@ -940,12 +940,12 @@ class TestCreateProjectFilesTable:
 # ============================================================================
 
 class TestCreateProjectTemplatesTable:
-    """Миграция: таблица contract_templates."""
+    """Миграция: таблица project_templates."""
 
     def test_creates_table(self, migrator_full):
-        """Таблица contract_templates создаётся."""
+        """Таблица project_templates создаётся."""
         migrator_full.create_project_templates_table()
-        assert _table_exists(migrator_full.db_path, 'contract_templates')
+        assert _table_exists(migrator_full.db_path, 'project_templates')
 
     def test_idempotent(self, migrator_full):
         migrator_full.create_project_templates_table()
@@ -1178,7 +1178,7 @@ class TestUpgradePath:
             'stage_executors', 'salaries', 'action_history', 'agents',
             'supervision_cards', 'supervision_project_history',
             'manager_stage_acceptance', 'payments', 'rates',
-            'project_files', 'contract_templates',
+            'project_files', 'project_templates',
             'project_timeline_entries', 'stage_workflow_state',
             'messenger_settings', 'messenger_scripts',
             'user_permissions', 'cities',

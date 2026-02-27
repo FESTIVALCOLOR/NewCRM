@@ -9,16 +9,18 @@ from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget
 
 # ─── Патчи для импортов ─────────────────────────────────────────────────
 
-ARCHIVE_PATCHES = {
-    'ui.crm_archive.DataAccess': MagicMock,
-    'ui.crm_archive.IconLoader': MagicMock(),
-    'ui.crm_archive.CustomTitleBar': MagicMock(return_value=QWidget()),
-    'ui.crm_archive.CustomMessageBox': MagicMock(),
-    'ui.crm_archive.CustomQuestionBox': MagicMock(),
-    'ui.crm_archive.CustomComboBox': MagicMock(),
-    'ui.crm_archive.YANDEX_DISK_TOKEN': 'fake_token',
-    'ui.crm_archive.resource_path': lambda p: p,
-}
+def _archive_patches():
+    """Создаёт патчи для ui.crm_archive (QWidget нельзя на module level)."""
+    return {
+        'ui.crm_archive.DataAccess': MagicMock,
+        'ui.crm_archive.IconLoader': MagicMock(),
+        'ui.crm_archive.CustomTitleBar': MagicMock(return_value=QWidget()),
+        'ui.crm_archive.CustomMessageBox': MagicMock(),
+        'ui.crm_archive.CustomQuestionBox': MagicMock(),
+        'ui.crm_archive.CustomComboBox': MagicMock(),
+        'ui.crm_archive.YANDEX_DISK_TOKEN': 'fake_token',
+        'ui.crm_archive.resource_path': lambda p: p,
+    }
 
 
 # ─── base_kanban_tab.py ─────────────────────────────────────────────────

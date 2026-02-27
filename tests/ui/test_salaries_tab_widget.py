@@ -38,8 +38,9 @@ def _create_salaries_tab(qtbot, employee, mock_da=None):
         mock_da = _make_mock_data_access()
     with patch('ui.salaries_tab.DataAccess', return_value=mock_da), \
          patch('ui.salaries_tab.IconLoader') as mock_icon:
-        # IconLoader.load возвращает пустую иконку
-        mock_icon.load.return_value = MagicMock()
+        # IconLoader.load возвращает реальную пустую QIcon (не MagicMock — setIcon не примет)
+        from PyQt5.QtGui import QIcon
+        mock_icon.load.return_value = QIcon()
         mock_icon.create_action_button.return_value = QPushButton()
         mock_icon.create_icon_button.return_value = QPushButton()
         from ui.salaries_tab import SalariesTab

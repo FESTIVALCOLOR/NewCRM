@@ -10,11 +10,20 @@ Interior Studio CRM — Test Runner с прогрессбаром.
   - Итоговый summary для Claude Code
 
 Использование:
-  python run_tests.py              — все тесты
-  python run_tests.py client       — только client
-  python run_tests.py ui           — только UI
-  python run_tests.py db           — только DB
-  python run_tests.py --coverage   — с замером coverage
+  python run_tests.py                        — все локальные тесты
+  python run_tests.py client                 — только client
+  python run_tests.py ui                     — только UI
+  python run_tests.py db                     — только DB
+  python run_tests.py api_client             — API client тесты
+  python run_tests.py edge_cases             — Edge cases
+  python run_tests.py frontend               — Frontend тесты
+  python run_tests.py integration            — Интеграционные тесты
+  python run_tests.py regression             — Регрессионные тесты
+  python run_tests.py backend                — Backend (нужен сервер)
+  python run_tests.py e2e                    — E2E (нужен сервер)
+  python run_tests.py smoke                  — Smoke (нужен сервер)
+  python run_tests.py client ui db           — несколько групп
+  python run_tests.py --coverage             — с замером coverage
 """
 
 import subprocess
@@ -128,6 +137,7 @@ def run_with_progress(venv_python, test_dir, label, log_file, extra_args=None):
     current = 0
     log_lines = []
 
+    prev_current = -1
     for line in process.stdout:
         log_lines.append(line)
 
@@ -144,8 +154,10 @@ def run_with_progress(venv_python, test_dir, label, log_file, extra_args=None):
         elif 'SKIPPED' in line:
             current += 1
 
-        elapsed = time.time() - start_time
-        progress_bar(current, total, elapsed=elapsed, prefix=label)
+        if current != prev_current:
+            elapsed = time.time() - start_time
+            progress_bar(current, total, elapsed=elapsed, prefix=label)
+            prev_current = current
 
     process.wait()
     elapsed = time.time() - start_time
@@ -184,13 +196,36 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     run_all = len(args) == 0
 
+    # Локальные тесты (без сервера)
+    LOCAL_SUITES = {
+        'client':      ('Client',      'tests/client/'),
+        'ui':          ('UI',          'tests/ui/'),
+        'db':          ('DB',          'tests/db/'),
+        'api_client':  ('API Client',  'tests/api_client/'),
+        'edge_cases':  ('Edge Cases',  'tests/edge_cases/'),
+        'frontend':    ('Frontend',    'tests/frontend/'),
+        'integration': ('Integration', 'tests/integration/'),
+        'regression':  ('Regression',  'tests/regression/'),
+    }
+    # Серверные тесты (нужен запущенный сервер)
+    SERVER_SUITES = {
+        'backend':     ('Backend',     'tests/backend/'),
+        'e2e':         ('E2E',         'tests/e2e/'),
+        'smoke':       ('Smoke',       'tests/smoke/'),
+    }
+
     suites = []
-    if run_all or 'client' in args:
-        suites.append(('Client', 'tests/client/', str(log_dir / f'client_{ts}.log'), []))
-    if run_all or 'ui' in args:
-        suites.append(('UI', 'tests/ui/', str(log_dir / f'ui_{ts}.log'), []))
-    if run_all or 'db' in args:
-        suites.append(('DB', 'tests/db/', str(log_dir / f'db_{ts}.log'), []))
+    if run_all:
+        # По умолчанию — только локальные тесты
+        for key, (label, path) in LOCAL_SUITES.items():
+            if Path(path).exists():
+                suites.append((label, path, str(log_dir / f'{key}_{ts}.log'), []))
+    else:
+        all_suites = {**LOCAL_SUITES, **SERVER_SUITES}
+        for arg in args:
+            if arg in all_suites:
+                label, path = all_suites[arg]
+                suites.append((label, path, str(log_dir / f'{arg}_{ts}.log'), []))
 
     print()
     print(f"  {colorize('═' * 50, Colors.CYAN)}")
@@ -219,7 +254,7 @@ def main():
 
     for label, r in results.items():
         status = colorize('✓', Colors.GREEN) if r['failed'] == 0 else colorize('✗', Colors.RED)
-        print(f"  {status} {label:8s}: {r['passed']:4d} passed, {r['failed']:2d} failed ({r['duration']:.1f}s)")
+        print(f"  {status} {label:12s}: {r['passed']:4d} passed, {r['failed']:2d} failed ({r['duration']:.1f}s)")
 
     print(f"  {'─' * 50}")
     all_ok = total_failed == 0 and total_errors == 0

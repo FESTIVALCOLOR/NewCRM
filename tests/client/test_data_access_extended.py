@@ -26,6 +26,15 @@ sys.path.insert(0, str(PROJECT_ROOT))
 pytest.importorskip("PyQt5")
 
 
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Очистка глобального кэша DataAccess между тестами."""
+    from utils.data_access import _global_cache
+    _global_cache.invalidate()
+    yield
+    _global_cache.invalidate()
+
+
 # ---------------------------------------------------------------------------
 # Вспомогательная фабрика DataAccess с моками (без __init__ для PyQt5)
 # ---------------------------------------------------------------------------
