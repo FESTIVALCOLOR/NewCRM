@@ -14,13 +14,20 @@
   GET /salaries-supervision
   GET /agent-types
   GET /contract-years
+  GET /reports/summary
+  GET /reports/clients-dynamics
+  GET /reports/contracts-dynamics
+  GET /reports/crm-analytics
+  GET /reports/supervision-analytics
+  GET /reports/distribution
 
 Подключение в main.py:
   app.include_router(dashboard_router, prefix="/api/dashboard")
 """
 import logging
+from collections import defaultdict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -32,6 +39,8 @@ from database import (
     Client, Contract, Employee,
     CRMCard, SupervisionCard,
     Payment, Salary,
+    Agent, StageExecutor, SupervisionTimelineEntry,
+    ProjectTimelineEntry,
 )
 
 logger = logging.getLogger(__name__)
@@ -1026,3 +1035,892 @@ async def get_contract_years(
         from datetime import datetime
         current_year = datetime.now().year
         return list(range(current_year + 1, current_year - 10, -1))
+
+
+# =============================================================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ОТЧЁТОВ
+# =============================================================================
+
+def _parse_contract_date(date_str: str):
+    """Разбирает дату договора из форматов ДД.ММ.ГГГГ или YYYY-MM-DD.
+    Возвращает объект datetime или None."""
+    if not date_str:
+        return None
+    for fmt in ('%d.%m.%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(date_str.strip(), fmt)
+        except ValueError:
+            pass
+    return None
+
+
+def _get_period_key(dt: datetime, granularity: str) -> str:
+    """Возвращает ключ периода: '2026-01' или '2026-Q1'."""
+    if granularity == 'quarter':
+        q = (dt.month - 1) // 3 + 1
+        return f"{dt.year}-Q{q}"
+    return f"{dt.year}-{dt.month:02d}"
+
+
+def _apply_period_filter(contracts: list, year: Optional[int], quarter: Optional[int], month: Optional[int]) -> list:
+    """Фильтрует список контрактов по году/кварталу/месяцу в Python (дата — VARCHAR)."""
+    if not year and not quarter and not month:
+        return contracts
+    result = []
+    for c in contracts:
+        dt = _parse_contract_date(c.contract_date)
+        if dt is None:
+            continue
+        if year and dt.year != year:
+            continue
+        if quarter and (dt.month - 1) // 3 + 1 != quarter:
+            continue
+        if month and dt.month != month:
+            continue
+        result.append(c)
+    return result
+
+
+def _get_prev_period_filter(year: Optional[int], quarter: Optional[int], month: Optional[int]):
+    """Возвращает параметры (year, quarter, month) для аналогичного прошлого периода."""
+    if year:
+        return year - 1, quarter, month
+    # Если год не задан — нет смысла считать тренд
+    return None, None, None
+
+
+# =============================================================================
+# ENDPOINT 1: GET /reports/summary
+# =============================================================================
+
+@router.get("/reports/summary")
+async def get_reports_summary(
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    agent_type: Optional[str] = None,
+    city: Optional[str] = None,
+    project_type: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Агрегация KPI-метрик с разбивкой по агентам для страницы Отчёты."""
+    try:
+        # --- Загрузить все договоры одним запросом, потом фильтровать в Python ---
+        query = db.query(Contract)
+        if agent_type:
+            query = query.filter(Contract.agent_type == agent_type)
+        if city:
+            query = query.filter(Contract.city == city)
+        if project_type:
+            query = query.filter(Contract.project_type == project_type)
+
+        all_contracts = query.all()
+
+        # Применяем фильтр по периоду в Python (дата хранится как VARCHAR)
+        filtered = _apply_period_filter(all_contracts, year, quarter, month)
+
+        # --- KPI метрики ---
+        filtered_client_ids = {c.client_id for c in filtered}
+        total_clients = len(filtered_client_ids)
+        total_contracts = len(filtered)
+        total_amount = sum(c.total_amount or 0 for c in filtered)
+        avg_amount = total_amount / total_contracts if total_contracts else 0.0
+        total_area = sum(c.area or 0 for c in filtered)
+        avg_area = total_area / total_contracts if total_contracts else 0.0
+
+        # Новые клиенты: клиенты, у которых ПЕРВЫЙ договор (за всё время) попадает в период
+        # Для этого берём все договоры без фильтра по периоду, но с теми же прочими фильтрами
+        client_ids_in_period = filtered_client_ids
+        # Первые даты договора для каждого клиента (по всем договорам с теми же прочими фильтрами)
+        client_first_date: dict = {}
+        for c in all_contracts:
+            dt = _parse_contract_date(c.contract_date)
+            if dt is None:
+                continue
+            cid = c.client_id
+            if cid not in client_first_date or dt < client_first_date[cid]:
+                client_first_date[cid] = dt
+
+        new_clients = 0
+        for cid in client_ids_in_period:
+            dt = client_first_date.get(cid)
+            if dt is None:
+                continue
+            # Проверяем, попадает ли первый договор в период
+            check = _apply_period_filter(
+                [type('C', (), {'contract_date': dt.strftime('%Y-%m-%d'), 'client_id': cid})()],
+                year, quarter, month
+            )
+            if check:
+                new_clients += 1
+
+        # Повторные клиенты: клиенты с >1 договором (за всё время), имеющие договор в периоде
+        client_contract_count: dict = defaultdict(int)
+        for c in all_contracts:
+            client_contract_count[c.client_id] += 1
+        returning_clients = sum(
+            1 for cid in client_ids_in_period if client_contract_count.get(cid, 0) > 1
+        )
+
+        # % завершённых проектов в срок (column_name='Выполненный проект')
+        # Берём только договоры из отфильтрованного списка
+        filtered_contract_ids = {c.id for c in filtered}
+        contracts_on_time_pct = 0.0
+        if filtered_contract_ids:
+            completed_cards = db.query(CRMCard).filter(
+                CRMCard.contract_id.in_(filtered_contract_ids),
+                CRMCard.column_name == 'Выполненный проект'
+            ).all()
+            if completed_cards:
+                on_time_count = 0
+                for card in completed_cards:
+                    if card.deadline and card.updated_at:
+                        try:
+                            deadline_dt = datetime.strptime(card.deadline.strip(), '%Y-%m-%d')
+                            if card.updated_at <= deadline_dt:
+                                on_time_count += 1
+                        except ValueError:
+                            pass
+                contracts_on_time_pct = round(on_time_count / len(completed_cards) * 100, 1)
+
+        # % стадий выполненных в срок (через StageExecutor)
+        stages_on_time_pct = 0.0
+        if filtered_contract_ids:
+            # Получаем crm_card_ids для отфильтрованных договоров
+            crm_card_ids = [
+                row[0] for row in db.query(CRMCard.id).filter(
+                    CRMCard.contract_id.in_(filtered_contract_ids)
+                ).all()
+            ]
+            if crm_card_ids:
+                completed_stages = db.query(StageExecutor).filter(
+                    StageExecutor.crm_card_id.in_(crm_card_ids),
+                    StageExecutor.completed == True
+                ).all()
+                if completed_stages:
+                    on_time_stages = 0
+                    for stage in completed_stages:
+                        if stage.deadline and stage.completed_date:
+                            try:
+                                deadline_dt = datetime.strptime(stage.deadline.strip(), '%Y-%m-%d')
+                                if stage.completed_date <= deadline_dt:
+                                    on_time_stages += 1
+                            except ValueError:
+                                pass
+                    stages_on_time_pct = round(on_time_stages / len(completed_stages) * 100, 1)
+
+        # --- Тренды: сравнение с аналогичным прошлым периодом ---
+        prev_year, prev_quarter, prev_month = _get_prev_period_filter(year, quarter, month)
+        trend_clients = 0.0
+        trend_contracts = 0.0
+        trend_amount = 0.0
+
+        if prev_year is not None:
+            prev_filtered = _apply_period_filter(all_contracts, prev_year, prev_quarter, prev_month)
+            prev_clients = len({c.client_id for c in prev_filtered})
+            prev_contracts = len(prev_filtered)
+            prev_amount = sum(c.total_amount or 0 for c in prev_filtered)
+
+            if prev_clients > 0:
+                trend_clients = round((total_clients - prev_clients) / prev_clients * 100, 1)
+            if prev_contracts > 0:
+                trend_contracts = round((total_contracts - prev_contracts) / prev_contracts * 100, 1)
+            if prev_amount > 0:
+                trend_amount = round((total_amount - prev_amount) / prev_amount * 100, 1)
+
+        # --- Разбивка по агентам (из справочника Agent) ---
+        agents_list = db.query(Agent).filter(Agent.status == 'активный').order_by(Agent.name).all()
+        agent_color_map = {a.name: a.color for a in agents_list}
+
+        # Группировка отфильтрованных договоров по agent_type
+        agent_data: dict = defaultdict(lambda: {'clients': set(), 'contracts': 0, 'amount': 0.0, 'area': 0.0})
+        for c in filtered:
+            key = c.agent_type or 'Не указан'
+            agent_data[key]['clients'].add(c.client_id)
+            agent_data[key]['contracts'] += 1
+            agent_data[key]['amount'] += c.total_amount or 0
+            agent_data[key]['area'] += c.area or 0
+
+        by_agent = []
+        for a in agents_list:
+            data = agent_data.get(a.name, {'clients': set(), 'contracts': 0, 'amount': 0.0, 'area': 0.0})
+            by_agent.append({
+                'agent_name': a.name,
+                'agent_color': a.color,
+                'clients': len(data['clients']),
+                'contracts': data['contracts'],
+                'amount': round(data['amount'], 2),
+                'area': round(data['area'], 2),
+            })
+
+        return {
+            'total_clients': total_clients,
+            'new_clients': new_clients,
+            'returning_clients': returning_clients,
+            'total_contracts': total_contracts,
+            'total_amount': round(total_amount, 2),
+            'avg_amount': round(avg_amount, 2),
+            'total_area': round(total_area, 2),
+            'avg_area': round(avg_area, 2),
+            'contracts_on_time_pct': contracts_on_time_pct,
+            'stages_on_time_pct': stages_on_time_pct,
+            'trend_clients': trend_clients,
+            'trend_contracts': trend_contracts,
+            'trend_amount': trend_amount,
+            'by_agent': by_agent,
+        }
+
+    except Exception as e:
+        logger.exception(f"Ошибка отчёта summary: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+# =============================================================================
+# ENDPOINT 2: GET /reports/clients-dynamics
+# =============================================================================
+
+@router.get("/reports/clients-dynamics")
+async def get_clients_dynamics(
+    year: Optional[int] = None,
+    granularity: Optional[str] = "month",
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Динамика клиентов по месяцам/кварталам за указанный год."""
+    try:
+        target_year = year or datetime.now().year
+
+        # Загружаем все договоры за нужный год (фильтрация в Python)
+        all_contracts = db.query(Contract).all()
+        year_contracts = _apply_period_filter(all_contracts, target_year, None, None)
+
+        # Загружаем типы клиентов
+        client_type_map: dict = {}
+        all_clients = db.query(Client.id, Client.client_type).all()
+        for cid, ctype in all_clients:
+            client_type_map[cid] = ctype or ''
+
+        # Первый договор каждого клиента (по всем договорам)
+        client_first_date: dict = {}
+        for c in all_contracts:
+            dt = _parse_contract_date(c.contract_date)
+            if dt is None:
+                continue
+            cid = c.client_id
+            if cid not in client_first_date or dt < client_first_date[cid]:
+                client_first_date[cid] = dt
+
+        # Кол-во договоров у каждого клиента (за всё время)
+        client_contract_count: dict = defaultdict(int)
+        for c in all_contracts:
+            client_contract_count[c.client_id] += 1
+
+        # Группировка по периодам
+        period_data: dict = defaultdict(lambda: {
+            'new_set': set(), 'returning_set': set(),
+            'individual_set': set(), 'legal_set': set(), 'all_set': set()
+        })
+
+        for c in year_contracts:
+            dt = _parse_contract_date(c.contract_date)
+            if dt is None:
+                continue
+            period = _get_period_key(dt, granularity)
+            cid = c.client_id
+            period_data[period]['all_set'].add(cid)
+
+            # Новый: первый договор в этом периоде (совпадает с первым договором вообще)
+            first = client_first_date.get(cid)
+            if first and _get_period_key(first, granularity) == period:
+                period_data[period]['new_set'].add(cid)
+
+            # Повторный: >1 договор за всё время + есть договор в периоде
+            if client_contract_count.get(cid, 0) > 1:
+                period_data[period]['returning_set'].add(cid)
+
+            # Тип клиента
+            ctype = client_type_map.get(cid, '')
+            if 'Физическое' in ctype:
+                period_data[period]['individual_set'].add(cid)
+            elif 'Юридическое' in ctype:
+                period_data[period]['legal_set'].add(cid)
+
+        # Формируем упорядоченный список периодов
+        if granularity == 'quarter':
+            all_periods = [f"{target_year}-Q{q}" for q in range(1, 5)]
+        else:
+            all_periods = [f"{target_year}-{m:02d}" for m in range(1, 13)]
+
+        result = []
+        for period in all_periods:
+            data = period_data.get(period, {})
+            result.append({
+                'period': period,
+                'new_clients': len(data.get('new_set', set())),
+                'returning_clients': len(data.get('returning_set', set())),
+                'individual': len(data.get('individual_set', set())),
+                'legal': len(data.get('legal_set', set())),
+                'total': len(data.get('all_set', set())),
+            })
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Ошибка clients-dynamics: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+# =============================================================================
+# ENDPOINT 3: GET /reports/contracts-dynamics
+# =============================================================================
+
+@router.get("/reports/contracts-dynamics")
+async def get_contracts_dynamics(
+    year: Optional[int] = None,
+    granularity: Optional[str] = "month",
+    agent_type: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Динамика договоров по месяцам/кварталам (кол-во + стоимость по типам)."""
+    try:
+        target_year = year or datetime.now().year
+
+        query = db.query(Contract)
+        if agent_type:
+            query = query.filter(Contract.agent_type == agent_type)
+        if city:
+            query = query.filter(Contract.city == city)
+
+        all_contracts = query.all()
+        year_contracts = _apply_period_filter(all_contracts, target_year, None, None)
+
+        # Группировка по периодам
+        period_data: dict = defaultdict(lambda: {
+            'individual_count': 0, 'template_count': 0, 'supervision_count': 0,
+            'individual_amount': 0.0, 'template_amount': 0.0, 'supervision_amount': 0.0,
+        })
+
+        for c in year_contracts:
+            dt = _parse_contract_date(c.contract_date)
+            if dt is None:
+                continue
+            period = _get_period_key(dt, granularity)
+            amount = c.total_amount or 0.0
+            ptype = c.project_type or ''
+
+            # Авторский надзор определяем по статусу или project_type
+            if c.status == 'АВТОРСКИЙ НАДЗОР' or ptype == 'Авторский надзор':
+                period_data[period]['supervision_count'] += 1
+                period_data[period]['supervision_amount'] += amount
+            elif ptype == 'Индивидуальный':
+                period_data[period]['individual_count'] += 1
+                period_data[period]['individual_amount'] += amount
+            elif ptype == 'Шаблонный':
+                period_data[period]['template_count'] += 1
+                period_data[period]['template_amount'] += amount
+            else:
+                # Прочие типы считаем как индивидуальные
+                period_data[period]['individual_count'] += 1
+                period_data[period]['individual_amount'] += amount
+
+        # Формируем упорядоченный список периодов
+        if granularity == 'quarter':
+            all_periods = [f"{target_year}-Q{q}" for q in range(1, 5)]
+        else:
+            all_periods = [f"{target_year}-{m:02d}" for m in range(1, 13)]
+
+        result = []
+        for period in all_periods:
+            d = period_data.get(period, {})
+            ind_c = d.get('individual_count', 0)
+            tmpl_c = d.get('template_count', 0)
+            sup_c = d.get('supervision_count', 0)
+            ind_a = d.get('individual_amount', 0.0)
+            tmpl_a = d.get('template_amount', 0.0)
+            sup_a = d.get('supervision_amount', 0.0)
+            result.append({
+                'period': period,
+                'individual_count': ind_c,
+                'template_count': tmpl_c,
+                'supervision_count': sup_c,
+                'total_count': ind_c + tmpl_c + sup_c,
+                'individual_amount': round(ind_a, 2),
+                'template_amount': round(tmpl_a, 2),
+                'supervision_amount': round(sup_a, 2),
+                'total_amount': round(ind_a + tmpl_a + sup_a, 2),
+            })
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Ошибка contracts-dynamics: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+# =============================================================================
+# ENDPOINT 4: GET /reports/crm-analytics
+# =============================================================================
+
+@router.get("/reports/crm-analytics")
+async def get_crm_analytics(
+    project_type: Optional[str] = "Индивидуальный",
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """CRM аналитика: воронка стадий, соблюдение сроков, длительность стадий."""
+    try:
+        # Определяем таблицу: для Авторского надзора — SupervisionCard
+        use_supervision = (project_type == 'Авторский надзор')
+
+        if use_supervision:
+            # Для надзора используем SupervisionCard
+            all_contracts = db.query(Contract).filter(
+                Contract.status == 'АВТОРСКИЙ НАДЗОР'
+            ).all()
+        else:
+            all_contracts = db.query(Contract).filter(
+                Contract.project_type == project_type
+            ).all()
+
+        # Фильтр по периоду
+        filtered_contracts = _apply_period_filter(all_contracts, year, quarter, month)
+        filtered_ids = {c.id for c in filtered_contracts}
+
+        if not filtered_ids:
+            # Возвращаем пустую структуру
+            return {
+                'funnel': [],
+                'on_time_stats': {
+                    'projects_on_time': 0, 'projects_overdue': 0, 'projects_total': 0,
+                    'projects_pct': 0.0, 'stages_on_time': 0, 'stages_overdue': 0,
+                    'stages_total': 0, 'stages_pct': 0.0, 'avg_deviation_days': 0.0,
+                },
+                'stage_durations': [],
+                'paused_count': 0,
+                'active_count': 0,
+                'archived_count': 0,
+            }
+
+        if use_supervision:
+            crm_cards = db.query(SupervisionCard).filter(
+                SupervisionCard.contract_id.in_(filtered_ids)
+            ).all()
+        else:
+            crm_cards = db.query(CRMCard).filter(
+                CRMCard.contract_id.in_(filtered_ids)
+            ).all()
+
+        # --- Воронка: GROUP BY column_name ---
+        funnel_counter: dict = defaultdict(int)
+        for card in crm_cards:
+            funnel_counter[card.column_name] += 1
+
+        # Порядок стадий воронки
+        if project_type == 'Шаблонный':
+            stage_order = [
+                'Новый заказ', 'В ожидании',
+                'Стадия 1: планировочные решения',
+                'Стадия 2: чертежи',
+                'Стадия 3: 3D визуализация',
+                'Выполненный проект',
+            ]
+        elif use_supervision:
+            stage_order = [
+                'Новый заказ', 'В ожидании',
+                'Стадия 1: Закупка керамогранита',
+                'Стадия 2: Закупка плитки',
+                'Стадия 3: Закупка паркета',
+                'Стадия 4: Закупка сантехники',
+                'Стадия 5: Закупка мебели кухни',
+                'Стадия 6: Закупка дверей',
+                'Стадия 7: Закупка электрики',
+                'Стадия 8: Закупка освещения',
+                'Стадия 9: Закупка сантехники и аксессуаров',
+                'Стадия 10: Закупка мебели',
+                'Стадия 11: Закупка текстиля',
+                'Стадия 12: Закупка декора',
+                'Выполненный проект',
+            ]
+        else:
+            # Индивидуальный
+            stage_order = [
+                'Новый заказ', 'В ожидании',
+                'Стадия 1: планировочные решения',
+                'Стадия 2: концепция',
+                'Стадия 3: чертежи',
+                'Выполненный проект',
+            ]
+
+        # Собираем воронку в нужном порядке + все прочие стадии
+        seen = set()
+        funnel = []
+        for stage in stage_order:
+            funnel.append({'stage': stage, 'count': funnel_counter.get(stage, 0), 'avg_days': 0.0})
+            seen.add(stage)
+        for stage, cnt in funnel_counter.items():
+            if stage not in seen:
+                funnel.append({'stage': stage, 'count': cnt, 'avg_days': 0.0})
+
+        # Средняя длительность стадий — из ProjectTimelineEntry (только для CRMCard)
+        if not use_supervision and filtered_ids:
+            timeline_entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id.in_(filtered_ids)
+            ).all()
+            stage_actual_days: dict = defaultdict(list)
+            for e in timeline_entries:
+                if e.actual_days and e.actual_days > 0:
+                    stage_actual_days[e.stage_name].append(e.actual_days)
+            for item in funnel:
+                days_list = stage_actual_days.get(item['stage'], [])
+                item['avg_days'] = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
+
+        # --- On-time статистика ---
+        # Проекты: column_name='Выполненный проект', сравниваем deadline с updated_at
+        completed_cards = [c for c in crm_cards if c.column_name == 'Выполненный проект']
+        projects_on_time = 0
+        projects_overdue = 0
+        deviation_days: list = []
+
+        for card in completed_cards:
+            if card.deadline and card.updated_at:
+                try:
+                    deadline_dt = datetime.strptime(card.deadline.strip(), '%Y-%m-%d')
+                    delta = (card.updated_at - deadline_dt).days
+                    deviation_days.append(delta)
+                    if card.updated_at <= deadline_dt:
+                        projects_on_time += 1
+                    else:
+                        projects_overdue += 1
+                except ValueError:
+                    pass
+
+        projects_total = projects_on_time + projects_overdue
+        projects_pct = round(projects_on_time / projects_total * 100, 1) if projects_total else 0.0
+        avg_deviation = round(sum(deviation_days) / len(deviation_days), 1) if deviation_days else 0.0
+
+        # Стадии (StageExecutor, только для CRM карточек)
+        stages_on_time = 0
+        stages_overdue = 0
+        if not use_supervision and crm_cards:
+            crm_card_ids = [c.id for c in crm_cards]
+            completed_stages = db.query(StageExecutor).filter(
+                StageExecutor.crm_card_id.in_(crm_card_ids),
+                StageExecutor.completed == True
+            ).all()
+            for stage in completed_stages:
+                if stage.deadline and stage.completed_date:
+                    try:
+                        deadline_dt = datetime.strptime(stage.deadline.strip(), '%Y-%m-%d')
+                        if stage.completed_date <= deadline_dt:
+                            stages_on_time += 1
+                        else:
+                            stages_overdue += 1
+                    except ValueError:
+                        pass
+
+        stages_total = stages_on_time + stages_overdue
+        stages_pct = round(stages_on_time / stages_total * 100, 1) if stages_total else 0.0
+
+        on_time_stats = {
+            'projects_on_time': projects_on_time,
+            'projects_overdue': projects_overdue,
+            'projects_total': projects_total,
+            'projects_pct': projects_pct,
+            'stages_on_time': stages_on_time,
+            'stages_overdue': stages_overdue,
+            'stages_total': stages_total,
+            'stages_pct': stages_pct,
+            'avg_deviation_days': avg_deviation,
+        }
+
+        # --- Длительность стадий (avg actual vs norm) ---
+        stage_durations = []
+        if not use_supervision and filtered_ids:
+            # Группируем timeline entries по stage_name
+            stage_actual: dict = defaultdict(list)
+            stage_norm: dict = {}
+            for e in timeline_entries:
+                stage_actual[e.stage_name].append(e.actual_days or 0)
+                stage_norm[e.stage_name] = e.norm_days or 0
+
+            for sname, days_list in stage_actual.items():
+                avg_actual = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
+                norm = stage_norm.get(sname, 0)
+                on_time_pct_s = 0.0
+                if days_list and norm > 0:
+                    on_time_count_s = sum(1 for d in days_list if d <= norm)
+                    on_time_pct_s = round(on_time_count_s / len(days_list) * 100, 1)
+                stage_durations.append({
+                    'stage': sname,
+                    'avg_actual_days': avg_actual,
+                    'norm_days': float(norm),
+                    'on_time_pct': on_time_pct_s,
+                })
+
+        # --- Счётчики статусов ---
+        paused_count = sum(1 for c in crm_cards if c.column_name == 'В ожидании')
+        archived_statuses = {'Выполненный проект', 'СДАН', 'РАСТОРГНУТ'}
+        active_count = sum(
+            1 for c in crm_cards
+            if c.column_name not in archived_statuses and c.column_name != 'В ожидании'
+        )
+        archived_count = sum(1 for c in crm_cards if c.column_name in archived_statuses)
+
+        return {
+            'funnel': funnel,
+            'on_time_stats': on_time_stats,
+            'stage_durations': stage_durations,
+            'paused_count': paused_count,
+            'active_count': active_count,
+            'archived_count': archived_count,
+        }
+
+    except Exception as e:
+        logger.exception(f"Ошибка crm-analytics: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+# =============================================================================
+# ENDPOINT 5: GET /reports/supervision-analytics
+# =============================================================================
+
+@router.get("/reports/supervision-analytics")
+async def get_supervision_analytics(
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Аналитика авторского надзора: стадии, бюджет, дефекты, визиты."""
+    try:
+        # Загружаем все надзорные карточки с договорами
+        supervision_cards = db.query(SupervisionCard).all()
+        supervision_card_ids_all = [c.id for c in supervision_cards]
+
+        # Словарь contract_id → SupervisionCard
+        sc_by_id = {c.id: c for c in supervision_cards}
+
+        # Договоры для надзоров
+        contract_ids_for_sup = [c.contract_id for c in supervision_cards]
+        contracts_map: dict = {}
+        if contract_ids_for_sup:
+            for cont in db.query(Contract).filter(Contract.id.in_(contract_ids_for_sup)).all():
+                contracts_map[cont.id] = cont
+
+        # Фильтрация по периоду: через contract_date договора
+        if year or quarter or month:
+            filtered_sc = []
+            for sc in supervision_cards:
+                cont = contracts_map.get(sc.contract_id)
+                if cont is None:
+                    continue
+                check = _apply_period_filter([cont], year, quarter, month)
+                if check:
+                    filtered_sc.append(sc)
+        else:
+            filtered_sc = supervision_cards
+
+        filtered_sc_ids = {sc.id for sc in filtered_sc}
+
+        # --- Итоговые счётчики ---
+        total = len(filtered_sc)
+        # Активные: не в архивных стадиях
+        archived_stages = {'Выполненный проект', 'СДАН', 'РАСТОРГНУТ'}
+        active = sum(1 for sc in filtered_sc if sc.column_name not in archived_stages)
+
+        # --- По типу проекта (через договор) ---
+        individual_count = 0
+        template_count = 0
+        for sc in filtered_sc:
+            cont = contracts_map.get(sc.contract_id)
+            if cont is None:
+                continue
+            ptype = cont.project_type or ''
+            if ptype == 'Индивидуальный':
+                individual_count += 1
+            elif ptype == 'Шаблонный':
+                template_count += 1
+
+        # --- По агентам (из справочника Agent + договоры) ---
+        agents_list = db.query(Agent).filter(Agent.status == 'активный').order_by(Agent.name).all()
+        agent_counter: dict = defaultdict(int)
+        for sc in filtered_sc:
+            cont = contracts_map.get(sc.contract_id)
+            if cont is None:
+                continue
+            agent_counter[cont.agent_type or 'Не указан'] += 1
+
+        by_agent = []
+        for a in agents_list:
+            by_agent.append({
+                'agent_name': a.name,
+                'agent_color': a.color,
+                'count': agent_counter.get(a.name, 0),
+            })
+
+        # --- По городам ---
+        city_counter: dict = defaultdict(int)
+        for sc in filtered_sc:
+            cont = contracts_map.get(sc.contract_id)
+            if cont is None:
+                continue
+            city_counter[cont.city or 'Не указан'] += 1
+
+        by_city = [
+            {'city': city, 'count': cnt}
+            for city, cnt in sorted(city_counter.items(), key=lambda x: -x[1])
+        ]
+
+        # --- Стадии надзора (GROUP BY column_name) ---
+        supervision_stage_names = [
+            'Стадия 1: Закупка керамогранита',
+            'Стадия 2: Закупка плитки',
+            'Стадия 3: Закупка паркета',
+            'Стадия 4: Закупка сантехники',
+            'Стадия 5: Закупка мебели кухни',
+            'Стадия 6: Закупка дверей',
+            'Стадия 7: Закупка электрики',
+            'Стадия 8: Закупка освещения',
+            'Стадия 9: Закупка сантехники и аксессуаров',
+            'Стадия 10: Закупка мебели',
+            'Стадия 11: Закупка текстиля',
+            'Стадия 12: Закупка декора',
+        ]
+        # Подсчёт через SupervisionTimelineEntry (stage_code → status)
+        stages_result = []
+        if filtered_sc_ids:
+            timeline_entries = db.query(SupervisionTimelineEntry).filter(
+                SupervisionTimelineEntry.supervision_card_id.in_(filtered_sc_ids)
+            ).all()
+
+            # Группировка по stage_name (используем stage_name)
+            stage_active: dict = defaultdict(int)
+            stage_completed: dict = defaultdict(int)
+            for entry in timeline_entries:
+                sname = entry.stage_name
+                if entry.status in ('Завершено', 'Выполнено', 'completed'):
+                    stage_completed[sname] += 1
+                else:
+                    stage_active[sname] += 1
+
+            for sname in supervision_stage_names:
+                stages_result.append({
+                    'stage': sname,
+                    'active': stage_active.get(sname, 0),
+                    'completed': stage_completed.get(sname, 0),
+                })
+        else:
+            stages_result = [{'stage': s, 'active': 0, 'completed': 0} for s in supervision_stage_names]
+
+        # --- Бюджет и дефекты из SupervisionTimelineEntry ---
+        total_planned = 0.0
+        total_actual = 0.0
+        total_savings = 0.0
+        defects_found = 0
+        defects_resolved = 0
+        site_visits_total = 0
+
+        if filtered_sc_ids:
+            for entry in timeline_entries:
+                total_planned += entry.budget_planned or 0.0
+                total_actual += entry.budget_actual or 0.0
+                total_savings += entry.budget_savings or 0.0
+                defects_found += entry.defects_found or 0
+                defects_resolved += entry.defects_resolved or 0
+                site_visits_total += entry.site_visits or 0
+
+        savings_pct = round(total_savings / total_planned * 100, 1) if total_planned > 0 else 0.0
+        resolution_pct = round(defects_resolved / defects_found * 100, 1) if defects_found > 0 else 0.0
+
+        return {
+            'total': total,
+            'active': active,
+            'by_project_type': {
+                'individual': individual_count,
+                'template': template_count,
+            },
+            'by_agent': by_agent,
+            'by_city': by_city,
+            'stages': stages_result,
+            'budget': {
+                'total_planned': round(total_planned, 2),
+                'total_actual': round(total_actual, 2),
+                'total_savings': round(total_savings, 2),
+                'savings_pct': savings_pct,
+            },
+            'defects': {
+                'found': defects_found,
+                'resolved': defects_resolved,
+                'resolution_pct': resolution_pct,
+            },
+            'site_visits': site_visits_total,
+        }
+
+    except Exception as e:
+        logger.exception(f"Ошибка supervision-analytics: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+# =============================================================================
+# ENDPOINT 6: GET /reports/distribution
+# =============================================================================
+
+@router.get("/reports/distribution")
+async def get_distribution(
+    dimension: str,
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    month: Optional[int] = None,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Универсальное распределение договоров по измерению (city|agent|project_type|subtype)."""
+    try:
+        # Загружаем все договоры
+        all_contracts = db.query(Contract).all()
+        filtered = _apply_period_filter(all_contracts, year, quarter, month)
+
+        # Функция извлечения значения измерения
+        def get_dim_value(c: Contract) -> str:
+            if dimension == 'city':
+                return c.city or 'Не указан'
+            elif dimension == 'agent':
+                return c.agent_type or 'Не указан'
+            elif dimension == 'project_type':
+                return c.project_type or 'Не указан'
+            elif dimension == 'subtype':
+                return c.project_subtype or 'Не указан'
+            else:
+                return 'Неизвестно'
+
+        # Группировка
+        dim_data: dict = defaultdict(lambda: {'count': 0, 'amount': 0.0, 'area': 0.0})
+        for c in filtered:
+            key = get_dim_value(c)
+            dim_data[key]['count'] += 1
+            dim_data[key]['amount'] += c.total_amount or 0.0
+            dim_data[key]['area'] += c.area or 0.0
+
+        # Результат, сортировка по убыванию count
+        result = [
+            {
+                'name': name,
+                'count': data['count'],
+                'amount': round(data['amount'], 2),
+                'area': round(data['area'], 2),
+            }
+            for name, data in sorted(dim_data.items(), key=lambda x: -x[1]['count'])
+        ]
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Ошибка distribution (dimension={dimension}): {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")

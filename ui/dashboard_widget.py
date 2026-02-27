@@ -6,7 +6,7 @@
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QGroupBox, QLabel, QPushButton, QMenu, QSizePolicy,
-                             QToolTip)
+                             QToolTip, QFrame)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QRectF
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter, QColor
 from PyQt5.QtSvg import QSvgWidget, QSvgRenderer
@@ -501,3 +501,201 @@ class DashboardWidget(QWidget):
             print(f"[ERROR] Ошибка обновления дашборда: {e}")
             import traceback
             traceback.print_exc()
+
+
+class KPICard(QFrame):
+    """Карточка KPI-метрики с трендом для страницы отчётов"""
+
+    def __init__(self, title, icon_name, border_color, bg_color="#ffffff", parent=None):
+        """
+        Args:
+            title: Заголовок метрики
+            icon_name: Имя SVG-иконки (без пути и расширения, напр. "users")
+            border_color: Цвет рамки и акцентный цвет
+            bg_color: Цвет фона карточки
+            parent: Родительский виджет
+        """
+        super().__init__(parent)
+        self.border_color = border_color
+        self.bg_color = bg_color
+
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFixedHeight(90)
+
+        # Стиль карточки
+        self.setStyleSheet(f"""
+            KPICard {{
+                background-color: {bg_color};
+                border: 2px solid {border_color};
+                border-radius: 12px;
+                padding: 10px;
+            }}
+            KPICard:hover {{
+                border: 3px solid {border_color};
+            }}
+        """)
+
+        # Основной горизонтальный layout
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(10, 6, 10, 6)
+
+        # Левая часть: иконка 32px
+        icon_path = f"resources/icons/{icon_name}.svg"
+        icon_widget = ColoredSvgWidget(icon_path, border_color, size=32, parent=self)
+        main_layout.addWidget(icon_widget, 0, Qt.AlignVCenter)
+
+        # Центральная часть: заголовок + значение
+        center_layout = QVBoxLayout()
+        center_layout.setSpacing(2)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+
+        title_label = QLabel(title, self)
+        title_label.setStyleSheet(f"""
+            font-size: 10px;
+            color: {border_color};
+            font-weight: 600;
+            background-color: transparent;
+        """)
+        title_label.setWordWrap(True)
+        center_layout.addWidget(title_label)
+
+        self.value_label = QLabel("—", self)
+        self.value_label.setStyleSheet(f"""
+            font-size: 24px;
+            font-weight: bold;
+            color: {border_color};
+            background-color: transparent;
+        """)
+        self.value_label.setWordWrap(False)
+        center_layout.addWidget(self.value_label)
+
+        center_widget = QWidget(self)
+        center_widget.setStyleSheet("background: transparent;")
+        center_widget.setLayout(center_layout)
+        main_layout.addWidget(center_widget, 1, Qt.AlignVCenter)
+
+        # Правая часть: тренд
+        self.trend_label = QLabel("—", self)
+        self.trend_label.setStyleSheet("""
+            font-size: 12px;
+            color: #9E9E9E;
+            background-color: transparent;
+        """)
+        self.trend_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        main_layout.addWidget(self.trend_label, 0, Qt.AlignVCenter)
+
+        self.setLayout(main_layout)
+
+    def set_value(self, value: str):
+        """Установить значение метрики"""
+        self.value_label.setText(str(value))
+
+    def set_trend(self, pct: float):
+        """
+        Установить тренд.
+        Положительный pct — зелёный (рост), отрицательный — красный (снижение).
+        """
+        if pct is None:
+            self.trend_label.setText("—")
+            self.trend_label.setStyleSheet("""
+                font-size: 12px;
+                color: #9E9E9E;
+                background-color: transparent;
+            """)
+        elif pct > 0:
+            self.trend_label.setText(f"↑{abs(pct):.1f}%")
+            self.trend_label.setStyleSheet("""
+                font-size: 12px;
+                color: #4CAF50;
+                font-weight: 600;
+                background-color: transparent;
+            """)
+        elif pct < 0:
+            self.trend_label.setText(f"↓{abs(pct):.1f}%")
+            self.trend_label.setStyleSheet("""
+                font-size: 12px;
+                color: #E74C3C;
+                font-weight: 600;
+                background-color: transparent;
+            """)
+        else:
+            self.trend_label.setText("0%")
+            self.trend_label.setStyleSheet("""
+                font-size: 12px;
+                color: #9E9E9E;
+                background-color: transparent;
+            """)
+
+    def resizeEvent(self, event):
+        """Маска по border-radius — убирает вылезание фона в углах"""
+        super().resizeEvent(event)
+        from PyQt5.QtGui import QPainterPath, QRegion
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 12, 12)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+
+class MiniKPICard(QFrame):
+    """Компактная карточка KPI для встраивания в секции отчётов"""
+
+    def __init__(self, title, border_color, parent=None):
+        """
+        Args:
+            title: Заголовок метрики
+            border_color: Цвет рамки и акцентный цвет
+            parent: Родительский виджет
+        """
+        super().__init__(parent)
+        self.border_color = border_color
+
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFixedHeight(60)
+
+        # Стиль карточки
+        self.setStyleSheet(f"""
+            MiniKPICard {{
+                background-color: #ffffff;
+                border: 1px solid {border_color};
+                border-radius: 8px;
+                padding: 8px;
+            }}
+        """)
+
+        # Вертикальный layout: заголовок + значение
+        layout = QVBoxLayout()
+        layout.setSpacing(2)
+        layout.setContentsMargins(8, 6, 8, 6)
+
+        title_label = QLabel(title, self)
+        title_label.setStyleSheet("""
+            font-size: 9px;
+            color: #666666;
+            background-color: transparent;
+        """)
+        title_label.setWordWrap(True)
+        layout.addWidget(title_label)
+
+        self.value_label = QLabel("—", self)
+        self.value_label.setStyleSheet(f"""
+            font-size: 18px;
+            font-weight: bold;
+            color: {border_color};
+            background-color: transparent;
+        """)
+        self.value_label.setWordWrap(False)
+        layout.addWidget(self.value_label)
+
+        self.setLayout(layout)
+
+    def set_value(self, value: str):
+        """Установить значение метрики"""
+        self.value_label.setText(str(value))
+
+    def resizeEvent(self, event):
+        """Маска по border-radius — убирает вылезание фона в углах"""
+        super().resizeEvent(event)
+        from PyQt5.QtGui import QPainterPath, QRegion
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 8, 8)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))

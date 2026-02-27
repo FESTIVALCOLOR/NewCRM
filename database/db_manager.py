@@ -6036,3 +6036,438 @@ class DatabaseManager(DatabaseMigrations):
         except Exception as e:
             print(f"[DB] Ошибка get_executor_load: {e}")
             return []
+
+    # ==================== ОТЧЁТЫ: FALLBACK SQL (SQLite) ====================
+
+    def _build_period_filter(self, year=None, quarter=None, month=None,
+                              date_field="contract_date"):
+        """Построить WHERE-условия по периоду для SQLite (strftime)"""
+        clauses = []
+        params = []
+        if month and year:
+            clauses.append(f"strftime('%Y-%m', {date_field}) = ?")
+            params.append(f"{year}-{month:02d}")
+        elif quarter and year:
+            q_ranges = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
+            start, end = q_ranges.get(int(quarter), (1, 12))
+            clauses.append(
+                f"strftime('%Y', {date_field}) = ? "
+                f"AND CAST(strftime('%m', {date_field}) AS INTEGER) BETWEEN {start} AND {end}"
+            )
+            params.append(str(year))
+        elif year:
+            clauses.append(f"strftime('%Y', {date_field}) = ?")
+            params.append(str(year))
+        return clauses, params
+
+    def get_reports_summary(self, year=None, quarter=None, month=None,
+                             agent_type=None, city=None, project_type=None):
+        """KPI-метрики для страницы отчётов (offline fallback)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Базовые фильтры по периоду
+            period_clauses, period_params = self._build_period_filter(year, quarter, month)
+            where_clauses = list(period_clauses)
+            params = list(period_params)
+
+            if agent_type:
+                where_clauses.append("agent_type = ?")
+                params.append(agent_type)
+            if city:
+                where_clauses.append("city = ?")
+                params.append(city)
+            if project_type:
+                where_clauses.append("project_type = ?")
+                params.append(project_type)
+
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+            # Всего клиентов
+            cursor.execute(
+                f"SELECT COUNT(DISTINCT client_id) FROM contracts WHERE {where_sql}",
+                params
+            )
+            total_clients = cursor.fetchone()[0] or 0
+
+            # Всего договоров
+            cursor.execute(
+                f"SELECT COUNT(*) FROM contracts WHERE {where_sql}",
+                params
+            )
+            total_contracts = cursor.fetchone()[0] or 0
+
+            # Общая сумма договоров
+            cursor.execute(
+                f"SELECT COALESCE(SUM(total_amount), 0) FROM contracts WHERE {where_sql}",
+                params
+            )
+            total_amount = round(cursor.fetchone()[0] or 0, 2)
+
+            # Общая площадь
+            cursor.execute(
+                f"SELECT COALESCE(SUM(area), 0) FROM contracts WHERE {where_sql}",
+                params
+            )
+            total_area = round(cursor.fetchone()[0] or 0, 2)
+
+            # Новые клиенты (первый договор в периоде)
+            if where_clauses:
+                cursor.execute(
+                    f"""SELECT COUNT(DISTINCT client_id) FROM contracts
+                        WHERE {where_sql} AND client_id NOT IN (
+                            SELECT DISTINCT client_id FROM contracts
+                            WHERE NOT ({where_sql})
+                        )""",
+                    params + params
+                )
+            else:
+                cursor.execute("SELECT COUNT(DISTINCT client_id) FROM contracts")
+            new_clients = cursor.fetchone()[0] or 0
+            returning_clients = max(0, total_clients - new_clients)
+
+            # Разбивка по агентам
+            cursor.execute(
+                "SELECT name, color FROM agents WHERE status = 'активный' ORDER BY name"
+            )
+            agents_rows = cursor.fetchall()
+            by_agent = []
+            for row in agents_rows:
+                agent_name = row[0]
+                agent_color = row[1] or "#FFFFFF"
+                agent_clauses = where_clauses + ["agent_type = ?"]
+                agent_params = params + [agent_name]
+                agent_where = " AND ".join(agent_clauses) if agent_clauses else "1=1"
+                cursor.execute(
+                    f"""SELECT COUNT(*), COUNT(DISTINCT client_id),
+                               COALESCE(SUM(total_amount), 0),
+                               COALESCE(SUM(area), 0)
+                        FROM contracts WHERE {agent_where}""",
+                    agent_params
+                )
+                r = cursor.fetchone()
+                by_agent.append({
+                    "agent_name": agent_name,
+                    "agent_color": agent_color,
+                    "clients": r[1] or 0,
+                    "contracts": r[0] or 0,
+                    "amount": round(r[2] or 0, 2),
+                    "area": round(r[3] or 0, 2)
+                })
+
+            self.close()
+            return {
+                "total_clients": total_clients,
+                "new_clients": new_clients,
+                "returning_clients": returning_clients,
+                "total_contracts": total_contracts,
+                "total_amount": total_amount,
+                "total_area": total_area,
+                "avg_amount": round(total_amount / total_contracts, 2) if total_contracts else 0.0,
+                "clients_trend": 0.0,
+                "contracts_trend": 0.0,
+                "amount_trend": 0.0,
+                "by_agent": by_agent
+            }
+        except Exception as e:
+            print(f"[DB] get_reports_summary ошибка: {e}")
+            return {}
+
+    def get_reports_clients_dynamics(self, year=None, granularity="month"):
+        """Динамика клиентов по месяцам/кварталам (offline fallback)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            if granularity == "quarter":
+                # Группировка по кварталам
+                query = """
+                    SELECT strftime('%Y', contract_date) as yr,
+                           CASE
+                               WHEN CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN 1 AND 3 THEN 1
+                               WHEN CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN 4 AND 6 THEN 2
+                               WHEN CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN 7 AND 9 THEN 3
+                               ELSE 4
+                           END as qtr,
+                           COUNT(DISTINCT client_id) as clients
+                    FROM contracts
+                    WHERE contract_date IS NOT NULL
+                """
+                params = []
+                if year:
+                    query += " AND strftime('%Y', contract_date) = ?"
+                    params.append(str(year))
+                query += " GROUP BY yr, qtr ORDER BY yr, qtr"
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                labels = [f"Q{r[1]} {r[0]}" for r in rows]
+                values = [r[2] or 0 for r in rows]
+            else:
+                # Группировка по месяцам
+                query = """
+                    SELECT strftime('%Y-%m', contract_date) as ym,
+                           COUNT(DISTINCT client_id) as clients
+                    FROM contracts
+                    WHERE contract_date IS NOT NULL
+                """
+                params = []
+                if year:
+                    query += " AND strftime('%Y', contract_date) = ?"
+                    params.append(str(year))
+                query += " GROUP BY ym ORDER BY ym"
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                labels = [r[0] for r in rows]
+                values = [r[1] or 0 for r in rows]
+
+            self.close()
+            return {"labels": labels, "values": values, "granularity": granularity}
+        except Exception as e:
+            print(f"[DB] get_reports_clients_dynamics ошибка: {e}")
+            return {"labels": [], "values": [], "granularity": granularity}
+
+    def get_reports_contracts_dynamics(self, year=None, granularity="month",
+                                        agent_type=None, city=None):
+        """Динамика договоров по месяцам (offline fallback)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            where_clauses = ["contract_date IS NOT NULL"]
+            params = []
+            if year:
+                where_clauses.append("strftime('%Y', contract_date) = ?")
+                params.append(str(year))
+            if agent_type:
+                where_clauses.append("agent_type = ?")
+                params.append(agent_type)
+            if city:
+                where_clauses.append("city = ?")
+                params.append(city)
+            where_sql = " AND ".join(where_clauses)
+
+            if granularity == "quarter":
+                query = f"""
+                    SELECT strftime('%Y', contract_date) as yr,
+                           CASE
+                               WHEN CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN 1 AND 3 THEN 1
+                               WHEN CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN 4 AND 6 THEN 2
+                               WHEN CAST(strftime('%m', contract_date) AS INTEGER) BETWEEN 7 AND 9 THEN 3
+                               ELSE 4
+                           END as qtr,
+                           COUNT(*) as cnt,
+                           COALESCE(SUM(total_amount), 0) as amount
+                    FROM contracts WHERE {where_sql}
+                    GROUP BY yr, qtr ORDER BY yr, qtr
+                """
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                labels = [f"Q{r[1]} {r[0]}" for r in rows]
+                counts = [r[2] or 0 for r in rows]
+                amounts = [round(r[3] or 0, 2) for r in rows]
+            else:
+                query = f"""
+                    SELECT strftime('%Y-%m', contract_date) as ym,
+                           COUNT(*) as cnt,
+                           COALESCE(SUM(total_amount), 0) as amount
+                    FROM contracts WHERE {where_sql}
+                    GROUP BY ym ORDER BY ym
+                """
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                labels = [r[0] for r in rows]
+                counts = [r[1] or 0 for r in rows]
+                amounts = [round(r[2] or 0, 2) for r in rows]
+
+            self.close()
+            return {
+                "labels": labels,
+                "counts": counts,
+                "amounts": amounts,
+                "granularity": granularity
+            }
+        except Exception as e:
+            print(f"[DB] get_reports_contracts_dynamics ошибка: {e}")
+            return {"labels": [], "counts": [], "amounts": [], "granularity": granularity}
+
+    def get_reports_crm_analytics(self, project_type="Индивидуальный",
+                                   year=None, quarter=None, month=None):
+        """CRM аналитика: воронка, просрочки, время стадий (offline fallback)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            # Фильтр по project_type через contracts
+            where_clauses = ["cc.project_type = ?"]
+            params = [project_type]
+            period_clauses, period_params = self._build_period_filter(
+                year, quarter, month, date_field="c.contract_date"
+            )
+            if period_clauses:
+                where_clauses.extend(period_clauses)
+                params.extend(period_params)
+            where_sql = " AND ".join(where_clauses)
+
+            # Воронка: подсчёт карточек по колонкам
+            cursor.execute(
+                f"""SELECT cc.column_name, COUNT(*) as cnt
+                    FROM crm_cards cc
+                    LEFT JOIN contracts c ON cc.contract_id = c.id
+                    WHERE {where_sql}
+                    GROUP BY cc.column_name ORDER BY cnt DESC""",
+                params
+            )
+            funnel = {row[0]: row[1] for row in cursor.fetchall()}
+
+            # Просрочки: исполнители с completed=0 и deadline < today
+            today = datetime.now().strftime("%Y-%m-%d")
+            cursor.execute(
+                f"""SELECT COUNT(*) FROM stage_executors se
+                    JOIN crm_cards cc ON se.crm_card_id = cc.id
+                    LEFT JOIN contracts c ON cc.contract_id = c.id
+                    WHERE {where_sql}
+                    AND se.completed = 0
+                    AND se.deadline IS NOT NULL
+                    AND se.deadline < ?""",
+                params + [today]
+            )
+            overdue_count = cursor.fetchone()[0] or 0
+
+            # Всего активных стадий
+            cursor.execute(
+                f"""SELECT COUNT(*) FROM stage_executors se
+                    JOIN crm_cards cc ON se.crm_card_id = cc.id
+                    LEFT JOIN contracts c ON cc.contract_id = c.id
+                    WHERE {where_sql} AND se.completed = 0""",
+                params
+            )
+            active_stages = cursor.fetchone()[0] or 0
+
+            self.close()
+            return {
+                "funnel": funnel,
+                "total_funnel": sum(funnel.values()),
+                "overdue_count": overdue_count,
+                "active_stages": active_stages,
+                "avg_stage_days": 0.0,
+                "project_type": project_type
+            }
+        except Exception as e:
+            print(f"[DB] get_reports_crm_analytics ошибка: {e}")
+            return {"funnel": {}, "total_funnel": 0, "overdue_count": 0,
+                    "active_stages": 0, "avg_stage_days": 0.0}
+
+    def get_reports_supervision_analytics(self, year=None, quarter=None, month=None):
+        """Аналитика авторского надзора (offline fallback)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            period_clauses, period_params = self._build_period_filter(
+                year, quarter, month, date_field="sc.start_date"
+            )
+            where_sql = " AND ".join(period_clauses) if period_clauses else "1=1"
+
+            # Всего карточек надзора
+            cursor.execute(
+                f"SELECT COUNT(*) FROM supervision_cards sc WHERE {where_sql}",
+                period_params
+            )
+            total = cursor.fetchone()[0] or 0
+
+            # Активных
+            cursor.execute(
+                f"""SELECT COUNT(*) FROM supervision_cards sc
+                    WHERE {where_sql} AND sc.status != 'завершён'""",
+                period_params
+            )
+            active = cursor.fetchone()[0] or 0
+
+            # Завершённых
+            cursor.execute(
+                f"""SELECT COUNT(*) FROM supervision_cards sc
+                    WHERE {where_sql} AND sc.status = 'завершён'""",
+                period_params
+            )
+            completed = cursor.fetchone()[0] or 0
+
+            # Суммарные выплаты за надзор (из payments)
+            pay_clauses = list(period_clauses)
+            pay_params = list(period_params)
+            # Переиспользуем period filter для payments по дате оплаты
+            if period_clauses:
+                # Применяем фильтр по дате начала карточки через JOIN
+                pay_where = (
+                    f"p.supervision_card_id IS NOT NULL "
+                    f"AND p.payment_status = 'paid' "
+                    f"AND p.supervision_card_id IN "
+                    f"(SELECT id FROM supervision_cards sc WHERE {where_sql})"
+                )
+            else:
+                pay_where = "p.supervision_card_id IS NOT NULL AND p.payment_status = 'paid'"
+
+            cursor.execute(
+                f"SELECT COALESCE(SUM(p.final_amount), 0) FROM payments p WHERE {pay_where}",
+                period_params
+            )
+            total_paid = round(cursor.fetchone()[0] or 0, 2)
+
+            self.close()
+            return {
+                "total": total,
+                "active": active,
+                "completed": completed,
+                "total_paid": total_paid,
+                "avg_duration_days": 0.0,
+                "overdue_count": 0
+            }
+        except Exception as e:
+            print(f"[DB] get_reports_supervision_analytics ошибка: {e}")
+            return {"total": 0, "active": 0, "completed": 0,
+                    "total_paid": 0.0, "avg_duration_days": 0.0, "overdue_count": 0}
+
+    def get_reports_distribution(self, dimension, year=None, quarter=None, month=None):
+        """Распределение по измерению: city/agent/project_type/subtype (offline fallback)"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            period_clauses, period_params = self._build_period_filter(year, quarter, month)
+            where_sql = " AND ".join(period_clauses) if period_clauses else "1=1"
+
+            # Маппинг dimension → поле в таблице contracts
+            dim_field_map = {
+                "city": "city",
+                "agent": "agent_type",
+                "project_type": "project_type",
+                "subtype": "project_subtype",
+            }
+            field = dim_field_map.get(dimension, "city")
+
+            cursor.execute(
+                f"""SELECT COALESCE({field}, 'Не указан') as label,
+                           COUNT(*) as contracts,
+                           COUNT(DISTINCT client_id) as clients,
+                           COALESCE(SUM(total_amount), 0) as amount,
+                           COALESCE(SUM(area), 0) as area
+                    FROM contracts
+                    WHERE {where_sql} AND {field} IS NOT NULL AND {field} != ''
+                    GROUP BY {field}
+                    ORDER BY contracts DESC""",
+                period_params
+            )
+            rows = cursor.fetchall()
+            items = []
+            for row in rows:
+                items.append({
+                    "label": row[0],
+                    "contracts": row[1] or 0,
+                    "clients": row[2] or 0,
+                    "amount": round(row[3] or 0, 2),
+                    "area": round(row[4] or 0, 2)
+                })
+
+            self.close()
+            return {"dimension": dimension, "items": items}
+        except Exception as e:
+            print(f"[DB] get_reports_distribution ошибка: {e}")
+            return {"dimension": dimension, "items": []}
