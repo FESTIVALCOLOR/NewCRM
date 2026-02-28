@@ -88,7 +88,7 @@ def register_fonts():
 # 2. Стили таблиц
 # =====================================================================
 
-HEADER_BG = colors.HexColor('#2C3E50')
+HEADER_BG = colors.HexColor('#444444')
 HEADER_FG = colors.white
 ROW_ODD = colors.white
 ROW_EVEN = colors.HexColor('#F8F9FA')
@@ -116,7 +116,7 @@ def get_default_table_style(font_name='Arial', font_bold='ArialBold'):
         ('VALIGN',          (0, 0), (-1, -1), 'MIDDLE'),
         # Границы
         ('GRID',            (0, 0), (-1, -1), 0.25, BORDER_COLOR),
-        ('LINEBELOW',       (0, 0), (-1, 0),  1.0,  colors.HexColor('#1A252F')),
+        ('LINEBELOW',       (0, 0), (-1, 0),  1.0,  colors.HexColor('#333333')),
         ('BOX',             (0, 0), (-1, -1), 0.5,  BORDER_COLOR),
         ('NOSPLIT',         (0, 0), (-1, 0)),
     ])
@@ -129,13 +129,14 @@ def get_default_table_style(font_name='Arial', font_bold='ArialBold'):
 def make_page_footer(page_size, font_name='Arial'):
     """
     Возвращает callback для onFirstPage/onLaterPages.
-    Градиентная полоска footer.jpg + белый блок с рамкой 1px:
-    строка 1 — «Интерьерное бюро FESTIVAL COLOR»,
-    строка 2 — номер страницы.
+    Градиентная полоска footer.jpg (8mm) + белый блок «бюро + год».
+    Номер страницы — над футером.
     """
     def _draw_footer(canvas_obj, doc_obj):
         canvas_obj.saveState()
         pw = page_size[0]
+
+        strip_h = 8 * mm
 
         # Градиентная полоска по всей ширине
         footer_path = resource_path("resources/footer.jpg")
@@ -143,33 +144,36 @@ def make_page_footer(page_size, font_name='Arial'):
             try:
                 canvas_obj.drawImage(
                     footer_path, 0, 0,
-                    width=pw, height=12 * mm,
+                    width=pw, height=strip_h,
                     preserveAspectRatio=False, mask='auto')
             except Exception:
                 pass
 
-        # Белый блок с текстом поверх полоски
-        block_w = 200
-        block_h = 28
+        # Белый блок с текстом поверх полоски (компактный)
+        block_w = 220
+        block_h = 14
         x = (pw - block_w) / 2
-        y = 2 * mm
+        y = 1 * mm
 
         canvas_obj.setStrokeColor(colors.HexColor('#CCCCCC'))
         canvas_obj.setLineWidth(0.5)
         canvas_obj.setFillColor(colors.white)
-        canvas_obj.roundRect(x, y, block_w, block_h, 4, fill=1, stroke=1)
+        canvas_obj.roundRect(x, y, block_w, block_h, 3, fill=1, stroke=1)
 
-        # Текст
-        canvas_obj.setFont(font_name, 7)
+        # Текст: бюро + год
+        canvas_obj.setFont(font_name, 6)
         canvas_obj.setFillColor(colors.HexColor('#666666'))
+        year = datetime.now().year
         canvas_obj.drawCentredString(
-            pw / 2, y + 16,
-            "\u0418\u043d\u0442\u0435\u0440\u044c\u0435\u0440\u043d\u043e\u0435 \u0431\u044e\u0440\u043e FESTIVAL COLOR"
+            pw / 2, y + 4,
+            f"\u0418\u043d\u0442\u0435\u0440\u044c\u0435\u0440\u043d\u043e\u0435 \u0431\u044e\u0440\u043e FESTIVAL COLOR \u2014 {year}"
         )
-        canvas_obj.drawCentredString(
-            pw / 2, y + 6,
-            f"\u0441\u0442\u0440. {doc_obj.page}"
-        )
+
+        # Номер страницы — над полоской
+        canvas_obj.setFont(font_name, 7)
+        canvas_obj.setFillColor(colors.HexColor('#999999'))
+        canvas_obj.drawCentredString(pw / 2, strip_h + 2 * mm, f"\u0441\u0442\u0440. {doc_obj.page}")
+
         canvas_obj.restoreState()
     return _draw_footer
 
@@ -179,25 +183,13 @@ def make_page_footer(page_size, font_name='Arial'):
 # =====================================================================
 
 def pdf_section_header(text, font_bold='ArialBold'):
-    """Заголовок секции с желтой полоской слева."""
+    """Заголовок секции — по центру, заглавные буквы."""
     style = ParagraphStyle(
         'SectionH', fontName=font_bold, fontSize=13,
         textColor=colors.HexColor('#333333'), leading=16,
+        alignment=TA_CENTER, spaceBefore=0, spaceAfter=3 * mm,
     )
-    t = Table(
-        [['', Paragraph(f'<b>{text}</b>', style)]],
-        colWidths=[4, None],
-    )
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#FFD93C')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (0, 0), 0),
-        ('RIGHTPADDING', (0, 0), (0, 0), 0),
-        ('LEFTPADDING', (1, 0), (1, 0), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
-    return t
+    return Paragraph(text.upper(), style)
 
 
 def pdf_hr(page_w_mm):
@@ -415,21 +407,21 @@ def build_table_pdf(
         logo_path = resource_path("resources/logo.png")
     if os.path.exists(logo_path):
         try:
-            logo = RLImage(logo_path, width=40 * mm, height=18 * mm)
+            logo = RLImage(logo_path, width=35 * mm, height=20 * mm,
+                           kind='proportional')
             logo.hAlign = 'CENTER'
             elements.append(logo)
-            elements.append(Spacer(1, 3 * mm))
+            elements.append(Spacer(1, 4 * mm))
         except Exception:
             pass
 
     style_title = ParagraphStyle(
-        'RptTitle', fontName=font_bold, fontSize=16,
+        'RptTitle', fontName=font_bold, fontSize=13,
         textColor=colors.HexColor('#333333'),
-        alignment=1, spaceAfter=2 * mm,
+        alignment=TA_CENTER, leading=16,
+        spaceBefore=0, spaceAfter=3 * mm,
     )
-    elements.append(Paragraph(title, style_title))
-    elements.append(pdf_hr(PAGE_W_MM))
-    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(title.upper(), style_title))
 
     # Подзаголовок / дата
     style_sub = ParagraphStyle(

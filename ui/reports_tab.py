@@ -26,7 +26,7 @@ from ui.chart_widget import (
 from utils.data_access import DataAccess
 from utils.resource_path import resource_path
 from utils.pdf_utils import (
-    register_fonts, make_page_footer, pdf_section_header, pdf_hr,
+    register_fonts, make_page_footer, pdf_section_header,
     grab_widget_png, chart_to_png, fit_image, open_file,
 )
 
@@ -1611,21 +1611,23 @@ class ReportsTab(QWidget):
             elements = []
 
             # === ШАПКА ===
-            logo_path = resource_path("resources/logo.png")
+            logo_path = resource_path("resources/logo_pdf.png")
+            if not os.path.exists(logo_path):
+                logo_path = resource_path("resources/logo.png")
             if os.path.exists(logo_path):
                 try:
-                    logo = RLImage(logo_path, width=18 * mm, height=18 * mm)
+                    logo = RLImage(logo_path, width=35 * mm, height=20 * mm,
+                                   kind='proportional')
                     logo.hAlign = 'CENTER'
                     elements.append(logo)
-                    elements.append(Spacer(1, 2 * mm))
+                    elements.append(Spacer(1, 4 * mm))
                 except Exception:
                     pass
 
             elements.append(Paragraph(
-                'Interior Studio — Отчёты и Статистика', style_title
+                'ОТЧЁТЫ И СТАТИСТИКА', style_title
             ))
-            elements.append(pdf_hr(PAGE_W_MM))
-            elements.append(Spacer(1, 2 * mm))
+            elements.append(Spacer(1, 3 * mm))
 
             filters_info = []
             for label, combo in [

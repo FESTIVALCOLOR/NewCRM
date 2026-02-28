@@ -345,7 +345,12 @@ async def export_timeline_pdf(
     """Экспорт таблицы сроков CRM в PDF (фирменный стиль)."""
     from reportlab.platypus import Paragraph
     from reportlab.lib.styles import ParagraphStyle
-    from pdf_helper import build_timeline_pdf, _font
+    from pdf_helper import (
+        build_timeline_pdf, _font, _font_bold,
+        COLOR_HEADER_ROW, COLOR_SUBHEADER_ROW,
+        COLOR_OK, COLOR_OVERDUE, COLOR_SKIPPED,
+        COLOR_OUT_SCOPE, COLOR_SUBTOTAL, COLOR_GRANDTOTAL,
+    )
 
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
@@ -356,33 +361,115 @@ async def export_timeline_pdf(
     ).order_by(ProjectTimelineEntry.sort_order).all()
 
     fn = _font()
+    fb = _font_bold()
     cell_style = ParagraphStyle('Cell', fontName=fn, fontSize=8, leading=10)
+    bold_style = ParagraphStyle('CellB', fontName=fb, fontSize=8, leading=10)
 
     headers = ["Этап", "Дата", "Дней", "Норма", "Статус", "Исполнитель"]
     rows = []
     row_styles = []
 
-    for i, entry in enumerate(entries):
+    # Для подсчёта итогов
+    current_stage_group = None
+    stage_actual_sum = 0
+    stage_norm_sum = 0
+    total_actual = 0
+    total_norm = 0
+
+    def _add_subtotal(label):
+        """Вставить строку «Итого этапа»."""
+        nonlocal stage_actual_sum, stage_norm_sum
+        row_idx = len(rows) + 1
+        rows.append([
+            Paragraph(f'<b>Итого {label}:</b>', bold_style),
+            Paragraph('', cell_style),
+            Paragraph(f'<b>{stage_actual_sum}</b>', bold_style),
+            Paragraph(f'<b>{stage_norm_sum}</b>', bold_style),
+            Paragraph('', cell_style),
+            Paragraph('', cell_style),
+        ])
+        row_styles.append({'row_idx': row_idx, 'bg': COLOR_SUBTOTAL, 'bold': True})
+
+    for entry in entries:
+        role = entry.executor_role or ''
+        is_header = role == 'header' and not entry.substage_group
+        is_subheader = role == 'header' and bool(entry.substage_group)
+        stage_group = entry.stage_group or ''
+        is_in_scope = entry.is_in_contract_scope if entry.is_in_contract_scope is not None else True
+
+        # Итого предыдущего этапа при смене stage_group
+        if is_header and stage_group != current_stage_group and current_stage_group and current_stage_group != 'START':
+            _add_subtotal(current_stage_group.replace('STAGE', 'Этап '))
+            stage_actual_sum = 0
+            stage_norm_sum = 0
+
+        if is_header and stage_group != current_stage_group:
+            current_stage_group = stage_group
+            stage_actual_sum = 0
+            stage_norm_sum = 0
+
+        # Вычисление статуса как в программе
+        actual_days = entry.actual_days or 0
+        norm_days_val = entry.norm_days or 0
+        status_text = entry.status or ''
+        row_bg = None
+
+        if not is_header and not is_subheader:
+            if not is_in_scope:
+                row_bg = COLOR_OUT_SCOPE
+            elif status_text == 'skipped':
+                status_text = 'Пропущен'
+                row_bg = COLOR_SKIPPED
+            elif actual_days > 0 and norm_days_val > 0:
+                if actual_days <= norm_days_val:
+                    status_text = 'В срок'
+                    row_bg = COLOR_OK
+                else:
+                    status_text = 'Просрочен'
+                    row_bg = COLOR_OVERDUE
+
+            # Накопление сумм
+            stage_actual_sum += actual_days
+            total_actual += actual_days
+            if is_in_scope:
+                stage_norm_sum += norm_days_val
+                total_norm += norm_days_val
+
+        # Строка данных
+        row_idx = len(rows) + 1  # +1 т.к. row 0 — заголовок таблицы
         rows.append([
             Paragraph(entry.stage_name or "", cell_style),
             Paragraph(entry.actual_date or "", cell_style),
-            Paragraph(str(entry.actual_days or ""), cell_style),
-            Paragraph(str(entry.norm_days or ""), cell_style),
-            Paragraph(entry.status or "", cell_style),
-            Paragraph(
-                entry.executor_role
-                if entry.executor_role not in ('header', 'subheader')
-                else "",
-                cell_style,
-            ),
+            Paragraph(str(actual_days) if actual_days else "", cell_style),
+            Paragraph(str(norm_days_val) if norm_days_val else "", cell_style),
+            Paragraph(status_text, cell_style),
+            Paragraph(role if role not in ('header',) else "", cell_style),
         ])
-        row_idx = i + 1  # +1 т.к. row 0 — заголовок таблицы
-        if entry.executor_role == 'header':
-            row_styles.append({'row_idx': row_idx, 'bg': '#2C3E50', 'fg': '#FFFFFF'})
-        elif entry.executor_role == 'subheader':
-            row_styles.append({'row_idx': row_idx, 'bg': '#D6E4F0'})
-        elif entry.actual_days and entry.norm_days and entry.actual_days > entry.norm_days:
-            row_styles.append({'row_idx': row_idx, 'bg': '#F2DCDB'})
+
+        if is_header:
+            row_styles.append({'row_idx': row_idx, 'bg': COLOR_HEADER_ROW, 'fg': '#FFFFFF', 'bold': True})
+        elif is_subheader:
+            row_styles.append({'row_idx': row_idx, 'bg': COLOR_SUBHEADER_ROW, 'bold': True})
+        elif row_bg:
+            row_styles.append({'row_idx': row_idx, 'bg': row_bg})
+
+    # Итого последнего этапа
+    if current_stage_group and current_stage_group != 'START':
+        _add_subtotal(current_stage_group.replace('STAGE', 'Этап '))
+
+    # Общий итог
+    contract_term = getattr(contract, 'contract_term', None)
+    grand_norm = contract_term if contract_term else total_norm
+    grand_idx = len(rows) + 1
+    rows.append([
+        Paragraph('<b>ИТОГО ВСЕХ ЭТАПОВ:</b>', bold_style),
+        Paragraph('', cell_style),
+        Paragraph(f'<b>{total_actual}</b>', bold_style),
+        Paragraph(f'<b>{grand_norm}</b>', bold_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+    ])
+    row_styles.append({'row_idx': grand_idx, 'bg': COLOR_GRANDTOTAL, 'bold': True})
 
     pdf_bytes = build_timeline_pdf(
         title="Таблица сроков проекта",

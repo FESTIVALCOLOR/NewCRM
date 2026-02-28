@@ -1,8 +1,8 @@
 """
 Серверная утилита генерации PDF для таблиц сроков.
 
-Стилистика единая с клиентом: фирменные цвета #2C3E50,
-лого, инфо-блок о проекте, футер с рамкой.
+Стилистика: тёмно-серые заголовки таблиц, лого logo_pdf.png,
+инфо-блок в рамке, статусы как в программе, итоги этапов.
 """
 
 import io
@@ -24,17 +24,24 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 logger = logging.getLogger(__name__)
 
-# ── Цвета (единые с клиентом) ────────────────────────────
-HEADER_BG = colors.HexColor('#2C3E50')
+# ── Цвета ─────────────────────────────────────────────────
+HEADER_BG = colors.HexColor('#444444')       # тёмно-серый заголовок
 HEADER_FG = colors.white
 ROW_ODD = colors.white
 ROW_EVEN = colors.HexColor('#F8F9FA')
 BORDER_COLOR = colors.HexColor('#DEE2E6')
-ACCENT = colors.HexColor('#FFD93C')
+
+# Цвета строк как в программе
+COLOR_HEADER_ROW = '#2F5496'        # заголовок этапа (синий)
+COLOR_SUBHEADER_ROW = '#D6E4F0'     # заголовок подэтапа
+COLOR_OK = '#E8F5E9'                # в срок (зелёный)
+COLOR_OVERDUE = '#FFEBEE'           # просрочен (красный)
+COLOR_SKIPPED = '#F5F5F5'           # пропущен
+COLOR_OUT_SCOPE = '#E0E0E0'         # вне расчёта
+COLOR_SUBTOTAL = '#E3F2FD'          # итого этапа (голубой)
+COLOR_GRANDTOTAL = '#FFF8E1'        # итого общий (жёлтый)
 
 # ── Базовый путь ресурсов ─────────────────────────────────
-# Docker: pdf_helper.py в /app/ → resources в /app/resources/
-# Локально: pdf_helper.py в server/ → resources в ../resources/
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _BASE = _HERE if os.path.isdir(os.path.join(_HERE, 'resources')) else os.path.dirname(_HERE)
 LOGO_PATH = os.path.join(_BASE, 'resources', 'logo_pdf.png')
@@ -97,42 +104,52 @@ def _font_bold():
 # ── Футер ─────────────────────────────────────────────────
 
 def _draw_footer(canvas_obj, doc_obj):
-    """Футер: градиентная полоска footer.jpg + белый блок с рамкой + текст."""
+    """Градиентная полоска footer.jpg (8mm) + текст бюро + год.
+    Номер страницы — над футером."""
     canvas_obj.saveState()
-    pw, ph = doc_obj.pagesize if hasattr(doc_obj, 'pagesize') else landscape(A4)
+    pw = doc_obj.pagesize[0] if hasattr(doc_obj, 'pagesize') else landscape(A4)[0]
 
-    # Градиентная полоска по всей ширине (как в клиентских PDF)
+    strip_h = 8 * mm
+
+    # Градиентная полоска
     if os.path.exists(FOOTER_IMG):
         try:
             canvas_obj.drawImage(
                 FOOTER_IMG, 0, 0,
-                width=pw, height=12 * mm,
+                width=pw, height=strip_h,
                 preserveAspectRatio=False, mask='auto')
         except Exception:
             pass
 
-    # Белый блок с текстом поверх полоски
-    block_w = 200
-    block_h = 28
+    # Белый блок с текстом поверх полоски (компактный)
+    block_w = 220
+    block_h = 14
     x = (pw - block_w) / 2
-    y = 2 * mm
+    y = 1 * mm
 
     canvas_obj.setStrokeColor(colors.HexColor('#CCCCCC'))
     canvas_obj.setLineWidth(0.5)
     canvas_obj.setFillColor(colors.white)
-    canvas_obj.roundRect(x, y, block_w, block_h, 4, fill=1, stroke=1)
+    canvas_obj.roundRect(x, y, block_w, block_h, 3, fill=1, stroke=1)
 
-    # Текст
     fn = _font()
-    canvas_obj.setFont(fn, 7)
+    canvas_obj.setFont(fn, 6)
     canvas_obj.setFillColor(colors.HexColor('#666666'))
-    canvas_obj.drawCentredString(pw / 2, y + 16, "\u0418\u043d\u0442\u0435\u0440\u044c\u0435\u0440\u043d\u043e\u0435 \u0431\u044e\u0440\u043e FESTIVAL COLOR")
-    canvas_obj.drawCentredString(pw / 2, y + 6, f"\u0441\u0442\u0440. {doc_obj.page}")
+    year = date.today().year
+    canvas_obj.drawCentredString(
+        pw / 2, y + 4,
+        f"\u0418\u043d\u0442\u0435\u0440\u044c\u0435\u0440\u043d\u043e\u0435 \u0431\u044e\u0440\u043e FESTIVAL COLOR \u2014 {year}"
+    )
+
+    # Номер страницы — над полоской
+    canvas_obj.setFont(fn, 7)
+    canvas_obj.setFillColor(colors.HexColor('#999999'))
+    canvas_obj.drawCentredString(pw / 2, strip_h + 2 * mm, f"\u0441\u0442\u0440. {doc_obj.page}")
 
     canvas_obj.restoreState()
 
 
-# ── Стили ─────────────────────────────────────────────────
+# ── Стиль таблицы ─────────────────────────────────────────
 
 def _table_style():
     fn = _font()
@@ -153,7 +170,7 @@ def _table_style():
         ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
         ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID',          (0, 0), (-1, -1), 0.25, BORDER_COLOR),
-        ('LINEBELOW',     (0, 0), (-1, 0),  1.0, colors.HexColor('#1A252F')),
+        ('LINEBELOW',     (0, 0), (-1, 0),  1.0, colors.HexColor('#333333')),
         ('BOX',           (0, 0), (-1, -1), 0.5, BORDER_COLOR),
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),
     ])
@@ -162,20 +179,21 @@ def _table_style():
 # ── Инфо-блок ────────────────────────────────────────────
 
 def _project_info_block(contract, fn, fb, available_w):
-    """Возвращает элементы: лого, заголовок, блок с инфо о проекте."""
+    """Лого по центру + инфо о проекте в рамке с радиусами."""
     elements = []
 
-    # Лого (по центру)
+    # Лого по центру (пропорции из файла)
     if os.path.exists(LOGO_PATH):
         try:
-            logo = RLImage(LOGO_PATH, width=40 * mm, height=18 * mm)
+            logo = RLImage(LOGO_PATH, width=35 * mm, height=20 * mm,
+                           kind='proportional')
             logo.hAlign = 'CENTER'
             elements.append(logo)
             elements.append(Spacer(1, 4 * mm))
         except Exception:
             pass
 
-    # Информация о проекте — компактная таблица на всю ширину
+    # Информация о проекте
     info_rows = []
     address = getattr(contract, 'address', None) or '-'
     area = getattr(contract, 'area', None) or 0
@@ -190,38 +208,39 @@ def _project_info_block(contract, fn, fb, available_w):
                                   textColor=colors.HexColor('#333333'))
 
     info_rows.append([
-        Paragraph('Адрес:', label_style),
+        Paragraph('\u0410\u0434\u0440\u0435\u0441:', label_style),
         Paragraph(address, value_style),
-        Paragraph('Площадь:', label_style),
-        Paragraph(f'{area} м\u00b2', value_style),
+        Paragraph('\u041f\u043b\u043e\u0449\u0430\u0434\u044c:', label_style),
+        Paragraph(f'{area} \u043c\u00b2', value_style),
     ])
-    type_text = f'{ptype}'
+    type_text = ptype
     if psubtype:
         type_text += f' / {psubtype}'
     info_rows.append([
-        Paragraph('Тип проекта:', label_style),
+        Paragraph('\u0422\u0438\u043f \u043f\u0440\u043e\u0435\u043a\u0442\u0430:', label_style),
         Paragraph(type_text, value_style),
-        Paragraph('Агент:', label_style),
+        Paragraph('\u0410\u0433\u0435\u043d\u0442:', label_style),
         Paragraph(agent, value_style),
     ])
     info_rows.append([
-        Paragraph('Город:', label_style),
+        Paragraph('\u0413\u043e\u0440\u043e\u0434:', label_style),
         Paragraph(city, value_style),
-        Paragraph('Дата:', label_style),
+        Paragraph('\u0414\u0430\u0442\u0430:', label_style),
         Paragraph(date.today().strftime('%d.%m.%Y'), value_style),
     ])
 
-    # Ширины: label1=80, value1=заполняет, label2=72, value2=остаток
     lbl1, lbl2, val2 = 80, 72, available_w * 0.25
     val1 = available_w - lbl1 - lbl2 - val2
     info_table = Table(info_rows, colWidths=[lbl1, val1, lbl2, val2])
     info_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ('LINEBELOW', (0, -1), (-1, -1), 0.5, BORDER_COLOR),
+        # Рамка с радиусами вокруг всего блока
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
     ]))
     elements.append(info_table)
     elements.append(Spacer(1, 5 * mm))
@@ -243,12 +262,12 @@ def build_timeline_pdf(
     Генерирует PDF для таблицы сроков (timeline / supervision).
 
     Args:
-        title: Заголовок документа
+        title: Заголовок документа (будет в верхнем регистре)
         contract: ORM-объект Contract
         headers: Заголовки столбцов
         rows: Список строк (каждая строка — список Paragraph)
-        col_widths: Ширины столбцов
-        row_styles: Доп. стили для строк [{row_idx, bg, fg}, ...]
+        col_widths: Ширины столбцов (пропорциональные, будут масштабированы)
+        row_styles: Доп. стили для строк [{row_idx, bg, fg, bold}, ...]
 
     Returns:
         bytes — содержимое PDF
@@ -266,32 +285,22 @@ def build_timeline_pdf(
         output,
         pagesize=page,
         leftMargin=MARGIN_LR, rightMargin=MARGIN_LR,
-        topMargin=15 * mm, bottomMargin=20 * mm,
+        topMargin=15 * mm, bottomMargin=18 * mm,
     )
 
     elements = []
 
-    # Инфо-блок
+    # Инфо-блок (лого + инфо)
     elements.extend(_project_info_block(contract, fn, fb, available_w))
 
-    # Заголовок таблицы — жёлтая полоска
-    title_style = ParagraphStyle('TitleH', fontName=fb, fontSize=13,
-                                  textColor=colors.HexColor('#333333'), leading=16)
-    title_tbl = Table(
-        [['', Paragraph(f'<b>{title}</b>', title_style)]],
-        colWidths=[4, None],
+    # Заголовок — по центру, заглавные буквы, без жёлтой полоски
+    title_style = ParagraphStyle(
+        'TitleH', fontName=fb, fontSize=13,
+        textColor=colors.HexColor('#333333'),
+        leading=16, alignment=TA_CENTER,
+        spaceBefore=0, spaceAfter=3 * mm,
     )
-    title_tbl.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), ACCENT),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (0, 0), 0),
-        ('RIGHTPADDING', (0, 0), (0, 0), 0),
-        ('LEFTPADDING', (1, 0), (1, 0), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
-    elements.append(title_tbl)
-    elements.append(Spacer(1, 3 * mm))
+    elements.append(Paragraph(title.upper(), title_style))
 
     # Auto-scale col_widths на всю доступную ширину
     total_w = sum(col_widths)
@@ -309,7 +318,7 @@ def build_timeline_pdf(
 
     style_cmds = list(_table_style().getCommands())
 
-    # Доп. стили строк (заголовки этапов, просрочки и т.д.)
+    # Доп. стили строк (заголовки этапов, статусы, итоги)
     if row_styles:
         for rs in row_styles:
             idx = rs['row_idx']
@@ -319,6 +328,8 @@ def build_timeline_pdf(
             if 'fg' in rs:
                 style_cmds.append(('TEXTCOLOR', (0, idx), (-1, idx),
                                    colors.HexColor(rs['fg'])))
+            if rs.get('bold'):
+                style_cmds.append(('FONTNAME', (0, idx), (-1, idx), fb))
 
     table.setStyle(TableStyle(style_cmds))
     elements.append(table)
