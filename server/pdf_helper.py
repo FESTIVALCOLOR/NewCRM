@@ -97,17 +97,26 @@ def _font_bold():
 # ── Футер ─────────────────────────────────────────────────
 
 def _draw_footer(canvas_obj, doc_obj):
-    """Футер: белый блок с рамкой 1px, радиусами, текст бюро + номер страницы."""
+    """Футер: градиентная полоска footer.jpg + белый блок с рамкой + текст."""
     canvas_obj.saveState()
     pw, ph = doc_obj.pagesize if hasattr(doc_obj, 'pagesize') else landscape(A4)
 
-    # Размеры блока
-    block_w = 180
+    # Градиентная полоска по всей ширине (как в клиентских PDF)
+    if os.path.exists(FOOTER_IMG):
+        try:
+            canvas_obj.drawImage(
+                FOOTER_IMG, 0, 0,
+                width=pw, height=12 * mm,
+                preserveAspectRatio=False, mask='auto')
+        except Exception:
+            pass
+
+    # Белый блок с текстом поверх полоски
+    block_w = 200
     block_h = 28
     x = (pw - block_w) / 2
-    y = 8 * mm
+    y = 2 * mm
 
-    # Белый фон с закруглёнными углами и рамкой
     canvas_obj.setStrokeColor(colors.HexColor('#CCCCCC'))
     canvas_obj.setLineWidth(0.5)
     canvas_obj.setFillColor(colors.white)
@@ -117,8 +126,8 @@ def _draw_footer(canvas_obj, doc_obj):
     fn = _font()
     canvas_obj.setFont(fn, 7)
     canvas_obj.setFillColor(colors.HexColor('#666666'))
-    canvas_obj.drawCentredString(pw / 2, y + 16, "Интерьерное бюро FESTIVAL COLOR")
-    canvas_obj.drawCentredString(pw / 2, y + 6, f"стр. {doc_obj.page}")
+    canvas_obj.drawCentredString(pw / 2, y + 16, "\u0418\u043d\u0442\u0435\u0440\u044c\u0435\u0440\u043d\u043e\u0435 \u0431\u044e\u0440\u043e FESTIVAL COLOR")
+    canvas_obj.drawCentredString(pw / 2, y + 6, f"\u0441\u0442\u0440. {doc_obj.page}")
 
     canvas_obj.restoreState()
 

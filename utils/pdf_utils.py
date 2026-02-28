@@ -129,7 +129,7 @@ def get_default_table_style(font_name='Arial', font_bold='ArialBold'):
 def make_page_footer(page_size, font_name='Arial'):
     """
     Возвращает callback для onFirstPage/onLaterPages.
-    Белый блок с закруглёнными углами и рамкой 1px:
+    Градиентная полоска footer.jpg + белый блок с рамкой 1px:
     строка 1 — «Интерьерное бюро FESTIVAL COLOR»,
     строка 2 — номер страницы.
     """
@@ -137,13 +137,23 @@ def make_page_footer(page_size, font_name='Arial'):
         canvas_obj.saveState()
         pw = page_size[0]
 
-        # Размеры блока
-        block_w = 180
+        # Градиентная полоска по всей ширине
+        footer_path = resource_path("resources/footer.jpg")
+        if os.path.exists(footer_path):
+            try:
+                canvas_obj.drawImage(
+                    footer_path, 0, 0,
+                    width=pw, height=12 * mm,
+                    preserveAspectRatio=False, mask='auto')
+            except Exception:
+                pass
+
+        # Белый блок с текстом поверх полоски
+        block_w = 200
         block_h = 28
         x = (pw - block_w) / 2
-        y = 4 * mm
+        y = 2 * mm
 
-        # Белый фон с закруглёнными углами и рамкой
         canvas_obj.setStrokeColor(colors.HexColor('#CCCCCC'))
         canvas_obj.setLineWidth(0.5)
         canvas_obj.setFillColor(colors.white)
