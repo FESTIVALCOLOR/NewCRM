@@ -23,6 +23,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     # Клиенты
     "clients.delete": "Удаление клиентов",
     # Договоры
+    "contracts.update": "Редактирование договоров",
     "contracts.delete": "Удаление договоров",
     # CRM
     "crm_cards.update": "Редактирование CRM карточек",
@@ -56,6 +57,10 @@ PERMISSION_NAMES: Dict[str, str] = {
     # Агенты
     "agents.create": "Создание агентов",
     "agents.update": "Редактирование агентов",
+    "agents.delete": "Удаление агентов",
+    # Города
+    "cities.create": "Создание городов",
+    "cities.delete": "Удаление городов",
     # Мессенджер
     "messenger.create_chat": "Создание чатов",
     "messenger.delete_chat": "Удаление чатов",
@@ -70,6 +75,7 @@ PERMISSION_NAMES: Dict[str, str] = {
 # Базовый набор: Руководитель + Старший менеджер
 _BASE_MANAGER = {
     "clients.delete",
+    "contracts.update",
     "contracts.delete",
     "crm_cards.update",
     "crm_cards.move",
@@ -94,6 +100,9 @@ _BASE_MANAGER = {
     "rates.delete",
     "agents.create",
     "agents.update",
+    "agents.delete",
+    "cities.create",
+    "cities.delete",
     "messenger.create_chat",
     "messenger.delete_chat",
     "messenger.view_chat",

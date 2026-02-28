@@ -161,7 +161,7 @@ class CustomCalendarWidget(QCalendarWidget):
 
 
 def add_working_days(start_date_str, working_days):
-    """Добавляет рабочие дни (Пн-Пт) к дате.
+    """Добавляет рабочие дни (с учётом праздников РФ) к дате.
     start_date_str: 'YYYY-MM-DD'
     working_days: int
     Возвращает: 'YYYY-MM-DD'
@@ -172,10 +172,11 @@ def add_working_days(start_date_str, working_days):
         current = datetime.strptime(start_date_str, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return start_date_str or ''
+    from utils.date_utils import is_working_day
     added = 0
     while added < working_days:
         current += timedelta(days=1)
-        if current.weekday() < 5:
+        if is_working_day(current):
             added += 1
     return current.strftime('%Y-%m-%d')
 

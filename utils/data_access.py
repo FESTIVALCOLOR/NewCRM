@@ -3,10 +3,54 @@
 Автоматически выбирает источник данных в зависимости от наличия api_client
 Поддерживает offline-режим с очередью отложенных операций
 """
+import time as _time
 from typing import Optional, List, Dict, Any
 from database.db_manager import DatabaseManager
 from PyQt5.QtCore import QObject, pyqtSignal
 from utils.api_client import APIAuthError
+
+
+# ==================== КЕШИРОВАНИЕ ====================
+
+class _DataCache:
+    """Простой кеш с TTL для данных DataAccess.
+
+    Ключ — строка (имя метода + параметры).
+    Значение — (timestamp, data).
+    По умолчанию TTL = 30 сек — данные считаются свежими.
+    При записи (create/update/delete) — инвалидируем связанные ключи.
+    """
+    DEFAULT_TTL = 30  # секунд
+
+    def __init__(self):
+        self._store = {}  # key → (timestamp, data)
+
+    def get(self, key: str, ttl: float = None):
+        """Получить данные из кеша. Возвращает None если нет или истёк."""
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        ts, data = entry
+        if _time.monotonic() - ts > (ttl if ttl is not None else self.DEFAULT_TTL):
+            del self._store[key]
+            return None
+        return data
+
+    def set(self, key: str, data):
+        """Записать данные в кеш."""
+        self._store[key] = (_time.monotonic(), data)
+
+    def invalidate(self, prefix: str = None):
+        """Инвалидировать кеш. Если prefix задан — только ключи с этим префиксом."""
+        if prefix is None:
+            self._store.clear()
+        else:
+            keys_to_del = [k for k in self._store if k.startswith(prefix)]
+            for k in keys_to_del:
+                del self._store[k]
+
+# Глобальный кеш — общий для всех экземпляров DataAccess
+_global_cache = _DataCache()
 
 
 def _safe_log(msg):
@@ -52,6 +96,7 @@ class DataAccess(QObject):
         # Флаг: при True чтение идёт из локальной БД (мгновенно),
         # API используется только для записи. Устанавливается при первом показе табов.
         self.prefer_local = False
+        self._prev_api_mode = self._should_use_api() if api_client is not None else None
 
         # ПРИМЕЧАНИЕ: Ранее каждый DataAccess подключался к OfflineManager.pending_operations_changed
         # и connection_status_changed. Это создавало десятки stale-коннекций от уничтоженных
@@ -114,6 +159,18 @@ class DataAccess(QObject):
         Если prefer_local=True, читаем из локальной БД (мгновенно)."""
         return self.api_client is not None and not self.prefer_local
 
+    def _check_cache_on_mode_change(self):
+        """Инвалидировать кэш при смене режима online ↔ offline.
+        Предотвращает возврат устаревших API-данных при потере сети."""
+        try:
+            current = self._should_use_api()
+            prev = self.__dict__.get('_prev_api_mode')
+            if prev is not None and prev != current:
+                _global_cache.invalidate()
+            self._prev_api_mode = current
+        except RuntimeError:
+            pass
+
     # ==================== КЛИЕНТЫ ====================
 
     def get_all_clients(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
@@ -122,12 +179,21 @@ class DataAccess(QObject):
         Параметры skip/limit позволяют получать данные постранично.
         По умолчанию limit=10000 для обратной совместимости (загрузка всех записей).
         """
+        cache_key = f"clients:{skip}:{limit}"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_clients(skip=skip, limit=limit)
+                result = self.api_client.get_clients(skip=skip, limit=limit)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_clients, fallback: {e}")
-        return self.db.get_all_clients(skip=skip, limit=limit)
+        result = self.db.get_all_clients(skip=skip, limit=limit)
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_clients_paginated(
         self, skip: int = 0, limit: int = 100
@@ -198,6 +264,7 @@ class DataAccess(QObject):
 
     def create_client(self, client_data: Dict) -> Optional[Dict]:
         """Создать клиента"""
+        _global_cache.invalidate("clients")
         # Сначала сохраняем локально
         client_id = self.db.add_client(client_data)
 
@@ -238,6 +305,7 @@ class DataAccess(QObject):
 
     def update_client(self, client_id: int, client_data: Dict) -> bool:
         """Обновить клиента"""
+        _global_cache.invalidate("clients")
         # Сначала обновляем локально
         self.db.update_client(client_id, client_data)
 
@@ -278,12 +346,21 @@ class DataAccess(QObject):
         Параметры skip/limit позволяют получать данные постранично.
         По умолчанию limit=10000 для обратной совместимости (загрузка всех записей).
         """
+        cache_key = f"contracts:{skip}:{limit}"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_contracts(skip=skip, limit=limit)
+                result = self.api_client.get_contracts(skip=skip, limit=limit)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_contracts, fallback: {e}")
-        return self.db.get_all_contracts(skip=skip, limit=limit)
+        result = self.db.get_all_contracts(skip=skip, limit=limit)
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_contracts_paginated(
         self, skip: int = 0, limit: int = 100
@@ -315,7 +392,9 @@ class DataAccess(QObject):
 
     def create_contract(self, contract_data: Dict) -> Optional[Dict]:
         """Создать договор"""
-        # Сначала сохраняем локально
+        _global_cache.invalidate("contracts")
+        _global_cache.invalidate("crm_cards")
+        # Сначала сохраняем локально (add_contract также создаёт CRM карточку)
         contract_id = self.db.add_contract(contract_data)
 
         if self.is_online and self.api_client:
@@ -328,6 +407,11 @@ class DataAccess(QObject):
                     server_id = result.get('id') if isinstance(result, dict) else None
                     if server_id and server_id != contract_id:
                         self._update_local_id('contracts', contract_id, server_id)
+
+                    # Проверяем что CRM карточка была создана на сервере
+                    # (сервер создаёт её атомарно, но на всякий случай)
+                    self._ensure_crm_card_exists(result, contract_data)
+
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_contract: {e}")
@@ -337,8 +421,37 @@ class DataAccess(QObject):
 
         return {'id': contract_id, **contract_data} if contract_id else None
 
+    def _ensure_crm_card_exists(self, contract_result: Dict, contract_data: Dict):
+        """Проверить что CRM карточка создана для договора, создать если нет"""
+        try:
+            project_type = contract_data.get('project_type', '')
+            if project_type == 'Авторский надзор':
+                return  # Для надзора используется SupervisionCard
+
+            contract_id = contract_result.get('id') if isinstance(contract_result, dict) else None
+            if not contract_id:
+                return
+
+            # Проверяем наличие CRM карточки через API
+            cards = self.api_client.get_crm_cards(project_type)
+            has_card = any(
+                (c.get('contract_id') == contract_id)
+                for c in (cards if isinstance(cards, list) else [])
+            )
+
+            if not has_card:
+                _safe_log(f"[DataAccess] CRM карточка для договора {contract_id} не найдена, создаём...")
+                self.api_client.create_crm_card({
+                    'contract_id': contract_id,
+                    'column_name': 'Новый заказ'
+                })
+                _safe_log(f"[DataAccess] CRM карточка для договора {contract_id} создана")
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка проверки CRM карточки: {e}")
+
     def update_contract(self, contract_id: int, contract_data: Dict) -> bool:
         """Обновить договор"""
+        _global_cache.invalidate("contracts")
         # Сначала обновляем локально
         self.db.update_contract(contract_id, contract_data)
 
@@ -392,12 +505,21 @@ class DataAccess(QObject):
 
     def get_all_employees(self) -> List[Dict]:
         """Получить всех сотрудников"""
+        cache_key = "employees:all"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_employees(skip=0, limit=10000)
+                result = self.api_client.get_employees(skip=0, limit=10000)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_employees, fallback: {e}")
-        return self.db.get_all_employees()
+        result = self.db.get_all_employees()
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_employees_by_position(self, position: str) -> List[Dict]:
         """Получить сотрудников по должности"""
@@ -419,6 +541,7 @@ class DataAccess(QObject):
 
     def create_employee(self, employee_data: Dict) -> Optional[Dict]:
         """Создать сотрудника"""
+        _global_cache.invalidate("employees")
         employee_id = self.db.add_employee(employee_data)
 
         if self.is_online and self.api_client:
@@ -442,6 +565,7 @@ class DataAccess(QObject):
 
     def update_employee(self, employee_id: int, employee_data: Dict) -> bool:
         """Обновить сотрудника"""
+        _global_cache.invalidate("employees")
         self.db.update_employee(employee_id, employee_data)
 
         if self.is_online and self.api_client:
@@ -455,6 +579,26 @@ class DataAccess(QObject):
             self._queue_operation('update', 'employee', employee_id, employee_data)
 
         return True
+
+    def get_employee_active_assignments(self, employee_id: int) -> List[Dict]:
+        """Получить список активных назначений сотрудника"""
+        try:
+            if self._should_use_api():
+                try:
+                    cards = self.api_client.get_crm_cards('Индивидуальный') + self.api_client.get_crm_cards('Шаблонный')
+                    result = []
+                    for card in cards:
+                        team = card.get('team', []) or []
+                        for member in team:
+                            if member.get('executor_id') == employee_id and member.get('status') != 'completed':
+                                result.append({'card_id': card.get('id'), 'contract_number': card.get('contract_number', ''), 'stage': member.get('stage_name', '')})
+                    return result
+                except Exception:
+                    pass
+            # Fallback: локальная БД
+            return self.db.get_employee_active_assignments(employee_id) if hasattr(self.db, 'get_employee_active_assignments') else []
+        except Exception:
+            return []
 
     def delete_employee(self, employee_id: int) -> bool:
         """Удалить сотрудника"""
@@ -475,12 +619,21 @@ class DataAccess(QObject):
 
     def get_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить CRM карточки по типу проекта"""
+        cache_key = f"crm_cards:{project_type}"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_crm_cards(project_type)
+                result = self.api_client.get_crm_cards(project_type)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_crm_cards, fallback: {e}")
-        return self.db.get_crm_cards_by_project_type(project_type)
+        result = self.db.get_crm_cards_by_project_type(project_type)
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_crm_card(self, card_id: int) -> Optional[Dict]:
         """Получить CRM карточку по ID"""
@@ -493,15 +646,25 @@ class DataAccess(QObject):
 
     def get_archived_crm_cards(self, project_type: str) -> List[Dict]:
         """Получить архивные CRM карточки"""
+        cache_key = f"crm_cards_archived:{project_type}"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key, ttl=60)  # архив меняется редко — 60 сек TTL
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_archived_crm_cards(project_type)
+                result = self.api_client.get_archived_crm_cards(project_type)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_archived_crm_cards, fallback: {e}")
-        return self.db.get_archived_crm_cards(project_type)
+        result = self.db.get_archived_crm_cards(project_type)
+        _global_cache.set(cache_key, result)
+        return result
 
     def create_crm_card(self, card_data: Dict) -> Optional[Dict]:
         """Создать CRM карточку"""
+        _global_cache.invalidate("crm_cards")
         # Сначала сохраняем локально
         card_id = self.db.add_crm_card(card_data)
 
@@ -526,6 +689,7 @@ class DataAccess(QObject):
 
     def update_crm_card(self, card_id: int, updates: Dict) -> bool:
         """Обновить CRM карточку"""
+        _global_cache.invalidate("crm_cards")
         # Сначала обновляем локально
         self.db.update_crm_card(card_id, updates)
 
@@ -543,6 +707,7 @@ class DataAccess(QObject):
 
     def delete_crm_card(self, card_id: int) -> bool:
         """Удалить CRM карточку"""
+        _global_cache.invalidate("crm_cards")
         # Сначала удаляем локально
         contract_id = self.db.get_contract_id_by_crm_card(card_id)
         if contract_id:
@@ -562,6 +727,7 @@ class DataAccess(QObject):
 
     def update_crm_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку в другую колонку"""
+        _global_cache.invalidate("crm_cards")
         # Сначала обновляем локально
         self.db.update_crm_card_column(card_id, column)
 
@@ -581,6 +747,7 @@ class DataAccess(QObject):
 
     def move_crm_card(self, card_id: int, column: str) -> bool:
         """Переместить CRM карточку в другую колонку (через workflow или напрямую)"""
+        _global_cache.invalidate("crm_cards")
         # Сначала обновляем локально
         self.db.update_crm_card_column(card_id, column)
 
@@ -679,21 +846,39 @@ class DataAccess(QObject):
 
     def get_supervision_cards_active(self) -> List[Dict]:
         """Получить активные карточки надзора"""
+        cache_key = "supervision:active"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_supervision_cards(status="active")
+                result = self.api_client.get_supervision_cards(status="active")
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_supervision_cards_active, fallback: {e}")
-        return self.db.get_supervision_cards_active()
+        result = self.db.get_supervision_cards_active()
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_supervision_cards_archived(self) -> List[Dict]:
         """Получить архивные карточки надзора"""
+        cache_key = "supervision:archived"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_supervision_cards(status="archived")
+                result = self.api_client.get_supervision_cards(status="archived")
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_supervision_cards_archived, fallback: {e}")
-        return self.db.get_supervision_cards_archived()
+        result = self.db.get_supervision_cards_archived()
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_supervision_card(self, card_id: int) -> Optional[Dict]:
         """Получить карточку надзора по ID"""
@@ -706,6 +891,7 @@ class DataAccess(QObject):
 
     def create_supervision_card(self, card_data) -> Optional[Dict]:
         """Создать карточку надзора (принимает Dict или int contract_id)"""
+        _global_cache.invalidate("supervision")
         if isinstance(card_data, int):
             card_data = {'contract_id': card_data, 'column_name': 'Новый заказ'}
         # Сначала сохраняем локально
@@ -732,6 +918,7 @@ class DataAccess(QObject):
 
     def update_supervision_card(self, card_id: int, updates: Dict) -> bool:
         """Обновить карточку надзора"""
+        _global_cache.invalidate("supervision")
         # Сначала обновляем локально
         self.db.update_supervision_card(card_id, updates)
 
@@ -749,6 +936,7 @@ class DataAccess(QObject):
 
     def update_supervision_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку надзора в другую колонку"""
+        _global_cache.invalidate("supervision")
         # Сначала обновляем локально
         self.db.update_supervision_card_column(card_id, column)
 
@@ -955,6 +1143,7 @@ class DataAccess(QObject):
 
     def create_payment(self, payment_data: Dict) -> Optional[Dict]:
         """Создать платёж"""
+        _global_cache.invalidate("payments")
         # Сначала сохраняем локально
         payment_id = self.db.add_payment(payment_data)
 
@@ -1058,15 +1247,25 @@ class DataAccess(QObject):
 
     def get_year_payments(self, year: int, include_null_month: bool = False) -> List[Dict]:
         """Получить платежи за год"""
+        cache_key = f"payments:year:{year}:{include_null_month}"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_year_payments(year, include_null_month=include_null_month)
+                result = self.api_client.get_year_payments(year, include_null_month=include_null_month)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_year_payments, fallback: {e}")
-        return self.db.get_year_payments(year, include_null_month)
+        result = self.db.get_year_payments(year, include_null_month)
+        _global_cache.set(cache_key, result)
+        return result
 
     def mark_payment_as_paid(self, payment_id: int, employee_id: int = None) -> bool:
         """Отметить платёж как оплаченный"""
+        _global_cache.invalidate("payments")
         # Сначала отмечаем локально
         self.db.mark_payment_as_paid(payment_id, employee_id or 0)
 
@@ -1398,12 +1597,21 @@ class DataAccess(QObject):
 
     def get_salaries(self, report_month: str = None, employee_id: int = None) -> List[Dict]:
         """Получить зарплаты"""
+        cache_key = f"salaries:{report_month}:{employee_id}"
+        self._check_cache_on_mode_change()
+        cached = _global_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if self._should_use_api():
             try:
-                return self.api_client.get_salaries(report_month, employee_id)
+                result = self.api_client.get_salaries(report_month, employee_id)
+                _global_cache.set(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_salaries, fallback: {e}")
-        return self.db.get_salaries(report_month, employee_id)
+        result = self.db.get_salaries(report_month, employee_id)
+        _global_cache.set(cache_key, result)
+        return result
 
     def get_salary(self, salary_id: int) -> Optional[Dict]:
         """Получить зарплату по ID"""
@@ -1416,6 +1624,7 @@ class DataAccess(QObject):
 
     def create_salary(self, salary_data: Dict) -> Optional[Dict]:
         """Создать запись о зарплате"""
+        _global_cache.invalidate("salaries")
         # Сначала сохраняем локально
         salary_id = self.db.add_salary(salary_data)
 
@@ -1440,6 +1649,7 @@ class DataAccess(QObject):
 
     def update_salary(self, salary_id: int, salary_data: Dict) -> bool:
         """Обновить запись о зарплате"""
+        _global_cache.invalidate("salaries")
         # Сначала обновляем локально
         self.db.update_salary(salary_id, salary_data)
 
@@ -1457,6 +1667,7 @@ class DataAccess(QObject):
 
     def delete_salary(self, salary_id: int) -> bool:
         """Удалить запись о зарплате"""
+        _global_cache.invalidate("salaries")
         # Сначала удаляем локально
         self.db.delete_salary(salary_id)
 
@@ -1540,6 +1751,29 @@ class DataAccess(QObject):
 
         return True
 
+    def delete_agent(self, agent_id: int) -> bool:
+        """Удалить агента (мягкое удаление)"""
+        if self.api_client:
+            try:
+                return self.api_client.delete_agent(agent_id)
+            except (ConnectionError, TimeoutError, OSError) as e:
+                _safe_log(f"[DataAccess] API delete_agent network error: {e}")
+                if self.db:
+                    try:
+                        self.db.delete_agent(agent_id)
+                    except Exception:
+                        pass
+                self._queue_operation('delete', 'agent', agent_id, {})
+                return True
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_agent error: {e}")
+        if self.db:
+            try:
+                return self.db.delete_agent(agent_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB delete_agent error: {e}")
+        return False
+
     def get_agent_types(self) -> List[str]:
         """Получить типы агентов"""
         if self.api_client:
@@ -1553,6 +1787,82 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] DB get_agent_types: {e}")
         return []
+
+    # ==================== ГОРОДА ====================
+
+    def get_all_cities(self) -> List[Dict]:
+        """Получить все города"""
+        if self.api_client:
+            try:
+                cities = self.api_client.get_all_cities()
+                if cities:
+                    return cities
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_all_cities error, fallback: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_all_cities()
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_all_cities error: {e}")
+        # Последний fallback — config.py
+        try:
+            from config import CITIES
+            return [{"id": i, "name": c, "status": "активный"} for i, c in enumerate(CITIES, 1)]
+        except Exception:
+            return []
+
+    def add_city(self, name: str) -> bool:
+        """Добавить город (API-first с fallback)"""
+        if self.api_client:
+            try:
+                result = self.api_client.add_city(name)
+                if result and self.db:
+                    try:
+                        self.db.add_city(name)
+                    except Exception:
+                        pass
+                return result
+            except (ConnectionError, TimeoutError, OSError) as e:
+                _safe_log(f"[DataAccess] API add_city network error: {e}")
+                if self.db:
+                    try:
+                        self.db.add_city(name)
+                    except Exception:
+                        pass
+                self._queue_operation('create', 'city', None, {'name': name})
+                return True
+            except Exception as e:
+                _safe_log(f"[DataAccess] API add_city error: {e}")
+        if self.db:
+            try:
+                return self.db.add_city(name)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB add_city error: {e}")
+        return False
+
+    def delete_city(self, city_id: int) -> bool:
+        """Удалить город (API-first с fallback)"""
+        if self.api_client:
+            try:
+                return self.api_client.delete_city(city_id)
+            except (ConnectionError, TimeoutError, OSError) as e:
+                _safe_log(f"[DataAccess] API delete_city network error: {e}")
+                if self.db:
+                    try:
+                        self.db.delete_city(city_id)
+                    except Exception:
+                        pass
+                self._queue_operation('delete', 'city', city_id, {})
+                return True
+            except Exception as e:
+                _safe_log(f"[DataAccess] API delete_city error: {e}")
+        if self.db:
+            try:
+                return self.db.delete_city(city_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB delete_city error: {e}")
+        return False
 
     # ==================== СТАДИИ ====================
 
@@ -1674,6 +1984,30 @@ class DataAccess(QObject):
                                    'executor_id': executor_id, '_action': 'complete'})
 
         return {'success': True}
+
+    def get_incomplete_stage_executors(self, card_id: int, stage_name: str) -> list:
+        """S-05: Получить незавершённых исполнителей стадии"""
+        try:
+            return self.db.get_incomplete_stage_executors(card_id, stage_name)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка get_incomplete_stage_executors: {e}")
+            return []
+
+    def get_stage_completion_info(self, card_id: int, stage_name: str) -> dict:
+        """S-05: Получить информацию о завершении стадии"""
+        try:
+            return self.db.get_stage_completion_info(card_id, stage_name)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка get_stage_completion_info: {e}")
+            return {'stage': None, 'approval': None}
+
+    def auto_accept_stage(self, card_id: int, stage_name: str, accepted_by_id: int, project_type: str = None) -> int:
+        """S-05: Автоматическое принятие стадии руководителем"""
+        try:
+            return self.db.auto_accept_stage(card_id, stage_name, accepted_by_id, project_type)
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка auto_accept_stage: {e}")
+            return 0
 
     def reset_stage_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения стадии"""
@@ -2223,6 +2557,116 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_supervision_statistics_report: {e}")
         return {}
 
+    # ==================== ОТЧЁТЫ (REPORTS DASHBOARD) ====================
+
+    def get_reports_summary(self, **kwargs) -> Dict:
+        """KPI-метрики для страницы отчётов"""
+        # API-first
+        if self.is_multi_user and self.api_client:
+            try:
+                result = self.api_client.get_reports_summary(**kwargs)
+                if result is not None:
+                    return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_reports_summary ошибка: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_reports_summary(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_reports_summary ошибка: {e}")
+        return {}
+
+    def get_reports_clients_dynamics(self, **kwargs) -> Dict:
+        """Динамика клиентов по месяцам/кварталам"""
+        # API-first
+        if self.is_multi_user and self.api_client:
+            try:
+                result = self.api_client.get_reports_clients_dynamics(**kwargs)
+                if result is not None:
+                    return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_reports_clients_dynamics ошибка: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_reports_clients_dynamics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_reports_clients_dynamics ошибка: {e}")
+        return {}
+
+    def get_reports_contracts_dynamics(self, **kwargs) -> Dict:
+        """Динамика договоров по месяцам"""
+        # API-first
+        if self.is_multi_user and self.api_client:
+            try:
+                result = self.api_client.get_reports_contracts_dynamics(**kwargs)
+                if result is not None:
+                    return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_reports_contracts_dynamics ошибка: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_reports_contracts_dynamics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_reports_contracts_dynamics ошибка: {e}")
+        return {}
+
+    def get_reports_crm_analytics(self, **kwargs) -> Dict:
+        """CRM аналитика: воронка, просрочки, время стадий"""
+        # API-first
+        if self.is_multi_user and self.api_client:
+            try:
+                result = self.api_client.get_reports_crm_analytics(**kwargs)
+                if result is not None:
+                    return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_reports_crm_analytics ошибка: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_reports_crm_analytics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_reports_crm_analytics ошибка: {e}")
+        return {}
+
+    def get_reports_supervision_analytics(self, **kwargs) -> Dict:
+        """Аналитика авторского надзора"""
+        # API-first
+        if self.is_multi_user and self.api_client:
+            try:
+                result = self.api_client.get_reports_supervision_analytics(**kwargs)
+                if result is not None:
+                    return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_reports_supervision_analytics ошибка: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_reports_supervision_analytics(**kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_reports_supervision_analytics ошибка: {e}")
+        return {}
+
+    def get_reports_distribution(self, dimension, **kwargs) -> Dict:
+        """Распределение по измерению (city/agent/project_type/subtype)"""
+        # API-first
+        if self.is_multi_user and self.api_client:
+            try:
+                result = self.api_client.get_reports_distribution(dimension, **kwargs)
+                if result is not None:
+                    return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_reports_distribution ошибка: {e}")
+        # Fallback на локальную БД
+        if self.db:
+            try:
+                return self.db.get_reports_distribution(dimension, **kwargs)
+            except Exception as e:
+                _safe_log(f"[DataAccess] DB get_reports_distribution ошибка: {e}")
+        return {}
+
     # ==================== ТАБЛИЦА СРОКОВ (CRM) ====================
 
     def get_project_timeline(self, contract_id: int) -> List[Dict]:
@@ -2323,14 +2767,22 @@ class DataAccess(QObject):
 
     # ==================== ТАБЛИЦА СРОКОВ (НАДЗОР) ====================
 
-    def get_supervision_timeline(self, card_id: int) -> List[Dict]:
-        """Получить таблицу сроков надзора"""
+    def get_supervision_timeline(self, card_id: int) -> Dict:
+        """Получить таблицу сроков надзора.
+
+        Возвращает {"entries": [...], "totals": {...}}.
+        Обратная совместимость: если результат — список, оборачиваем.
+        """
         if self._should_use_api():
             try:
-                return self.api_client.get_supervision_timeline(card_id)
+                result = self.api_client.get_supervision_timeline(card_id)
+                # api_client уже возвращает dict с entries/totals
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_supervision_timeline, fallback: {e}")
-        return self.db.get_supervision_timeline(card_id)
+        # Локальная БД возвращает список
+        entries = self.db.get_supervision_timeline(card_id)
+        return {'entries': entries or [], 'totals': {}}
 
     def init_supervision_timeline(self, card_id: int, data: Dict = None) -> Optional[Dict]:
         """Инициализировать таблицу сроков надзора"""
@@ -2586,6 +3038,15 @@ class DataAccess(QObject):
             except Exception:
                 pass
         return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}
+
+    def trigger_script(self, card_id: int, script_type: str, entity_type: str = 'crm') -> bool:
+        """Отправить скрипт мессенджера (начальный/завершающий)"""
+        if self.api_client:
+            try:
+                return self.api_client.trigger_script(card_id, script_type, entity_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] trigger_script error: {e}")
+        return False
 
     def create_messenger_script(self, data: Dict) -> Optional[Dict]:
         """Создать скрипт мессенджера"""

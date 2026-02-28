@@ -83,6 +83,7 @@ class APIClientBase:
         }
         self._is_online = True  # Флаг статуса соединения
         self._last_offline_time = None  # Время последнего перехода в offline
+        self._state_lock = threading.RLock()  # Потокобезопасный lock для _is_online и _last_offline_time
         self._is_refreshing = False  # Флаг для предотвращения рекурсивного refresh
         self._refresh_lock = threading.Lock()  # Потокобезопасный lock для refresh
         self._offline_message_shown = False  # Флаг для подавления повторных сообщений об offline
@@ -154,12 +155,13 @@ class APIClientBase:
             try:
                 response = self.session.request(method, url, **kwargs)
                 # Успешный запрос - сбрасываем offline статус и флаг первого запроса
-                if not self._is_online:
-                    print("[API] Соединение восстановлено")
-                self._is_online = True
-                self._first_request = False
-                self._last_offline_time = None
-                self._offline_message_shown = False
+                with self._state_lock:
+                    if not self._is_online:
+                        print("[API] Соединение восстановлено")
+                    self._is_online = True
+                    self._first_request = False
+                    self._last_offline_time = None
+                    self._offline_message_shown = False
 
                 # Авторетрай на 401: обновляем токен и повторяем запрос однократно
                 if (response.status_code == 401
@@ -241,7 +243,8 @@ class APIClientBase:
 
         # Все попытки исчерпаны
         if mark_offline:
-            self._is_online = False
+            with self._state_lock:
+                self._is_online = False
         raise last_error
 
     def _calc_backoff(self, attempt: int) -> float:
@@ -263,42 +266,46 @@ class APIClientBase:
 
     def _is_recently_offline(self) -> bool:
         """Проверить, были ли мы недавно offline (в пределах OFFLINE_CACHE_DURATION)"""
-        if self._last_offline_time is None:
-            return False
-        elapsed = time.time() - self._last_offline_time
-        return elapsed < self.OFFLINE_CACHE_DURATION
+        with self._state_lock:
+            if self._last_offline_time is None:
+                return False
+            elapsed = time.time() - self._last_offline_time
+            return elapsed < self.OFFLINE_CACHE_DURATION
 
     def _mark_offline(self):
         """Отметить переход в offline режим"""
-        was_online = self._is_online
-        self._is_online = False
-        self._last_offline_time = time.time()
-        # Выводим сообщение только при первом переходе в offline
-        if was_online and not self._offline_message_shown:
-            print("[API] Переход в offline режим")
-            self._offline_message_shown = True
+        with self._state_lock:
+            was_online = self._is_online
+            self._is_online = False
+            self._last_offline_time = time.time()
+            # Выводим сообщение только при первом переходе в offline
+            if was_online and not self._offline_message_shown:
+                print("[API] Переход в offline режим")
+                self._offline_message_shown = True
 
     def reset_offline_cache(self):
         """
         ИСПРАВЛЕНИЕ 30.01.2026: Сбросить кеш offline статуса
         Используется OfflineManager после успешного ping для координации
         """
-        self._last_offline_time = None
-        self._offline_message_shown = False
+        with self._state_lock:
+            self._last_offline_time = None
+            self._offline_message_shown = False
 
     def set_offline_mode(self, offline: bool = True):
         """
         Принудительная установка offline режима.
         Используется после offline логина чтобы предотвратить ненужные API запросы.
         """
-        self._is_online = not offline
-        if offline:
-            # Устанавливаем время offline далеко в будущее чтобы кеш не истекал
-            self._last_offline_time = time.time() + 86400  # +24 часа
-            print("[API] Принудительно установлен OFFLINE режим")
-        else:
-            self._last_offline_time = None
-            print("[API] Принудительно установлен ONLINE режим")
+        with self._state_lock:
+            self._is_online = not offline
+            if offline:
+                # Устанавливаем время offline далеко в будущее чтобы кеш не истекал
+                self._last_offline_time = time.time() + 86400  # +24 часа
+                print("[API] Принудительно установлен OFFLINE режим")
+            else:
+                self._last_offline_time = None
+                print("[API] Принудительно установлен ONLINE режим")
 
     def force_online_check(self) -> bool:
         """
@@ -310,8 +317,9 @@ class APIClientBase:
         """
         try:
             # Сбрасываем кеш перед проверкой
-            old_offline_time = self._last_offline_time
-            self._last_offline_time = None
+            with self._state_lock:
+                old_offline_time = self._last_offline_time
+                self._last_offline_time = None
 
             # Делаем быстрый запрос к health endpoint
             response = self.session.get(
@@ -321,18 +329,21 @@ class APIClientBase:
             )
 
             if response.status_code == 200:
-                self._is_online = True
+                with self._state_lock:
+                    self._is_online = True
                 print("[API] Принудительная проверка: сервер доступен")
                 return True
             else:
-                self._is_online = False
-                self._last_offline_time = old_offline_time or time.time()
+                with self._state_lock:
+                    self._is_online = False
+                    self._last_offline_time = old_offline_time or time.time()
                 print(f"[API] Принудительная проверка: сервер вернул {response.status_code}")
                 return False
 
         except Exception as e:
-            self._is_online = False
-            self._last_offline_time = old_offline_time or time.time()
+            with self._state_lock:
+                self._is_online = False
+                self._last_offline_time = old_offline_time or time.time()
             print(f"[API] Принудительная проверка: ошибка - {e}")
             return False
 
@@ -395,7 +406,8 @@ class APIClientBase:
     @property
     def is_online(self) -> bool:
         """Статус соединения с сервером"""
-        return self._is_online
+        with self._state_lock:
+            return self._is_online
 
     def _extract_token_expiry(self, token: str) -> Optional[float]:
         """Извлечь время истечения из JWT токена (без проверки подписи)"""

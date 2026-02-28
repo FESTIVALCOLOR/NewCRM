@@ -476,15 +476,15 @@ class TestThreadSafeReload:
             "_reload_files_signal должен быть определён как pyqtSignal()"
         )
 
-    def test_crm_uses_signal_not_qtimer_in_validate(self):
-        """Валидация CRM использует _reload_stage_files_signal.emit()"""
+    def test_crm_uses_signal_via_qtimer_in_validate(self):
+        """Валидация CRM вызывает emit через QTimer.singleShot из потока (R-03 fix)"""
         source_path = PROJECT_ROOT / 'ui' / 'crm_card_edit_dialog.py'
         with open(source_path, 'r', encoding='utf-8') as f:
             source = f.read()
 
-        assert '_reload_stage_files_signal.emit()' in source, (
-            "CRM должен использовать _reload_stage_files_signal.emit() "
-            "для потокобезопасной перезагрузки файлов"
+        assert '_reload_stage_files_signal.emit' in source, (
+            "CRM должен использовать _reload_stage_files_signal.emit "
+            "для потокобезопасной перезагрузки файлов (через QTimer.singleShot)"
         )
 
     def test_crm_has_reload_signal_definition(self):

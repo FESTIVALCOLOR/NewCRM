@@ -187,6 +187,10 @@ ssh timeweb "cd /opt/interior_studio && \
 **Деплой ЗАПРЕЩЁН, если последний CI run failed.**
 CI команды: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
 
+## Формат отчёта
+
+> **ОБЯЗАТЕЛЬНО** использовать стандартный формат из `.claude/agents/shared-rules.md` → "Правила форматирования отчётов субагентов" → Deploy Agent (🚀) или Docker Monitor (🐳).
+
 ## Чеклист
 - [ ] Pre-checks пройдены (синтаксис, совместимость, безопасность)
 - [ ] Backup создан
@@ -194,3 +198,4 @@ CI команды: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
 - [ ] Docker rebuild (не restart)
 - [ ] Верификация пройдена
 - [ ] Smoke test пройден
+- [ ] Отчёт оформлен в стандартном формате (emoji + таблицы)

@@ -249,6 +249,7 @@ class TestStatisticsEndpoints:
         response = requests.get(
             f"{api_base}/api/statistics/projects",
             headers=auth_headers,
+            params={"project_type": "Индивидуальный"},
             timeout=10
         )
         assert response.status_code == 200, f"Statistics projects вернул {response.status_code}"

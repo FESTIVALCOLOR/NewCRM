@@ -155,6 +155,10 @@ curl -s https://crm.festivalcolor.ru/api/ | python -m json.tool
 .venv\Scripts\python.exe -m pytest tests/e2e/test_e2e_payments.py::test_create_payment -v
 ```
 
+## Формат отчёта
+
+> **ОБЯЗАТЕЛЬНО** использовать стандартный формат из `.claude/agents/shared-rules.md` → "Правила форматирования отчётов субагентов" → Debugger Agent (🐛).
+
 ## Чеклист
 - [ ] Root cause найден
 - [ ] Исправление минимальное (не рефакторинг)
@@ -163,3 +167,4 @@ curl -s https://crm.festivalcolor.ru/api/ | python -m json.tool
 - [ ] Нет регрессии (новые тесты не упали)
 - [ ] Упавшие тесты теперь проходят
 - [ ] CI (GitHub Actions) пройден успешно после исправлений
+- [ ] Отчёт оформлен в стандартном формате (emoji + таблицы)

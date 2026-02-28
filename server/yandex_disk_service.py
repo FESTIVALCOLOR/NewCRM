@@ -228,19 +228,33 @@ class YandexDiskService:
         Returns:
             Публичная ссылка
         """
+        import time as _time
         # Публикуем файл
         response = requests.put(
             f"{self.base_url}/resources/publish",
             headers=self.headers,
-            params={"path": yandex_path}
+            params={"path": yandex_path},
+            timeout=15
         )
 
-        if response.status_code != 200:
-            raise Exception(f"Ошибка публикации: {response.json()}")
+        # 200 = опубликован, 409 = уже опубликован — оба OK
+        if response.status_code not in [200, 409]:
+            raise Exception(f"Ошибка публикации: {response.status_code} {response.text}")
+
+        # Задержка для обработки на стороне ЯД
+        _time.sleep(1.0)
 
         # Получаем информацию с публичной ссылкой
         file_info = self.get_file_info(yandex_path)
-        return file_info.get("public_url")
+        public_url = file_info.get("public_url")
+
+        # Retry если ссылка ещё не готова
+        if not public_url:
+            _time.sleep(2.0)
+            file_info = self.get_file_info(yandex_path)
+            public_url = file_info.get("public_url")
+
+        return public_url or ""
 
     def list_files(self, yandex_path: str = "/", limit: int = 100) -> list:
         """

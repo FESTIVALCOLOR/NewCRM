@@ -104,6 +104,22 @@ class MessengerMixin:
         )
         return self._handle_response(response)
 
+    def trigger_script(self, card_id: int, script_type: str, entity_type: str = 'crm') -> bool:
+        """Отправить скрипт мессенджера"""
+        try:
+            response = self._request(
+                'POST',
+                f"{self.base_url}/api/messenger/trigger-script",
+                json={
+                    'card_id': card_id,
+                    'script_type': script_type,
+                    'entity_type': entity_type
+                }
+            )
+            return response is not None and response.status_code == 200
+        except Exception:
+            return False
+
     # --- Скрипты ---
 
     def get_messenger_scripts(self, project_type: str = None, script_type: str = None) -> List[Dict[str, Any]]:

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List, Optional
 
 from database import (
@@ -28,16 +28,45 @@ router = APIRouter(tags=["clients"])
 async def get_clients(
     skip: int = 0,
     limit: int = 100,
+    search: Optional[str] = None,
+    search_type: str = "name",
     response: Response = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Получить список клиентов с пагинацией.
-    Заголовок X-Total-Count содержит общее количество записей."""
-    # Считаем общее количество записей для пагинации
-    total = db.query(func.count(Client.id)).scalar()
-    clients = db.query(Client).offset(skip).limit(limit).all()
-    # Устанавливаем заголовок с общим количеством записей
+    """Получить список клиентов с пагинацией и поиском.
+    Заголовок X-Total-Count содержит общее количество записей.
+    search — строка поиска, search_type — поле (name/phone/email/inn/all)."""
+    query = db.query(Client)
+
+    if search:
+        term = f"%{search}%"
+        if search_type == "all":
+            query = query.filter(
+                or_(
+                    Client.full_name.ilike(term),
+                    Client.organization_name.ilike(term),
+                    Client.phone.ilike(term),
+                    Client.email.ilike(term),
+                    Client.inn.ilike(term),
+                )
+            )
+        elif search_type == "phone":
+            query = query.filter(Client.phone.ilike(term))
+        elif search_type == "email":
+            query = query.filter(Client.email.ilike(term))
+        elif search_type == "inn":
+            query = query.filter(Client.inn.ilike(term))
+        else:
+            query = query.filter(
+                or_(
+                    Client.full_name.ilike(term),
+                    Client.organization_name.ilike(term),
+                )
+            )
+
+    total = query.count()
+    clients = query.order_by(Client.id.desc()).offset(skip).limit(limit).all()
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
     return clients

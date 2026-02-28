@@ -154,6 +154,10 @@ tests/
 CI команды и процесс: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
 CI failure → Debugger → повторный push (макс 3 итерации).
 
+## Формат отчёта
+
+> **ОБЯЗАТЕЛЬНО** использовать стандартный формат из `.claude/agents/shared-rules.md` → "Правила форматирования отчётов субагентов" → Test-Runner Agent (🧪).
+
 ## Чеклист
 - [ ] Все категории тестов определены
 - [ ] Critical тесты запущены
@@ -162,3 +166,4 @@ CI failure → Debugger → повторный push (макс 3 итерации
 - [ ] Результаты оформлены в отчёт
 - [ ] Если FAIL — передать stacktrace в Debugger
 - [ ] CI (GitHub Actions) пройден успешно
+- [ ] Отчёт оформлен в стандартном формате (emoji + таблицы)

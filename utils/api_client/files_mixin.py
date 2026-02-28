@@ -67,15 +67,15 @@ class FilesMixin:
 
     def upload_file_to_yandex(self, file_bytes: bytes, filename: str, yandex_path: str) -> Dict[str, Any]:
         """Загрузить файл на Яндекс.Диск через сервер"""
-        import base64
+        # S-03: Сервер ожидает multipart/form-data (UploadFile), а не JSON base64
+        # Для multipart нельзя передавать Content-Type: application/json — requests выставит сам
+        upload_headers = {k: v for k, v in self.headers.items() if k.lower() != 'content-type'}
         response = self._request(
             'POST',
             f"{self.base_url}/api/files/upload",
-            json={
-                'file_data': base64.b64encode(file_bytes).decode('utf-8'),
-                'filename': filename,
-                'yandex_path': yandex_path
-            }
+            files={'file': (filename, file_bytes)},
+            params={'yandex_path': yandex_path},
+            headers=upload_headers
         )
         return self._handle_response(response)
 

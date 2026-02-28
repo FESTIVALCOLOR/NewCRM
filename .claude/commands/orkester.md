@@ -1,7 +1,7 @@
 # Оркестратор субагентов Interior Studio CRM
 
-Ты — оркестратор, управляющий конвейером из 17 субагентов.
-Твоя задача: выполнить запрос пользователя, проведя его через нужные фазы конвейера.
+Ты — оркестратор, управляющий 6-фазным конвейером из 21 субагента.
+Твоя задача: выполнить запрос пользователя, проведя его через фазы: Research → Design → Plan → Implement (+Gate Checks) → PR → CI.
 
 ## Задача пользователя
 
@@ -15,12 +15,12 @@ $ARGUMENTS
 
 | Режим | Ключевые слова | Фазы |
 |-------|---------------|------|
-| **full** | добавить, реализовать, создать, новый, внедрить | Planner → Worker → **QA Monitor** → Test → **CI Push** → Reviewer → Compat → Security? → Doc → SeniorReview? → Refactor? |
-| **fix** | исправь, баг, не работает, ошибка, падает, сломалось | Planner(lite) → Debugger → **QA Monitor?** → Test → **CI Push** → Reviewer? → Compat? |
-| **test** | тесты, проверь, запусти тесты, покрытие | Test-Runner → Debugger? → **CI Push** → Doc(отчёт) |
-| **refactor** | рефакторинг, улучши, упрости, структура | Planner → SeniorReview → Refactor → **QA Monitor** → Test → **CI Push** → Reviewer → Doc |
-| **security** | безопасность, аудит, security, уязвимость | SecurityAuditor → Planner → Worker → Test → **CI Push** → Doc |
-| **deploy** | деплой, deploy, обнови сервер, выложи | Compat → Test(critical) → **CI Push** → Deploy → Test(smoke) → Doc |
+| **full** | добавить, реализовать, создать, новый, внедрить | **Research** → **Design** → Planner → Worker **[+Gate]** → QA Monitor → Test **[+Gate]** → **PR** → **CI** → Reviewer → Compat → Security? → Doc → SeniorReview? |
+| **fix** | исправь, баг, не работает, ошибка, падает, сломалось | Planner(lite) → Debugger **[+Gate]** → Test → **PR** → **CI** → Reviewer? → Compat? |
+| **test** | тесты, проверь, запусти тесты, покрытие | Test-Runner → Debugger? → **PR** → **CI** → Doc(отчёт) |
+| **refactor** | рефакторинг, улучши, упрости, структура | **Research** → **Design** → Planner → SeniorReview → Refactor **[+Gate]** → QA Monitor → Test → **PR** → **CI** → Reviewer → Doc |
+| **security** | безопасность, аудит, security, уязвимость | **Research(lite)** → SecurityAuditor → Planner → Worker **[+Gate]** → Test → **PR** → **CI** → Doc |
+| **deploy** | деплой, deploy, обнови сервер, выложи | Compat → Test(critical) → Deploy → Test(smoke) → Doc |
 | **docker** | docker, контейнер, логи сервера, healthcheck, мониторинг | Docker Monitor → Debugger? → Deploy? → Doc |
 | **qa** | проверь руками, ручное тестирование, qa, покликай | QA Monitor → Debugger? → Doc(отчёт) |
 
@@ -29,17 +29,59 @@ $ARGUMENTS
 
 ---
 
+## ШАГ 0.5: RESEARCH (модель: sonnet) — УСЛОВНЫЙ
+
+Активируется в режимах: **full**, **refactor**.
+В режиме **security** — Research(lite): только направление "архитектура".
+Пропустить в: **fix**, **test**, **deploy**, **docker**, **qa**.
+
+Вызови субагент `.claude/agents/research-agent.md` через Task tool.
+
+**Задание для Research:**
+1. Определить место задачи в проекте
+2. Проанализировать 3 направления: архитектура, паттерны, интеграции
+3. ТОЛЬКО описание текущего состояния — БЕЗ рекомендаций
+4. Создать папку `docs/plan/{task-slug}/`
+5. Сохранить результат в `docs/plan/{task-slug}/research.md`
+
+**task-slug:** kebab-case от названия задачи, латиница, до 50 символов.
+
+---
+
+## ШАГ 0.7: DESIGN (модель: opus) — УСЛОВНЫЙ
+
+Активируется в режимах: **full**, **refactor**.
+Пропустить в: **fix**, **test**, **security**, **deploy**, **docker**, **qa**.
+
+Вызови субагент `.claude/agents/design-agent.md` через Task tool.
+
+**Задание для Design:**
+1. Прочитать `docs/plan/{task-slug}/research.md`
+2. Создать C4 model (Container + Component минимум)
+3. Создать DFD (потоки данных до и после)
+4. При необходимости — ADR (Architecture Decision Record)
+5. Стратегия тестирования (типы, кейсы, acceptance criteria)
+6. API контракты (если затронут server/): endpoints, Pydantic схемы
+7. Сохранить в `docs/plan/{task-slug}/design.md`
+
+---
+
 ## ШАГ 1: PLANNER (модель: opus)
 
 Вызови субагент `.claude/agents/planner-agent.md` через Task tool.
 
 **Задание для Planner:**
-1. Прочитать описание задачи
+1. Прочитать описание задачи (+ research.md и design.md если есть)
 2. Определить затронутые слои (server / client / db / ui)
 3. Определить затронутые файлы (Grep/Glob)
 4. Разбить на подзадачи с зависимостями
 5. Определить какие специализированные агенты нужны
 6. Определить какие категории тестов запускать
+7. Создать `docs/plan/{task-slug}/roadmap.md` — дорожная карта с фазами и чеклистами
+8. **ОБЯЗАТЕЛЬНО:** В начале roadmap.md добавить раздел **"## Оглавление"** со списком всех этапов и подзадач. Каждый пункт начинается с маркера статуса:
+   - `✅` — задача завершена
+   - `⬜` — задача ожидает выполнения
+   При завершении задачи оркестратор (или Documenter) обязан обновить маркер с ⬜ на ✅ в оглавлении.
 
 **Формат плана:**
 ```
@@ -81,7 +123,16 @@ $ARGUMENTS
 [после них]   Frontend Agent → ui/*.py (зависит от API контракта)
 ```
 
-В режиме **fix** — вместо Worker вызвать Debugger.
+### Gate Check после каждого субагента:
+После завершения каждого субагента — вызвать `.claude/agents/gate-checker-agent.md`:
+```
+1. Передать: изменённые файлы, путь к design.md, категории тестов
+2. Gate Checker выполняет 5 проверок: билд, тесты, линтер, дизайн, безопасность
+3. Если FAIL → субагент исправляет → повторный Gate Check (макс 2 итерации)
+4. Если 2 итерации FAIL → ЭСКАЛАЦИЯ пользователю
+```
+
+В режиме **fix** — вместо Worker вызвать Debugger (+ Gate Check после).
 В режиме **test** — пропустить Worker.
 
 ---
@@ -215,19 +266,26 @@ Stacktrace: [последний]
 
 ---
 
-## ШАГ 5: CI PUSH & VERIFY — ОБЯЗАТЕЛЬНЫЙ
+## ШАГ 5: PR CREATE & CI VERIFY — ОБЯЗАТЕЛЬНЫЙ
 
-После прохождения локальных тестов — автоматически закоммитить, запушить и дождаться результатов CI (GitHub Actions).
+После прохождения локальных тестов и Gate Checks — создать PR вместо прямого push в main.
+Пропустить в режимах: **deploy**, **docker**, **qa**.
 
-### 5.1: Коммит и пуш
+Вызови субагент `.claude/agents/pr-creator-agent.md` через Task tool.
+
+### 5.1: Создание feature branch
 ```bash
-# Определить изменённые файлы
-git status --short
+# Branch naming: {тип}/{slug}
+# feat/ — full, fix/ — fix, refactor/ — refactor, security/ — security, test/ — test
+git checkout -b {тип}/{slug}
+```
 
-# Добавить изменённые файлы (НЕ git add -A, только конкретные файлы)
+### 5.2: Коммит и push
+```bash
+# Добавить КОНКРЕТНЫЕ файлы (НЕ git add -A)
 git add <список_изменённых_файлов>
 
-# Коммит (использовать HEREDOC для сообщения)
+# Коммит (HEREDOC формат)
 git commit -m "$(cat <<'EOF'
 описание изменений
 
@@ -235,19 +293,41 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 
-# Пуш
-git push origin main
+# Push feature branch
+git push -u origin {тип}/{slug}
 ```
 
-### 5.2: Ожидание CI результатов
+### 5.3: Создание PR
 ```bash
-# gh CLI авторизован через keyring (gh auth login), GH_TOKEN не нужен
 export PATH="/c/Program Files/GitHub CLI:/c/Program Files/Git/bin:$PATH"
 
-# Подождать 30 секунд для инициализации CI
+gh pr create --title "{краткий заголовок до 70 символов}" --body "$(cat <<'EOF'
+## Краткое описание
+{1-3 предложения}
+
+## Изменения
+{Список по пунктам}
+
+## Документация
+- Research: {ссылка на research.md или N/A}
+- Design: {ссылка на design.md или N/A}
+- Roadmap: {ссылка на roadmap.md или N/A}
+
+## Тестирование
+- Локальные тесты: {N} passed, 0 failed
+- Gate Checks: 5/5 passed
+- Категории: {e2e, db, ui, client, critical}
+
+Сгенерировано Claude Code
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"
+```
+
+### 5.4: Ожидание CI на PR
+```bash
 sleep 30
 
-# Дождаться завершения CI (макс 10 минут)
 for i in $(seq 1 20); do
   STATUS=$(gh run list -L 1 --json status -q '.[0].status')
   if [ "$STATUS" = "completed" ]; then
@@ -256,49 +336,41 @@ for i in $(seq 1 20); do
   sleep 30
 done
 
-# Получить результат
 gh run list -L 1 --json conclusion,displayTitle -q '.[0] | "\(.conclusion): \(.displayTitle)"'
 ```
 
-### 5.3: Проверка результатов CI
+### 5.5: Проверка результатов CI
 ```bash
-# Получить ID последнего запуска
 RUN_ID=$(gh run list -L 1 --json databaseId -q '.[0].databaseId')
-
-# Проверить все jobs
 gh run view $RUN_ID --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
-
-# Если есть failures — получить логи
 gh run view $RUN_ID --log-failed 2>&1 | tail -100
 ```
 
-### 5.4: Реакция на результат CI
+### 5.6: Реакция на результат CI
 ```
 CI PASSED (conclusion=success):
   → Продолжить конвейер (Reviewer)
-  → Записать в отчёт: "CI: ✓ все 5 jobs passed"
+  → Записать: "PR #{N}, CI: 5/5 jobs passed"
 
 CI FAILED (conclusion=failure):
-  → Получить логи упавших jobs
-  → Debugger анализирует и исправляет
-  → Повторный коммит + пуш + ожидание CI
-  → Максимум 3 итерации
-  → Если 3 итерации не помогли → ЭСКАЛАЦИЯ пользователю
+  → Debugger анализирует логи → исправляет
+  → Push в тот же branch → CI перезапускается
+  → Максимум 3 итерации → ЭСКАЛАЦИЯ
 
-CI TIMEOUT (10 мин без ответа):
-  → Записать предупреждение
-  → Продолжить конвейер с пометкой "CI: не дождались ответа"
+CI TIMEOUT (10 мин):
+  → Продолжить с пометкой "CI: не дождались ответа"
 ```
 
 ### Цикл CI-Fix (макс 3 итерации):
 ```
-1. Push → CI запускается
-2. Ожидание результата (макс 10 мин)
-3. CI FAILED → Debugger анализирует логи → исправляет
-4. Повторный push → CI перезапускается
-5. Если OK → продолжить
-6. Если 3 итерации → ЭСКАЛАЦИЯ
+1. PR создан → CI запускается на PR branch
+2. CI FAILED → Debugger анализирует → исправляет
+3. Push в тот же branch → CI перезапускается
+4. Если OK → продолжить
+5. Если 3 итерации → ЭСКАЛАЦИЯ
 ```
+
+**ВАЖНО:** НИКОГДА не merge PR автоматически — только ручное решение пользователя.
 
 ---
 
@@ -524,38 +596,100 @@ send_task_notification(
 **НЕ писать в task_state.json** — устаревший механизм.
 
 ### Отчёт
-По завершении конвейера вывести:
+По завершении конвейера вывести финальный отчёт в формате ниже. Каждый субагент также обязан возвращать свой отчёт в стандартном формате из `.claude/agents/shared-rules.md` → "Правила форматирования отчётов субагентов".
 
 ```
-=== ОТЧЁТ ОРКЕСТРАТОРА ===
-Задача: [описание]
-Режим: [full/fix/test/...]
-Статус: ЗАВЕРШЕНО / С ПРЕДУПРЕЖДЕНИЯМИ / ТРЕБУЕТ ВНИМАНИЯ
+🎯 ФИНАЛЬНЫЙ ОТЧЁТ ОРКЕСТРАТОРА
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Фазы:
-  [V] Planner — план создан, N подзадач
-  [V] Worker — N файлов изменено
-  [V] QA Monitor — ручное тестирование OK, 0 крашей
-  [V] Test-Runner — N тестов, все прошли
-  [-] Debugger — не потребовался
-  [V] CI Push & Verify — pushed, 5/5 jobs passed, 360 tests
-  [V] Reviewer — 0 BLOCK, 2 WARN, 1 INFO
-  [V] Compatibility — OK
-  [-] Security — не затронуто
-  [V] Documenter — обновлено N docs
-  [-] Senior Reviewer — не требовался
-  [-] Refactor — не требовался
-  [-] Deploy — не запрашивался
-  [-] Docker Monitor — не запрашивался
+📊 Общая сводка
+| Параметр | Значение |
+|----------|----------|
+| Задача | {описание} |
+| Режим | {full/fix/test/refactor/security/deploy/docker/qa} |
+| Статус | ✅ ЗАВЕРШЕНО / ⚠️ С ПРЕДУПРЕЖДЕНИЯМИ / ❌ ТРЕБУЕТ ВНИМАНИЯ |
+| Файлов изменено | {N} |
+| Строк кода | +{add} / -{del} |
+| Субагентов задействовано | {N} из 21 |
 
-Изменённые файлы:
-  - path/to/file1.py (+N строк)
-  - path/to/file2.py (+M строк)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Тесты (локальные): XX passed, 0 failed, YY skipped
-CI (GitHub Actions): 5/5 jobs passed, XX e2e tests
-Tech debt: [список INFO замечаний]
-=== КОНЕЦ ОТЧЁТА ===
+📡 Конвейер фаз
+| # | Фаза | Статус | Агент | Детали |
+|---|------|--------|-------|--------|
+| 0.5 | Research | ✅/⏭️ | Research | research.md создан / пропущено |
+| 0.7 | Design | ✅/⏭️ | Design | design.md (C4+DFD) / пропущено |
+| 1 | Планирование | ✅ | Planner | {N} подзадач, roadmap.md |
+| 2 | Реализация | ✅ | Worker | {N} файлов изменено |
+| 2+ | Gate Checks | ✅ | Gate Checker | 5/5 × {N} субагентов |
+| 2.5 | QA Monitor | ✅/⏭️ | QA Monitor | 0 крашей / пропущено |
+| 3 | Тесты | ✅ | Test-Runner | {N} passed, 0 failed |
+| 4 | Отладка | ✅/⏭️ | Debugger | {N} фиксов / не потребовался |
+| 5 | PR & Push | ✅ | PR Creator | PR #{N}, branch: {тип}/{slug} |
+| 5.4 | CI Verify | ✅ | GitHub Actions | 5/5 jobs passed |
+| 6 | Ревью | ✅ | Reviewer | 🚫{N} ⚠️{N} ℹ️{N} |
+| 7 | Совместимость | ✅/⏭️ | Compatibility | OK / пропущено |
+| 8 | Безопасность | ✅/⏭️ | Security Auditor | 0 уязвимостей / пропущено |
+| 9 | Документация | ✅ | Documenter | {N} docs обновлено |
+| 10 | Архитектура | ✅/⏭️ | Senior Reviewer | OK / пропущено |
+| 11 | Рефакторинг | ✅/⏭️ | Refactor | {описание} / не требовался |
+| 12 | Деплой | ✅/⏭️ | Deploy | {описание} / не запрашивался |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏗️ Реализация: подзадачи
+| # | Подзадача | Агент | Статус | Gate |
+|---|-----------|-------|--------|------|
+| 1 | {описание} | {агент} | ✅ | ✅ 5/5 |
+| 2 | {описание} | {агент} | ✅ | ✅ 5/5 |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 Изменённые файлы
+| Файл | Действие | Строк (+/-) |
+|------|----------|-------------|
+| path/to/file1.py | ✅ Изменён | +{N}/-{M} |
+| path/to/file2.py | ✅ Создан | +{N} |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 Тесты
+| Источник | Всего | ✅ Passed | ❌ Failed | ⏭️ Skipped |
+|----------|-------|-----------|-----------|------------|
+| Локальные (pytest) | {N} | {N} | 0 | {N} |
+| CI (GitHub Actions) | 5 jobs | {N} | 0 | — |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👁️ Качество кода
+| Проверка | Результат |
+|----------|-----------|
+| Reviewer (12 правил) | 🚫 BLOCK: {N} \| ⚠️ WARN: {N} \| ℹ️ INFO: {N} |
+| Compatibility (6 проверок) | ✅ OK / ❌ {N} MISMATCH |
+| Security Auditor | ✅ Чисто / 🚫 {N} CRITICAL / ❌ {N} HIGH |
+| Senior Reviewer (6 проверок) | ✅ OK / ⚠️ Рефакторинг рекомендован |
+| Gate Checks (5 × {N} субагентов) | ✅ Все пройдены |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📎 Артефакты
+| Артефакт | Путь |
+|----------|------|
+| Исследование | docs/plan/{slug}/research.md |
+| Дизайн | docs/plan/{slug}/design.md |
+| Дорожная карта | docs/plan/{slug}/roadmap.md |
+| PR | #{N} — ожидает ручного merge |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 Tech debt (INFO от Reviewer + Senior Reviewer)
+| # | Описание | Файл | Источник |
+|---|----------|------|----------|
+| 1 | {описание} | {файл:строка} | Reviewer #12 |
+| 2 | {описание} | {файл:строка} | Senior Reviewer #3 |
+
+🎯 Итог: {краткое резюме задачи и статус одной строкой}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ---
@@ -567,6 +701,8 @@ Tech debt: [список INFO замечаний]
 
 | Агент | Как использовать |
 |-------|-----------------|
+| **Research** | Каждое из 3 направлений = отдельный thought (архитектура → паттерны → интеграции) |
+| **Design** | Каждый раздел дизайна = отдельный thought (C4 → DFD → ADR → тесты → API контракты) |
 | **Planner** | Каждый шаг декомпозиции = отдельный thought (определение слоёв → подзадачи → зависимости → параллелизм) |
 | **Worker** | Планирование порядка делегирования и интеграции результатов |
 | **QA Monitor** | Анализ crash-логов, построение тест-сценариев по изменённым файлам |
@@ -577,6 +713,13 @@ Tech debt: [список INFO замечаний]
 
 ### Context7 (`mcp__context7__resolve-library-id` + `mcp__context7__query-docs`)
 Для получения актуальной документации библиотек. Используют: Worker, Debugger, Backend, Frontend, Refactor, Design Stylist.
+
+---
+
+## КОНТЕКСТНОЕ ОКНО СУБАГЕНТОВ
+
+Оркестратор работает с моделью `opus[1m]` (1M токенов контекста).
+Субагенты через Task tool ограничены стандартным контекстом (~200K), т.к. параметр `model` принимает только `"sonnet"`, `"opus"`, `"haiku"` без `[1m]` суффикса. Это допустимо — каждый субагент решает узкую задачу и не нуждается в 1M контексте.
 
 ---
 

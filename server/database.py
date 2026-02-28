@@ -174,6 +174,16 @@ class Agent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class City(Base):
+    """Города"""
+    __tablename__ = "cities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    status = Column(String, default='активный')
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ActivityLog(Base):
     """Расширенный лог действий"""
     __tablename__ = "activity_log"
@@ -455,10 +465,11 @@ class StageExecutor(Base):
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id"), nullable=False)
 
     stage_name = Column(String, nullable=False)
-    executor_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    # S-07: nullable для SET NULL при удалении сотрудника
+    executor_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     assigned_date = Column(DateTime, default=datetime.utcnow)
-    assigned_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    assigned_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     deadline = Column(String)
     submitted_date = Column(DateTime)
@@ -619,7 +630,8 @@ class Payment(Base):
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id"))
     supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id"))
 
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    # S-07: nullable чтобы сохранять платежи при удалении сотрудника (SET NULL)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     role = Column(String, nullable=False)
     stage_name = Column(String)
 
@@ -678,7 +690,8 @@ class Salary(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     contract_id = Column(Integer, ForeignKey("contracts.id"))
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    # S-07: nullable чтобы сохранять зарплаты при удалении сотрудника (SET NULL)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     payment_type = Column(String, nullable=False)
     stage_name = Column(String)
@@ -812,6 +825,7 @@ class MessengerScript(Base):
     stage_name = Column(String, nullable=True)
 
     message_template = Column(Text, nullable=False)
+    memo_file_path = Column(String, nullable=True)  # Путь к PDF-памятке на Яндекс.Диске
     use_auto_deadline = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
@@ -848,10 +862,44 @@ class MessengerMessageLog(Base):
     delivery_status = Column(String, default="sent")  # sent/failed/pending
 
 
+def _auto_migrate_columns():
+    """Автоматически добавляет недостающие столбцы в существующие таблицы.
+
+    create_all() НЕ добавляет новые столбцы к уже существующим таблицам.
+    Эта функция сравнивает модель с БД и выполняет ALTER TABLE ADD COLUMN.
+    """
+    import logging
+    from sqlalchemy import inspect, text
+    logger = logging.getLogger(__name__)
+    try:
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # create_all() создаст таблицу целиком
+
+            db_columns = {col['name'] for col in inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in db_columns:
+                    col_type = col.type.compile(engine.dialect)
+                    nullable = "NULL" if col.nullable else "NOT NULL"
+                    default = ""
+                    if col.default is not None:
+                        default = f" DEFAULT {col.default.arg!r}"
+                    sql = f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type} {nullable}{default}'
+                    with engine.begin() as conn:
+                        conn.execute(text(sql))
+                    logger.info(f"auto-migrate: добавлен столбец {table.name}.{col.name} ({col_type})")
+    except Exception as e:
+        logger.warning(f"auto-migrate warning: {e}")
+
+
 def init_db():
     """Инициализация базы данных"""
     try:
         Base.metadata.create_all(bind=engine)
+        _auto_migrate_columns()
     except Exception as e:
         # Race condition при 2+ workers: один уже создал таблицы
         import logging

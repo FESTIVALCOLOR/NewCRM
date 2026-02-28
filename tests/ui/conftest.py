@@ -22,6 +22,17 @@ if _project_root not in sys.path:
 from database.db_manager import DatabaseManager
 
 
+# ========== Сброс debounce_click между тестами ==========
+
+@pytest.fixture(autouse=True)
+def _clear_debounce():
+    """Сброс глобального состояния debounce_click между тестами."""
+    from utils.button_debounce import _last_click_time
+    _last_click_time.clear()
+    yield
+    _last_click_time.clear()
+
+
 # ========== SAFETY NET: запрет доступа к production БД ==========
 
 @pytest.fixture(autouse=True)

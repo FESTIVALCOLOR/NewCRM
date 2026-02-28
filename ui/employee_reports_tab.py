@@ -3,11 +3,11 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 
                              QGroupBox, QPushButton, QComboBox, QTabWidget,
                              QTableWidget, QTableWidgetItem, QHeaderView,
-                             QFileDialog, QMessageBox, QSpinBox)
+                             QFileDialog, QSpinBox)
 from PyQt5.QtCore import Qt, QDate
 from ui.custom_combobox import CustomComboBox
 from database.db_manager import DatabaseManager
-from utils.pdf_generator import PDFGenerator
+from utils.pdf_utils import build_table_pdf
 from utils.icon_loader import IconLoader  # ← ДОБАВЛЕНО
 from utils.calendar_helpers import ICONS_PATH
 from utils.table_settings import apply_no_focus_delegate
@@ -21,7 +21,6 @@ class EmployeeReportsTab(QWidget):
         self.api_client = api_client  # Клиент для работы с API (многопользовательский режим)
         self.db = DatabaseManager()
         self.data_access = DataAccess(api_client=self.api_client, db=self.db)
-        self.pdf_gen = PDFGenerator()
         self.init_ui()
 
     def init_ui(self):
@@ -91,7 +90,7 @@ class EmployeeReportsTab(QWidget):
 
         filters_layout.addWidget(QLabel('Тип периода:'))
         period_combo = CustomComboBox()
-        period_combo.addItems(['Месяц', 'Квартал', 'Год'])
+        period_combo.addItems(['За месяц', 'За квартал', 'За год'])
         period_combo.setObjectName(f'period_{project_type}')
         period_combo.currentTextChanged.connect(lambda: self.load_report_data(project_type))
         filters_layout.addWidget(period_combo)
@@ -302,8 +301,11 @@ class EmployeeReportsTab(QWidget):
             
             period = period_combo.currentText()
             year = year_spin.value()
-            quarter = quarter_combo.currentText() if period == 'Квартал' else None
-            month = month_combo.currentIndex() + 1 if period == 'Месяц' else None
+            # S-15: Конвертируем 'Q1'→1, 'Q2'→2 и т.д. — API ожидает int
+            quarter_text = quarter_combo.currentText() if period == 'За квартал' else None
+            quarter = int(quarter_text[1]) if quarter_text and len(quarter_text) > 1 and quarter_text[1].isdigit() else None
+            month_idx = month_combo.currentIndex() if period == 'За месяц' else -1
+            month = (month_idx + 1) if month_idx >= 0 else None
             
             # Получаем данные из API или БД через DataAccess
             try:
@@ -327,6 +329,16 @@ class EmployeeReportsTab(QWidget):
             print(f"Ошибка загрузки данных отчета: {e}")
             import traceback
             traceback.print_exc()
+            # S7.2: Уведомление пользователя об ошибке загрузки
+            try:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(
+                    self, 'Ошибка',
+                    f'Не удалось загрузить данные отчёта.\n{str(e)[:200]}',
+                    'error'
+                ).exec_()
+            except Exception:
+                pass
     
     def update_completed_table(self, tab_widget, project_type, data):
         """Обновление таблицы выполненных заказов"""
@@ -382,6 +394,8 @@ class EmployeeReportsTab(QWidget):
     
     def export_report(self, project_type, report_type):
         """Экспорт отчета в PDF"""
+        import logging
+        _logger = logging.getLogger(__name__)
         try:
             # Получаем виджет вкладки
             if project_type == 'Индивидуальный':
@@ -390,18 +404,21 @@ class EmployeeReportsTab(QWidget):
                 tab_widget = self.template_tab
             else:
                 tab_widget = self.supervision_tab
-            
+
             # Получаем параметры периода
             period_combo = tab_widget.findChild(QComboBox, f'period_{project_type}')
             year_spin = tab_widget.findChild(QSpinBox, f'year_{project_type}')
             quarter_combo = tab_widget.findChild(QComboBox, f'quarter_{project_type}')
             month_combo = tab_widget.findChild(QComboBox, f'month_{project_type}')
-            
+
             period = period_combo.currentText()
             year = year_spin.value()
-            quarter = quarter_combo.currentText() if period == 'Квартал' else None
-            month = month_combo.currentIndex() + 1 if period == 'Месяц' else None
-            
+            # S-15: Конвертируем 'Q1'→1, 'Q2'→2 и т.д. — API ожидает int
+            quarter_text = quarter_combo.currentText() if period == 'За квартал' else None
+            quarter = int(quarter_text[1]) if quarter_text and len(quarter_text) > 1 and quarter_text[1].isdigit() else None
+            month_idx = month_combo.currentIndex() if period == 'За месяц' else -1
+            month = (month_idx + 1) if month_idx >= 0 else None
+
             # Диалог сохранения
             filename, _ = QFileDialog.getSaveFileName(
                 self,
@@ -409,45 +426,48 @@ class EmployeeReportsTab(QWidget):
                 f'Отчет_сотрудники_{report_type}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf',
                 'PDF Files (*.pdf)'
             )
-            
-            if filename:
-                # Получаем данные через DataAccess
-                try:
-                    report_data = self.data_access.get_employee_report_data(
-                        self.employee.get('id', 0),
-                        project_type=project_type,
-                        period=period,
-                        year=year,
-                        quarter=quarter,
-                        month=month
-                    )
-                except Exception as e:
-                    print(f"[WARN] DataAccess ошибка get_employee_report_data: {e}")
-                    report_data = {'completed': [], 'salaries': []}
-                
-                # Генерируем PDF
-                if report_type == 'completed':
-                    data = report_data.get('completed', [])
-                    headers = ['Исполнитель', 'Должность', 'Количество проектов']
-                    title = f'Выполненные заказы - {project_type}'
-                    
-                    pdf_data = [[item.get('employee_name', ''), 
-                                item.get('position', ''), 
-                                str(item.get('count', 0))] for item in data]
-                else:  # salary
-                    data = report_data.get('salaries', [])
-                    headers = ['Исполнитель', 'Должность', 'Сумма (₽)']
-                    title = f'Зарплаты - {project_type}'
-                    
-                    pdf_data = [[item.get('employee_name', ''), 
-                                item.get('position', ''), 
-                                f"{item.get('total_salary', 0):,.2f}"] for item in data]
-                
-                self.pdf_gen.generate_report(filename, title, pdf_data, headers)
-                
-                QMessageBox.information(self, 'Успех', f'Отчет сохранен:\n{filename}')
-        
+            if not filename:
+                return
+
+            # Получаем данные через DataAccess
+            try:
+                report_data = self.data_access.get_employee_report_data(
+                    self.employee.get('id', 0),
+                    project_type=project_type,
+                    period=period,
+                    year=year,
+                    quarter=quarter,
+                    month=month
+                )
+            except Exception as e:
+                _logger.warning("DataAccess ошибка get_employee_report_data: %s", e)
+                report_data = {'completed': [], 'salaries': []}
+
+            # Подготовка данных для PDF
+            if report_type == 'completed':
+                data = report_data.get('completed', [])
+                headers = ['Исполнитель', 'Должность', 'Количество проектов']
+                title = f'Выполненные заказы - {project_type}'
+                pdf_data = [[item.get('employee_name', ''),
+                             item.get('position', ''),
+                             str(item.get('count', 0))] for item in data]
+            else:  # salary
+                data = report_data.get('salaries', [])
+                headers = ['Исполнитель', 'Должность', 'Сумма (руб.)']
+                title = f'Зарплаты - {project_type}'
+                pdf_data = [[item.get('employee_name', ''),
+                             item.get('position', ''),
+                             f"{item.get('total_salary', 0):,.2f}"] for item in data]
+
+            build_table_pdf(
+                output_path=filename,
+                title=title,
+                headers=headers,
+                rows=pdf_data,
+                summary_items=[('Всего записей', str(len(pdf_data)))],
+            )
+
         except Exception as e:
-            QMessageBox.critical(self, 'Ошибка', f'Ошибка экспорта отчета:\n{str(e)}')
-            import traceback
-            traceback.print_exc()
+            _logger.error("Ошибка экспорта отчета: %s", e, exc_info=True)
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', f'Ошибка экспорта отчета:\n{e}', 'error').exec_()

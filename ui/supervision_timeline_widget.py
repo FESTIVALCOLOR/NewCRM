@@ -16,6 +16,9 @@ from PyQt5.QtGui import QDoubleValidator
 from utils.calendar_helpers import add_today_button_to_dateedit
 from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Цвета статусов
@@ -75,6 +78,7 @@ class SupervisionTimelineWidget(QWidget):
         self.api_client = api_client
         self.employee = employee
         self.entries = []
+        self.totals = {}
         self._loading = False
 
         self.card_id = card_data.get('id')
@@ -451,6 +455,52 @@ class SupervisionTimelineWidget(QWidget):
 
         layout.addWidget(self.table, 1)
 
+        # === ТАБЛИЦА ВЫЕЗДОВ И ДЕФЕКТОВ ===
+        defects_header = QLabel('Выезды и дефекты')
+        defects_header.setStyleSheet(
+            'font-size: 12px; font-weight: bold; color: #333; margin-top: 10px;'
+        )
+        layout.addWidget(defects_header)
+
+        self.DEFECTS_COLUMNS = [
+            'Стадия', 'Выезды на объект', 'Дефекты обнаружено', 'Дефекты устранено'
+        ]
+        self.DEFECTS_COLUMN_WIDTHS = [220, 130, 150, 150]
+
+        self.defects_table = QTableWidget()
+        self.defects_table.setColumnCount(len(self.DEFECTS_COLUMNS))
+        self.defects_table.setHorizontalHeaderLabels(self.DEFECTS_COLUMNS)
+        self.defects_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.defects_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.defects_table.verticalHeader().setVisible(False)
+        self.defects_table.setShowGrid(True)
+        self.defects_table.setAlternatingRowColors(False)
+
+        defects_header_view = self.defects_table.horizontalHeader()
+        for col in range(len(self.DEFECTS_COLUMNS)):
+            defects_header_view.setSectionResizeMode(col, QHeaderView.Interactive)
+        for col, width in enumerate(self.DEFECTS_COLUMN_WIDTHS):
+            self.defects_table.setColumnWidth(col, width)
+        defects_header_view.setStretchLastSection(True)
+
+        self.defects_table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #E0E0E0;
+                gridline-color: #E0E0E0;
+                font-size: 11px;
+            }
+            QHeaderView::section {
+                background-color: #2F5496;
+                color: white;
+                border: 1px solid #1B3A6E;
+                padding: 5px;
+                font-weight: bold;
+                font-size: 10px;
+            }
+        """)
+
+        layout.addWidget(self.defects_table)
+
         # === СВОДКА ===
         self.summary_widget = QWidget()
         summary_layout = QHBoxLayout(self.summary_widget)
@@ -523,20 +573,29 @@ class SupervisionTimelineWidget(QWidget):
 
         self._loading = True
         try:
-            entries = self.data.get_supervision_timeline(self.card_id)
+            timeline_result = self.data.get_supervision_timeline(self.card_id)
+            entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+            totals = timeline_result.get('totals', {}) if isinstance(timeline_result, dict) else {}
+
             if not entries:
                 # Автоинициализация через API
                 result = self.data.init_supervision_timeline(self.card_id)
                 if result and 'entries' in result:
                     entries = result['entries']
+                    totals = result.get('totals', {})
                 else:
                     # API мог вернуть ошибку (404) — пробуем локальную инициализацию
-                    entries = self.data.get_supervision_timeline(self.card_id)
+                    timeline_result = self.data.get_supervision_timeline(self.card_id)
+                    entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+                    totals = timeline_result.get('totals', {}) if isinstance(timeline_result, dict) else {}
                     if not entries:
                         self._init_timeline_locally()
-                        entries = self.data.get_supervision_timeline(self.card_id)
+                        timeline_result = self.data.get_supervision_timeline(self.card_id)
+                        entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+                        totals = timeline_result.get('totals', {}) if isinstance(timeline_result, dict) else {}
 
             self.entries = entries or []
+            self.totals = totals or {}
             self._recalculate_all_days()
             self._populate_table()
             self._update_summary()
@@ -572,7 +631,9 @@ class SupervisionTimelineWidget(QWidget):
         self.table.setUpdatesEnabled(False)
         try:
             self.table.setRowCount(0)
-            self.table.setRowCount(len(self.entries))
+            # +1 строка для "Итого"
+            total_rows = len(self.entries) + 1 if self.entries else 0
+            self.table.setRowCount(total_rows)
 
             for row, entry in enumerate(self.entries):
                 self.table.setRowHeight(row, 36)
@@ -684,9 +745,81 @@ class SupervisionTimelineWidget(QWidget):
                     align='left', is_multiline=True, tooltip_text=tip)
                 self.table.setCellWidget(row, 10, notes_cell)
 
+            # === СТРОКА "ИТОГО" ===
+            if self.entries:
+                self._add_totals_row(len(self.entries))
+
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
+
+        # Обновить таблицу дефектов
+        self._populate_defects_table()
+
+    def _add_totals_row(self, row):
+        """Добавить строку 'Итого' в конец таблицы (не редактируемая, жирный шрифт, серый фон)"""
+        totals_bg = '#F5F5F5'
+        self.table.setRowHeight(row, 36)
+
+        # Кол 0: "Итого" (жирный)
+        totals_label = self._make_cell_label('Итого', totals_bg, 'left', bold=True)
+        self.table.setCellWidget(row, 0, totals_label)
+
+        # Кол 1-3: пустые
+        for col in (1, 2, 3):
+            empty_lbl = self._make_cell_label('', totals_bg)
+            self.table.setCellWidget(row, col, empty_lbl)
+
+        # Суммы: сначала пробуем из totals (от сервера), иначе считаем локально
+        totals = getattr(self, 'totals', {}) or {}
+        total_bp = totals.get('budget_planned', None)
+        total_ba = totals.get('budget_actual', None)
+        total_savings = totals.get('budget_savings', None)
+        total_commission = totals.get('commission', None)
+
+        # Если сервер не вернул totals — считаем из entries
+        if total_bp is None:
+            total_bp = sum(e.get('budget_planned', 0) or 0 for e in self.entries)
+        if total_ba is None:
+            total_ba = sum(e.get('budget_actual', 0) or 0 for e in self.entries)
+        if total_savings is None:
+            total_savings = sum(e.get('budget_savings', 0) or 0 for e in self.entries)
+        if total_commission is None:
+            total_commission = sum(e.get('commission', 0) or 0 for e in self.entries)
+
+        # Кол 4: Бюджет план
+        bp_text = f'{total_bp:,.0f}' if total_bp else ''
+        bp_lbl = self._make_cell_label(bp_text, totals_bg, 'right', bold=True)
+        self.table.setCellWidget(row, 4, bp_lbl)
+
+        # Кол 5: Бюджет факт
+        ba_text = f'{total_ba:,.0f}' if total_ba else ''
+        ba_lbl = self._make_cell_label(ba_text, totals_bg, 'right', bold=True)
+        self.table.setCellWidget(row, 5, ba_lbl)
+
+        # Кол 6: Экономия
+        savings_color = '#333333'
+        if total_savings > 0:
+            savings_color = '#4CAF50'
+        elif total_savings < 0:
+            savings_color = '#F44336'
+        savings_text = f'{total_savings:,.0f}' if total_savings else ''
+        savings_lbl = self._make_cell_label(savings_text, totals_bg, 'right', bold=True, color=savings_color)
+        self.table.setCellWidget(row, 6, savings_lbl)
+
+        # Кол 7: Поставщик — пусто
+        empty_supplier = self._make_cell_label('', totals_bg)
+        self.table.setCellWidget(row, 7, empty_supplier)
+
+        # Кол 8: Комиссия
+        comm_text = f'{total_commission:,.0f}' if total_commission else ''
+        comm_lbl = self._make_cell_label(comm_text, totals_bg, 'right', bold=True)
+        self.table.setCellWidget(row, 8, comm_lbl)
+
+        # Кол 9-10: пустые
+        for col in (9, 10):
+            empty_lbl = self._make_cell_label('', totals_bg)
+            self.table.setCellWidget(row, col, empty_lbl)
 
     def _on_status_changed(self, row, stage_code, new_status):
         """Изменение статуса"""
@@ -732,6 +865,143 @@ class SupervisionTimelineWidget(QWidget):
             except Exception as e:
                 print(f"[SupervisionTimelineWidget] Ошибка сохранения: {e}")
 
+    def _populate_defects_table(self):
+        """Заполнение таблицы выездов и дефектов"""
+        self.defects_table.setUpdatesEnabled(False)
+        try:
+            self.defects_table.setRowCount(0)
+            total_rows = len(self.entries) + 1 if self.entries else 0
+            self.defects_table.setRowCount(total_rows)
+
+            for row, entry in enumerate(self.entries):
+                self.defects_table.setRowHeight(row, 30)
+                stage_code = entry.get('stage_code', '')
+                bg = '#FFFFFF' if row % 2 == 0 else '#F9F9F9'
+
+                # Кол 0: Стадия (только чтение)
+                stage_lbl = self._make_cell_label(
+                    entry.get('stage_name', ''), bg, 'left', font_size=11)
+                self.defects_table.setCellWidget(row, 0, stage_lbl)
+
+                # Кол 1: Выезды на объект
+                visits = entry.get('site_visits', 0) or 0
+                visits_text = str(visits) if visits else ''
+                visits_cell = self._create_defects_editable_cell(
+                    visits_text, bg, row, stage_code, 'site_visits')
+                self.defects_table.setCellWidget(row, 1, visits_cell)
+
+                # Кол 2: Дефекты обнаружено
+                df = entry.get('defects_found', 0) or 0
+                df_text = str(df) if df else ''
+                df_cell = self._create_defects_editable_cell(
+                    df_text, bg, row, stage_code, 'defects_found')
+                self.defects_table.setCellWidget(row, 2, df_cell)
+
+                # Кол 3: Дефекты устранено
+                dr = entry.get('defects_resolved', 0) or 0
+                dr_text = str(dr) if dr else ''
+                dr_cell = self._create_defects_editable_cell(
+                    dr_text, bg, row, stage_code, 'defects_resolved')
+                self.defects_table.setCellWidget(row, 3, dr_cell)
+
+            # === СТРОКА "ИТОГО" ===
+            if self.entries:
+                self._add_defects_totals_row(len(self.entries))
+        finally:
+            self.defects_table.setUpdatesEnabled(True)
+
+    def _add_defects_totals_row(self, row):
+        """Строка 'Итого' для таблицы дефектов"""
+        bg = '#F5F5F5'
+        self.defects_table.setRowHeight(row, 30)
+
+        totals_lbl = self._make_cell_label('Итого', bg, 'left', bold=True, font_size=11)
+        self.defects_table.setCellWidget(row, 0, totals_lbl)
+
+        total_visits = sum(e.get('site_visits', 0) or 0 for e in self.entries)
+        total_found = sum(e.get('defects_found', 0) or 0 for e in self.entries)
+        total_resolved = sum(e.get('defects_resolved', 0) or 0 for e in self.entries)
+
+        v_lbl = self._make_cell_label(
+            str(total_visits) if total_visits else '', bg, 'center', bold=True, font_size=11)
+        self.defects_table.setCellWidget(row, 1, v_lbl)
+
+        df_lbl = self._make_cell_label(
+            str(total_found) if total_found else '', bg, 'center', bold=True, font_size=11)
+        self.defects_table.setCellWidget(row, 2, df_lbl)
+
+        dr_lbl = self._make_cell_label(
+            str(total_resolved) if total_resolved else '', bg, 'center', bold=True, font_size=11)
+        self.defects_table.setCellWidget(row, 3, dr_lbl)
+
+    def _create_defects_editable_cell(self, text, bg_color, row, stage_code, field_name):
+        """Ячейка с карандашом для таблицы дефектов"""
+        container = QWidget()
+        container.setStyleSheet('background-color: transparent;')
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(2, 0, 2, 0)
+        layout.setSpacing(2)
+        layout.setAlignment(Qt.AlignVCenter)
+
+        lbl = QLabel(text)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet(
+            f'background-color: {bg_color}; color: #333333; padding: 2px 4px; '
+            f'font-size: 11px; border-radius: 2px; border: 1px solid #E0E0E0;'
+        )
+        lbl.setMinimumWidth(30)
+
+        pencil_btn = self._create_pencil_btn()
+        pencil_btn.clicked.connect(
+            lambda checked, r=row, sc=stage_code, fn=field_name, cur=text:
+                self._edit_defects_cell(r, sc, fn, cur)
+        )
+
+        layout.addWidget(lbl, 1)
+        layout.addWidget(pencil_btn, 0)
+        return container
+
+    def _edit_defects_cell(self, row, stage_code, field_name, current_text):
+        """Inline-редактирование числовой ячейки таблицы дефектов"""
+        col_map = {'site_visits': 1, 'defects_found': 2, 'defects_resolved': 3}
+        col = col_map.get(field_name, -1)
+        if col < 0:
+            return
+
+        line_edit = QLineEdit()
+        clean_text = current_text.strip() if current_text else ''
+        line_edit.setText(clean_text)
+        line_edit.setValidator(QDoubleValidator(0, 999999, 0))
+
+        line_edit.setStyleSheet('''
+            QLineEdit {
+                background-color: #FFF2CC;
+                border: 1px solid #CCCCCC;
+                border-radius: 2px;
+                padding: 2px 4px;
+                font-size: 11px;
+            }
+        ''')
+
+        def save_and_close():
+            text = line_edit.text().strip()
+            try:
+                value = int(float(text)) if text else 0
+            except ValueError:
+                value = 0
+
+            if row < len(self.entries):
+                self.entries[row][field_name] = value
+
+            self._save_entry(stage_code, {field_name: value})
+            self._populate_defects_table()
+            self._update_summary()
+
+        line_edit.editingFinished.connect(save_and_close)
+        self.defects_table.setCellWidget(row, col, line_edit)
+        line_edit.setFocus()
+        line_edit.selectAll()
+
     def _update_summary(self):
         """Обновление сводки"""
         total_plan = sum(e.get('budget_planned', 0) or 0 for e in self.entries)
@@ -771,7 +1041,7 @@ class SupervisionTimelineWidget(QWidget):
                     with open(path, 'wb') as f:
                         f.write(file_bytes)
         except Exception as e:
-            print(f"[SupervisionTimelineWidget] Ошибка экспорта Excel: {e}")
+            logger.error("Ошибка экспорта Excel авторского надзора: %s", e, exc_info=True)
 
     def _export_pdf(self):
         """Экспорт в PDF (без бюджетов)"""
@@ -779,13 +1049,22 @@ class SupervisionTimelineWidget(QWidget):
             return
         try:
             file_bytes = self.data.export_supervision_timeline_pdf(self.card_id)
-            if file_bytes:
-                path, _ = QFileDialog.getSaveFileName(
-                    self, 'Сохранить PDF', f'supervision_timeline_{self.card_id}.pdf',
-                    'PDF (*.pdf)'
-                )
-                if path:
-                    with open(path, 'wb') as f:
-                        f.write(file_bytes)
+            if not file_bytes:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Предупреждение',
+                                 'Сервер не вернул данные для PDF-экспорта.', 'warning').exec_()
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, 'Сохранить PDF', f'supervision_timeline_{self.card_id}.pdf',
+                'PDF (*.pdf)'
+            )
+            if path:
+                with open(path, 'wb') as f:
+                    f.write(file_bytes)
+                logger.info("Авторский надзор таймлайн PDF сохранён: %s", path)
+                from utils.pdf_utils import open_file
+                open_file(path)
         except Exception as e:
-            print(f"[SupervisionTimelineWidget] Ошибка экспорта PDF: {e}")
+            logger.error("Ошибка экспорта PDF авторского надзора: %s", e, exc_info=True)
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать PDF:\n{e}', 'error').exec_()

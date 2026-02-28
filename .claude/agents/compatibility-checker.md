@@ -97,6 +97,10 @@ self.api_client.get_payments_for_contract(contract_id)
 [MISMATCH] DataAccess не содержит обёртку для get_new_entity()
 ```
 
+## Формат отчёта
+
+> **ОБЯЗАТЕЛЬНО** использовать стандартный формат из `.claude/agents/shared-rules.md` → "Правила форматирования отчётов субагентов" → Compatibility Checker (🔗).
+
 ## Чеклист
 - [ ] Endpoint → Method маппинг проверен
 - [ ] Ключи ответов совпадают
@@ -104,3 +108,4 @@ self.api_client.get_payments_for_contract(contract_id)
 - [ ] Pydantic ↔ SQLAlchemy совместимы
 - [ ] DB fallback формат идентичен API
 - [ ] DataAccess обёртки существуют
+- [ ] Отчёт оформлен в стандартном формате (emoji + таблицы)

@@ -31,6 +31,8 @@ class EmployeesTab(QWidget):
         _sec = employee.get('secondary_position', '')
         self.can_edit = _pos in ['Руководитель студии', 'Старший менеджер проектов'] or \
                         _sec in ['Руководитель студии', 'Старший менеджер проектов']
+        # Удаление доступно только Руководителю студии
+        self.can_delete = _pos == 'Руководитель студии' or _sec == 'Руководитель студии'
         # ======================================
 
         self._data_loaded = False
@@ -292,7 +294,8 @@ class EmployeesTab(QWidget):
                 edit_btn.clicked.connect(lambda checked, e=emp: self.edit_employee(e))
                 actions_layout.addWidget(edit_btn)
 
-                # Кнопка удаления
+            # Кнопка удаления — только для Руководителя студии
+            if self.can_delete:
                 delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
                 delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
@@ -313,7 +316,7 @@ class EmployeesTab(QWidget):
 
 
         self.employees_table.setSortingEnabled(True)
-        
+
         CustomMessageBox(
             self, 
             'Результаты поиска', 
@@ -435,7 +438,8 @@ class EmployeesTab(QWidget):
                 edit_btn.clicked.connect(lambda checked, e=emp: self.edit_employee(e))
                 actions_layout.addWidget(edit_btn)
 
-                # Кнопка удаления
+            # Кнопка удаления — только для Руководителя студии
+            if self.can_delete:
                 delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
                 delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
@@ -453,7 +457,7 @@ class EmployeesTab(QWidget):
 
             actions_widget.setLayout(actions_layout)
             self.employees_table.setCellWidget(row, 7, actions_widget)
-            
+
         self.employees_table.setSortingEnabled(True)
 
     @staticmethod
@@ -550,10 +554,21 @@ class EmployeesTab(QWidget):
             ).exec_()
             return
 
+        # Проверяем наличие активных назначений у сотрудника
+        active_warning = ''
+        try:
+            active_cards = self.data.get_employee_active_assignments(employee_data['id'])
+            if active_cards:
+                count = len(active_cards) if isinstance(active_cards, list) else 0
+                if count > 0:
+                    active_warning = f"\n\nВНИМАНИЕ: Сотрудник назначен на {count} активных стадий. При удалении назначения будут сброшены."
+        except Exception:
+            pass
+
         reply = CustomQuestionBox(
             self,
             'Подтверждение',
-            f"Вы уверены, что хотите удалить сотрудника {employee_data['full_name']}?"
+            f"Вы уверены, что хотите удалить сотрудника {employee_data['full_name']}?{active_warning}"
         ).exec_()
 
         if reply == QDialog.Accepted:

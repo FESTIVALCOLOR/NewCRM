@@ -16,7 +16,10 @@ from utils.calendar_helpers import add_today_button_to_dateedit, add_working_day
 from utils.timeline_calc import calc_planned_dates
 from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
+import logging
 import threading
+
+logger = logging.getLogger(__name__)
 
 
 # ========== БИЗНЕС-ЛОГИКА ==========
@@ -43,7 +46,7 @@ def calc_area_coefficient(area: float) -> int:
 
 
 def networkdays(start_date, end_date):
-    """Расчёт рабочих дней между двумя датами (NETWORKDAYS аналог)"""
+    """Расчёт рабочих дней между двумя датами (с учётом праздников РФ)"""
     if not start_date or not end_date:
         return 0
     if isinstance(start_date, str):
@@ -60,18 +63,14 @@ def networkdays(start_date, end_date):
     if end_date < start_date:
         return 0
 
-    try:
-        import numpy as np
-        days = np.busday_count(start_date, end_date)
-        return int(days)
-    except Exception:
-        count = 0
-        current = start_date
-        while current < end_date:
-            if current.weekday() < 5:
-                count += 1
-            current += timedelta(days=1)
-        return count
+    from utils.date_utils import is_working_day
+    count = 0
+    current = start_date
+    while current < end_date:
+        if is_working_day(current):
+            count += 1
+        current += timedelta(days=1)
+    return count
 
 
 # Цвета
@@ -193,9 +192,11 @@ class ProjectTimelineWidget(QWidget):
         header_layout.addWidget(self.lbl_address)
 
         subtype_text = f'  |  Подтип: {project_subtype}' if project_subtype else ''
+        # k_multiplier (коэфф. площади) отображается только для индивидуальных проектов
+        k_text = f'  |  Коэфф. площади (K): {K}' if project_type == 'Индивидуальный' else ''
         info_line = QLabel(
             f'Тип: {project_type}{subtype_text}  |  Площадь: {area} м\u00b2  |  '
-            f'Срок по договору: {contract_term} р.д.  |  Коэфф. площади (K): {K}'
+            f'Срок по договору: {contract_term} р.д.{k_text}'
         )
         info_line.setStyleSheet('font-size: 11px; color: #666;')
         header_layout.addWidget(info_line)
@@ -1005,7 +1006,7 @@ class ProjectTimelineWidget(QWidget):
                     with open(path, 'wb') as f:
                         f.write(file_bytes)
         except Exception as e:
-            print(f"[TimelineWidget] Ошибка экспорта Excel: {e}")
+            logger.error("Ошибка экспорта Excel таймлайна: %s", e, exc_info=True)
 
     def _export_pdf(self):
         """Экспорт в PDF через API"""
@@ -1013,13 +1014,22 @@ class ProjectTimelineWidget(QWidget):
             return
         try:
             file_bytes = self.data.export_timeline_pdf(self.contract_id)
-            if file_bytes:
-                path, _ = QFileDialog.getSaveFileName(
-                    self, 'Сохранить PDF', f'timeline_{self.contract_id}.pdf',
-                    'PDF (*.pdf)'
-                )
-                if path:
-                    with open(path, 'wb') as f:
-                        f.write(file_bytes)
+            if not file_bytes:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Предупреждение',
+                                 'Сервер не вернул данные для PDF-экспорта.', 'warning').exec_()
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, 'Сохранить PDF', f'timeline_{self.contract_id}.pdf',
+                'PDF (*.pdf)'
+            )
+            if path:
+                with open(path, 'wb') as f:
+                    f.write(file_bytes)
+                logger.info("Таймлайн PDF сохранён: %s", path)
+                from utils.pdf_utils import open_file
+                open_file(path)
         except Exception as e:
-            print(f"[TimelineWidget] Ошибка экспорта PDF: {e}")
+            logger.error("Ошибка экспорта PDF таймлайна: %s", e, exc_info=True)
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать PDF:\n{e}', 'error').exec_()

@@ -58,12 +58,29 @@ Worker: "Добавить CRUD для сущности X"
 4. Собрать список всех изменённых файлов для Test-Runner
 ```
 
-### Шаг 5: CI Push & Verify (после прохождения локальных тестов)
+### Шаг 5: Gate Check после каждого субагента
 
-После завершения всех задач — автоматически коммит, пуш, ожидание CI.
-Команды и процесс: `.claude/agents/shared-rules.md` → CI / GitHub Actions.
-CI failed → Debugger исправляет → повторный push (макс 3 итерации).
-**ВАЖНО:** НЕ сообщать пользователю результаты, пока CI не завершится.
+После завершения каждого субагента (Backend, Frontend, API Client, Database, Design Stylist) — вызвать Gate Checker Agent (`.claude/agents/gate-checker-agent.md`):
+
+```
+1. Передать: изменённые файлы, путь к design.md, категории тестов
+2. Gate Checker выполняет 5 проверок: билд, тесты, линтер, дизайн, безопасность
+3. Если FAIL → субагент исправляет → повторный Gate Check (макс 2 итерации)
+4. Если 2 итерации FAIL → ЭСКАЛАЦИЯ пользователю
+```
+
+**Финальный Gate Check:** После всех субагентов — полная проверка всех изменённых файлов.
+
+### Шаг 6: PR Create (после прохождения всех Gate Checks)
+
+Передать управление PR Creator Agent (`.claude/agents/pr-creator-agent.md`):
+```
+1. Создание feature branch ({тип}/{slug})
+2. Коммит + push feature branch
+3. Создание PR через gh pr create
+4. Ожидание CI на PR branch
+```
+**ВАЖНО:** НЕ делать `git push origin main` напрямую! Только через PR.
 
 ## Критические правила проекта
 
@@ -135,6 +152,10 @@ class SomeDialog(QDialog):
         btn_save.setStyleSheet(UnifiedStyles.get_primary_button_style())
 ```
 
+## Формат отчёта
+
+> **ОБЯЗАТЕЛЬНО** использовать стандартный формат из `.claude/agents/shared-rules.md` → "Правила форматирования отчётов субагентов" → Worker Agent (🏗️).
+
 ## Чеклист перед завершением
 - [ ] Все подзадачи плана выполнены
 - [ ] Контракты изменений от спец. агентов проверены
@@ -145,5 +166,6 @@ class SomeDialog(QDialog):
 - [ ] 1px border для frameless
 - [ ] DataAccess используется в UI
 - [ ] Список изменённых файлов передан Test-Runner
-- [ ] Код запушен и CI (GitHub Actions) прошёл успешно
-- [ ] Результат CI включён в отчёт
+- [ ] Gate Checks 5/5 пройдены для каждого субагента
+- [ ] PR создан через PR Creator Agent (не push в main)
+- [ ] Отчёт оформлен в стандартном формате (emoji + таблицы)

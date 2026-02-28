@@ -63,10 +63,21 @@ async def get_supervision_timeline(
     entries = db.query(SupervisionTimelineEntry).filter(
         SupervisionTimelineEntry.supervision_card_id == card_id
     ).order_by(SupervisionTimelineEntry.sort_order).all()
-    return [
-        {c.name: getattr(e, c.name) for c in e.__table__.columns}
-        for e in entries
-    ]
+
+    totals = {
+        "budget_planned": sum(e.budget_planned or 0 for e in entries),
+        "budget_actual": sum(e.budget_actual or 0 for e in entries),
+        "budget_savings": sum(e.budget_savings or 0 for e in entries),
+        "commission": sum(e.commission or 0 for e in entries),
+    }
+
+    return {
+        "entries": [
+            {c.name: getattr(e, c.name) for c in e.__table__.columns}
+            for e in entries
+        ],
+        "totals": totals,
+    }
 
 
 @router.post("/{card_id}/init")
@@ -201,7 +212,7 @@ async def export_supervision_timeline_excel(
 
     # Заголовки
     headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Бюджет план",
-               "Бюджет факт", "Экономия", "Поставщик", "Статус", "Примечания"]
+               "Бюджет факт", "Экономия", "Комиссия", "Поставщик", "Статус", "Примечания"]
     ws.append(headers)
 
     header_fill = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
@@ -235,6 +246,7 @@ async def export_supervision_timeline_excel(
             entry.budget_planned or 0,
             entry.budget_actual or 0,
             entry.budget_savings or 0,
+            entry.commission or 0,
             entry.supplier or "",
             entry.status or "",
             entry.notes or ""
@@ -242,7 +254,7 @@ async def export_supervision_timeline_excel(
         ws.append(row_data)
         row_idx = ws.max_row
 
-        for col_idx in range(1, 11):
+        for col_idx in range(1, 12):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.border = thin_border
 

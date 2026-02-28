@@ -80,6 +80,9 @@ class SupervisionCardEditDialog(QDialog):
         self.sv_create_chat_btn.setVisible(_can_create)
         self.sv_open_chat_btn.setVisible(_can_view)
         self.sv_delete_chat_btn.setVisible(_can_delete)
+        # Кнопки скриптов: видимы если есть право просмотра чатов
+        self.sv_start_script_btn.setVisible(_can_view)
+        self.sv_end_script_btn.setVisible(_can_view)
 
         # Загрузить состояние чата (после layout подключён — нет ghost windows)
         self._sv_chat_data = None
@@ -403,6 +406,44 @@ class SupervisionCardEditDialog(QDialog):
         buttons_layout.addWidget(self.sv_open_chat_btn)
         buttons_layout.addWidget(self.sv_delete_chat_btn)
 
+        # --- Кнопки скриптов мессенджера (надзор, иконки без текста) ---
+        self.sv_start_script_btn = IconLoader.create_icon_button(
+            'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
+        )
+        self.sv_start_script_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff; color: #333333;
+                padding: 0px; border-radius: 2px; border: 1px solid #d9d9d9;
+                min-width: 36px; max-width: 36px;
+                min-height: 36px; max-height: 36px;
+            }
+            QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+            QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+            QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+        """)
+        self.sv_start_script_btn.setFixedSize(36, 36)
+        self.sv_start_script_btn.clicked.connect(self._on_send_supervision_start_script)
+
+        self.sv_end_script_btn = IconLoader.create_icon_button(
+            'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
+        )
+        self.sv_end_script_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff; color: #333333;
+                padding: 0px; border-radius: 2px; border: 1px solid #d9d9d9;
+                min-width: 36px; max-width: 36px;
+                min-height: 36px; max-height: 36px;
+            }
+            QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+            QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+            QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+        """)
+        self.sv_end_script_btn.setFixedSize(36, 36)
+        self.sv_end_script_btn.clicked.connect(self._on_send_supervision_end_script)
+
+        buttons_layout.addWidget(self.sv_start_script_btn)
+        buttons_layout.addWidget(self.sv_end_script_btn)
+
         buttons_layout.addStretch()
 
         if not self.is_dan_role:
@@ -620,6 +661,11 @@ class SupervisionCardEditDialog(QDialog):
         self.sv_open_chat_btn.setEnabled(has_chat)
         self.sv_delete_chat_btn.setEnabled(has_chat and is_online)
 
+        # Кнопки скриптов доступны только при наличии чата и подключении к серверу
+        if hasattr(self, 'sv_start_script_btn'):
+            self.sv_start_script_btn.setEnabled(has_chat and is_online)
+            self.sv_end_script_btn.setEnabled(has_chat and is_online)
+
         if not is_online:
             self.sv_create_chat_btn.setToolTip("Требуется подключение к серверу")
         elif has_chat:
@@ -681,6 +727,34 @@ class SupervisionCardEditDialog(QDialog):
                 CustomMessageBox(self, 'Успех', 'Чат удалён', 'success').exec_()
             except Exception as e:
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{str(e)}', 'error').exec_()
+
+    def _on_send_supervision_start_script(self):
+        """Отправить начальный скрипт в чат надзора"""
+        supervision_card_id = self.card_data.get('id') if self.card_data else None
+        if not supervision_card_id:
+            return
+        try:
+            result = self.data.trigger_script(supervision_card_id, 'supervision_start', entity_type='supervision')
+            if result:
+                CustomMessageBox(self, 'Скрипт', 'Начальный скрипт отправлен в чат', 'success').exec_()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось отправить скрипт', 'warning').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', str(e), 'error').exec_()
+
+    def _on_send_supervision_end_script(self):
+        """Отправить завершающий скрипт в чат надзора"""
+        supervision_card_id = self.card_data.get('id') if self.card_data else None
+        if not supervision_card_id:
+            return
+        try:
+            result = self.data.trigger_script(supervision_card_id, 'supervision_end', entity_type='supervision')
+            if result:
+                CustomMessageBox(self, 'Скрипт', 'Завершающий скрипт отправлен в чат', 'success').exec_()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось отправить скрипт', 'warning').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', str(e), 'error').exec_()
 
     def delete_order(self):
         """Удаление заказа надзора"""
@@ -2410,8 +2484,9 @@ class SupervisionCardEditDialog(QDialog):
         current_data = {}
         if stage_code and self.card_data.get('id'):
             try:
-                entries = self.data.get_supervision_timeline(self.card_data['id'])
-                for entry in (entries or []):
+                timeline_result = self.data.get_supervision_timeline(self.card_data['id'])
+                entries = timeline_result.get('entries', []) if isinstance(timeline_result, dict) else (timeline_result or [])
+                for entry in entries:
                     if entry.get('stage_code') == stage_code:
                         current_data = entry
                         break

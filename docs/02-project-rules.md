@@ -181,7 +181,46 @@ _gui(lambda: self.my_signal.emit(data))
 
 **Также запрещено:** подключать сигналы долгоживущего QObject (например, OfflineManager) к слотам короткоживущего QObject (диалог). При уничтожении диалога connection становится stale → emit вызывает slot на мёртвом объекте → access violation.
 
-## 14. Offline-очередь: только сетевые ошибки
+## 14. Обязательное покрытие тестами runtime-крашей
+
+> Добавлено 2026-02-23 по результатам аудита: 13 runtime-крашей не обнаруживались 1178 тестами.
+
+**Каждый фикс runtime-краша ОБЯЗАН сопровождаться тестом**, воспроизводящим проблему. Без теста фикс не считается завершённым.
+
+### 14.1 Обязательные категории тестов
+
+| Категория | Что тестировать | Пример |
+|-----------|----------------|--------|
+| **Декораторы + Qt сигналы** | Все декораторы, оборачивающие слоты (`*args`), ДОЛЖНЫ тестироваться с передачей лишних аргументов от Qt (bool, int, str) | `debounce_click(method)(self, False)` не крашит |
+| **Thread-safety Qt** | Код из `threading.Thread` НЕ ДОЛЖЕН обращаться к Qt объектам. Тест: mock Qt object, вызвать из потока, проверить что используется `threading.Event` / `QTimer.singleShot` | `progress.wasCanceled()` → `cancel_event.is_set()` |
+| **Deleted object safety** | Callback из фонового потока ДОЛЖЕН проверять валидность целевого объекта | `callback(deleted_widget)` не крашит |
+| **None-safe dict access** | Все `data['key']` для данных из API/БД ДОЛЖНЫ быть `data.get('key', default)` или обёрнуты в try/except | `fill_data({'incomplete': True})` не крашит |
+| **API response format** | Create и update endpoints ДОЛЖНЫ возвращать одинаковый набор ключей. Тест: сравнить ключи ответов | `set(create_keys) == set(update_keys)` |
+| **Thread shared state** | Все shared variables (`_is_online`, `_last_offline_time`) ДОЛЖНЫ быть защищены `threading.Lock/RLock` | Concurrent read/write не вызывает race condition |
+| **SQLite thread-safety** | Все операции с SQLite из фоновых потоков ДОЛЖНЫ использовать mutex или `check_same_thread=False` | Параллельные write+read не вызывают corruption |
+| **datetime serialization** | Все datetime в API ответах ДОЛЖНЫ быть `.isoformat()` строками, не объектами | `json.dumps(response)` не вызывает TypeError |
+
+### 14.2 Расположение тестов
+
+```
+tests/
+  client/test_button_debounce.py      # Декораторы + Qt сигналы
+  client/test_thread_safety.py        # Thread-safety (Qt, SQLite, API client)
+  client/test_none_safety.py          # None-safe dict access, deleted objects
+  backend/test_api_response_format.py # API response consistency
+```
+
+### 14.3 Правило: "Нет теста — нет фикса"
+
+При исправлении любого runtime-краша:
+1. **Сначала** написать тест, воспроизводящий краш (RED)
+2. Применить фикс (GREEN)
+3. Убедиться что тест проходит
+4. Добавить тест в соответствующую категорию
+
+**Валидация:** CI ДОЛЖЕН запускать `pytest tests/client/test_thread_safety.py tests/client/test_button_debounce.py tests/client/test_none_safety.py -v` как отдельный шаг.
+
+## 15. Offline-очередь: только сетевые ошибки
 
 В `_queue_operation()` DataAccess ставить в offline-очередь **ТОЛЬКО** сетевые ошибки (`APIConnectionError`, `APITimeoutError`). Бизнес-ошибки (409 Conflict, 400 Bad Request) **НЕ ДОЛЖНЫ** ставиться в очередь — повторная отправка бессмысленна.
 

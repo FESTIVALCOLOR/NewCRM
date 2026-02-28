@@ -138,6 +138,10 @@ async def update_employee(
     db.commit()
     db.refresh(employee)
 
+    # Cache invalidation при смене роли или должности
+    if 'role' in update_data or 'position' in update_data or 'secondary_position' in update_data:
+        invalidate_perm_cache(employee_id)
+
     # Лог
     log = ActivityLog(
         employee_id=current_user.id,
@@ -176,12 +180,17 @@ async def delete_employee(
     if session_ids:
         db.query(ActivityLog).filter(ActivityLog.session_id.in_(session_ids)).delete(synchronize_session=False)
 
-    # Удаляем stage_executors, payments, salaries, action_history
-    db.query(StageExecutor).filter(StageExecutor.executor_id == employee_id).delete(synchronize_session=False)
-    db.query(StageExecutor).filter(StageExecutor.assigned_by == employee_id).delete(synchronize_session=False)
-    db.query(Payment).filter(Payment.employee_id == employee_id).delete(synchronize_session=False)
-    db.query(Payment).filter(Payment.paid_by == employee_id).update({"paid_by": None}, synchronize_session=False)
-    db.query(Salary).filter(Salary.employee_id == employee_id).delete(synchronize_session=False)
+    # S-07: SET NULL вместо hard delete — сохраняем историю платежей и зарплат
+    db.query(StageExecutor).filter(StageExecutor.executor_id == employee_id).update(
+        {"executor_id": None}, synchronize_session=False)
+    db.query(StageExecutor).filter(StageExecutor.assigned_by == employee_id).update(
+        {"assigned_by": None}, synchronize_session=False)
+    db.query(Payment).filter(Payment.employee_id == employee_id).update(
+        {"employee_id": None}, synchronize_session=False)
+    db.query(Payment).filter(Payment.paid_by == employee_id).update(
+        {"paid_by": None}, synchronize_session=False)
+    db.query(Salary).filter(Salary.employee_id == employee_id).update(
+        {"employee_id": None}, synchronize_session=False)
     db.query(ActionHistory).filter(ActionHistory.user_id == employee_id).delete(synchronize_session=False)
 
     # Обнуляем FK ссылки в crm_cards и supervision_cards
@@ -214,7 +223,7 @@ async def get_permission_definitions(
 
 @router.get("/permissions/role-matrix", response_model=RoleMatrixResponse)
 async def get_role_matrix(
-    current_user: Employee = Depends(require_permission("employees.update")),
+    current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Получить текущую матрицу прав по ролям"""
@@ -295,7 +304,7 @@ async def update_permissions(
 ):
     """Установить права сотрудника (полная замена)"""
     # Только Руководитель / admin / director могут менять права
-    if current_user.role not in SUPERUSER_ROLES and current_user.role != 'Руководитель студии':
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
 
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
@@ -325,7 +334,7 @@ async def reset_permissions_to_defaults(
     db: Session = Depends(get_db)
 ):
     """Сбросить права до дефолтных по роли"""
-    if current_user.role not in SUPERUSER_ROLES and current_user.role != 'Руководитель студии':
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
 
     employee = db.query(Employee).filter(Employee.id == employee_id).first()

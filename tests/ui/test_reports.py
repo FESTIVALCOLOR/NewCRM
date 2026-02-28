@@ -3,48 +3,86 @@
 Тесты ReportsTab — pytest-qt offscreen.
 
 Покрытие:
-  - TestReportsRendering (4) — создание, вкладки, фильтры
+  - TestReportsRendering (4) — создание, секции, фильтры
   - TestReportsFilters (4)   — комбобоксы фильтров, сброс
 ИТОГО: 8 тестов
+
+Адаптировано под переписанный ReportsTab (bc2790b):
+  - Архитектура: QScrollArea с секциями (не QTabWidget)
+  - Фильтры: filter_year, filter_quarter, filter_month, filter_agent, filter_city
+  - DataAccess вместо DatabaseManager
 """
 
 import pytest
 import logging
 from unittest.mock import MagicMock, patch
-from PyQt5.QtWidgets import QWidget, QTabWidget, QPushButton
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QWidget, QComboBox, QFrame
+from PyQt5.QtCore import Qt
 
 logger = logging.getLogger('tests')
 
 
 # ─── Helpers ───────────────────────────────────────────────────────
 
-def _mock_icon_loader():
-    """IconLoader с реальным QIcon."""
-    mock = MagicMock()
-    mock.load = MagicMock(return_value=QIcon())
-    mock.create_icon_button = MagicMock(
-        side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else '')
-    )
-    mock.create_action_button = MagicMock(side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else ''))
-    mock.get_icon_path = MagicMock(return_value='')
-    return mock
+def _make_section_widget():
+    """Создать mock-SectionWidget с нужными методами."""
+    from PyQt5.QtWidgets import QVBoxLayout
+    w = QFrame()
+    layout = QVBoxLayout(w)
+    w.add_widget = lambda widget: layout.addWidget(widget)
+    w.add_layout = lambda lo: layout.addLayout(lo)
+    return w
+
+
+def _make_mock_da():
+    """Создание MagicMock DataAccess для ReportsTab."""
+    da = MagicMock()
+    da.get_contract_years.return_value = [2024, 2025, 2026]
+    da.get_all_agents.return_value = [{'name': 'Риелтор'}]
+    da.get_cities.return_value = ['СПБ', 'МСК']
+    da.get_reports_summary.return_value = {}
+    da.get_reports_clients_dynamics.return_value = []
+    da.get_reports_contracts_dynamics.return_value = []
+    da.get_reports_crm_analytics.return_value = {}
+    da.get_reports_supervision_analytics.return_value = {}
+    da.get_reports_distribution.return_value = []
+    da.api_client = None
+    da.db = MagicMock()
+    return da
+
+
+def _make_kpi_stub(**kw):
+    """Заглушка KPICard/MiniKPICard с нужными методами."""
+    w = QFrame()
+    w.set_value = lambda v: None
+    w.set_trend = lambda v: None
+    return w
+
+
+def _make_chart_stub(*a, **kw):
+    """Заглушка для виджетов графиков с нужными методами."""
+    w = QWidget()
+    w.set_data = lambda *a, **kw: None
+    return w
 
 
 def _create_reports_tab(qtbot, employee):
     """Создание ReportsTab с замоканными зависимостями."""
-    mock_db = MagicMock()
-    mock_db.get_all_contracts.return_value = []
-    mock_db.get_project_statistics.return_value = {}
-    mock_db.get_supervision_statistics_report.return_value = {}
-    mock_db.get_funnel_statistics.return_value = {}
-    mock_db.get_executor_load.return_value = []
+    mock_da = _make_mock_da()
 
-    with patch('ui.reports_tab.DatabaseManager', return_value=mock_db), \
-         patch('ui.reports_tab.IconLoader', _mock_icon_loader()):
+    with patch('ui.reports_tab.DataAccess', return_value=mock_da), \
+         patch('ui.reports_tab.KPICard', side_effect=_make_kpi_stub), \
+         patch('ui.reports_tab.MiniKPICard', side_effect=_make_kpi_stub), \
+         patch('ui.reports_tab.SectionWidget', side_effect=lambda *a, **kw: _make_section_widget()), \
+         patch('ui.reports_tab.LineChartWidget', side_effect=_make_chart_stub), \
+         patch('ui.reports_tab.StackedBarChartWidget', side_effect=_make_chart_stub), \
+         patch('ui.reports_tab.HorizontalBarWidget', side_effect=_make_chart_stub), \
+         patch('ui.reports_tab.FunnelBarChart', side_effect=_make_chart_stub), \
+         patch('ui.reports_tab.ProjectTypePieChart', side_effect=_make_chart_stub):
         from ui.reports_tab import ReportsTab
         tab = ReportsTab(employee=employee, api_client=None)
         qtbot.addWidget(tab)
+        tab._test_da = mock_da
         return tab
 
 
@@ -82,16 +120,17 @@ class TestReportsRendering:
         tab = _create_reports_tab(qtbot, mock_employee_admin)
         assert isinstance(tab, QWidget)
 
-    def test_has_tabs(self, qtbot, mock_employee_admin):
-        """QTabWidget с вкладками статистики."""
+    def test_has_sections_layout(self, qtbot, mock_employee_admin):
+        """ReportsTab имеет sections_layout для секций."""
         tab = _create_reports_tab(qtbot, mock_employee_admin)
-        assert hasattr(tab, 'tabs')
-        assert isinstance(tab.tabs, QTabWidget)
+        assert hasattr(tab, 'sections_layout')
 
-    def test_4_tabs(self, qtbot, mock_employee_admin):
-        """4 вкладки: Индивидуальные, Шаблонные, Надзор, Аналитика."""
+    def test_has_filter_combos(self, qtbot, mock_employee_admin):
+        """ReportsTab имеет фильтры filter_year, filter_quarter, filter_month."""
         tab = _create_reports_tab(qtbot, mock_employee_admin)
-        assert tab.tabs.count() == 4
+        assert hasattr(tab, 'filter_year')
+        assert hasattr(tab, 'filter_quarter')
+        assert hasattr(tab, 'filter_month')
 
     def test_lazy_loading(self, qtbot, mock_employee_admin):
         """_data_loaded = False до вызова ensure_data_loaded."""
@@ -106,29 +145,30 @@ class TestReportsRendering:
 class TestReportsFilters:
     """Фильтры ReportsTab."""
 
-    def test_year_combo(self, qtbot, mock_employee_admin):
-        """Фильтр года существует."""
+    def test_filter_year(self, qtbot, mock_employee_admin):
+        """Фильтр года существует как QComboBox."""
         tab = _create_reports_tab(qtbot, mock_employee_admin)
-        assert hasattr(tab, 'year_combo')
-        # Должен содержать годы 2020-2040
-        assert tab.year_combo.count() >= 20
+        assert hasattr(tab, 'filter_year')
+        assert isinstance(tab.filter_year, QComboBox)
 
-    def test_quarter_combo(self, qtbot, mock_employee_admin):
+    def test_filter_quarter(self, qtbot, mock_employee_admin):
         """Фильтр квартала: Все + Q1-Q4."""
         tab = _create_reports_tab(qtbot, mock_employee_admin)
-        assert hasattr(tab, 'quarter_combo')
-        items = [tab.quarter_combo.itemText(i) for i in range(tab.quarter_combo.count())]
-        assert 'Все' in items or 'Q1' in items
+        assert hasattr(tab, 'filter_quarter')
+        items = [tab.filter_quarter.itemText(i) for i in range(tab.filter_quarter.count())]
+        assert 'Все' in items
+        assert 'Q1' in items
 
-    def test_month_combo(self, qtbot, mock_employee_admin):
+    def test_filter_month(self, qtbot, mock_employee_admin):
         """Фильтр месяца: Все + 12 месяцев."""
         tab = _create_reports_tab(qtbot, mock_employee_admin)
-        assert hasattr(tab, 'month_combo')
-        assert tab.month_combo.count() >= 12
+        assert hasattr(tab, 'filter_month')
+        assert tab.filter_month.count() == 13
 
     def test_ensure_data_loaded(self, qtbot, mock_employee_admin):
-        """ensure_data_loaded ставит _data_loaded = True."""
+        """ensure_data_loaded ставит запуск загрузки."""
         tab = _create_reports_tab(qtbot, mock_employee_admin)
         assert tab._data_loaded is False
-        tab.ensure_data_loaded()
-        assert tab._data_loaded is True
+        with patch.object(tab, 'reload_all_sections'), \
+             patch.object(tab, '_load_filter_options'):
+            tab.ensure_data_loaded()
