@@ -307,8 +307,9 @@ class TestRolePermissions:
         if create_resp.status_code in (200, 201):
             agent_id = create_resp.json()["id"]
         else:
-            # Агент уже существует — ищем его
-            list_resp = api_get(api_base, "/api/v1/agents", admin_headers)
+            # Агент уже существует (возможно удалён) — ищем среди всех включая удалённых
+            list_resp = api_get(api_base, "/api/v1/agents", admin_headers,
+                                params={"include_deleted": "true"})
             agents = list_resp.json()
             agent = next(
                 (a for a in agents if a.get("name") == f"{TEST_PREFIX}АГЕНТ_ДЛЯ_УДАЛЕНИЯ_РОЛЬ"),
