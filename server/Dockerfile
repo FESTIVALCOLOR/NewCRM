@@ -4,10 +4,11 @@ FROM python:3.11-slim
 # Рабочая директория
 WORKDIR /app
 
-# Установка зависимостей системы
+# Установка зависимостей системы + шрифты с кириллицей
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Копирование зависимостей

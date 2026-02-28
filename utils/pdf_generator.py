@@ -1,5 +1,21 @@
+"""
+DEPRECATED: Используйте utils.pdf_utils вместо этого модуля.
+
+Модуль сохранён для обратной совместимости. Все новые экспорты PDF
+должны использовать build_table_pdf() из utils.pdf_utils.
+"""
+import warnings
+warnings.warn(
+    "utils.pdf_generator устарел. Используйте utils.pdf_utils.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from datetime import datetime
 import os
+import logging
+
+_logger = logging.getLogger(__name__)
 
 # Опциональный импорт reportlab
 try:
@@ -13,7 +29,7 @@ try:
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
-    print("[WARN] reportlab не установлен. Генерация PDF отчетов будет недоступна.")
+    _logger.warning("reportlab не установлен. Генерация PDF отчетов будет недоступна.")
 
 # Единый стиль PDF отчётов FestivalColor
 PDF_STYLE = {
@@ -68,7 +84,7 @@ class PDFGenerator:
                 # Для Mac/Linux или если Arial не найден
                 self.font = 'Helvetica'
         except Exception as e:
-            print(f"Предупреждение: Не удалось загрузить шрифт Arial. Используется Helvetica. {e}")
+            _logger.warning("Не удалось загрузить шрифт Arial. Используется Helvetica: %s", e)
             self.font = 'Helvetica'
     
     def generate_report(self, filename, title, data, headers):
@@ -158,9 +174,9 @@ class PDFGenerator:
         # Сборка документа
         try:
             doc.build(elements)
-            print(f"PDF отчет создан: {filename}")
+            _logger.info("PDF отчет создан: %s", filename)
         except Exception as e:
-            print(f"Ошибка создания PDF: {e}")
+            _logger.error("Ошибка создания PDF: %s", e)
             raise
         
         return filename
@@ -268,9 +284,9 @@ class PDFGenerator:
         # Сборка документа
         try:
             doc.build(elements)
-            print(f"Общий отчет создан: {filename}")
+            _logger.info("Общий отчет создан: %s", filename)
         except Exception as e:
-            print(f"Ошибка создания общего отчета: {e}")
+            _logger.error("Ошибка создания общего отчета: %s", e)
             raise
         
         return filename

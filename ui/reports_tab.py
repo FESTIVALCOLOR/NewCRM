@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRect, QSize, QPoint
 from PyQt5.QtGui import QFont
 
+from ui.custom_message_box import CustomMessageBox
 from ui.dashboard_widget import KPICard, MiniKPICard
 from ui.chart_widget import (
     SectionWidget, LineChartWidget, StackedBarChartWidget,
@@ -24,6 +25,10 @@ from ui.chart_widget import (
 )
 from utils.data_access import DataAccess
 from utils.resource_path import resource_path
+from utils.pdf_utils import (
+    register_fonts, make_page_footer, pdf_section_header, pdf_hr,
+    grab_widget_png, chart_to_png, fit_image, open_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +170,9 @@ class ReportsTab(QWidget):
         self.sections_layout = QVBoxLayout(scroll_content)
         self.sections_layout.setContentsMargins(16, 16, 16, 16)
         self.sections_layout.setSpacing(16)
+
+        # Секции (ссылки для PDF-экспорта скриншотами)
+        self._pdf_sections = []
 
         # Секция 1: KPI-карточки
         self._create_kpi_section()
@@ -338,6 +346,7 @@ class ReportsTab(QWidget):
 
         section.add_layout(self.kpi_layout)
         self.sections_layout.addWidget(section)
+        self._pdf_sections.append(section)
 
     def _make_kpi(self, title, icon_name, color):
         """Создать KPI-карточку со значением-заглушкой"""
@@ -388,9 +397,12 @@ class ReportsTab(QWidget):
         grid.addWidget(self.chart_clients_new_vs_returning, 1, 1)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
 
         section.add_layout(grid)
         self.sections_layout.addWidget(section)
+        self._pdf_sections.append(section)
 
     # ===================================================================
     # СЕКЦИЯ 3: ДОГОВОРЫ
@@ -439,9 +451,13 @@ class ReportsTab(QWidget):
         grid.addWidget(self.chart_contracts_amount_by_agent, 2, 1)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
+        grid.setRowStretch(2, 1)
 
         section.add_layout(grid)
         self.sections_layout.addWidget(section)
+        self._pdf_sections.append(section)
 
     # ===================================================================
     # СЕКЦИЯ 4: CRM АНАЛИТИКА
@@ -481,6 +497,7 @@ class ReportsTab(QWidget):
 
         section.add_widget(self.crm_tabs)
         self.sections_layout.addWidget(section)
+        self._pdf_sections.append(section)
 
     def _create_crm_subtab(self, project_type):
         """Создать содержимое одной подвкладки CRM"""
@@ -507,19 +524,35 @@ class ReportsTab(QWidget):
         mini_flow_w.setLayout(mini_flow)
         layout.addWidget(mini_flow_w)
 
-        # Воронка — в строку
+        # Воронка — на всю ширину, фиксированная высота
         funnel = FunnelBarChart()
+        funnel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(funnel)
 
-        # Время стадий vs норматив — на всю ширину (отдельный ряд)
+        # Время стадий vs норматив — в горизонтальном скролле для большого числа стадий
         stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
-        layout.addWidget(stage_duration)
+        stage_scroll = QScrollArea()
+        stage_scroll.setWidgetResizable(False)
+        stage_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        stage_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        stage_scroll.setWidget(stage_duration)
+        stage_scroll.setFrameShape(QFrame.NoFrame)
+        stage_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        stage_scroll.setMinimumHeight(480)
+        stage_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        stage_scroll.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        layout.addWidget(stage_scroll)
+
+        # Прижимаем контент к верху — spacer забирает лишнюю высоту
+        layout.addStretch(1)
 
         return {
             "widget": widget,
             "mini_cards": mini_cards,
+            "mini_flow_w": mini_flow_w,
             "funnel": funnel,
             "stage_duration": stage_duration,
+            "stage_scroll": stage_scroll,
         }
 
     # ===================================================================
@@ -562,29 +595,38 @@ class ReportsTab(QWidget):
         grid.addWidget(self.chart_sv_cities, 1, 0)
         grid.addWidget(self.chart_sv_agents, 1, 1)
         grid.addWidget(self.chart_sv_project_types, 2, 0)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
 
-        # Мини-KPI: экономия, дефекты, визиты — FlowLayout
+        # Мини-KPI: экономия, дефекты, визиты — вертикально рядом с Pie chart
         self._mini_sv_kpi = {}
-        sv_kpi_flow = FlowLayout(spacing=8)
-        items = [
+        sv_kpi_layout = QVBoxLayout()
+        sv_kpi_layout.setSpacing(0)
+        sv_kpi_layout.setContentsMargins(0, 0, 0, 0)
+        sv_kpi_layout.addStretch(1)
+        for key, title, color in [
             ("savings", "Экономия бюджета", "#4CAF50"),
             ("defects", "Дефекты", "#FF9800"),
             ("visits", "Визиты на объект", "#2196F3"),
-        ]
-        for key, title, color in items:
+        ]:
             card = MiniKPICard(title=title, border_color=color)
             card.set_value("—")
             self._mini_sv_kpi[key] = card
-            sv_kpi_flow.addWidget(card)
+            sv_kpi_layout.addWidget(card)
+            sv_kpi_layout.addStretch(1)
 
-        kpi_widget = QWidget()
-        kpi_widget.setLayout(sv_kpi_flow)
-        grid.addWidget(kpi_widget, 2, 1)
+        sv_kpi_widget = QWidget()
+        sv_kpi_widget.setLayout(sv_kpi_layout)
+        grid.addWidget(sv_kpi_widget, 2, 1)
+
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
+        grid.setRowStretch(2, 1)
 
         section.add_layout(grid)
+
         self.sections_layout.addWidget(section)
+        self._pdf_sections.append(section)
 
     # ===================================================================
     # ЗАГРУЗКА ДАННЫХ
@@ -1071,24 +1113,33 @@ class ReportsTab(QWidget):
 
             # Время стадий vs норматив: grouped bar
             durations = data.get("stage_durations", []) or []
+            # Убрать "ДАТА НАЧАЛА РАЗРАБОТКИ" из диаграммы
+            durations = [d for d in durations
+                         if not d.get("stage", "").upper().startswith("ДАТА НАЧАЛА")]
             if durations:
-                stage_labels = [d.get("stage", "")[:25] for d in durations]
+                stage_labels = [d.get("stage", "") for d in durations]
                 subtab["stage_duration"].set_data(
                     stage_labels,
                     [
-                        {
-                            "label": "Факт (дни)",
-                            "values": [d.get("avg_actual_days", 0) or 0 for d in durations],
-                            "color": "#F57C00"
-                        },
                         {
                             "label": "Норматив",
                             "values": [d.get("norm_days", 0) or 0 for d in durations],
                             "color": "#4CAF50"
                         },
+                        {
+                            "label": "Факт (дни)",
+                            "values": [d.get("avg_actual_days", 0) or 0 for d in durations],
+                            "color": "#F57C00"
+                        },
                     ],
-                    stacked=False
+                    stacked=False,
+                    highlight_prefixes=["СТАДИЯ", "ЭТАП", "ДАТА"]
                 )
+                # Прокрутить скролл на середину графика
+                scroll = subtab.get("stage_scroll")
+                if scroll:
+                    QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
+                        s.horizontalScrollBar().maximum() // 2))
 
     def _update_supervision_section(self):
         """Обновить секцию авторского надзора"""
@@ -1145,7 +1196,7 @@ class ReportsTab(QWidget):
         budget = sv.get("budget", {}) or {}
         if budget.get("total_planned"):
             self.chart_sv_budget.set_data(
-                ["Бюджет"],
+                [""],
                 [
                     {
                         "label": "План",
@@ -1184,17 +1235,16 @@ class ReportsTab(QWidget):
             self.chart_sv_project_types.set_data(ind_count, tmpl_count, 0)
 
         # Мини-KPI: экономия, дефекты, визиты
+        budget = sv.get("budget", {}) or {}
         savings = budget.get("total_savings", 0) or 0
         savings_pct = budget.get("savings_pct", 0) or 0
         self._mini_sv_kpi["savings"].set_value(
             f"{savings:,.0f}\u00a0руб ({savings_pct:.0f}%)".replace(",", "\u00a0")
         )
-
         defects = sv.get("defects", {}) or {}
         self._mini_sv_kpi["defects"].set_value(
             f"{defects.get('found', 0) or 0}\u00a0/\u00a0{defects.get('resolved', 0) or 0}"
         )
-
         self._mini_sv_kpi["visits"].set_value(str(sv.get("site_visits", 0) or 0))
 
     # ===================================================================
@@ -1228,340 +1278,425 @@ class ReportsTab(QWidget):
         except (ValueError, TypeError):
             return str(val) + suffix
 
+    # ===================================================================
+    # PDF-ЭКСПОРТ (ReportLab Platypus)
+    # ===================================================================
+
+    def _chart_to_rl_image(self, chart, width_mm, height_mm=None,
+                           max_height_mm=None, dpi=150):
+        """Рендер matplotlib-графика в ReportLab Image через BytesIO.
+
+        Если height_mm задан — figure ресайзится к целевым пропорциям,
+        обеспечивая одинаковую высоту парных графиков.
+
+        Args:
+            chart: ChartBase виджет с matplotlib figure
+            width_mm: желаемая ширина в мм
+            height_mm: желаемая высота в мм (None = авто из пропорций figure)
+            max_height_mm: максимальная высота в мм (ограничение сверху)
+            dpi: разрешение PNG
+        Returns:
+            reportlab.platypus.Image или None
+        """
+        import io
+        from reportlab.platypus import Image as RLImage
+        from reportlab.lib.units import mm
+
+        if not hasattr(chart, 'canvas') or not chart.canvas:
+            return None
+        if not hasattr(chart, 'figure') or not chart.figure.axes:
+            return None
+
+        buf = io.BytesIO()
+        fig = chart.figure
+        orig_size = fig.get_size_inches()
+        orig_dpi = fig.get_dpi()
+
+        try:
+            # Целевые размеры в дюймах
+            target_w = width_mm / 25.4
+            if height_mm:
+                target_h = height_mm / 25.4
+            else:
+                aspect = orig_size[1] / orig_size[0] if orig_size[0] > 0 else 0.6
+                target_h = target_w * aspect
+
+            # Ограничение максимальной высоты
+            if max_height_mm:
+                max_h = max_height_mm / 25.4
+                if target_h > max_h:
+                    target_h = max_h
+
+            # Временно ресайзим figure для консистентного рендера
+            fig.set_size_inches(target_w, target_h)
+            try:
+                fig.tight_layout(pad=0.8, h_pad=0.6, w_pad=0.6)
+            except Exception:
+                pass
+
+            fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight',
+                        facecolor='white', edgecolor='none', pad_inches=0.04)
+            buf.seek(0)
+
+            w = width_mm * mm
+            h_mm = height_mm if height_mm else width_mm * (target_h / target_w)
+            if max_height_mm and h_mm > max_height_mm:
+                h_mm = max_height_mm
+            h = h_mm * mm
+
+            return RLImage(buf, width=w, height=h)
+        except Exception as e:
+            logger.debug(f"Не удалось отрендерить график в PDF: {e}")
+            return None
+        finally:
+            fig.set_size_inches(orig_size)
+            fig.set_dpi(orig_dpi)
+            try:
+                fig.tight_layout(pad=1.2, h_pad=1.0, w_pad=1.0)
+            except Exception:
+                pass
+            chart.canvas.draw()
+
+    def _is_wide_chart(self, chart):
+        """Определить нужен ли график на всю ширину.
+
+        Широкие: FunnelBarChart + "Время стадий" (полная ширина в UI).
+        Остальные (включая HorizontalBarWidget, StackedBar) — парные, как в UI grid.
+        """
+        if isinstance(chart, FunnelBarChart):
+            return True
+        # "Время стадий vs норматив" — отдельный ряд на всю ширину в программе
+        if isinstance(chart, StackedBarChartWidget):
+            if hasattr(chart, 'chart_title') and 'Время стадий' in (chart.chart_title or ''):
+                return True
+        return False
+
+    def _pdf_chart_flowables(self, charts, page_w_mm):
+        """Раскладка графиков: парные по 2 в строку, широкие на всю ширину.
+
+        Стандарт размеров:
+        - Парные графики: col_w x HALF_H мм (одинаковая высота для выравнивания осей)
+        - Динамические графики (Funnel, HorizontalBar): авто-высота из пропорций
+        - Широкие графики: page_w x авто-высота
+
+        Args:
+            charts: список ChartBase виджетов
+            page_w_mm: доступная ширина страницы в мм
+        Returns:
+            list[Flowable] для добавления в elements
+        """
+        from reportlab.platypus import Table as RLTable, TableStyle as RLTableStyle, Spacer
+        from reportlab.lib.units import mm
+
+        GAP_MM = 6
+        col_w = (page_w_mm - GAP_MM) / 2
+        HALF_H = int(col_w * 0.45)  # стандартная высота парных (~60мм для landscape)
+        _TABLE_STYLE = RLTableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ])
+
+        # Максимальная высота для широких графиков (не занимать всю страницу)
+        WIDE_MAX_H = 90  # мм
+
+        def _is_dynamic(c):
+            """Динамическая высота зависит от количества данных"""
+            return isinstance(c, (FunnelBarChart, HorizontalBarWidget))
+
+        elements = []
+        pending = None
+
+        for chart in charts:
+            is_wide = self._is_wide_chart(chart)
+
+            if is_wide:
+                if pending is not None:
+                    row = RLTable([[pending, '']], colWidths=[col_w * mm, col_w * mm])
+                    row.setStyle(_TABLE_STYLE)
+                    elements.append(row)
+                    elements.append(Spacer(1, 2 * mm))
+                    pending = None
+
+                # Широкие: авто-высота с ограничением сверху
+                img = self._chart_to_rl_image(
+                    chart, width_mm=page_w_mm - 4, max_height_mm=WIDE_MAX_H)
+                if img:
+                    elements.append(img)
+                    elements.append(Spacer(1, 2 * mm))
+            else:
+                # Парные: фиксированная высота для обычных и Pie, авто для горизонтальных баров
+                h = None if _is_dynamic(chart) else HALF_H
+                img = self._chart_to_rl_image(chart, width_mm=col_w - 2, height_mm=h)
+                if not img:
+                    continue
+                if pending is None:
+                    pending = img
+                else:
+                    row = RLTable([[pending, img]], colWidths=[col_w * mm, col_w * mm])
+                    row.setStyle(_TABLE_STYLE)
+                    elements.append(row)
+                    elements.append(Spacer(1, 2 * mm))
+                    pending = None
+
+        if pending is not None:
+            row = RLTable([[pending, '']], colWidths=[col_w * mm, col_w * mm])
+            row.setStyle(_TABLE_STYLE)
+            elements.append(row)
+            elements.append(Spacer(1, 2 * mm))
+
+        return elements
+
+    def _pdf_kpi_row(self, items, font_name, page_w_mm):
+        """KPI-карточки с цветной левой рамкой через ReportLab Table.
+
+        Args:
+            items: list of (label, value, hex_color)
+            font_name: зарегистрированный шрифт
+            page_w_mm: доступная ширина страницы в мм
+        Returns:
+            Table flowable
+        """
+        from reportlab.platypus import Table as RLTable, TableStyle as RLTableStyle, Paragraph
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+
+        label_style = ParagraphStyle(
+            'KPILabel', fontName=font_name, fontSize=7,
+            textColor=colors.HexColor('#888888'), leading=9,
+        )
+        value_style = ParagraphStyle(
+            'KPIValue', fontName=font_name, fontSize=11,
+            textColor=colors.HexColor('#333333'), leading=14,
+        )
+
+        n = len(items)
+        card_w = page_w_mm / n * mm
+
+        # Каждая ячейка — вложенная таблица [label, value]
+        cells = []
+        for label, value, _ in items:
+            inner = RLTable(
+                [[Paragraph(label, label_style)],
+                 [Paragraph(f'<b>{value}</b>', value_style)]],
+                colWidths=[card_w - 10 * mm],
+            )
+            inner.setStyle(RLTableStyle([
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ]))
+            cells.append(inner)
+
+        table = RLTable([cells], colWidths=[card_w] * n)
+
+        style_cmds = [
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FAFAFA')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#E0E0E0')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E0E0E0')),
+        ]
+        for i, (_, _, hex_color) in enumerate(items):
+            style_cmds.append(
+                ('LINEBEFORE', (i, 0), (i, 0), 3, colors.HexColor(hex_color))
+            )
+        table.setStyle(RLTableStyle(style_cmds))
+        return table
+
+    def _grab_crm_both_tabs(self, scale=3.0):
+        """Захватить обе вкладки CRM — покомпонентно (mini cards, funnel, stage chart).
+        Returns: list of (label, images_list) где images_list = [(buf, w_px, h_px), ...]
+        """
+        from PyQt5.QtWidgets import QApplication
+        results = []
+        saved_idx = self.crm_tabs.currentIndex()
+        for idx, subtab in enumerate([self._crm_individual, self._crm_template]):
+            self.crm_tabs.setCurrentIndex(idx)
+            QApplication.processEvents()
+            QApplication.processEvents()
+            label = self.crm_tabs.tabText(idx)
+            images = []
+
+            # 1. Mini KPI cards
+            mini_flow_w = subtab.get("mini_flow_w")
+            if mini_flow_w and mini_flow_w.isVisible():
+                data = grab_widget_png(mini_flow_w, scale)
+                if data:
+                    images.append(data)
+
+            # 2. Funnel chart — через figure.savefig() (лучшее качество)
+            funnel = subtab.get("funnel")
+            if funnel and hasattr(funnel, 'figure') and funnel.figure.axes:
+                chart_data = chart_to_png(funnel, dpi=300)
+                if chart_data:
+                    images.append(chart_data)
+
+            # 3. Stage duration chart — через figure.savefig() (полный, без обрезки скроллом)
+            stage_chart = subtab.get("stage_duration")
+            if stage_chart and hasattr(stage_chart, 'figure') and stage_chart.figure.axes:
+                chart_data = chart_to_png(stage_chart, dpi=300)
+                if chart_data:
+                    images.append(chart_data)
+
+            if images:
+                results.append((label, images))
+        self.crm_tabs.setCurrentIndex(saved_idx)
+        return results
+
     def export_to_pdf(self):
-        """Экспорт стилизованного сводного отчёта в PDF"""
+        """Экспорт отчёта в PDF — скриншоты секций (pixel-perfect как на экране)"""
         try:
             import os
-            import base64
             from datetime import datetime
-            from PyQt5.QtPrintSupport import QPrinter
-            from PyQt5.QtGui import QTextDocument
+            from reportlab.platypus import (
+                SimpleDocTemplate, Paragraph, Spacer,
+                Image as RLImage, CondPageBreak
+            )
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib import colors
+            from reportlab.lib.units import mm
+
+            date_str = datetime.now().strftime('%d.%m.%Y')
+            default_name = f"Отчеты и статистика от {date_str}"
 
             filename, _ = QFileDialog.getSaveFileName(
-                self, "Сохранить отчёт", "report.pdf", "PDF файлы (*.pdf)"
+                self, "Сохранить отчёт", default_name, "PDF файлы (*.pdf)"
             )
             if not filename:
                 return
 
-            printer = QPrinter(QPrinter.ScreenResolution)
-            printer.setOutputFormat(QPrinter.PdfFormat)
-            printer.setOutputFileName(filename)
-            printer.setPageMargins(15, 12, 15, 12, QPrinter.Millimeter)
+            font_name, font_bold = register_fonts()
 
-            # Логотип в base64
-            logo_b64 = ""
+            # --- Landscape A4 ---
+            page_size = landscape(A4)
+            MARGIN_LR = 10 * mm
+            MARGIN_TOP = 8 * mm
+            MARGIN_BOT = 12 * mm
+            PAGE_W_MM = (page_size[0] - 2 * MARGIN_LR) / mm
+            PAGE_H_MM = (page_size[1] - MARGIN_TOP - MARGIN_BOT) / mm
+            RENDER_SCALE = 3.0  # 3x для чёткого текста в PDF
+
+            doc = SimpleDocTemplate(
+                filename,
+                pagesize=page_size,
+                leftMargin=MARGIN_LR,
+                rightMargin=MARGIN_LR,
+                topMargin=MARGIN_TOP,
+                bottomMargin=MARGIN_BOT,
+            )
+
+            style_title = ParagraphStyle(
+                'RptTitle', fontName=font_bold, fontSize=16,
+                textColor=colors.HexColor('#333333'),
+                alignment=1, spaceAfter=2 * mm,
+            )
+            style_filter = ParagraphStyle(
+                'RptFilter', fontName=font_name, fontSize=8,
+                textColor=colors.HexColor('#666666'),
+                alignment=1, spaceAfter=3 * mm,
+                backColor=colors.HexColor('#F8F9FA'),
+            )
+
+            footer_cb = make_page_footer(page_size, font_name)
+
+            elements = []
+
+            # === ШАПКА ===
             logo_path = resource_path("resources/logo.png")
             if os.path.exists(logo_path):
-                with open(logo_path, "rb") as f:
-                    logo_b64 = base64.b64encode(f.read()).decode("utf-8")
+                try:
+                    logo = RLImage(logo_path, width=18 * mm, height=18 * mm)
+                    logo.hAlign = 'CENTER'
+                    elements.append(logo)
+                    elements.append(Spacer(1, 2 * mm))
+                except Exception:
+                    pass
 
-            # Собираем текущие фильтры для отображения
+            elements.append(Paragraph(
+                'Interior Studio — Отчёты и Статистика', style_title
+            ))
+            elements.append(pdf_hr(PAGE_W_MM))
+            elements.append(Spacer(1, 2 * mm))
+
             filters_info = []
             for label, combo in [
-                ("Год", self.filter_year),
-                ("Квартал", self.filter_quarter),
-                ("Месяц", self.filter_month),
-                ("Тип агента", self.filter_agent),
-                ("Город", self.filter_city),
-                ("Тип проекта", self.filter_project_type),
+                ("Год", self.filter_year), ("Квартал", self.filter_quarter),
+                ("Месяц", self.filter_month), ("Тип агента", self.filter_agent),
+                ("Город", self.filter_city), ("Тип проекта", self.filter_project_type),
             ]:
                 val = combo.currentText()
                 if val and val != "Все":
                     filters_info.append(f"<b>{label}:</b> {val}")
             filter_text = " | ".join(filters_info) if filters_info else "Все данные (без фильтров)"
+            elements.append(Paragraph(
+                f'<b>Фильтры:</b> {filter_text} | '
+                f'<b>Дата:</b> {datetime.now().strftime("%d.%m.%Y %H:%M")}',
+                style_filter
+            ))
+            elements.append(Spacer(1, 3 * mm))
 
-            s = self._cache.get("summary", {})
+            # === СЕКЦИИ — скриншоты виджетов (pixel-perfect) ===
+            crm_section_idx = 3  # CRM — 4-я секция (0-indexed)
+            logger.info(f"PDF: захват {len(self._pdf_sections)} секций")
 
-            # CSS-стили для PDF (увеличенные шрифты для читаемости)
-            css = """
-            <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; font-size: 14px; }
-                .header { text-align: center; margin-bottom: 16px; padding-bottom: 10px;
-                          border-bottom: 3px solid #ffd93c; }
-                .header h1 { font-size: 22px; color: #333; margin: 6px 0 4px 0; }
-                .filter-bar { background-color: #F8F9FA; border: 1px solid #E0E0E0;
-                              padding: 10px 14px; margin-bottom: 16px;
-                              font-size: 13px; color: #444; }
-                .section-title { font-size: 18px; font-weight: bold; color: #333;
-                                 border-left: 5px solid #ffd93c; padding-left: 10px;
-                                 margin: 20px 0 10px 0; }
-                .kpi-row { margin-bottom: 8px; }
-                .kpi-card { display: inline-block; border: 1px solid #E8E8E8;
-                            padding: 8px 14px; margin: 3px; min-width: 120px; }
-                .kpi-label { font-size: 11px; color: #888; }
-                .kpi-value { font-size: 18px; font-weight: bold; color: #333; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-                th { background-color: #F5F5F5; border: 1px solid #E0E0E0;
-                     padding: 7px 10px; font-size: 13px; color: #555;
-                     text-align: left; font-weight: bold; }
-                td { border: 1px solid #E8E8E8; padding: 6px 10px;
-                     font-size: 13px; }
-                .accent-orange { border-left-color: #F57C00; border-left-width: 5px; }
-                .accent-green { border-left-color: #388E3C; border-left-width: 5px; }
-                .accent-blue { border-left-color: #2196F3; border-left-width: 5px; }
-                .accent-red { border-left-color: #C62828; border-left-width: 5px; }
-                .footer { margin-top: 16px; padding-top: 8px;
-                          border-top: 1px solid #E0E0E0; font-size: 11px;
-                          color: #999; text-align: center; }
-            </style>
-            """
+            # Доступная высота на странице (с запасом на footer/spacers)
+            safe_h_mm = PAGE_H_MM - 15
 
-            # Шапка с логотипом (фиксированный размер 60px)
-            logo_html = ""
-            if logo_b64:
-                logo_html = f'<img src="data:image/png;base64,{logo_b64}" width="60" height="60" /><br/>'
-            header = f"""
-            <div class="header">
-                {logo_html}
-                <h1>Interior Studio - Отчёты и Статистика</h1>
-            </div>
-            <div class="filter-bar">
-                <b>Фильтры:</b> {filter_text}<br/>
-                <b>Дата формирования:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}
-            </div>
-            """
+            for idx, section in enumerate(self._pdf_sections):
+                if idx == crm_section_idx:
+                    # CRM: заголовок + каждый таб отдельно
+                    elements.append(CondPageBreak(40 * mm))
+                    elements.append(pdf_section_header(
+                        'CRM Аналитика', font_bold))
+                    elements.append(Spacer(1, 3 * mm))
+                    # CRM: mini cards (~15мм) + funnel (~55мм) + stage (~95мм) = ~170мм ≈ 1 стр
+                    CRM_CARDS_H = 18   # мм — мини-карточки
+                    CRM_FUNNEL_H = 55  # мм — воронка
+                    CRM_STAGE_H = 95   # мм — время стадий
+                    crm_heights = [CRM_CARDS_H, CRM_FUNNEL_H, CRM_STAGE_H]
 
-            # Секция 1: Ключевые показатели — KPI-карточки в таблице 4 в ряд
-            amount = s.get("total_amount", 0) or 0
-            avg = s.get("avg_amount", 0) or 0
-            area = s.get("total_area", 0) or 0
-            avg_area = s.get("avg_area", 0) or 0
-
-            kpi_items = [
-                ("Всего клиентов", str(s.get("total_clients", 0)), "#2196F3"),
-                ("Новых", str(s.get("new_clients", 0)), "#4CAF50"),
-                ("Повторных", str(s.get("returning_clients", 0)), "#9C27B0"),
-                ("Договоров", str(s.get("total_contracts", 0)), "#FF9800"),
-                ("Стоимость", self._format_number(amount, " руб"), "#F57C00"),
-                ("Средний чек", self._format_number(avg, " руб"), "#E91E63"),
-                ("Площадь", self._format_number(area, " м\u00b2"), "#00BCD4"),
-                ("Ср. площадь", self._format_number(avg_area, " м\u00b2"), "#607D8B"),
-            ]
-
-            kpi_html = '<div class="section-title">Ключевые показатели</div>'
-            kpi_html += '<table cellpadding="0" cellspacing="4"><tr>'
-            for i, (label, val, color) in enumerate(kpi_items):
-                kpi_html += (
-                    f'<td style="border-left: 4px solid {color}; border: 1px solid #E8E8E8;'
-                    f' padding: 8px 12px; min-width: 100px;">'
-                    f'<span style="font-size: 11px; color: #888;">{label}</span><br/>'
-                    f'<span style="font-size: 18px; font-weight: bold; color: #333;">{val}</span>'
-                    f'</td>'
-                )
-                if (i + 1) % 4 == 0 and i < len(kpi_items) - 1:
-                    kpi_html += '</tr><tr>'
-            kpi_html += '</tr></table>'
-
-            # Секция 2: По агентам
-            agents_html = ""
-            by_agent = s.get("by_agent", []) or []
-            if by_agent:
-                agents_html = """
-                <div class="section-title">Показатели по агентам</div>
-                <table class="data-table">
-                <tr><th>Агент</th><th>Клиенты</th><th>Договоры</th>
-                    <th>Стоимость</th><th>Площадь</th></tr>
-                """
-                for a in by_agent:
-                    a_amount = a.get("amount", 0) or 0
-                    a_area = a.get("area", 0) or 0
-                    agents_html += (
-                        f"<tr>"
-                        f"<td><b>{a.get('agent_name', '')}</b></td>"
-                        f"<td>{a.get('clients', 0)}</td>"
-                        f"<td>{a.get('contracts', 0)}</td>"
-                        f"<td>{self._format_number(a_amount, ' руб')}</td>"
-                        f"<td>{self._format_number(a_area, ' м²')}</td>"
-                        f"</tr>"
-                    )
-                agents_html += "</table>"
-
-            # Секция 3: Клиенты
-            dynamics = self._cache.get("clients_dynamics", [])
-            clients_html = '<div class="section-title accent-blue">Клиенты</div>'
-            if dynamics:
-                clients_html += """
-                <table class="data-table">
-                <tr><th>Период</th><th>Новых</th><th>Повторных</th>
-                    <th>Физлица</th><th>Юрлица</th></tr>
-                """
-                for d in dynamics:
-                    period = d.get("period", "")
-                    clients_html += (
-                        f"<tr><td>{period}</td>"
-                        f"<td>{d.get('new_clients', 0) or 0}</td>"
-                        f"<td>{d.get('returning_clients', 0) or 0}</td>"
-                        f"<td>{d.get('individual', 0) or 0}</td>"
-                        f"<td>{d.get('legal', 0) or 0}</td></tr>"
-                    )
-                clients_html += "</table>"
-
-            # Секция 4: Договоры
-            contracts_dyn = self._cache.get("contracts_dynamics", [])
-            contracts_html = '<div class="section-title accent-orange">Договоры</div>'
-            if contracts_dyn:
-                contracts_html += """
-                <table class="data-table">
-                <tr><th>Период</th><th>Индивид.</th><th>Шаблон.</th>
-                    <th>Надзор</th><th>Стоимость</th></tr>
-                """
-                for d in contracts_dyn:
-                    period = d.get("period", "")
-                    t_amount = d.get("total_amount", 0) or 0
-                    contracts_html += (
-                        f"<tr><td>{period}</td>"
-                        f"<td>{d.get('individual_count', 0) or 0}</td>"
-                        f"<td>{d.get('template_count', 0) or 0}</td>"
-                        f"<td>{d.get('supervision_count', 0) or 0}</td>"
-                        f"<td>{self._format_number(t_amount, ' руб')}</td></tr>"
-                    )
-                contracts_html += "</table>"
-
-            # Распределение по городам
-            dist_city = self._cache.get("dist_city", [])
-            cities_html = ""
-            if dist_city:
-                cities_html = '<div class="section-title">Распределение по городам</div>'
-                cities_html += '<table class="data-table"><tr><th>Город</th><th>Договоры</th></tr>'
-                for c in dist_city[:15]:
-                    cities_html += (
-                        f"<tr><td>{c.get('name', '')}</td>"
-                        f"<td>{c.get('count', 0) or 0}</td></tr>"
-                    )
-                cities_html += "</table>"
-
-            # Распределение по агентам
-            dist_agent = self._cache.get("dist_agent", [])
-            dist_agents_html = ""
-            if dist_agent:
-                dist_agents_html = '<div class="section-title">Распределение по типам агентов</div>'
-                dist_agents_html += '<table class="data-table"><tr><th>Агент</th><th>Клиенты</th></tr>'
-                for a in dist_agent:
-                    dist_agents_html += (
-                        f"<tr><td>{a.get('name', '')}</td>"
-                        f"<td>{a.get('count', 0) or 0}</td></tr>"
-                    )
-                dist_agents_html += "</table>"
-
-            # Секция 5: CRM аналитика
-            crm_html = ""
-            for cache_key, type_name in [
-                ("crm_individual", "Индивидуальные проекты"),
-                ("crm_template", "Шаблонные проекты"),
-            ]:
-                data = self._cache.get(cache_key, {})
-                if not data:
-                    continue
-                on_time = data.get("on_time_stats", {}) or {}
-                crm_html += f'<div class="section-title accent-green">CRM — {type_name}</div>'
-                crm_html += '<table class="kpi-table">'
-                crm_html += (
-                    f'<tr><td class="kpi-label">Проектов в срок</td>'
-                    f'<td class="kpi-value">{on_time.get("projects_pct", 0) or 0:.0f}%</td></tr>'
-                    f'<tr><td class="kpi-label">Стадий в срок</td>'
-                    f'<td class="kpi-value">{on_time.get("stages_pct", 0) or 0:.0f}%</td></tr>'
-                    f'<tr><td class="kpi-label">Ср. отклонение (дни)</td>'
-                    f'<td class="kpi-value">{on_time.get("avg_deviation_days", 0) or 0:.1f}</td></tr>'
-                    f'<tr><td class="kpi-label">На паузе</td>'
-                    f'<td class="kpi-value">{data.get("paused_count", 0) or 0}</td></tr>'
-                )
-                crm_html += "</table>"
-
-                # Воронка
-                funnel_list = data.get("funnel", []) or []
-                if funnel_list:
-                    crm_html += '<table class="data-table"><tr><th>Стадия</th><th>Кол-во</th></tr>'
-                    for f in funnel_list:
-                        crm_html += (
-                            f"<tr><td>{f.get('stage', '')}</td>"
-                            f"<td>{f.get('count', 0) or 0}</td></tr>"
+                    for tab_label, images_list in self._grab_crm_both_tabs(RENDER_SCALE):
+                        elements.append(CondPageBreak(120 * mm))
+                        tab_style = ParagraphStyle(
+                            'TabLabel', fontName=font_bold, fontSize=11,
+                            textColor=colors.HexColor('#555555'),
+                            spaceAfter=2 * mm,
                         )
-                    crm_html += "</table>"
+                        elements.append(Paragraph(tab_label, tab_style))
+                        for img_idx, (buf, w_px, h_px) in enumerate(images_list):
+                            max_h = crm_heights[img_idx] if img_idx < len(crm_heights) else 80
+                            img = fit_image(buf, w_px, h_px, PAGE_W_MM, max_h)
+                            elements.append(img)
+                            if img_idx < len(images_list) - 1:
+                                elements.append(Spacer(1, 2 * mm))
+                else:
+                    elements.append(CondPageBreak(50 * mm))
+                    data = grab_widget_png(section, RENDER_SCALE)
+                    logger.info(f"PDF: секция [{idx}] {section.width()}x{section.height()} "
+                                f"grab={'OK' if data else 'FAIL'}")
+                    if data:
+                        buf, w_px, h_px = data
+                        img = fit_image(buf, w_px, h_px, PAGE_W_MM, safe_h_mm)
+                        elements.append(img)
+                        elements.append(Spacer(1, 4 * mm))
 
-                # Время стадий
-                durations = data.get("stage_durations", []) or []
-                if durations:
-                    crm_html += '<table class="data-table"><tr><th>Стадия</th><th>Факт (дни)</th><th>Норматив</th></tr>'
-                    for d in durations:
-                        actual = d.get("avg_actual_days", 0) or 0
-                        norm = d.get("norm_days", 0) or 0
-                        crm_html += (
-                            f"<tr><td>{d.get('stage', '')}</td>"
-                            f"<td>{actual:.1f}</td>"
-                            f"<td>{norm:.0f}</td></tr>"
-                        )
-                    crm_html += "</table>"
-
-            # Секция 6: Авторский надзор
-            sv = self._cache.get("supervision", {})
-            sv_html = ""
-            if sv:
-                sv_html = '<div class="section-title accent-red">Авторский надзор</div>'
-                by_pt = sv.get("by_project_type", {}) or {}
-                budget = sv.get("budget", {}) or {}
-                defects = sv.get("defects", {}) or {}
-                sv_html += '<table class="kpi-table">'
-                sv_html += (
-                    f'<tr><td class="kpi-label">Всего надзоров</td>'
-                    f'<td class="kpi-value">{sv.get("total", 0) or 0}</td></tr>'
-                    f'<tr><td class="kpi-label">Активных</td>'
-                    f'<td class="kpi-value">{sv.get("active", 0) or 0}</td></tr>'
-                    f'<tr><td class="kpi-label">По индивид.</td>'
-                    f'<td class="kpi-value">{by_pt.get("individual", 0) or 0}</td></tr>'
-                    f'<tr><td class="kpi-label">По шаблонным</td>'
-                    f'<td class="kpi-value">{by_pt.get("template", 0) or 0}</td></tr>'
-                    f'<tr><td class="kpi-label">Бюджет план</td>'
-                    f'<td class="kpi-value">{self._format_number(budget.get("total_planned", 0), " руб")}</td></tr>'
-                    f'<tr><td class="kpi-label">Бюджет факт</td>'
-                    f'<td class="kpi-value">{self._format_number(budget.get("total_actual", 0), " руб")}</td></tr>'
-                    f'<tr><td class="kpi-label">Экономия</td>'
-                    f'<td class="kpi-value">{self._format_number(budget.get("total_savings", 0), " руб")}'
-                    f' ({budget.get("savings_pct", 0) or 0:.0f}%)</td></tr>'
-                    f'<tr><td class="kpi-label">Дефекты (найдено / устранено)</td>'
-                    f'<td class="kpi-value">{defects.get("found", 0) or 0} / {defects.get("resolved", 0) or 0}</td></tr>'
-                    f'<tr><td class="kpi-label">Визиты на объект</td>'
-                    f'<td class="kpi-value">{sv.get("site_visits", 0) or 0}</td></tr>'
-                )
-                sv_html += "</table>"
-
-                # Надзоры по агентам
-                sv_by_agent = sv.get("by_agent", []) or []
-                if sv_by_agent:
-                    sv_html += '<table class="data-table"><tr><th>Агент</th><th>Надзоры</th></tr>'
-                    for a in sv_by_agent:
-                        sv_html += (
-                            f"<tr><td>{a.get('agent_name', '')}</td>"
-                            f"<td>{a.get('count', 0) or 0}</td></tr>"
-                        )
-                    sv_html += "</table>"
-
-            # Футер
-            footer = """
-            <div class="footer">
-                Interior Studio CRM &bull; Автоматически сгенерированный отчёт
-            </div>
-            """
-
-            # Собираем финальный HTML
-            html = f"""
-            <html><head>{css}</head><body>
-            {header}
-            {kpi_html}
-            {agents_html}
-            {clients_html}
-            {contracts_html}
-            {cities_html}
-            {dist_agents_html}
-            {crm_html}
-            {sv_html}
-            {footer}
-            </body></html>
-            """
-
-            doc = QTextDocument()
-            doc.setHtml(html)
-            doc.print_(printer)
+            # === СБОРКА ===
+            doc.build(elements,
+                      onFirstPage=footer_cb,
+                      onLaterPages=footer_cb)
             logger.info(f"PDF отчёт сохранён: {filename}")
+            open_file(filename)
 
         except Exception as e:
-            logger.error(f"Ошибка экспорта PDF: {e}")
+            logger.error(f"Ошибка экспорта PDF: {e}", exc_info=True)
+            CustomMessageBox(self, "Ошибка экспорта",
+                             f"Не удалось сохранить PDF:\n{e}").exec_()

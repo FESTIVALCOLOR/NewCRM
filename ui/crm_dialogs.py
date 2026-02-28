@@ -7,10 +7,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTableWidgetItem, QTabWidget, QTextEdit)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, pyqtSignal, QUrl, QTimer
-from PyQt5.QtGui import (QColor, QPixmap, QTextDocument, QTextCursor, QTextTableFormat,
-                         QTextCharFormat, QFont, QBrush,
-                         QTextBlockFormat, QTextLength, QTextImageFormat)
-from PyQt5.QtPrintSupport import QPrinter
+from PyQt5.QtGui import QColor, QPixmap, QFont
 from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
 from utils.icon_loader import IconLoader
@@ -1813,543 +1810,116 @@ class CRMStatisticsDialog(QDialog):
                    
     def export_to_pdf(self):
         """Экспорт в PDF"""
-        dialog = ExportPDFDialog(self, f'Отчет CRM {self.project_type} {QDate.currentDate().toString("yyyy-MM-dd")}')
-        
-        if dialog.exec_() == QDialog.Accepted:
-            filename = dialog.get_filename()
-            folder = dialog.get_folder()
-            
-            if folder and filename:
-                full_path = f"{folder}/{filename}"
-                
-                try:
-                    from PyQt5.QtPrintSupport import QPrinter
-                    from PyQt5.QtGui import (QTextDocument, QTextCursor, QTextTableFormat, 
-                                             QTextCharFormat, QFont, QColor, QBrush, 
-                                             QTextBlockFormat, QTextLength, QPixmap, QTextImageFormat)
-                    from PyQt5.QtCore import QUrl
-                    
-                    printer = QPrinter(QPrinter.HighResolution)
-                    printer.setOutputFormat(QPrinter.PdfFormat)
-                    printer.setOutputFileName(full_path)
-                    printer.setPageMargins(0, 0, 0, 0, QPrinter.Millimeter)
-                    printer.setPageSize(QPrinter.A4)
-                    
-                    doc = QTextDocument()       
-                    cursor = QTextCursor(doc)
-                    
-                    # ЛОГОТИП
-                    block_format = QTextBlockFormat()
-                    block_format.setAlignment(Qt.AlignCenter)
-                    cursor.setBlockFormat(block_format)
-                    
-                    logo_path = resource_path('resources/logo.png')
-                    
-                    if os.path.exists(logo_path):
-                        try:
-                            pixmap = QPixmap(logo_path)
-                            
-                            if not pixmap.isNull():
-                                scaled_pixmap = pixmap.scaledToHeight(80, Qt.SmoothTransformation)
-                                image = scaled_pixmap.toImage()
-                                
-                                doc.addResource(QTextDocument.ImageResource, 
-                                              QUrl.fromLocalFile(logo_path),
-                                              image)
-                                
-                                image_format = QTextImageFormat()
-                                image_format.setName(logo_path)
-                                image_format.setWidth(scaled_pixmap.width())
-                                image_format.setHeight(scaled_pixmap.height())
-                                
-                                cursor.insertImage(image_format)
-                                cursor.insertText('\n\n')
-                            else:
-                                logo_format = QTextCharFormat()
-                                logo_format.setFont(QFont('Arial', 36, QFont.Bold))
-                                logo_format.setForeground(QColor('#FF9800'))
-                                cursor.insertText('FC\n\n', logo_format)
-                        except Exception as e:
-                            logo_format = QTextCharFormat()
-                            logo_format.setFont(QFont('Arial', 36, QFont.Bold))
-                            logo_format.setForeground(QColor('#FF9800'))
-                            cursor.insertText('FC\n\n', logo_format)
-                    else:
-                        logo_format = QTextCharFormat()
-                        logo_format.setFont(QFont('Arial', 36, QFont.Bold))
-                        logo_format.setForeground(QColor('#FF9800'))
-                        cursor.insertText('FC\n\n', logo_format)
-                    
-                    company_format = QTextCharFormat()
-                    company_format.setFont(QFont('Arial', 18, QFont.Bold))
-                    company_format.setForeground(QColor('#000000'))
-                    cursor.insertText('FESTIVAL COLOR\n', company_format)
-                    
-                    subtitle_format = QTextCharFormat()
-                    subtitle_format.setFont(QFont('Arial', 10))
-                    subtitle_format.setForeground(QColor('#666'))
-                    cursor.insertText('Система управления проектами\n\n', subtitle_format)
-                    
-                    cursor.insertText('\n')
-                    line_format = QTextCharFormat()
-                    line_format.setForeground(QColor('#E0E0E0'))
-                    cursor.insertText('─' * 60 + '\n\n', line_format)
-                    
-                    title_format = QTextCharFormat()
-                    title_format.setFont(QFont('Arial', 14, QFont.Bold))
-                    title_format.setForeground(QColor('#2C3E50'))
-                    cursor.insertText(f'Статистика CRM: {self.project_type} проекты\n\n', title_format)
-                    
-                    date_format = QTextCharFormat()
-                    date_format.setFont(QFont('Arial', 8))
-                    date_format.setForeground(QColor('#95A5A6'))
-                    cursor.insertText(f'Дата формирования: {QDate.currentDate().toString("dd.MM.yyyy")}\n\n', date_format)
-                    
-                    cursor.insertText('─' * 80 + '\n\n', line_format)
-                    
-                    # Сводка
-                    left_block = QTextBlockFormat()
-                    left_block.setAlignment(Qt.AlignLeft)
-                    cursor.setBlockFormat(left_block)
-                    
-                    summary_title_format = QTextCharFormat()
-                    summary_title_format.setFont(QFont('Arial', 10, QFont.Bold))
-                    summary_title_format.setForeground(QColor('#FF9800'))
-                    cursor.insertText('Краткая сводка\n\n', summary_title_format)
-                    
-                    total_projects = self.stats_table.rowCount()
-                    completed_count = 0
-                    in_work_count = 0
-                    overdue_count = 0
-                    
-                    for row in range(total_projects):
-                        status_item = self.stats_table.item(row, 5)
-                        if status_item:
-                            status_text = status_item.text()
-                            if 'Завершено' in status_text:
-                                completed_count += 1
-                            elif 'Просрочено' in status_text:
-                                overdue_count += 1
-                            else:
-                                in_work_count += 1
-                    
-                    summary_format = QTextCharFormat()
-                    summary_format.setFont(QFont('Arial', 8))
-                    
-                    cursor.insertText(f'• Всего записей: {total_projects}\n', summary_format)
-                    cursor.insertText(f'• Выполнено: {completed_count}\n', summary_format)
-                    cursor.insertText(f'• В работе: {in_work_count}\n', summary_format)
-                    cursor.insertText(f'• Просрочено: {overdue_count}\n\n', summary_format)
-                    
-                    cursor.insertText('─' * 80 + '\n\n', line_format)
-                    
-                    # Таблица
-                    table_title_format = QTextCharFormat()
-                    table_title_format.setFont(QFont('Arial', 10, QFont.Bold))
-                    table_title_format.setForeground(QColor('#FF9800'))
-                    cursor.insertText('Детальная статистика\n\n', table_title_format)
-                    
-                    table_format = QTextTableFormat()
-                    table_format.setBorder(1)
-                    table_format.setBorderBrush(QBrush(QColor('#CCCCCC')))
-                    table_format.setCellPadding(4)
-                    table_format.setCellSpacing(0)
-                    table_format.setHeaderRowCount(1)
-                    table_format.setWidth(QTextLength(QTextLength.PercentageLength, 100))
-                    
-                    table = cursor.insertTable(
-                        self.stats_table.rowCount() + 1,
-                        self.stats_table.columnCount(),
-                        table_format
-                    )
-                    
-                    # Заголовки
-                    header_format = QTextCharFormat()
-                    header_format.setFont(QFont('Arial', 9, QFont.Bold))
-                    header_format.setForeground(QColor('white'))
-                    header_format.setBackground(QColor('#808080'))
-                    
-                    for col in range(self.stats_table.columnCount()):
-                        cell = table.cellAt(0, col)
-                        cell_cursor = cell.firstCursorPosition()
-                        
-                        cell_format = cell.format()
-                        cell_format.setBackground(QBrush(QColor('#808080')))
-                        cell.setFormat(cell_format)
-                        
-                        cell_cursor.insertText(
-                            self.stats_table.horizontalHeaderItem(col).text(),
-                            header_format
-                        )
-                    
-                    # Данные
-                    for row in range(self.stats_table.rowCount()):
-                        if row % 2 == 0:
-                            row_bg = QColor('#FFFFFF')
-                        else:
-                            row_bg = QColor('#F5F5F5')
-                        
-                        data_format = QTextCharFormat()
-                        data_format.setFont(QFont('Arial', 8))
-                        data_format.setForeground(QColor('#333'))
-                        
-                        for col in range(self.stats_table.columnCount()):
-                            item = self.stats_table.item(row, col)
-                            cell = table.cellAt(row + 1, col)
-                            
-                            cell_format = cell.format()
-                            cell_format.setBackground(QBrush(row_bg))
-                            cell.setFormat(cell_format)
-                            
-                            cell_cursor = cell.firstCursorPosition()
-                            
-                            if col == 5 and item:
-                                status_text = item.text()
-                                
-                                if 'Просрочено' in status_text:
-                                    status_format = QTextCharFormat()
-                                    status_format.setFont(QFont('Arial', 8, QFont.Bold))
-                                    status_format.setForeground(QColor('#E74C3C'))
-                                    cell_cursor.insertText(status_text, status_format)
-                                elif 'Завершено' in status_text:
-                                    status_format = QTextCharFormat()
-                                    status_format.setFont(QFont('Arial', 8, QFont.Bold))
-                                    status_format.setForeground(QColor('#27AE60'))
-                                    cell_cursor.insertText(status_text, status_format)
-                                else:
-                                    cell_cursor.insertText(status_text, data_format)
-                            else:
-                                cell_cursor.insertText(
-                                    item.text() if item else '',
-                                    data_format
-                                )
-                    
-                    # Подвал
-                    cursor.movePosition(QTextCursor.End)
-                    cursor.insertText('\n\n')
-                    
-                    footer_block = QTextBlockFormat()
-                    footer_block.setAlignment(Qt.AlignCenter)
-                    cursor.setBlockFormat(footer_block)
-                    
-                    footer_format = QTextCharFormat()
-                    footer_format.setFont(QFont('Arial', 8))
-                    footer_format.setForeground(QColor('#999'))
-                    cursor.insertText(
-                        f'\n{"─" * 60}\n'
-                        f'Документ сформирован автоматически системой Festival Color\n'
-                        f'{QDate.currentDate().toString("dd.MM.yyyy")}',
-                        footer_format
-                    )
-                    
-                    doc.print_(printer)
-                    
-                    # Диалог успеха
-                    success_dialog = PDFExportSuccessDialog(self, full_path, folder)
-                    success_dialog.exec_()
-                    
-                except Exception as e:
-                    print(f" Ошибка экспорта PDF: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF:\n{str(e)}', 'error').exec_()
+        import logging
+        from PyQt5.QtWidgets import QFileDialog
+        from utils.pdf_utils import build_table_pdf
+        _logger = logging.getLogger(__name__)
 
-          
-    def perform_pdf_export_with_params(self, folder, filename):
-        """Выполнение экспорта PDF с параметрами"""
+        default_name = f'Отчет "Статистика CRM {self.project_type}" от {QDate.currentDate().toString("dd.MM.yyyy")}'
+        filename, _ = QFileDialog.getSaveFileName(
+            self, 'Сохранить PDF', default_name, 'PDF файлы (*.pdf)'
+        )
+        if not filename:
+            return
+
         try:
-            full_path = f"{folder}/{filename}"
-            
-            printer = QPrinter(QPrinter.HighResolution)
-            printer.setOutputFormat(QPrinter.PdfFormat)
-            printer.setOutputFileName(full_path)
-            printer.setPageMargins(0, 0, 0, 0, QPrinter.Millimeter)
-            printer.setPageSize(QPrinter.A4)
-            
-            doc = QTextDocument()       
-            cursor = QTextCursor(doc)
-            
-            # ЛОГОТИП
-            block_format = QTextBlockFormat()
-            block_format.setAlignment(Qt.AlignCenter)
-            cursor.setBlockFormat(block_format)
-            
-            logo_path = resource_path('resources/logo.png')
-            
-            if os.path.exists(logo_path):
-                try:
-                    pixmap = QPixmap(logo_path)
-                    
-                    if not pixmap.isNull():
-                        scaled_pixmap = pixmap.scaledToHeight(80, Qt.SmoothTransformation)
-                        image = scaled_pixmap.toImage()
-                        
-                        doc.addResource(QTextDocument.ImageResource, 
-                                      QUrl.fromLocalFile(logo_path),
-                                      image)
-                        
-                        image_format = QTextImageFormat()
-                        image_format.setName(logo_path)
-                        image_format.setWidth(scaled_pixmap.width())
-                        image_format.setHeight(scaled_pixmap.height())
-                        
-                        cursor.insertImage(image_format)
-                        cursor.insertText('\n\n')
-                    else:
-                        logo_format = QTextCharFormat()
-                        logo_format.setFont(QFont('Arial', 36, QFont.Bold))
-                        logo_format.setForeground(QColor('#FF9800'))
-                        cursor.insertText('FC\n\n', logo_format)
-                except Exception as e:
-                    logo_format = QTextCharFormat()
-                    logo_format.setFont(QFont('Arial', 36, QFont.Bold))
-                    logo_format.setForeground(QColor('#FF9800'))
-                    cursor.insertText('FC\n\n', logo_format)
-            else:
-                logo_format = QTextCharFormat()
-                logo_format.setFont(QFont('Arial', 36, QFont.Bold))
-                logo_format.setForeground(QColor('#FF9800'))
-                cursor.insertText('FC\n\n', logo_format)
-            
-            company_format = QTextCharFormat()
-            company_format.setFont(QFont('Arial', 18, QFont.Bold))
-            company_format.setForeground(QColor('#000000'))
-            cursor.insertText('FESTIVAL COLOR\n', company_format)
-            
-            subtitle_format = QTextCharFormat()
-            subtitle_format.setFont(QFont('Arial', 10))
-            subtitle_format.setForeground(QColor('#666'))
-            cursor.insertText('Система управления проектами\n\n', subtitle_format)
-            
-            cursor.insertText('\n')
-            line_format = QTextCharFormat()
-            line_format.setForeground(QColor('#E0E0E0'))
-            cursor.insertText('─' * 60 + '\n\n', line_format)
-            
-            title_format = QTextCharFormat()
-            title_format.setFont(QFont('Arial', 14, QFont.Bold))
-            title_format.setForeground(QColor('#2C3E50'))
-            cursor.insertText(f'Статистика CRM: {self.project_type} проекты\n\n', title_format)
-            
-            date_format = QTextCharFormat()
-            date_format.setFont(QFont('Arial', 8))
-            date_format.setForeground(QColor('#95A5A6'))
-            cursor.insertText(f'Дата формирования: {QDate.currentDate().toString("dd.MM.yyyy")}\n\n', date_format)
-            
-            cursor.insertText('─' * 80 + '\n\n', line_format)
-            
-            # Сводка
-            left_block = QTextBlockFormat()
-            left_block.setAlignment(Qt.AlignLeft)
-            cursor.setBlockFormat(left_block)
-            
-            summary_title_format = QTextCharFormat()
-            summary_title_format.setFont(QFont('Arial', 10, QFont.Bold))
-            summary_title_format.setForeground(QColor('#FF9800'))
-            cursor.insertText('Краткая сводка\n\n', summary_title_format)
-            
-            total_projects = self.stats_table.rowCount()
-            completed_count = 0
-            in_work_count = 0
-            overdue_count = 0
-            
-            for row in range(total_projects):
-                status_item = self.stats_table.item(row, 5)
-                if status_item:
-                    status_text = status_item.text()
-                    if 'Завершено' in status_text:
-                        completed_count += 1
-                    elif 'Просрочено' in status_text:
-                        overdue_count += 1
-                    else:
-                        in_work_count += 1
-            
-            summary_format = QTextCharFormat()
-            summary_format.setFont(QFont('Arial', 8))
-            
-            cursor.insertText(f'• Всего записей: {total_projects}\n', summary_format)
-            cursor.insertText(f'• Выполнено: {completed_count}\n', summary_format)
-            cursor.insertText(f'• В работе: {in_work_count}\n', summary_format)
-            cursor.insertText(f'• Просрочено: {overdue_count}\n\n', summary_format)
-            
-            cursor.insertText('─' * 80 + '\n\n', line_format)
-            
-            # Таблица
-            table_title_format = QTextCharFormat()
-            table_title_format.setFont(QFont('Arial', 10, QFont.Bold))
-            table_title_format.setForeground(QColor('#FF9800'))
-            cursor.insertText('Детальная статистика\n\n', table_title_format)
-            
-            table_format = QTextTableFormat()
-            table_format.setBorder(1)
-            table_format.setBorderBrush(QBrush(QColor('#CCCCCC')))
-            table_format.setCellPadding(4)
-            table_format.setCellSpacing(0)
-            table_format.setHeaderRowCount(1)
-            table_format.setWidth(QTextLength(QTextLength.PercentageLength, 100))
-            
-            table = cursor.insertTable(
-                self.stats_table.rowCount() + 1,
-                self.stats_table.columnCount(),
-                table_format
-            )
-            
-            # Заголовки
-            header_format = QTextCharFormat()
-            header_format.setFont(QFont('Arial', 9, QFont.Bold))
-            header_format.setForeground(QColor('white'))
-            header_format.setBackground(QColor('#808080'))
-            
-            for col in range(self.stats_table.columnCount()):
-                cell = table.cellAt(0, col)
-                cell_cursor = cell.firstCursorPosition()
-                
-                cell_format = cell.format()
-                cell_format.setBackground(QBrush(QColor('#808080')))
-                cell.setFormat(cell_format)
-                
-                cell_cursor.insertText(
-                    self.stats_table.horizontalHeaderItem(col).text(),
-                    header_format
-                )
-            
-            # Данные
-            for row in range(self.stats_table.rowCount()):
-                if row % 2 == 0:
-                    row_bg = QColor('#FFFFFF')
-                else:
-                    row_bg = QColor('#F5F5F5')
-                
-                data_format = QTextCharFormat()
-                data_format.setFont(QFont('Arial', 8))
-                data_format.setForeground(QColor('#333'))
-                
+            headers = [self.stats_table.horizontalHeaderItem(col).text()
+                       for col in range(self.stats_table.columnCount())]
+            rows = []
+            total = self.stats_table.rowCount()
+            completed = in_work = overdue = 0
+
+            for row in range(total):
+                row_data = []
                 for col in range(self.stats_table.columnCount()):
                     item = self.stats_table.item(row, col)
-                    cell = table.cellAt(row + 1, col)
-                    
-                    cell_format = cell.format()
-                    cell_format.setBackground(QBrush(row_bg))
-                    cell.setFormat(cell_format)
-                    
-                    cell_cursor = cell.firstCursorPosition()
-                    
-                    if col == 5 and item:
-                        status_text = item.text()
-                        
-                        if 'Просрочено' in status_text:
-                            status_format = QTextCharFormat()
-                            status_format.setFont(QFont('Arial', 8, QFont.Bold))
-                            status_format.setForeground(QColor('#E74C3C'))
-                            cell_cursor.insertText(status_text, status_format)
-                        elif 'Завершено' in status_text:
-                            status_format = QTextCharFormat()
-                            status_format.setFont(QFont('Arial', 8, QFont.Bold))
-                            status_format.setForeground(QColor('#27AE60'))
-                            cell_cursor.insertText(status_text, status_format)
-                        else:
-                            cell_cursor.insertText(status_text, data_format)
+                    row_data.append(item.text() if item else '')
+                rows.append(row_data)
+
+                status_item = self.stats_table.item(row, 5)
+                if status_item:
+                    st = status_item.text()
+                    if 'Завершено' in st:
+                        completed += 1
+                    elif 'Просрочено' in st:
+                        overdue += 1
                     else:
-                        cell_cursor.insertText(
-                            item.text() if item else '',
-                            data_format
-                        )
-            
-            # Подвал
-            cursor.movePosition(QTextCursor.End)
-            cursor.insertText('\n\n')
-            
-            footer_block = QTextBlockFormat()
-            footer_block.setAlignment(Qt.AlignCenter)
-            cursor.setBlockFormat(footer_block)
-            
-            footer_format = QTextCharFormat()
-            footer_format.setFont(QFont('Arial', 8))
-            footer_format.setForeground(QColor('#999'))
-            cursor.insertText(
-                f'\n{"─" * 60}\n'
-                f'Документ сформирован автоматически системой Festival Color\n'
-                f'{QDate.currentDate().toString("dd.MM.yyyy")}',
-                footer_format
+                        in_work += 1
+
+            build_table_pdf(
+                output_path=filename,
+                title=f'Статистика CRM: {self.project_type} проекты',
+                headers=headers,
+                rows=rows,
+                summary_items=[
+                    ('Всего записей', str(total)),
+                    ('Выполнено', str(completed)),
+                    ('В работе', str(in_work)),
+                    ('Просрочено', str(overdue)),
+                ],
+                status_column=5,
+                status_colors={
+                    'Просрочено': '#E74C3C',
+                    'Завершено': '#27AE60',
+                },
             )
-            
-            doc.print_(printer)
-            
-            parent_dialog.accept()
-            
-            # Диалог успеха
-            success_dialog = QDialog(self)
-            success_dialog.setWindowTitle('Успех')
-            success_dialog.setMinimumWidth(500)
-            
-            success_layout = QVBoxLayout()
-            success_layout.setSpacing(15)
-            success_layout.setContentsMargins(20, 20, 20, 20)
-            
-            success_title = QLabel('PDF успешно создан!')
-            success_title.setStyleSheet('font-size: 14px; font-weight: bold; color: #27AE60;')
-            success_title.setAlignment(Qt.AlignCenter)
-            success_layout.addWidget(success_title)
-            
-            path_frame = QFrame()
-            path_frame.setStyleSheet('''
-                QFrame {
-                    background-color: #f5f5f5;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 10px;
-                }
-            ''')
-            path_layout = QVBoxLayout()
-            path_layout.setContentsMargins(0, 0, 0, 0)
-            
-            path_label = QLabel(full_path)
-            path_label.setWordWrap(True)
-            path_label.setStyleSheet('font-size: 10px; color: #333;')
-            path_label.setAlignment(Qt.AlignCenter)
-            path_layout.addWidget(path_label)
-            
-            path_frame.setLayout(path_layout)
-            success_layout.addWidget(path_frame)
-            
-            open_folder_btn = QPushButton('Открыть папку с файлом')
-            open_folder_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffd93c;
-                    color: white;
-                    padding: 10px;
-                    border-radius: 4px;
-                    font-size: 11px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #2980B9; }
-            """)
-            open_folder_btn.clicked.connect(lambda: self.open_folder(folder))
-            success_layout.addWidget(open_folder_btn)
-            
-            ok_btn = QPushButton('OK')
-            ok_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #27AE60;
-                    color: white;
-                    padding: 12px;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #229954; }
-            """)
-            ok_btn.clicked.connect(success_dialog.accept)
-            success_layout.addWidget(ok_btn)
-            
-            success_dialog = PDFExportSuccessDialog(self, full_path, folder)
-            success_dialog.exec_()
-            
         except Exception as e:
-            print(f" Ошибка экспорта PDF: {e}")
-            import traceback
-            traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF:\n{str(e)}', 'error').exec_()
+            _logger.error(f"Ошибка экспорта PDF: {e}", exc_info=True)
+            CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF:\n{e}', 'error').exec_()
+
+    def perform_pdf_export_with_params(self, folder, filename):
+        """Выполнение экспорта PDF с параметрами (обратная совместимость)"""
+        import os
+        import logging
+        from utils.pdf_utils import build_table_pdf
+        _logger = logging.getLogger(__name__)
+
+        try:
+            full_path = os.path.join(folder, filename)
+
+            headers = [self.stats_table.horizontalHeaderItem(col).text()
+                       for col in range(self.stats_table.columnCount())]
+            rows = []
+            total = self.stats_table.rowCount()
+            completed = in_work = overdue = 0
+
+            for row in range(total):
+                row_data = []
+                for col in range(self.stats_table.columnCount()):
+                    item = self.stats_table.item(row, col)
+                    row_data.append(item.text() if item else '')
+                rows.append(row_data)
+
+                status_item = self.stats_table.item(row, 5)
+                if status_item:
+                    st = status_item.text()
+                    if 'Завершено' in st:
+                        completed += 1
+                    elif 'Просрочено' in st:
+                        overdue += 1
+                    else:
+                        in_work += 1
+
+            build_table_pdf(
+                output_path=full_path,
+                title=f'Статистика CRM: {self.project_type} проекты',
+                headers=headers,
+                rows=rows,
+                summary_items=[
+                    ('Всего записей', str(total)),
+                    ('Выполнено', str(completed)),
+                    ('В работе', str(in_work)),
+                    ('Просрочено', str(overdue)),
+                ],
+                status_column=5,
+                status_colors={
+                    'Просрочено': '#E74C3C',
+                    'Завершено': '#27AE60',
+                },
+            )
+        except Exception as e:
+            _logger.error(f"Ошибка экспорта PDF: {e}", exc_info=True)
+            CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF:\n{e}', 'error').exec_()
         
     def open_folder(self, folder_path):
         """Открытие папки в проводнике"""

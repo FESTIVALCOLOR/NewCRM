@@ -300,7 +300,6 @@ class TestEmployeeReportsTab:
         from PyQt5.QtWidgets import QComboBox
         with patch('ui.employee_reports_tab.DatabaseManager'), \
              patch('ui.employee_reports_tab.DataAccess', return_value=mock_da), \
-             patch('ui.employee_reports_tab.PDFGenerator'), \
              patch('ui.employee_reports_tab.CustomComboBox', QComboBox), \
              patch('ui.employee_reports_tab.IconLoader', self._mock_icon_loader()), \
              patch('ui.employee_reports_tab.apply_no_focus_delegate'):
@@ -314,7 +313,6 @@ class TestEmployeeReportsTab:
         from PyQt5.QtWidgets import QComboBox
         with patch('ui.employee_reports_tab.DatabaseManager'), \
              patch('ui.employee_reports_tab.DataAccess', return_value=mock_da), \
-             patch('ui.employee_reports_tab.PDFGenerator'), \
              patch('ui.employee_reports_tab.CustomComboBox', QComboBox), \
              patch('ui.employee_reports_tab.IconLoader', self._mock_icon_loader()), \
              patch('ui.employee_reports_tab.apply_no_focus_delegate'):

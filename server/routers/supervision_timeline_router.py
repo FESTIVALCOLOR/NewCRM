@@ -325,11 +325,18 @@ async def export_supervision_timeline_pdf(
                             topMargin=15*mm, bottomMargin=15*mm)
 
     font_name = "Helvetica"
-    for font_path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                      "/usr/share/fonts/TTF/DejaVuSans.ttf"]:
+    font_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ]
+    for font_path in font_candidates:
         if os.path.exists(font_path):
-            pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
-            font_name = "DejaVuSans"
+            try:
+                pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
+                font_name = "DejaVuSans"
+            except Exception:
+                pass
             break
 
     styles = getSampleStyleSheet()
@@ -341,10 +348,9 @@ async def export_supervision_timeline_pdf(
                                    leading=11, textColor=colors.white)
 
     elements = []
+    addr = contract.address if contract else "-"
     elements.append(Paragraph("Таблица сроков надзора", title_style))
     elements.append(Spacer(1, 5*mm))
-
-    addr = contract.address if contract else "-"
     elements.append(Paragraph(f"Адрес: {addr}", ParagraphStyle('Info', fontName=font_name, fontSize=10)))
     elements.append(Spacer(1, 5*mm))
 
@@ -400,9 +406,13 @@ async def export_supervision_timeline_pdf(
     doc.build(elements)
     output.seek(0)
 
-    filename = f"supervision_timeline_{card_id}.pdf"
+    from datetime import date
+    from urllib.parse import quote
+    today = date.today().strftime("%d.%m.%Y")
+    ru_name = f'Отчет "Авторский надзор {addr}" от {today}.pdf'
+    encoded = quote(ru_name)
     return StreamingResponse(
         output,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}; filename=supervision_timeline_{card_id}.pdf"}
     )

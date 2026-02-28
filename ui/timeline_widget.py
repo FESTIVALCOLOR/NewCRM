@@ -16,7 +16,10 @@ from utils.calendar_helpers import add_today_button_to_dateedit, add_working_day
 from utils.timeline_calc import calc_planned_dates
 from utils.icon_loader import IconLoader
 from datetime import datetime, timedelta
+import logging
 import threading
+
+logger = logging.getLogger(__name__)
 
 
 # ========== БИЗНЕС-ЛОГИКА ==========
@@ -1003,7 +1006,7 @@ class ProjectTimelineWidget(QWidget):
                     with open(path, 'wb') as f:
                         f.write(file_bytes)
         except Exception as e:
-            print(f"[TimelineWidget] Ошибка экспорта Excel: {e}")
+            logger.error("Ошибка экспорта Excel таймлайна: %s", e, exc_info=True)
 
     def _export_pdf(self):
         """Экспорт в PDF через API"""
@@ -1011,13 +1014,23 @@ class ProjectTimelineWidget(QWidget):
             return
         try:
             file_bytes = self.data.export_timeline_pdf(self.contract_id)
-            if file_bytes:
-                path, _ = QFileDialog.getSaveFileName(
-                    self, 'Сохранить PDF', f'timeline_{self.contract_id}.pdf',
-                    'PDF (*.pdf)'
-                )
-                if path:
-                    with open(path, 'wb') as f:
-                        f.write(file_bytes)
+            if not file_bytes:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Предупреждение',
+                                 'Сервер не вернул данные для PDF-экспорта.', 'warning').exec_()
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, 'Сохранить PDF',
+                f'Отчет "Таблица сроков договор {self.contract_id}" от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
+                'PDF (*.pdf)'
+            )
+            if path:
+                with open(path, 'wb') as f:
+                    f.write(file_bytes)
+                logger.info("Таймлайн PDF сохранён: %s", path)
+                from utils.pdf_utils import open_file
+                open_file(path)
         except Exception as e:
-            print(f"[TimelineWidget] Ошибка экспорта PDF: {e}")
+            logger.error("Ошибка экспорта PDF таймлайна: %s", e, exc_info=True)
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать PDF:\n{e}', 'error').exec_()

@@ -365,13 +365,21 @@ async def export_timeline_pdf(
                             leftMargin=15*mm, rightMargin=15*mm,
                             topMargin=15*mm, bottomMargin=15*mm)
 
-    # Попытка зарегистрировать шрифт с кириллицей
+    # Регистрация шрифта с кириллицей
     font_name = "Helvetica"
-    for font_path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                      "/usr/share/fonts/TTF/DejaVuSans.ttf"]:
+    font_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ]
+    for font_path in font_candidates:
         if os.path.exists(font_path):
-            pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
-            font_name = "DejaVuSans"
+            try:
+                pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
+                font_name = "DejaVuSans"
+            except Exception:
+                pass
             break
 
     styles = getSampleStyleSheet()
@@ -383,7 +391,8 @@ async def export_timeline_pdf(
                                    leading=11, textColor=colors.white)
 
     elements = []
-    elements.append(Paragraph(f"Таблица сроков проекта", title_style))
+    contract_name = contract.address or f"договор_{contract_id}"
+    elements.append(Paragraph("Таблица сроков проекта", title_style))
     elements.append(Spacer(1, 5*mm))
 
     # Информация о проекте
@@ -440,9 +449,13 @@ async def export_timeline_pdf(
     doc.build(elements)
     output.seek(0)
 
-    filename = f"timeline_{contract_id}.pdf"
+    from datetime import date
+    from urllib.parse import quote
+    today = date.today().strftime("%d.%m.%Y")
+    ru_name = f'Отчет "Таблица сроков {contract_name}" от {today}.pdf'
+    encoded = quote(ru_name)
     return StreamingResponse(
         output,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}; filename=timeline_{contract_id}.pdf"}
     )
