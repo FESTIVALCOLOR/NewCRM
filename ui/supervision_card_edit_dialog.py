@@ -215,6 +215,14 @@ class SupervisionCardEditDialog(QDialog):
 
             form_layout.addRow('ДАН:', dan_row)
 
+            # Руководитель студии
+            self.studio_director = CustomComboBox()
+            directors = self.data.get_employees_by_position('Руководитель студии')
+            self.studio_director.addItem('Не назначен', None)
+            for director in directors:
+                self.studio_director.addItem(director['full_name'], director['id'])
+            form_layout.addRow('Руководитель студии:', self.studio_director)
+
             # ========== НОВОЕ: ПОДКЛЮЧЕНИЕ АВТОМАТИЧЕСКОГО СОЗДАНИЯ ВЫПЛАТ ==========
             # Подключаем обработчики изменения сотрудников для автоматического
             # создания/обновления записей о выплатах
@@ -2306,7 +2314,7 @@ class SupervisionCardEditDialog(QDialog):
         stages = list(SUPERVISION_STAGE_MAPPING.keys())
 
         from ui.supervision_dialogs import SupervisionFileUploadDialog
-        dialog = SupervisionFileUploadDialog(self, self.card_data, stages, self.api_client)
+        dialog = SupervisionFileUploadDialog(self, self.card_data, stages, self.api_client, simple_mode=True)
         if dialog.exec_() != QDialog.Accepted:
             return
 
@@ -2766,6 +2774,12 @@ class SupervisionCardEditDialog(QDialog):
                 self.dan.setCurrentIndex(i)
                 break
 
+        # Руководитель студии
+        for i in range(self.studio_director.count()):
+            if self.studio_director.itemData(i) == self.card_data.get('studio_director_id'):
+                self.studio_director.setCurrentIndex(i)
+                break
+
         # Дата начала
         start_date_str = self.card_data.get('start_date', '')
         if start_date_str:
@@ -2800,6 +2814,7 @@ class SupervisionCardEditDialog(QDialog):
         """ИСПРАВЛЕНИЕ: Подключение сигналов для автосохранения данных при изменении"""
         self.senior_manager.currentIndexChanged.connect(self.auto_save_field)
         self.dan.currentIndexChanged.connect(self.auto_save_field)
+        self.studio_director.currentIndexChanged.connect(self.auto_save_field)
         self.start_date_edit.dateChanged.connect(self.auto_save_field)
         # deadline теперь read-only (рассчитывается из таблицы сроков)
         self.tags.textChanged.connect(self.auto_save_field)
@@ -2814,6 +2829,7 @@ class SupervisionCardEditDialog(QDialog):
             updates = {
                 'senior_manager_id': self.senior_manager.currentData(),
                 'dan_id': self.dan.currentData(),
+                'studio_director_id': self.studio_director.currentData(),
                 'start_date': self.start_date_edit.date().toString('yyyy-MM-dd'),
                 'deadline': self.deadline.date().toString('yyyy-MM-dd'),
                 'tags': self.tags.text().strip()
@@ -2821,8 +2837,11 @@ class SupervisionCardEditDialog(QDialog):
 
             self.data.update_supervision_card(self.card_data['id'], updates)
 
-            # Обновляем данные карточки
+            # Обновляем данные карточки (+ ФИО для виджетов)
             self.card_data.update(updates)
+            self.card_data['studio_director_name'] = self.studio_director.currentText() if self.studio_director.currentData() else ''
+            self.card_data['senior_manager_name'] = self.senior_manager.currentText() if self.senior_manager.currentData() else ''
+            self.card_data['dan_name'] = self.dan.currentText() if self.dan.currentData() else ''
 
             # Обновляем таблицу сроков при изменении start_date
             if hasattr(self, 'sv_timeline_widget') and self.sv_timeline_widget:
@@ -2845,6 +2864,7 @@ class SupervisionCardEditDialog(QDialog):
         updates = {
             'senior_manager_id': self.senior_manager.currentData(),
             'dan_id': self.dan.currentData(),
+            'studio_director_id': self.studio_director.currentData(),
             'start_date': self.start_date_edit.date().toString('yyyy-MM-dd'),
             'deadline': self.deadline.date().toString('yyyy-MM-dd'),
             'tags': self.tags.text().strip()
@@ -3060,7 +3080,8 @@ class SupervisionCardEditDialog(QDialog):
         # Сначала обновляем информацию о сотруднике через API/БД
         role_to_field = {
             'Старший менеджер проектов': 'senior_manager_id',
-            'ДАН': 'dan_id'
+            'ДАН': 'dan_id',
+            'Руководитель студии': 'studio_director_id'
         }
 
         field_name = role_to_field.get(role_name)

@@ -805,11 +805,12 @@ class CRMSupervisionTab(QWidget):
         """Обработка перемещения карточки"""
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
         if to_column == 'Новый заказ' and from_column != 'Новый заказ':
-            QMessageBox.warning(
+            CustomMessageBox(
                 self, 'Перемещение запрещено',
                 'Нельзя вернуть карточку в "Новый заказ".\n'
-                'Используйте столбец "В ожидании" для приостановки.'
-            )
+                'Используйте столбец "В ожидании" для приостановки.',
+                'warning'
+            ).exec_()
             self.load_cards_for_current_tab()
             return
 
@@ -819,10 +820,11 @@ class CRMSupervisionTab(QWidget):
             prev_col = card_info.get('previous_column') if card_info else None
             # Если prev_col известен и это не "Новый заказ" — разрешаем только в prev_col
             if prev_col and prev_col != 'Новый заказ' and to_column != prev_col:
-                QMessageBox.warning(
+                CustomMessageBox(
                     self, 'Перемещение запрещено',
-                    f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".'
-                )
+                    f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".',
+                    'warning'
+                ).exec_()
                 self.load_cards_for_current_tab()
                 return
             # Если prev_col = None/пусто — разрешаем (сервер дополнительно проверит)
@@ -888,13 +890,14 @@ class CRMSupervisionTab(QWidget):
 
                     # Если ДАН сдал работу, но её не приняли - предупреждение
                     if dan_completed == 1:
-                        QMessageBox.warning(
+                        CustomMessageBox(
                             self,
                             'Работа не принята',
                             f'ДАН сдал работу, но вы еще не приняли её!\n\n'
                             f'Сначала нажмите кнопку "Принять работу" на карточке,\n'
-                            f'затем переместите её на следующую стадию.'
-                        )
+                            f'затем переместите её на следующую стадию.',
+                            'warning'
+                        ).exec_()
                         self.load_cards_for_current_tab()
                         return
 
@@ -1020,7 +1023,7 @@ class CRMSupervisionTab(QWidget):
                 if ': ' in error_msg:
                     error_msg = error_msg.split(': ', 1)[1]
                 print(f"   ! Перемещение запрещено сервером: {error_msg}")
-                QMessageBox.warning(self, 'Перемещение запрещено', error_msg)
+                CustomMessageBox(self, 'Перемещение запрещено', error_msg, 'warning').exec_()
                 self.load_cards_for_current_tab()
                 return
             print(f"   + Карточка перемещена")
@@ -1094,7 +1097,7 @@ class CRMSupervisionTab(QWidget):
     def save_termination_reason(self, contract_id, reason, dialog):
         """Сохранение причины расторжения"""
         if not reason.strip():
-            QMessageBox.warning(self, 'Ошибка', 'Укажите причину расторжения')
+            CustomMessageBox(self, 'Ошибка', 'Укажите причину расторжения', 'warning').exec_()
             return
 
         self.data.update_contract(contract_id, {'termination_reason': reason.strip()})

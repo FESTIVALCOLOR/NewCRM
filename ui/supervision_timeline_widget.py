@@ -109,13 +109,15 @@ class SupervisionTimelineWidget(QWidget):
     def _get_executor_names(self):
         """Получить список ФИО исполнителей из карточки"""
         names = []
+        director = self.card_data.get('studio_director_name', '') or ''
         sm = self.card_data.get('senior_manager_name', '') or ''
         dan = self.card_data.get('dan_name', '') or ''
+        if director:
+            names.append(director)
         if sm:
             names.append(sm)
         if dan:
             names.append(dan)
-        # Если ничего не нашли — пустой список
         return names
 
     @staticmethod
@@ -787,11 +789,13 @@ class SupervisionTimelineWidget(QWidget):
             if self.entries:
                 self._add_totals_row(len(self.entries))
 
-            # Зафиксировать высоту таблицы — ровно под строки + заголовок
+            # Зафиксировать высоту таблицы — ровно под строки + заголовок + запас
             row_count = self.table.rowCount()
-            total_h = self.table.horizontalHeader().height() + 4
+            total_h = self.table.horizontalHeader().height() + 6
             for i in range(row_count):
                 total_h += self.table.rowHeight(i)
+            # Добавляем запас для предотвращения вертикального скроллбара
+            total_h += row_count + 2
             self.table.setFixedHeight(total_h)
 
         finally:

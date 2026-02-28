@@ -501,6 +501,7 @@ class SupervisionCard(Base):
 
     senior_manager_id = Column(Integer, ForeignKey("employees.id"))
     dan_id = Column(Integer, ForeignKey("employees.id"))  # Дежурный по авторскому надзору
+    studio_director_id = Column(Integer, ForeignKey("employees.id"))  # Руководитель студии
     dan_completed = Column(Boolean, default=False)
 
     is_paused = Column(Boolean, default=False)
@@ -515,6 +516,7 @@ class SupervisionCard(Base):
     contract = relationship("Contract", back_populates="supervision_cards")
     senior_manager = relationship("Employee", foreign_keys=[senior_manager_id])
     dan = relationship("Employee", foreign_keys=[dan_id])
+    studio_director = relationship("Employee", foreign_keys=[studio_director_id])
     history = relationship("SupervisionProjectHistory", back_populates="supervision_card")
 
 

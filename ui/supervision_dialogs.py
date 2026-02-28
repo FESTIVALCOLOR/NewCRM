@@ -1758,10 +1758,11 @@ class AssignExecutorsDialog(QDialog):
 class SupervisionFileUploadDialog(QDialog):
     """Диалог загрузки файла для карточки авторского надзора с выбором стадии и даты"""
 
-    def __init__(self, parent, card_data, stages, api_client=None):
+    def __init__(self, parent, card_data, stages, api_client=None, simple_mode=False):
         super().__init__(parent)
         self.card_data = card_data
         self.stages = stages  # Список стадий для выбора
+        self.simple_mode = simple_mode  # True = только файл, стадия, дата (без бюджета)
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
@@ -1882,74 +1883,84 @@ class SupervisionFileUploadDialog(QDialog):
 
         # Выбор даты
         self.date_edit = CustomDateEdit()
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat('dd.MM.yyyy')
         self.date_edit.setFixedHeight(28)
         self.date_edit.setDate(QDate.currentDate())
         form_layout.addRow('Дата:', self.date_edit)
 
-        # Разделитель
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet('color: #E0E0E0;')
-        form_layout.addRow(separator)
+        if self.simple_mode:
+            # Простой режим: только файл, стадия, дата — без полей бюджета
+            pass
+        else:
+            # Разделитель
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setStyleSheet('color: #E0E0E0;')
+            form_layout.addRow(separator)
 
-        # Доп. поля: данные для таблицы сроков надзора
-        fields_hint = QLabel('Данные для таблицы сроков (необязательно)')
-        fields_hint.setStyleSheet('color: #888; font-size: 10px; font-style: italic;')
-        form_layout.addRow(fields_hint)
+            # Доп. поля: данные для таблицы сроков надзора
+            fields_hint = QLabel('Данные для таблицы сроков (необязательно)')
+            fields_hint.setStyleSheet('color: #888; font-size: 10px; font-style: italic;')
+            form_layout.addRow(fields_hint)
 
-        field_style = '''
-            QLineEdit {
-                border: 1px solid #E0E0E0;
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 12px;
-                background-color: #FAFAFA;
-            }
-            QLineEdit:focus {
-                border-color: #ffd93c;
-                background-color: #FFFFFF;
-            }
-        '''
+        if not self.simple_mode:
+            field_style = '''
+                QLineEdit {
+                    border: 1px solid #E0E0E0;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    font-size: 12px;
+                    background-color: #FAFAFA;
+                }
+                QLineEdit:focus {
+                    border-color: #ffd93c;
+                    background-color: #FFFFFF;
+                }
+            '''
 
-        # Бюджет план
-        self.budget_planned_edit = QLineEdit()
-        self.budget_planned_edit.setFixedHeight(28)
-        self.budget_planned_edit.setPlaceholderText('0')
-        self.budget_planned_edit.setStyleSheet(field_style)
-        form_layout.addRow('Бюджет план:', self.budget_planned_edit)
+            # Бюджет план
+            self.budget_planned_edit = QLineEdit()
+            self.budget_planned_edit.setFixedHeight(28)
+            self.budget_planned_edit.setPlaceholderText('0')
+            self.budget_planned_edit.setStyleSheet(field_style)
+            form_layout.addRow('Бюджет план:', self.budget_planned_edit)
 
-        # Бюджет факт
-        self.budget_actual_edit = QLineEdit()
-        self.budget_actual_edit.setFixedHeight(28)
-        self.budget_actual_edit.setPlaceholderText('0')
-        self.budget_actual_edit.setStyleSheet(field_style)
-        form_layout.addRow('Бюджет факт:', self.budget_actual_edit)
+            # Бюджет факт
+            self.budget_actual_edit = QLineEdit()
+            self.budget_actual_edit.setFixedHeight(28)
+            self.budget_actual_edit.setPlaceholderText('0')
+            self.budget_actual_edit.setStyleSheet(field_style)
+            form_layout.addRow('Бюджет факт:', self.budget_actual_edit)
 
-        # Поставщик
-        self.supplier_edit = QLineEdit()
-        self.supplier_edit.setFixedHeight(28)
-        self.supplier_edit.setPlaceholderText('Название поставщика')
-        self.supplier_edit.setStyleSheet(field_style)
-        form_layout.addRow('Поставщик:', self.supplier_edit)
+            # Поставщик
+            self.supplier_edit = QLineEdit()
+            self.supplier_edit.setFixedHeight(28)
+            self.supplier_edit.setPlaceholderText('Название поставщика')
+            self.supplier_edit.setStyleSheet(field_style)
+            form_layout.addRow('Поставщик:', self.supplier_edit)
 
-        # Комиссия
-        self.commission_edit = QLineEdit()
-        self.commission_edit.setFixedHeight(28)
-        self.commission_edit.setPlaceholderText('0')
-        self.commission_edit.setStyleSheet(field_style)
-        form_layout.addRow('Комиссия:', self.commission_edit)
+            # Комиссия
+            self.commission_edit = QLineEdit()
+            self.commission_edit.setFixedHeight(28)
+            self.commission_edit.setPlaceholderText('0')
+            self.commission_edit.setStyleSheet(field_style)
+            form_layout.addRow('Комиссия:', self.commission_edit)
 
-        # Примечания
-        self.notes_edit = QLineEdit()
-        self.notes_edit.setFixedHeight(28)
-        self.notes_edit.setPlaceholderText('Примечания')
-        self.notes_edit.setStyleSheet(field_style)
-        form_layout.addRow('Примечания:', self.notes_edit)
+            # Примечания
+            self.notes_edit = QLineEdit()
+            self.notes_edit.setFixedHeight(28)
+            self.notes_edit.setPlaceholderText('Примечания')
+            self.notes_edit.setStyleSheet(field_style)
+            form_layout.addRow('Примечания:', self.notes_edit)
 
         layout.addLayout(form_layout)
 
         # Подсказка
-        hint = QLabel('После загрузки файл будет привязан к выбранной стадии.\nДанные бюджета и поставщика обновятся в таблице сроков.')
+        if self.simple_mode:
+            hint = QLabel('После загрузки файл будет привязан к выбранной стадии.')
+        else:
+            hint = QLabel('После загрузки файл будет привязан к выбранной стадии.\nДанные бюджета и поставщика обновятся в таблице сроков.')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic; margin-top: 10px;')
         hint.setAlignment(Qt.AlignCenter)
@@ -2065,13 +2076,16 @@ class SupervisionFileUploadDialog(QDialog):
             'stage': stage,
             'date': date,
             'file_name': os.path.basename(self.selected_file_path),
-            # Доп. поля для таблицы сроков
-            'budget_planned': self._parse_number(self.budget_planned_edit.text()),
-            'budget_actual': self._parse_number(self.budget_actual_edit.text()),
-            'supplier': self.supplier_edit.text().strip(),
-            'commission': self._parse_number(self.commission_edit.text()),
-            'notes': self.notes_edit.text().strip(),
         }
+        if not self.simple_mode:
+            # Доп. поля для таблицы сроков
+            self.result_data.update({
+                'budget_planned': self._parse_number(self.budget_planned_edit.text()),
+                'budget_actual': self._parse_number(self.budget_actual_edit.text()),
+                'supplier': self.supplier_edit.text().strip(),
+                'commission': self._parse_number(self.commission_edit.text()),
+                'notes': self.notes_edit.text().strip(),
+            })
 
         self.accept()
 

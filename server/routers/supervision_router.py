@@ -167,6 +167,7 @@ async def get_supervision_cards(
             contract = card.contract
             senior_manager_name = card.senior_manager.full_name if card.senior_manager else None
             dan_name = card.dan.full_name if card.dan else None
+            studio_director_name = card.studio_director.full_name if card.studio_director else None
 
             card_data = {
                 'id': card.id,
@@ -176,6 +177,7 @@ async def get_supervision_cards(
                 'tags': card.tags,
                 'senior_manager_id': card.senior_manager_id,
                 'dan_id': card.dan_id,
+                'studio_director_id': card.studio_director_id,
                 'dan_completed': card.dan_completed,
                 'is_paused': card.is_paused,
                 'pause_reason': card.pause_reason,
@@ -183,6 +185,7 @@ async def get_supervision_cards(
                 'total_pause_days': card.total_pause_days or 0,
                 'senior_manager_name': senior_manager_name,
                 'dan_name': dan_name,
+                'studio_director_name': studio_director_name,
                 'contract_number': contract.contract_number,
                 'address': contract.address,
                 'area': contract.area,
@@ -235,6 +238,10 @@ async def get_supervision_card(
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
+        senior_manager_name = card.senior_manager.full_name if card.senior_manager else None
+        dan_name = card.dan.full_name if card.dan else None
+        studio_director_name = card.studio_director.full_name if card.studio_director else None
+
         return {
             'id': card.id,
             'contract_id': card.contract_id,
@@ -243,11 +250,15 @@ async def get_supervision_card(
             'tags': card.tags,
             'senior_manager_id': card.senior_manager_id,
             'dan_id': card.dan_id,
+            'studio_director_id': card.studio_director_id,
             'dan_completed': card.dan_completed,
             'is_paused': card.is_paused,
             'pause_reason': card.pause_reason,
             'paused_at': card.paused_at.isoformat() if card.paused_at else None,
             'total_pause_days': card.total_pause_days or 0,
+            'senior_manager_name': senior_manager_name,
+            'dan_name': dan_name,
+            'studio_director_name': studio_director_name,
             'created_at': card.created_at.isoformat() if card.created_at else None,
             'updated_at': card.updated_at.isoformat() if card.updated_at else None,
         }
@@ -289,6 +300,7 @@ async def create_supervision_card(
             "tags": card.tags,
             "senior_manager_id": card.senior_manager_id,
             "dan_id": card.dan_id,
+            "studio_director_id": card.studio_director_id,
             "dan_completed": card.dan_completed,
             "is_paused": card.is_paused,
             "pause_reason": card.pause_reason,

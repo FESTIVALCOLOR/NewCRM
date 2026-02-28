@@ -583,6 +583,7 @@ class SupervisionCardBase(BaseModel):
     tags: Optional[str] = None
     senior_manager_id: Optional[int] = None
     dan_id: Optional[int] = None
+    studio_director_id: Optional[int] = None
     dan_completed: bool = False
 
     @field_validator('deadline', mode='before')
@@ -611,6 +612,7 @@ class SupervisionCardUpdate(BaseModel):
     tags: Optional[str] = None
     senior_manager_id: Optional[int] = None
     dan_id: Optional[int] = None
+    studio_director_id: Optional[int] = None
     dan_completed: Optional[bool] = None
 
     @field_validator('deadline', mode='before')

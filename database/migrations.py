@@ -887,6 +887,7 @@ class DatabaseMigrations:
                 new_fields = {
                     'senior_manager_id': 'INTEGER',
                     'dan_id': 'INTEGER',
+                    'studio_director_id': 'INTEGER',
                     'dan_completed': 'BOOLEAN DEFAULT 0',
                     'is_paused': 'BOOLEAN DEFAULT 0',
                     'pause_reason': 'TEXT',

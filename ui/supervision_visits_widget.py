@@ -74,8 +74,25 @@ class SupervisionVisitsWidget(QWidget):
             except Exception:
                 pass
 
+        # Список исполнителей для выпадающего списка
+        self._executor_names = self._get_executor_names()
+
         self._build_ui()
         self._load_data()
+
+    def _get_executor_names(self):
+        """Получить список ФИО исполнителей из карточки"""
+        names = []
+        sm = self.card_data.get('senior_manager_name', '') or ''
+        dan = self.card_data.get('dan_name', '') or ''
+        director = self.card_data.get('studio_director_name', '') or ''
+        if director:
+            names.append(director)
+        if sm:
+            names.append(sm)
+        if dan:
+            names.append(dan)
+        return names
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -114,11 +131,17 @@ class SupervisionVisitsWidget(QWidget):
         self.table.setShowGrid(True)
 
         header = self.table.horizontalHeader()
-        for col in range(len(self.COLUMNS)):
+        # Столбцы 0-3 — Interactive (пользователь может растягивать)
+        for col in range(len(self.COLUMNS) - 1):
             header.setSectionResizeMode(col, QHeaderView.Interactive)
-        for col, width in enumerate(self.COLUMN_WIDTHS):
+        for col, width in enumerate(self.COLUMN_WIDTHS[:4]):
             self.table.setColumnWidth(col, width)
-        header.setStretchLastSection(True)
+        # Столбец 3 (Примечание) растягивается на оставшееся пространство
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        # Столбец удаления — фиксированная узкая ширина
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 36)
+        header.setStretchLastSection(False)
 
         self.table.setStyleSheet("""
             QTableWidget {
@@ -322,18 +345,24 @@ class SupervisionVisitsWidget(QWidget):
                 dl.addWidget(date_edit)
                 self.table.setCellWidget(row, 1, date_container)
 
-                # Кол 2: ФИО исполнителя (QLineEdit)
-                executor_edit = QLineEdit(visit.get('executor_name', '') or '')
-                executor_edit.setStyleSheet('''
-                    QLineEdit {
-                        background-color: white; border: 1px solid #E0E0E0;
-                        border-radius: 2px; padding: 2px 4px; font-size: 12px;
-                    }
-                ''')
-                executor_edit.editingFinished.connect(
-                    lambda vid=visit_id, r=row, le=executor_edit:
-                        self._on_field_edited(r, vid, 'executor_name', le.text().strip()))
-                self.table.setCellWidget(row, 2, executor_edit)
+                # Кол 2: ФИО исполнителя (QComboBox)
+                executor_combo = QComboBox()
+                executor_combo.addItem('')
+                for name in self._executor_names:
+                    executor_combo.addItem(name)
+                current_executor = visit.get('executor_name', '') or ''
+                if current_executor and current_executor not in self._executor_names:
+                    executor_combo.addItem(current_executor)
+                idx = executor_combo.findText(current_executor)
+                if idx >= 0:
+                    executor_combo.setCurrentIndex(idx)
+                executor_combo.setStyleSheet(
+                    "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
+                    " font-size: 11px; background: white; }")
+                executor_combo.currentTextChanged.connect(
+                    lambda text, vid=visit_id, r=row:
+                        self._on_field_edited(r, vid, 'executor_name', text.strip()))
+                self.table.setCellWidget(row, 2, executor_combo)
 
                 # Кол 3: Примечание (QLineEdit)
                 notes_edit = QLineEdit(visit.get('notes', '') or '')
@@ -394,7 +423,7 @@ class SupervisionVisitsWidget(QWidget):
         """Удалить запись выезда"""
         if not visit_id or not self.card_id:
             return
-        from ui.custom_question_box import CustomQuestionBox
+        from ui.custom_message_box import CustomQuestionBox
         if CustomQuestionBox(self, 'Удаление', 'Удалить эту запись выезда?').exec_():
             try:
                 self.data.delete_supervision_visit(self.card_id, visit_id)
