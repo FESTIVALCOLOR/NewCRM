@@ -152,7 +152,7 @@ def _table_style():
 
 # ── Инфо-блок ────────────────────────────────────────────
 
-def _project_info_block(contract, fn, fb):
+def _project_info_block(contract, fn, fb, available_w):
     """Возвращает элементы: лого, заголовок, блок с инфо о проекте."""
     elements = []
 
@@ -166,7 +166,7 @@ def _project_info_block(contract, fn, fb):
         except Exception:
             pass
 
-    # Информация о проекте — компактная таблица
+    # Информация о проекте — компактная таблица на всю ширину
     info_rows = []
     address = getattr(contract, 'address', None) or '-'
     area = getattr(contract, 'area', None) or 0
@@ -184,7 +184,7 @@ def _project_info_block(contract, fn, fb):
         Paragraph('Адрес:', label_style),
         Paragraph(address, value_style),
         Paragraph('Площадь:', label_style),
-        Paragraph(f'{area} м²', value_style),
+        Paragraph(f'{area} м\u00b2', value_style),
     ])
     type_text = f'{ptype}'
     if psubtype:
@@ -202,7 +202,10 @@ def _project_info_block(contract, fn, fb):
         Paragraph(date.today().strftime('%d.%m.%Y'), value_style),
     ])
 
-    info_table = Table(info_rows, colWidths=[55, 190, 55, 100])
+    # Ширины: label1=80, value1=заполняет, label2=72, value2=остаток
+    lbl1, lbl2, val2 = 80, 72, available_w * 0.25
+    val1 = available_w - lbl1 - lbl2 - val2
+    info_table = Table(info_rows, colWidths=[lbl1, val1, lbl2, val2])
     info_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -245,18 +248,22 @@ def build_timeline_pdf(
     fn = _font()
     fb = _font_bold()
 
+    MARGIN_LR = 15 * mm
+    page = landscape(A4)
+    available_w = page[0] - 2 * MARGIN_LR
+
     output = io.BytesIO()
     doc = SimpleDocTemplate(
         output,
-        pagesize=landscape(A4),
-        leftMargin=15 * mm, rightMargin=15 * mm,
+        pagesize=page,
+        leftMargin=MARGIN_LR, rightMargin=MARGIN_LR,
         topMargin=15 * mm, bottomMargin=20 * mm,
     )
 
     elements = []
 
     # Инфо-блок
-    elements.extend(_project_info_block(contract, fn, fb))
+    elements.extend(_project_info_block(contract, fn, fb, available_w))
 
     # Заголовок таблицы — жёлтая полоска
     title_style = ParagraphStyle('TitleH', fontName=fb, fontSize=13,
@@ -276,6 +283,12 @@ def build_timeline_pdf(
     ]))
     elements.append(title_tbl)
     elements.append(Spacer(1, 3 * mm))
+
+    # Auto-scale col_widths на всю доступную ширину
+    total_w = sum(col_widths)
+    if total_w < available_w:
+        scale = available_w / total_w
+        col_widths = [w * scale for w in col_widths]
 
     # Основная таблица
     header_style = ParagraphStyle('H', fontName=fb, fontSize=9,
