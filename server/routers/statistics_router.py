@@ -377,6 +377,7 @@ async def get_project_statistics(
 
             overdue = overdue_query.scalar() or 0
         except Exception:
+            db.rollback()
             overdue = 0
 
         # По городам
