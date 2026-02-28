@@ -410,13 +410,15 @@ def build_table_pdf(
     elements = []
 
     # --- ШАПКА ---
-    logo_path = resource_path("resources/logo.png")
+    logo_path = resource_path("resources/logo_pdf.png")
+    if not os.path.exists(logo_path):
+        logo_path = resource_path("resources/logo.png")
     if os.path.exists(logo_path):
         try:
-            logo = RLImage(logo_path, width=18 * mm, height=18 * mm)
+            logo = RLImage(logo_path, width=40 * mm, height=18 * mm)
             logo.hAlign = 'CENTER'
             elements.append(logo)
-            elements.append(Spacer(1, 2 * mm))
+            elements.append(Spacer(1, 3 * mm))
         except Exception:
             pass
 

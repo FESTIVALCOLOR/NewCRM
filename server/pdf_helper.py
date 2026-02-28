@@ -37,7 +37,7 @@ ACCENT = colors.HexColor('#FFD93C')
 # Локально: pdf_helper.py в server/ → resources в ../resources/
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _BASE = _HERE if os.path.isdir(os.path.join(_HERE, 'resources')) else os.path.dirname(_HERE)
-LOGO_PATH = os.path.join(_BASE, 'resources', 'festival_logo.png')
+LOGO_PATH = os.path.join(_BASE, 'resources', 'logo_pdf.png')
 FOOTER_IMG = os.path.join(_BASE, 'resources', 'footer.jpg')
 
 # ── Шрифты ────────────────────────────────────────────────
@@ -165,13 +165,13 @@ def _project_info_block(contract, fn, fb, available_w):
     """Возвращает элементы: лого, заголовок, блок с инфо о проекте."""
     elements = []
 
-    # Лого
+    # Лого (по центру)
     if os.path.exists(LOGO_PATH):
         try:
-            logo = RLImage(LOGO_PATH, width=50 * mm, height=15 * mm)
-            logo.hAlign = 'LEFT'
+            logo = RLImage(LOGO_PATH, width=40 * mm, height=18 * mm)
+            logo.hAlign = 'CENTER'
             elements.append(logo)
-            elements.append(Spacer(1, 3 * mm))
+            elements.append(Spacer(1, 4 * mm))
         except Exception:
             pass
 
