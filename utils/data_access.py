@@ -2845,22 +2845,81 @@ class DataAccess(QObject):
             pass
         return {}
 
-    def export_supervision_timeline_excel(self, card_id: int) -> bytes:
-        """Экспорт таблицы сроков надзора в Excel"""
+    def export_supervision_timeline_excel(self, card_id: int, include_commission: bool = True) -> bytes:
+        """Экспорт таблицы сроков надзора в Excel (с/без комиссии)"""
         if self.api_client:
             try:
-                return self.api_client.export_supervision_timeline_excel(card_id)
+                return self.api_client.export_supervision_timeline_excel(card_id, include_commission)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_supervision_timeline_excel: {e}")
         return b''
 
-    def export_supervision_timeline_pdf(self, card_id: int) -> bytes:
-        """Экспорт таблицы сроков надзора в PDF"""
+    def export_supervision_timeline_pdf(self, card_id: int, include_commission: bool = False) -> bytes:
+        """Экспорт таблицы сроков надзора в PDF (с/без комиссии)"""
         if self.api_client:
             try:
-                return self.api_client.export_supervision_timeline_pdf(card_id)
+                return self.api_client.export_supervision_timeline_pdf(card_id, include_commission)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_supervision_timeline_pdf: {e}")
+        return b''
+
+    # ==================== ВЫЕЗДЫ НАДЗОРА ====================
+
+    def get_supervision_visits(self, card_id: int):
+        """Получить выезды по карточке надзора"""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_supervision_visits(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error get_supervision_visits: {e}")
+        return self.db.get_supervision_visits(card_id)
+
+    def create_supervision_visit(self, card_id: int, data: dict):
+        """Создать запись выезда"""
+        local_id = self.db.create_supervision_visit(card_id, data)
+        if self.is_online and self.api_client:
+            try:
+                return self.api_client.create_supervision_visit(card_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error create_supervision_visit: {e}")
+        return {'id': local_id} if local_id else None
+
+    def update_supervision_visit(self, card_id: int, visit_id: int, data: dict) -> bool:
+        """Обновить запись выезда"""
+        self.db.update_supervision_visit(visit_id, data)
+        if self.is_online and self.api_client:
+            try:
+                self.api_client.update_supervision_visit(card_id, visit_id, data)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error update_supervision_visit: {e}")
+        return True
+
+    def delete_supervision_visit(self, card_id: int, visit_id: int) -> bool:
+        """Удалить запись выезда"""
+        self.db.delete_supervision_visit(visit_id)
+        if self.is_online and self.api_client:
+            try:
+                self.api_client.delete_supervision_visit(card_id, visit_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error delete_supervision_visit: {e}")
+        return True
+
+    def export_supervision_visits_excel(self, card_id: int) -> bytes:
+        """Экспорт выездов в Excel"""
+        if self.api_client:
+            try:
+                return self.api_client.export_supervision_visits_excel(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error export_supervision_visits_excel: {e}")
+        return b''
+
+    def export_supervision_visits_pdf(self, card_id: int) -> bytes:
+        """Экспорт выездов в PDF"""
+        if self.api_client:
+            try:
+                return self.api_client.export_supervision_visits_pdf(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API error export_supervision_visits_pdf: {e}")
         return b''
 
     # ==================== ПРЯМОЙ ДОСТУП К БД (для сложных запросов) ====================

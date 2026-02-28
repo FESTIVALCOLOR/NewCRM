@@ -596,6 +596,24 @@ class SupervisionTimelineEntry(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SupervisionVisit(Base):
+    """Записи выездов на объект авторского надзора"""
+    __tablename__ = "supervision_visits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervision_card_id = Column(Integer, ForeignKey("supervision_cards.id", ondelete="CASCADE"), nullable=False, index=True)
+    stage_code = Column(String(30), nullable=False)
+    stage_name = Column(String(255), nullable=False)
+    visit_date = Column(String, nullable=False)  # YYYY-MM-DD
+    executor_name = Column(String(255))  # ФИО исполнителя (ДАН)
+    notes = Column(Text)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    supervision_card = relationship("SupervisionCard", backref="visits")
+
+
 # =========================
 # РАБОЧИЙ ПРОЦЕСС (WORKFLOW)
 # =========================

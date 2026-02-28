@@ -113,22 +113,91 @@ class TimelineMixin:
         )
         return self._handle_response(response)
 
-    def export_supervision_timeline_excel(self, card_id: int) -> bytes:
-        """Экспорт таблицы сроков надзора в Excel"""
+    def export_supervision_timeline_excel(self, card_id: int, include_commission: bool = True) -> bytes:
+        """Экспорт таблицы сроков надзора в Excel (с/без комиссии)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/export/excel"
+            f"{self.base_url}/api/supervision-timeline/{card_id}/export/excel",
+            params={"include_commission": str(include_commission).lower()},
         )
         if response.status_code == 200:
             return response.content
         self._handle_response(response)
         return b''
 
-    def export_supervision_timeline_pdf(self, card_id: int) -> bytes:
-        """Экспорт таблицы сроков надзора в PDF"""
+    def export_supervision_timeline_pdf(self, card_id: int, include_commission: bool = False) -> bytes:
+        """Экспорт таблицы сроков надзора в PDF (с/без комиссии)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/export/pdf"
+            f"{self.base_url}/api/supervision-timeline/{card_id}/export/pdf",
+            params={"include_commission": str(include_commission).lower()},
+        )
+        if response.status_code == 200:
+            return response.content
+        self._handle_response(response)
+        return b''
+
+    # ==================== ВЫЕЗДЫ НАДЗОРА ====================
+
+    def get_supervision_visits(self, card_id: int):
+        """Получить выезды по карточке надзора"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits"
+        )
+        return self._handle_response(response)
+
+    def create_supervision_visit(self, card_id: int, data: dict):
+        """Создать запись выезда"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits",
+            json=data,
+        )
+        return self._handle_response(response)
+
+    def update_supervision_visit(self, card_id: int, visit_id: int, data: dict):
+        """Обновить запись выезда"""
+        response = self._request(
+            'PUT',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits/{visit_id}",
+            json=data,
+        )
+        return self._handle_response(response)
+
+    def delete_supervision_visit(self, card_id: int, visit_id: int):
+        """Удалить запись выезда"""
+        response = self._request(
+            'DELETE',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits/{visit_id}",
+        )
+        self._handle_response(response)
+        return True
+
+    def get_supervision_visits_summary(self, card_id: int):
+        """Итого выездов по месяцам"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits/summary"
+        )
+        return self._handle_response(response)
+
+    def export_supervision_visits_excel(self, card_id: int) -> bytes:
+        """Экспорт выездов в Excel"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits/export/excel"
+        )
+        if response.status_code == 200:
+            return response.content
+        self._handle_response(response)
+        return b''
+
+    def export_supervision_visits_pdf(self, card_id: int) -> bytes:
+        """Экспорт выездов в PDF"""
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/supervision-visits/{card_id}/visits/export/pdf"
         )
         if response.status_code == 200:
             return response.content

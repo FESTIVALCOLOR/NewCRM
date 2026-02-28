@@ -310,8 +310,12 @@ class SupervisionCardEditDialog(QDialog):
         # ВКЛАДКИ: Отложенное создание тяжёлых вкладок (после showEvent)
         # Лёгкие placeholder'ы — реальные виджеты создаются в _init_deferred_tabs()
         self.sv_timeline_widget = None
+        self.sv_visits_widget = None
         self._timeline_placeholder = QWidget()
         self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
+
+        self._visits_placeholder = QWidget()
+        self._visits_tab_index = self.tabs.addTab(self._visits_placeholder, 'Таблица выездов и дефектов')
 
         self._payments_placeholder = QWidget()
         self.payments_tab_index = self.tabs.addTab(self._payments_placeholder, 'Оплаты надзора')
@@ -323,9 +327,6 @@ class SupervisionCardEditDialog(QDialog):
         self.sync_label = QLabel('Синхронизация...')
         self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
         self.sync_label.setVisible(False)
-
-        self._files_placeholder = QWidget()
-        self.files_tab_index = self.tabs.addTab(self._files_placeholder, 'Файлы надзора')
 
         self._deferred_tabs_ready = False
 
@@ -1924,7 +1925,14 @@ class SupervisionCardEditDialog(QDialog):
         return widget
 
     def load_supervision_files(self, validate=True):
-        """Загрузка списка файлов надзора"""
+        """Загрузка списка файлов надзора — делегируем в виджеты вкладок"""
+        # Загрузить файлы в виджет таблицы сроков
+        if self.sv_timeline_widget and hasattr(self.sv_timeline_widget, 'load_files'):
+            self.sv_timeline_widget.load_files()
+        # Загрузить отчёты в виджет выездов
+        if self.sv_visits_widget and hasattr(self.sv_visits_widget, 'load_reports'):
+            self.sv_visits_widget.load_reports()
+        # Совместимость: если файлы_table ещё существуют (legacy), обновить
         if not hasattr(self, 'files_table'):
             return
         try:
@@ -2276,6 +2284,97 @@ class SupervisionCardEditDialog(QDialog):
                 self.supervision_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread)
+        thread.start()
+
+    def upload_supervision_report_file(self):
+        """Загрузка файла отчёта (блок «Отчёты» во вкладке выездов)"""
+        if not self.yandex_disk:
+            CustomMessageBox(self, 'Ошибка', 'Yandex Disk не инициализирован', 'error').exec_()
+            return
+
+        contract_id = self.card_data.get('contract_id')
+        if not contract_id:
+            CustomMessageBox(self, 'Ошибка', 'Не найден ID договора', 'error').exec_()
+            return
+
+        contract_folder = self._get_contract_yandex_folder(contract_id)
+        if not contract_folder:
+            CustomMessageBox(self, 'Ошибка', 'Папка договора на Яндекс.Диске не найдена', 'error').exec_()
+            return
+
+        from ui.crm_supervision_tab import SUPERVISION_STAGE_MAPPING
+        stages = list(SUPERVISION_STAGE_MAPPING.keys())
+
+        from ui.supervision_dialogs import SupervisionFileUploadDialog
+        dialog = SupervisionFileUploadDialog(self, self.card_data, stages, self.api_client)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        result = dialog.get_result()
+        if not result:
+            return
+
+        file_path = result['file_path']
+        stage = result['stage']
+        date = result['date']
+        file_name = result['file_name']
+
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QMetaObject, Q_ARG
+        progress = create_progress_dialog('Загрузка на Яндекс.Диск', 'Загрузка файла...', 'Отмена', 100, self)
+        QApplication.processEvents()
+
+        def upload_thread():
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                report_folder = f"{contract_folder}/Авторский надзор/Отчёты/{stage}"
+                yd.create_folder(f"{contract_folder}/Авторский надзор")
+                yd.create_folder(f"{contract_folder}/Авторский надзор/Отчёты")
+                yd.create_folder(report_folder)
+
+                QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 30))
+
+                yandex_path = f"{report_folder}/{file_name}"
+                result_upload = yd.upload_file(file_path, yandex_path)
+
+                QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 70))
+
+                if result_upload:
+                    public_link = yd.get_public_link(yandex_path)
+                    QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 100))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+
+                    # Сохраняем как supervision_reports
+                    from PyQt5.QtCore import QTimer
+                    def save_report():
+                        try:
+                            file_data = {
+                                'contract_id': contract_id,
+                                'stage': 'supervision_reports',
+                                'file_type': stage,
+                                'yandex_path': yandex_path,
+                                'public_link': public_link or '',
+                                'file_name': file_name,
+                            }
+                            self.data.add_project_file(file_data)
+                            CustomMessageBox(self, 'Успех', f'Отчёт "{file_name}" успешно загружен', 'success').exec_()
+                            self.refresh_files_list()
+                        except Exception as e:
+                            print(f"[ERROR] Ошибка сохранения отчёта: {e}")
+                    QTimer.singleShot(0, save_report)
+                else:
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    from PyQt5.QtCore import QTimer
+                    QTimer.singleShot(0, lambda: CustomMessageBox(
+                        self, 'Ошибка', 'Не удалось загрузить файл', 'error').exec_())
+
+            except Exception as e:
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, lambda: CustomMessageBox(
+                    self, 'Ошибка', f'Ошибка загрузки: {e}', 'error').exec_())
+
+        thread = threading.Thread(target=upload_thread, daemon=True)
         thread.start()
 
     def _on_supervision_upload_completed(self, file_name, stage, date, public_link, yandex_path, contract_id):
@@ -3179,8 +3278,27 @@ class SupervisionCardEditDialog(QDialog):
             )
             self.tabs.removeTab(self._timeline_tab_index)
             self.tabs.insertTab(self._timeline_tab_index, self.sv_timeline_widget, 'Таблица сроков')
+            # Загрузить файлы в блок файлов timeline widget
+            if hasattr(self.sv_timeline_widget, 'load_files'):
+                self.sv_timeline_widget.load_files()
         except Exception as e:
             print(f"[SupervisionCardEditDialog] Ошибка создания таблицы сроков: {e}")
+
+        # Таблица выездов и дефектов
+        try:
+            from ui.supervision_visits_widget import SupervisionVisitsWidget
+            self.sv_visits_widget = SupervisionVisitsWidget(
+                card_data=self.card_data,
+                data=self.data,
+                db=self.data.db,
+                api_client=self.data.api_client,
+                employee=self.employee,
+                parent=self
+            )
+            self.tabs.removeTab(self._visits_tab_index)
+            self.tabs.insertTab(self._visits_tab_index, self.sv_visits_widget, 'Таблица выездов и дефектов')
+        except Exception as e:
+            print(f"[SupervisionCardEditDialog] Ошибка создания таблицы выездов: {e}")
 
         # Оплаты надзора
         payments_widget = self.create_payments_widget()
@@ -3191,11 +3309,6 @@ class SupervisionCardEditDialog(QDialog):
         info_widget = self.create_project_info_widget()
         self.tabs.removeTab(self.project_info_tab_index)
         self.tabs.insertTab(self.project_info_tab_index, info_widget, 'Информация о проекте')
-
-        # Файлы надзора
-        files_widget = self.create_files_widget()
-        self.tabs.removeTab(self.files_tab_index)
-        self.tabs.insertTab(self.files_tab_index, files_widget, 'Файлы надзора')
 
         # Восстановить текущую вкладку
         self.tabs.setCurrentIndex(current_tab)

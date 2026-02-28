@@ -5916,6 +5916,84 @@ class DatabaseManager(DatabaseMigrations):
             return False
 
     # =========================
+    # ВЫЕЗДЫ НАДЗОРА
+    # =========================
+
+    def get_supervision_visits(self, supervision_card_id):
+        """Получить выезды по карточке надзора"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM supervision_visits
+                WHERE supervision_card_id = ?
+                ORDER BY sort_order, visit_date
+            ''', (supervision_card_id,))
+            rows = [dict(row) for row in cursor.fetchall()]
+            self.close()
+            return rows
+        except Exception as e:
+            print(f"[DB] Ошибка get_supervision_visits: {e}")
+            return []
+
+    def create_supervision_visit(self, supervision_card_id, data):
+        """Создать запись выезда"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO supervision_visits
+                (supervision_card_id, stage_code, stage_name, visit_date, executor_name, notes, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                supervision_card_id,
+                data.get('stage_code', ''),
+                data.get('stage_name', ''),
+                data.get('visit_date', ''),
+                data.get('executor_name', ''),
+                data.get('notes', ''),
+                data.get('sort_order', 0),
+            ))
+            conn.commit()
+            visit_id = cursor.lastrowid
+            self.close()
+            return {'id': visit_id, 'supervision_card_id': supervision_card_id, **data}
+        except Exception as e:
+            print(f"[DB] Ошибка create_supervision_visit: {e}")
+            return None
+
+    def update_supervision_visit(self, visit_id, data):
+        """Обновить запись выезда"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            set_clause, values = self._build_set_clause(data)
+            values = values + [visit_id]
+            cursor.execute(
+                f"UPDATE supervision_visits SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                tuple(values)
+            )
+            conn.commit()
+            self.close()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"[DB] Ошибка update_supervision_visit: {e}")
+            return False
+
+    def delete_supervision_visit(self, visit_id):
+        """Удалить запись выезда"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM supervision_visits WHERE id = ?', (visit_id,))
+            conn.commit()
+            self.close()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"[DB] Ошибка delete_supervision_visit: {e}")
+            return False
+
+    # =========================
     # ГЛОБАЛЬНЫЙ ПОИСК
     # =========================
 

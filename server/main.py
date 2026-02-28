@@ -386,6 +386,9 @@ app.include_router(norm_days_router, prefix="/api/v1/norm-days")
 app.include_router(supervision_timeline_router, prefix="/api/v1/supervision-timeline")
 app.include_router(project_templates_router, prefix="/api/v1/project-templates")
 app.include_router(supervision_router, prefix="/api/v1/supervision")
+
+from routers.supervision_visits_router import router as supervision_visits_router
+app.include_router(supervision_visits_router, prefix="/api/v1/supervision-visits")
 app.include_router(action_history_router, prefix="/api/v1/action-history")
 app.include_router(reports_router, prefix="/api/v1/reports")
 

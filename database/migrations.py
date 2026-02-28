@@ -1376,7 +1376,7 @@ class DatabaseMigrations:
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                contract_id INTEGER NOT NULL,
+                contract_id INTEGER,
                 crm_card_id INTEGER,
                 supervision_card_id INTEGER,
                 employee_id INTEGER NOT NULL,
@@ -1580,6 +1580,86 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[WARN] Миграция rates/payments/salaries: {e}")
+
+    def fix_payments_contract_id_nullable(self):
+        """Миграция: снять NOT NULL с contract_id в payments.
+        Оклады (salary_type) не привязаны к договорам — contract_id = NULL."""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            # Проверяем, есть ли NOT NULL на contract_id
+            cursor.execute("PRAGMA table_info(payments)")
+            cols = cursor.fetchall()
+            contract_col = [c for c in cols if c[1] == 'contract_id']
+            if not contract_col:
+                self.close()
+                return
+            # c[3] = notnull flag: 1 = NOT NULL, 0 = nullable
+            if contract_col[0][3] == 0:
+                # Уже nullable — ничего делать не нужно
+                self.close()
+                return
+            # Пересоздаём таблицу без NOT NULL на contract_id
+            # Шаг 1: получаем все колонки
+            col_names = [c[1] for c in cols]
+            cols_str = ', '.join(col_names)
+            # Шаг 2: rename → temp
+            cursor.execute("ALTER TABLE payments RENAME TO payments_old")
+            # Шаг 3: создаём новую таблицу (contract_id без NOT NULL)
+            cursor.execute('''
+            CREATE TABLE payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contract_id INTEGER,
+                crm_card_id INTEGER,
+                supervision_card_id INTEGER,
+                employee_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                stage_name TEXT,
+                calculated_amount REAL NOT NULL,
+                manual_amount REAL,
+                final_amount REAL NOT NULL,
+                is_manual BOOLEAN DEFAULT 0,
+                payment_type TEXT,
+                report_month TEXT,
+                is_paid BOOLEAN DEFAULT 0,
+                paid_date TIMESTAMP,
+                paid_by INTEGER,
+                payment_status TEXT,
+                reassigned BOOLEAN DEFAULT 0,
+                old_employee_id INTEGER,
+                stage TEXT,
+                base_amount REAL,
+                bonus_amount REAL,
+                penalty_amount REAL,
+                status TEXT,
+                payment_date TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (contract_id) REFERENCES contracts(id),
+                FOREIGN KEY (employee_id) REFERENCES employees(id)
+            )
+            ''')
+            # Шаг 4: копируем данные (только колонки которые есть в обоих таблицах)
+            new_cols = [
+                'id', 'contract_id', 'crm_card_id', 'supervision_card_id',
+                'employee_id', 'role', 'stage_name',
+                'calculated_amount', 'manual_amount', 'final_amount',
+                'is_manual', 'payment_type', 'report_month',
+                'is_paid', 'paid_date', 'paid_by',
+                'payment_status', 'reassigned', 'old_employee_id',
+                'stage', 'base_amount', 'bonus_amount', 'penalty_amount',
+                'status', 'payment_date', 'created_at', 'updated_at'
+            ]
+            common_cols = [c for c in new_cols if c in col_names]
+            common_str = ', '.join(common_cols)
+            cursor.execute(f"INSERT INTO payments ({common_str}) SELECT {common_str} FROM payments_old")
+            # Шаг 5: удаляем старую
+            cursor.execute("DROP TABLE payments_old")
+            conn.commit()
+            print("[OK] payments.contract_id теперь nullable (для окладов)")
+            self.close()
+        except Exception as e:
+            print(f"[WARN] fix_payments_contract_id_nullable: {e}")
 
     def add_project_subtype_to_contracts(self):
         """Миграция: поле project_subtype в contracts"""
@@ -1807,6 +1887,28 @@ class DatabaseMigrations:
             sv_cols = [col[1] for col in cursor.fetchall()]
             if 'commission' not in sv_cols:
                 cursor.execute('ALTER TABLE supervision_timeline_entries ADD COLUMN commission REAL DEFAULT 0')
+
+            # Таблица выездов надзора
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS supervision_visits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    supervision_card_id INTEGER NOT NULL,
+                    stage_code TEXT NOT NULL,
+                    stage_name TEXT NOT NULL,
+                    visit_date TEXT NOT NULL,
+                    executor_name TEXT,
+                    notes TEXT,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (supervision_card_id) REFERENCES supervision_cards(id) ON DELETE CASCADE
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_supervision_visits_card_id
+                ON supervision_visits(supervision_card_id)
+            ''')
 
             conn.commit()
             self.close()

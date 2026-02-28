@@ -9,12 +9,14 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
     QPushButton, QHeaderView, QDateEdit,
     QAbstractItemView, QFileDialog, QComboBox, QLineEdit,
-    QTextEdit, QDialog, QDialogButtonBox
+    QTextEdit, QDialog, QDialogButtonBox, QGroupBox,
+    QTableWidgetItem
 )
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QDoubleValidator
+from PyQt5.QtCore import Qt, QDate, QUrl
+from PyQt5.QtGui import QDoubleValidator, QDesktopServices
 from utils.calendar_helpers import add_today_button_to_dateedit
 from utils.icon_loader import IconLoader
+from utils.table_settings import apply_no_focus_delegate
 from datetime import datetime, timedelta
 import logging
 
@@ -455,52 +457,6 @@ class SupervisionTimelineWidget(QWidget):
 
         layout.addWidget(self.table, 1)
 
-        # === ТАБЛИЦА ВЫЕЗДОВ И ДЕФЕКТОВ ===
-        defects_header = QLabel('Выезды и дефекты')
-        defects_header.setStyleSheet(
-            'font-size: 12px; font-weight: bold; color: #333; margin-top: 10px;'
-        )
-        layout.addWidget(defects_header)
-
-        self.DEFECTS_COLUMNS = [
-            'Стадия', 'Выезды на объект', 'Дефекты обнаружено', 'Дефекты устранено'
-        ]
-        self.DEFECTS_COLUMN_WIDTHS = [220, 130, 150, 150]
-
-        self.defects_table = QTableWidget()
-        self.defects_table.setColumnCount(len(self.DEFECTS_COLUMNS))
-        self.defects_table.setHorizontalHeaderLabels(self.DEFECTS_COLUMNS)
-        self.defects_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.defects_table.setSelectionMode(QAbstractItemView.NoSelection)
-        self.defects_table.verticalHeader().setVisible(False)
-        self.defects_table.setShowGrid(True)
-        self.defects_table.setAlternatingRowColors(False)
-
-        defects_header_view = self.defects_table.horizontalHeader()
-        for col in range(len(self.DEFECTS_COLUMNS)):
-            defects_header_view.setSectionResizeMode(col, QHeaderView.Interactive)
-        for col, width in enumerate(self.DEFECTS_COLUMN_WIDTHS):
-            self.defects_table.setColumnWidth(col, width)
-        defects_header_view.setStretchLastSection(True)
-
-        self.defects_table.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #E0E0E0;
-                gridline-color: #E0E0E0;
-                font-size: 11px;
-            }
-            QHeaderView::section {
-                background-color: #2F5496;
-                color: white;
-                border: 1px solid #1B3A6E;
-                padding: 5px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-        """)
-
-        layout.addWidget(self.defects_table)
-
         # === СВОДКА ===
         self.summary_widget = QWidget()
         summary_layout = QHBoxLayout(self.summary_widget)
@@ -509,46 +465,63 @@ class SupervisionTimelineWidget(QWidget):
         self.lbl_budget_plan = QLabel('Бюджет план: 0')
         self.lbl_budget_fact = QLabel('Бюджет факт: 0')
         self.lbl_savings = QLabel('Экономия: 0')
-        self.lbl_defects = QLabel('Дефекты: 0/0')
-        self.lbl_visits = QLabel('Визиты: 0')
+        self.lbl_commission = QLabel('Комиссия: 0')
 
-        for lbl in [self.lbl_budget_plan, self.lbl_budget_fact, self.lbl_savings, self.lbl_defects, self.lbl_visits]:
+        for lbl in [self.lbl_budget_plan, self.lbl_budget_fact, self.lbl_savings, self.lbl_commission]:
             lbl.setStyleSheet('font-size: 11px; font-weight: bold; color: #333; padding: 0 8px;')
             summary_layout.addWidget(lbl)
 
         summary_layout.addStretch()
         layout.addWidget(self.summary_widget)
 
-        # === КНОПКИ ===
+        # === КНОПКИ ЭКСПОРТА ===
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
-        self.btn_excel = QPushButton('Экспорт в Excel')
-        self.btn_excel.setFixedHeight(32)
-        self.btn_excel.setStyleSheet("""
+        EXCEL_STYLE = """
             QPushButton {
                 background-color: #217346; color: white; border: none;
-                border-radius: 4px; padding: 0 16px; font-size: 12px;
+                border-radius: 4px; padding: 0 14px; font-size: 11px;
             }
             QPushButton:hover { background-color: #1a5c38; }
-        """)
-        self.btn_excel.clicked.connect(self._export_excel)
-        btn_layout.addWidget(self.btn_excel)
-
-        self.btn_pdf = QPushButton('Экспорт в PDF (без бюджетов)')
-        self.btn_pdf.setFixedHeight(32)
-        self.btn_pdf.setStyleSheet("""
+        """
+        PDF_STYLE = """
             QPushButton {
                 background-color: #C62828; color: white; border: none;
-                border-radius: 4px; padding: 0 16px; font-size: 12px;
+                border-radius: 4px; padding: 0 14px; font-size: 11px;
             }
             QPushButton:hover { background-color: #a52222; }
-        """)
-        self.btn_pdf.clicked.connect(self._export_pdf)
-        btn_layout.addWidget(self.btn_pdf)
+        """
+
+        self.btn_excel_comm = QPushButton('Excel (с комиссией)')
+        self.btn_excel_comm.setFixedHeight(32)
+        self.btn_excel_comm.setStyleSheet(EXCEL_STYLE)
+        self.btn_excel_comm.clicked.connect(lambda: self._export_excel(include_commission=True))
+        btn_layout.addWidget(self.btn_excel_comm)
+
+        self.btn_excel_no_comm = QPushButton('Excel (без комиссии)')
+        self.btn_excel_no_comm.setFixedHeight(32)
+        self.btn_excel_no_comm.setStyleSheet(EXCEL_STYLE)
+        self.btn_excel_no_comm.clicked.connect(lambda: self._export_excel(include_commission=False))
+        btn_layout.addWidget(self.btn_excel_no_comm)
+
+        self.btn_pdf_comm = QPushButton('PDF (с комиссией)')
+        self.btn_pdf_comm.setFixedHeight(32)
+        self.btn_pdf_comm.setStyleSheet(PDF_STYLE)
+        self.btn_pdf_comm.clicked.connect(lambda: self._export_pdf(include_commission=True))
+        btn_layout.addWidget(self.btn_pdf_comm)
+
+        self.btn_pdf_no_comm = QPushButton('PDF (без комиссии)')
+        self.btn_pdf_no_comm.setFixedHeight(32)
+        self.btn_pdf_no_comm.setStyleSheet(PDF_STYLE)
+        self.btn_pdf_no_comm.clicked.connect(lambda: self._export_pdf(include_commission=False))
+        btn_layout.addWidget(self.btn_pdf_no_comm)
 
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
+
+        # === БЛОК ФАЙЛОВ ===
+        self._build_files_section(layout)
 
     # Стадии надзора для локальной инициализации
     SUPERVISION_STAGES = [
@@ -753,8 +726,8 @@ class SupervisionTimelineWidget(QWidget):
             self.table.setUpdatesEnabled(True)
             self._loading = False
 
-        # Обновить таблицу дефектов
-        self._populate_defects_table()
+        # Обновить блок файлов (если создан)
+        pass
 
     def _add_totals_row(self, row):
         """Добавить строку 'Итого' в конец таблицы (не редактируемая, жирный шрифт, серый фон)"""
@@ -865,151 +838,13 @@ class SupervisionTimelineWidget(QWidget):
             except Exception as e:
                 print(f"[SupervisionTimelineWidget] Ошибка сохранения: {e}")
 
-    def _populate_defects_table(self):
-        """Заполнение таблицы выездов и дефектов"""
-        self.defects_table.setUpdatesEnabled(False)
-        try:
-            self.defects_table.setRowCount(0)
-            total_rows = len(self.entries) + 1 if self.entries else 0
-            self.defects_table.setRowCount(total_rows)
-
-            for row, entry in enumerate(self.entries):
-                self.defects_table.setRowHeight(row, 30)
-                stage_code = entry.get('stage_code', '')
-                bg = '#FFFFFF' if row % 2 == 0 else '#F9F9F9'
-
-                # Кол 0: Стадия (только чтение)
-                stage_lbl = self._make_cell_label(
-                    entry.get('stage_name', ''), bg, 'left', font_size=11)
-                self.defects_table.setCellWidget(row, 0, stage_lbl)
-
-                # Кол 1: Выезды на объект
-                visits = entry.get('site_visits', 0) or 0
-                visits_text = str(visits) if visits else ''
-                visits_cell = self._create_defects_editable_cell(
-                    visits_text, bg, row, stage_code, 'site_visits')
-                self.defects_table.setCellWidget(row, 1, visits_cell)
-
-                # Кол 2: Дефекты обнаружено
-                df = entry.get('defects_found', 0) or 0
-                df_text = str(df) if df else ''
-                df_cell = self._create_defects_editable_cell(
-                    df_text, bg, row, stage_code, 'defects_found')
-                self.defects_table.setCellWidget(row, 2, df_cell)
-
-                # Кол 3: Дефекты устранено
-                dr = entry.get('defects_resolved', 0) or 0
-                dr_text = str(dr) if dr else ''
-                dr_cell = self._create_defects_editable_cell(
-                    dr_text, bg, row, stage_code, 'defects_resolved')
-                self.defects_table.setCellWidget(row, 3, dr_cell)
-
-            # === СТРОКА "ИТОГО" ===
-            if self.entries:
-                self._add_defects_totals_row(len(self.entries))
-        finally:
-            self.defects_table.setUpdatesEnabled(True)
-
-    def _add_defects_totals_row(self, row):
-        """Строка 'Итого' для таблицы дефектов"""
-        bg = '#F5F5F5'
-        self.defects_table.setRowHeight(row, 30)
-
-        totals_lbl = self._make_cell_label('Итого', bg, 'left', bold=True, font_size=11)
-        self.defects_table.setCellWidget(row, 0, totals_lbl)
-
-        total_visits = sum(e.get('site_visits', 0) or 0 for e in self.entries)
-        total_found = sum(e.get('defects_found', 0) or 0 for e in self.entries)
-        total_resolved = sum(e.get('defects_resolved', 0) or 0 for e in self.entries)
-
-        v_lbl = self._make_cell_label(
-            str(total_visits) if total_visits else '', bg, 'center', bold=True, font_size=11)
-        self.defects_table.setCellWidget(row, 1, v_lbl)
-
-        df_lbl = self._make_cell_label(
-            str(total_found) if total_found else '', bg, 'center', bold=True, font_size=11)
-        self.defects_table.setCellWidget(row, 2, df_lbl)
-
-        dr_lbl = self._make_cell_label(
-            str(total_resolved) if total_resolved else '', bg, 'center', bold=True, font_size=11)
-        self.defects_table.setCellWidget(row, 3, dr_lbl)
-
-    def _create_defects_editable_cell(self, text, bg_color, row, stage_code, field_name):
-        """Ячейка с карандашом для таблицы дефектов"""
-        container = QWidget()
-        container.setStyleSheet('background-color: transparent;')
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(2, 0, 2, 0)
-        layout.setSpacing(2)
-        layout.setAlignment(Qt.AlignVCenter)
-
-        lbl = QLabel(text)
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet(
-            f'background-color: {bg_color}; color: #333333; padding: 2px 4px; '
-            f'font-size: 11px; border-radius: 2px; border: 1px solid #E0E0E0;'
-        )
-        lbl.setMinimumWidth(30)
-
-        pencil_btn = self._create_pencil_btn()
-        pencil_btn.clicked.connect(
-            lambda checked, r=row, sc=stage_code, fn=field_name, cur=text:
-                self._edit_defects_cell(r, sc, fn, cur)
-        )
-
-        layout.addWidget(lbl, 1)
-        layout.addWidget(pencil_btn, 0)
-        return container
-
-    def _edit_defects_cell(self, row, stage_code, field_name, current_text):
-        """Inline-редактирование числовой ячейки таблицы дефектов"""
-        col_map = {'site_visits': 1, 'defects_found': 2, 'defects_resolved': 3}
-        col = col_map.get(field_name, -1)
-        if col < 0:
-            return
-
-        line_edit = QLineEdit()
-        clean_text = current_text.strip() if current_text else ''
-        line_edit.setText(clean_text)
-        line_edit.setValidator(QDoubleValidator(0, 999999, 0))
-
-        line_edit.setStyleSheet('''
-            QLineEdit {
-                background-color: #FFF2CC;
-                border: 1px solid #CCCCCC;
-                border-radius: 2px;
-                padding: 2px 4px;
-                font-size: 11px;
-            }
-        ''')
-
-        def save_and_close():
-            text = line_edit.text().strip()
-            try:
-                value = int(float(text)) if text else 0
-            except ValueError:
-                value = 0
-
-            if row < len(self.entries):
-                self.entries[row][field_name] = value
-
-            self._save_entry(stage_code, {field_name: value})
-            self._populate_defects_table()
-            self._update_summary()
-
-        line_edit.editingFinished.connect(save_and_close)
-        self.defects_table.setCellWidget(row, col, line_edit)
-        line_edit.setFocus()
-        line_edit.selectAll()
 
     def _update_summary(self):
         """Обновление сводки"""
         total_plan = sum(e.get('budget_planned', 0) or 0 for e in self.entries)
         total_fact = sum(e.get('budget_actual', 0) or 0 for e in self.entries)
         total_savings = sum(e.get('budget_savings', 0) or 0 for e in self.entries)
-        total_defects = sum(e.get('defects_found', 0) or 0 for e in self.entries)
-        total_resolved = sum(e.get('defects_resolved', 0) or 0 for e in self.entries)
-        total_visits = sum(e.get('site_visits', 0) or 0 for e in self.entries)
+        total_commission = sum(e.get('commission', 0) or 0 for e in self.entries)
 
         self.lbl_budget_plan.setText(f'Бюджет план: {total_plan:,.0f}')
         self.lbl_budget_fact.setText(f'Бюджет факт: {total_fact:,.0f}')
@@ -1023,18 +858,20 @@ class SupervisionTimelineWidget(QWidget):
             savings_style += ' color: #333;'
         self.lbl_savings.setStyleSheet(savings_style)
         self.lbl_savings.setText(f'Экономия: {total_savings:,.0f}')
-        self.lbl_defects.setText(f'Дефекты: {total_defects}/{total_resolved}')
-        self.lbl_visits.setText(f'Визиты: {total_visits}')
+        self.lbl_commission.setText(f'Комиссия: {total_commission:,.0f}')
 
-    def _export_excel(self):
-        """Экспорт в Excel"""
+    def _export_excel(self, include_commission=True):
+        """Экспорт в Excel (с/без комиссии)"""
         if not self.card_id:
             return
         try:
-            file_bytes = self.data.export_supervision_timeline_excel(self.card_id)
+            file_bytes = self.data.export_supervision_timeline_excel(
+                self.card_id, include_commission=include_commission)
             if file_bytes:
+                suffix = ' с комиссией' if include_commission else ' без комиссии'
                 path, _ = QFileDialog.getSaveFileName(
-                    self, 'Сохранить Excel', f'supervision_timeline_{self.card_id}.xlsx',
+                    self, 'Сохранить Excel',
+                    f'Таблица сроков{suffix} {self.contract_data.get("address", "")}.xlsx',
                     'Excel (*.xlsx)'
                 )
                 if path:
@@ -1043,20 +880,22 @@ class SupervisionTimelineWidget(QWidget):
         except Exception as e:
             logger.error("Ошибка экспорта Excel авторского надзора: %s", e, exc_info=True)
 
-    def _export_pdf(self):
-        """Экспорт в PDF (без бюджетов)"""
+    def _export_pdf(self, include_commission=False):
+        """Экспорт в PDF (с/без комиссии)"""
         if not self.card_id:
             return
         try:
-            file_bytes = self.data.export_supervision_timeline_pdf(self.card_id)
+            file_bytes = self.data.export_supervision_timeline_pdf(
+                self.card_id, include_commission=include_commission)
             if not file_bytes:
                 from ui.custom_message_box import CustomMessageBox
                 CustomMessageBox(self, 'Предупреждение',
                                  'Сервер не вернул данные для PDF-экспорта.', 'warning').exec_()
                 return
+            suffix = ' с комиссией' if include_commission else ' без комиссии'
             path, _ = QFileDialog.getSaveFileName(
                 self, 'Сохранить PDF',
-                f'Отчет Авторский надзор {self.contract_data.get("address", "")} от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
+                f'Таблица сроков{suffix} {self.contract_data.get("address", "")} от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
                 'PDF (*.pdf)'
             )
             if path:
@@ -1069,3 +908,161 @@ class SupervisionTimelineWidget(QWidget):
             logger.error("Ошибка экспорта PDF авторского надзора: %s", e, exc_info=True)
             from ui.custom_message_box import CustomMessageBox
             CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать PDF:\n{e}', 'error').exec_()
+
+    # === БЛОК ФАЙЛОВ ===
+
+    def _build_files_section(self, parent_layout):
+        """Создание блока файлов под кнопками экспорта"""
+        GROUP_BOX_STYLE = """
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 10px;
+                background-color: #FAFAFA;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+                color: #2C3E50;
+            }
+        """
+
+        files_group = QGroupBox("Файлы авторского надзора")
+        files_group.setStyleSheet(GROUP_BOX_STYLE)
+        fl = QVBoxLayout()
+
+        # Кнопка загрузки
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        upload_btn = IconLoader.create_icon_button(
+            'upload', 'Загрузить файл', 'Загрузить файл на Яндекс.Диск', icon_size=12)
+        upload_btn.setFixedHeight(32)
+        upload_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #ffd93c; color: #333333;
+                padding: 6px 20px; border-radius: 4px;
+                font-weight: bold; min-width: 200px;
+            }
+            QPushButton:hover { background-color: #e6c435; }
+        ''')
+        upload_btn.clicked.connect(self._upload_file)
+        btn_row.addWidget(upload_btn, 2)
+        btn_row.addStretch(1)
+        fl.addLayout(btn_row)
+
+        # Таблица файлов
+        self.files_table = QTableWidget()
+        apply_no_focus_delegate(self.files_table)
+        self.files_table.setColumnCount(4)
+        self.files_table.setHorizontalHeaderLabels(
+            ['Название файла', 'Тип', 'Дата загрузки', 'Действия'])
+        self.files_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.files_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.files_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.files_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.files_table.setAlternatingRowColors(True)
+        self.files_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.files_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.files_table.verticalHeader().setDefaultSectionSize(32)
+
+        fl.addWidget(self.files_table, 1)
+        files_group.setLayout(fl)
+        parent_layout.addWidget(files_group)
+
+    def _upload_file(self):
+        """Загрузка файла — делегируем родительскому диалогу"""
+        dialog = self.parent()
+        if dialog and hasattr(dialog, 'upload_supervision_file'):
+            dialog.upload_supervision_file()
+
+    def load_files(self):
+        """Загрузить список файлов (вызывается из родительского диалога)"""
+        if not hasattr(self, 'files_table'):
+            return
+        try:
+            contract_id = self.card_data.get('contract_id')
+            if not contract_id:
+                return
+
+            api_files = self.data.get_project_files(contract_id, stage='supervision')
+            if not api_files:
+                all_files = self.data.get_project_files(contract_id)
+                api_files = [f for f in (all_files or [])
+                             if f.get('file_type') == 'Файл надзора' or f.get('stage') == 'supervision']
+
+            files = [
+                {
+                    'id': f.get('id'),
+                    'file_name': f.get('file_name'),
+                    'file_type': f.get('file_type'),
+                    'yandex_path': f.get('yandex_path'),
+                    'public_link': f.get('public_link'),
+                    'created_at': f.get('upload_date') or f.get('created_at')
+                }
+                for f in (api_files or [])
+            ]
+
+            self.files_table.setRowCount(len(files))
+
+            for row, file_data in enumerate(files):
+                name_item = QTableWidgetItem(file_data['file_name'] or 'Без названия')
+                name_item.setData(Qt.UserRole, file_data['id'])
+                self.files_table.setItem(row, 0, name_item)
+
+                type_item = QTableWidgetItem(file_data['file_type'] or 'Файл')
+                self.files_table.setItem(row, 1, type_item)
+
+                from utils.date_utils import format_date
+                date_str = format_date(file_data['created_at']) if file_data['created_at'] else ''
+                date_item = QTableWidgetItem(date_str)
+                self.files_table.setItem(row, 2, date_item)
+
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout()
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(4)
+
+                file_link = file_data.get('public_link') or ''
+                if file_link:
+                    open_btn = IconLoader.create_icon_button('eye', '', 'Открыть файл', icon_size=12)
+                    open_btn.setFixedSize(20, 20)
+                    open_btn.setStyleSheet('''
+                        QPushButton {
+                            background-color: #d4e4bc; border: 1px solid #c0d4a8;
+                            border-radius: 4px; padding: 0px;
+                        }
+                        QPushButton:hover { background-color: #c0d4a8; }
+                    ''')
+                    open_btn.clicked.connect(
+                        lambda checked, link=file_link: QDesktopServices.openUrl(QUrl(link)))
+                    actions_layout.addWidget(open_btn)
+
+                delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить файл', icon_size=12)
+                delete_btn.setFixedSize(20, 20)
+                delete_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #FFE6E6; border: 1px solid #FFCCCC;
+                        border-radius: 4px; padding: 0px;
+                    }
+                    QPushButton:hover { background-color: #FFCCCC; }
+                ''')
+                delete_btn.clicked.connect(
+                    lambda checked, fid=file_data['id'], fpath=file_data.get('yandex_path'):
+                        self._delete_file(fid, fpath))
+                actions_layout.addWidget(delete_btn)
+
+                actions_layout.setAlignment(Qt.AlignCenter)
+                actions_widget.setLayout(actions_layout)
+                self.files_table.setCellWidget(row, 3, actions_widget)
+
+        except Exception as e:
+            logger.error("Ошибка загрузки файлов в timeline widget: %s", e)
+
+    def _delete_file(self, file_id, yandex_path):
+        """Удалить файл — делегируем родительскому диалогу"""
+        dialog = self.parent()
+        if dialog and hasattr(dialog, 'delete_supervision_file'):
+            dialog.delete_supervision_file(file_id, yandex_path)

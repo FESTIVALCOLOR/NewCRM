@@ -1156,6 +1156,39 @@ class SupervisionTimelineResponse(SupervisionTimelineBase):
 
 
 # =========================
+# ВЫЕЗДЫ НАДЗОРА
+# =========================
+
+class SupervisionVisitCreate(BaseModel):
+    stage_code: str
+    stage_name: str
+    visit_date: str
+    executor_name: Optional[str] = None
+    notes: Optional[str] = None
+
+class SupervisionVisitUpdate(BaseModel):
+    stage_code: Optional[str] = None
+    stage_name: Optional[str] = None
+    visit_date: Optional[str] = None
+    executor_name: Optional[str] = None
+    notes: Optional[str] = None
+
+class SupervisionVisitResponse(BaseModel):
+    id: int
+    supervision_card_id: int
+    stage_code: str
+    stage_name: str
+    visit_date: str
+    executor_name: Optional[str] = None
+    notes: Optional[str] = None
+    sort_order: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+# =========================
 # ГЛОБАЛЬНЫЙ ПОИСК
 # =========================
 

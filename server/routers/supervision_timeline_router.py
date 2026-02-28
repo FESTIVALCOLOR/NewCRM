@@ -186,10 +186,11 @@ async def get_supervision_timeline_summary(
 @router.get("/{card_id}/export/excel")
 async def export_supervision_timeline_excel(
     card_id: int,
+    include_commission: bool = True,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Экспорт таблицы сроков надзора в Excel"""
+    """Экспорт таблицы сроков надзора в Excel (с/без комиссии)."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -210,19 +211,27 @@ async def export_supervision_timeline_excel(
     ws.append(["Адрес:", contract.address if contract else ""])
     ws.append([])
 
-    # Заголовки
-    headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Бюджет план",
-               "Бюджет факт", "Экономия", "Комиссия", "Поставщик", "Статус", "Примечания"]
+    # Заголовки (с/без комиссии)
+    if include_commission:
+        headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Исполнитель",
+                   "Бюджет план", "Бюджет факт", "Экономия", "Поставщик",
+                   "Комиссия", "Статус", "Примечания"]
+        widths = [30, 14, 14, 10, 18, 14, 14, 14, 18, 14, 14, 25]
+    else:
+        headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Исполнитель",
+                   "Бюджет план", "Бюджет факт", "Экономия", "Поставщик",
+                   "Статус", "Примечания"]
+        widths = [30, 14, 14, 10, 18, 14, 14, 14, 18, 14, 25]
     ws.append(headers)
 
-    header_fill = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
+    header_fill = PatternFill(start_color="444444", end_color="444444", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=10)
     thin_border = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    for col_idx, header in enumerate(headers, 1):
+    for col_idx in range(1, len(headers) + 1):
         cell = ws.cell(row=3, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
@@ -238,47 +247,69 @@ async def export_supervision_timeline_excel(
     }
 
     for entry in entries:
-        row_data = [
-            entry.stage_name,
-            entry.plan_date or "",
-            entry.actual_date or "",
-            entry.actual_days or 0,
-            entry.budget_planned or 0,
-            entry.budget_actual or 0,
-            entry.budget_savings or 0,
-            entry.commission or 0,
-            entry.supplier or "",
-            entry.status or "",
-            entry.notes or ""
-        ]
+        if include_commission:
+            row_data = [
+                entry.stage_name,
+                entry.plan_date or "",
+                entry.actual_date or "",
+                entry.actual_days or 0,
+                entry.executor or "",
+                entry.budget_planned or 0,
+                entry.budget_actual or 0,
+                entry.budget_savings or 0,
+                entry.supplier or "",
+                entry.commission or 0,
+                entry.status or "",
+                entry.notes or "",
+            ]
+        else:
+            row_data = [
+                entry.stage_name,
+                entry.plan_date or "",
+                entry.actual_date or "",
+                entry.actual_days or 0,
+                entry.executor or "",
+                entry.budget_planned or 0,
+                entry.budget_actual or 0,
+                entry.budget_savings or 0,
+                entry.supplier or "",
+                entry.status or "",
+                entry.notes or "",
+            ]
         ws.append(row_data)
         row_idx = ws.max_row
 
-        for col_idx in range(1, 12):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            cell.border = thin_border
+        for col_idx in range(1, len(headers) + 1):
+            ws.cell(row=row_idx, column=col_idx).border = thin_border
 
         # Цвет по статусу
         color_hex = status_colors.get(entry.status)
         if color_hex:
             fill = PatternFill(start_color=color_hex, end_color=color_hex, fill_type="solid")
-            for col_idx in range(1, 11):
+            for col_idx in range(1, len(headers) + 1):
                 ws.cell(row=row_idx, column=col_idx).fill = fill
 
-    # Сводка внизу
+    # Сводка ИТОГО
     ws.append([])
     total_planned = sum(e.budget_planned or 0 for e in entries)
     total_actual = sum(e.budget_actual or 0 for e in entries)
     total_savings = sum(e.budget_savings or 0 for e in entries)
-    ws.append(["ИТОГО:", "", "", "", total_planned, total_actual, total_savings])
+    total_commission = sum(e.commission or 0 for e in entries)
+
+    if include_commission:
+        total_row_data = ["ИТОГО:", "", "", "", "", total_planned, total_actual,
+                          total_savings, "", total_commission, "", ""]
+    else:
+        total_row_data = ["ИТОГО:", "", "", "", "", total_planned, total_actual,
+                          total_savings, "", "", ""]
+    ws.append(total_row_data)
     total_row = ws.max_row
-    for col_idx in range(1, 11):
+    for col_idx in range(1, len(headers) + 1):
         cell = ws.cell(row=total_row, column=col_idx)
         cell.font = Font(bold=True)
         cell.border = thin_border
 
     # Ширина колонок
-    widths = [30, 14, 14, 10, 14, 14, 14, 20, 14, 25]
     for i, w in enumerate(widths):
         ws.column_dimensions[chr(65 + i)].width = w
 
@@ -297,13 +328,14 @@ async def export_supervision_timeline_excel(
 @router.get("/{card_id}/export/pdf")
 async def export_supervision_timeline_pdf(
     card_id: int,
+    include_commission: bool = False,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Экспорт таблицы сроков надзора в PDF (фирменный стиль, без бюджетов)."""
+    """Экспорт таблицы сроков надзора в PDF (с/без комиссии, с ИТОГО)."""
     from reportlab.platypus import Paragraph
     from reportlab.lib.styles import ParagraphStyle
-    from pdf_helper import build_timeline_pdf, _font
+    from pdf_helper import build_timeline_pdf, _font, _font_bold, COLOR_GRANDTOTAL
 
     card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
     if not card:
@@ -315,7 +347,9 @@ async def export_supervision_timeline_pdf(
     ).order_by(SupervisionTimelineEntry.sort_order).all()
 
     fn = _font()
+    fb = _font_bold()
     cell_style = ParagraphStyle('Cell', fontName=fn, fontSize=8, leading=10)
+    bold_style = ParagraphStyle('CellB', fontName=fb, fontSize=8, leading=10)
 
     STATUS_COLORS = {
         'В работе': '#FFF8E1',
@@ -324,31 +358,74 @@ async def export_supervision_timeline_pdf(
         'Просрочено': '#FFEBEE',
     }
 
-    headers = ["Стадия", "План. дата", "Факт. дата", "Дней",
-               "Поставщик", "Статус", "Примечания"]
+    if include_commission:
+        headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Исполнитель",
+                   "Бюджет план", "Бюджет факт", "Поставщик", "Комиссия",
+                   "Статус", "Примечания"]
+        col_widths = [120, 55, 55, 35, 80, 55, 55, 80, 50, 55, 80]
+    else:
+        headers = ["Стадия", "План. дата", "Факт. дата", "Дней", "Исполнитель",
+                   "Бюджет план", "Бюджет факт", "Поставщик",
+                   "Статус", "Примечания"]
+        col_widths = [130, 60, 60, 40, 85, 60, 60, 90, 60, 90]
+
     rows = []
     row_styles = []
 
-    for i, entry in enumerate(entries):
-        rows.append([
+    total_planned = 0
+    total_actual = 0
+    total_commission = 0
+
+    for entry in entries:
+        bp = entry.budget_planned or 0
+        ba = entry.budget_actual or 0
+        cm = entry.commission or 0
+        total_planned += bp
+        total_actual += ba
+        total_commission += cm
+
+        base_cells = [
             Paragraph(entry.stage_name or "", cell_style),
             Paragraph(entry.plan_date or "", cell_style),
             Paragraph(entry.actual_date or "", cell_style),
             Paragraph(str(entry.actual_days or ""), cell_style),
+            Paragraph(entry.executor or "", cell_style),
+            Paragraph(f"{bp:,.0f}" if bp else "", cell_style),
+            Paragraph(f"{ba:,.0f}" if ba else "", cell_style),
             Paragraph(entry.supplier or "", cell_style),
+        ]
+        if include_commission:
+            base_cells.append(Paragraph(f"{cm:,.0f}" if cm else "", cell_style))
+        base_cells.extend([
             Paragraph(entry.status or "", cell_style),
             Paragraph(entry.notes or "", cell_style),
         ])
+        rows.append(base_cells)
+
         color_hex = STATUS_COLORS.get(entry.status)
         if color_hex:
-            row_styles.append({'row_idx': i + 1, 'bg': color_hex})
+            row_styles.append({'row_idx': len(rows), 'bg': color_hex})
+
+    # Строка ИТОГО
+    grand_idx = len(rows) + 1
+    num_cols = len(headers)
+    total_cells = [Paragraph('<b>ИТОГО:</b>', bold_style)]
+    total_cells.extend([Paragraph('', cell_style)] * 4)  # даты, дней, исполнитель
+    total_cells.append(Paragraph(f'<b>{total_planned:,.0f}</b>', bold_style))
+    total_cells.append(Paragraph(f'<b>{total_actual:,.0f}</b>', bold_style))
+    total_cells.append(Paragraph('', cell_style))  # поставщик
+    if include_commission:
+        total_cells.append(Paragraph(f'<b>{total_commission:,.0f}</b>', bold_style))
+    total_cells.extend([Paragraph('', cell_style)] * 2)  # статус, примечания
+    rows.append(total_cells)
+    row_styles.append({'row_idx': grand_idx, 'bg': COLOR_GRANDTOTAL, 'bold': True})
 
     pdf_bytes = build_timeline_pdf(
         title="Таблица сроков авторского надзора",
         contract=contract,
         headers=headers,
         rows=rows,
-        col_widths=[140, 65, 65, 40, 100, 70, 120],
+        col_widths=col_widths,
         row_styles=row_styles,
     )
 
@@ -356,7 +433,8 @@ async def export_supervision_timeline_pdf(
     from urllib.parse import quote
     today = date.today().strftime("%d.%m.%Y")
     addr = contract.address if contract else f"надзор_{card_id}"
-    ru_name = f'Отчет Авторский надзор {addr} от {today}.pdf'
+    suffix = " с комиссией" if include_commission else ""
+    ru_name = f'Отчет Авторский надзор{suffix} {addr} от {today}.pdf'
     encoded = quote(ru_name)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
