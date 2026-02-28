@@ -128,25 +128,37 @@ def get_default_table_style(font_name='Arial', font_bold='ArialBold'):
 
 def make_page_footer(page_size, font_name='Arial'):
     """
-    Возвращает callback для onFirstPage/onLaterPages,
-    рисующий footer.jpg полосу + номер страницы.
+    Возвращает callback для onFirstPage/onLaterPages.
+    Белый блок с закруглёнными углами и рамкой 1px:
+    строка 1 — «Интерьерное бюро FESTIVAL COLOR»,
+    строка 2 — номер страницы.
     """
     def _draw_footer(canvas_obj, doc_obj):
         canvas_obj.saveState()
-        footer_path = resource_path("resources/footer.jpg")
-        if os.path.exists(footer_path):
-            try:
-                canvas_obj.drawImage(
-                    footer_path, 0, 0,
-                    width=page_size[0], height=12 * mm,
-                    preserveAspectRatio=False, mask='auto')
-            except Exception:
-                pass
+        pw = page_size[0]
+
+        # Размеры блока
+        block_w = 180
+        block_h = 28
+        x = (pw - block_w) / 2
+        y = 4 * mm
+
+        # Белый фон с закруглёнными углами и рамкой
+        canvas_obj.setStrokeColor(colors.HexColor('#CCCCCC'))
+        canvas_obj.setLineWidth(0.5)
+        canvas_obj.setFillColor(colors.white)
+        canvas_obj.roundRect(x, y, block_w, block_h, 4, fill=1, stroke=1)
+
+        # Текст
         canvas_obj.setFont(font_name, 7)
-        canvas_obj.setFillColor(colors.HexColor('#999999'))
+        canvas_obj.setFillColor(colors.HexColor('#666666'))
         canvas_obj.drawCentredString(
-            page_size[0] / 2, 4 * mm,
-            f"Interior Studio CRM \u2014 \u0441\u0442\u0440. {doc_obj.page}"
+            pw / 2, y + 16,
+            "\u0418\u043d\u0442\u0435\u0440\u044c\u0435\u0440\u043d\u043e\u0435 \u0431\u044e\u0440\u043e FESTIVAL COLOR"
+        )
+        canvas_obj.drawCentredString(
+            pw / 2, y + 6,
+            f"\u0441\u0442\u0440. {doc_obj.page}"
         )
         canvas_obj.restoreState()
     return _draw_footer

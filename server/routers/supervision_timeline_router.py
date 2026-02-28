@@ -300,15 +300,10 @@ async def export_supervision_timeline_pdf(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Экспорт таблицы сроков надзора в PDF (без бюджетов)"""
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib import colors
-    from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    import os
+    """Экспорт таблицы сроков надзора в PDF (фирменный стиль, без бюджетов)."""
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from pdf_helper import build_timeline_pdf, _font
 
     card = db.query(SupervisionCard).filter(SupervisionCard.id == card_id).first()
     if not card:
@@ -319,100 +314,56 @@ async def export_supervision_timeline_pdf(
         SupervisionTimelineEntry.supervision_card_id == card_id
     ).order_by(SupervisionTimelineEntry.sort_order).all()
 
-    output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
-                            leftMargin=15*mm, rightMargin=15*mm,
-                            topMargin=15*mm, bottomMargin=15*mm)
+    fn = _font()
+    cell_style = ParagraphStyle('Cell', fontName=fn, fontSize=8, leading=10)
 
-    font_name = "Helvetica"
-    font_candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    ]
-    for font_path in font_candidates:
-        if os.path.exists(font_path):
-            try:
-                pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
-                font_name = "DejaVuSans"
-            except Exception:
-                pass
-            break
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title_RU', parent=styles['Title'],
-                                  fontName=font_name, fontSize=14)
-    cell_style = ParagraphStyle('Cell_RU', fontName=font_name, fontSize=8,
-                                 leading=10)
-    header_style = ParagraphStyle('Header_RU', fontName=font_name, fontSize=9,
-                                   leading=11, textColor=colors.white)
-
-    elements = []
-    addr = contract.address if contract else "-"
-    elements.append(Paragraph("Таблица сроков надзора", title_style))
-    elements.append(Spacer(1, 5*mm))
-    elements.append(Paragraph(f"Адрес: {addr}", ParagraphStyle('Info', fontName=font_name, fontSize=10)))
-    elements.append(Spacer(1, 5*mm))
-
-    # PDF без бюджетов — только: Стадия, План, Факт, Дней, Поставщик, Статус, Примечания
-    table_data = [[
-        Paragraph("Стадия", header_style),
-        Paragraph("План. дата", header_style),
-        Paragraph("Факт. дата", header_style),
-        Paragraph("Дней", header_style),
-        Paragraph("Поставщик", header_style),
-        Paragraph("Статус", header_style),
-        Paragraph("Примечания", header_style)
-    ]]
-
-    for entry in entries:
-        table_data.append([
-            Paragraph(entry.stage_name or "", cell_style),
-            Paragraph(entry.plan_date or "", cell_style),
-            Paragraph(entry.actual_date or "", cell_style),
-            Paragraph(str(entry.actual_days or ""), cell_style),
-            Paragraph(entry.supplier or "", cell_style),
-            Paragraph(entry.status or "", cell_style),
-            Paragraph(entry.notes or "", cell_style)
-        ])
-
-    col_widths = [140, 65, 65, 40, 100, 70, 120]
-    table = Table(table_data, colWidths=col_widths)
-
-    status_pdf_colors = {
+    STATUS_COLORS = {
         'В работе': '#FFF8E1',
         'Закуплено': '#E3F2FD',
         'Доставлено': '#E8F5E9',
         'Просрочено': '#FFEBEE',
     }
 
-    style_cmds = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F5496')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-    ]
+    headers = ["Стадия", "План. дата", "Факт. дата", "Дней",
+               "Поставщик", "Статус", "Примечания"]
+    rows = []
+    row_styles = []
 
-    for i, entry in enumerate(entries, 1):
-        color_hex = status_pdf_colors.get(entry.status)
+    for i, entry in enumerate(entries):
+        rows.append([
+            Paragraph(entry.stage_name or "", cell_style),
+            Paragraph(entry.plan_date or "", cell_style),
+            Paragraph(entry.actual_date or "", cell_style),
+            Paragraph(str(entry.actual_days or ""), cell_style),
+            Paragraph(entry.supplier or "", cell_style),
+            Paragraph(entry.status or "", cell_style),
+            Paragraph(entry.notes or "", cell_style),
+        ])
+        color_hex = STATUS_COLORS.get(entry.status)
         if color_hex:
-            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor(color_hex)))
+            row_styles.append({'row_idx': i + 1, 'bg': color_hex})
 
-    table.setStyle(TableStyle(style_cmds))
-    elements.append(table)
-
-    doc.build(elements)
-    output.seek(0)
+    pdf_bytes = build_timeline_pdf(
+        title="Таблица сроков авторского надзора",
+        contract=contract,
+        headers=headers,
+        rows=rows,
+        col_widths=[140, 65, 65, 40, 100, 70, 120],
+        row_styles=row_styles,
+    )
 
     from datetime import date
     from urllib.parse import quote
     today = date.today().strftime("%d.%m.%Y")
-    ru_name = f'Отчет "Авторский надзор {addr}" от {today}.pdf'
+    addr = contract.address if contract else f"надзор_{card_id}"
+    ru_name = f'Отчет Авторский надзор {addr} от {today}.pdf'
     encoded = quote(ru_name)
     return StreamingResponse(
-        output,
+        io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}; filename=supervision_timeline_{card_id}.pdf"}
+        headers={
+            "Content-Disposition":
+                f"attachment; filename*=UTF-8''{encoded}; "
+                f"filename=supervision_timeline_{card_id}.pdf"
+        },
     )

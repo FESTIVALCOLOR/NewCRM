@@ -1021,7 +1021,7 @@ class ProjectTimelineWidget(QWidget):
                 return
             path, _ = QFileDialog.getSaveFileName(
                 self, 'Сохранить PDF',
-                f'Отчет "Таблица сроков договор {self.contract_id}" от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
+                f'Отчет Таблица сроков {self.contract_data.get("address", "")} от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
                 'PDF (*.pdf)'
             )
             if path:

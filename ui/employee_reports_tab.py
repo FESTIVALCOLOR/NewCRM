@@ -423,7 +423,7 @@ class EmployeeReportsTab(QWidget):
             filename, _ = QFileDialog.getSaveFileName(
                 self,
                 'Сохранить отчет',
-                f'Отчет "Сотрудники {report_type}" от {datetime.now().strftime("%d.%m.%Y")}.pdf',
+                f'Отчет Сотрудники {report_type} от {datetime.now().strftime("%d.%m.%Y")}.pdf',
                 'PDF Files (*.pdf)'
             )
             if not filename:

@@ -1056,7 +1056,7 @@ class SupervisionTimelineWidget(QWidget):
                 return
             path, _ = QFileDialog.getSaveFileName(
                 self, 'Сохранить PDF',
-                f'Отчет "Авторский надзор {self.card_id}" от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
+                f'Отчет Авторский надзор {self.contract_data.get("address", "")} от {QDate.currentDate().toString("dd.MM.yyyy")}.pdf',
                 'PDF (*.pdf)'
             )
             if path:

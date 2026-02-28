@@ -342,15 +342,10 @@ async def export_timeline_pdf(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Экспорт таблицы сроков CRM в PDF (для клиента)"""
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib import colors
-    from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    import os
+    """Экспорт таблицы сроков CRM в PDF (фирменный стиль)."""
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from pdf_helper import build_timeline_pdf, _font
 
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
@@ -360,102 +355,56 @@ async def export_timeline_pdf(
         ProjectTimelineEntry.contract_id == contract_id
     ).order_by(ProjectTimelineEntry.sort_order).all()
 
-    output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
-                            leftMargin=15*mm, rightMargin=15*mm,
-                            topMargin=15*mm, bottomMargin=15*mm)
+    fn = _font()
+    cell_style = ParagraphStyle('Cell', fontName=fn, fontSize=8, leading=10)
 
-    # Регистрация шрифта с кириллицей
-    font_name = "Helvetica"
-    font_candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    ]
-    for font_path in font_candidates:
-        if os.path.exists(font_path):
-            try:
-                pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
-                font_name = "DejaVuSans"
-            except Exception:
-                pass
-            break
+    headers = ["Этап", "Дата", "Дней", "Норма", "Статус", "Исполнитель"]
+    rows = []
+    row_styles = []
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title_RU', parent=styles['Title'],
-                                  fontName=font_name, fontSize=14)
-    cell_style = ParagraphStyle('Cell_RU', fontName=font_name, fontSize=8,
-                                 leading=10)
-    header_style = ParagraphStyle('Header_RU', fontName=font_name, fontSize=9,
-                                   leading=11, textColor=colors.white)
-
-    elements = []
-    contract_name = contract.address or f"договор_{contract_id}"
-    elements.append(Paragraph("Таблица сроков проекта", title_style))
-    elements.append(Spacer(1, 5*mm))
-
-    # Информация о проекте
-    info_text = f"Адрес: {contract.address or '-'}  |  Тип: {contract.project_type or '-'}  |  Площадь: {contract.area or 0} м²"
-    elements.append(Paragraph(info_text, ParagraphStyle('Info', fontName=font_name, fontSize=10)))
-    elements.append(Spacer(1, 5*mm))
-
-    # Таблица
-    table_data = [[
-        Paragraph("Этап", header_style),
-        Paragraph("Дата", header_style),
-        Paragraph("Дней", header_style),
-        Paragraph("Норма", header_style),
-        Paragraph("Статус", header_style),
-        Paragraph("Исполнитель", header_style)
-    ]]
-
-    for entry in entries:
-        table_data.append([
+    for i, entry in enumerate(entries):
+        rows.append([
             Paragraph(entry.stage_name or "", cell_style),
             Paragraph(entry.actual_date or "", cell_style),
             Paragraph(str(entry.actual_days or ""), cell_style),
             Paragraph(str(entry.norm_days or ""), cell_style),
             Paragraph(entry.status or "", cell_style),
-            Paragraph(entry.executor_role if entry.executor_role not in ('header', 'subheader') else "", cell_style)
+            Paragraph(
+                entry.executor_role
+                if entry.executor_role not in ('header', 'subheader')
+                else "",
+                cell_style,
+            ),
         ])
-
-    col_widths = [180, 60, 50, 50, 50, 80]
-    table = Table(table_data, colWidths=col_widths)
-
-    style_cmds = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F5496')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F8F8')]),
-    ]
-
-    # Подсветка строк-заголовков
-    for i, entry in enumerate(entries, 1):
+        row_idx = i + 1  # +1 т.к. row 0 — заголовок таблицы
         if entry.executor_role == 'header':
-            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#2F5496')))
-            style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), colors.white))
+            row_styles.append({'row_idx': row_idx, 'bg': '#2C3E50', 'fg': '#FFFFFF'})
         elif entry.executor_role == 'subheader':
-            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#D6E4F0')))
+            row_styles.append({'row_idx': row_idx, 'bg': '#D6E4F0'})
         elif entry.actual_days and entry.norm_days and entry.actual_days > entry.norm_days:
-            style_cmds.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#F2DCDB')))
+            row_styles.append({'row_idx': row_idx, 'bg': '#F2DCDB'})
 
-    table.setStyle(TableStyle(style_cmds))
-    elements.append(table)
-
-    doc.build(elements)
-    output.seek(0)
+    pdf_bytes = build_timeline_pdf(
+        title="Таблица сроков проекта",
+        contract=contract,
+        headers=headers,
+        rows=rows,
+        col_widths=[180, 60, 50, 50, 50, 80],
+        row_styles=row_styles,
+    )
 
     from datetime import date
     from urllib.parse import quote
     today = date.today().strftime("%d.%m.%Y")
-    ru_name = f'Отчет "Таблица сроков {contract_name}" от {today}.pdf'
+    address = contract.address or f"договор_{contract_id}"
+    ru_name = f'Отчет Таблица сроков {address} от {today}.pdf'
     encoded = quote(ru_name)
     return StreamingResponse(
-        output,
+        io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}; filename=timeline_{contract_id}.pdf"}
+        headers={
+            "Content-Disposition":
+                f"attachment; filename*=UTF-8''{encoded}; "
+                f"filename=timeline_{contract_id}.pdf"
+        },
     )

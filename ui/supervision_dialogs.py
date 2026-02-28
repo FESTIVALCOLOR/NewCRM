@@ -584,7 +584,7 @@ class SupervisionStatisticsDialog(QDialog):
         from utils.pdf_utils import build_table_pdf
         _logger = logging.getLogger(__name__)
 
-        default_name = f'Отчет "Статистика авторского надзора" от {QDate.currentDate().toString("dd.MM.yyyy")}'
+        default_name = f'Отчет Статистика авторского надзора от {QDate.currentDate().toString("dd.MM.yyyy")}'
         filename, _ = QFileDialog.getSaveFileName(
             self, 'Сохранить PDF', default_name, 'PDF файлы (*.pdf)'
         )
