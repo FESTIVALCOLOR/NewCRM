@@ -246,12 +246,22 @@ async def export_supervision_timeline_excel(
         'Просрочено': 'FFEBEE',
     }
 
+    def _fmt_date(d):
+        """Конвертировать дату YYYY-MM-DD → DD.MM.YYYY для экспорта"""
+        if not d:
+            return ""
+        try:
+            from datetime import datetime as dt
+            return dt.strptime(d, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except (ValueError, TypeError):
+            return d
+
     for entry in entries:
         if include_commission:
             row_data = [
                 entry.stage_name,
-                entry.plan_date or "",
-                entry.actual_date or "",
+                _fmt_date(entry.plan_date),
+                _fmt_date(entry.actual_date),
                 entry.actual_days or 0,
                 entry.executor or "",
                 entry.budget_planned or 0,
@@ -265,8 +275,8 @@ async def export_supervision_timeline_excel(
         else:
             row_data = [
                 entry.stage_name,
-                entry.plan_date or "",
-                entry.actual_date or "",
+                _fmt_date(entry.plan_date),
+                _fmt_date(entry.actual_date),
                 entry.actual_days or 0,
                 entry.executor or "",
                 entry.budget_planned or 0,
@@ -376,6 +386,16 @@ async def export_supervision_timeline_pdf(
     total_actual = 0
     total_commission = 0
 
+    def _fmt_date_pdf(d):
+        """Конвертировать дату YYYY-MM-DD → DD.MM.YYYY для экспорта"""
+        if not d:
+            return ""
+        try:
+            from datetime import datetime as dt
+            return dt.strptime(d, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except (ValueError, TypeError):
+            return d
+
     for entry in entries:
         bp = entry.budget_planned or 0
         ba = entry.budget_actual or 0
@@ -386,8 +406,8 @@ async def export_supervision_timeline_pdf(
 
         base_cells = [
             Paragraph(entry.stage_name or "", cell_style),
-            Paragraph(entry.plan_date or "", cell_style),
-            Paragraph(entry.actual_date or "", cell_style),
+            Paragraph(_fmt_date_pdf(entry.plan_date), cell_style),
+            Paragraph(_fmt_date_pdf(entry.actual_date), cell_style),
             Paragraph(str(entry.actual_days or ""), cell_style),
             Paragraph(entry.executor or "", cell_style),
             Paragraph(f"{bp:,.0f}" if bp else "", cell_style),

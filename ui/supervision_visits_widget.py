@@ -44,11 +44,13 @@ STAGE_NAME_MAP = {code: name for code, name in SUPERVISION_STAGES}
 class SupervisionVisitsWidget(QWidget):
     """Виджет таблицы выездов и дефектов"""
 
-    COLUMNS = ['Стадия', 'Выезд на объект', 'ФИО исполнителя (ДАН)', 'Примечание']
-    COLUMN_WIDTHS = [250, 150, 200, 250]
+    COLUMNS = ['Стадия', 'Выезд на объект', 'ФИО исполнителя (ДАН)', 'Примечание', '']
+    COLUMN_WIDTHS = [250, 150, 200, 250, 40]
 
     def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None):
         super().__init__(parent)
+        # Сохраняем ссылку на диалог ДО того, как QTabWidget перехватит parent
+        self._dialog = parent
         self.card_data = card_data
         self.data = data
         self.db = db
@@ -200,24 +202,20 @@ class SupervisionVisitsWidget(QWidget):
         reports_group.setStyleSheet(GROUP_BOX_STYLE)
         fl = QVBoxLayout()
 
-        # Кнопка загрузки
-        btn_row = QHBoxLayout()
-        btn_row.addStretch(1)
+        # Кнопка загрузки — компактная, во всю ширину
         upload_btn = IconLoader.create_icon_button(
             'upload', 'Загрузить файл', 'Загрузить файл на Яндекс.Диск', icon_size=12)
         upload_btn.setFixedHeight(32)
         upload_btn.setStyleSheet('''
             QPushButton {
                 background-color: #ffd93c; color: #333333;
-                padding: 6px 20px; border-radius: 4px;
-                font-weight: bold; min-width: 200px;
+                padding: 4px 16px; border-radius: 4px;
+                font-weight: bold; font-size: 12px;
             }
             QPushButton:hover { background-color: #e6c435; }
         ''')
         upload_btn.clicked.connect(self._upload_report)
-        btn_row.addWidget(upload_btn, 2)
-        btn_row.addStretch(1)
-        fl.addLayout(btn_row)
+        fl.addWidget(upload_btn)
 
         # Таблица файлов
         self.reports_table = QTableWidget()
@@ -350,6 +348,16 @@ class SupervisionVisitsWidget(QWidget):
                         self._on_field_edited(r, vid, 'notes', le.text().strip()))
                 self.table.setCellWidget(row, 3, notes_edit)
 
+                # Кол 4: Кнопка удаления
+                del_btn = IconLoader.create_action_button(
+                    'delete2', tooltip='Удалить строку',
+                    bg_color='#FFE6E6', hover_color='#FFCCCC',
+                    icon_size=14, button_size=28, icon_color='#C62828'
+                )
+                del_btn.clicked.connect(
+                    lambda checked, vid=visit_id: self._delete_row(vid))
+                self.table.setCellWidget(row, 4, del_btn)
+
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
@@ -381,6 +389,18 @@ class SupervisionVisitsWidget(QWidget):
         self.lbl_summary.setText(summary)
 
     # === ОБРАБОТЧИКИ ИЗМЕНЕНИЙ ===
+
+    def _delete_row(self, visit_id):
+        """Удалить запись выезда"""
+        if not visit_id or not self.card_id:
+            return
+        from ui.custom_question_box import CustomQuestionBox
+        if CustomQuestionBox(self, 'Удаление', 'Удалить эту запись выезда?').exec_():
+            try:
+                self.data.delete_supervision_visit(self.card_id, visit_id)
+                self._load_data()
+            except Exception as e:
+                logger.error("Ошибка удаления выезда %s: %s", visit_id, e)
 
     def _add_row(self):
         """Добавить новую запись выезда"""
@@ -488,7 +508,7 @@ class SupervisionVisitsWidget(QWidget):
 
     def _upload_report(self):
         """Загрузка файла — делегируем родительскому диалогу"""
-        dialog = self.parent()
+        dialog = self._dialog or self.window()
         if dialog and hasattr(dialog, 'upload_supervision_report_file'):
             dialog.upload_supervision_report_file()
 
@@ -577,6 +597,6 @@ class SupervisionVisitsWidget(QWidget):
 
     def _delete_report(self, file_id, yandex_path):
         """Удалить файл-отчёт — делегируем родительскому диалогу"""
-        dialog = self.parent()
+        dialog = self._dialog or self.window()
         if dialog and hasattr(dialog, 'delete_supervision_file'):
             dialog.delete_supervision_file(file_id, yandex_path)

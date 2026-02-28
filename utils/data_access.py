@@ -955,24 +955,59 @@ class DataAccess(QObject):
     # ==================== SUPERVISION ACTIONS ====================
 
     def move_supervision_card(self, card_id: int, column: str) -> bool:
-        """Переместить карточку надзора через специализированный метод"""
-        # Сначала обновляем локально
-        try:
-            self.db.update_supervision_card_column(card_id, column)
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB move_supervision_card: {e}")
+        """Переместить карточку надзора через специализированный метод.
+
+        Raises:
+            APIResponseError: При бизнес-ошибках (422) — запрещённое перемещение.
+        """
+        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
 
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.move_supervision_card(card_id, column)
+                # API успешно — обновляем локальную БД
+                try:
+                    self.db.update_supervision_card_column(card_id, column)
+                except Exception:
+                    pass
                 return result is not None
-            except Exception as e:
+            except APIResponseError as e:
+                if e.status_code in (422, 400):
+                    # Бизнес-ошибка — НЕ обновляем локально, пропускаем наверх
+                    raise
                 _safe_log(f"[DataAccess] Ошибка API move_supervision_card: {e}")
+                # Для прочих ошибок — обновляем локально + очередь
+                try:
+                    self.db.update_supervision_card_column(card_id, column)
+                except Exception:
+                    pass
                 self._queue_operation('update', 'supervision_card', card_id,
                                       {'column_name': column, '_action': 'move'})
-        elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id,
-                                  {'column_name': column, '_action': 'move'})
+            except (APIConnectionError, APITimeoutError) as e:
+                _safe_log(f"[DataAccess] Сеть move_supervision_card: {e}")
+                try:
+                    self.db.update_supervision_card_column(card_id, column)
+                except Exception:
+                    pass
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'column_name': column, '_action': 'move'})
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка move_supervision_card: {e}")
+                try:
+                    self.db.update_supervision_card_column(card_id, column)
+                except Exception:
+                    pass
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'column_name': column, '_action': 'move'})
+        else:
+            # Офлайн — обновляем локально + очередь
+            try:
+                self.db.update_supervision_card_column(card_id, column)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка DB move_supervision_card: {e}")
+            if self.api_client:
+                self._queue_operation('update', 'supervision_card', card_id,
+                                      {'column_name': column, '_action': 'move'})
 
         return True
 

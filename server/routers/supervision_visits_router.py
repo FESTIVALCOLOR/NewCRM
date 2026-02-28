@@ -108,11 +108,31 @@ async def export_visits_excel(
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
+    MONTH_NAMES_RU = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+    def _fmt_date(d):
+        if not d:
+            return ""
+        try:
+            from datetime import datetime as dt
+            return dt.strptime(d, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except (ValueError, TypeError):
+            return d
+
+    def _fmt_month(ym):
+        """YYYY-MM → Январь 2026"""
+        try:
+            parts = ym.split('-')
+            return f"{MONTH_NAMES_RU[int(parts[1])]} {parts[0]}"
+        except (IndexError, ValueError):
+            return ym
+
     # Данные
     for visit in visits:
         ws.append([
             visit.stage_name or "",
-            visit.visit_date or "",
+            _fmt_date(visit.visit_date),
             visit.executor_name or "",
             visit.notes or "",
         ])
@@ -127,7 +147,7 @@ async def export_visits_excel(
     ws.append(["ИТОГО ВЫЕЗДОВ:", str(len(visits))])
     ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
     for month_key in sorted(by_month.keys()):
-        ws.append([f"  {month_key}", str(by_month[month_key])])
+        ws.append([f"  {_fmt_month(month_key)}", str(by_month[month_key])])
 
     # Ширины
     widths = [35, 18, 25, 40]
@@ -174,6 +194,25 @@ async def export_visits_pdf(
     cell_style = ParagraphStyle('Cell', fontName=fn, fontSize=8, leading=10)
     bold_style = ParagraphStyle('CellB', fontName=fb, fontSize=8, leading=10)
 
+    MONTH_NAMES_RU = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+    def _fmt_date(d):
+        if not d:
+            return ""
+        try:
+            from datetime import datetime as dt
+            return dt.strptime(d, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except (ValueError, TypeError):
+            return d
+
+    def _fmt_month(ym):
+        try:
+            parts = ym.split('-')
+            return f"{MONTH_NAMES_RU[int(parts[1])]} {parts[0]}"
+        except (IndexError, ValueError):
+            return ym
+
     headers = ["Стадия", "Выезд на объект", "ФИО исполнителя (ДАН)", "Примечание"]
     rows = []
     row_styles = []
@@ -184,7 +223,7 @@ async def export_visits_pdf(
     for visit in visits:
         rows.append([
             Paragraph(visit.stage_name or "", cell_style),
-            Paragraph(visit.visit_date or "", cell_style),
+            Paragraph(_fmt_date(visit.visit_date), cell_style),
             Paragraph(visit.executor_name or "", cell_style),
             Paragraph(visit.notes or "", cell_style),
         ])
@@ -195,7 +234,7 @@ async def export_visits_pdf(
     for month_key in sorted(by_month.keys()):
         row_idx = len(rows) + 1
         rows.append([
-            Paragraph(f'<b>{month_key}:</b>', bold_style),
+            Paragraph(f'<b>{_fmt_month(month_key)}:</b>', bold_style),
             Paragraph(f'<b>{by_month[month_key]} выездов</b>', bold_style),
             Paragraph('', cell_style),
             Paragraph('', cell_style),

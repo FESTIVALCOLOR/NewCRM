@@ -805,7 +805,6 @@ class CRMSupervisionTab(QWidget):
         """Обработка перемещения карточки"""
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
         if to_column == 'Новый заказ' and from_column != 'Новый заказ':
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self, 'Перемещение запрещено',
                 'Нельзя вернуть карточку в "Новый заказ".\n'
@@ -818,14 +817,15 @@ class CRMSupervisionTab(QWidget):
         if from_column == 'В ожидании' and to_column not in ['В ожидании', 'Выполненный проект']:
             card_info = self.data.get_supervision_card(card_id)
             prev_col = card_info.get('previous_column') if card_info else None
+            # Если prev_col известен и это не "Новый заказ" — разрешаем только в prev_col
             if prev_col and prev_col != 'Новый заказ' and to_column != prev_col:
-                from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.warning(
                     self, 'Перемещение запрещено',
                     f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".'
                 )
                 self.load_cards_for_current_tab()
                 return
+            # Если prev_col = None/пусто — разрешаем (сервер дополнительно проверит)
 
         # Приостанавливаем синхронизацию на время перемещения
         sync = self._get_sync_manager()
@@ -1010,7 +1010,19 @@ class CRMSupervisionTab(QWidget):
 
             # Обновляем колонку в БД с fallback логикой
             # Перемещаем карточку через DataAccess (API + fallback на локальную БД)
-            self.data.move_supervision_card(card_id, to_column)
+            from utils.api_client.exceptions import APIResponseError
+            try:
+                self.data.move_supervision_card(card_id, to_column)
+            except APIResponseError as move_err:
+                # Бизнес-ошибка (сервер запретил перемещение)
+                error_msg = str(move_err)
+                # Извлекаем понятный текст из "Ошибка сервера (HTTP 422): ..."
+                if ': ' in error_msg:
+                    error_msg = error_msg.split(': ', 1)[1]
+                print(f"   ! Перемещение запрещено сервером: {error_msg}")
+                QMessageBox.warning(self, 'Перемещение запрещено', error_msg)
+                self.load_cards_for_current_tab()
+                return
             print(f"   + Карточка перемещена")
 
             # Сбрасываем отметку о сдаче при перемещении
@@ -1019,11 +1031,11 @@ class CRMSupervisionTab(QWidget):
             if to_column != from_column:
                 self.data.reset_supervision_stage_completion(card_id)
                 print(f"   + Отметка о сдаче сброшена")
-                
+
             # Запрос дедлайна при перемещении (только для менеджеров)
             if not self.is_dan_role:
                 skip_deadline_columns = ['Новый заказ', 'В ожидании', 'Выполненный проект']
-                
+
                 if to_column not in skip_deadline_columns and from_column != to_column:
                     dialog = SupervisionStageDeadlineDialog(self, card_id, to_column, api_client=self.api_client)
                     dialog.exec_()
@@ -1036,9 +1048,9 @@ class CRMSupervisionTab(QWidget):
                 else:
                     self.load_cards_for_current_tab()
                 return
-            
+
             self.load_cards_for_current_tab()
-            
+
         except Exception as e:
             print(f" Ошибка перемещения: {e}")
             import traceback

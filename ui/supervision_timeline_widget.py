@@ -64,16 +64,18 @@ class SupervisionTimelineWidget(QWidget):
     """Виджет таблицы сроков надзора"""
 
     COLUMNS = [
-        'Стадия', 'План. дата', 'Факт. дата', 'Дней',
+        'Стадия', 'Исполнитель', 'План. дата', 'Факт. дата', 'Дней', 'Расхожд.',
         'Бюджет план', 'Бюджет факт', 'Экономия',
         'Поставщик', 'Комиссия', 'Статус', 'Примечания'
     ]
 
     # Минимальные ширины столбцов
-    COLUMN_WIDTHS = [220, 130, 130, 60, 110, 110, 100, 150, 100, 120, 180]
+    COLUMN_WIDTHS = [200, 140, 110, 110, 55, 65, 100, 100, 90, 130, 90, 110, 160]
 
     def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None):
         super().__init__(parent)
+        # Сохраняем ссылку на диалог ДО того, как QTabWidget перехватит parent
+        self._dialog = parent
         self.card_data = card_data
         self.data = data
         self.db = db
@@ -98,8 +100,23 @@ class SupervisionTimelineWidget(QWidget):
             except Exception:
                 pass
 
+        # Список исполнителей для выпадающего списка
+        self._executor_names = self._get_executor_names()
+
         self._build_ui()
         self._load_data()
+
+    def _get_executor_names(self):
+        """Получить список ФИО исполнителей из карточки"""
+        names = []
+        sm = self.card_data.get('senior_manager_name', '') or ''
+        dan = self.card_data.get('dan_name', '') or ''
+        if sm:
+            names.append(sm)
+        if dan:
+            names.append(dan)
+        # Если ничего не нашли — пустой список
+        return names
 
     @staticmethod
     def _make_cell_label(text, bg_color, align='center', bold=False, font_size=12,
@@ -186,7 +203,7 @@ class SupervisionTimelineWidget(QWidget):
 
     def _edit_date_cell(self, row, stage_code, field_name, current_text):
         """Переключить ячейку даты в режим редактирования (QDateEdit)"""
-        col = 1 if field_name == 'plan_date' else 2
+        col = 2 if field_name == 'plan_date' else 3
 
         date_container = QWidget()
         date_container.setStyleSheet('background-color: transparent;')
@@ -380,16 +397,18 @@ class SupervisionTimelineWidget(QWidget):
     def _field_to_col(self, field_name):
         """Маппинг имени поля → номер столбца"""
         mapping = {
-            'plan_date': 1,
-            'actual_date': 2,
-            'actual_days': 3,
-            'budget_planned': 4,
-            'budget_actual': 5,
-            'budget_savings': 6,
-            'supplier': 7,
-            'commission': 8,
-            'status': 9,
-            'notes': 10,
+            'executor': 1,
+            'plan_date': 2,
+            'actual_date': 3,
+            'actual_days': 4,
+            'deviation': 5,
+            'budget_planned': 6,
+            'budget_actual': 7,
+            'budget_savings': 8,
+            'supplier': 9,
+            'commission': 10,
+            'status': 11,
+            'notes': 12,
         }
         return mapping.get(field_name, -1)
 
@@ -598,6 +617,18 @@ class SupervisionTimelineWidget(QWidget):
         except Exception as e:
             print(f"[SupervisionTimelineWidget] Ошибка локальной инициализации: {e}")
 
+    def _calculate_deviation(self, plan_date_str, actual_date_str):
+        """Расчёт расхождения между плановой и фактической датой (в днях).
+        Положительное = опоздание, отрицательное = раньше срока."""
+        if not plan_date_str or not actual_date_str:
+            return None
+        try:
+            plan = datetime.strptime(plan_date_str, '%Y-%m-%d').date()
+            actual = datetime.strptime(actual_date_str, '%Y-%m-%d').date()
+            return (actual - plan).days
+        except (ValueError, TypeError):
+            return None
+
     def _populate_table(self):
         """Заполнение таблицы: QLabel + карандаш для всех редактируемых полей"""
         self._loading = True
@@ -618,7 +649,27 @@ class SupervisionTimelineWidget(QWidget):
                 stage_lbl = self._make_cell_label(entry.get('stage_name', ''), bg, 'left')
                 self.table.setCellWidget(row, 0, stage_lbl)
 
-                # Кол 1: План. дата (карандаш → QDateEdit)
+                # Кол 1: Исполнитель (QComboBox с привязанными к карточке)
+                executor_combo = QComboBox()
+                executor_combo.addItem('')
+                for name in self._executor_names:
+                    executor_combo.addItem(name)
+                current_executor = entry.get('executor', '') or ''
+                # Если текущий исполнитель не в списке — добавить
+                if current_executor and current_executor not in self._executor_names:
+                    executor_combo.addItem(current_executor)
+                idx = executor_combo.findText(current_executor)
+                if idx >= 0:
+                    executor_combo.setCurrentIndex(idx)
+                executor_combo.setStyleSheet(
+                    "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
+                    " font-size: 11px; background: white; }")
+                executor_combo.currentTextChanged.connect(
+                    lambda text, r=row, sc=stage_code:
+                        self._on_executor_changed(r, sc, text))
+                self.table.setCellWidget(row, 1, executor_combo)
+
+                # Кол 2: План. дата (карандаш → QDateEdit)
                 plan_date = entry.get('plan_date', '')
                 plan_text = ''
                 if plan_date:
@@ -630,9 +681,9 @@ class SupervisionTimelineWidget(QWidget):
                 plan_cell = self._create_editable_cell(
                     plan_text, bg, row, stage_code, 'plan_date',
                     align='center', is_date=True)
-                self.table.setCellWidget(row, 1, plan_cell)
+                self.table.setCellWidget(row, 2, plan_cell)
 
-                # Кол 2: Факт. дата (карандаш → QDateEdit)
+                # Кол 3: Факт. дата (карандаш → QDateEdit)
                 fact_date = entry.get('actual_date', '')
                 fact_text = ''
                 fact_bg = bg
@@ -640,36 +691,50 @@ class SupervisionTimelineWidget(QWidget):
                     try:
                         d = QDate.fromString(fact_date, 'yyyy-MM-dd')
                         fact_text = d.toString('dd.MM.yyyy') if d.isValid() else ''
-                        fact_bg = '#E8F5E9'  # зелёный — факт заполнен
+                        fact_bg = '#E8F5E9'
                     except Exception:
                         pass
                 fact_cell = self._create_editable_cell(
                     fact_text, fact_bg, row, stage_code, 'actual_date',
                     align='center', is_date=True)
-                self.table.setCellWidget(row, 2, fact_cell)
+                self.table.setCellWidget(row, 3, fact_cell)
 
-                # Кол 3: Дней (авто-расчёт, только чтение)
+                # Кол 4: Дней (авто-расчёт, только чтение)
                 days_val = entry.get('actual_days', '') or ''
                 days_lbl = self._make_cell_label(str(days_val) if days_val else '', bg)
-                self.table.setCellWidget(row, 3, days_lbl)
+                self.table.setCellWidget(row, 4, days_lbl)
 
-                # Кол 4: Бюджет план (карандаш → число)
+                # Кол 5: Расхождение (авто-расчёт, цвет)
+                deviation = self._calculate_deviation(plan_date, fact_date)
+                entry['_deviation'] = deviation  # кэшируем
+                dev_text = ''
+                dev_color = '#333333'
+                if deviation is not None:
+                    dev_text = str(deviation)
+                    if deviation > 0:
+                        dev_color = '#F44336'  # красный — опоздание
+                    elif deviation < 0:
+                        dev_color = '#4CAF50'  # зелёный — раньше срока
+                dev_lbl = self._make_cell_label(dev_text, bg, 'center', color=dev_color)
+                self.table.setCellWidget(row, 5, dev_lbl)
+
+                # Кол 6: Бюджет план (карандаш → число)
                 bp = entry.get('budget_planned', 0) or 0
                 bp_text = f'{bp:,.0f}' if bp else ''
                 bp_cell = self._create_editable_cell(
                     bp_text, bg, row, stage_code, 'budget_planned',
                     align='right', is_number=True)
-                self.table.setCellWidget(row, 4, bp_cell)
+                self.table.setCellWidget(row, 6, bp_cell)
 
-                # Кол 5: Бюджет факт (карандаш → число)
+                # Кол 7: Бюджет факт (карандаш → число)
                 ba = entry.get('budget_actual', 0) or 0
                 ba_text = f'{ba:,.0f}' if ba else ''
                 ba_cell = self._create_editable_cell(
                     ba_text, bg, row, stage_code, 'budget_actual',
                     align='right', is_number=True)
-                self.table.setCellWidget(row, 5, ba_cell)
+                self.table.setCellWidget(row, 7, ba_cell)
 
-                # Кол 6: Экономия (авто-расчёт, только чтение)
+                # Кол 8: Экономия (авто-расчёт, только чтение)
                 savings = entry.get('budget_savings', 0) or 0
                 savings_color = '#333333'
                 if savings > 0:
@@ -679,24 +744,24 @@ class SupervisionTimelineWidget(QWidget):
                 savings_text = f'{savings:,.0f}' if savings else ''
                 savings_lbl = self._make_cell_label(
                     savings_text, bg, 'right', color=savings_color)
-                self.table.setCellWidget(row, 6, savings_lbl)
+                self.table.setCellWidget(row, 8, savings_lbl)
 
-                # Кол 7: Поставщик (карандаш → текст)
+                # Кол 9: Поставщик (карандаш → текст)
                 supplier = entry.get('supplier', '') or ''
                 supplier_cell = self._create_editable_cell(
                     supplier, bg, row, stage_code, 'supplier',
                     align='left')
-                self.table.setCellWidget(row, 7, supplier_cell)
+                self.table.setCellWidget(row, 9, supplier_cell)
 
-                # Кол 8: Комиссия (карандаш → число)
+                # Кол 10: Комиссия (карандаш → число)
                 commission = entry.get('commission', 0) or 0
                 comm_text = f'{commission:,.0f}' if commission else ''
                 comm_cell = self._create_editable_cell(
                     comm_text, bg, row, stage_code, 'commission',
                     align='right', is_number=True)
-                self.table.setCellWidget(row, 8, comm_cell)
+                self.table.setCellWidget(row, 10, comm_cell)
 
-                # Кол 9: Статус (QComboBox — оставляем как есть)
+                # Кол 11: Статус (QComboBox)
                 status_combo = QComboBox()
                 status_combo.addItems(STATUS_OPTIONS)
                 idx = STATUS_OPTIONS.index(status) if status in STATUS_OPTIONS else 0
@@ -707,27 +772,31 @@ class SupervisionTimelineWidget(QWidget):
                 status_combo.currentTextChanged.connect(
                     lambda text, r=row, sc=stage_code:
                         self._on_status_changed(r, sc, text))
-                self.table.setCellWidget(row, 9, status_combo)
+                self.table.setCellWidget(row, 11, status_combo)
 
-                # Кол 10: Примечания (карандаш → многострочный диалог, tooltip)
+                # Кол 12: Примечания (карандаш → многострочный диалог)
                 notes = entry.get('notes', '') or ''
                 display_notes = notes[:40] + '...' if len(notes) > 40 else notes
                 tip = notes if notes else 'Нажмите карандаш для ввода примечания'
                 notes_cell = self._create_editable_cell(
                     display_notes, bg, row, stage_code, 'notes',
                     align='left', is_multiline=True, tooltip_text=tip)
-                self.table.setCellWidget(row, 10, notes_cell)
+                self.table.setCellWidget(row, 12, notes_cell)
 
             # === СТРОКА "ИТОГО" ===
             if self.entries:
                 self._add_totals_row(len(self.entries))
 
+            # Зафиксировать высоту таблицы — ровно под строки + заголовок
+            row_count = self.table.rowCount()
+            total_h = self.table.horizontalHeader().height() + 4
+            for i in range(row_count):
+                total_h += self.table.rowHeight(i)
+            self.table.setFixedHeight(total_h)
+
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
-
-        # Обновить блок файлов (если создан)
-        pass
 
     def _add_totals_row(self, row):
         """Добавить строку 'Итого' в конец таблицы (не редактируемая, жирный шрифт, серый фон)"""
@@ -738,39 +807,45 @@ class SupervisionTimelineWidget(QWidget):
         totals_label = self._make_cell_label('Итого', totals_bg, 'left', bold=True)
         self.table.setCellWidget(row, 0, totals_label)
 
-        # Кол 1-3: пустые
+        # Кол 1 (Исполнитель), 2 (План), 3 (Факт): пустые
         for col in (1, 2, 3):
             empty_lbl = self._make_cell_label('', totals_bg)
             self.table.setCellWidget(row, col, empty_lbl)
 
-        # Суммы: сначала пробуем из totals (от сервера), иначе считаем локально
-        totals = getattr(self, 'totals', {}) or {}
-        total_bp = totals.get('budget_planned', None)
-        total_ba = totals.get('budget_actual', None)
-        total_savings = totals.get('budget_savings', None)
-        total_commission = totals.get('commission', None)
+        # Кол 4: Итого дней
+        total_days = sum(e.get('actual_days', 0) or 0 for e in self.entries)
+        days_text = str(total_days) if total_days else ''
+        days_lbl = self._make_cell_label(days_text, totals_bg, 'center', bold=True)
+        self.table.setCellWidget(row, 4, days_lbl)
 
-        # Если сервер не вернул totals — считаем из entries
-        if total_bp is None:
-            total_bp = sum(e.get('budget_planned', 0) or 0 for e in self.entries)
-        if total_ba is None:
-            total_ba = sum(e.get('budget_actual', 0) or 0 for e in self.entries)
-        if total_savings is None:
-            total_savings = sum(e.get('budget_savings', 0) or 0 for e in self.entries)
-        if total_commission is None:
-            total_commission = sum(e.get('commission', 0) or 0 for e in self.entries)
+        # Кол 5: Итого расхождений (сумма положительных = опоздания)
+        total_deviation = sum(
+            e.get('_deviation', 0) or 0
+            for e in self.entries
+            if e.get('_deviation') is not None and e.get('_deviation', 0) > 0
+        )
+        dev_text = str(total_deviation) if total_deviation else ''
+        dev_color = '#F44336' if total_deviation > 0 else '#333333'
+        dev_lbl = self._make_cell_label(dev_text, totals_bg, 'center', bold=True, color=dev_color)
+        self.table.setCellWidget(row, 5, dev_lbl)
 
-        # Кол 4: Бюджет план
+        # Суммы бюджетов
+        total_bp = sum(e.get('budget_planned', 0) or 0 for e in self.entries)
+        total_ba = sum(e.get('budget_actual', 0) or 0 for e in self.entries)
+        total_savings = sum(e.get('budget_savings', 0) or 0 for e in self.entries)
+        total_commission = sum(e.get('commission', 0) or 0 for e in self.entries)
+
+        # Кол 6: Бюджет план
         bp_text = f'{total_bp:,.0f}' if total_bp else ''
         bp_lbl = self._make_cell_label(bp_text, totals_bg, 'right', bold=True)
-        self.table.setCellWidget(row, 4, bp_lbl)
+        self.table.setCellWidget(row, 6, bp_lbl)
 
-        # Кол 5: Бюджет факт
+        # Кол 7: Бюджет факт
         ba_text = f'{total_ba:,.0f}' if total_ba else ''
         ba_lbl = self._make_cell_label(ba_text, totals_bg, 'right', bold=True)
-        self.table.setCellWidget(row, 5, ba_lbl)
+        self.table.setCellWidget(row, 7, ba_lbl)
 
-        # Кол 6: Экономия
+        # Кол 8: Экономия
         savings_color = '#333333'
         if total_savings > 0:
             savings_color = '#4CAF50'
@@ -778,21 +853,29 @@ class SupervisionTimelineWidget(QWidget):
             savings_color = '#F44336'
         savings_text = f'{total_savings:,.0f}' if total_savings else ''
         savings_lbl = self._make_cell_label(savings_text, totals_bg, 'right', bold=True, color=savings_color)
-        self.table.setCellWidget(row, 6, savings_lbl)
+        self.table.setCellWidget(row, 8, savings_lbl)
 
-        # Кол 7: Поставщик — пусто
+        # Кол 9: Поставщик — пусто
         empty_supplier = self._make_cell_label('', totals_bg)
-        self.table.setCellWidget(row, 7, empty_supplier)
+        self.table.setCellWidget(row, 9, empty_supplier)
 
-        # Кол 8: Комиссия
+        # Кол 10: Комиссия
         comm_text = f'{total_commission:,.0f}' if total_commission else ''
         comm_lbl = self._make_cell_label(comm_text, totals_bg, 'right', bold=True)
-        self.table.setCellWidget(row, 8, comm_lbl)
+        self.table.setCellWidget(row, 10, comm_lbl)
 
-        # Кол 9-10: пустые
-        for col in (9, 10):
+        # Кол 11-12: пустые
+        for col in (11, 12):
             empty_lbl = self._make_cell_label('', totals_bg)
             self.table.setCellWidget(row, col, empty_lbl)
+
+    def _on_executor_changed(self, row, stage_code, new_executor):
+        """Изменение исполнителя"""
+        if self._loading:
+            return
+        if row < len(self.entries):
+            self.entries[row]['executor'] = new_executor
+        self._save_entry(stage_code, {'executor': new_executor})
 
     def _on_status_changed(self, row, stage_code, new_status):
         """Изменение статуса"""
@@ -934,24 +1017,20 @@ class SupervisionTimelineWidget(QWidget):
         files_group.setStyleSheet(GROUP_BOX_STYLE)
         fl = QVBoxLayout()
 
-        # Кнопка загрузки
-        btn_row = QHBoxLayout()
-        btn_row.addStretch(1)
+        # Кнопка загрузки — компактная, во всю ширину
         upload_btn = IconLoader.create_icon_button(
             'upload', 'Загрузить файл', 'Загрузить файл на Яндекс.Диск', icon_size=12)
         upload_btn.setFixedHeight(32)
         upload_btn.setStyleSheet('''
             QPushButton {
                 background-color: #ffd93c; color: #333333;
-                padding: 6px 20px; border-radius: 4px;
-                font-weight: bold; min-width: 200px;
+                padding: 4px 16px; border-radius: 4px;
+                font-weight: bold; font-size: 12px;
             }
             QPushButton:hover { background-color: #e6c435; }
         ''')
         upload_btn.clicked.connect(self._upload_file)
-        btn_row.addWidget(upload_btn, 2)
-        btn_row.addStretch(1)
-        fl.addLayout(btn_row)
+        fl.addWidget(upload_btn)
 
         # Таблица файлов
         self.files_table = QTableWidget()
@@ -974,7 +1053,7 @@ class SupervisionTimelineWidget(QWidget):
 
     def _upload_file(self):
         """Загрузка файла — делегируем родительскому диалогу"""
-        dialog = self.parent()
+        dialog = self._dialog or self.window()
         if dialog and hasattr(dialog, 'upload_supervision_file'):
             dialog.upload_supervision_file()
 
@@ -1063,6 +1142,6 @@ class SupervisionTimelineWidget(QWidget):
 
     def _delete_file(self, file_id, yandex_path):
         """Удалить файл — делегируем родительскому диалогу"""
-        dialog = self.parent()
+        dialog = self._dialog or self.window()
         if dialog and hasattr(dialog, 'delete_supervision_file'):
             dialog.delete_supervision_file(file_id, yandex_path)

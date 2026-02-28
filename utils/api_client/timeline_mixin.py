@@ -143,7 +143,7 @@ class TimelineMixin:
         """Получить выезды по карточке надзора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits"
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits"
         )
         return self._handle_response(response)
 
@@ -151,16 +151,16 @@ class TimelineMixin:
         """Создать запись выезда"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits",
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits",
             json=data,
         )
-        return self._handle_response(response)
+        return self._handle_response(response, success_codes=[200, 201])
 
     def update_supervision_visit(self, card_id: int, visit_id: int, data: dict):
         """Обновить запись выезда"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits/{visit_id}",
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits/{visit_id}",
             json=data,
         )
         return self._handle_response(response)
@@ -169,7 +169,7 @@ class TimelineMixin:
         """Удалить запись выезда"""
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits/{visit_id}",
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits/{visit_id}",
         )
         self._handle_response(response)
         return True
@@ -178,7 +178,7 @@ class TimelineMixin:
         """Итого выездов по месяцам"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits/summary"
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits/summary"
         )
         return self._handle_response(response)
 
@@ -186,7 +186,7 @@ class TimelineMixin:
         """Экспорт выездов в Excel"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits/export/excel"
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits/export/excel"
         )
         if response.status_code == 200:
             return response.content
@@ -197,7 +197,7 @@ class TimelineMixin:
         """Экспорт выездов в PDF"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-visits/{card_id}/visits/export/pdf"
+            f"{self.base_url}/api/v1/supervision-visits/{card_id}/visits/export/pdf"
         )
         if response.status_code == 200:
             return response.content
