@@ -99,8 +99,8 @@ class TestNoAuth:
         )
 
     def test_agents_no_auth(self, api_base):
-        """GET /api/agents без заголовка Authorization -> 401/403"""
-        resp = api_get(api_base, "/api/agents", {})
+        """GET /api/v1/agents без заголовка Authorization -> 401/403"""
+        resp = api_get(api_base, "/api/v1/agents", {})
         assert resp.status_code in (401, 403), (
             f"Ожидается 401/403 без авторизации, получено {resp.status_code}"
         )
@@ -113,8 +113,8 @@ class TestNoAuth:
         )
 
     def test_cities_no_auth(self, api_base):
-        """GET /api/cities без заголовка Authorization -> 401/403"""
-        resp = api_get(api_base, "/api/cities", {})
+        """GET /api/v1/cities без заголовка Authorization -> 401/403"""
+        resp = api_get(api_base, "/api/v1/cities", {})
         assert resp.status_code in (401, 403), (
             f"Ожидается 401/403 без авторизации, получено {resp.status_code}"
         )
@@ -223,7 +223,7 @@ class TestRolePermissions:
         if 'surveyor' not in role_tokens:
             pytest.skip("Токен замерщика не создан")
         resp = api_post(
-            api_base, "/api/agents", role_tokens['surveyor'],
+            api_base, "/api/v1/agents", role_tokens['surveyor'],
             json={"name": f"{TEST_PREFIX}ЗАПРЕЩЁННЫЙ_АГЕНТ", "color": "#000000"}
         )
         assert resp.status_code == 403, (
@@ -235,7 +235,7 @@ class TestRolePermissions:
         if 'draftsman' not in role_tokens:
             pytest.skip("Токен чертёжника не создан")
         resp = api_post(
-            api_base, "/api/cities", role_tokens['draftsman'],
+            api_base, "/api/v1/cities", role_tokens['draftsman'],
             json={"name": f"{TEST_PREFIX}ЗАПРЕЩЁННЫЙ_ГОРОД"}
         )
         assert resp.status_code == 403, (

@@ -4,9 +4,9 @@ E2E Tests: Города (cities)
 Тесты CRUD endpoints городов.
 
 Endpoints:
-  GET    /api/cities         — список городов (только активные по умолчанию)
-  POST   /api/cities         — создать город (требует rights: cities.create)
-  DELETE /api/cities/{id}    — мягкое удаление города (требует rights: cities.delete)
+  GET    /api/v1/cities         — список городов (только активные по умолчанию)
+  POST   /api/v1/cities         — создать город (требует rights: cities.create)
+  DELETE /api/v1/cities/{id}    — мягкое удаление города (требует rights: cities.delete)
 """
 import pytest
 import sys
@@ -32,12 +32,12 @@ class TestCities:
     """E2E тесты для endpoints городов"""
 
     # ------------------------------------------------------------------ #
-    #  1. GET /api/cities — список городов
+    #  1. GET /api/v1/cities — список городов
     # ------------------------------------------------------------------ #
 
     def test_get_cities_returns_list(self, api_base, admin_headers):
-        """GET /api/cities возвращает список (list), каждый элемент содержит id и name"""
-        resp = api_get(api_base, "/api/cities", admin_headers)
+        """GET /api/v1/cities возвращает список (list), каждый элемент содержит id и name"""
+        resp = api_get(api_base, "/api/v1/cities", admin_headers)
 
         assert resp.status_code == 200, (
             f"Ожидался 200, получено {resp.status_code}: {resp.text}"
@@ -55,17 +55,17 @@ class TestCities:
             assert isinstance(item["name"], str), f"name должен быть str: {item['name']}"
 
     # ------------------------------------------------------------------ #
-    #  2. POST /api/cities — создать город
+    #  2. POST /api/v1/cities — создать город
     # ------------------------------------------------------------------ #
 
     def test_create_city(self, api_base, admin_headers):
-        """POST /api/cities создаёт новый город, возвращает 200 или 201"""
+        """POST /api/v1/cities создаёт новый город, возвращает 200 или 201"""
         # Предварительно чистим, если осталось с прошлого запуска
         _cleanup_test_city(api_base, admin_headers, TEST_CITY_NAME)
 
         resp = api_post(
             api_base,
-            "/api/cities",
+            "/api/v1/cities",
             admin_headers,
             json={"name": TEST_CITY_NAME},
         )
@@ -86,11 +86,11 @@ class TestCities:
     # ------------------------------------------------------------------ #
 
     def test_created_city_appears_in_list(self, api_base, admin_headers):
-        """После создания GET /api/cities содержит новый город"""
+        """После создания GET /api/v1/cities содержит новый город"""
         # Убедиться что город создан
         _ensure_test_city_exists(api_base, admin_headers, TEST_CITY_NAME)
 
-        resp = api_get(api_base, "/api/cities", admin_headers)
+        resp = api_get(api_base, "/api/v1/cities", admin_headers)
         assert resp.status_code == 200
 
         cities = resp.json()
@@ -104,17 +104,17 @@ class TestCities:
     # ------------------------------------------------------------------ #
 
     def test_delete_city(self, api_base, admin_headers):
-        """DELETE /api/cities/{id} успешно удаляет город (мягкое удаление)"""
+        """DELETE /api/v1/cities/{id} успешно удаляет город (мягкое удаление)"""
         city_id = _ensure_test_city_exists(api_base, admin_headers, TEST_CITY_NAME)
         assert city_id is not None, "Не удалось создать тестовый город для удаления"
 
-        resp = api_delete(api_base, f"/api/cities/{city_id}", admin_headers)
+        resp = api_delete(api_base, f"/api/v1/cities/{city_id}", admin_headers)
         assert resp.status_code in (200, 204), (
             f"Ожидался 200 или 204, получено {resp.status_code}: {resp.text}"
         )
 
         # Проверяем что город исчез из активного списка
-        list_resp = api_get(api_base, "/api/cities", admin_headers)
+        list_resp = api_get(api_base, "/api/v1/cities", admin_headers)
         assert list_resp.status_code == 200
         names = [c.get("name") for c in list_resp.json()]
         assert TEST_CITY_NAME not in names, (
@@ -126,14 +126,14 @@ class TestCities:
     # ------------------------------------------------------------------ #
 
     def test_create_duplicate_city_returns_error(self, api_base, admin_headers):
-        """POST /api/cities с уже существующим именем возвращает 400"""
+        """POST /api/v1/cities с уже существующим именем возвращает 400"""
         # Создать город
         _ensure_test_city_exists(api_base, admin_headers, TEST_CITY_NAME)
 
         # Попытка создать дубликат
         resp = api_post(
             api_base,
-            "/api/cities",
+            "/api/v1/cities",
             admin_headers,
             json={"name": TEST_CITY_NAME},
         )
@@ -150,8 +150,8 @@ class TestCities:
     # ------------------------------------------------------------------ #
 
     def test_get_cities_without_auth_returns_401(self, api_base):
-        """GET /api/cities без токена авторизации возвращает 401 или 403"""
-        resp = api_get(api_base, "/api/cities", headers={})
+        """GET /api/v1/cities без токена авторизации возвращает 401 или 403"""
+        resp = api_get(api_base, "/api/v1/cities", headers={})
 
         assert resp.status_code in (401, 403), (
             f"Ожидался 401 или 403 без авторизации, получено {resp.status_code}: {resp.text}"
@@ -162,10 +162,10 @@ class TestCities:
     # ------------------------------------------------------------------ #
 
     def test_delete_nonexistent_city_returns_404(self, api_base, admin_headers):
-        """DELETE /api/cities/{id} для несуществующего id возвращает 404"""
+        """DELETE /api/v1/cities/{id} для несуществующего id возвращает 404"""
         nonexistent_id = 999999999
 
-        resp = api_delete(api_base, f"/api/cities/{nonexistent_id}", admin_headers)
+        resp = api_delete(api_base, f"/api/v1/cities/{nonexistent_id}", admin_headers)
 
         assert resp.status_code == 404, (
             f"Ожидался 404 для несуществующего города, получено {resp.status_code}: {resp.text}"
@@ -179,7 +179,7 @@ class TestCities:
 def _get_city_id_by_name(api_base: str, admin_headers: dict, name: str) -> int | None:
     """Найти id города по имени (включая удалённые)"""
     resp = _http_session.get(
-        f"{api_base}/api/cities",
+        f"{api_base}/api/v1/cities",
         headers=admin_headers,
         params={"include_deleted": True},
         timeout=REQUEST_TIMEOUT,
@@ -197,13 +197,13 @@ def _ensure_test_city_exists(api_base: str, admin_headers: dict, name: str) -> i
     existing_id = _get_city_id_by_name(api_base, admin_headers, name)
     if existing_id:
         # Город может быть удалён — попробуем пересоздать (роутер восстанавливает удалённые)
-        resp = api_post(api_base, "/api/cities", admin_headers, json={"name": name})
+        resp = api_post(api_base, "/api/v1/cities", admin_headers, json={"name": name})
         if resp.status_code in (200, 201):
             return resp.json().get("id")
         # Уже активен — вернуть существующий id
         return existing_id
 
-    resp = api_post(api_base, "/api/cities", admin_headers, json={"name": name})
+    resp = api_post(api_base, "/api/v1/cities", admin_headers, json={"name": name})
     if resp.status_code in (200, 201):
         return resp.json().get("id")
     return None
@@ -215,7 +215,7 @@ def _cleanup_test_city(api_base: str, admin_headers: dict, name: str) -> None:
     if city_id:
         try:
             _http_session.delete(
-                f"{api_base}/api/cities/{city_id}",
+                f"{api_base}/api/v1/cities/{city_id}",
                 headers=admin_headers,
                 timeout=REQUEST_TIMEOUT,
             )
