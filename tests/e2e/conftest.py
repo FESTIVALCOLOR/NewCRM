@@ -20,6 +20,33 @@ from config import API_BASE_URL
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
+
+# ==============================================================
+# AUTO-SKIP: пропуск E2E тестов если сервер недоступен
+# ==============================================================
+
+def _check_server_available():
+    """Проверка доступности API сервера."""
+    try:
+        resp = requests.get(f"{API_BASE_URL}/health", timeout=3, verify=False)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+_server_available = _check_server_available()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Пропустить все E2E тесты если сервер недоступен."""
+    if _server_available:
+        return
+    skip_marker = pytest.mark.skip(reason="API сервер недоступен — E2E тесты пропущены")
+    for item in items:
+        if "e2e" in str(item.fspath):
+            item.add_marker(skip_marker)
+
+
 # ==============================================================
 # КОНСТАНТЫ
 # ==============================================================
@@ -289,6 +316,21 @@ def role_tokens(api_base, test_employees):
                 token = response.json()["access_token"]
                 tokens[role_key] = {"Authorization": f"Bearer {token}"}
                 print(f"  [auth] Токен получен для: {role_key}")
+            elif response.status_code == 429:
+                # Rate limit — ждём и повторяем
+                print(f"  [auth] Rate limit для {role_key}, ждём 10с...")
+                time.sleep(10)
+                response = _http_session.post(
+                    f"{api_base}/api/auth/login",
+                    data={"username": login, "password": TEST_PASSWORD},
+                    timeout=REQUEST_TIMEOUT
+                )
+                if response.status_code == 200:
+                    token = response.json()["access_token"]
+                    tokens[role_key] = {"Authorization": f"Bearer {token}"}
+                    print(f"  [auth] Токен получен для: {role_key} (после retry)")
+                else:
+                    print(f"  [!] Не удалось получить токен для {role_key}: {response.status_code}")
             else:
                 print(f"  [!] Не удалось получить токен для {role_key}: {response.status_code}")
         except Exception as e:

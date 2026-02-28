@@ -301,14 +301,14 @@ class TestRolePermissions:
             pytest.skip("Токен дизайнера не создан")
         # Создаём агента от имени admin, затем пробуем удалить от дизайнера
         create_resp = api_post(
-            api_base, "/api/agents", admin_headers,
+            api_base, "/api/v1/agents", admin_headers,
             json={"name": f"{TEST_PREFIX}АГЕНТ_ДЛЯ_УДАЛЕНИЯ_РОЛЬ", "color": "#AABBCC"}
         )
-        if create_resp.status_code == 200:
+        if create_resp.status_code in (200, 201):
             agent_id = create_resp.json()["id"]
         else:
             # Агент уже существует — ищем его
-            list_resp = api_get(api_base, "/api/agents", admin_headers)
+            list_resp = api_get(api_base, "/api/v1/agents", admin_headers)
             agents = list_resp.json()
             agent = next(
                 (a for a in agents if a.get("name") == f"{TEST_PREFIX}АГЕНТ_ДЛЯ_УДАЛЕНИЯ_РОЛЬ"),
@@ -318,13 +318,13 @@ class TestRolePermissions:
                 pytest.skip("Не удалось найти тестового агента для удаления")
             agent_id = agent["id"]
 
-        resp = api_delete(api_base, f"/api/agents/{agent_id}", role_tokens['designer'])
+        resp = api_delete(api_base, f"/api/v1/agents/{agent_id}", role_tokens['designer'])
         assert resp.status_code == 403, (
             f"Дизайнер не должен удалять агентов: ожидается 403, получено {resp.status_code}"
         )
 
         # Очистка: удаляем агента от admin
-        api_delete(api_base, f"/api/agents/{agent_id}", admin_headers)
+        api_delete(api_base, f"/api/v1/agents/{agent_id}", admin_headers)
 
 
 @pytest.mark.e2e

@@ -63,22 +63,14 @@ class TestAuthentication:
         resp = _http_session.get(f"{api_base}/api/clients", timeout=REQUEST_TIMEOUT)
         assert resp.status_code in [401, 403], f"Ожидался 401/403, получен {resp.status_code}"
 
-    def test_test_employees_can_login(self, api_base, test_employees):
-        """Тестовые сотрудники могут авторизоваться"""
-        import time
+    def test_test_employees_can_login(self, api_base, test_employees, role_tokens):
+        """Тестовые сотрудники могут авторизоваться (проверяем через role_tokens)"""
         for role_key, emp in test_employees.items():
             login = emp.get('login')
             if not login:
                 continue
-            resp = _http_session.post(
-                f"{api_base}/api/auth/login",
-                data={"username": login, "password": TEST_PASSWORD},
-                timeout=REQUEST_TIMEOUT
-            )
-            if resp.status_code == 429:
-                pytest.skip("Rate limit достигнут, пропускаем тест")
-            assert resp.status_code == 200, (
-                f"Авторизация {role_key} ({login}) не удалась: {resp.status_code}"
+            assert role_key in role_tokens, (
+                f"Авторизация {role_key} ({login}) не удалась: токен не получен в role_tokens"
             )
 
 

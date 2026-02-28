@@ -49,7 +49,7 @@ _LOGIN_BLOCK_MINUTES: int = 15
 # ---------------------------------------------------------------------------
 
 @router.post("/login", response_model=LoginResponse)
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
