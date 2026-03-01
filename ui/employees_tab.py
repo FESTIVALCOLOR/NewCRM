@@ -28,6 +28,7 @@ class EmployeesTab(QWidget):
 
         # ========== ОПРЕДЕЛЯЕМ ПРАВА (через permissions) ==========
         from utils.permissions import _has_perm
+        self.can_create = _has_perm(employee, api_client, 'employees.create')
         self.can_edit = _has_perm(employee, api_client, 'employees.update')
         self.can_delete = _has_perm(employee, api_client, 'employees.delete')
         # ======================================
@@ -52,7 +53,7 @@ class EmployeesTab(QWidget):
         search_btn.clicked.connect(self.open_search)
         header_layout.addWidget(search_btn)
 
-        if self.can_edit:
+        if self.can_create:
             add_btn = IconLoader.create_action_button(
                 'add', 'Добавить сотрудника',
                 bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
@@ -346,7 +347,16 @@ class EmployeesTab(QWidget):
         """Загрузка списка сотрудников с фильтрацией по отделу"""
         self.employees_table.setSortingEnabled(False)
 
-        employees = self.data.get_all_employees()
+        try:
+            employees = self.data.get_all_employees()
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка загрузки", f"Не удалось загрузить сотрудников: {e}", "warning").exec_()
+            employees = None
+
+        if not employees:
+            self.employees_table.setRowCount(0)
+            self.employees_table.setSortingEnabled(True)
+            return
 
         if department == 'admin':
             positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
@@ -507,16 +517,15 @@ class EmployeesTab(QWidget):
         """Редактирование сотрудника"""
         
         # ========== ПРОВЕРКА ПРАВ ==========
-        _cur_pos = self.employee.get('position', '')
-        _cur_sec = self.employee.get('secondary_position', '')
-        if _cur_pos == 'Старший менеджер проектов' or _cur_sec == 'Старший менеджер проектов':
-            admin_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
+        from utils.permissions import _has_perm
+        admin_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
+        if not _has_perm(self.employee, self.api_client, 'access.admin'):
             if employee_data.get('position', '') in admin_positions:
                 CustomMessageBox(
-                    self, 
-                    'Доступ запрещен', 
+                    self,
+                    'Доступ запрещен',
                     'У вас нет прав для редактирования сотрудников административного отдела.\n\n'
-                    'Только Руководитель студии может редактировать эти должности.',
+                    'Только администратор может редактировать эти должности.',
                     'warning'
                 ).exec_()
                 return
@@ -530,6 +539,7 @@ class EmployeesTab(QWidget):
     def delete_employee(self, employee_data):
         """Удаление сотрудника"""
         from ui.custom_message_box import CustomQuestionBox
+        from utils.permissions import _has_perm
 
         # Проверка права на удаление сотрудников
         if not _has_perm(self.employee, self.api_client, 'employees.delete'):
@@ -629,6 +639,7 @@ class EmployeeDialog(QDialog):
 
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
+        self.api_client = getattr(parent, 'api_client', None)
         # ==========================================
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -698,9 +709,10 @@ class EmployeeDialog(QDialog):
         
         self.position = CustomComboBox()
 
-        # ========== ФИЛЬТРУЕМ ДОЛЖНОСТИ ДЛЯ СТАРШЕГО МЕНЕДЖЕРА ==========
-        if self.current_user['position'] == 'Старший менеджер проектов':
-            # Убираем руководящие должности
+        # ========== ФИЛЬТРУЕМ ДОЛЖНОСТИ — ТОЛЬКО АДМИН МОЖЕТ НАЗНАЧАТЬ АДМИНСКИЕ ==========
+        from utils.permissions import _has_perm
+        has_admin = _has_perm(self.current_user, self.api_client, 'access.admin')
+        if not has_admin:
             restricted_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
             filtered_positions = [pos for pos in POSITIONS if pos not in restricted_positions]
             self.position.addItems(filtered_positions)
@@ -714,7 +726,7 @@ class EmployeeDialog(QDialog):
         self.secondary_position = CustomComboBox()
         self.secondary_position.addItem('Нет', '')  # Пустое значение по умолчанию
 
-        if self.current_user['position'] == 'Старший менеджер проектов':
+        if not has_admin:
             restricted_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
             filtered_positions = [pos for pos in POSITIONS if pos not in restricted_positions]
             for pos in filtered_positions:

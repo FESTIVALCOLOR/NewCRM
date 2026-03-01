@@ -1733,11 +1733,12 @@ class AssignExecutorsDialog(QDialog):
 
         # Проверяем, что хотя бы один исполнитель назначен
         if not self.assigned_dan_id and not self.assigned_smp_id:
-            QMessageBox.warning(
+            CustomMessageBox(
                 self,
                 'Внимание',
-                'Необходимо назначить хотя бы одного исполнителя (ДАН или Старшего менеджера)'
-            )
+                'Необходимо назначить хотя бы одного исполнителя (ДАН или Старшего менеджера)',
+                'warning'
+            ).exec_()
             return
 
         # Сохраняем в БД

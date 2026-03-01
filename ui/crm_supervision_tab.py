@@ -1843,6 +1843,9 @@ class SupervisionCard(QFrame):
     
     def pause_card(self):
         """Приостановка карточки"""
+        if not _has_perm(self.employee, self.api_client, 'supervision.pause_resume'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на приостановку карточки', 'error').exec_()
+            return
         dialog = PauseDialog(self, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             reason = dialog.reason_text.toPlainText().strip()
@@ -1855,6 +1858,9 @@ class SupervisionCard(QFrame):
                 
     def resume_card(self):
         """Возобновление карточки"""
+        if not _has_perm(self.employee, self.api_client, 'supervision.pause_resume'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на возобновление карточки', 'error').exec_()
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle('Подтверждение')
         dialog.setMinimumWidth(450)

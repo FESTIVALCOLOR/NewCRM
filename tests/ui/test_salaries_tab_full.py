@@ -613,8 +613,10 @@ class TestSalariesTabDeletePayment:
     def test_delete_payment_legacy(self, qtbot, mock_employee_admin):
         """delete_payment при отмене подтверждения — не удаляет."""
         tab, mock_da = _create_salaries_tab(qtbot, mock_employee_admin)
-        from PyQt5.QtWidgets import QMessageBox
-        with patch('ui.salaries_tab.QMessageBox.question', return_value=QMessageBox.No):
+        from PyQt5.QtWidgets import QDialog
+        mock_box = MagicMock()
+        mock_box.exec_.return_value = QDialog.Rejected
+        with patch('ui.salaries_tab.CustomQuestionBox', return_value=mock_box):
             tab.delete_payment(1)
             mock_da.delete_payment.assert_not_called()
 

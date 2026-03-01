@@ -1140,6 +1140,9 @@ class SupervisionCardEditDialog(QDialog):
 
     def delete_payment(self, payment_id, role, employee_name):
         """ИСПРАВЛЕНИЕ 30.01.2026: Удаление записи об оплате с API синхронизацией"""
+        if not _has_perm(self.employee, self.api_client, 'supervision.payments'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на управление платежами', 'error').exec_()
+            return
         # Подтверждение удаления
         reply = CustomQuestionBox(
             self,
@@ -1185,6 +1188,9 @@ class SupervisionCardEditDialog(QDialog):
 
     def adjust_payment_amount(self, payment_id):
         """ИСПРАВЛЕНИЕ 30.01.2026: Диалог корректировки с API синхронизацией"""
+        if not _has_perm(self.employee, self.api_client, 'supervision.payments'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на управление платежами', 'error').exec_()
+            return
         from PyQt5.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QDoubleSpinBox, QComboBox, QFrame
         from PyQt5.QtCore import Qt, QDate
         from ui.custom_title_bar import CustomTitleBar
@@ -2332,6 +2338,9 @@ class SupervisionCardEditDialog(QDialog):
 
     def upload_supervision_file(self):
         """Загрузка файла надзора на Яндекс.Диск с выбором стадии и даты"""
+        if not _has_perm(self.employee, self.api_client, 'supervision.files_upload'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на загрузку файлов', 'error').exec_()
+            return
         if not self.yandex_disk:
             CustomMessageBox(self, 'Ошибка', 'Yandex Disk не инициализирован', 'error').exec_()
             return
@@ -2605,6 +2614,9 @@ class SupervisionCardEditDialog(QDialog):
 
     def delete_supervision_file(self, file_id, yandex_path):
         """Удаление файла надзора"""
+        if not _has_perm(self.employee, self.api_client, 'supervision.files_delete'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление файлов', 'error').exec_()
+            return
         reply = CustomQuestionBox(
             self,
             'Подтверждение удаления',

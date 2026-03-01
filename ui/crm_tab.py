@@ -2116,7 +2116,7 @@ class CRMCard(QFrame):
         # Менеджер может принимать/отклонять работу только в шаблонных проектах
         is_template_project = self.card_data.get('project_type', '') == 'Шаблонный'
         is_only_manager = _emp_only_pos(self.employee, 'Менеджер')
-        can_review_work = _has_perm(self.employee, self.api_client, 'crm_cards.move')
+        can_review_work = _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval')
         if is_only_manager and not is_template_project:
             can_review_work = False
         if self.employee and can_review_work:
@@ -2727,6 +2727,9 @@ class CRMCard(QFrame):
     @debounce_click(delay_ms=2000)
     def accept_work(self):
         """Принятие работы менеджером"""
+        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на принятие работы', 'error').exec_()
+            return
         current_column = self.card_data.get('column_name', '')
         
         if 'концепция дизайна' in current_column:
@@ -2894,6 +2897,9 @@ class CRMCard(QFrame):
     @debounce_click(delay_ms=2000)
     def reject_work(self):
         """Отправить работу на исправление с загрузкой файла правок на ЯД"""
+        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на отправку на исправление', 'error').exec_()
+            return
         current_column = self.card_data.get('column_name', '')
         contract_id = self.card_data.get('contract_id')
 
@@ -2920,6 +2926,9 @@ class CRMCard(QFrame):
 
     def send_to_client(self):
         """Отправить на согласование клиенту"""
+        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на отправку клиенту', 'error').exec_()
+            return
         current_column = self.card_data.get('column_name', '')
         reply = CustomQuestionBox(
             self,

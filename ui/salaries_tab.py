@@ -736,6 +736,7 @@ class SalariesTab(QWidget):
         paid_btn = QPushButton()
         paid_btn.setIcon(IconLoader.load('check-active'))
         paid_btn.setIconSize(QSize(16, 16))
+        has_mark_paid = _has_perm(self.employee, self.api_client, 'salaries.mark_paid')
         if payment.get('is_paid'):
             paid_btn.setStyleSheet("""
                 QPushButton {
@@ -748,6 +749,18 @@ class SalariesTab(QWidget):
             """)
             paid_btn.setEnabled(False)
             paid_btn.setToolTip('Оплачено')
+        elif not has_mark_paid:
+            paid_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #95A5A6;
+                    color: white;
+                    padding: 7px 12px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                }
+            """)
+            paid_btn.setEnabled(False)
+            paid_btn.setToolTip('Нет прав на изменение статуса')
         else:
             paid_btn.setStyleSheet("""
                 QPushButton {
@@ -812,8 +825,12 @@ class SalariesTab(QWidget):
             """)
         to_pay_btn.setIconSize(QSize(12, 12))
         to_pay_btn.setFixedSize(26, 26)
-        to_pay_btn.setToolTip('Отметить к оплате')
-        to_pay_btn.clicked.connect(lambda: self.set_payment_status(payment, 'to_pay', table, row, is_salary))
+        if _has_perm(self.employee, self.api_client, 'salaries.mark_to_pay'):
+            to_pay_btn.setToolTip('Отметить к оплате')
+            to_pay_btn.clicked.connect(lambda: self.set_payment_status(payment, 'to_pay', table, row, is_salary))
+        else:
+            to_pay_btn.setEnabled(False)
+            to_pay_btn.setToolTip('Нет прав на изменение статуса')
         layout.addWidget(to_pay_btn)
 
         # Кнопка "Оплачено" (иконка галочки)
@@ -850,31 +867,36 @@ class SalariesTab(QWidget):
                 }
                 QPushButton:hover { background-color: #E8E8E8; }
             """)
-        paid_btn.setToolTip('Отметить как оплачено')
-        paid_btn.clicked.connect(lambda: self.set_payment_status(payment, 'paid', table, row, is_salary))
+        if _has_perm(self.employee, self.api_client, 'salaries.mark_paid'):
+            paid_btn.setToolTip('Отметить как оплачено')
+            paid_btn.clicked.connect(lambda: self.set_payment_status(payment, 'paid', table, row, is_salary))
+        else:
+            paid_btn.setEnabled(False)
+            paid_btn.setToolTip('Нет прав на изменение статуса')
         layout.addWidget(paid_btn)
 
-        # Кнопка редактирования
-        edit_btn = QPushButton()
-        edit_btn.setIcon(IconLoader.load('edit'))
-        edit_btn.setIconSize(QSize(12, 12))
-        edit_btn.setFixedSize(26, 26)
-        edit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498DB;
-                color: white;
-                padding: 0px;
-                border-radius: 4px;
-                min-height: 0px;
-                max-height: 26px;
-                min-width: 0px;
-                max-width: 26px;
-            }
-            QPushButton:hover { background-color: #2980B9; }
-        """)
-        edit_btn.setToolTip('Редактировать выплату')
-        edit_btn.clicked.connect(lambda checked, p=payment, s=is_salary: self.edit_payment_from_all(p, s))
-        layout.addWidget(edit_btn)
+        # Кнопка редактирования (по праву salaries.update)
+        if _has_perm(self.employee, self.api_client, 'salaries.update'):
+            edit_btn = QPushButton()
+            edit_btn.setIcon(IconLoader.load('edit'))
+            edit_btn.setIconSize(QSize(12, 12))
+            edit_btn.setFixedSize(26, 26)
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498DB;
+                    color: white;
+                    padding: 0px;
+                    border-radius: 4px;
+                    min-height: 0px;
+                    max-height: 26px;
+                    min-width: 0px;
+                    max-width: 26px;
+                }
+                QPushButton:hover { background-color: #2980B9; }
+            """)
+            edit_btn.setToolTip('Редактировать выплату')
+            edit_btn.clicked.connect(lambda checked, p=payment, s=is_salary: self.edit_payment_from_all(p, s))
+            layout.addWidget(edit_btn)
 
         # Кнопка удаления (по праву salaries.delete)
         if _has_perm(self.employee, self.api_client, 'salaries.delete'):
@@ -2203,18 +2225,19 @@ class SalariesTab(QWidget):
         widget = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(5, 5, 5, 5)
-        
-        edit_btn = QPushButton('')
-        edit_btn.setMaximumWidth(35)
-        edit_btn.clicked.connect(lambda: self.edit_payment(payment_data, payment_type))
-        
-        delete_btn = QPushButton('[DELETE]')
-        delete_btn.setMaximumWidth(35)
-        delete_btn.clicked.connect(lambda: self.delete_payment(payment_data['id']))
-        
-        layout.addWidget(edit_btn)
-        layout.addWidget(delete_btn)
-        
+
+        if _has_perm(self.employee, self.api_client, 'salaries.update'):
+            edit_btn = QPushButton('')
+            edit_btn.setMaximumWidth(35)
+            edit_btn.clicked.connect(lambda: self.edit_payment(payment_data, payment_type))
+            layout.addWidget(edit_btn)
+
+        if _has_perm(self.employee, self.api_client, 'salaries.delete'):
+            delete_btn = QPushButton('[DELETE]')
+            delete_btn.setMaximumWidth(35)
+            delete_btn.clicked.connect(lambda: self.delete_payment(payment_data['id']))
+            layout.addWidget(delete_btn)
+
         widget.setLayout(layout)
         return widget
     
