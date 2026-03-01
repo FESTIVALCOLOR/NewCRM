@@ -132,8 +132,8 @@ async def get_current_user(
     if employee is None:
         raise credentials_exception
 
-    # Проверяем что сотрудник активен
-    if employee.is_active is False:
+    # Проверяем что сотрудник активен (getattr для обратной совместимости с БД)
+    if getattr(employee, 'is_active', True) is False:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Учётная запись деактивирована",
