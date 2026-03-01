@@ -337,11 +337,11 @@ class PermissionsMatrixWidget(QWidget):
             }
             QHeaderView::section {
                 background-color: #f5f5f5;
-                padding: 8px;
+                padding: 4px 2px;
                 border: none;
                 border-bottom: 1px solid #d9d9d9;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 11px;
             }
         """)
 
@@ -356,16 +356,19 @@ class PermissionsMatrixWidget(QWidget):
         table.setColumnCount(col_count)
         table.setRowCount(total_rows)
 
-        # Заголовки столбцов
-        headers = ['Право'] + ROLES
+        # Заголовки столбцов — с переносом слов для длинных названий ролей
+        headers = ['Право'] + [r.replace(' ', '\n') for r in ROLES]
         table.setHorizontalHeaderLabels(headers)
 
         # Настройка заголовков
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         for col_idx in range(1, col_count):
-            header.setSectionResizeMode(col_idx, QHeaderView.ResizeToContents)
-        header.setMinimumSectionSize(90)
+            header.setSectionResizeMode(col_idx, QHeaderView.Fixed)
+            header.resizeSection(col_idx, 90)
+        header.setMinimumSectionSize(70)
+        # Высота заголовка для 2-3 строк текста
+        header.setFixedHeight(52)
 
         # Скрываем вертикальный заголовок (номера строк)
         table.verticalHeader().setVisible(False)
