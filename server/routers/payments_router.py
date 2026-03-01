@@ -1083,11 +1083,10 @@ async def update_payment(
 
     # Аудит-лог обновления платежа
     activity = ActivityLog(
-        user_id=current_user.id,
+        employee_id=current_user.id,
         action_type="update",
         entity_type="payment",
         entity_id=payment_id,
-        description=f"Обновлены поля: {', '.join(update_fields.keys())}"
     )
     db.add(activity)
 
@@ -1164,7 +1163,7 @@ async def update_payment_manual(
 async def mark_payment_as_paid(
     payment_id: int,
     employee_id: int,
-    current_user: Employee = Depends(require_permission("payments.update")),
+    current_user: Employee = Depends(require_permission("salaries.mark_paid")),
     db: Session = Depends(get_db)
 ):
     """Отметить платеж как выплаченный"""
@@ -1181,11 +1180,10 @@ async def mark_payment_as_paid(
 
         # Аудит-лог отметки выплаты
         activity = ActivityLog(
-            user_id=current_user.id,
+            employee_id=current_user.id,
             action_type="mark_paid",
             entity_type="payment",
             entity_id=payment_id,
-            description=f"Платеж отмечен как выплаченный"
         )
         db.add(activity)
 
