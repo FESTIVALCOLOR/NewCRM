@@ -693,9 +693,7 @@ class ArchiveCardDetailsDialog(QDialog):
             tabs.addTab(team_widget, 'Команда')
 
             # ========== ВКЛАДКА ОПЛАТЫ ==========
-            # ИСПРАВЛЕНИЕ: Определяем, нужно ли показывать вкладку оплат
             contract_id = self.card_data.get('contract_id')
-            contract_status = self.card_data.get('status', '')
 
             # Проверяем права доступа к вкладке оплаты
             from utils.permissions import _has_perm
@@ -706,19 +704,17 @@ class ArchiveCardDetailsDialog(QDialog):
             payments_tab_title = 'Оплаты'
             payments = []
 
-            # Показываем вкладку оплат только если есть права доступа
+            # Показываем вкладку оплат если есть права — архивные карточки
+            # всегда имеют статус СДАН/РАСТОРГНУТ/АВТОРСКИЙ НАДЗОР
             if can_view_payments and contract_id:
                 if self.card_type == 'supervision':
-                    # Для CRM надзора: показываем только оплаты надзора
                     payments = self.data.get_payments_for_supervision(contract_id)
                     payments_tab_title = 'Оплаты надзора'
                     show_payments_tab = True
                 elif self.card_type == 'crm':
-                    # Для основной CRM: показываем CRM-оплаты для СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР
-                    if contract_status in ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']:
-                        payments = self.data.get_payments_for_crm(contract_id)
-                        payments_tab_title = 'Оплаты'
-                        show_payments_tab = True
+                    payments = self.data.get_payments_for_crm(contract_id)
+                    payments_tab_title = 'Оплаты'
+                    show_payments_tab = True
 
             # Создаем вкладку оплат только если нужно ее показывать
             if show_payments_tab:
