@@ -78,6 +78,9 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
         if not emp_id:
             continue
         amount = _calc_supervision_payment_amount(db, card.contract_id, role, stage_name)
+        if amount <= 0:
+            logger.warning(f"Пропуск авто-оплаты: card={card.id}, role={role}, stage={stage_name} — тариф не найден или area=0")
+            continue
         payment = Payment(
             contract_id=card.contract_id,
             employee_id=emp_id,

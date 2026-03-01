@@ -1288,7 +1288,8 @@ class ArchiveCardDetailsDialog(QDialog):
             layout.addWidget(tabs, 1)
             
             buttons_layout = QHBoxLayout()
-            
+
+            can_restore = _has_perm(self.employee, self.api_client, 'crm_cards.move')
             restore_btn = IconLoader.create_icon_button('refresh3', 'Вернуть в активные проекты', icon_size=12)
             restore_btn.setStyleSheet("""
                 QPushButton {
@@ -1306,6 +1307,7 @@ class ArchiveCardDetailsDialog(QDialog):
             """)
             restore_btn.setFixedHeight(36)
             restore_btn.clicked.connect(self.restore_to_active)
+            restore_btn.setVisible(can_restore)
             buttons_layout.addWidget(restore_btn)
 
             self.sync_label = QLabel('Синхронизация...')

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from database import get_db, Employee, Rate
+from database import get_db, Employee, Rate, Payment, Contract
 from auth import get_current_user
 from permissions import require_permission
 from schemas import (
@@ -21,6 +21,30 @@ from schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rates"])
+
+
+def _recalc_zero_supervision_payments(db: Session, role: str, stage_name: str, rate_per_m2: float):
+    """Пересчитать нулевые платежи надзора после создания/обновления тарифа."""
+    zero_payments = db.query(Payment).filter(
+        Payment.role == role,
+        Payment.stage_name == stage_name,
+        Payment.supervision_card_id.isnot(None),
+        Payment.final_amount == 0,
+    ).all()
+    if not zero_payments:
+        return 0
+    count = 0
+    for p in zero_payments:
+        contract = db.query(Contract).filter(Contract.id == p.contract_id).first()
+        area = float(contract.area) if contract and contract.area else 0
+        if area > 0 and rate_per_m2 > 0:
+            new_amount = area * rate_per_m2
+            p.calculated_amount = new_amount
+            p.final_amount = new_amount
+            p.updated_at = datetime.utcnow()
+            count += 1
+            logger.info(f"Пересчитан платёж id={p.id}: 0 → {new_amount} (area={area}, rate={rate_per_m2})")
+    return count
 
 
 # --- Основные CRUD ---
@@ -219,6 +243,19 @@ async def save_supervision_rate(
             results.append({'role': 'Старший менеджер проектов', 'rate': data.manager_rate})
 
         db.commit()
+
+        # Пересчитать нулевые платежи для обновлённых тарифов
+        recalc_count = 0
+        if data.executor_rate is not None:
+            recalc_count += _recalc_zero_supervision_payments(
+                db, 'ДАН', data.stage_name, data.executor_rate)
+        if data.manager_rate is not None:
+            recalc_count += _recalc_zero_supervision_payments(
+                db, 'Старший менеджер проектов', data.stage_name, data.manager_rate)
+        if recalc_count > 0:
+            db.commit()
+            logger.info(f"Пересчитано {recalc_count} нулевых платежей после обновления тарифа")
+
         return {'status': 'success', 'stage_name': data.stage_name, 'rates': results}
 
     except Exception as e:
