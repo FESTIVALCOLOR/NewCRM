@@ -462,12 +462,12 @@ class TestCRMTabRoleVisibility:
         assert tab.project_tabs.count() == 1, \
             f"СДП должен видеть 1 вкладку, видит {tab.project_tabs.count()}"
 
-    def test_designer_sees_two_tabs(self, qtbot, mock_data_access, mock_employee_designer):
-        """Дизайнер видит обе вкладки (шаблонные не скрыты для дизайнера)."""
+    def test_designer_sees_only_individual_tab(self, qtbot, mock_data_access, mock_employee_designer):
+        """Дизайнер без crm_cards.move видит только индивидуальные проекты."""
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_designer)
-        # Дизайнер — не чистый СДП, поэтому шаблонные видны
-        assert tab.project_tabs.count() == 2, \
-            f"Дизайнер должен видеть 2 вкладки, видит {tab.project_tabs.count()}"
+        # Дизайнер не имеет crm_cards.move, поэтому шаблонные проекты скрыты
+        assert tab.project_tabs.count() == 1, \
+            f"Дизайнер должен видеть 1 вкладку, видит {tab.project_tabs.count()}"
 
     def test_admin_has_archive_subtabs(self, qtbot, mock_data_access, mock_employee_admin):
         """Админ видит подвкладки Архив в индивидуальных проектах."""

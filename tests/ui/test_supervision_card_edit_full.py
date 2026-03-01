@@ -125,7 +125,7 @@ def _create_dialog(qtbot, employee, card_data=None, mock_da=None):
          patch('ui.supervision_card_edit_dialog.CustomTitleBar', return_value=QLabel('Title')), \
          patch('ui.supervision_card_edit_dialog.CustomComboBox', QComboBox), \
          patch('ui.supervision_card_edit_dialog.CustomDateEdit') as MockDateEdit, \
-         patch('ui.supervision_card_edit_dialog._has_perm', return_value=True), \
+         patch('ui.supervision_card_edit_dialog._has_perm', side_effect=lambda emp, api, perm: perm != 'supervision.move' or emp.get('position', '') not in ('ДАН', 'Дизайнер', 'Чертёжник', 'Замерщик', 'Менеджер')), \
          patch('ui.supervision_card_edit_dialog.add_today_button_to_dateedit'), \
          patch('ui.supervision_card_edit_dialog.create_progress_dialog', return_value=MagicMock()):
 

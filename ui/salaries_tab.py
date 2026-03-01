@@ -1125,6 +1125,9 @@ class SalariesTab(QWidget):
 
     def edit_payment_from_all(self, payment, is_salary):
         """Редактирование выплаты из таблицы 'Все выплаты'"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.update'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование выплат.', 'error').exec_()
+            return
         # Преобразуем данные для диалога
         payment_data = {
             'id': payment['id'],
@@ -1203,6 +1206,9 @@ class SalariesTab(QWidget):
 
     def delete_payment_universal(self, payment_id, source, role, employee_name):
         """Универсальное удаление записи об оплате (из payments или salaries)"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.delete'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление выплат.', 'error').exec_()
+            return
         # Подтверждение удаления
         reply = CustomQuestionBox(
             self,
@@ -2249,6 +2255,9 @@ class SalariesTab(QWidget):
 
     def add_salary_payment(self):
         """Добавление выплаты оклада"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.create'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание выплат.', 'error').exec_()
+            return
         dialog = PaymentDialog(self, payment_type='Оклады', api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
@@ -2257,6 +2266,9 @@ class SalariesTab(QWidget):
 
     def add_payment(self, payment_type):
         """Добавление выплаты"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.create'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание выплат.', 'error').exec_()
+            return
         dialog = PaymentDialog(self, payment_type=payment_type, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
@@ -2265,6 +2277,9 @@ class SalariesTab(QWidget):
 
     def edit_payment(self, payment_data, payment_type):
         """Редактирование выплаты"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.update'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование выплат.', 'error').exec_()
+            return
         dialog = PaymentDialog(self, payment_data=payment_data, payment_type=payment_type, api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
@@ -2273,6 +2288,9 @@ class SalariesTab(QWidget):
 
     def edit_salary_payment(self, payment_data):
         """Редактирование оклада"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.update'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование выплат.', 'error').exec_()
+            return
         dialog = PaymentDialog(self, payment_data=payment_data, payment_type='Оклады', api_client=self.api_client)
         if dialog.exec_() == QDialog.Accepted:
             self.invalidate_cache()
@@ -2282,6 +2300,9 @@ class SalariesTab(QWidget):
 
     def delete_salary_payment(self, payment):
         """Удаление оклада (#5)"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.delete'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление выплат.', 'error').exec_()
+            return
         reply = CustomQuestionBox(
             self,
             'Подтверждение удаления',
@@ -2299,6 +2320,9 @@ class SalariesTab(QWidget):
 
     def delete_payment(self, payment_id):
         """Удаление выплаты"""
+        if not _has_perm(self.employee, self.api_client, 'salaries.delete'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление выплат.', 'error').exec_()
+            return
         reply = CustomQuestionBox(
             self,
             'Подтверждение удаления',
@@ -2446,6 +2470,10 @@ class SalariesTab(QWidget):
 
     def set_payment_status(self, payment, status, table, row, is_salary=False):
         """Установка статуса оплаты с toggle логикой"""
+        perm_name = 'salaries.mark_paid' if status == 'paid' else 'salaries.mark_to_pay'
+        if not _has_perm(self.employee, self.api_client, perm_name):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на изменение статуса оплаты.', 'error').exec_()
+            return
         try:
             # Toggle логика: если статус уже установлен, то сбрасываем его
             current_status = payment.get('payment_status')

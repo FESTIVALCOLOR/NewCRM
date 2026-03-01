@@ -136,10 +136,10 @@ class TestSupervisionRoles:
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_admin)
         assert tab.tabs.count() >= 2
 
-    def test_manager_sees_archive(self, qtbot, mock_data_access, mock_employee_manager):
-        """Менеджер видит архив."""
+    def test_manager_no_archive(self, qtbot, mock_data_access, mock_employee_manager):
+        """Менеджер НЕ видит архив (нет supervision.move)."""
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_manager)
-        assert tab.tabs.count() >= 2
+        assert tab.tabs.count() == 1
 
     def test_dan_no_archive(self, qtbot, mock_data_access, mock_employee_dan):
         """ДАН не видит архив (1 подвкладка)."""

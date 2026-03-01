@@ -1025,13 +1025,14 @@ class AddProjectNoteDialog(QDialog):
 class SupervisionStageDeadlineDialog(QDialog):
     """Диалог установки дедлайна для стадии надзора"""
 
-    def __init__(self, parent, card_id, stage_name, api_client=None):
+    def __init__(self, parent, card_id, stage_name, api_client=None, employee=None):
         super().__init__(parent)
         self.card_id = card_id
         self.stage_name = stage_name
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
+        self.employee = employee or getattr(parent, 'employee', None)
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -1191,6 +1192,10 @@ class SupervisionStageDeadlineDialog(QDialog):
     
     def save_deadline(self):
         """Сохранение дедлайна в карточку и в таблицу сроков (plan_date)"""
+        from utils.permissions import _has_perm
+        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.deadlines'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на управление дедлайнами.', 'error').exec_()
+            return
         deadline = self.deadline_widget.date().toString('yyyy-MM-dd')
 
         try:
@@ -1248,13 +1253,14 @@ class SupervisionStageDeadlineDialog(QDialog):
 class SupervisionReassignDANDialog(QDialog):
     """ИСПРАВЛЕНИЕ 28.01.2026: Диалог переназначения ДАН для надзора"""
 
-    def __init__(self, parent, card_id, current_dan_name, api_client=None):
+    def __init__(self, parent, card_id, current_dan_name, api_client=None, employee=None):
         super().__init__(parent)
         self.card_id = card_id
         self.current_dan_name = current_dan_name
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
+        self.employee = employee or getattr(parent, 'employee', None)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -1403,6 +1409,10 @@ class SupervisionReassignDANDialog(QDialog):
 
     def save_reassignment(self):
         """Сохранение нового назначения ДАН"""
+        from utils.permissions import _has_perm
+        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.assign_executor'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на переназначение исполнителей.', 'error').exec_()
+            return
         new_dan_id = self.dan_combo.currentData()
 
         if not new_dan_id:
@@ -1564,13 +1574,14 @@ class SupervisionReassignDANDialog(QDialog):
 class AssignExecutorsDialog(QDialog):
     """Диалог назначения исполнителей (ДАН и СМП) при перемещении карточки на рабочую стадию"""
 
-    def __init__(self, parent, card_id, stage_name, api_client=None):
+    def __init__(self, parent, card_id, stage_name, api_client=None, employee=None):
         super().__init__(parent)
         self.card_id = card_id
         self.stage_name = stage_name
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
+        self.employee = employee or getattr(parent, 'employee', None)
         self.assigned_dan_id = None
         self.assigned_smp_id = None
 
@@ -1728,6 +1739,10 @@ class AssignExecutorsDialog(QDialog):
 
     def save_and_continue(self):
         """Сохранение назначенных исполнителей"""
+        from utils.permissions import _has_perm
+        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.assign_executor'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на назначение исполнителей.', 'error').exec_()
+            return
         self.assigned_dan_id = self.dan_combo.currentData()
         self.assigned_smp_id = self.smp_combo.currentData()
 
@@ -1768,7 +1783,7 @@ class AssignExecutorsDialog(QDialog):
 class SupervisionFileUploadDialog(QDialog):
     """Диалог загрузки файла для карточки авторского надзора с выбором стадии и даты"""
 
-    def __init__(self, parent, card_data, stages, api_client=None, simple_mode=False):
+    def __init__(self, parent, card_data, stages, api_client=None, simple_mode=False, employee=None):
         super().__init__(parent)
         self.card_data = card_data
         self.stages = stages  # Список стадий для выбора
@@ -1776,6 +1791,7 @@ class SupervisionFileUploadDialog(QDialog):
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
+        self.employee = employee or getattr(parent, 'employee', None)
         self.selected_file_path = None
         self.result_data = None  # Для передачи данных родителю
 
@@ -2071,6 +2087,10 @@ class SupervisionFileUploadDialog(QDialog):
 
     def upload_file(self):
         """Подготовить данные и закрыть диалог"""
+        from utils.permissions import _has_perm
+        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.files_upload'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на загрузку файлов.', 'error').exec_()
+            return
         if not self.selected_file_path:
             return
 

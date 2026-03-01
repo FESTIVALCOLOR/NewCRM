@@ -613,11 +613,11 @@ class TestStatusCombo:
         dialog, _ = _create_dialog(qtbot, employee=_ADMIN)
         assert dialog.status_combo.isEnabled()
 
-    def test_status_combo_disabled_for_sdp(self, qtbot):
-        """Комбобокс статуса выключен для СДП (нет полного доступа)."""
+    def test_status_combo_not_created_for_sdp(self, qtbot):
+        """Комбобокс статуса не создаётся для СДП (нет crm_cards.move → is_executor)."""
         dialog, _ = _create_dialog(qtbot, employee=_SDP)
-        assert hasattr(dialog, 'status_combo')
-        assert not dialog.status_combo.isEnabled()
+        assert not hasattr(dialog, 'status_combo'), \
+            "СДП — исполнитель, status_combo не должен создаваться"
 
 
 # ========== 10. Отображение дедлайна (3 теста) ==========
@@ -698,12 +698,11 @@ class TestTagsField:
         placeholder = dialog.tags.placeholderText()
         assert placeholder != '', "Placeholder тегов не должен быть пустым"
 
-    def test_tags_editable_for_sdp(self, qtbot):
-        """Теги доступны для редактирования СДП/ГАП."""
+    def test_tags_not_created_for_sdp(self, qtbot):
+        """Теги не создаются для СДП (нет crm_cards.move → is_executor, нет вкладки 'Исполнители')."""
         dialog, _ = _create_dialog(qtbot, employee=_SDP)
-        assert hasattr(dialog, 'tags')
-        # Теги могут редактировать все (СДП/ГАП тоже)
-        assert dialog.tags.isEnabled()
+        assert not hasattr(dialog, 'tags'), \
+            "СДП — исполнитель, поле tags не создаётся (нет вкладки 'Исполнители и дедлайн')"
 
 
 # ========== 13. Режим только просмотр (4 теста) ==========
@@ -794,27 +793,31 @@ class TestSyncLabel:
 class TestTabsByRole:
     """Видимость вкладок для разных ролей."""
 
-    def test_manager_sees_executors_tab(self, qtbot):
-        """Менеджер видит вкладку 'Исполнители и дедлайн'."""
+    def test_manager_no_executors_tab(self, qtbot):
+        """Менеджер НЕ видит вкладку 'Исполнители и дедлайн' (нет crm_cards.move)."""
         dialog, _ = _create_dialog(qtbot, employee=_MANAGER)
         tab_names = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-        assert any('Исполнители' in name for name in tab_names)
+        assert not any('Исполнители' in name for name in tab_names), \
+            f"Менеджер без crm_cards.move не должен видеть 'Исполнители': {tab_names}"
 
-    def test_manager_sees_payments_tab(self, qtbot):
-        """Менеджер видит вкладку 'Оплаты'."""
+    def test_manager_no_payments_tab(self, qtbot):
+        """Менеджер НЕ видит вкладку 'Оплаты' (нет crm_cards.payments)."""
         dialog, _ = _create_dialog(qtbot, employee=_MANAGER)
-        assert dialog.payments_tab_index >= 0
+        assert dialog.payments_tab_index == -1, \
+            "Менеджер без crm_cards.payments не должен видеть 'Оплаты'"
 
-    def test_sdp_sees_executors_tab(self, qtbot):
-        """СДП видит вкладку 'Исполнители и дедлайн'."""
+    def test_sdp_no_executors_tab(self, qtbot):
+        """СДП НЕ видит вкладку 'Исполнители и дедлайн' (нет crm_cards.move)."""
         dialog, _ = _create_dialog(qtbot, employee=_SDP)
         tab_names = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-        assert any('Исполнители' in name for name in tab_names)
+        assert not any('Исполнители' in name for name in tab_names), \
+            f"СДП без crm_cards.move не должен видеть 'Исполнители': {tab_names}"
 
-    def test_gap_sees_payments_tab(self, qtbot):
-        """ГАП видит вкладку 'Оплаты'."""
+    def test_gap_no_payments_tab(self, qtbot):
+        """ГАП НЕ видит вкладку 'Оплаты' (нет crm_cards.payments)."""
         dialog, _ = _create_dialog(qtbot, employee=_GAP)
-        assert dialog.payments_tab_index >= 0
+        assert dialog.payments_tab_index == -1, \
+            "ГАП без crm_cards.payments не должен видеть 'Оплаты'"
 
     def test_draftsman_no_executors_tab(self, qtbot):
         """Чертёжник НЕ видит вкладку 'Исполнители и дедлайн'."""
@@ -828,12 +831,12 @@ class TestTabsByRole:
         tab_names = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
         assert not any('Исполнители' in name for name in tab_names)
 
-    def test_designer_manager_sees_executors_tab(self, qtbot):
-        """Дизайнер+Менеджер (двойная роль) ВИДИТ вкладку 'Исполнители и дедлайн'."""
+    def test_designer_manager_no_executors_tab(self, qtbot):
+        """Дизайнер+Менеджер (двойная роль) НЕ видит 'Исполнители' (ни одна позиция не даёт crm_cards.move)."""
         dialog, _ = _create_dialog(qtbot, employee=_DESIGNER_MANAGER)
         tab_names = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-        assert any('Исполнители' in name for name in tab_names), \
-            f"Дизайнер+Менеджер должен видеть 'Исполнители': {tab_names}"
+        assert not any('Исполнители' in name for name in tab_names), \
+            f"Дизайнер+Менеджер без crm_cards.move не должен видеть 'Исполнители': {tab_names}"
 
 
 # ========== 17. Комбобоксы — доступность по роли (4 теста) ==========
@@ -850,19 +853,21 @@ class TestComboAccessByRole:
         assert dialog.manager.isEnabled()
         assert dialog.surveyor.isEnabled()
 
-    def test_combos_disabled_for_manager(self, qtbot):
-        """Комбобоксы команды выключены для обычного Менеджера (не admin)."""
+    def test_combos_not_created_for_manager(self, qtbot):
+        """Комбобоксы команды не создаются для Менеджера (нет crm_cards.move → is_executor)."""
         dialog, _ = _create_dialog(qtbot, employee=_MANAGER)
-        # Менеджер имеет full_access, но не admin_access (has_admin_access = False)
-        assert not dialog.senior_manager.isEnabled()
-        assert not dialog.gap.isEnabled()
+        assert not hasattr(dialog, 'senior_manager'), \
+            "Менеджер — исполнитель, комбобоксы команды не создаются"
+        assert not hasattr(dialog, 'gap'), \
+            "Менеджер — исполнитель, комбобоксы команды не создаются"
 
-    def test_combos_disabled_for_sdp(self, qtbot):
-        """Комбобоксы команды выключены для СДП."""
+    def test_combos_not_created_for_sdp(self, qtbot):
+        """Комбобоксы команды не создаются для СДП (нет crm_cards.move → is_executor)."""
         dialog, _ = _create_dialog(qtbot, employee=_SDP)
-        assert not dialog.senior_manager.isEnabled()
-        assert not dialog.gap.isEnabled()
-        assert not dialog.manager.isEnabled()
+        assert not hasattr(dialog, 'senior_manager'), \
+            "СДП — исполнитель, комбобоксы команды не создаются"
+        assert not hasattr(dialog, 'gap'), \
+            "СДП — исполнитель, комбобоксы команды не создаются"
 
     def test_combos_enabled_for_senior_manager(self, qtbot):
         """Комбобоксы команды включены для Старшего менеджера."""

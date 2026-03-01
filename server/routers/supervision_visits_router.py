@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 from database import get_db, Employee, Contract, SupervisionCard, SupervisionVisit
 from auth import get_current_user
+from permissions import require_permission
 from schemas import SupervisionVisitCreate, SupervisionVisitUpdate, SupervisionVisitResponse
 
 logger = logging.getLogger(__name__)
@@ -300,7 +301,7 @@ async def get_visits(
 async def create_visit(
     card_id: int,
     data: SupervisionVisitCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.update")),
     db: Session = Depends(get_db),
 ):
     """Создать запись выезда."""
@@ -333,7 +334,7 @@ async def update_visit(
     card_id: int,
     visit_id: int,
     data: SupervisionVisitUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.update")),
     db: Session = Depends(get_db),
 ):
     """Обновить запись выезда."""
@@ -358,7 +359,7 @@ async def update_visit(
 async def delete_visit(
     card_id: int,
     visit_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("supervision.update")),
     db: Session = Depends(get_db),
 ):
     """Удалить запись выезда."""

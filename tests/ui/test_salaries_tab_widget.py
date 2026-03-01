@@ -32,17 +32,30 @@ def _make_mock_data_access(payments=None, year_payments=None):
     return mock_da
 
 
+class _FakeIconLoader:
+    """Fake IconLoader — возвращает реальные Qt-объекты, без MagicMock."""
+    @staticmethod
+    def load(*args, **kwargs):
+        from PyQt5.QtGui import QIcon
+        return QIcon()
+    @staticmethod
+    def load_colored(*args, **kwargs):
+        from PyQt5.QtGui import QIcon
+        return QIcon()
+    @staticmethod
+    def create_action_button(*args, **kwargs):
+        return QPushButton()
+    @staticmethod
+    def create_icon_button(*args, **kwargs):
+        return QPushButton()
+
+
 def _create_salaries_tab(qtbot, employee, mock_da=None):
     """Создать SalariesTab с замоканными зависимостями."""
     if mock_da is None:
         mock_da = _make_mock_data_access()
     with patch('ui.salaries_tab.DataAccess', return_value=mock_da), \
-         patch('ui.salaries_tab.IconLoader') as mock_icon:
-        # IconLoader.load возвращает реальную пустую QIcon (не MagicMock — setIcon не примет)
-        from PyQt5.QtGui import QIcon
-        mock_icon.load.return_value = QIcon()
-        mock_icon.create_action_button.return_value = QPushButton()
-        mock_icon.create_icon_button.return_value = QPushButton()
+         patch('ui.salaries_tab.IconLoader', _FakeIconLoader):
         from ui.salaries_tab import SalariesTab
         tab = SalariesTab(employee=employee, api_client=None)
         qtbot.addWidget(tab)

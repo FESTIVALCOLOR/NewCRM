@@ -503,6 +503,10 @@ class EmployeesTab(QWidget):
 
     def add_employee(self):
         """Открытие диалога добавления сотрудника"""
+        from utils.permissions import _has_perm
+        if not _has_perm(self.employee, self.api_client, 'employees.create'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание сотрудников.', 'error').exec_()
+            return
         dialog = EmployeeDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self._reload_employees(prefer_local=True)
@@ -1000,6 +1004,15 @@ class EmployeeDialog(QDialog):
         
     def save_employee(self):
         """Сохранение сотрудника"""
+        from utils.permissions import _has_perm
+        if not self.employee_data:
+            if not _has_perm(self.current_user, self.api_client, 'employees.create'):
+                CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание сотрудников.', 'error').exec_()
+                return
+        else:
+            if not _has_perm(self.current_user, self.api_client, 'employees.update'):
+                CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование сотрудников.', 'error').exec_()
+                return
         if not self.full_name.text().strip() or not self.login.text().strip():
             CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин)', 'warning').exec_()
             return

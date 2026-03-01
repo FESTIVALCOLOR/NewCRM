@@ -168,13 +168,24 @@ class ContractsTab(QWidget):
         self.contracts_table.setSortingEnabled(False)
 
         # Загружаем договоры через DataAccess (API с fallback на локальную БД)
-        contracts = self.data.get_all_contracts()
+        try:
+            contracts = self.data.get_all_contracts()
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка загрузки", f"Не удалось загрузить договоры: {e}", "warning").exec_()
+            contracts = None
+
+        if not contracts:
+            self.contracts_table.setRowCount(0)
+            self.contracts_table.setSortingEnabled(True)
+            print("[DB REFRESH] Нет данных о договорах")
+            return
+
         print(f"[DB REFRESH] Загружено {len(contracts)} договоров")
         # Загружаем клиентов для отображения имен
         clients_dict = {}
         try:
             clients = self.data.get_all_clients()
-            clients_dict = {c['id']: c for c in clients}
+            clients_dict = {c['id']: c for c in (clients or [])}
         except Exception:
             pass
 
@@ -360,6 +371,9 @@ class ContractsTab(QWidget):
     @debounce_click
     def add_contract(self):
         """Добавление договора"""
+        if not _has_perm(self.employee, self.api_client, 'contracts.create'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание договоров.', 'error').exec_()
+            return
         dialog = ContractDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self.load_contracts()
@@ -373,6 +387,9 @@ class ContractsTab(QWidget):
 
     def edit_contract(self, contract_data):
         """Редактирование договора"""
+        if not _has_perm(self.employee, self.api_client, 'contracts.update'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование договоров.', 'error').exec_()
+            return
         dialog = ContractDialog(self, contract_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_contracts()
@@ -381,7 +398,10 @@ class ContractsTab(QWidget):
 
     @debounce_click(delay_ms=2000)
     def delete_contract(self, contract_data):
-        """Удаление договора - ИСПРАВЛЕНО 01.02.2026: добавлен fallback и offline поддержка"""
+        """Удаление договора"""
+        if not _has_perm(self.employee, self.api_client, 'contracts.delete'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление договоров.', 'error').exec_()
+            return
         reply = CustomQuestionBox(
             self,
             'Подтверждение удаления',

@@ -266,7 +266,7 @@ class CardEditDialog(QDialog):
         # === ПРОВЕРКА ПРАВ ДОСТУПА (через permissions) ===
         is_executor = not _has_perm(self.employee, self.api_client, 'crm_cards.move')
         has_full_access = _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor')
-        has_admin_access = _has_perm(self.employee, self.api_client, 'employees.update')
+        has_admin_access = _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor')
         has_deadlines_access = _has_perm(self.employee, self.api_client, 'crm_cards.deadlines')
         has_move_access = _has_perm(self.employee, self.api_client, 'crm_cards.move')
         is_sdp_or_gap = not has_full_access and not is_executor
@@ -4596,9 +4596,9 @@ class CardEditDialog(QDialog):
 
             stage3_layout = QVBoxLayout()
 
-            # Стадия 3 (шаблонные) - могут удалять и загружать все кроме чистого чертёжника
-            can_delete_stage3 = not is_only_draftsman
-            can_upload_stage3 = not is_only_draftsman
+            # Стадия 3 (шаблонные) — через permissions
+            can_delete_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
+            can_upload_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
             # Только 3D визуализация (без концепции-коллажей)
             self.stage2_3d_gallery = VariationGalleryWidget(
@@ -4644,9 +4644,9 @@ class CardEditDialog(QDialog):
 
             stage2_layout = QVBoxLayout()
 
-            # Стадия 2 (индивидуальные) - могут удалять и загружать все кроме чистого чертёжника
-            can_delete_stage2 = not is_only_draftsman
-            can_upload_stage2 = not is_only_draftsman
+            # Стадия 2 (индивидуальные) — через permissions
+            can_delete_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
+            can_upload_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
             # Подсекция: Концепция-коллажи (с поддержкой вариаций)
             self.stage2_concept_gallery = VariationGalleryWidget(

@@ -88,7 +88,7 @@ async def get_client(
 @router.post("/", response_model=ClientResponse)
 async def create_client(
     client_data: ClientCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("clients.create")),
     db: Session = Depends(get_db)
 ):
     """Создать нового клиента"""
@@ -114,7 +114,7 @@ async def create_client(
 async def update_client(
     client_id: int,
     client_data: ClientUpdate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("clients.update")),
     db: Session = Depends(get_db)
 ):
     """Обновить клиента"""

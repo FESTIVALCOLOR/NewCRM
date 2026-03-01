@@ -426,11 +426,10 @@ async def update_crm_card(
 
         # Аудит-лог изменений
         activity = ActivityLog(
-            user_id=current_user.id,
+            employee_id=current_user.id,
             action_type="update",
             entity_type="crm_card",
             entity_id=card_id,
-            description=f"Обновлены поля: {', '.join(update_data.keys())}",
             old_values=json.dumps(old_values_str, ensure_ascii=False) if old_values_str else None,
             new_values=json.dumps({k: str(v) if v is not None else None for k, v in update_data.items()}, ensure_ascii=False)
         )
@@ -712,11 +711,10 @@ async def assign_stage_executor(
 
         # Аудит-лог назначения исполнителя
         activity = ActivityLog(
-            user_id=current_user.id,
+            employee_id=current_user.id,
             action_type="assign_executor",
             entity_type="crm_card",
             entity_id=card_id,
-            description=f"Назначен исполнитель {executor.full_name} на стадию '{executor_data.stage_name}'"
         )
         db.add(activity)
 
@@ -1601,7 +1599,7 @@ async def complete_approval_stage(
 async def update_stage_executor_deadline(
     card_id: int,
     body: StageExecutorDeadlineRequest,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.deadlines")),
     db: Session = Depends(get_db)
 ):
     """Обновить дедлайн исполнителя стадии"""

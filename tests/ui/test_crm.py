@@ -323,20 +323,20 @@ class TestCRMRoleVisibility:
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_sdp)
         assert tab.project_tabs.count() == 1
 
-    def test_manager_sees_both_tabs(self, qtbot, mock_data_access, mock_employee_manager):
-        """Менеджер видит 2 вкладки проектов."""
+    def test_manager_sees_only_individual_tab(self, qtbot, mock_data_access, mock_employee_manager):
+        """Менеджер без права crm_cards.move видит только 1 вкладку (Индивидуальные)."""
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_manager)
-        assert tab.project_tabs.count() == 2
+        assert tab.project_tabs.count() == 1
 
-    def test_dual_designer_manager_sees_both(self, qtbot, mock_data_access, mock_employee_designer_manager):
-        """Дизайнер+Менеджер видит 2 вкладки проектов."""
+    def test_dual_designer_manager_sees_only_individual(self, qtbot, mock_data_access, mock_employee_designer_manager):
+        """Дизайнер+Менеджер без права crm_cards.move видит только 1 вкладку."""
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_designer_manager)
-        assert tab.project_tabs.count() == 2
+        assert tab.project_tabs.count() == 1
 
-    def test_dual_designer_manager_sees_archive(self, qtbot, mock_data_access, mock_employee_designer_manager):
-        """Дизайнер+Менеджер видит архив."""
+    def test_dual_designer_manager_no_archive(self, qtbot, mock_data_access, mock_employee_designer_manager):
+        """Дизайнер+Менеджер без права crm_cards.move не видит архив (1 подвкладка)."""
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_designer_manager)
-        assert tab.individual_subtabs.count() == 2
+        assert tab.individual_subtabs.count() == 1
 
 
 # ========== 3. CRMColumn (6 тестов) ==========

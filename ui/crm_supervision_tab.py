@@ -801,6 +801,11 @@ class CRMSupervisionTab(QWidget):
 
     def on_card_moved(self, card_id, from_column, to_column):
         """Обработка перемещения карточки"""
+        # === ПРОВЕРКА ПРАВА НА ПЕРЕМЕЩЕНИЕ ===
+        if not _has_perm(self.employee, self.api_client, 'supervision.move'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на перемещение карточек надзора.', 'error').exec_()
+            self.load_cards_for_current_tab()
+            return
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
         if to_column == 'Новый заказ' and from_column != 'Новый заказ':
             CustomMessageBox(

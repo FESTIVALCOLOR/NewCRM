@@ -242,6 +242,9 @@ class ClientsTab(QWidget):
 
     def add_client(self):
         """Открытие диалога добавления клиента"""
+        if not _has_perm(self.employee, self.api_client, 'clients.create'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание клиентов.', 'error').exec_()
+            return
         dialog = ClientDialog(self)
         result = dialog.exec_()
         if result == QDialog.Accepted:
@@ -255,6 +258,9 @@ class ClientsTab(QWidget):
 
     def edit_client(self, client_data):
         """Редактирование клиента"""
+        if not _has_perm(self.employee, self.api_client, 'clients.update'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование клиентов.', 'error').exec_()
+            return
         dialog = ClientDialog(self, client_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_clients()
@@ -262,6 +268,9 @@ class ClientsTab(QWidget):
     
     def delete_client(self, client_id):
         """Удаление клиента"""
+        if not _has_perm(self.employee, self.api_client, 'clients.delete'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление клиентов.', 'error').exec_()
+            return
         from ui.custom_message_box import CustomQuestionBox
 
         # Проверяем наличие связанных договоров

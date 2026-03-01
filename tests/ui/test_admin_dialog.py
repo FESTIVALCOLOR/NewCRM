@@ -87,14 +87,14 @@ class TestAdminDialog:
             dialog.close()
 
     def test_dialog_minimum_size(self, qapp):
-        """Диалог имеет минимальные размеры 1050x700."""
+        """Диалог имеет минимальные размеры 1250x750."""
         with patch('ui.custom_title_bar.resource_path', return_value=''), \
              patch('ui.custom_title_bar.os.path.exists', return_value=False):
             from ui.admin_dialog import AdminDialog
             mock_api = MagicMock()
             dialog = AdminDialog(parent=None, api_client=mock_api)
-            assert dialog.minimumWidth() == 1050
-            assert dialog.minimumHeight() == 700
+            assert dialog.minimumWidth() == 1250
+            assert dialog.minimumHeight() == 750
             dialog.close()
 
     def test_dialog_with_employee(self, qapp):

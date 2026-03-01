@@ -84,7 +84,7 @@ async def get_contract(
 @router.post("/", response_model=ContractResponse)
 async def create_contract(
     contract_data: ContractCreate,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("contracts.create")),
     db: Session = Depends(get_db)
 ):
     """Создать новый договор"""

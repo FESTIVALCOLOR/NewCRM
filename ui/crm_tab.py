@@ -54,10 +54,10 @@ class DraggableListWidget(BaseDraggableList):
             event.ignore()
             return
 
-        # S2.1: Проверка права crm.update перед перемещением карточки
+        # S2.1: Проверка права crm_cards.move перед перемещением карточки
         column = self.parent_column
         if hasattr(column, 'employee') and hasattr(column, 'api_client'):
-            if not _has_perm(column.employee, column.api_client, 'crm_cards.update'):
+            if not _has_perm(column.employee, column.api_client, 'crm_cards.move'):
                 print("[DROP EVENT] Отказано: нет права crm.update")
                 event.ignore()
                 return
@@ -2956,6 +2956,9 @@ class CRMCard(QFrame):
 
     def client_approved(self):
         """Клиент согласовал работу"""
+        if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на согласование работы.', 'error').exec_()
+            return
         current_column = self.card_data.get('column_name', '')
         try:
             if self.data.is_multi_user:

@@ -311,9 +311,12 @@ def require_permission(permission_name: str):
 
 def seed_permissions(db: Session):
     """
-    Заполнить/дополнить дефолтные права для сотрудников.
+    Заполнить дефолтные права ТОЛЬКО для новых сотрудников (без записей в user_permissions).
     Вызывается при старте сервера.
     Использует advisory lock для предотвращения deadlock между workers.
+
+    ВАЖНО: Если у сотрудника УЖЕ есть записи в user_permissions — пропускаем.
+    Это защищает ручные настройки администратора от перезаписи при рестарте.
     """
     from sqlalchemy import text
 
@@ -340,8 +343,12 @@ def seed_permissions(db: Session):
                 ).fetchall()
             }
 
-            missing = default_perms - existing
-            for perm_name in missing:
+            # Seed ТОЛЬКО для сотрудников БЕЗ записей (новые, ещё не настроенные).
+            # Если записи уже есть — значит права настроены (seed или админ), не трогаем.
+            if existing:
+                continue
+
+            for perm_name in default_perms:
                 db.execute(
                     text("""
                         INSERT INTO user_permissions (employee_id, permission_name)
@@ -354,7 +361,7 @@ def seed_permissions(db: Session):
 
         db.commit()
         if total_added > 0:
-            logger.info(f"Seeded {total_added} missing permissions")
+            logger.info(f"Seeded {total_added} permissions for new employees")
     except Exception as e:
         db.rollback()
         logger.warning(f"seed_permissions error (non-fatal): {e}")
