@@ -427,6 +427,9 @@ class SupervisionVisitsWidget(QWidget):
         if CustomQuestionBox(self, 'Удаление', 'Удалить эту запись выезда?').exec_():
             try:
                 self.data.delete_supervision_visit(self.card_id, visit_id)
+                dialog = self._dialog
+                if dialog and hasattr(dialog, '_add_project_history'):
+                    dialog._add_project_history('row_deleted', 'Удалена запись выезда')
                 self._load_data()
             except Exception as e:
                 logger.error("Ошибка удаления выезда %s: %s", visit_id, e)
@@ -445,6 +448,9 @@ class SupervisionVisitsWidget(QWidget):
         try:
             result = self.data.create_supervision_visit(self.card_id, data)
             if result:
+                dialog = self._dialog
+                if dialog and hasattr(dialog, '_add_project_history'):
+                    dialog._add_project_history('row_added', 'Добавлена запись выезда')
                 self._load_data()
         except Exception as e:
             logger.error("Ошибка добавления выезда: %s", e)
@@ -486,6 +492,10 @@ class SupervisionVisitsWidget(QWidget):
             return
         try:
             self.data.update_supervision_visit(self.card_id, visit_id, updates)
+            dialog = self._dialog
+            if dialog and hasattr(dialog, '_add_project_history'):
+                fields = ', '.join(f'{k}={v}' for k, v in updates.items())
+                dialog._add_project_history('data_change', f'Выезд: {fields}')
         except Exception as e:
             logger.error("Ошибка сохранения выезда %s: %s", visit_id, e)
 

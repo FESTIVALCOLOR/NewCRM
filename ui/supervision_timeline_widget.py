@@ -922,6 +922,13 @@ class SupervisionTimelineWidget(QWidget):
         if self.card_id and stage_code:
             try:
                 self.data.update_supervision_timeline_entry(self.card_id, stage_code, updates)
+                # Логирование в историю проекта
+                dialog = self._dialog
+                if dialog and hasattr(dialog, '_add_project_history'):
+                    fields = ', '.join(f'{k}={v}' for k, v in updates.items())
+                    dialog._add_project_history(
+                        'data_change', f'Таблица сроков ({stage_code}): {fields}'
+                    )
             except Exception as e:
                 print(f"[SupervisionTimelineWidget] Ошибка сохранения: {e}")
 

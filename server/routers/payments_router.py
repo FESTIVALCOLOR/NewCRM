@@ -1077,8 +1077,19 @@ async def update_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Платеж не найден")
 
-    for field, value in payment_data.model_dump(exclude_unset=True).items():
+    update_fields = payment_data.model_dump(exclude_unset=True)
+    for field, value in update_fields.items():
         setattr(payment, field, value)
+
+    # Аудит-лог обновления платежа
+    activity = ActivityLog(
+        user_id=current_user.id,
+        action_type="update",
+        entity_type="payment",
+        entity_id=payment_id,
+        description=f"Обновлены поля: {', '.join(update_fields.keys())}"
+    )
+    db.add(activity)
 
     payment.updated_at = datetime.utcnow()
     db.commit()
@@ -1167,6 +1178,16 @@ async def mark_payment_as_paid(
         payment.paid_by = current_user.id
         payment.payment_status = 'paid'
         payment.updated_at = datetime.utcnow()
+
+        # Аудит-лог отметки выплаты
+        activity = ActivityLog(
+            user_id=current_user.id,
+            action_type="mark_paid",
+            entity_type="payment",
+            entity_id=payment_id,
+            description=f"Платеж отмечен как выплаченный"
+        )
+        db.add(activity)
 
         db.commit()
 

@@ -1190,22 +1190,35 @@ class SupervisionStageDeadlineDialog(QDialog):
         self.setMinimumWidth(500)
     
     def save_deadline(self):
-        """Сохранение дедлайна"""
+        """Сохранение дедлайна в карточку и в таблицу сроков (plan_date)"""
         deadline = self.deadline_widget.date().toString('yyyy-MM-dd')
 
         try:
             self.data.update_supervision_card(self.card_id, {
                 'deadline': deadline
             })
-            
-            # ========== ЗАМЕНИЛИ на CustomMessageBox ==========
+
+            # Обновляем plan_date в таблице сроков для текущей стадии
+            try:
+                timeline_entries = self.data.get_supervision_timeline(self.card_id) or []
+                for entry in timeline_entries:
+                    if entry.get('stage_name') == self.stage_name:
+                        stage_code = entry.get('stage_code', '')
+                        self.data.update_supervision_timeline_entry(
+                            self.card_id, stage_code, {'plan_date': deadline}
+                        )
+                        print(f"[DEADLINE] plan_date обновлён для стадии '{self.stage_name}' (code={stage_code}): {deadline}")
+                        break
+            except Exception as e:
+                print(f"[WARN] Не удалось обновить plan_date в timeline: {e}")
+
             CustomMessageBox(
-                self, 
-                'Успех', 
-                f'Дедлайн установлен на {self.deadline_widget.date().toString("dd.MM.yyyy")}!', 
+                self,
+                'Успех',
+                f'Дедлайн установлен на {self.deadline_widget.date().toString("dd.MM.yyyy")}!',
                 'success'
             ).exec_()
-            
+
             self.accept()
             
         except Exception as e:
@@ -1542,11 +1555,8 @@ class SupervisionReassignDANDialog(QDialog):
             self.center_on_screen()
 
     def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 2 + screen.top()
-        self.move(x, y)
+        from utils.dialog_helpers import center_dialog_on_parent
+        center_dialog_on_parent(self)
 
 
 class AssignExecutorsDialog(QDialog):
@@ -1748,11 +1758,8 @@ class AssignExecutorsDialog(QDialog):
             self.center_on_screen()
 
     def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 2 + screen.top()
-        self.move(x, y)
+        from utils.dialog_helpers import center_dialog_on_parent
+        center_dialog_on_parent(self)
 
 
 class SupervisionFileUploadDialog(QDialog):
@@ -2102,8 +2109,5 @@ class SupervisionFileUploadDialog(QDialog):
             self.center_on_screen()
 
     def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 2 + screen.top()
-        self.move(x, y)
+        from utils.dialog_helpers import center_dialog_on_parent
+        center_dialog_on_parent(self)

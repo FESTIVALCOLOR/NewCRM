@@ -417,8 +417,24 @@ async def update_crm_card(
                     logger.warning(f"Employee ID {update_data[field]} not found for field {field}, skipping")
                     del update_data[field]
 
+        # Сохраняем старые значения для аудита
+        old_values = {field: getattr(card, field, None) for field in update_data}
+        old_values_str = {k: str(v) if v is not None else None for k, v in old_values.items()}
+
         for field, value in update_data.items():
             setattr(card, field, value)
+
+        # Аудит-лог изменений
+        activity = ActivityLog(
+            user_id=current_user.id,
+            action_type="update",
+            entity_type="crm_card",
+            entity_id=card_id,
+            description=f"Обновлены поля: {', '.join(update_data.keys())}",
+            old_values=json.dumps(old_values_str, ensure_ascii=False) if old_values_str else None,
+            new_values=json.dumps({k: str(v) if v is not None else None for k, v in update_data.items()}, ensure_ascii=False)
+        )
+        db.add(activity)
 
         db.commit()
         db.refresh(card)
@@ -693,6 +709,17 @@ async def assign_stage_executor(
         )
 
         db.add(stage_executor)
+
+        # Аудит-лог назначения исполнителя
+        activity = ActivityLog(
+            user_id=current_user.id,
+            action_type="assign_executor",
+            entity_type="crm_card",
+            entity_id=card_id,
+            description=f"Назначен исполнитель {executor.full_name} на стадию '{executor_data.stage_name}'"
+        )
+        db.add(activity)
+
         db.commit()
         db.refresh(stage_executor)
 

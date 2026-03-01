@@ -966,7 +966,7 @@ class CRMSupervisionTab(QWidget):
                                             'stage_name': from_column,
                                             'calculated_amount': dan_amount,
                                             'final_amount': dan_amount,
-                                            'payment_type': 'Полная оплата',
+                                            'payment_type': None,
                                             'report_month': current_month,
                                             'supervision_card_id': card_id
                                         }
@@ -992,7 +992,7 @@ class CRMSupervisionTab(QWidget):
                                             'stage_name': from_column,
                                             'calculated_amount': smp_amount,
                                             'final_amount': smp_amount,
-                                            'payment_type': 'Полная оплата',
+                                            'payment_type': None,
                                             'report_month': current_month,
                                             'supervision_card_id': card_id
                                         }
