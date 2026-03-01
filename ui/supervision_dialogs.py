@@ -1200,7 +1200,9 @@ class SupervisionStageDeadlineDialog(QDialog):
 
             # Обновляем plan_date в таблице сроков для текущей стадии
             try:
-                timeline_entries = self.data.get_supervision_timeline(self.card_id) or []
+                timeline_data = self.data.get_supervision_timeline(self.card_id) or {}
+                # get_supervision_timeline возвращает {'entries': [...], 'totals': {...}}
+                timeline_entries = timeline_data.get('entries', []) if isinstance(timeline_data, dict) else timeline_data
                 for entry in timeline_entries:
                     if entry.get('stage_name') == self.stage_name:
                         stage_code = entry.get('stage_code', '')
@@ -2111,3 +2113,133 @@ class SupervisionFileUploadDialog(QDialog):
     def center_on_screen(self):
         from utils.dialog_helpers import center_dialog_on_parent
         center_dialog_on_parent(self)
+
+
+class SupervisionStartDateDialog(QDialog):
+    """Диалог изменения даты начала надзора — кастомный календарь в стиле проекта"""
+
+    def __init__(self, parent=None, current_date=None, data=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.selected_date = current_date or QDate.currentDate()
+
+        border_widget = QFrame(self)
+        border_widget.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(self, 'Изменить дату начала', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        content_widget = QWidget()
+        content_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        label = QLabel('Выберите новую дату начала:')
+        label.setStyleSheet('font-size: 12px; font-weight: bold; color: #333;')
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+
+        date_layout = QHBoxLayout()
+        date_layout.addStretch()
+
+        from ui.custom_dateedit import CustomDateEdit
+        from utils.calendar_helpers import add_today_button_to_dateedit
+
+        self.date_widget = CustomDateEdit()
+        self.date_widget.setCalendarPopup(True)
+        add_today_button_to_dateedit(self.date_widget)
+        self.date_widget.setDate(current_date or QDate.currentDate())
+        self.date_widget.setDisplayFormat('dd.MM.yyyy')
+        self.date_widget.setMinimumWidth(150)
+        self.date_widget.setStyleSheet("""
+            QDateEdit {
+                padding: 6px;
+                border: 1px solid #CCC;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+        """)
+        date_layout.addWidget(self.date_widget)
+        date_layout.addStretch()
+        layout.addLayout(date_layout)
+
+        # Кнопки
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedSize(100, 32)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0; color: #333;
+                border: none; border-radius: 4px;
+                font-weight: bold; font-size: 11px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        save_btn = QPushButton('Сохранить')
+        save_btn.setFixedSize(100, 32)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50; color: white;
+                border: none; border-radius: 4px;
+                font-weight: bold; font-size: 11px;
+            }
+            QPushButton:hover { background-color: #45a049; }
+        """)
+        save_btn.clicked.connect(self._save)
+        btn_layout.addWidget(save_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+        border_widget.setLayout(border_layout)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(border_widget)
+
+        self.setMinimumWidth(400)
+
+    def _save(self):
+        self.selected_date = self.date_widget.date()
+        self.accept()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not hasattr(self, '_centered'):
+            self._centered = True
+            from utils.dialog_helpers import center_dialog_on_parent
+            center_dialog_on_parent(self)

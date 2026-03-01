@@ -724,7 +724,7 @@ class PaymentBase(BaseModel):
     @classmethod
     def validate_payment_type(cls, v):
         """Допустимые типы платежей"""
-        allowed = {'Наличные', 'Безналичные', 'Карта', None}
+        allowed = {'Наличные', 'Безналичные', 'Карта', 'Полная оплата', 'Аванс', 'Доплата', 'Оклад', None}
         if v is not None and v not in allowed:
             raise ValueError(
                 f"Недопустимый тип платежа '{v}'. "
@@ -762,7 +762,7 @@ class PaymentUpdate(BaseModel):
     @classmethod
     def validate_payment_type(cls, v):
         """Допустимые типы платежей"""
-        allowed = {'Наличные', 'Безналичные', 'Карта', None}
+        allowed = {'Наличные', 'Безналичные', 'Карта', 'Полная оплата', 'Аванс', 'Доплата', 'Оклад', None}
         if v is not None and v not in allowed:
             raise ValueError(
                 f"Недопустимый тип платежа '{v}'. "

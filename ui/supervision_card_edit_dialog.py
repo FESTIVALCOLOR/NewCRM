@@ -181,16 +181,19 @@ class SupervisionCardEditDialog(QDialog):
                 self.senior_manager.addItem(manager['full_name'], manager['id'])
             form_layout.addRow('Старший менеджер:', self.senior_manager)
 
-            # ДАН (заблокирован — изменяется только через кнопку "Переназначить")
+            # ДАН (отображается как текст — изменяется только через кнопку "Переназначить")
+            self.dan_label = QLabel('Не назначен')
+            self.dan_label.setStyleSheet('font-weight: bold; font-size: 13px; padding: 4px 8px;')
+            # Скрытый combo для совместимости (сохранение ID)
             self.dan = CustomComboBox()
             dans = self.data.get_employees_by_position('ДАН')
             self.dan.addItem('Не назначен', None)
             for dan in dans:
                 self.dan.addItem(dan['full_name'], dan['id'])
-            self.dan.setEnabled(False)
+            self.dan.setVisible(False)
 
             dan_row = QHBoxLayout()
-            dan_row.addWidget(self.dan)
+            dan_row.addWidget(self.dan_label)
 
             reassign_dan_btn = IconLoader.create_icon_button(
                 'refresh-black',
@@ -239,17 +242,15 @@ class SupervisionCardEditDialog(QDialog):
             start_date_row = QHBoxLayout()
             start_date_row.setSpacing(8)
 
+            self.start_date_label = QLabel(QDate.currentDate().toString('dd.MM.yyyy'))
+            self.start_date_label.setStyleSheet('font-weight: bold; font-size: 13px; padding: 4px 8px;')
+            start_date_row.addWidget(self.start_date_label)
+            # Скрытый виджет для совместимости (auto_save_field)
             self.start_date_edit = CustomDateEdit()
             self.start_date_edit.setCalendarPopup(True)
             self.start_date_edit.setDisplayFormat('dd.MM.yyyy')
             self.start_date_edit.setDate(QDate.currentDate())
-            from PyQt5.QtWidgets import QAbstractSpinBox
-            self.start_date_edit.setReadOnly(True)
-            self.start_date_edit.setButtonSymbols(QAbstractSpinBox.NoButtons)
-            self.start_date_edit.setStyleSheet(
-                self.start_date_edit.styleSheet() + 'QDateEdit { background-color: #F5F5F5; color: #333; }'
-            )
-            start_date_row.addWidget(self.start_date_edit)
+            self.start_date_edit.setVisible(False)
 
             edit_start_btn = QPushButton('Изменить дату')
             edit_start_btn.setFixedHeight(28)
@@ -1731,36 +1732,51 @@ class SupervisionCardEditDialog(QDialog):
         separator.setFixedHeight(2)
         layout.addWidget(separator)
 
-        # ИСПРАВЛЕНИЕ: История стадий с датами сдачи и принятия
+        # История ведения проекта с фильтрацией
+        history_header_row = QHBoxLayout()
         history_header = QLabel('История ведения проекта')
-        history_header.setStyleSheet('font-size: 12px; font-weight: bold; margin-bottom: 8px;')
-        layout.addWidget(history_header)
+        history_header.setStyleSheet('font-size: 12px; font-weight: bold;')
+        history_header_row.addWidget(history_header)
+
+        # Фильтр по типу события
+        filter_label = QLabel('Фильтр:')
+        filter_label.setStyleSheet('font-size: 10px; color: #666; margin-left: 20px;')
+        history_header_row.addWidget(filter_label)
+
+        from PyQt5.QtWidgets import QComboBox
+        self._sv_history_filter = QComboBox()
+        self._sv_history_filter.addItems([
+            'Все события',
+            'Перемещение карточки',
+            'Назначение сотрудников',
+            'Завершение стадий',
+            'Изменение данных',
+            'Загрузка файлов',
+            'Выезды и дефекты',
+            'Прочее',
+        ])
+        self._sv_history_filter.setStyleSheet('font-size: 10px; padding: 2px 5px;')
+        self._sv_history_filter.setFixedWidth(200)
+        self._sv_history_filter.currentTextChanged.connect(self._on_sv_history_filter_changed)
+        history_header_row.addWidget(self._sv_history_filter)
+        history_header_row.addStretch()
+        layout.addLayout(history_header_row)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: 1px solid #DDD; border-radius: 4px; background: white; }")
 
         info_container = QWidget()
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(10)
-        info_layout.setContentsMargins(10, 10, 10, 10)
+        self._sv_history_layout = QVBoxLayout()
+        self._sv_history_layout.setSpacing(10)
+        self._sv_history_layout.setContentsMargins(10, 10, 10, 10)
 
         # Журнал всех изменений из supervision_project_history
-        history_entries = self.data.get_supervision_history(self.card_data['id']) or []
+        self._all_sv_history = self.data.get_supervision_history(self.card_data['id']) or []
 
-        if history_entries:
-            for entry in history_entries:
-                entry_widget = self._create_history_entry_widget(entry)
-                info_layout.addWidget(entry_widget)
-        else:
-            empty_label = QLabel('История проекта пуста')
-            empty_label.setStyleSheet('color: #999; font-size: 12px; padding: 20px;')
-            empty_label.setAlignment(Qt.AlignCenter)
-            info_layout.addWidget(empty_label)
+        self._render_sv_history(self._all_sv_history)
 
-        info_layout.addStretch()
-
-        info_container.setLayout(info_layout)
+        info_container.setLayout(self._sv_history_layout)
         scroll.setWidget(info_container)
 
         layout.addWidget(scroll, 1)
@@ -1893,6 +1909,53 @@ class SupervisionCardEditDialog(QDialog):
 
         frame.setLayout(frame_layout)
         return frame
+
+    def _render_sv_history(self, entries):
+        """Отрисовка записей истории"""
+        # Очищаем layout
+        while self._sv_history_layout.count():
+            child = self._sv_history_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        if entries:
+            for entry in entries:
+                entry_widget = self._create_history_entry_widget(entry)
+                self._sv_history_layout.addWidget(entry_widget)
+        else:
+            empty_label = QLabel('История проекта пуста')
+            empty_label.setStyleSheet('color: #999; font-size: 12px; padding: 20px;')
+            empty_label.setAlignment(Qt.AlignCenter)
+            self._sv_history_layout.addWidget(empty_label)
+
+        self._sv_history_layout.addStretch()
+
+    def _on_sv_history_filter_changed(self, filter_text):
+        """Фильтрация истории надзора по типу события"""
+        if not hasattr(self, '_all_sv_history'):
+            return
+
+        filter_map = {
+            'Перемещение карточки': ['card_moved'],
+            'Назначение сотрудников': ['assignment_change'],
+            'Завершение стадий': ['stage_completed', 'accepted'],
+            'Изменение данных': ['data_change', 'pause', 'resume', 'auto_resume'],
+            'Загрузка файлов': ['file_upload'],
+            'Выезды и дефекты': ['row_added', 'row_deleted'],
+        }
+
+        if filter_text == 'Все события':
+            filtered = self._all_sv_history
+        elif filter_text == 'Прочее':
+            all_known = set()
+            for types in filter_map.values():
+                all_known.update(types)
+            filtered = [e for e in self._all_sv_history if e.get('entry_type', '') not in all_known]
+        else:
+            allowed_types = filter_map.get(filter_text, [])
+            filtered = [e for e in self._all_sv_history if e.get('entry_type', '') in allowed_types]
+
+        self._render_sv_history(filtered)
 
     def refresh_payments_tab(self):
         """ИСПРАВЛЕНИЕ: Обновление вкладки оплат"""
@@ -2861,6 +2924,8 @@ class SupervisionCardEditDialog(QDialog):
         for i in range(self.dan.count()):
             if self.dan.itemData(i) == self.card_data.get('dan_id'):
                 self.dan.setCurrentIndex(i)
+                if hasattr(self, 'dan_label'):
+                    self.dan_label.setText(self.dan.itemText(i))
                 break
 
         # Руководитель студии
@@ -2879,6 +2944,8 @@ class SupervisionCardEditDialog(QDialog):
             sd = QDate.fromString(start_date_str, 'yyyy-MM-dd')
             if sd.isValid():
                 self.start_date_edit.setDate(sd)
+                if hasattr(self, 'start_date_label'):
+                    self.start_date_label.setText(sd.toString('dd.MM.yyyy'))
 
         # Дедлайн (read-only label + скрытый виджет для совместимости)
         if self.card_data.get('deadline'):
@@ -2988,23 +3055,19 @@ class SupervisionCardEditDialog(QDialog):
 
     def _on_start_date_manual_change(self):
         """Изменение даты начала вручную — открыть календарь для выбора"""
-        from PyQt5.QtWidgets import QCalendarWidget, QDialog, QVBoxLayout, QDialogButtonBox
-        dlg = QDialog(self)
-        dlg.setWindowTitle('Изменить дату начала')
-        dlg_layout = QVBoxLayout(dlg)
-        cal_widget = QCalendarWidget()
-        cal_widget.setSelectedDate(self.start_date_edit.date())
-        dlg_layout.addWidget(cal_widget)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dlg.accept)
-        buttons.rejected.connect(dlg.reject)
-        dlg_layout.addWidget(buttons)
+        from ui.supervision_dialogs import SupervisionStartDateDialog
+        dlg = SupervisionStartDateDialog(
+            self,
+            current_date=self.start_date_edit.date(),
+            data=self.data
+        )
         if dlg.exec_() == QDialog.Accepted:
             old_date = self.start_date_edit.date().toString('dd.MM.yyyy')
-            new_date = cal_widget.selectedDate().toString('dd.MM.yyyy')
+            new_date = dlg.selected_date.toString('dd.MM.yyyy')
             self._loading_data = True
-            self.start_date_edit.setDate(cal_widget.selectedDate())
+            self.start_date_edit.setDate(dlg.selected_date)
             self._loading_data = False
+            self.start_date_label.setText(dlg.selected_date.toString('dd.MM.yyyy'))
             self.auto_save_field()
             self._add_project_history(
                 'data_change',
@@ -3246,7 +3309,7 @@ class SupervisionCardEditDialog(QDialog):
                         'stage_name': None,
                         'calculated_amount': calculated_amount,
                         'final_amount': calculated_amount,
-                        'payment_type': None,
+                        'payment_type': 'Полная оплата',
                         'report_month': None  # В работе - без месяца
                     }
 

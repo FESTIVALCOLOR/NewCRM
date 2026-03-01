@@ -556,71 +556,94 @@ class ArchiveCardDetailsDialog(QDialog):
             history_label.setStyleSheet('margin-top: 10px; font-size: 12px;')
             info_layout.addRow(history_label)
 
-            stages = self.data.get_stage_history(self.card_data.get('id'))
-
-            if stages:
-                # Разделяем стадии по приоритетам
-                completed_stages = []  # Приоритет 1: Завершенные стадии
-                active_stages = []     # Приоритет 2: Назначенные/активные стадии
-
-                for stage in stages:
-                    if stage.get('completed'):
-                        completed_stages.append(stage)
-                    else:
-                        active_stages.append(stage)
-
-                # Выводим стадии с приоритетами
-                all_prioritized_stages = completed_stages + active_stages
-
-                for stage in all_prioritized_stages:
-                    stage_frame = QFrame()
-
-                    if stage.get('completed'):
-                        bg_color = '#D5F4E6'
-                    else:
-                        bg_color = '#F8F9FA'
-
-                    stage_frame.setStyleSheet(f'''
-                        QFrame {{
-                            background-color: {bg_color};
-                            border: none;
-                            border-radius: 4px;
-                            padding: 2px;
-                            margin: 2px 0px;
-                        }}
-                    ''')
-
-                    stage_layout = QVBoxLayout()
-                    stage_layout.setSpacing(3)
-
-                    stage_name = QLabel(f"<b>{stage.get('stage_name', 'N/A')}</b>")
-                    stage_layout.addWidget(stage_name)
-
-                    executor = QLabel(f"Исполнитель: {stage.get('executor_name', 'Не назначен')}")
-                    executor.setStyleSheet('font-size: 10px; color: #666;')
-                    stage_layout.addWidget(executor)
-
-                    # ИСПРАВЛЕНИЕ: Объединяем Назначено, Дедлайн и Сдано в одну строку
-                    dates_parts = [f"Назначено: {format_date(stage.get('assigned_date'), 'N/A')}", f"Дедлайн: {format_date(stage.get('deadline'), 'N/A')}"]
-                    if stage.get('submitted_date'):
-                        dates_parts.append(f"Сдано: {format_date(stage.get('submitted_date'), 'N/A')}")
-
-                    dates = QLabel(" | ".join(dates_parts))
-                    dates.setStyleSheet('font-size: 10px; color: #666;')
-                    stage_layout.addWidget(dates)
-
-                    # ИСПРАВЛЕНИЕ: Дата принятия (завершения)
-                    if stage.get('completed'):
-                        completed_label = QLabel(f"Принято: {format_date(stage.get('completed_date'), 'N/A')}")
-                        completed_label.setStyleSheet('font-size: 10px; color: #27AE60; font-weight: bold;')
-                        stage_layout.addWidget(completed_label)
-
-                    stage_frame.setLayout(stage_layout)
-                    info_layout.addRow(stage_frame)
+            # Для надзорных карточек используем supervision_history
+            if self.card_type == 'supervision':
+                supervision_history = self.data.get_supervision_history(self.card_data.get('id')) or []
+                if supervision_history:
+                    for entry in supervision_history:
+                        entry_type = entry.get('entry_type', '')
+                        message = entry.get('message', '')
+                        created_at = entry.get('created_at', '')
+                        if isinstance(created_at, str) and 'T' in created_at:
+                            created_at = created_at.split('T')[0]
+                        type_colors = {
+                            'card_moved': '#1565C0', 'assignment_change': '#E65100',
+                            'stage_completed': '#2E7D32', 'pause': '#F57F17',
+                            'resume': '#388E3C', 'data_change': '#6A1B9A',
+                            'file_upload': '#00695C', 'row_added': '#283593',
+                            'row_deleted': '#B71C1C',
+                        }
+                        color = type_colors.get(entry_type, '#616161')
+                        entry_label = QLabel(f"<span style='color: {color}; font-weight: bold;'>{created_at}</span> — {message}")
+                        entry_label.setWordWrap(True)
+                        entry_label.setStyleSheet('font-size: 10px; padding: 2px 0;')
+                        info_layout.addRow(entry_label)
+                else:
+                    empty = QLabel('История отсутствует')
+                    empty.setStyleSheet('color: #999; font-style: italic;')
+                    info_layout.addRow(empty)
             else:
-                empty = QLabel('История отсутствует')
-                empty.setStyleSheet('color: #999; font-style: italic;')
-                info_layout.addRow(empty)
+                stages = self.data.get_stage_history(self.card_data.get('id'))
+
+                if stages:
+                    completed_stages = []
+                    active_stages = []
+
+                    for stage in stages:
+                        if stage.get('completed'):
+                            completed_stages.append(stage)
+                        else:
+                            active_stages.append(stage)
+
+                    all_prioritized_stages = completed_stages + active_stages
+
+                    for stage in all_prioritized_stages:
+                        stage_frame = QFrame()
+
+                        if stage.get('completed'):
+                            bg_color = '#D5F4E6'
+                        else:
+                            bg_color = '#F8F9FA'
+
+                        stage_frame.setStyleSheet(f'''
+                            QFrame {{
+                                background-color: {bg_color};
+                                border: none;
+                                border-radius: 4px;
+                                padding: 2px;
+                                margin: 2px 0px;
+                            }}
+                        ''')
+
+                        stage_layout = QVBoxLayout()
+                        stage_layout.setSpacing(3)
+
+                        stage_name = QLabel(f"<b>{stage.get('stage_name', 'N/A')}</b>")
+                        stage_layout.addWidget(stage_name)
+
+                        executor = QLabel(f"Исполнитель: {stage.get('executor_name', 'Не назначен')}")
+                        executor.setStyleSheet('font-size: 10px; color: #666;')
+                        stage_layout.addWidget(executor)
+
+                        dates_parts = [f"Назначено: {format_date(stage.get('assigned_date'), 'N/A')}", f"Дедлайн: {format_date(stage.get('deadline'), 'N/A')}"]
+                        if stage.get('submitted_date'):
+                            dates_parts.append(f"Сдано: {format_date(stage.get('submitted_date'), 'N/A')}")
+
+                        dates = QLabel(" | ".join(dates_parts))
+                        dates.setStyleSheet('font-size: 10px; color: #666;')
+                        stage_layout.addWidget(dates)
+
+                        if stage.get('completed'):
+                            completed_label = QLabel(f"Принято: {format_date(stage.get('completed_date'), 'N/A')}")
+                            completed_label.setStyleSheet('font-size: 10px; color: #27AE60; font-weight: bold;')
+                            stage_layout.addWidget(completed_label)
+
+                        stage_frame.setLayout(stage_layout)
+                        info_layout.addRow(stage_frame)
+                else:
+                    empty = QLabel('История отсутствует')
+                    empty.setStyleSheet('color: #999; font-style: italic;')
+                    info_layout.addRow(empty)
             
             info_content.setLayout(info_layout)
             info_scroll.setWidget(info_content)

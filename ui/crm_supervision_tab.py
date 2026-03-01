@@ -966,7 +966,7 @@ class CRMSupervisionTab(QWidget):
                                             'stage_name': from_column,
                                             'calculated_amount': dan_amount,
                                             'final_amount': dan_amount,
-                                            'payment_type': None,
+                                            'payment_type': 'Полная оплата',
                                             'report_month': current_month,
                                             'supervision_card_id': card_id
                                         }
@@ -992,7 +992,7 @@ class CRMSupervisionTab(QWidget):
                                             'stage_name': from_column,
                                             'calculated_amount': smp_amount,
                                             'final_amount': smp_amount,
-                                            'payment_type': None,
+                                            'payment_type': 'Полная оплата',
                                             'report_month': current_month,
                                             'supervision_card_id': card_id
                                         }
@@ -1460,7 +1460,13 @@ class SupervisionCard(QFrame):
         
         # Дедлайн
         if self.card_data.get('deadline'):
-            deadline_label = QLabel(f"Дедлайн: {self.card_data['deadline']}")
+            deadline_raw = self.card_data['deadline']
+            try:
+                dl_date = QDate.fromString(deadline_raw, 'yyyy-MM-dd')
+                deadline_display = dl_date.toString('dd.MM.yyyy') if dl_date.isValid() else deadline_raw
+            except Exception:
+                deadline_display = deadline_raw
+            deadline_label = QLabel(f"Дедлайн: {deadline_display}")
             deadline_label.setStyleSheet('''
                 color: white;
                 background-color: #95A5A6;

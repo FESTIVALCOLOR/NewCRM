@@ -85,7 +85,7 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
             stage_name=stage_name,
             calculated_amount=amount,
             final_amount=amount,
-            payment_type=None,
+            payment_type='Полная оплата',
             report_month=current_month,
             supervision_card_id=card.id,
         )
