@@ -348,8 +348,8 @@ class SupervisionCardEditDialog(QDialog):
         # Кнопки
         buttons_layout = QHBoxLayout()
 
-        # Кнопка удаления заказа (только для Руководителя студии)
-        if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
+        # Кнопка удаления заказа (по праву supervision.delete_order)
+        if _has_perm(self.employee, self.api_client, 'supervision.delete_order'):
             delete_btn = IconLoader.create_icon_button('delete', 'Удалить заказ', 'Полностью удалить заказ', icon_size=12)
             delete_btn.setStyleSheet("""
                 QPushButton {
@@ -1017,8 +1017,8 @@ class SupervisionCardEditDialog(QDialog):
                 month_label.setAlignment(Qt.AlignCenter)
                 table.setCellWidget(row, 7, month_label)
 
-                # Кнопки действий (столбец 8, только для руководителей)
-                if self.employee.get('position', '') in ['Руководитель студии', 'Старший менеджер проектов'] or self.employee.get('secondary_position', '') in ['Руководитель студии', 'Старший менеджер проектов']:
+                # Кнопки действий (столбец 8, по праву supervision.payments)
+                if _has_perm(self.employee, self.api_client, 'supervision.payments'):
                     actions_widget = QWidget()
                     actions_widget.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                     actions_layout = QHBoxLayout()

@@ -546,12 +546,12 @@ class CRMTab(QWidget):
         """Внутренняя логика перемещения карточки (выделена для try/finally)"""
         # === ПРАВИЛО: Нельзя вернуться в "Новый заказ" ===
         if to_column == 'Новый заказ' and from_column != 'Новый заказ':
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(
+            CustomMessageBox(
                 self, 'Перемещение запрещено',
                 'Нельзя вернуть карточку в "Новый заказ".\n'
-                'Используйте столбец "В ожидании" для приостановки.'
-            )
+                'Используйте столбец "В ожидании" для приостановки.',
+                'warning'
+            ).exec_()
             self.load_cards_for_type(project_type)
             return
 
@@ -560,11 +560,11 @@ class CRMTab(QWidget):
             card_info = self.data.get_crm_card(card_id)
             prev_col = card_info.get('previous_column') if card_info else None
             if prev_col and prev_col != 'Новый заказ' and to_column != prev_col:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(
+                CustomMessageBox(
                     self, 'Перемещение запрещено',
-                    f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".'
-                )
+                    f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".',
+                    'warning'
+                ).exec_()
                 self.load_cards_for_type(project_type)
                 return
 
@@ -583,24 +583,26 @@ class CRMTab(QWidget):
 
             if card_data:
                 if 'концепция' in from_column and card_data.get('designer_completed') == 1:
-                    QMessageBox.warning(
-                        self, 
-                        'Работа не принята', 
+                    CustomMessageBox(
+                        self,
+                        'Работа не принята',
                         'Дизайнер сдал работу, но вы еще не приняли её!\n\n'
                         'Сначала нажмите кнопку "Принять работу" на карточке,\n'
-                        'затем переместите её на следующую стадию.'
-                    )
+                        'затем переместите её на следующую стадию.',
+                        'warning'
+                    ).exec_()
                     self.load_cards_for_type(project_type)
                     return
                 
                 if ('планировочные' in from_column or 'чертежи' in from_column) and card_data.get('draftsman_completed') == 1:
-                    QMessageBox.warning(
+                    CustomMessageBox(
                         self,
                         'Работа не принята',
                         'Чертёжник сдал работу, но вы еще не приняли её!\n\n'
                         'Сначала нажмите кнопку "Принять работу" на карточке,\n'
-                        'затем переместите её на следующую стадию.'
-                    )
+                        'затем переместите её на следующую стадию.',
+                        'warning'
+                    ).exec_()
                     self.load_cards_for_type(project_type)
                     return
 
@@ -704,7 +706,7 @@ class CRMTab(QWidget):
 
         except Exception as e:
             print(f" Ошибка обновления БД: {e}")
-            QMessageBox.critical(self, 'Ошибка', f'Не удалось переместить карточку: {e}')
+            CustomMessageBox(self, 'Ошибка', f'Не удалось переместить карточку: {e}', 'error').exec_()
             return
 
         # S9.3: Уведомление об успешном перемещении карточки
@@ -784,7 +786,7 @@ class CRMTab(QWidget):
         _contract_id = _card_info.get('contract_id') if _card_info else None
         dialog = ExecutorSelectionDialog(self, card_id, stage_name, project_type, self.api_client, contract_id=_contract_id)
         if dialog.exec_() != QDialog.Accepted:
-            QMessageBox.warning(self, 'Внимание', 'Выберите исполнителя для стадии')
+            CustomMessageBox(self, 'Внимание', 'Выберите исполнителя для стадии', 'warning').exec_()
     
     def complete_project(self, card_id):
         """Завершение проекта"""
@@ -2982,7 +2984,7 @@ class CRMCard(QFrame):
             dialog = ProjectDataDialog(self, project_data_link)
             dialog.exec_()
         else:
-            QMessageBox.information(self, 'Информация', 'Ссылка на данные проекта не установлена')
+            CustomMessageBox(self, 'Информация', 'Ссылка на данные проекта не установлена').exec_()
 
     def add_tech_task(self):
         """Добавить техническое задание"""

@@ -531,12 +531,12 @@ class EmployeesTab(QWidget):
         """Удаление сотрудника"""
         from ui.custom_message_box import CustomQuestionBox
 
-        # Только Руководитель студии может удалять сотрудников
-        if self.employee.get('position', '') != 'Руководитель студии' and self.employee.get('secondary_position', '') != 'Руководитель студии':
+        # Проверка права на удаление сотрудников
+        if not _has_perm(self.employee, self.api_client, 'employees.delete'):
             CustomMessageBox(
                 self,
                 'Ошибка',
-                'У вас недостаточно прав для удаления сотрудников.\nТолько Руководитель студии может удалять сотрудников.',
+                'У вас недостаточно прав для удаления сотрудников.',
                 'error'
             ).exec_()
             return

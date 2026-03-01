@@ -86,11 +86,12 @@ class ContractsTab(QWidget):
         refresh_btn.clicked.connect(self.load_contracts)
         header_layout.addWidget(refresh_btn)
 
-        add_btn = IconLoader.create_action_button(
-            'add', 'Создать новый договор',
-            bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
-        add_btn.clicked.connect(lambda checked: self.add_contract())
-        header_layout.addWidget(add_btn)
+        if _has_perm(self.employee, self.api_client, 'contracts.create'):
+            add_btn = IconLoader.create_action_button(
+                'add', 'Создать новый договор',
+                bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
+            add_btn.clicked.connect(lambda checked: self.add_contract())
+            header_layout.addWidget(add_btn)
 
         layout.addLayout(header_layout)
 
@@ -314,7 +315,7 @@ class ContractsTab(QWidget):
             actions_layout.addWidget(view_btn)
             actions_layout.addWidget(edit_btn)
 
-            if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
+            if _has_perm(self.employee, self.api_client, 'contracts.delete'):
                 delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=12)
                 delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
@@ -666,7 +667,7 @@ class ContractsTab(QWidget):
             actions_layout.addWidget(view_btn)
             actions_layout.addWidget(edit_btn)
 
-            if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
+            if _has_perm(self.employee, self.api_client, 'contracts.delete'):
                 delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=12)
                 delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''

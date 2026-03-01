@@ -267,6 +267,8 @@ class CardEditDialog(QDialog):
         is_executor = not _has_perm(self.employee, self.api_client, 'crm_cards.move')
         has_full_access = _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor')
         has_admin_access = _has_perm(self.employee, self.api_client, 'employees.update')
+        has_deadlines_access = _has_perm(self.employee, self.api_client, 'crm_cards.deadlines')
+        has_move_access = _has_perm(self.employee, self.api_client, 'crm_cards.move')
         is_sdp_or_gap = not has_full_access and not is_executor
 
         # === ВКЛАДКА 1: ИСПОЛНИТЕЛИ И ДЕДЛАЙН (для всех кроме исполнителей) ===
@@ -425,9 +427,9 @@ class CardEditDialog(QDialog):
             self.deadline_display.setFixedHeight(28)
             deadline_row.addWidget(self.deadline_display, 1)
 
-            # Кнопка "Изменить дедлайн" (только для полного доступа)
+            # Кнопка "Изменить дедлайн" (по праву crm_cards.deadlines)
             edit_deadline_btn = None
-            if has_full_access:
+            if has_deadlines_access:
                 edit_deadline_btn = QPushButton('Изменить дедлайн')
                 edit_deadline_btn.setFixedHeight(28)
                 edit_deadline_btn.setStyleSheet("""
@@ -475,7 +477,7 @@ class CardEditDialog(QDialog):
             self.status_combo = CustomComboBox()
             self.status_combo.addItems(['Новый заказ', 'В работе', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
             self.status_combo.setFixedHeight(28)
-            self.status_combo.setEnabled(has_full_access)  # Только для полного доступа
+            self.status_combo.setEnabled(has_move_access)  # По праву crm_cards.move
             status_row.addWidget(self.status_combo, 1)
             project_info_layout.addLayout(status_row)
 
@@ -615,8 +617,8 @@ class CardEditDialog(QDialog):
             self.survey_date_label.setFixedHeight(28)
             survey_date_row.addWidget(self.survey_date_label, 1)
 
-            # Кнопка "Изменить дату" замера (только для полного доступа)
-            if has_full_access:
+            # Кнопка "Изменить дату" замера (по праву crm_cards.deadlines)
+            if has_deadlines_access:
                 edit_survey_btn = QPushButton('Изменить дату')
                 # Синхронизация ширины с кнопкой "Изменить дедлайн"
                 if edit_deadline_btn:
@@ -743,7 +745,7 @@ class CardEditDialog(QDialog):
 
                 deadline_row.addWidget(self.designer_deadline_display, 1)
 
-                if has_full_access:
+                if has_deadlines_access:
                     edit_designer_deadline_btn = QPushButton('Изменить')
                     edit_designer_deadline_btn.setFixedHeight(28)
                     edit_designer_deadline_btn.setStyleSheet("""
@@ -866,7 +868,7 @@ class CardEditDialog(QDialog):
 
                 deadline_row.addWidget(self.draftsman_deadline_display, 1)
 
-                if has_full_access:
+                if has_deadlines_access:
                     edit_draftsman_deadline_btn = QPushButton('Изменить')
                     edit_draftsman_deadline_btn.setFixedHeight(28)
                     edit_draftsman_deadline_btn.setStyleSheet("""

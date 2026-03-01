@@ -14,6 +14,7 @@ from utils.icon_loader import IconLoader
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit, ICONS_PATH
 from utils.data_access import DataAccess
 from utils.table_settings import ProportionalResizeTable
+from utils.permissions import _has_perm
 
 
 class CollapsibleBox(QWidget):
@@ -392,7 +393,7 @@ class SalariesTab(QWidget):
         widget = QWidget()
         layout = QVBoxLayout()
 
-        if payment_type == 'Оклады':
+        if payment_type == 'Оклады' and _has_perm(self.employee, self.api_client, 'salaries.create'):
             # Кнопка добавления
             add_btn = QPushButton('+ Добавить выплату оклада')
             add_btn.clicked.connect(lambda: self.add_salary_payment())
@@ -875,8 +876,8 @@ class SalariesTab(QWidget):
         edit_btn.clicked.connect(lambda checked, p=payment, s=is_salary: self.edit_payment_from_all(p, s))
         layout.addWidget(edit_btn)
 
-        # Кнопка удаления (только для руководителей)
-        if self.employee.get('position', '') in ['Руководитель студии', 'Старший менеджер проектов'] or self.employee.get('secondary_position', '') in ['Руководитель студии', 'Старший менеджер проектов']:
+        # Кнопка удаления (по праву salaries.delete)
+        if _has_perm(self.employee, self.api_client, 'salaries.delete'):
             delete_btn = QPushButton()
             delete_btn.setIcon(IconLoader.load('delete2'))
             delete_btn.setIconSize(QSize(12, 12))
@@ -942,10 +943,14 @@ class SalariesTab(QWidget):
             """)
         to_pay_btn.setIconSize(QSize(12, 12))
         to_pay_btn.setFixedSize(26, 26)
-        to_pay_btn.setToolTip('Отметить к оплате')
-        to_pay_btn.clicked.connect(
-            lambda: self.set_payment_status(payment, 'to_pay', table, row)
-        )
+        if _has_perm(self.employee, self.api_client, 'salaries.mark_to_pay'):
+            to_pay_btn.setToolTip('Отметить к оплате')
+            to_pay_btn.clicked.connect(
+                lambda: self.set_payment_status(payment, 'to_pay', table, row)
+            )
+        else:
+            to_pay_btn.setEnabled(False)
+            to_pay_btn.setToolTip('Нет прав на изменение статуса')
         layout.addWidget(to_pay_btn)
 
         # Кнопка "Оплачено" (иконка галочки)
@@ -977,55 +982,61 @@ class SalariesTab(QWidget):
                 }
                 QPushButton:hover { background-color: #27AE60; color: white; }
             """)
-        paid_btn.setToolTip('Отметить как оплачено')
-        paid_btn.clicked.connect(
-            lambda: self.set_payment_status(payment, 'paid', table, row)
-        )
+        if _has_perm(self.employee, self.api_client, 'salaries.mark_paid'):
+            paid_btn.setToolTip('Отметить как оплачено')
+            paid_btn.clicked.connect(
+                lambda: self.set_payment_status(payment, 'paid', table, row)
+            )
+        else:
+            paid_btn.setEnabled(False)
+            paid_btn.setToolTip('Нет прав на изменение статуса')
         layout.addWidget(paid_btn)
 
-        # Кнопка "Изменить"
-        edit_btn = QPushButton()
-        edit_btn.setIcon(IconLoader.load('edit2'))
-        edit_btn.setIconSize(QSize(12, 12))
-        edit_btn.setFixedSize(26, 26)
-        edit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ffd93c;
-                color: white;
-                padding: 0px;
-                border-radius: 4px;
-                min-height: 0px; max-height: 26px;
-                min-width: 0px; max-width: 26px;
-            }
-            QPushButton:hover { background-color: #f0c929; }
-        """)
-        edit_btn.setToolTip('Изменить выплату')
-        edit_btn.clicked.connect(
-            lambda: self.edit_crm_payment(payment, payment_type)
-        )
-        layout.addWidget(edit_btn)
+        # Кнопка "Изменить" (по праву salaries.update)
+        if _has_perm(self.employee, self.api_client, 'salaries.update'):
+            edit_btn = QPushButton()
+            edit_btn.setIcon(IconLoader.load('edit2'))
+            edit_btn.setIconSize(QSize(12, 12))
+            edit_btn.setFixedSize(26, 26)
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffd93c;
+                    color: white;
+                    padding: 0px;
+                    border-radius: 4px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
+                }
+                QPushButton:hover { background-color: #f0c929; }
+            """)
+            edit_btn.setToolTip('Изменить выплату')
+            edit_btn.clicked.connect(
+                lambda: self.edit_crm_payment(payment, payment_type)
+            )
+            layout.addWidget(edit_btn)
 
-        # Кнопка "Удалить"
-        delete_btn = QPushButton()
-        delete_btn.setIcon(IconLoader.load('delete2'))
-        delete_btn.setIconSize(QSize(12, 12))
-        delete_btn.setFixedSize(26, 26)
-        delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E74C3C;
-                color: white;
-                padding: 0px;
-                border-radius: 4px;
-                min-height: 0px; max-height: 26px;
-                min-width: 0px; max-width: 26px;
-            }
-            QPushButton:hover { background-color: #C0392B; }
-        """)
-        delete_btn.setToolTip('Удалить выплату')
-        delete_btn.clicked.connect(
-            lambda: self.delete_crm_payment(payment, payment_type)
-        )
-        layout.addWidget(delete_btn)
+        # Кнопка "Удалить" (по праву salaries.delete)
+        if _has_perm(self.employee, self.api_client, 'salaries.delete'):
+            delete_btn = QPushButton()
+            delete_btn.setIcon(IconLoader.load('delete2'))
+            delete_btn.setIconSize(QSize(12, 12))
+            delete_btn.setFixedSize(26, 26)
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E74C3C;
+                    color: white;
+                    padding: 0px;
+                    border-radius: 4px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
+                }
+                QPushButton:hover { background-color: #C0392B; }
+            """)
+            delete_btn.setToolTip('Удалить выплату')
+            delete_btn.clicked.connect(
+                lambda: self.delete_crm_payment(payment, payment_type)
+            )
+            layout.addWidget(delete_btn)
 
         widget.setLayout(layout)
         return widget
@@ -2248,14 +2259,13 @@ class SalariesTab(QWidget):
 
     def delete_salary_payment(self, payment):
         """Удаление оклада (#5)"""
-        reply = QMessageBox.question(
+        reply = CustomQuestionBox(
             self,
-            'Подтверждение',
-            f"Удалить оклад сотрудника {payment.get('employee_name', '')}?",
-            QMessageBox.Yes | QMessageBox.No
-        )
+            'Подтверждение удаления',
+            f"Удалить оклад сотрудника {payment.get('employee_name', '')}?"
+        ).exec_()
 
-        if reply == QMessageBox.Yes:
+        if reply == QDialog.Accepted:
             salary_id = payment.get('id')
             self.data.delete_salary(salary_id)
             print(f"[DataAccess] Оклад ID={salary_id} удален")
@@ -2266,14 +2276,13 @@ class SalariesTab(QWidget):
 
     def delete_payment(self, payment_id):
         """Удаление выплаты"""
-        reply = QMessageBox.question(
+        reply = CustomQuestionBox(
             self,
-            'Подтверждение',
-            'Удалить эту выплату?',
-            QMessageBox.Yes | QMessageBox.No
-        )
+            'Подтверждение удаления',
+            'Удалить эту выплату?'
+        ).exec_()
 
-        if reply == QMessageBox.Yes:
+        if reply == QDialog.Accepted:
             self.data.delete_payment(payment_id)
             self.invalidate_cache()
             self.load_all_payments()
@@ -2318,10 +2327,14 @@ class SalariesTab(QWidget):
                 }
                 QPushButton:hover { background-color: #F39C12; color: white; }
             """)
-        to_pay_btn.setToolTip('Отметить к оплате')
-        to_pay_btn.clicked.connect(
-            lambda: self.set_payment_status(payment, 'to_pay', table, row, is_salary=True)
-        )
+        if _has_perm(self.employee, self.api_client, 'salaries.mark_to_pay'):
+            to_pay_btn.setToolTip('Отметить к оплате')
+            to_pay_btn.clicked.connect(
+                lambda: self.set_payment_status(payment, 'to_pay', table, row, is_salary=True)
+            )
+        else:
+            to_pay_btn.setEnabled(False)
+            to_pay_btn.setToolTip('Нет прав на изменение статуса')
         layout.addWidget(to_pay_btn)
 
         # Кнопка "Оплачено"
@@ -2353,51 +2366,57 @@ class SalariesTab(QWidget):
                 }
                 QPushButton:hover { background-color: #27AE60; color: white; }
             """)
-        paid_btn.setToolTip('Отметить как оплачено')
-        paid_btn.clicked.connect(
-            lambda: self.set_payment_status(payment, 'paid', table, row, is_salary=True)
-        )
+        if _has_perm(self.employee, self.api_client, 'salaries.mark_paid'):
+            paid_btn.setToolTip('Отметить как оплачено')
+            paid_btn.clicked.connect(
+                lambda: self.set_payment_status(payment, 'paid', table, row, is_salary=True)
+            )
+        else:
+            paid_btn.setEnabled(False)
+            paid_btn.setToolTip('Нет прав на изменение статуса')
         layout.addWidget(paid_btn)
 
-        # Кнопка редактирования
-        edit_btn = QPushButton()
-        edit_btn.setIcon(IconLoader.load('edit'))
-        edit_btn.setIconSize(QSize(12, 12))
-        edit_btn.setFixedSize(26, 26)
-        edit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498DB;
-                color: white;
-                padding: 0px;
-                border-radius: 4px;
-                min-height: 0px; max-height: 26px;
-                min-width: 0px; max-width: 26px;
-            }
-            QPushButton:hover { background-color: #2980B9; }
-        """)
-        edit_btn.setToolTip('Редактировать')
-        edit_btn.clicked.connect(lambda: self.edit_salary_payment(payment))
-        layout.addWidget(edit_btn)
+        # Кнопка редактирования (по праву salaries.update)
+        if _has_perm(self.employee, self.api_client, 'salaries.update'):
+            edit_btn = QPushButton()
+            edit_btn.setIcon(IconLoader.load('edit'))
+            edit_btn.setIconSize(QSize(12, 12))
+            edit_btn.setFixedSize(26, 26)
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498DB;
+                    color: white;
+                    padding: 0px;
+                    border-radius: 4px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
+                }
+                QPushButton:hover { background-color: #2980B9; }
+            """)
+            edit_btn.setToolTip('Редактировать')
+            edit_btn.clicked.connect(lambda: self.edit_salary_payment(payment))
+            layout.addWidget(edit_btn)
 
-        # ИСПРАВЛЕНИЕ 07.02.2026: Добавлена кнопка "Удалить" для окладов (#5)
-        delete_btn = QPushButton()
-        delete_btn.setIcon(IconLoader.load('delete2'))
-        delete_btn.setIconSize(QSize(12, 12))
-        delete_btn.setFixedSize(26, 26)
-        delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E74C3C;
-                color: white;
-                padding: 0px;
-                border-radius: 4px;
-                min-height: 0px; max-height: 26px;
-                min-width: 0px; max-width: 26px;
-            }
-            QPushButton:hover { background-color: #C0392B; }
-        """)
-        delete_btn.setToolTip('Удалить оклад')
-        delete_btn.clicked.connect(lambda: self.delete_salary_payment(payment))
-        layout.addWidget(delete_btn)
+        # Кнопка "Удалить" для окладов (по праву salaries.delete)
+        if _has_perm(self.employee, self.api_client, 'salaries.delete'):
+            delete_btn = QPushButton()
+            delete_btn.setIcon(IconLoader.load('delete2'))
+            delete_btn.setIconSize(QSize(12, 12))
+            delete_btn.setFixedSize(26, 26)
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E74C3C;
+                    color: white;
+                    padding: 0px;
+                    border-radius: 4px;
+                    min-height: 0px; max-height: 26px;
+                    min-width: 0px; max-width: 26px;
+                }
+                QPushButton:hover { background-color: #C0392B; }
+            """)
+            delete_btn.setToolTip('Удалить оклад')
+            delete_btn.clicked.connect(lambda: self.delete_salary_payment(payment))
+            layout.addWidget(delete_btn)
 
         widget.setLayout(layout)
         return widget

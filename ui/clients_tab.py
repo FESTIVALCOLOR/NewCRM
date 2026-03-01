@@ -13,6 +13,7 @@ from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.table_settings import TableSettings, ProportionalResizeTable
 from utils.data_access import DataAccess
+from utils.permissions import _has_perm
 
 class ClientsTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
@@ -23,6 +24,9 @@ class ClientsTab(QWidget):
         self.db = self.data.db  # обратная совместимость для raw SQL
         self.table_settings = TableSettings()
         self._data_loaded = False
+        self.can_create = _has_perm(employee, api_client, 'clients.create')
+        self.can_edit = _has_perm(employee, api_client, 'clients.update')
+        self.can_delete = _has_perm(employee, api_client, 'clients.delete')
         self.init_ui()
     
     def init_ui(self):
@@ -50,11 +54,12 @@ class ClientsTab(QWidget):
         refresh_btn.clicked.connect(self.load_clients)
         header_layout.addWidget(refresh_btn)
 
-        add_btn = IconLoader.create_action_button(
-            'add', 'Добавить нового клиента',
-            bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
-        add_btn.clicked.connect(self.add_client)
-        header_layout.addWidget(add_btn)
+        if self.can_create:
+            add_btn = IconLoader.create_action_button(
+                'add', 'Добавить нового клиента',
+                bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
+            add_btn.clicked.connect(self.add_client)
+            header_layout.addWidget(add_btn)
         
         layout.addLayout(header_layout)
         
@@ -140,39 +145,41 @@ class ClientsTab(QWidget):
         view_btn.clicked.connect(lambda: self.view_client(client))
         actions_layout.addWidget(view_btn)
 
-        # Кнопка Редактировать
-        edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
-        edit_btn.setFixedSize(20, 20)
-        edit_btn.setStyleSheet('''
-            QPushButton {
-                background-color: #FFF3E0;
-                border: 1px solid #FFE0B2;
-                border-radius: 4px;
-                padding: 0px;
-            }
-            QPushButton:hover {
-                background-color: #FF9800;
-            }
-        ''')
-        edit_btn.clicked.connect(lambda: self.edit_client(client))
-        actions_layout.addWidget(edit_btn)
+        # Кнопка Редактировать (по праву clients.update)
+        if self.can_edit:
+            edit_btn = IconLoader.create_icon_button('edit2', '', 'Редактировать', icon_size=12)
+            edit_btn.setFixedSize(20, 20)
+            edit_btn.setStyleSheet('''
+                QPushButton {
+                    background-color: #FFF3E0;
+                    border: 1px solid #FFE0B2;
+                    border-radius: 4px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #FF9800;
+                }
+            ''')
+            edit_btn.clicked.connect(lambda: self.edit_client(client))
+            actions_layout.addWidget(edit_btn)
 
-        # Кнопка Удалить
-        delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
-        delete_btn.setFixedSize(20, 20)
-        delete_btn.setStyleSheet('''
-            QPushButton {
-                background-color: #FFE6E6;
-                border: 1px solid #FFCCCC;
-                border-radius: 4px;
-                padding: 0px;
-            }
-            QPushButton:hover {
-                background-color: #E74C3C;
-            }
-        ''')
-        delete_btn.clicked.connect(lambda: self.delete_client(client['id']))
-        actions_layout.addWidget(delete_btn)
+        # Кнопка Удалить (по праву clients.delete)
+        if self.can_delete:
+            delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить', icon_size=12)
+            delete_btn.setFixedSize(20, 20)
+            delete_btn.setStyleSheet('''
+                QPushButton {
+                    background-color: #FFE6E6;
+                    border: 1px solid #FFCCCC;
+                    border-radius: 4px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #E74C3C;
+                }
+            ''')
+            delete_btn.clicked.connect(lambda: self.delete_client(client['id']))
+            actions_layout.addWidget(delete_btn)
 
         actions_widget.setLayout(actions_layout)
 

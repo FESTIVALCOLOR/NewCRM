@@ -899,8 +899,8 @@ class CRMSupervisionTab(QWidget):
                         self.load_cards_for_current_tab()
                         return
 
-                    # Если ДАН НЕ сдал работу, но руководство перемещает - автоматически принимаем
-                    if dan_completed == 0 and (self.employee.get('position', '') in ['Руководитель студии', 'Старший менеджер проектов'] or self.employee.get('secondary_position', '') in ['Руководитель студии', 'Старший менеджер проектов']):
+                    # Если ДАН НЕ сдал работу, но пользователь с правом complete_stage перемещает - автоматически принимаем
+                    if dan_completed == 0 and _has_perm(self.employee, self.api_client, 'supervision.complete_stage'):
                         print(f"\n[AUTO ACCEPT] Автоматическое принятие стадии надзора '{from_column}'")
 
                         # Добавляем запись в историю о принятии
@@ -1056,7 +1056,7 @@ class CRMSupervisionTab(QWidget):
             print(f" Ошибка перемещения: {e}")
             import traceback
             traceback.print_exc()
-            QMessageBox.critical(self, 'Ошибка', f'Не удалось переместить карточку: {e}')
+            CustomMessageBox(self, 'Ошибка', f'Не удалось переместить карточку: {e}', 'error').exec_()
         finally:
             # Возобновляем синхронизацию после перемещения
             if sync:
@@ -2020,7 +2020,7 @@ class SupervisionCard(QFrame):
                 
             except Exception as e:
                 print(f" Ошибка сдачи работы: {e}")
-                QMessageBox.critical(self, 'Ошибка', f'Не удалось сдать работу: {e}')
+                CustomMessageBox(self, 'Ошибка', f'Не удалось сдать работу: {e}', 'error').exec_()
                 
     def edit_card(self):
         """Редактирование карточки"""
@@ -2165,7 +2165,7 @@ class SupervisionCard(QFrame):
                 
             except Exception as e:
                 print(f" Ошибка принятия работы: {e}")
-                QMessageBox.critical(self, 'Ошибка', f'Не удалось принять работу: {e}')
+                CustomMessageBox(self, 'Ошибка', f'Не удалось принять работу: {e}', 'error').exec_()
              
     def add_project_note(self):
         """Добавление записи в историю проекта"""
