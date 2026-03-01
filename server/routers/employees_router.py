@@ -22,8 +22,9 @@ from auth import get_current_user, get_password_hash
 from permissions import (
     require_permission, check_permission as perm_check,
     get_employee_permissions, set_employee_permissions, reset_to_defaults,
-    load_role_matrix, save_role_matrix,
+    load_role_matrix, save_role_matrix, load_permissions,
     PERMISSION_NAMES, DEFAULT_ROLE_PERMISSIONS, SUPERUSER_ROLES,
+    NON_MATRIX_PERMISSIONS,
     invalidate_cache as invalidate_perm_cache,
 )
 from schemas import (
@@ -259,7 +260,7 @@ async def update_role_matrix(
         ).all()
         updated_count = 0
         for emp in employees:
-            # Определяем права по роли из новой матрицы
+            # Определяем новые права по роли из матрицы
             role_perms = set(request.roles.get(emp.role, []))
             # Добавляем права по должности
             if emp.position and emp.position in request.roles:
@@ -268,8 +269,14 @@ async def update_role_matrix(
             if emp.secondary_position and emp.secondary_position in request.roles:
                 role_perms |= set(request.roles[emp.secondary_position])
 
-            if role_perms:
-                set_employee_permissions(emp.id, sorted(role_perms), current_user.id, db)
+            # Сохраняем не-матричные права (agents.*, cities.*, и др.)
+            # которые не управляются через UI и не должны теряться при сохранении
+            existing_perms = load_permissions(emp.id, db)
+            preserved_perms = existing_perms & NON_MATRIX_PERMISSIONS
+            merged_perms = role_perms | preserved_perms
+
+            if merged_perms:
+                set_employee_permissions(emp.id, sorted(merged_perms), current_user.id, db)
                 updated_count += 1
 
         logger.info(f"Обновлены права {updated_count} сотрудников по новой матрице ролей")

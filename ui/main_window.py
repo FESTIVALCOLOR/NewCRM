@@ -1453,9 +1453,8 @@ class MainWindow(QMainWindow):
         from PyQt5.QtCore import Qt
 
         if modifiers == Qt.ShiftModifier:
-            _pos = self.employee.get('position', '')
-            _sec = self.employee.get('secondary_position', '')
-            if _pos == 'Руководитель студии' or _sec == 'Руководитель студии':
+            from utils.permissions import _has_perm
+            if _has_perm(self.employee, getattr(self, 'api_client', None), 'access.admin'):
                 # Shift + клик = управление версией и загрузка обновлений
                 dialog = VersionDialog(self)
                 dialog.exec_()

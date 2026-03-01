@@ -114,6 +114,16 @@ async def get_current_user(
     )
 
     payload = decode_token(token)
+
+    # Проверяем тип токена: принимаем только access-токены
+    token_type = payload.get("type")
+    if token_type and token_type != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный тип токена. Используйте access-токен.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     employee_id: int = payload.get("sub")
     if employee_id is None:
         raise credentials_exception
@@ -121,6 +131,14 @@ async def get_current_user(
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if employee is None:
         raise credentials_exception
+
+    # Проверяем что сотрудник активен
+    if employee.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Учётная запись деактивирована",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Обновляем last_activity
     employee.last_activity = datetime.utcnow()

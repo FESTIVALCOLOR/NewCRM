@@ -161,9 +161,9 @@ class TestLoadUserPermissions:
         result = _load_user_permissions(emp, MagicMock())
         assert result is None
 
-    def test_rukovoditel_position_is_superuser(self):
-        """Руководитель студии — суперюзер по должности, даже без роли admin."""
-        emp = _make_employee('Руководитель студии', role='user')
+    def test_rukovoditel_role_is_superuser(self):
+        """Руководитель студии — суперюзер по роли."""
+        emp = _make_employee('Руководитель студии', role='Руководитель студии')
         result = _load_user_permissions(emp, MagicMock())
         assert result is None
 
@@ -224,7 +224,8 @@ class TestLoadUserPermissions:
     def test_cache_stores_none_for_superuser(self):
         emp = _make_employee('Менеджер', role='admin', emp_id=60)
         _load_user_permissions(emp, MagicMock())
-        assert _user_permissions_cache[60] is None
+        cached = _user_permissions_cache[60]
+        assert isinstance(cached, tuple) and cached[0] is None
 
     def test_different_employees_cached_separately(self):
         emp1 = _make_employee('Дизайнер', emp_id=70)
@@ -360,14 +361,16 @@ class TestInvalidateCache:
     """Тесты invalidate_cache."""
 
     def test_clear_all(self):
-        _user_permissions_cache[1] = {'access.crm'}
-        _user_permissions_cache[2] = None
+        import time as _time
+        _user_permissions_cache[1] = ({'access.crm'}, _time.time())
+        _user_permissions_cache[2] = (None, _time.time())
         invalidate_cache()
         assert len(_user_permissions_cache) == 0
 
     def test_clear_single_employee(self):
-        _user_permissions_cache[1] = {'access.crm'}
-        _user_permissions_cache[2] = {'access.reports'}
+        import time as _time
+        _user_permissions_cache[1] = ({'access.crm'}, _time.time())
+        _user_permissions_cache[2] = ({'access.reports'}, _time.time())
         invalidate_cache(employee_id=1)
         assert 1 not in _user_permissions_cache
         assert 2 in _user_permissions_cache
@@ -402,7 +405,7 @@ class TestGetAllowedTabs:
         assert tabs == set(ACCESS_TAB_MAP.values())
 
     def test_rukovoditel_gets_all_tabs(self):
-        emp = _make_employee('Руководитель студии', emp_id=201)
+        emp = _make_employee('Руководитель студии', role='Руководитель студии', emp_id=201)
         tabs = get_allowed_tabs(emp, MagicMock())
         assert tabs == set(ACCESS_TAB_MAP.values())
 

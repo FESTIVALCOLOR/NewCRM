@@ -1141,7 +1141,7 @@ async def workflow_submit_work(
 @router.post("/cards/{card_id}/workflow/accept")
 async def workflow_accept_work(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
     """Приемка работы — записывает дату проверки в timeline"""
@@ -1198,7 +1198,7 @@ async def workflow_accept_work(
 async def workflow_reject_work(
     card_id: int,
     request: Request,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
     """Отправить на исправление — обновляет workflow state и сбрасывает completed.
@@ -1286,7 +1286,7 @@ async def workflow_reject_work(
 @router.post("/cards/{card_id}/workflow/client-send")
 async def workflow_client_send(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
     """Отправить на согласование клиенту — приостанавливает дедлайн"""
@@ -1382,7 +1382,7 @@ async def workflow_client_send(
 @router.post("/cards/{card_id}/workflow/client-ok")
 async def workflow_client_approved(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.complete_approval")),
     db: Session = Depends(get_db)
 ):
     """Клиент согласовал — записывает дату согласования в timeline, возобновляет дедлайн"""
@@ -1711,7 +1711,7 @@ async def get_previous_executor_by_position(
 async def save_manager_acceptance(
     card_id: int,
     body: ManagerAcceptanceRequest,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
     """Сохранить принятие работы менеджером.
@@ -1721,7 +1721,8 @@ async def save_manager_acceptance(
     try:
         stage_name = body.stage_name
         executor_name = body.executor_name
-        manager_id = body.manager_id
+        # Используем current_user.id вместо body.manager_id для безопасности
+        manager_id = current_user.id
 
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:

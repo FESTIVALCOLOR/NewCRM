@@ -2,11 +2,12 @@
 """Единый модуль проверки прав на клиенте.
 
 Все UI-модули должны использовать ТОЛЬКО этот модуль для проверки прав.
-Внутри: кэш прав + API + fallback на config.py ROLES.
+Внутри: кэш прав с TTL + API + fallback на config.py ROLES.
 
 Исторически функции _emp_has_pos, _has_perm и др. были определены в ui/crm_tab.py.
 Сейчас они перенесены сюда, а в crm_tab.py остаётся реэкспорт для обратной совместимости.
 """
+import time
 
 
 # ========== Маппинг access.* прав на имена вкладок ==========
@@ -47,7 +48,8 @@ def _emp_only_pos(employee, *positions):
 
 
 # ========== Кэш и проверка permissions для текущего пользователя ==========
-_user_permissions_cache = {}  # {employee_id: set(permissions) | None}
+_CACHE_TTL = 300  # 5 минут — после этого кэш обновляется с сервера
+_user_permissions_cache = {}  # {employee_id: (set(permissions) | None, timestamp)}
 
 
 def _load_user_permissions(employee, api_client):
@@ -55,14 +57,19 @@ def _load_user_permissions(employee, api_client):
     if not employee:
         return set()
     emp_id = employee.get('id')
-    if emp_id in _user_permissions_cache:
-        return _user_permissions_cache[emp_id]
 
-    # Суперюзеры имеют все права (роль ИЛИ позиция Руководитель студии)
+    # Проверяем кэш с учётом TTL
+    cached = _user_permissions_cache.get(emp_id)
+    if cached is not None:
+        perms_value, cached_at = cached
+        if (time.time() - cached_at) < _CACHE_TTL:
+            return perms_value
+
+    # Суперюзеры имеют все права (по role или login, аналогично серверу)
     role = employee.get('role', '')
-    position = employee.get('position', '')
-    if role in ('admin', 'director') or position == 'Руководитель студии':
-        _user_permissions_cache[emp_id] = None  # None = все права
+    login = employee.get('login', '')
+    if role in ('admin', 'director', 'Руководитель студии') or login in ('admin', 'director'):
+        _user_permissions_cache[emp_id] = (None, time.time())  # None = все права
         return None
 
     perms = set()
@@ -77,7 +84,7 @@ def _load_user_permissions(employee, api_client):
     if not perms:
         perms = _get_default_permissions_for_position(employee)
 
-    _user_permissions_cache[emp_id] = perms
+    _user_permissions_cache[emp_id] = (perms, time.time())
     return perms
 
 
@@ -94,7 +101,7 @@ def _get_default_permissions_for_position(employee):
 
 
 def _has_perm(employee, api_client, perm_name):
-    """Проверить право у сотрудника. None в кэше = суперюзер (все права)."""
+    """Проверить право у сотрудника. None = суперюзер (все права)."""
     perms = _load_user_permissions(employee, api_client)
     if perms is None:
         return True  # суперюзер

@@ -522,6 +522,9 @@ class PermissionsMatrixWidget(QWidget):
                 "apply_to_employees": True,
             })
             if result:
+                # Сбрасываем клиентский кеш прав — изменения должны подхватиться
+                from utils.permissions import invalidate_cache
+                invalidate_cache()
                 CustomMessageBox(
                     self,
                     'Успешно',

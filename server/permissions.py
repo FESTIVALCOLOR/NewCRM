@@ -188,6 +188,16 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
 # Системные роли/логины с полным доступом (не настраиваются)
 SUPERUSER_ROLES = {"admin", "director", "Руководитель студии"}
 
+# Права, которые НЕ управляются через UI-матрицу (только суперпользователь/автоматика).
+# При apply_to_employees эти права сохраняются у сотрудников.
+NON_MATRIX_PERMISSIONS = {
+    "crm_cards.delete_executor",
+    "crm_cards.reset_stages",
+    "supervision.reset_stages",
+    "agents.create", "agents.update", "agents.delete",
+    "cities.create", "cities.delete",
+}
+
 # =========================
 # КЭШ ПРАВ
 # =========================
