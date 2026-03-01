@@ -9,6 +9,7 @@ from PyQt5.QtGui import QFont, QPixmap, QColor, QPalette
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtWidgets import QTabWidget
 from config import ROLES
+from utils.permissions import get_allowed_tabs, _has_perm
 from ui.dashboard_tab import DashboardTab
 from ui.clients_tab import ClientsTab
 from ui.contracts_tab import ContractsTab
@@ -1099,22 +1100,15 @@ class MainWindow(QMainWindow):
     def setup_tabs(self):
         """    """
 
-        # ==========   ==========
+        # ========== Определение прав доступа ==========
         position = self.employee.get('position', '')
         secondary_position = self.employee.get('secondary_position', '')
 
-        #
-        allowed_tabs = set(ROLES.get(position, {}).get('tabs', []))
-        can_edit = ROLES.get(position, {}).get('can_edit', False)
-        
-        # ==========     ==========
-        if secondary_position:
-            secondary_tabs = set(ROLES.get(secondary_position, {}).get('tabs', []))
-            allowed_tabs = allowed_tabs.union(secondary_tabs)  # 
-            
-            #       can_edit - 
-            secondary_can_edit = ROLES.get(secondary_position, {}).get('can_edit', False)
-            can_edit = can_edit or secondary_can_edit
+        # Получаем доступные вкладки из permissions (access.*) с fallback на config.py
+        allowed_tabs = get_allowed_tabs(self.employee, self.api_client)
+
+        # can_edit для CRM — определяем через permissions
+        can_edit = _has_perm(self.employee, self.api_client, 'crm_cards.update')
         # ================================================================
 
         print(f"\n  :")
@@ -1645,6 +1639,12 @@ class MainWindow(QMainWindow):
             # Останавливаем offline_manager перед выходом
             if self.offline_manager:
                 self.offline_manager.stop_monitoring()
+            # Закрываем все matplotlib figures (предотвращает crash при выходе)
+            try:
+                import matplotlib.pyplot as plt
+                plt.close('all')
+            except Exception:
+                pass
             event.accept()
         else:
             event.ignore()

@@ -33,7 +33,39 @@ def _create_main_window(qtbot, employee_data):
     mock_db = MagicMock()
     mock_da = MagicMock()
 
+    # Мок DataAccess для дашбордов — числовые значения вместо MagicMock
+    _zero_stats = {
+        'total_clients': 0, 'total_individual': 0, 'total_legal': 0,
+        'clients_by_year': 0, 'agent_clients_total': 0, 'agent_clients_by_year': 0,
+        'individual_orders': 0, 'individual_area': 0,
+        'template_orders': 0, 'template_area': 0,
+        'agent_orders_by_year': 0, 'agent_area_by_year': 0,
+        'total_orders': 0, 'total_area': 0,
+        'active_orders': 0, 'archive_orders': 0,
+        'agent_active_orders': 0, 'agent_archive_orders': 0,
+        'active_employees': 0, 'reserve_employees': 0,
+        'active_admin': 0, 'active_project': 0,
+        'active_execution': 0, 'nearest_birthday': '',
+        'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
+        'avg_salary': 0, 'employees_paid': 0, 'max_salary': 0,
+        'total_amount': 0, 'year_amount': 0, 'month_amount': 0,
+        'avg_amount': 0, 'total_count': 0, 'year_count': 0,
+        'agent_amount': 0, 'agent_count': 0,
+    }
+    mock_dashboard_da = MagicMock()
+    for m in ['get_clients_dashboard_stats', 'get_contracts_dashboard_stats',
+              'get_crm_dashboard_stats', 'get_employees_dashboard_stats',
+              'get_salaries_dashboard_stats', 'get_salaries_all_payments_stats',
+              'get_salaries_individual_stats', 'get_salaries_template_stats',
+              'get_salaries_salary_stats', 'get_salaries_supervision_stats']:
+        getattr(mock_dashboard_da, m).return_value = _zero_stats
+    mock_dashboard_da.get_contract_years.return_value = [2026]
+    mock_dashboard_da.get_agent_types.return_value = ['Прямой', 'Агент']
+
     patches = [
+        # Дашборды — числовые stats + без иконок
+        patch('ui.dashboards.DataAccess', return_value=mock_dashboard_da),
+        patch('ui.dashboard_widget.create_colored_icon', return_value=None),
         # БД и DataAccess (импортируются внутри методов)
         patch('database.db_manager.DatabaseManager', return_value=mock_db),
         patch('utils.data_access.DataAccess', return_value=mock_da),
@@ -53,21 +85,20 @@ def _create_main_window(qtbot, employee_data):
         patch('ui.main_window.DashboardTab', side_effect=_make_fake_tab),
     ]
 
+    from contextlib import ExitStack
+    stack = ExitStack()
     for p in patches:
-        p.start()
+        stack.enter_context(p)
 
-    try:
-        from ui.main_window import MainWindow
-        w = MainWindow(employee_data=employee_data, api_client=None)
-        # Отключаем closeEvent чтобы тест не блокировался на диалоге подтверждения
-        w.closeEvent = lambda e: e.accept()
-        qtbot.addWidget(w)
-        # Запускаем отложенную инициализацию вкладок
-        w._init_deferred()
-        return w
-    finally:
-        for p in patches:
-            p.stop()
+    from ui.main_window import MainWindow
+    w = MainWindow(employee_data=employee_data, api_client=None)
+    # Отключаем closeEvent чтобы тест не блокировался на диалоге подтверждения
+    w.closeEvent = lambda e: e.accept()
+    qtbot.addWidget(w)
+    # Запускаем отложенную инициализацию вкладок
+    w._init_deferred()
+    w._patch_stack = stack
+    return w
 
 
 # ========== 1. Рендеринг (6 тестов) ==========

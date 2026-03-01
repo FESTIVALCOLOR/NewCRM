@@ -22,7 +22,7 @@ from utils.dialog_helpers import create_progress_dialog
 from utils.data_access import DataAccess
 from utils.button_debounce import debounce_click
 from ui.base_kanban_tab import BaseDraggableList, BaseKanbanColumn
-from ui.crm_tab import _has_perm
+from utils.permissions import _has_perm
 import os
 import threading
 
@@ -91,10 +91,8 @@ class CRMSupervisionTab(QWidget):
             print(f"[WARNING] Не удалось инициализировать Yandex Disk: {e}")
             self.yandex_disk = None
 
-        # Учитываем secondary_position для роли ДАН
-        _pos = employee.get('position', '') if employee else ''
-        _sec = employee.get('secondary_position', '') if employee else ''
-        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
+        # Определяем права через permissions вместо хардкода роли
+        self.is_dan_role = not _has_perm(employee, api_client, 'supervision.move')
 
         self._data_loaded = False
         self._loading_guard = False
@@ -1196,9 +1194,7 @@ class SupervisionColumn(BaseKanbanColumn):
         self.employee = employee
         self.db = db
         self.api_client = api_client
-        _pos = employee.get('position', '') if employee else ''
-        _sec = employee.get('secondary_position', '') if employee else ''
-        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
+        self.is_dan_role = not _has_perm(employee, api_client, 'supervision.move')
         self._original_min_width = 340
         self._original_max_width = 360
         self._board_name = "crm_supervision"
@@ -1299,9 +1295,7 @@ class SupervisionCard(QFrame):
         self.db = db
         self.api_client = api_client
         self.data = DataAccess(api_client=api_client)
-        _pos = employee.get('position', '') if employee else ''
-        _sec = employee.get('secondary_position', '') if employee else ''
-        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
+        self.is_dan_role = not _has_perm(employee, api_client, 'supervision.move')
         self.init_ui()
 
     def init_ui(self):

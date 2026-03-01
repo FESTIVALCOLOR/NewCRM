@@ -46,8 +46,8 @@ class AdminDialog(QDialog):
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setMinimumSize(1050, 700)
-        self.setMaximumSize(1250, 850)
+        self.setMinimumSize(1250, 750)
+        self.setMaximumSize(1500, 900)
 
         self._init_ui()
 

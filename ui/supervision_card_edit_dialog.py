@@ -19,7 +19,7 @@ from utils.yandex_disk import YandexDiskManager
 from config import YANDEX_DISK_TOKEN
 from utils.dialog_helpers import create_progress_dialog
 from utils.data_access import DataAccess
-from ui.crm_tab import _has_perm
+from utils.permissions import _has_perm
 import os
 import threading
 
@@ -40,9 +40,7 @@ class SupervisionCardEditDialog(QDialog):
         self.data = getattr(parent, 'data', DataAccess(api_client=api_client))
         self.db = self.data.db
         self.api_client = self.data.api_client
-        _pos = employee.get('position', '') if employee else ''
-        _sec = employee.get('secondary_position', '') if employee else ''
-        self.is_dan_role = (_pos == 'ДАН' or _sec == 'ДАН')
+        self.is_dan_role = not _has_perm(employee, api_client, 'supervision.move')
 
         # Инициализация Yandex Disk
         try:

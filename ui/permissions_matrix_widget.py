@@ -20,31 +20,44 @@ from utils.data_access import DataAccess
 # =========================
 
 # S-12: Синхронизировано с server/permissions.py PERMISSION_NAMES
+# Агенты и Города убраны из матрицы — доступ только у суперпользователей
 PERMISSION_GROUPS = {
+    'Доступ к страницам': [
+        'access.clients', 'access.contracts', 'access.crm', 'access.supervision',
+        'access.reports', 'access.employees', 'access.salaries',
+        'access.employee_reports', 'access.admin',
+    ],
     'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
-    'Клиенты': ['clients.delete'],
-    'Договоры': ['contracts.update', 'contracts.delete'],
+    'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
+    'Договоры': ['contracts.create', 'contracts.view', 'contracts.update', 'contracts.delete'],
     'CRM': [
         'crm_cards.update', 'crm_cards.move', 'crm_cards.delete',
-        'crm_cards.assign_executor', 'crm_cards.delete_executor',
-        'crm_cards.reset_stages', 'crm_cards.reset_approval',
+        'crm_cards.assign_executor', 'crm_cards.reset_approval',
         'crm_cards.complete_approval', 'crm_cards.reset_designer',
         'crm_cards.reset_draftsman',
+        'crm_cards.files_upload', 'crm_cards.files_delete',
+        'crm_cards.deadlines', 'crm_cards.payments',
     ],
     'Надзор': [
         'supervision.update', 'supervision.move', 'supervision.pause_resume',
-        'supervision.reset_stages', 'supervision.complete_stage',
-        'supervision.delete_order',
+        'supervision.complete_stage', 'supervision.delete_order',
+        'supervision.assign_executor',
+        'supervision.files_upload', 'supervision.files_delete',
+        'supervision.deadlines', 'supervision.payments',
     ],
     'Платежи': ['payments.create', 'payments.update', 'payments.delete'],
-    'Зарплаты': ['salaries.create', 'salaries.update', 'salaries.delete'],
-    'Ставки': ['rates.create', 'rates.delete'],
-    'Агенты': ['agents.create', 'agents.update', 'agents.delete'],
-    'Города': ['cities.create', 'cities.delete'],
-    'Мессенджер': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat'],
+    'Зарплаты': [
+        'salaries.create', 'salaries.update', 'salaries.delete',
+        'salaries.mark_to_pay', 'salaries.mark_paid',
+    ],
+    'Тарифы': ['rates.create', 'rates.delete'],
+    'Мессенджер': [
+        'messenger.create_chat', 'messenger.delete_chat',
+        'messenger.view_chat', 'messenger.manage_scripts',
+    ],
 }
 
-# Роли — столбцы таблицы
+# Роли — столбцы таблицы (9 ролей)
 ROLES = [
     'Руководитель студии',
     'Старший менеджер проектов',
@@ -52,93 +65,163 @@ ROLES = [
     'ГАП',
     'Менеджер',
     'ДАН',
+    'Дизайнер',
+    'Чертёжник',
+    'Замерщик',
 ]
 
 # =========================
 # Дефолтные права по ролям
 # =========================
 
+# Наборы прав для повторного использования
+_ACCESS_ALL = {
+    "access.clients", "access.contracts", "access.crm", "access.supervision",
+    "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.admin",
+}
+_ACCESS_MANAGER = {
+    "access.clients", "access.contracts", "access.crm", "access.supervision",
+    "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+}
+_BASE_MANAGER = {
+    # Клиенты CRUD
+    "clients.create", "clients.view", "clients.update", "clients.delete",
+    # Договоры CRUD
+    "contracts.create", "contracts.view", "contracts.update", "contracts.delete",
+    # CRM
+    "crm_cards.update", "crm_cards.move", "crm_cards.delete",
+    "crm_cards.assign_executor", "crm_cards.reset_approval", "crm_cards.complete_approval",
+    "crm_cards.files_upload", "crm_cards.files_delete",
+    "crm_cards.deadlines", "crm_cards.payments",
+    # Надзор
+    "supervision.update", "supervision.move", "supervision.pause_resume",
+    "supervision.complete_stage", "supervision.delete_order",
+    "supervision.assign_executor", "supervision.files_upload", "supervision.files_delete",
+    "supervision.deadlines", "supervision.payments",
+    # Платежи
+    "payments.create", "payments.update", "payments.delete",
+    # Зарплаты
+    "salaries.create", "salaries.update",
+    "salaries.mark_to_pay", "salaries.mark_paid",
+    # Тарифы
+    "rates.create", "rates.delete",
+    # Мессенджер
+    "messenger.create_chat", "messenger.delete_chat", "messenger.view_chat",
+}
+
 DEFAULT_ROLE_PERMISSIONS = {
-    "Руководитель студии": {
+    "Руководитель студии": _ACCESS_ALL | _BASE_MANAGER | {
         "employees.create", "employees.update", "employees.delete",
-        "clients.delete", "contracts.update", "contracts.delete",
-        "crm_cards.update", "crm_cards.move", "crm_cards.delete",
-        "crm_cards.assign_executor", "crm_cards.delete_executor",
-        "crm_cards.reset_stages", "crm_cards.reset_approval",
-        "crm_cards.complete_approval", "crm_cards.reset_designer",
-        "crm_cards.reset_draftsman",
-        "supervision.update", "supervision.move", "supervision.pause_resume",
-        "supervision.reset_stages", "supervision.complete_stage",
-        "supervision.delete_order",
-        "payments.create", "payments.update", "payments.delete",
-        "salaries.create", "salaries.update", "salaries.delete",
-        "rates.create", "rates.delete",
-        "agents.create", "agents.update", "agents.delete",
-        "cities.create", "cities.delete",
-        "messenger.create_chat", "messenger.delete_chat", "messenger.view_chat",
+        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "salaries.delete",
+        "messenger.manage_scripts",
     },
-    "Старший менеджер проектов": {
+    "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
         "employees.update",
-        "clients.delete", "contracts.update", "contracts.delete",
-        "crm_cards.update", "crm_cards.move", "crm_cards.delete",
-        "crm_cards.assign_executor", "crm_cards.delete_executor",
-        "crm_cards.reset_stages", "crm_cards.reset_approval",
-        "crm_cards.complete_approval", "crm_cards.reset_designer",
-        "crm_cards.reset_draftsman",
-        "supervision.update", "supervision.move", "supervision.pause_resume",
-        "supervision.reset_stages", "supervision.complete_stage",
-        "supervision.delete_order",
-        "payments.create", "payments.update", "payments.delete",
-        "salaries.create", "salaries.update",
-        "rates.create", "rates.delete",
-        "agents.create", "agents.update", "agents.delete",
-        "cities.create", "cities.delete",
-        "messenger.create_chat", "messenger.delete_chat", "messenger.view_chat",
+        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
     },
-    "СДП": {"crm_cards.reset_designer", "crm_cards.reset_draftsman", "messenger.view_chat"},
-    "ГАП": {"crm_cards.reset_designer", "crm_cards.reset_draftsman", "messenger.view_chat"},
-    "Менеджер": {"crm_cards.reset_designer", "crm_cards.reset_draftsman"},
-    "ДАН": {"supervision.complete_stage", "messenger.view_chat"},
+    "СДП": {
+        "access.crm", "access.reports", "access.employees",
+        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "messenger.view_chat",
+    },
+    "ГАП": {
+        "access.crm", "access.reports", "access.employees",
+        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "messenger.view_chat",
+    },
+    "Менеджер": {
+        "access.crm", "access.supervision", "access.reports", "access.employees",
+        "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+    },
+    "ДАН": {
+        "access.supervision",
+        "supervision.complete_stage",
+        "supervision.files_upload",
+        "messenger.view_chat",
+    },
+    "Дизайнер": {
+        "access.crm",
+        "crm_cards.files_upload",
+    },
+    "Чертёжник": {
+        "access.crm",
+        "crm_cards.files_upload",
+    },
+    "Замерщик": {
+        "access.crm",
+    },
 }
 
 # Русские описания прав (fallback, если API недоступен)
 PERMISSION_DESCRIPTIONS = {
+    # Доступ к страницам
+    "access.clients": "Доступ к странице Клиенты",
+    "access.contracts": "Доступ к странице Договора",
+    "access.crm": "Доступ к странице СРМ",
+    "access.supervision": "Доступ к странице СРМ надзора",
+    "access.reports": "Доступ к Отчетам и Статистике",
+    "access.employees": "Доступ к странице Сотрудники",
+    "access.salaries": "Доступ к странице Зарплаты",
+    "access.employee_reports": "Доступ к Отчетам по сотрудникам",
+    "access.admin": "Доступ к администрированию",
+    # Сотрудники
     "employees.create": "Создание сотрудников",
     "employees.update": "Редактирование сотрудников",
     "employees.delete": "Удаление сотрудников",
+    # Клиенты
+    "clients.create": "Создание клиентов",
+    "clients.view": "Просмотр клиентов",
+    "clients.update": "Редактирование клиентов",
     "clients.delete": "Удаление клиентов",
+    # Договоры
+    "contracts.create": "Создание договоров",
+    "contracts.view": "Просмотр договоров",
     "contracts.update": "Редактирование договоров",
     "contracts.delete": "Удаление договоров",
+    # CRM
     "crm_cards.update": "Редактирование CRM карточек",
     "crm_cards.move": "Перемещение CRM карточек",
     "crm_cards.delete": "Удаление CRM карточек",
-    "crm_cards.assign_executor": "Назначение исполнителей",
-    "crm_cards.delete_executor": "Удаление исполнителей",
-    "crm_cards.reset_stages": "Сброс стадий CRM",
+    "crm_cards.assign_executor": "Назначение/переназначение исполнителей",
     "crm_cards.reset_approval": "Сброс согласования",
     "crm_cards.complete_approval": "Завершение согласования",
     "crm_cards.reset_designer": "Сброс отметки дизайнера",
     "crm_cards.reset_draftsman": "Сброс отметки чертежника",
+    "crm_cards.files_upload": "Загрузка файлов в CRM",
+    "crm_cards.files_delete": "Удаление файлов в CRM",
+    "crm_cards.deadlines": "Управление дедлайнами CRM",
+    "crm_cards.payments": "Оплаты в CRM карточках",
+    # Надзор
     "supervision.update": "Редактирование карточек надзора",
     "supervision.move": "Перемещение карточек надзора",
     "supervision.pause_resume": "Приостановка/возобновление надзора",
-    "supervision.reset_stages": "Сброс стадий надзора",
     "supervision.complete_stage": "Завершение стадии надзора",
     "supervision.delete_order": "Удаление заказа надзора",
+    "supervision.assign_executor": "Назначение исполнителей надзора",
+    "supervision.files_upload": "Загрузка файлов в надзоре",
+    "supervision.files_delete": "Удаление файлов в надзоре",
+    "supervision.deadlines": "Управление дедлайнами надзора",
+    "supervision.payments": "Оплаты в карточках надзора",
+    # Платежи
     "payments.create": "Создание платежей",
     "payments.update": "Редактирование платежей",
     "payments.delete": "Удаление платежей",
+    # Зарплаты
     "salaries.create": "Создание зарплат",
     "salaries.update": "Редактирование зарплат",
     "salaries.delete": "Удаление зарплат",
-    "agents.create": "Создание агентов",
-    "agents.update": "Редактирование агентов",
-    "agents.delete": "Удаление агентов",
-    "cities.create": "Создание городов",
-    "cities.delete": "Удаление городов",
+    "salaries.mark_to_pay": "Пометка к оплате",
+    "salaries.mark_paid": "Пометка оплачено",
+    # Тарифы
+    "rates.create": "Создание/редактирование тарифов",
+    "rates.delete": "Удаление тарифов",
+    # Мессенджер
     "messenger.create_chat": "Создание чатов",
     "messenger.delete_chat": "Удаление чатов",
     "messenger.view_chat": "Просмотр/открытие чатов",
+    "messenger.manage_scripts": "Управление скриптами мессенджера",
 }
 
 

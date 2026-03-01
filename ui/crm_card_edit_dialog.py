@@ -32,11 +32,11 @@ import json
 import os
 import threading
 
-# Импорт helper-функций из crm_tab
+# Импорт helper-функций прав доступа
 # ПРИМЕЧАНИЕ: CRMTab, TechTaskDialog, MeasurementDialog, ReassignExecutorDialog,
 # PreviewLoaderThread импортируются lazy (внутри методов) для избежания циклических импортов
-from ui.crm_tab import (_emp_has_pos, _emp_only_pos, _has_perm,
-                         _load_user_permissions)
+from utils.permissions import (_emp_has_pos, _emp_only_pos, _has_perm,
+                               _load_user_permissions)
 
 
 class CardEditDialog(QDialog):
@@ -263,18 +263,11 @@ class CardEditDialog(QDialog):
             }
         """)
 
-        # === ПРОВЕРКА ПРАВ ДОСТУПА ===
-        # Исполнители (только Дизайнер, Чертёжник, Замерщик без второй роли) не видят вкладку "Исполнители и дедлайн"
-        is_executor = _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник', 'Замерщик')
-
-        # СДП/ГАП имеют ограниченный доступ (просмотр + редактирование тегов и дедлайнов исполнителей)
-        is_sdp_or_gap = _emp_has_pos(self.employee, 'СДП', 'ГАП')
-
-        # Полный доступ: Руководитель, Старший менеджер, Менеджер
-        has_full_access = _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
-
-        # Административный доступ: только Руководитель и Старший менеджер (для редактирования полей команды)
-        has_admin_access = _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов')
+        # === ПРОВЕРКА ПРАВ ДОСТУПА (через permissions) ===
+        is_executor = not _has_perm(self.employee, self.api_client, 'crm_cards.move')
+        has_full_access = _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor')
+        has_admin_access = _has_perm(self.employee, self.api_client, 'employees.update')
+        is_sdp_or_gap = not has_full_access and not is_executor
 
         # === ВКЛАДКА 1: ИСПОЛНИТЕЛИ И ДЕДЛАЙН (для всех кроме исполнителей) ===
         if not is_executor:
@@ -957,7 +950,7 @@ class CardEditDialog(QDialog):
             self.project_info_tab_index = -1
 
         self.payments_tab_index = -1
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.payments'):
             self._payments_placeholder = QWidget()
             self.payments_tab_index = self.tabs.addTab(self._payments_placeholder, 'Оплаты')
 
@@ -978,7 +971,7 @@ class CardEditDialog(QDialog):
         if not self.view_only:
             buttons_layout = QHBoxLayout()
 
-            if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.delete'):
                 delete_btn = IconLoader.create_icon_button('delete', 'Удалить заказ', 'Полностью удалить заказ', icon_size=12)
                 delete_btn.setStyleSheet("""
                     QPushButton {
@@ -3208,8 +3201,8 @@ class CardEditDialog(QDialog):
         link_label.setWordWrap(True)
         row.addWidget(link_label, 1)
 
-        # Кнопка удаления (только для Руководителя, Старшего менеджера и Менеджера)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка удаления этапа
+        if _has_perm(self.employee, self.api_client, 'crm_cards.update'):
             delete_btn = QPushButton('X')
             delete_btn.setStyleSheet("""
                 QPushButton {
@@ -3964,8 +3957,8 @@ class CardEditDialog(QDialog):
         self.project_data_tz_file_label.setProperty('class', 'ellipsis-label')
         tz_file_row.addWidget(self.project_data_tz_file_label, 1)
 
-        # Кнопка загрузки ТЗ (только для Руководителя, Старшего менеджера и Менеджера)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка загрузки ТЗ
+        if _has_perm(self.employee, self.api_client, 'crm_cards.files_upload'):
             self.upload_tz_btn = QPushButton('Загрузить файлы')
             self.upload_tz_btn.setStyleSheet("""
                 QPushButton {
@@ -3984,8 +3977,8 @@ class CardEditDialog(QDialog):
             self.upload_tz_btn.clicked.connect(self.upload_project_tech_task_file)
             tz_file_row.addWidget(self.upload_tz_btn)
 
-        # Кнопка удаления ТЗ (как в договорах)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка удаления ТЗ
+        if _has_perm(self.employee, self.api_client, 'crm_cards.files_delete'):
             delete_tz_btn = IconLoader.create_icon_button('delete', '', 'Удалить файл ТЗ', icon_size=14)
             delete_tz_btn.setFixedSize(28, 28)
             delete_tz_btn.setStyleSheet("""
@@ -4029,8 +4022,8 @@ class CardEditDialog(QDialog):
         self.project_data_tz_date_label.setFixedHeight(28)  # Фиксированная высота для выравнивания
         tz_date_row.addWidget(self.project_data_tz_date_label, 1)
 
-        # Кнопка изменения даты ТЗ (ширина = "Загрузить файлы" + пробел + "X" = 120+8+28 = 156px)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка изменения даты ТЗ
+        if _has_perm(self.employee, self.api_client, 'crm_cards.deadlines'):
             edit_tz_date_btn = QPushButton('Изменить дату')
             edit_tz_date_btn.setStyleSheet("""
                 QPushButton {
@@ -4113,8 +4106,8 @@ class CardEditDialog(QDialog):
         self.project_data_survey_file_label.setProperty('class', 'ellipsis-label')
         survey_file_row.addWidget(self.project_data_survey_file_label, 1)
 
-        # Кнопка загрузки замера (только для Руководителя, Старшего менеджера и Менеджера)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка загрузки замера
+        if _has_perm(self.employee, self.api_client, 'crm_cards.files_upload'):
             self.upload_survey_btn = QPushButton('Загрузить файлы')
             self.upload_survey_btn.setStyleSheet("""
                 QPushButton {
@@ -4133,8 +4126,8 @@ class CardEditDialog(QDialog):
             self.upload_survey_btn.clicked.connect(self.add_measurement)
             survey_file_row.addWidget(self.upload_survey_btn)
 
-        # Кнопка удаления замера (как в договорах)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка удаления замера
+        if _has_perm(self.employee, self.api_client, 'crm_cards.files_delete'):
             delete_survey_btn = IconLoader.create_icon_button('delete', '', 'Удалить изображение замера', icon_size=14)
             delete_survey_btn.setFixedSize(28, 28)
             delete_survey_btn.setStyleSheet("""
@@ -4178,8 +4171,8 @@ class CardEditDialog(QDialog):
         self.project_data_survey_date_label.setFixedHeight(28)  # Фиксированная высота для выравнивания
         survey_date_row.addWidget(self.project_data_survey_date_label, 1)
 
-        # Кнопка изменения даты замера (ширина = 156px как сумма кнопок выше)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка изменения даты замера
+        if _has_perm(self.employee, self.api_client, 'crm_cards.deadlines'):
             edit_survey_date_btn = QPushButton('Изменить дату')
             edit_survey_date_btn.setStyleSheet("""
                 QPushButton {
@@ -4263,8 +4256,8 @@ class CardEditDialog(QDialog):
             templates_scroll.setMaximumHeight(150)
             references_layout.addWidget(templates_scroll)
 
-            # Кнопка добавления шаблонов (только для Руководителя, Старшего менеджера и Менеджера)
-            if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+            # Кнопка добавления шаблонов
+            if _has_perm(self.employee, self.api_client, 'crm_cards.files_upload'):
                 add_template_btn = QPushButton('Загрузить шаблоны')
                 # ИСПРАВЛЕНИЕ 07.02.2026: Стандартная высота 28px (#11,12)
                 add_template_btn.setStyleSheet("""
@@ -4323,7 +4316,7 @@ class CardEditDialog(QDialog):
             ref_folder_row.addWidget(self.project_data_references_label, 1)
 
             # Кнопка загрузки референсов
-            if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.files_upload'):
                 self.upload_references_btn = QPushButton('Загрузить файлы')
                 self.upload_references_btn.setStyleSheet("""
                     QPushButton {
@@ -4342,8 +4335,8 @@ class CardEditDialog(QDialog):
                 self.upload_references_btn.clicked.connect(self.upload_references_files)
                 ref_folder_row.addWidget(self.upload_references_btn)
 
-            # Кнопка удаления референсов (как в договорах)
-            if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+            # Кнопка удаления референсов
+            if _has_perm(self.employee, self.api_client, 'crm_cards.files_delete'):
                 delete_references_btn = IconLoader.create_icon_button('delete', '', 'Удалить все референсы', icon_size=14)
                 delete_references_btn.setFixedSize(28, 28)
                 delete_references_btn.setStyleSheet("""
@@ -4423,7 +4416,7 @@ class CardEditDialog(QDialog):
         photo_doc_folder_row.addWidget(self.project_data_photo_doc_label, 1)
 
         # Кнопка загрузки фотофиксации
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.files_upload'):
             self.upload_photo_doc_btn = QPushButton('Загрузить файлы')
             self.upload_photo_doc_btn.setStyleSheet("""
                 QPushButton {
@@ -4442,8 +4435,8 @@ class CardEditDialog(QDialog):
             self.upload_photo_doc_btn.clicked.connect(self.upload_photo_documentation_files)
             photo_doc_folder_row.addWidget(self.upload_photo_doc_btn)
 
-        # Кнопка удаления фотофиксации (как в договорах)
-        if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер'):
+        # Кнопка удаления фотофиксации
+        if _has_perm(self.employee, self.api_client, 'crm_cards.files_delete'):
             delete_photo_doc_btn = IconLoader.create_icon_button('delete', '', 'Удалить все файлы фотофиксации', icon_size=14)
             delete_photo_doc_btn.setFixedSize(28, 28)
             delete_photo_doc_btn.setStyleSheet("""
@@ -4514,13 +4507,12 @@ class CardEditDialog(QDialog):
 
         stage1_layout = QVBoxLayout()
 
-        # Стадия 1 - могут удалять и загружать все кроме чистого дизайнера (без совмещения с чертёжником)
+        # Стадия 1 — права на загрузку/удаление файлов через permissions
         emp_pos = self.employee.get('position', '') if self.employee else ''
         emp_sec = self.employee.get('secondary_position', '') if self.employee else ''
-        is_only_designer = (emp_pos == 'Дизайнер' and emp_sec != 'Чертёжник')
         is_only_draftsman = (emp_pos == 'Чертёжник' and emp_sec != 'Дизайнер')
-        can_delete_stage1 = not is_only_designer
-        can_upload_stage1 = not is_only_designer
+        can_delete_stage1 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
+        can_upload_stage1 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
         self.stage1_list = FileListWidget(
             title="PDF файлы планировочного решения",
@@ -4563,9 +4555,9 @@ class CardEditDialog(QDialog):
 
             stage2_layout = QVBoxLayout()
 
-            # Стадия 2 (шаблонные) - могут удалять и загружать все кроме чистого дизайнера
-            can_delete_stage2 = not is_only_designer
-            can_upload_stage2 = not is_only_designer
+            # Стадия 2 (шаблонные) — через permissions
+            can_delete_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
+            can_upload_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
             self.stage3_list = FileListWidget(  # используем stage3_list для совместимости с БД
                 title="PDF и Excel файлы чертежного проекта",
@@ -4706,9 +4698,9 @@ class CardEditDialog(QDialog):
 
             stage3_layout = QVBoxLayout()
 
-            # Стадия 3 (индивидуальные) - могут удалять и загружать все кроме чистого дизайнера
-            can_delete_stage3 = not is_only_designer
-            can_upload_stage3 = not is_only_designer
+            # Стадия 3 (индивидуальные) — через permissions
+            can_delete_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
+            can_upload_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
             self.stage3_list = FileListWidget(
                 title="PDF и Excel файлы чертежного проекта",
@@ -6987,7 +6979,7 @@ class CardEditDialog(QDialog):
                 table.setCellWidget(row, 7, month_label)
 
                 # Кнопки действий (столбец 8)
-                if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов'):
+                if _has_perm(self.employee, self.api_client, 'crm_cards.payments'):
                     actions_widget = QWidget()
                     actions_widget.setStyleSheet(f"background-color: {row_color.name()}; border-radius: 2px;")
                     actions_layout = QHBoxLayout()

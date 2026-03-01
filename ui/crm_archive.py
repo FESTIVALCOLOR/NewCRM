@@ -698,8 +698,8 @@ class ArchiveCardDetailsDialog(QDialog):
             contract_status = self.card_data.get('status', '')
 
             # Проверяем права доступа к вкладке оплаты
-            from ui.crm_tab import _emp_has_pos
-            can_view_payments = _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
+            from utils.permissions import _has_perm
+            can_view_payments = _has_perm(self.employee, self.api_client, 'crm_cards.payments')
 
             # Определяем тип оплат и название вкладки
             show_payments_tab = False
@@ -984,7 +984,8 @@ class ArchiveCardDetailsDialog(QDialog):
             project_data_layout.addWidget(project_data_header)
 
             # Определяем права доступа
-            can_edit_project_data = _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер')
+            from utils.permissions import _has_perm
+            can_edit_project_data = _has_perm(self.employee, self.api_client, 'crm_cards.update')
 
             # Информационное сообщение о правах
             if not can_edit_project_data:

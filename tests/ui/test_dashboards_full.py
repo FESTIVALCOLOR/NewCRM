@@ -44,6 +44,7 @@ def mock_da():
 
 PATCHES_BASE = {
     'ui.dashboard_widget.DataAccess': None,
+    'ui.dashboard_widget.create_colored_icon': lambda *a, **k: None,
     'ui.dashboard_widget.resource_path': lambda p: p,
     'ui.dashboard_widget.os.path.exists': lambda p: False,
 }
@@ -64,7 +65,8 @@ class TestCreateColoredIcon:
 
     def test_file_not_found(self):
         with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.os.path.exists', return_value=False), \
+             patch('builtins.print'):
             from ui.dashboard_widget import create_colored_icon
             result = create_colored_icon('icon.svg', '#FF0000')
             assert result is None
@@ -126,8 +128,7 @@ class TestFilterButton:
     """Тесты FilterButton"""
 
     def test_creation(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import FilterButton
             btn = FilterButton('year', [2024, 2025, 2026], border_color='#F57C00')
             qtbot.addWidget(btn)
@@ -136,8 +137,7 @@ class TestFilterButton:
             assert btn.current_value is None
 
     def test_select_option_emits_signal(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import FilterButton
             btn = FilterButton('agent', ['Прямой', 'Агент'], border_color='#F57C00')
             qtbot.addWidget(btn)
@@ -148,8 +148,7 @@ class TestFilterButton:
             assert 'Агент' in signals
 
     def test_get_value(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import FilterButton
             btn = FilterButton('month', ['01', '02'], border_color='#F57C00')
             qtbot.addWidget(btn)
@@ -158,8 +157,7 @@ class TestFilterButton:
             assert btn.get_value() == '02'
 
     def test_set_options_updates_menu(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import FilterButton
             btn = FilterButton('year', [2024], border_color='#F57C00')
             qtbot.addWidget(btn)
@@ -167,8 +165,7 @@ class TestFilterButton:
             assert btn.options == [2025, 2026]
 
     def test_get_filter_name(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import FilterButton
             btn = FilterButton('agent', ['A'], border_color='#F57C00')
             qtbot.addWidget(btn)
@@ -188,8 +185,7 @@ class TestMetricCard:
     """Тесты MetricCard"""
 
     def test_creation(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='test_card', title='Тест', value='42',
@@ -201,8 +197,7 @@ class TestMetricCard:
             assert card.value_label.text() == '42'
 
     def test_update_value(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='vc', title='T', value='0',
@@ -213,8 +208,7 @@ class TestMetricCard:
             assert card.value_label.text() == '99'
 
     def test_with_filters(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='fc', title='T', value='0',
@@ -225,8 +219,7 @@ class TestMetricCard:
             assert 'year' in card.filter_buttons
 
     def test_connect_filter(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='cf', title='T', value='0',
@@ -240,8 +233,7 @@ class TestMetricCard:
             assert 'A' in calls
 
     def test_get_filter_value(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='gfv', title='T', value='0',
@@ -254,8 +246,7 @@ class TestMetricCard:
             assert card.get_filter_value('year') == 2024
 
     def test_no_filters(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='nf', title='T', value='0',
@@ -266,8 +257,7 @@ class TestMetricCard:
             assert card.get_filter_value('year') is None
 
     def test_update_filter_label_shows_label(self, qtbot):
-        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboard_widget import MetricCard
             card = MetricCard(
                 object_name='ufl', title='T', value='0',
@@ -294,8 +284,7 @@ class TestDashboardWidget:
 
     def test_add_metric_card(self, qtbot):
         with patch('ui.dashboard_widget.DataAccess') as MockDA, \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             MockDA.return_value = MagicMock()
             from ui.dashboard_widget import DashboardWidget
             dw = DashboardWidget(db_manager=MagicMock())
@@ -306,8 +295,7 @@ class TestDashboardWidget:
 
     def test_update_metric(self, qtbot):
         with patch('ui.dashboard_widget.DataAccess') as MockDA, \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             MockDA.return_value = MagicMock()
             from ui.dashboard_widget import DashboardWidget
             dw = DashboardWidget(db_manager=MagicMock())
@@ -326,8 +314,7 @@ class TestDashboardWidget:
 
     def test_get_metric_card(self, qtbot):
         with patch('ui.dashboard_widget.DataAccess') as MockDA, \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             MockDA.return_value = MagicMock()
             from ui.dashboard_widget import DashboardWidget
             dw = DashboardWidget(db_manager=MagicMock())
@@ -413,8 +400,7 @@ class TestClientsDashboard:
     def test_creation(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -426,8 +412,7 @@ class TestClientsDashboard:
     def test_load_data(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -441,8 +426,7 @@ class TestClientsDashboard:
         mock_da2.get_contract_years.return_value = [2026]
         with patch('ui.dashboards.DataAccess', return_value=mock_da2), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da2), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -454,8 +438,7 @@ class TestClientsDashboard:
         mock_da2.get_contract_years.return_value = [2026]
         with patch('ui.dashboards.DataAccess', return_value=mock_da2), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da2), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -464,8 +447,7 @@ class TestClientsDashboard:
     def test_on_clients_by_year_changed(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -475,8 +457,7 @@ class TestClientsDashboard:
     def test_on_agent_clients_total_changed(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -490,8 +471,7 @@ class TestClientsDashboard:
         mock_da2.get_clients_dashboard_stats.side_effect = Exception('db error')
         with patch('ui.dashboards.DataAccess', return_value=mock_da2), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da2), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ClientsDashboard
             d = ClientsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -504,8 +484,7 @@ class TestContractsDashboard:
     def test_creation(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ContractsDashboard
             d = ContractsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -515,8 +494,7 @@ class TestContractsDashboard:
     def test_load_data(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ContractsDashboard
             d = ContractsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -526,8 +504,7 @@ class TestContractsDashboard:
     def test_on_year_changed(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ContractsDashboard
             d = ContractsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -537,8 +514,7 @@ class TestContractsDashboard:
     def test_on_agent_changed(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import ContractsDashboard
             d = ContractsDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -553,8 +529,7 @@ class TestCRMDashboard:
     def test_creation_per_type(self, qtbot, mock_da, project_type):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import CRMDashboard
             d = CRMDashboard(db_manager=MagicMock(), project_type=project_type)
             qtbot.addWidget(d)
@@ -564,8 +539,7 @@ class TestCRMDashboard:
     def test_load_data(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import CRMDashboard
             d = CRMDashboard(db_manager=MagicMock(), project_type='Индивидуальный')
             qtbot.addWidget(d)
@@ -575,8 +549,7 @@ class TestCRMDashboard:
     def test_on_agent_active_changed(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import CRMDashboard
             d = CRMDashboard(db_manager=MagicMock(), project_type='Индивидуальный')
             qtbot.addWidget(d)
@@ -586,8 +559,7 @@ class TestCRMDashboard:
     def test_on_agent_archive_changed(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import CRMDashboard
             d = CRMDashboard(db_manager=MagicMock(), project_type='Шаблонный')
             qtbot.addWidget(d)
@@ -601,8 +573,7 @@ class TestEmployeesDashboard:
     def test_creation(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import EmployeesDashboard
             d = EmployeesDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -611,8 +582,7 @@ class TestEmployeesDashboard:
     def test_load_data(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import EmployeesDashboard
             d = EmployeesDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -629,8 +599,7 @@ class TestEmployeesDashboard:
         }
         with patch('ui.dashboards.DataAccess', return_value=mock_da2), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da2), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import EmployeesDashboard
             d = EmployeesDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -648,8 +617,7 @@ class TestEmployeesDashboard:
         }
         with patch('ui.dashboards.DataAccess', return_value=mock_da2), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da2), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import EmployeesDashboard
             d = EmployeesDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -664,8 +632,7 @@ class TestSalariesDashboard:
     def test_creation(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import SalariesDashboard
             d = SalariesDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)
@@ -674,8 +641,7 @@ class TestSalariesDashboard:
     def test_load_data(self, qtbot, mock_da):
         with patch('ui.dashboards.DataAccess', return_value=mock_da), \
              patch('ui.dashboard_widget.DataAccess', return_value=mock_da), \
-             patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
-             patch('ui.dashboard_widget.os.path.exists', return_value=False):
+             patch('ui.dashboard_widget.create_colored_icon', return_value=None):
             from ui.dashboards import SalariesDashboard
             d = SalariesDashboard(db_manager=MagicMock())
             qtbot.addWidget(d)

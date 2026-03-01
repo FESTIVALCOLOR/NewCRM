@@ -26,13 +26,10 @@ class EmployeesTab(QWidget):
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
 
-        # ========== ОПРЕДЕЛЯЕМ ПРАВА ==========
-        _pos = employee.get('position', '')
-        _sec = employee.get('secondary_position', '')
-        self.can_edit = _pos in ['Руководитель студии', 'Старший менеджер проектов'] or \
-                        _sec in ['Руководитель студии', 'Старший менеджер проектов']
-        # Удаление доступно только Руководителю студии
-        self.can_delete = _pos == 'Руководитель студии' or _sec == 'Руководитель студии'
+        # ========== ОПРЕДЕЛЯЕМ ПРАВА (через permissions) ==========
+        from utils.permissions import _has_perm
+        self.can_edit = _has_perm(employee, api_client, 'employees.update')
+        self.can_delete = _has_perm(employee, api_client, 'employees.delete')
         # ======================================
 
         self._data_loaded = False
@@ -794,11 +791,10 @@ class EmployeeDialog(QDialog):
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
         
-        # Кнопка "Администрирование" (только для Руководителя студии / admin / director)
+        # Кнопка "Администрирование" — по праву access.admin
         if not self.view_only:
-            current_role = self.current_user.get('role', '') if isinstance(self.current_user, dict) else getattr(self.current_user, 'role', '')
-            current_pos = self.current_user.get('position', '') if isinstance(self.current_user, dict) else getattr(self.current_user, 'position', '')
-            if current_role in ('admin', 'director') or current_pos == 'Руководитель студии':
+            from utils.permissions import _has_perm
+            if _has_perm(self.current_user, self.api_client, 'access.admin'):
                 admin_btn = QPushButton('Администрирование')
                 admin_btn.setStyleSheet("""
                     QPushButton {

@@ -24,7 +24,7 @@ import json
 import os
 import threading
 from utils.button_debounce import debounce_click
-from ui.crm_tab import _has_perm
+from utils.permissions import _has_perm
 
 # ========== ИМПОРТ ДИАЛОГОВ (вынесены в contract_dialogs.py) ==========
 from ui.contract_dialogs import (

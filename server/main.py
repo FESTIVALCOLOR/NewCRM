@@ -270,6 +270,15 @@ async def global_search(
     results = []
     types_filter = entity_types.split(",") if entity_types else ["clients", "contracts", "crm_cards"]
 
+    # Фильтрация типов по access.* правам пользователя
+    from permissions import check_permission
+    access_map = {
+        "clients": "access.clients",
+        "contracts": "access.contracts",
+        "crm_cards": "access.crm",
+    }
+    types_filter = [t for t in types_filter if check_permission(current_user, access_map.get(t, ""), db)]
+
     # Поиск по клиентам
     if "clients" in types_filter:
         from database import Client as ClientModel

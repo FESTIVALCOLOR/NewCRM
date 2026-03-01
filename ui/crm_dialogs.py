@@ -3984,9 +3984,9 @@ class MeasurementDialog(QDialog):
         for surv in surveyors:
             self.surveyor_combo.addItem(surv['full_name'], surv['id'])
 
-        # Блокируем выбор замерщика для самого замерщика
-        from ui.crm_tab import _emp_has_pos
-        if _emp_has_pos(self.employee, 'Замерщик'):
+        # Блокируем выбор замерщика если нет прав на назначение
+        from utils.permissions import _has_perm
+        if not _has_perm(self.employee, getattr(self, 'api_client', None), 'crm_cards.assign_executor'):
             self.surveyor_combo.setEnabled(False)
 
         layout.addWidget(self.surveyor_combo)

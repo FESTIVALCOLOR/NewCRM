@@ -35,65 +35,12 @@ import os
 import threading
 
 
-# ========== HELPER: Проверка должности с учётом secondary_position ==========
-def _emp_has_pos(employee, *positions):
-    """Проверяет, есть ли у сотрудника одна из указанных должностей (основная или дополнительная).
-    Используется для ПРЕДОСТАВЛЕНИЯ доступа: True если хотя бы одна должность совпадает."""
-    if not employee:
-        return False
-    return employee.get('position', '') in positions or employee.get('secondary_position', '') in positions
-
-
-def _emp_only_pos(employee, *positions):
-    """Проверяет, что ВСЕ должности сотрудника входят в указанный набор.
-    Используется для ОГРАНИЧЕНИЯ доступа: True если сотрудник — чистый исполнитель без второй роли выше."""
-    if not employee:
-        return False
-    pos = employee.get('position', '')
-    sec = employee.get('secondary_position', '')
-    if pos not in positions:
-        return False
-    if sec and sec not in positions:
-        return False
-    return True
-# =============================================================================
-
-
-# ========== HELPER: Кэш и проверка permissions для текущего пользователя ==========
-_user_permissions_cache = {}  # {employee_id: set(permissions)}
-
-
-def _load_user_permissions(employee, api_client):
-    """Загрузить и закэшировать permissions текущего пользователя."""
-    if not employee:
-        return set()
-    emp_id = employee.get('id')
-    if emp_id in _user_permissions_cache:
-        return _user_permissions_cache[emp_id]
-
-    # Суперюзеры имеют все права
-    role = employee.get('role', '')
-    if role in ('admin', 'director'):
-        _user_permissions_cache[emp_id] = None  # None = все права
-        return None
-
-    perms = set()
-    if api_client:
-        try:
-            result = api_client.get_employee_permissions(emp_id)
-            perms = set(result.get('permissions', []))
-        except Exception:
-            pass
-    _user_permissions_cache[emp_id] = perms
-    return perms
-
-
-def _has_perm(employee, api_client, perm_name):
-    """Проверить право у сотрудника. None в кэше = суперюзер (все права)."""
-    perms = _load_user_permissions(employee, api_client)
-    if perms is None:
-        return True  # суперюзер
-    return perm_name in perms
+# ========== Реэкспорт из utils/permissions (обратная совместимость) ==========
+from utils.permissions import (  # noqa: F401
+    _emp_has_pos, _emp_only_pos,
+    _user_permissions_cache, _load_user_permissions, _has_perm,
+    has_any_perm, invalidate_cache,
+)
 # =============================================================================
 
 
@@ -186,7 +133,7 @@ class CRMTab(QWidget):
         refresh_btn.clicked.connect(self.refresh_current_tab)
         header_layout.addWidget(refresh_btn)
 
-        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник', 'Замерщик'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             stats_btn = IconLoader.create_action_button('stats', 'Показать статистику проектов')
             stats_btn.clicked.connect(self.show_statistics_current_tab)
             header_layout.addWidget(stats_btn)
@@ -236,7 +183,7 @@ class CRMTab(QWidget):
         self.individual_widget = self.create_crm_board('Индивидуальный')
         self.individual_subtabs.addTab(self.individual_widget, 'Активные проекты')
 
-        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник', 'Замерщик'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             self.individual_archive_widget = self.create_archive_board('Индивидуальный')
             self.individual_subtabs.addTab(self.individual_archive_widget, 'Архив (0)')
 
@@ -246,7 +193,7 @@ class CRMTab(QWidget):
         self.project_tabs.addTab(individual_main_widget, 'Индивидуальные проекты')
 
         # === ШАБЛОННЫЕ ПРОЕКТЫ (скрыто от чистого СДП) ===
-        if not _emp_only_pos(self.employee, 'СДП'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             template_main_widget = QWidget()
             template_main_layout = QVBoxLayout()
             template_main_layout.setContentsMargins(0, 0, 0, 0)
@@ -262,7 +209,7 @@ class CRMTab(QWidget):
             self.template_widget = self.create_crm_board('Шаблонный')
             self.template_subtabs.addTab(self.template_widget, 'Активные проекты')
 
-            if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник', 'Замерщик'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                 self.template_archive_widget = self.create_archive_board('Шаблонный')
                 self.template_subtabs.addTab(self.template_archive_widget, 'Архив (0)')
             
@@ -308,19 +255,19 @@ class CRMTab(QWidget):
             
             self.project_tabs.setTabText(0, f'Индивидуальные проекты ({individual_count})')
             
-            if not _emp_only_pos(self.employee, 'СДП'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                 self.project_tabs.setTabText(1, f'Шаблонные проекты ({template_count})')
             
             if hasattr(self, 'individual_subtabs'):
                 self.individual_subtabs.setTabText(0, f'Активные проекты ({individual_count})')
                 
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+                if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     self.individual_subtabs.setTabText(1, f'Архив ({individual_archive_count})')
             
-            if hasattr(self, 'template_subtabs') and not _emp_only_pos(self.employee, 'СДП'):
+            if hasattr(self, 'template_subtabs') and _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                 self.template_subtabs.setTabText(0, f'Активные проекты ({template_count})')
                 
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+                if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     self.template_subtabs.setTabText(1, f'Архив ({template_archive_count})')
             
             
@@ -418,7 +365,7 @@ class CRMTab(QWidget):
             other_type = 'Шаблонный' if current_index == 0 else 'Индивидуальный'
             if other_type == 'Шаблонный' and not hasattr(self, 'template_widget'):
                 # СДП — шаблонных нет, сразу грузим архив
-                if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+                if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     QTimer.singleShot(200, self._deferred_load_archive)
             else:
                 QTimer.singleShot(200, lambda t=other_type: self._deferred_load_other(t))
@@ -431,7 +378,7 @@ class CRMTab(QWidget):
         finally:
             self.data.prefer_local = False
         # Архив — ещё позже
-        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             QTimer.singleShot(300, self._deferred_load_archive)
 
     def _deferred_load_archive(self):
@@ -446,11 +393,11 @@ class CRMTab(QWidget):
         current_index = self.project_tabs.currentIndex()
         if current_index == 0:
             self.load_cards_for_type('Индивидуальный')
-            if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                 self.load_archive_cards('Индивидуальный')
         elif current_index == 1:
             self.load_cards_for_type('Шаблонный')
-            if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                 self.load_archive_cards('Шаблонный')
                 
     def load_cards_for_type(self, project_type):
@@ -565,7 +512,7 @@ class CRMTab(QWidget):
             self.data.prefer_local = False
 
         # Архив — через API (локальная БД не содержит crm_cards)
-        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             if index == 0:
                 self.load_archive_cards('Индивидуальный')
             elif index == 1:
@@ -659,7 +606,7 @@ class CRMTab(QWidget):
 
                 # ИСПРАВЛЕНИЕ: Проверка сдачи и принятия работы перед перемещением
                 # Руководители могут перемещать свободно, автоматически принимая стадии
-                if _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов'):
+                if _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
                     # Для руководителей: автоматически принимаем пропущенные стадии
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
                         # S-05: Используем DataAccess вместо прямого SQL
@@ -672,8 +619,8 @@ class CRMTab(QWidget):
                                 card_id, from_column, self.employee['id'], project_type
                             )
                             print(f"Стадия '{from_column}' автоматически принята для {count} исполнителей")
-                # ГАП/СДП/Менеджер могут перемещать если работа сдана, принята и согласована
-                elif _emp_has_pos(self.employee, 'ГАП', 'СДП', 'Менеджер'):
+                # Остальные с правом перемещения: проверяют сдачу и принятие
+                elif _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
                         # S-05: Используем DataAccess вместо прямого SQL
                         info = self.data.get_stage_completion_info(card_id, from_column)
@@ -811,7 +758,7 @@ class CRMTab(QWidget):
         if to_column == 'Выполненный проект':
             # Диалог завершения уже был показан ПЕРЕД перемещением
             self.load_cards_for_type(project_type)
-            if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                 self.load_archive_cards(project_type)
         else:
             print(f"\n[RELOAD] Перезагрузка карточек...")
@@ -864,7 +811,7 @@ class CRMTab(QWidget):
             self.data.prefer_local = False
 
         # Архив — через API (локальная БД не содержит crm_cards)
-        if not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             if current_index == 0:
                 self.load_archive_cards('Индивидуальный')
             elif current_index == 1:
@@ -1772,7 +1719,7 @@ class CRMCard(QFrame):
         if self.card_data.get('designer_deadline') or self.card_data.get('draftsman_deadline') or self.card_data.get('deadline'):
             height += 28
         
-        if self.employee and not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник'):
+        if self.employee and _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             if ('концепция дизайна' in current_column and self.card_data.get('designer_completed') == 1) or \
                (('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1):
                 height += 100  # work_done_label (wordWrap, до 4 строк)
@@ -2167,7 +2114,7 @@ class CRMCard(QFrame):
         # Менеджер может принимать/отклонять работу только в шаблонных проектах
         is_template_project = self.card_data.get('project_type', '') == 'Шаблонный'
         is_only_manager = _emp_only_pos(self.employee, 'Менеджер')
-        can_review_work = not _emp_only_pos(self.employee, 'Дизайнер', 'Чертёжник', 'Замерщик')
+        can_review_work = _has_perm(self.employee, self.api_client, 'crm_cards.move')
         if is_only_manager and not is_template_project:
             can_review_work = False
         if self.employee and can_review_work:
@@ -2397,7 +2344,7 @@ class CRMCard(QFrame):
         # Проверяем как новое поле (measurement_image_link из contracts), так и старое (survey_date из crm_cards)
         has_measurement = self.card_data.get('measurement_image_link') or self.card_data.get('survey_date')
         is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
-        can_add_measurement = _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер', 'Замерщик')
+        can_add_measurement = _has_perm(self.employee, self.api_client, 'crm_cards.update') or is_surveyor
         # Для замерщика разрешаем добавлять замер без can_edit, для остальных требуется can_edit
         if not has_measurement and can_add_measurement and (self.can_edit or is_surveyor):
             survey_btn = IconLoader.create_icon_button('calendar-plus', 'Добавить замер', 'Установить дату замера', icon_size=12)
@@ -2430,7 +2377,7 @@ class CRMCard(QFrame):
         # Проверяем как новое поле (tech_task_link из contracts), так и старое (tech_task_file из crm_cards)
         # Кнопка "Добавить ТЗ" (не показываем замерщику)
         has_tech_task = self.card_data.get('tech_task_link') or self.card_data.get('tech_task_file')
-        can_add_tech_task = _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
+        can_add_tech_task = _has_perm(self.employee, self.api_client, 'crm_cards.update')
         if self.can_edit and not has_tech_task and can_add_tech_task and not is_surveyor:
             tz_btn = IconLoader.create_icon_button('plus-circle', 'Добавить ТЗ', 'Добавить техническое задание', icon_size=12)
             tz_btn.setStyleSheet("""
@@ -2581,9 +2528,8 @@ class CRMCard(QFrame):
             # ========== КНОПКА "ПЕРЕНАЗНАЧИТЬ" ==========
             # Кнопка доступна только для управленческих ролей и только для дизайнеров/чертежников
             can_show_reassign = (
-                _emp_has_pos(self.employee, 'Руководитель студии', 'Старший менеджер проектов', 'Менеджер', 'СДП', 'ГАП') and
+                _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor') and
                 role_key in ['designer', 'draftsman'] and
-                self.can_edit and
                 not is_completed
             )
 
