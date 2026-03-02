@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QScrollArea, QFrame, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QDateEdit,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
-                             QTableWidgetItem, QTabWidget, QTextEdit)
+                             QTableWidgetItem, QTabWidget, QTextEdit, QSizePolicy)
 from PyQt5.QtCore import Qt, QDate, pyqtSignal, QUrl, QTimer
 from PyQt5.QtGui import QColor
 from database.db_manager import DatabaseManager
@@ -182,13 +182,13 @@ class ArchiveCard(QFrame):
                     font-weight: bold;
                     max-height: 22px;
                     min-height: 22px;
-                    min-width: 296px;
                 }
                 QPushButton:hover { background-color: #1976D2; }
                 QPushButton:pressed { background-color: #1565C0; }
             """)
+            supervision_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             supervision_btn.clicked.connect(self._transfer_to_supervision)
-            layout.addWidget(supervision_btn, 0, Qt.AlignCenter)
+            layout.addWidget(supervision_btn)
 
         # ========== КНОПКА ПОДРОБНЕЕ ==========
         details_btn = IconLoader.create_icon_button('info', 'Подробнее', 'Просмотр деталей', icon_size=12)
@@ -203,13 +203,13 @@ class ArchiveCard(QFrame):
                 font-weight: bold;
                 max-height: 22px;
                 min-height: 22px;
-                min-width: 296px;
             }
             QPushButton:hover { background-color: #D0D0D0; }
             QPushButton:pressed { background-color: #C0C0C0; }
         """)
+        details_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         details_btn.clicked.connect(self.show_details)
-        layout.addWidget(details_btn, 0, Qt.AlignCenter)
+        layout.addWidget(details_btn)
 
         self.setLayout(layout)
         
