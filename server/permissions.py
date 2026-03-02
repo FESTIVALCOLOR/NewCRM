@@ -42,13 +42,13 @@ PERMISSION_NAMES: Dict[str, str] = {
     "contracts.delete": "Удаление договоров",
     # === CRM ===
     "crm_cards.update": "Редактирование CRM карточек",
-    "crm_cards.move": "Перемещение CRM карточек",
+    "crm_cards.move": "Управление стадиями CRM",
     "crm_cards.delete": "Удаление CRM карточек",
     "crm_cards.assign_executor": "Назначение/переназначение исполнителей",
     "crm_cards.delete_executor": "Удаление исполнителей",
     "crm_cards.reset_stages": "Сброс стадий CRM",
     "crm_cards.reset_approval": "Сброс согласования",
-    "crm_cards.complete_approval": "Завершение согласования",
+    "crm_cards.complete_approval": "Согласование с клиентом",
     "crm_cards.reset_designer": "Сброс отметки дизайнера",
     "crm_cards.reset_draftsman": "Сброс отметки чертежника",
     "crm_cards.files_upload": "Загрузка файлов в CRM",
@@ -190,12 +190,11 @@ SUPERUSER_ROLES = {"admin", "director", "Руководитель студии"}
 
 # Права, которые НЕ управляются через UI-матрицу (только суперпользователь/автоматика).
 # При apply_to_employees эти права сохраняются у сотрудников.
+# agents.* и cities.* управляются автоматически через access.admin в матрице.
 NON_MATRIX_PERMISSIONS = {
     "crm_cards.delete_executor",
     "crm_cards.reset_stages",
     "supervision.reset_stages",
-    "agents.create", "agents.update", "agents.delete",
-    "cities.create", "cities.delete",
 }
 
 # =========================

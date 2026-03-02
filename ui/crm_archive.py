@@ -1289,7 +1289,8 @@ class ArchiveCardDetailsDialog(QDialog):
             
             buttons_layout = QHBoxLayout()
 
-            can_restore = _has_perm(self.employee, self.api_client, 'crm_cards.move')
+            restore_perm = 'supervision.move' if self.card_type == 'supervision' else 'crm_cards.move'
+            can_restore = _has_perm(self.employee, self.api_client, restore_perm)
             restore_btn = IconLoader.create_icon_button('refresh3', 'Вернуть в активные проекты', icon_size=12)
             restore_btn.setStyleSheet("""
                 QPushButton {
@@ -1367,7 +1368,6 @@ class ArchiveCardDetailsDialog(QDialog):
             
     def restore_to_active(self):
         """Возврат проекта в активные"""
-        # ========== ЗАМЕНИЛИ QMessageBox.question ==========
         reply = CustomQuestionBox(
             self,
             'Подтверждение',
@@ -1378,45 +1378,49 @@ class ArchiveCardDetailsDialog(QDialog):
             try:
                 contract_id = self.card_data.get('contract_id')
                 card_id = self.card_data['id']
+                is_supervision = self.card_type == 'supervision'
 
-                # ИСПРАВЛЕНИЕ: Синхронизация с API
-                if self.data.is_online:
-                    try:
-                        # 1. Обновляем статус договора через API
-                        self.data.update_contract(contract_id, {
-                            'status': 'В работе',
-                            'termination_reason': None
-                        })
-                        print(f"[API] Статус договора {contract_id} изменен на 'В работе'")
+                # 1. Обновляем статус договора
+                new_status = 'Авторский надзор' if is_supervision else 'В работе'
+                self.data.update_contract(contract_id, {
+                    'status': new_status,
+                    'termination_reason': None
+                })
+                print(f"[API] Статус договора {contract_id} изменен на '{new_status}'")
 
-                        # 2. Перемещаем CRM карточку через API
-                        self.data.move_crm_card(card_id, 'Выполненный проект')
-                        print(f"[API] CRM карточка {card_id} перемещена в 'Выполненный проект'")
-
-                    except Exception as api_e:
-                        print(f"[WARN] Ошибка API при возврате проекта: {api_e}, fallback на локальную БД")
-                        self.data.update_contract(contract_id, {
-                            'status': 'В работе',
-                            'termination_reason': None
-                        })
-                        self.data.update_crm_card_column(card_id, 'Выполненный проект')
+                # 2. Перемещаем карточку через правильный метод
+                if is_supervision:
+                    self.data.move_supervision_card(card_id, 'Выполненный проект')
+                    print(f"[API] Карточка надзора {card_id} перемещена в 'Выполненный проект'")
                 else:
-                    # Offline режим - только локальная БД
-                    self.data.update_contract(contract_id, {
-                        'status': 'В работе',
-                        'termination_reason': None
-                    })
-                    self.data.update_crm_card_column(card_id, 'Выполненный проект')
+                    self.data.move_crm_card(card_id, 'Выполненный проект')
+                    print(f"[API] CRM карточка {card_id} перемещена в 'Выполненный проект'")
 
-                # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех"
+                # 3. Сброс стадий при возврате из архива
+                if is_supervision:
+                    self.data.reset_supervision_stage_completion(card_id)
+                    print(f"[API] Сброшены стадии надзора для карточки {card_id}")
+                else:
+                    self.data.reset_stage_completion(card_id)
+                    self.data.reset_approval_stages(card_id)
+                    self.data.update_crm_card(card_id, {'deadline': None, 'is_approved': 0})
+                    print(f"[API] Сброшены стадии и согласования CRM для карточки {card_id}")
+
                 self.accept()
 
+                # 4. Обновляем родительский виджет (CRM или надзор)
                 parent = self.parent()
                 while parent:
-                    from ui.crm_tab import CRMTab
-                    if isinstance(parent, CRMTab):
-                        parent.refresh_current_tab()
-                        break
+                    if is_supervision:
+                        from ui.crm_supervision_tab import CrmSupervisionTab
+                        if isinstance(parent, CrmSupervisionTab):
+                            parent.refresh_current_tab()
+                            break
+                    else:
+                        from ui.crm_tab import CRMTab
+                        if isinstance(parent, CRMTab):
+                            parent.refresh_current_tab()
+                            break
                     parent = parent.parent()
 
             except Exception as e:

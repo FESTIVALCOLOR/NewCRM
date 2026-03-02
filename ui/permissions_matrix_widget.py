@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor, QBrush
 
-from ui.custom_message_box import CustomMessageBox
+from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from utils.data_access import DataAccess
 
 
@@ -182,11 +182,11 @@ PERMISSION_DESCRIPTIONS = {
     "contracts.delete": "Удаление договоров",
     # CRM
     "crm_cards.update": "Редактирование CRM карточек",
-    "crm_cards.move": "Перемещение CRM карточек",
+    "crm_cards.move": "Управление стадиями CRM",
     "crm_cards.delete": "Удаление CRM карточек",
     "crm_cards.assign_executor": "Назначение/переназначение исполнителей",
     "crm_cards.reset_approval": "Сброс согласования",
-    "crm_cards.complete_approval": "Завершение согласования",
+    "crm_cards.complete_approval": "Согласование с клиентом",
     "crm_cards.reset_designer": "Сброс отметки дизайнера",
     "crm_cards.reset_draftsman": "Сброс отметки чертежника",
     "crm_cards.files_upload": "Загрузка файлов в CRM",
@@ -425,8 +425,36 @@ class PermissionsMatrixWidget(QWidget):
 
                     self._checkboxes[(perm_name, role)] = cb
 
+                    # Подтверждение при включении access.admin
+                    if perm_name == 'access.admin':
+                        cb.stateChanged.connect(
+                            lambda state, r=role, c=cb: self._on_admin_access_changed(state, r, c)
+                        )
+
                 self._row_perm_map[row] = perm_name
                 row += 1
+
+    # Права, автоматически выдаваемые при access.admin
+    _ADMIN_AUTO_PERMS = [
+        'agents.create', 'agents.update', 'agents.delete',
+        'cities.create', 'cities.delete',
+    ]
+
+    def _on_admin_access_changed(self, state, role, checkbox):
+        """Подтверждение при включении access.admin для роли"""
+        if state == Qt.Checked:
+            from PyQt5.QtWidgets import QDialog
+            reply = CustomQuestionBox(
+                self,
+                'Доступ к администрированию',
+                f'Предоставить роли "{role}" доступ к администрированию?\n\n'
+                'Это включает управление агентами, городами,\n'
+                'правами доступа и другими настройками.'
+            ).exec_()
+            if reply != QDialog.Accepted:
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
 
     # =========================
     # Загрузка данных
@@ -497,7 +525,11 @@ class PermissionsMatrixWidget(QWidget):
                     cb.blockSignals(False)
 
     def _collect_matrix(self):
-        """Собрать текущее состояние чекбоксов в словарь матрицы"""
+        """Собрать текущее состояние чекбоксов в словарь матрицы.
+
+        Если access.admin включён для роли — автоматически добавляет
+        права на агентов и города (они не видны в матрице, но нужны).
+        """
         matrix = {}
         for role in ROLES:
             perms = []
@@ -506,6 +538,11 @@ class PermissionsMatrixWidget(QWidget):
                     cb = self._checkboxes.get((perm_name, role))
                     if cb and cb.isChecked():
                         perms.append(perm_name)
+            # Автоматически добавляем agents/cities при access.admin
+            if 'access.admin' in perms:
+                for auto_perm in self._ADMIN_AUTO_PERMS:
+                    if auto_perm not in perms:
+                        perms.append(auto_perm)
             matrix[role] = perms
         return matrix
 
