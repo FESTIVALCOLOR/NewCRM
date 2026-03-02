@@ -245,6 +245,15 @@ class ArchiveCard(QFrame):
                         break
                     parent = parent.parent()
 
+                # Обновляем вкладку СРМ надзора чтобы новая карточка появилась сразу
+                try:
+                    from ui.main_window import MainWindow
+                    main_win = self.window()
+                    if isinstance(main_win, MainWindow) and main_win.crm_supervision_tab:
+                        main_win.crm_supervision_tab.refresh_current_tab()
+                except Exception:
+                    pass
+
             except Exception as e:
                 print(f"[ArchiveCard] Ошибка перевода в авторский надзор: {e}")
                 import traceback
