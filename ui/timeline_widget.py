@@ -581,10 +581,39 @@ class ProjectTimelineWidget(QWidget):
             if e.get('executor_role', '') != 'header'
             and e.get('is_in_contract_scope', True)
         )
+
+        # Рассчитываем отклонение с причинами по подэтапам
+        deviation_reasons = []
+        for e in self.entries:
+            if e.get('executor_role', '') == 'header':
+                continue
+            ad = e.get('actual_days', 0) or 0
+            if ad <= 0:
+                continue  # Подэтап ещё не завершён
+            effective_norm = e.get('custom_norm_days') or e.get('norm_days', 0) or 0
+            if effective_norm <= 0:
+                continue
+            diff = ad - effective_norm
+            if diff != 0:
+                name = e.get('stage_name', e.get('stage_code', '?'))
+                deviation_reasons.append({'name': name, 'diff': diff})
+
+        # Дедлайн проекта = START + contract_term
+        deadline_date_str = ''
+        start_date = ''
+        for e in self.entries:
+            if e.get('stage_code') == 'START' and e.get('actual_date'):
+                start_date = e['actual_date']
+                break
+        if start_date and self._contract_term:
+            deadline_date_str = add_working_days(start_date, self._contract_term)
+
         display_rows.append({
             '_type': 'grandtotal',
             '_actual_sum': total_actual,
             '_norm_sum': total_norm,
+            '_deviation_reasons': deviation_reasons,
+            '_deadline_date': deadline_date_str,
         })
 
         return display_rows
@@ -637,14 +666,65 @@ class ProjectTimelineWidget(QWidget):
 
                 # --- ОБЩИЙ ИТОГ ---
                 if row_type == 'grandtotal':
-                    self.table.setRowHeight(row, 36)
+                    self.table.setRowHeight(row, 44)
                     bg = '#FFF8E1'
-                    texts = ['Итого всех этапов:', '', str(dr['_actual_sum']),
-                             str(dr['_norm_sum']), '', '', '']
-                    aligns = ['left', 'center', 'center', 'center', 'center', 'center', 'center']
-                    for col in range(num_cols):
-                        lbl = self._make_cell_label(texts[col], bg, aligns[col], bold=True, font_size=12)
-                        self.table.setCellWidget(row, col, lbl)
+                    actual_sum = dr['_actual_sum']
+                    norm_sum = dr['_norm_sum']
+                    deviation = actual_sum - norm_sum if actual_sum > 0 else 0
+                    deadline_str = dr.get('_deadline_date', '')
+                    reasons = dr.get('_deviation_reasons', [])
+
+                    # Колонка 0: заголовок + дата дедлайна
+                    title_text = 'Итого всех этапов:'
+                    if deadline_str:
+                        try:
+                            from datetime import datetime as _dt
+                            dl = _dt.strptime(deadline_str, '%Y-%m-%d')
+                            title_text += f'  Дедлайн: {dl.strftime("%d.%m.%Y")}'
+                        except (ValueError, TypeError):
+                            pass
+                    title_lbl = self._make_cell_label(title_text, bg, 'left', bold=True, font_size=12)
+                    self.table.setCellWidget(row, 0, title_lbl)
+
+                    # Колонка 1: пусто
+                    self.table.setCellWidget(row, 1, self._make_cell_label('', bg))
+
+                    # Колонка 2: факт дни
+                    self.table.setCellWidget(row, 2,
+                        self._make_cell_label(str(actual_sum), bg, bold=True, font_size=12))
+
+                    # Колонка 3: норма дни
+                    self.table.setCellWidget(row, 3,
+                        self._make_cell_label(str(norm_sum), bg, bold=True, font_size=12))
+
+                    # Колонка 4: отклонение с причиной
+                    if deviation != 0 and actual_sum > 0:
+                        sign = '+' if deviation > 0 else ''
+                        dev_color = '#C62828' if deviation > 0 else '#2E7D32'
+                        dev_text = f'{sign}{deviation} дн.'
+                        dev_lbl = QLabel()
+                        dev_lbl.setTextFormat(Qt.RichText)
+                        dev_lbl.setText(f'<b style="color:{dev_color}">{dev_text}</b>')
+                        dev_lbl.setAlignment(Qt.AlignCenter)
+                        dev_lbl.setStyleSheet(f'background-color: {bg}; padding: 2px 4px;')
+                        # Тултип с причинами отклонения
+                        if reasons:
+                            reason_lines = []
+                            for r in sorted(reasons, key=lambda x: abs(x['diff']), reverse=True):
+                                s = '+' if r['diff'] > 0 else ''
+                                reason_lines.append(f"{r['name']}: {s}{r['diff']} дн.")
+                            tooltip = 'Причины отклонения:\n' + '\n'.join(reason_lines)
+                            dev_lbl.setToolTip(tooltip)
+                        self.table.setCellWidget(row, 4, dev_lbl)
+                    else:
+                        status_text = 'В срок' if actual_sum > 0 else ''
+                        self.table.setCellWidget(row, 4,
+                            self._make_cell_label(status_text, bg, bold=True,
+                                                  color='#2E7D32' if status_text else '#333333'))
+
+                    # Колонки 5-6: пусто
+                    for col in range(5, num_cols):
+                        self.table.setCellWidget(row, col, self._make_cell_label('', bg))
                     continue
 
                 # --- ОБЫЧНАЯ СТРОКА (entry) ---

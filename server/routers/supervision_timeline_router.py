@@ -97,13 +97,33 @@ async def init_supervision_timeline(
     if existing > 0:
         return {"status": "already_initialized", "count": existing}
 
+    # Авторасчёт plan_date: равномерно распределяем от start_date до deadline
+    plan_dates = {}
+    start_str = sv_card.start_date or ''
+    deadline_str = sv_card.deadline or ''
+    if start_str and deadline_str:
+        try:
+            from datetime import datetime as _dt, timedelta as _td
+            start_dt = _dt.strptime(start_str, '%Y-%m-%d')
+            deadline_dt = _dt.strptime(deadline_str, '%Y-%m-%d')
+            total_days = (deadline_dt - start_dt).days
+            n = len(SUPERVISION_STAGES)
+            if total_days > 0 and n > 0:
+                for i in range(n):
+                    # Равномерное распределение: каждая стадия получает порцию общего срока
+                    stage_end = start_dt + _td(days=int(total_days * (i + 1) / n))
+                    plan_dates[i] = stage_end.strftime('%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+
     for i, (code, name) in enumerate(SUPERVISION_STAGES):
         record = SupervisionTimelineEntry(
             supervision_card_id=card_id,
             stage_code=code,
             stage_name=name,
             sort_order=i + 1,
-            status='Не начато'
+            status='Не начато',
+            plan_date=plan_dates.get(i)
         )
         db.add(record)
 

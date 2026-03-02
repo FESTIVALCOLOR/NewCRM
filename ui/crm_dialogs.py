@@ -1062,9 +1062,14 @@ class ProjectCompletionDialog(QDialog):
             # 2. Создаём карточку надзора (если нужно)
             if 'АВТОРСКИЙ НАДЗОР' in status:
                 print(f"\n Создание карточки надзора для договора {contract_id}...")
+                # Получаем дедлайн CRM карточки для plan_date надзора
+                crm_card = self.data.get_crm_card(self.card_id) if hasattr(self, 'card_id') else None
+                crm_deadline = crm_card.get('deadline', '') if crm_card else ''
                 supervision_data = {
                     'contract_id': contract_id,
-                    'column_name': 'Новый заказ'
+                    'column_name': 'Новый заказ',
+                    'start_date': QDate.currentDate().toString('yyyy-MM-dd'),
+                    'deadline': crm_deadline or ''
                 }
                 result = self.data.create_supervision_card(supervision_data)
                 supervision_card_id = result.get('id') if isinstance(result, dict) else result

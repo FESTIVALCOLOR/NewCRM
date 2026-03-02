@@ -5961,9 +5961,12 @@ class CardEditDialog(QDialog):
                                 supervision_cards = self.data.get_supervision_cards()
                                 existing = [c for c in supervision_cards if c.get('contract_id') == contract_id]
                                 if not existing:
+                                    crm_deadline = self.card_data.get('deadline', '') if hasattr(self, 'card_data') else ''
                                     result = self.data.create_supervision_card({
                                         'contract_id': contract_id,
-                                        'column_name': 'Новый заказ'
+                                        'column_name': 'Новый заказ',
+                                        'start_date': QDate.currentDate().toString('yyyy-MM-dd'),
+                                        'deadline': crm_deadline or ''
                                     })
                                     print(f"[API] Создана карточка надзора ID={result.get('id')} для договора {contract_id}")
                                 else:
@@ -6110,9 +6113,12 @@ class CardEditDialog(QDialog):
                         supervision_cards = self.data.get_supervision_cards()
                         existing = [c for c in supervision_cards if c.get('contract_id') == contract_id]
                         if not existing:
+                            crm_deadline = self.card_data.get('deadline', '') if hasattr(self, 'card_data') else ''
                             result = self.data.create_supervision_card({
                                 'contract_id': contract_id,
-                                'column_name': 'Новый заказ'
+                                'column_name': 'Новый заказ',
+                                'start_date': QDate.currentDate().toString('yyyy-MM-dd'),
+                                'deadline': crm_deadline or ''
                             })
                             print(f"[DataAccess] Создана карточка надзора для договора {contract_id}")
                         else:

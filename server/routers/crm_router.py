@@ -1186,6 +1186,78 @@ def _server_recalculate_actual_days(db, contract_id: int):
             prev_date = actual_date
 
 
+def _update_executor_deadline_for_next_substep(db, card_id: int, stage_name: str, contract_id: int):
+    """Обновить дедлайн исполнителя стадии по norm_days следующего незаполненного подэтапа.
+
+    Вызывается после каждого workflow-действия (submit/accept/reject/client-ok),
+    чтобы дедлайн на карточке канбана всегда отражал текущий подэтап.
+    Пример: подэтап «Чертёж» 4 дня → сдал → подэтап «Проверка СДП» 2 дня → дедлайн = today+2.
+    """
+    stage_group = _resolve_stage_group(stage_name)
+    if not stage_group or not contract_id:
+        return
+
+    # Первый незаполненный подэтап с norm_days > 0 (не skipped, не header)
+    next_entry = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.stage_group == stage_group,
+        ProjectTimelineEntry.executor_role != 'header',
+        (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
+        ProjectTimelineEntry.status != 'skipped',
+        ProjectTimelineEntry.norm_days > 0
+    ).order_by(ProjectTimelineEntry.sort_order).first()
+
+    if not next_entry:
+        # Все подэтапы стадии заполнены — стадия завершена, дедлайн не нужен
+        return
+
+    # Фаза 4: Если следующий подэтап вне расчёта срока (is_in_contract_scope=False),
+    # дедлайн приостанавливается (клиентские этапы, сбор правок и т.п.)
+    if not getattr(next_entry, 'is_in_contract_scope', True):
+        logger.info(
+            f"[Deadline] Пауза: card={card_id}, подэтап «{next_entry.stage_name}» "
+            f"вне расчёта срока — дедлайн не обновляется"
+        )
+        return
+
+    # norm_days с учётом custom_norm_days (если менеджер изменил)
+    norm = next_entry.norm_days or 0
+    if next_entry.custom_norm_days and next_entry.custom_norm_days > 0:
+        norm = next_entry.custom_norm_days
+    if norm <= 0:
+        return
+
+    # База для расчёта: последняя actual_date перед этим подэтапом (сквозная)
+    prev_filled = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.executor_role != 'header',
+        ProjectTimelineEntry.sort_order < next_entry.sort_order,
+        ProjectTimelineEntry.actual_date.isnot(None),
+        ProjectTimelineEntry.actual_date != ''
+    ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+
+    base_date_str = prev_filled.actual_date if prev_filled else datetime.utcnow().strftime('%Y-%m-%d')
+
+    # Рассчитываем новый дедлайн через _add_business_days (серверная, без PyQt5)
+    new_deadline_dt = _add_business_days(base_date_str, norm)
+    new_deadline = new_deadline_dt.strftime('%Y-%m-%d')
+
+    # Обновляем StageExecutor.deadline
+    stage_executor = db.query(StageExecutor).filter(
+        StageExecutor.crm_card_id == card_id,
+        StageExecutor.stage_name == stage_name
+    ).order_by(StageExecutor.id.desc()).first()
+
+    if stage_executor and stage_executor.deadline != new_deadline:
+        old_deadline = stage_executor.deadline or 'не установлен'
+        stage_executor.deadline = new_deadline
+        logger.info(
+            f"[Deadline] Обновлён: card={card_id}, стадия={stage_name}, "
+            f"подэтап=«{next_entry.stage_name}», {old_deadline} → {new_deadline} "
+            f"(norm={norm} раб.дн.)"
+        )
+
+
 def _resolve_stage_group(column_name: str) -> str:
     """Определить stage_group по имени колонки канбана.
     Маппинг гибкий: ищет паттерны 'стадия N' в названии колонки.
@@ -1280,6 +1352,9 @@ async def workflow_submit_work(
             description=f'Сдача работы: {stage_name} ({entry.stage_name if entry else ""})'
         ))
 
+        # Обновляем дедлайн исполнителя по norm_days следующего подэтапа
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+
         db.commit()
 
         # Хук: уведомление в чат о сдаче работы
@@ -1355,6 +1430,9 @@ async def workflow_accept_work(
             entity_type='crm_card', entity_id=card_id,
             description=f'Работа принята: {stage_name}'
         ))
+
+        # Обновляем дедлайн исполнителя по norm_days следующего подэтапа
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
         return {"status": "accepted"}
@@ -1444,6 +1522,9 @@ async def workflow_reject_work(
             entity_type='crm_card', entity_id=card_id,
             description=f'Отправлено на правки: {stage_name} (итерация {wf.revision_count})'
         ))
+
+        # Обновляем дедлайн исполнителя по norm_days следующего подэтапа (переделка)
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
         return {"status": "rejected", "revision_count": wf.revision_count, "revision_file_path": wf.revision_file_path}
@@ -1621,6 +1702,9 @@ async def workflow_client_approved(
         entity_type='crm_card', entity_id=card_id,
         description=f'Клиент согласовал: {stage_name}'
     ))
+
+    # Обновляем дедлайн исполнителя по norm_days следующего подэтапа
+    _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
     db.commit()
 
