@@ -225,6 +225,76 @@ PERMISSION_DESCRIPTIONS = {
 }
 
 
+PERMISSION_TOOLTIPS = {
+    # Доступ к страницам
+    "access.clients": "Сотрудник видит вкладку «Клиенты» в главном меню",
+    "access.contracts": "Сотрудник видит вкладку «Договоры» в главном меню",
+    "access.crm": "Сотрудник видит вкладку «CRM» с канбан-доской проектов",
+    "access.supervision": "Сотрудник видит вкладку «Авторский надзор»",
+    "access.reports": "Сотрудник видит вкладку «Отчёты и статистика»",
+    "access.employees": "Сотрудник видит вкладку «Сотрудники»",
+    "access.salaries": "Сотрудник видит вкладку «Зарплаты»",
+    "access.employee_reports": "Сотрудник видит раздел отчётов по сотрудникам",
+    "access.admin": "Сотрудник видит кнопку «Администрирование» — управление правами, агентами, городами",
+    # Сотрудники
+    "employees.create": "Может добавлять новых сотрудников в систему",
+    "employees.update": "Может редактировать данные сотрудников (ФИО, должность, контакты)",
+    "employees.delete": "Может удалять и увольнять сотрудников",
+    # Клиенты
+    "clients.create": "Может создавать новых клиентов",
+    "clients.view": "Может просматривать карточки клиентов",
+    "clients.update": "Может редактировать данные клиентов",
+    "clients.delete": "Может удалять клиентов из системы",
+    # Договоры
+    "contracts.create": "Может создавать новые договоры",
+    "contracts.view": "Может просматривать детали договоров",
+    "contracts.update": "Может редактировать условия договоров (площадь, сумма, статус)",
+    "contracts.delete": "Может удалять договоры из системы",
+    # CRM
+    "crm_cards.update": "Может редактировать данные в карточке проекта (теги, дедлайн, описание)",
+    "crm_cards.move": "Управление рабочим процессом: принять работу, отправить на исправление, отправить клиенту",
+    "crm_cards.delete": "Может удалять карточки проектов с канбан-доски",
+    "crm_cards.assign_executor": "Может назначать и переназначать исполнителей на стадии проекта",
+    "crm_cards.reset_approval": "Может сбросить согласование проекта для повторной отправки клиенту",
+    "crm_cards.complete_approval": "Может отмечать этапы согласования с клиентом как завершённые",
+    "crm_cards.reset_designer": "Может сбросить отметку о завершении работы дизайнера для доработки",
+    "crm_cards.reset_draftsman": "Может сбросить отметку о завершении работы чертёжника для доработки",
+    "crm_cards.files_upload": "Может загружать файлы в карточку проекта (чертежи, визуализации)",
+    "crm_cards.files_delete": "Может удалять файлы из карточки проекта",
+    "crm_cards.deadlines": "Может устанавливать и изменять дедлайны стадий проекта",
+    "crm_cards.payments": "Видит и управляет вкладкой «Оплаты» в карточке проекта",
+    # Надзор
+    "supervision.update": "Может редактировать данные карточки авторского надзора",
+    "supervision.move": "Может перемещать карточки надзора между стадиями на канбан-доске",
+    "supervision.pause_resume": "Может приостановить или возобновить работу по карточке надзора",
+    "supervision.complete_stage": "Может отмечать стадии надзора как завершённые",
+    "supervision.delete_order": "Может удалять заказы авторского надзора",
+    "supervision.assign_executor": "Может назначать исполнителей на стадии надзора",
+    "supervision.files_upload": "Может загружать файлы в карточку надзора (акты, фото)",
+    "supervision.files_delete": "Может удалять файлы из карточки надзора",
+    "supervision.deadlines": "Может устанавливать и изменять дедлайны стадий надзора",
+    "supervision.payments": "Видит и управляет оплатами в карточке надзора",
+    # Платежи
+    "payments.create": "Может создавать новые платежи и начисления",
+    "payments.update": "Может редактировать суммы и условия платежей",
+    "payments.delete": "Может удалять платежи из системы",
+    # Зарплаты
+    "salaries.create": "Может создавать записи о зарплатах",
+    "salaries.update": "Может редактировать суммы и данные зарплат",
+    "salaries.delete": "Может удалять записи о зарплатах",
+    "salaries.mark_to_pay": "Может помечать зарплаты как «К оплате»",
+    "salaries.mark_paid": "Может помечать зарплаты как «Оплачено»",
+    # Тарифы
+    "rates.create": "Может создавать и редактировать тарифные ставки",
+    "rates.delete": "Может удалять тарифные ставки",
+    # Мессенджер
+    "messenger.create_chat": "Может создавать новые чаты в мессенджере",
+    "messenger.delete_chat": "Может удалять чаты из мессенджера",
+    "messenger.view_chat": "Может просматривать и открывать чаты",
+    "messenger.manage_scripts": "Может управлять скриптами автоматических сообщений",
+}
+
+
 class PermissionsMatrixWidget(QWidget):
     """
     Виджет матрицы прав доступа.
@@ -241,6 +311,10 @@ class PermissionsMatrixWidget(QWidget):
         self._checkboxes = {}
         # Маппинг строк таблицы: row -> perm_name (None для строк-заголовков категорий)
         self._row_perm_map = {}
+
+        # Исправление черного фона всплывающих подсказок
+        from utils.tooltip_fix import apply_tooltip_palette
+        apply_tooltip_palette(self)
 
         self._init_ui()
         self._load_data()
@@ -343,6 +417,14 @@ class PermissionsMatrixWidget(QWidget):
                 font-weight: bold;
                 font-size: 11px;
             }
+            QToolTip {
+                background-color: #f5f5f5;
+                color: #333333;
+                border: 1px solid #d9d9d9;
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-size: 12px;
+            }
         """)
 
         # Подсчитаем количество строк: категории + права
@@ -409,7 +491,8 @@ class PermissionsMatrixWidget(QWidget):
                 desc = self.definitions.get(perm_name, perm_name)
                 perm_item = QTableWidgetItem(desc)
                 perm_item.setFlags(Qt.ItemIsEnabled)
-                perm_item.setToolTip(perm_name)
+                tooltip = PERMISSION_TOOLTIPS.get(perm_name, perm_name)
+                perm_item.setToolTip(tooltip)
                 table.setItem(row, 0, perm_item)
 
                 # Чекбоксы для каждой роли
@@ -497,7 +580,8 @@ class PermissionsMatrixWidget(QWidget):
                         item = self.table.item(row, 0)
                         if item:
                             item.setText(desc)
-                            item.setToolTip(perm_name)
+                            tooltip = PERMISSION_TOOLTIPS.get(perm_name, perm_name)
+                            item.setToolTip(tooltip)
         except Exception:
             pass
 

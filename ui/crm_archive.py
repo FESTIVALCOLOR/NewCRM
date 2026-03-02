@@ -1401,43 +1401,87 @@ class ArchiveCardDetailsDialog(QDialog):
         """Возврат проекта в активные — с выбором стадии"""
         stages = self._get_stage_columns()
 
-        # Диалог выбора стадии
+        # Кастомный frameless диалог выбора стадии
         dialog = QDialog(self)
-        dialog.setWindowTitle('Возврат в активные')
-        dialog.setFixedSize(420, 200)
-        dialog.setStyleSheet("""
-            QDialog { background-color: #ffffff; border: 1px solid #E0E0E0; }
-            QLabel { font-size: 13px; color: #333; }
-            QComboBox { font-size: 13px; padding: 6px; border: 1px solid #d9d9d9;
-                        border-radius: 4px; background: #fff; min-height: 28px; }
+        dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        dialog.setFixedSize(460, 260)
+
+        # Корневой layout (прозрачный)
+        root_layout = QVBoxLayout(dialog)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # Контейнер с рамкой
+        border_frame = QFrame()
+        border_frame.setObjectName("restoreBorderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#restoreBorderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
         """)
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(12)
-        layout.setContentsMargins(20, 20, 20, 20)
+        frame_layout = QVBoxLayout(border_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
 
-        label = QLabel('В какую стадию вернуть проект?')
-        label.setStyleSheet('font-size: 14px; font-weight: bold;')
-        layout.addWidget(label)
+        # Кастомный title bar
+        title_bar = CustomTitleBar(dialog, 'Возврат в активные', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        frame_layout.addWidget(title_bar)
 
-        desc = QLabel('Будет сброшена выбранная стадия и все последующие.\nПредыдущие завершённые стадии сохранятся.')
+        # Контент
+        content = QWidget()
+        content.setStyleSheet("QWidget { background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }")
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(12)
+        content_layout.setContentsMargins(28, 20, 28, 28)
+
+        desc = QLabel('Выберите стадию, в которую нужно вернуть проект.\nБудет сброшена выбранная стадия и все последующие.')
         desc.setWordWrap(True)
         desc.setStyleSheet('font-size: 12px; color: #757575;')
-        layout.addWidget(desc)
+        content_layout.addWidget(desc)
 
         combo = QComboBox()
+        combo.setStyleSheet("""
+            QComboBox {
+                font-size: 13px; padding: 6px 10px; border: 1px solid #d9d9d9;
+                border-radius: 4px; background: #fff; min-height: 28px;
+            }
+            QComboBox:hover { border-color: #b0b0b0; }
+            QComboBox::drop-down { border: none; width: 28px; }
+            QComboBox QAbstractItemView {
+                background-color: #fff; border: 1px solid #d9d9d9;
+                selection-background-color: #ffd93c; selection-color: #333;
+            }
+        """)
         for stage in stages:
             combo.addItem(stage)
-        layout.addWidget(combo)
+        content_layout.addWidget(combo)
 
-        layout.addStretch()
+        content_layout.addStretch()
 
         buttons_layout = QHBoxLayout()
         cancel_btn = QPushButton('Отмена')
         cancel_btn.setFixedHeight(36)
+        cancel_btn.setMinimumWidth(100)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setStyleSheet("""
-            QPushButton { background-color: #fff; color: #333; padding: 0px 20px;
-                          border-radius: 4px; border: 1px solid #d9d9d9; font-weight: bold; }
-            QPushButton:hover { background-color: #f5f5f5; }
+            QPushButton {
+                background-color: #E0E0E0; color: #333333; padding: 0px 20px;
+                border-radius: 4px; border: none; font-weight: bold;
+                max-height: 36px; min-height: 36px;
+            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
         cancel_btn.clicked.connect(dialog.reject)
         buttons_layout.addWidget(cancel_btn)
@@ -1446,15 +1490,27 @@ class ArchiveCardDetailsDialog(QDialog):
 
         ok_btn = QPushButton('Вернуть')
         ok_btn.setFixedHeight(36)
+        ok_btn.setMinimumWidth(100)
+        ok_btn.setCursor(Qt.PointingHandCursor)
         ok_btn.setStyleSheet("""
-            QPushButton { background-color: #ffd93c; color: #333; padding: 0px 30px;
-                          border-radius: 4px; border: none; font-weight: bold; }
+            QPushButton {
+                background-color: #ffd93c; color: #333333; padding: 0px 30px;
+                border-radius: 4px; border: none; font-weight: bold;
+                max-height: 36px; min-height: 36px;
+            }
             QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
         ok_btn.clicked.connect(dialog.accept)
         buttons_layout.addWidget(ok_btn)
 
-        layout.addLayout(buttons_layout)
+        content_layout.addLayout(buttons_layout)
+        frame_layout.addWidget(content)
+        root_layout.addWidget(border_frame)
+
+        # Центрирование на родителе
+        from utils.dialog_helpers import center_dialog_on_parent
+        dialog.showEvent = lambda e: (QDialog.showEvent(dialog, e), center_dialog_on_parent(dialog))
 
         if dialog.exec_() != QDialog.Accepted:
             return
