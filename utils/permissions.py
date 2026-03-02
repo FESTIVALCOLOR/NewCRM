@@ -77,10 +77,28 @@ def _load_user_permissions(employee, api_client):
         try:
             result = api_client.get_employee_permissions(emp_id)
             perms = set(result.get('permissions', []))
+            # Кэшируем в локальную SQLite при успешном получении с сервера
+            if perms:
+                try:
+                    from database.db_manager import DatabaseManager
+                    db = DatabaseManager()
+                    db.set_employee_permissions(emp_id, {'permissions': list(perms)})
+                except Exception:
+                    pass
         except Exception:
             pass
 
-    # Fallback: если API недоступен или вернул пустой набор — дефолтные по должности
+    # Fallback 1: локальная БД (кэш прав из SQLite)
+    if not perms:
+        try:
+            from database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            result = db.get_employee_permissions(emp_id)
+            perms = set(result.get('permissions', []))
+        except Exception:
+            pass
+
+    # Fallback 2: дефолтные по должности (hardcoded)
     if not perms:
         perms = _get_default_permissions_for_position(employee)
 

@@ -4379,17 +4379,38 @@ class DatabaseManager(DatabaseMigrations):
             return None
 
     def get_employee_permissions(self, employee_id):
-        """Получить права сотрудника (заглушка для offline)"""
+        """Получить права сотрудника из локального кэша SQLite"""
         try:
-            return {'permissions': []}
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT permission_name FROM user_permissions WHERE employee_id = ?',
+                (employee_id,)
+            )
+            rows = cursor.fetchall()
+            self.close()
+            return {'permissions': [row['permission_name'] for row in rows]}
         except Exception as e:
             print(f"[WARN] get_employee_permissions: {e}")
             return {'permissions': []}
 
     def set_employee_permissions(self, employee_id, data):
-        """Установить права сотрудника (заглушка для offline)"""
+        """Сохранить права сотрудника в локальный кэш SQLite"""
         try:
-            return False
+            permissions = data.get('permissions', []) if isinstance(data, dict) else data
+            conn = self.connect()
+            cursor = conn.cursor()
+            # Удаляем старые права
+            cursor.execute('DELETE FROM user_permissions WHERE employee_id = ?', (employee_id,))
+            # Вставляем новые
+            for perm in permissions:
+                cursor.execute(
+                    'INSERT OR IGNORE INTO user_permissions (employee_id, permission_name) VALUES (?, ?)',
+                    (employee_id, perm)
+                )
+            conn.commit()
+            self.close()
+            return True
         except Exception as e:
             print(f"[WARN] set_employee_permissions: {e}")
             return False

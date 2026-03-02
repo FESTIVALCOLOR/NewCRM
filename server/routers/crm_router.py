@@ -1110,20 +1110,34 @@ async def get_stage_history(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Получить историю стадий карточки"""
-    # История из ActionHistory для данной карточки
-    history = db.query(ActionHistory).filter(
-        ActionHistory.entity_type.in_(['crm_card', 'stage', 'stage_executor']),
-        ActionHistory.entity_id == card_id
-    ).order_by(ActionHistory.action_date.desc()).all()
+    """Получить историю стадий карточки (stage executors с именами сотрудников)"""
+    executors = db.query(StageExecutor).filter(
+        StageExecutor.crm_card_id == card_id
+    ).order_by(StageExecutor.assigned_date.asc()).all()
 
-    return [{
-        'id': h.id,
-        'action_type': h.action_type,
-        'description': h.description,
-        'action_date': h.action_date.isoformat() if h.action_date else None,
-        'user_id': h.user_id
-    } for h in history]
+    result = []
+    for se in executors:
+        executor_name = 'Не назначен'
+        if se.executor:
+            executor_name = se.executor.full_name or 'Не назначен'
+
+        assigned_by_name = None
+        if se.assigned_by:
+            assigner = db.query(Employee).filter(Employee.id == se.assigned_by).first()
+            assigned_by_name = assigner.full_name if assigner else None
+
+        result.append({
+            'stage_name': se.stage_name,
+            'executor_name': executor_name,
+            'assigned_by_name': assigned_by_name,
+            'assigned_date': se.assigned_date.isoformat() if se.assigned_date else None,
+            'deadline': se.deadline,
+            'submitted_date': se.submitted_date.isoformat() if se.submitted_date else None,
+            'completed': se.completed,
+            'completed_date': se.completed_date.isoformat() if se.completed_date else None,
+        })
+
+    return result
 
 
 # =========================
@@ -1275,6 +1289,16 @@ async def workflow_accept_work(
                 entry = entries[0]
                 entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                 entry.updated_at = datetime.utcnow()
+
+        # Устанавливаем submitted_date у завершённых исполнителей текущей стадии
+        stage_executors = db.query(StageExecutor).filter(
+            StageExecutor.crm_card_id == card_id,
+            StageExecutor.stage_name == stage_name,
+            StageExecutor.completed == True,
+            StageExecutor.submitted_date.is_(None)
+        ).all()
+        for se in stage_executors:
+            se.submitted_date = datetime.utcnow()
 
         # Обновляем workflow state
         wf = db.query(StageWorkflowState).filter(

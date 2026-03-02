@@ -215,7 +215,7 @@ class ArchiveCard(QFrame):
                     background-color: #2196F3;
                     color: white;
                     border: none;
-                    padding: 4px 20px;
+                    padding: 4px 100px;
                     border-radius: 4px;
                     font-size: 10px;
                     font-weight: bold;
@@ -424,7 +424,7 @@ class ArchiveCardDetailsDialog(QDialog):
                 info_layout.addRow(tags_label)
 
             if self.card_data.get('deadline'):
-                deadline_label = QLabel(f"<b>Общий дедлайн:</b> {self.card_data['deadline']}")
+                deadline_label = QLabel(f"<b>Общий дедлайн:</b> {format_date(self.card_data['deadline'], 'N/A')}")
                 deadline_label.setStyleSheet('padding: 5px; background-color: #ffffff; border-radius: 4px; border: none;')
                 info_layout.addRow(deadline_label)
 
