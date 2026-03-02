@@ -66,192 +66,147 @@ class ArchiveCard(QFrame):
             }}
         """)
 
-        # Устанавливаем фиксированный размер для всех карточек
-        # Ширина: 295px - оптимально для 3 карточек в ряду при минимальной ширине окна 950px
-        self.setFixedSize(328, 220)
+        # Фиксированный размер для одинаковой сетки карточек
+        self.setFixedSize(328, 235)
 
         layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(6)
         layout.setContentsMargins(15, 12, 15, 12)
 
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(5)
-        
+        info_layout.setSpacing(4)
+
         contract_label = QLabel(f"<b>Договор:</b> {self.card_data.get('contract_number', 'N/A')}")
         contract_label.setStyleSheet('font-size: 11px; color: #666; background-color: transparent;')
         info_layout.addWidget(contract_label)
-        
+
         address = self.card_data.get('address', 'Адрес не указан')
         address_label = QLabel(f"<b>{address}</b>")
         address_label.setWordWrap(True)
         address_label.setStyleSheet('font-size: 13px; color: #222; font-weight: bold; background-color: transparent;')
         info_layout.addWidget(address_label)
-        
-        details_parts = []
+
+        # Площадь, город и тип агента на одной строке (как в активных карточках)
+        info_row = QHBoxLayout()
+        info_row.setSpacing(4)
+        info_row.setContentsMargins(0, 0, 0, 0)
+
+        info_container = QWidget()
+        details_layout = QHBoxLayout()
+        details_layout.setSpacing(4)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setAlignment(Qt.AlignVCenter)
+
         if self.card_data.get('area'):
-            details_parts.append(f"{self.card_data['area']} м²")
-        if self.card_data.get('city'):
-            details_parts.append(self.card_data['city'])
+            area_icon = IconLoader.create_icon_button('box', '', '', icon_size=11)
+            area_icon.setFixedSize(11, 11)
+            area_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
+            area_icon.setEnabled(False)
+            details_layout.addWidget(area_icon, 0, Qt.AlignVCenter)
 
-        if details_parts:
-            # Создаем контейнер для иконок и текста
-            details_container = QWidget()
-            details_layout = QHBoxLayout()
-            details_layout.setSpacing(4)
-            details_layout.setContentsMargins(0, 0, 0, 0)
-            details_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-            if self.card_data.get('area'):
-                # Иконка площади
-                area_icon = IconLoader.create_icon_button('box', '', '', icon_size=11)
-                area_icon.setFixedSize(11, 11)
-                area_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
-                area_icon.setEnabled(False)
-                details_layout.addWidget(area_icon, 0, Qt.AlignVCenter)
-
-                # Текст площади
-                area_label = QLabel(f"{self.card_data['area']} м²")
-                area_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
-                area_label.setAlignment(Qt.AlignVCenter)
-                details_layout.addWidget(area_label, 0, Qt.AlignVCenter)
-
-                if self.card_data.get('city'):
-                    # Разделитель
-                    sep_label = QLabel("|")
-                    sep_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
-                    sep_label.setAlignment(Qt.AlignVCenter)
-                    details_layout.addWidget(sep_label, 0, Qt.AlignVCenter)
+            area_label = QLabel(f"{self.card_data['area']} м²")
+            area_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
+            details_layout.addWidget(area_label, 0, Qt.AlignVCenter)
 
             if self.card_data.get('city'):
-                # Иконка города
-                city_icon = IconLoader.create_icon_button('map-pin', '', '', icon_size=11)
-                city_icon.setFixedSize(11, 11)
-                city_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
-                city_icon.setEnabled(False)
-                details_layout.addWidget(city_icon, 0, Qt.AlignVCenter)
+                sep_label = QLabel("|")
+                sep_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
+                details_layout.addWidget(sep_label, 0, Qt.AlignVCenter)
 
-                # Текст города
-                city_label = QLabel(self.card_data['city'])
-                city_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
-                city_label.setAlignment(Qt.AlignVCenter)
-                details_layout.addWidget(city_label, 0, Qt.AlignVCenter)
+        if self.card_data.get('city'):
+            city_icon = IconLoader.create_icon_button('map-pin', '', '', icon_size=11)
+            city_icon.setFixedSize(11, 11)
+            city_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
+            city_icon.setEnabled(False)
+            details_layout.addWidget(city_icon, 0, Qt.AlignVCenter)
 
-            details_layout.addStretch()
-            details_container.setLayout(details_layout)
-            info_layout.addWidget(details_container)
+            city_label = QLabel(self.card_data['city'])
+            city_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
+            details_layout.addWidget(city_label, 0, Qt.AlignVCenter)
 
-        # ИСПРАВЛЕНИЕ: Тип агента отдельно с цветом
+        details_layout.addStretch()
+        info_container.setLayout(details_layout)
+        info_row.addWidget(info_container, 1)
+
+        # Тип агента — справа в той же строке
         if self.card_data.get('agent_type'):
             agent_type = self.card_data['agent_type']
             agent_color = self.data.get_agent_color(agent_type)
 
             agent_label = QLabel(agent_type)
-            if agent_color:
-                agent_label.setStyleSheet(f'''
-                    background-color: {agent_color};
-                    color: white;
-                    font-size: 10px;
-                    font-weight: bold;
-                    padding: 3px 8px;
-                    border-radius: 4px;
-                    border: 2px solid {agent_color};
-                ''')
-            else:
-                agent_label.setStyleSheet('''
-                    background-color: #95A5A6;
-                    color: white;
-                    font-size: 10px;
-                    font-weight: bold;
-                    padding: 3px 8px;
-                    border-radius: 4px;
-                    border: 2px solid #95A5A6;
-                ''')
-            agent_label.setAlignment(Qt.AlignLeft)
-            info_layout.addWidget(agent_label)
-        
+            agent_label.setFixedHeight(22)
+            color = agent_color or '#95A5A6'
+            agent_label.setStyleSheet(f'''
+                background-color: {color};
+                color: white;
+                font-size: 10px;
+                font-weight: bold;
+                padding: 2px 6px;
+                border-radius: 4px;
+            ''')
+            agent_label.setAlignment(Qt.AlignCenter)
+            info_row.addWidget(agent_label, 0)
+
+        info_layout.addLayout(info_row)
+
         if status:
             status_label = QLabel(f"Статус: {status}")
             if 'СДАН' in status:
-                status_label.setStyleSheet('''
-                    color: white;
-                    background-color: #27AE60;
-                    padding: 3px 8px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
-                ''')
+                status_style = 'color: white; background-color: #27AE60;'
             elif 'РАСТОРГНУТ' in status:
-                status_label.setStyleSheet('''
-                    color: white;
-                    background-color: #E74C3C;
-                    padding: 3px 8px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
-                ''')
+                status_style = 'color: white; background-color: #E74C3C;'
             elif 'НАДЗОР' in status:
-                status_label.setStyleSheet('''
-                    color: white;
-                    background-color: #2196F3;
-                    padding: 3px 8px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
-                ''')
+                status_style = 'color: white; background-color: #2196F3;'
+            else:
+                status_style = 'color: white; background-color: #95A5A6;'
+            status_label.setStyleSheet(f'{status_style} padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;')
             info_layout.addWidget(status_label)
 
         layout.addLayout(info_layout)
 
-        # Добавляем stretch, чтобы кнопки всегда были внизу
+        # Stretch для прижатия кнопок к низу
         layout.addStretch(1)
 
         # ========== КНОПКА "ПЕРЕВЕСТИ В АВТОРСКИЙ НАДЗОР" ==========
-        # Показываем только для карточек, статус которых НЕ "АВТОРСКИЙ НАДЗОР"
         if 'АВТОРСКИЙ НАДЗОР' not in status and 'НАДЗОР' not in status:
             supervision_btn = IconLoader.create_icon_button(
-                'shield', 'В авторский надзор', 'Перевести в авторский надзор', icon_size=12)
+                'shield-white', 'В авторский надзор', 'Перевести в авторский надзор', icon_size=12)
             supervision_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #2196F3;
                     color: white;
                     border: none;
-                    padding: 4px 100px;
+                    padding: 4px 8px;
                     border-radius: 4px;
                     font-size: 10px;
                     font-weight: bold;
-                    max-height: 19px;
-                    min-height: 19px;
+                    max-height: 22px;
+                    min-height: 22px;
+                    min-width: 296px;
                 }
-                QPushButton:hover {
-                    background-color: #1976D2;
-                }
-                QPushButton:pressed {
-                    background-color: #1565C0;
-                }
+                QPushButton:hover { background-color: #1976D2; }
+                QPushButton:pressed { background-color: #1565C0; }
             """)
             supervision_btn.clicked.connect(self._transfer_to_supervision)
             layout.addWidget(supervision_btn, 0, Qt.AlignCenter)
 
-        # ========== КНОПКА ПОДРОБНЕЕ (SVG) ==========
+        # ========== КНОПКА ПОДРОБНЕЕ ==========
         details_btn = IconLoader.create_icon_button('info', 'Подробнее', 'Просмотр деталей', icon_size=12)
         details_btn.setStyleSheet("""
             QPushButton {
                 background-color: #E0E0E0;
                 color: #333333;
                 border: none;
-                padding: 4px 100px;
+                padding: 4px 8px;
                 border-radius: 4px;
                 font-size: 11px;
                 font-weight: bold;
-                max-height: 19px;
-                min-height: 19px;
+                max-height: 22px;
+                min-height: 22px;
+                min-width: 296px;
             }
-            QPushButton:hover {
-                background-color: #D0D0D0;
-            }
-            QPushButton:pressed {
-                background-color: #C0C0C0;
-            }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
         details_btn.clicked.connect(self.show_details)
         layout.addWidget(details_btn, 0, Qt.AlignCenter)
@@ -563,99 +518,58 @@ class ArchiveCardDetailsDialog(QDialog):
             history_label.setStyleSheet('margin-top: 10px; font-size: 12px;')
             info_layout.addRow(history_label)
 
-            # Для надзорных карточек используем supervision_history
-            if self.card_type == 'supervision':
-                supervision_history = self.data.get_supervision_history(self.card_data.get('id')) or []
-                if supervision_history:
-                    for entry in supervision_history:
-                        entry_type = entry.get('entry_type', '')
-                        message = entry.get('message', '')
-                        created_at = entry.get('created_at', '')
-                        if isinstance(created_at, str) and 'T' in created_at:
-                            created_at = created_at.split('T')[0]
-                        type_colors = {
-                            'card_moved': '#1565C0', 'assignment_change': '#E65100',
-                            'stage_completed': '#2E7D32', 'pause': '#F57F17',
-                            'resume': '#388E3C', 'data_change': '#6A1B9A',
-                            'file_upload': '#00695C', 'row_added': '#283593',
-                            'row_deleted': '#B71C1C', 'accepted': '#1B5E20',
-                            'executor_assigned': '#E65100', 'executor_deleted': '#B71C1C',
-                            'work_submitted': '#0D47A1', 'work_accepted': '#1B5E20',
-                            'work_rejected': '#C62828', 'payment_created': '#4A148C',
-                            'payment_updated': '#6A1B9A', 'deadline_changed': '#E65100',
-                            'stages_reset': '#BF360C', 'approval_completed': '#2E7D32',
-                        }
-                        color = type_colors.get(entry_type, '#616161')
-                        entry_label = QLabel(f"<span style='color: {color}; font-weight: bold;'>{created_at}</span> — {message}")
-                        entry_label.setWordWrap(True)
-                        entry_label.setStyleSheet('font-size: 10px; padding: 2px 0;')
-                        info_layout.addRow(entry_label)
+            # Фильтр по типу действия
+            filter_row = QHBoxLayout()
+            filter_lbl = QLabel('Фильтр:')
+            filter_lbl.setStyleSheet('font-size: 10px; color: #666;')
+            filter_row.addWidget(filter_lbl)
+            self._archive_history_filter = QComboBox()
+            self._archive_history_filter.addItems([
+                'Все действия', 'Стадии исполнителей',
+                'Перемещение карточки', 'Пауза / возобновление',
+                'Назначение исполнителей', 'Сдача / приёмка работы',
+                'Стадии и согласование', 'Оплаты',
+                'Изменение дедлайна', 'Загрузка файлов',
+                'Удаление файлов', 'Замер', 'Прочее',
+            ])
+            self._archive_history_filter.setStyleSheet('font-size: 10px; padding: 2px 5px;')
+            self._archive_history_filter.setFixedWidth(200)
+            filter_row.addWidget(self._archive_history_filter)
+            filter_row.addStretch()
+            filter_widget = QWidget()
+            filter_widget.setLayout(filter_row)
+            info_layout.addRow(filter_widget)
+
+            # Контейнер для истории (будет обновляться фильтром)
+            self._archive_history_container = QVBoxLayout()
+            history_container_widget = QWidget()
+            history_container_widget.setLayout(self._archive_history_container)
+            info_layout.addRow(history_container_widget)
+
+            # Загружаем данные
+            card_id = self.card_data.get('id')
+
+            # Стадии исполнителей
+            self._archive_stages = self.data.get_stage_history(card_id) or []
+
+            # ActionHistory (все записи)
+            self._archive_action_history = []
+            try:
+                if self.card_type == 'supervision':
+                    self._archive_action_history = self.data.get_supervision_history(card_id) or []
                 else:
-                    empty = QLabel('История отсутствует')
-                    empty.setStyleSheet('color: #999; font-style: italic;')
-                    info_layout.addRow(empty)
-            else:
-                stages = self.data.get_stage_history(self.card_data.get('id'))
+                    entity_type = 'crm_card'
+                    try:
+                        self._archive_action_history = self.data.get_action_history(entity_type, card_id) or []
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"[ARCHIVE] Ошибка загрузки истории: {e}")
 
-                if stages:
-                    completed_stages = []
-                    active_stages = []
-
-                    for stage in stages:
-                        if stage.get('completed'):
-                            completed_stages.append(stage)
-                        else:
-                            active_stages.append(stage)
-
-                    all_prioritized_stages = completed_stages + active_stages
-
-                    for stage in all_prioritized_stages:
-                        stage_frame = QFrame()
-
-                        if stage.get('completed'):
-                            bg_color = '#D5F4E6'
-                        else:
-                            bg_color = '#F8F9FA'
-
-                        stage_frame.setStyleSheet(f'''
-                            QFrame {{
-                                background-color: {bg_color};
-                                border: none;
-                                border-radius: 4px;
-                                padding: 2px;
-                                margin: 2px 0px;
-                            }}
-                        ''')
-
-                        stage_layout = QVBoxLayout()
-                        stage_layout.setSpacing(3)
-
-                        stage_name = QLabel(f"<b>{stage.get('stage_name', 'N/A')}</b>")
-                        stage_layout.addWidget(stage_name)
-
-                        executor = QLabel(f"Исполнитель: {stage.get('executor_name', 'Не назначен')}")
-                        executor.setStyleSheet('font-size: 10px; color: #666;')
-                        stage_layout.addWidget(executor)
-
-                        dates_parts = [f"Назначено: {format_date(stage.get('assigned_date'), 'N/A')}", f"Дедлайн: {format_date(stage.get('deadline'), 'N/A')}"]
-                        if stage.get('submitted_date'):
-                            dates_parts.append(f"Сдано: {format_date(stage.get('submitted_date'), 'N/A')}")
-
-                        dates = QLabel(" | ".join(dates_parts))
-                        dates.setStyleSheet('font-size: 10px; color: #666;')
-                        stage_layout.addWidget(dates)
-
-                        if stage.get('completed'):
-                            completed_label = QLabel(f"Принято: {format_date(stage.get('completed_date'), 'N/A')}")
-                            completed_label.setStyleSheet('font-size: 10px; color: #27AE60; font-weight: bold;')
-                            stage_layout.addWidget(completed_label)
-
-                        stage_frame.setLayout(stage_layout)
-                        info_layout.addRow(stage_frame)
-                else:
-                    empty = QLabel('История отсутствует')
-                    empty.setStyleSheet('color: #999; font-style: italic;')
-                    info_layout.addRow(empty)
+            # Подключаем фильтр
+            self._archive_history_filter.currentTextChanged.connect(self._on_archive_history_filter)
+            # Рендерим начальное состояние
+            self._on_archive_history_filter('Все действия')
             
             info_content.setLayout(info_layout)
             info_scroll.setWidget(info_content)
@@ -1303,7 +1217,7 @@ class ArchiveCardDetailsDialog(QDialog):
 
             restore_perm = 'supervision.move' if self.card_type == 'supervision' else 'crm_cards.move'
             can_restore = _has_perm(self.employee, self.api_client, restore_perm)
-            restore_btn = IconLoader.create_icon_button('refresh3', 'Вернуть в активные проекты', icon_size=12)
+            restore_btn = IconLoader.create_icon_button('refresh-black', 'Вернуть в активные проекты', icon_size=12)
             restore_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffd93c;
@@ -1382,6 +1296,103 @@ class ArchiveCardDetailsDialog(QDialog):
         self.setAttribute(Qt.WA_Hover, True)
         # =======================================================  
             
+    def _on_archive_history_filter(self, filter_text):
+        """Фильтрация истории архивной карточки"""
+        container = self._archive_history_container
+        # Очищаем
+        while container.count():
+            child = container.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Маппинг фильтров на action_type
+        filter_map = {
+            'Перемещение карточки': ['card_moved'],
+            'Пауза / возобновление': ['card_paused', 'card_resumed', 'pause', 'resume'],
+            'Назначение исполнителей': ['executor_assigned', 'executor_deleted', 'executor_completed', 'assignment_change'],
+            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance', 'accepted'],
+            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset'],
+            'Оплаты': ['payment_created', 'payment_updated'],
+            'Изменение дедлайна': ['deadline_changed', 'executor_deadline_changed'],
+            'Загрузка файлов': ['file_upload'],
+            'Удаление файлов': ['file_delete'],
+            'Замер': ['survey_complete', 'survey_date_changed'],
+        }
+
+        show_stages = filter_text in ('Все действия', 'Стадии исполнителей')
+        show_actions = filter_text != 'Стадии исполнителей'
+        has_content = False
+
+        # ActionHistory
+        if show_actions and self._archive_action_history:
+            allowed = filter_map.get(filter_text)
+            if filter_text == 'Прочее':
+                all_known = set()
+                for types in filter_map.values():
+                    all_known.update(types)
+                items = [a for a in self._archive_action_history
+                         if a.get('action_type', a.get('entry_type', '')) not in all_known]
+            elif allowed:
+                items = [a for a in self._archive_action_history
+                         if a.get('action_type', a.get('entry_type', '')) in allowed]
+            else:
+                items = self._archive_action_history
+
+            for action in items:
+                has_content = True
+                date_str = action.get('action_date', action.get('created_at', ''))
+                if isinstance(date_str, str) and 'T' in date_str:
+                    date_str = date_str.split('T')[0]
+                desc = action.get('description', action.get('message', ''))
+                user = action.get('user_name', '')
+                text = f"{format_date(date_str, date_str)}"
+                if user:
+                    text += f" | {user}"
+                text += f": {desc}"
+
+                lbl = QLabel(text)
+                lbl.setWordWrap(True)
+                lbl.setStyleSheet('color: #2C3E50; font-size: 10px; background-color: #EBF5FB; padding: 6px; border-radius: 4px;')
+                container.addWidget(lbl)
+
+        # Стадии исполнителей
+        if show_stages and self._archive_stages:
+            for stage in self._archive_stages:
+                has_content = True
+                stage_frame = QFrame()
+                bg = '#D5F4E6' if stage.get('completed') else '#F8F9FA'
+                stage_frame.setStyleSheet(f'QFrame {{ background-color: {bg}; border: none; border-radius: 4px; padding: 2px; margin: 2px 0px; }}')
+
+                sl = QVBoxLayout()
+                sl.setSpacing(3)
+                sl.addWidget(QLabel(f"<b>{stage.get('stage_name', 'N/A')}</b>"))
+
+                ex = QLabel(f"Исполнитель: {stage.get('executor_name', 'Не назначен')}")
+                ex.setStyleSheet('font-size: 10px; color: #666;')
+                sl.addWidget(ex)
+
+                dp = [f"Назначено: {format_date(stage.get('assigned_date'), 'N/A')}", f"Дедлайн: {format_date(stage.get('deadline'), 'N/A')}"]
+                if stage.get('submitted_date'):
+                    dp.append(f"Сдано: {format_date(stage.get('submitted_date'), 'N/A')}")
+                dl = QLabel(" | ".join(dp))
+                dl.setStyleSheet('font-size: 10px; color: #666;')
+                sl.addWidget(dl)
+
+                if stage.get('completed'):
+                    cl = QLabel(f"Принято: {format_date(stage.get('completed_date'), 'N/A')}")
+                    cl.setStyleSheet('font-size: 10px; color: #27AE60; font-weight: bold;')
+                    sl.addWidget(cl)
+
+                stage_frame.setLayout(sl)
+                container.addWidget(stage_frame)
+
+        if not has_content:
+            empty = QLabel('История отсутствует')
+            empty.setStyleSheet('color: #999; font-style: italic;')
+            container.addWidget(empty)
+
+        container.addStretch()
+
     def _get_stage_columns(self):
         """Получить список рабочих стадий для выбора при возврате из архива."""
         if self.card_type == 'supervision':
@@ -1610,6 +1621,9 @@ class ArchiveCardDetailsDialog(QDialog):
             return
 
         self._show_sync_label()
+
+        # Таймаут: скрыть надпись через 30 секунд если sync зависнет
+        QTimer.singleShot(30000, self._on_sync_ended)
 
         def sync_thread():
             try:
