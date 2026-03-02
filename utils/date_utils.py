@@ -227,6 +227,36 @@ def is_working_day(date):
     return True
 
 
+def networkdays(start_date, end_date):
+    """Расчёт рабочих дней между двумя датами (с учётом праздников РФ).
+    Чистый Python, без PyQt5 — можно использовать и на сервере."""
+    if not start_date or not end_date:
+        return 0
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            return 0
+    if isinstance(end_date, str):
+        try:
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        except ValueError:
+            return 0
+    if hasattr(start_date, 'date'):
+        start_date = start_date.date()
+    if hasattr(end_date, 'date'):
+        end_date = end_date.date()
+    if end_date < start_date:
+        return 0
+    count = 0
+    current = start_date
+    while current < end_date:
+        if is_working_day(current):
+            count += 1
+        current += timedelta(days=1)
+    return count
+
+
 def add_working_days(start_date, working_days):
     """
     Добавляет указанное количество рабочих дней к дате

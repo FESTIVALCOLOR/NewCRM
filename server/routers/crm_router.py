@@ -595,6 +595,23 @@ async def move_crm_card_to_column(
 
         card.column_name = new_column
 
+        # При перемещении вперёд: помечаем незаполненные подэтапы предыдущей стадии как skipped
+        if old_column != new_column and new_column != 'В ожидании' and old_column != 'В ожидании':
+            old_stage_group = _resolve_stage_group(old_column)
+            if old_stage_group and contract:
+                unfilled = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract.id,
+                    ProjectTimelineEntry.stage_group == old_stage_group,
+                    ProjectTimelineEntry.executor_role != 'header',
+                    ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == ''),
+                    ProjectTimelineEntry.status != 'skipped'
+                ).all()
+                for uf in unfilled:
+                    uf.status = 'skipped'
+                    uf.updated_at = datetime.utcnow()
+                if unfilled:
+                    logger.info(f"Card {card_id} move: {len(unfilled)} entries marked skipped in {old_stage_group}")
+
         # K11: Запись перемещения в историю проекта
         if old_column != new_column:
             if new_column == 'В ожидании':
@@ -1144,6 +1161,31 @@ async def get_stage_history(
 # WORKFLOW ENDPOINTS (CRM)
 # =========================
 
+def _server_recalculate_actual_days(db, contract_id: int):
+    """Пересчёт actual_days (рабочие дни между последовательными actual_date) на сервере.
+    Аналог _recalculate_days() из timeline_widget.py, но серверный."""
+    from utils.date_utils import networkdays as _nwd
+    entries = db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.executor_role != 'header'
+    ).order_by(ProjectTimelineEntry.sort_order).all()
+
+    prev_date = None
+    for entry in entries:
+        actual_date = entry.actual_date
+        if actual_date and prev_date:
+            try:
+                days = _nwd(prev_date, actual_date)
+                entry.actual_days = max(days, 0)
+            except Exception:
+                entry.actual_days = 0
+        else:
+            if not actual_date:
+                entry.actual_days = 0
+        if actual_date:
+            prev_date = actual_date
+
+
 def _resolve_stage_group(column_name: str) -> str:
     """Определить stage_group по имени колонки канбана.
     Маппинг гибкий: ищет паттерны 'стадия N' в названии колонки.
@@ -1186,7 +1228,8 @@ async def workflow_submit_work(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Сдача работы исполнителем — записывает дату в timeline"""
+    """Сдача работы исполнителем — записывает дату в timeline.
+    Ищет строку по executor_role (Чертежник/Дизайнер/ГАП), а не просто первую пустую."""
     try:
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
@@ -1195,31 +1238,24 @@ async def workflow_submit_work(
         contract_id = card.contract_id
         stage_name = card.column_name
 
-        # Находим текущий подэтап (первый без actual_date, is_in_contract_scope, не header)
         stage_group = _resolve_stage_group(stage_name)
         if not stage_group:
             return {"status": "no_stage_group"}
 
-        entries = db.query(ProjectTimelineEntry).filter(
+        # Роли исполнителей (те, кто нажимает "Сдать работу")
+        executor_roles = ['Чертежник', 'Дизайнер', 'ГАП']
+
+        entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role != 'header',
-            ProjectTimelineEntry.actual_date.is_(None)
-        ).order_by(ProjectTimelineEntry.sort_order).all()
+            ProjectTimelineEntry.executor_role.in_(executor_roles),
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).first()
 
-        # Также check entries with empty string
-        if not entries:
-            entries = db.query(ProjectTimelineEntry).filter(
-                ProjectTimelineEntry.contract_id == contract_id,
-                ProjectTimelineEntry.stage_group == stage_group,
-                ProjectTimelineEntry.executor_role != 'header',
-                ProjectTimelineEntry.actual_date == ''
-            ).order_by(ProjectTimelineEntry.sort_order).all()
-
-        if entries:
-            entry = entries[0]
+        if entry:
             entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
             entry.updated_at = datetime.utcnow()
+            _server_recalculate_actual_days(db, contract_id)
 
         # Обновляем workflow state
         wf = db.query(StageWorkflowState).filter(
@@ -1230,18 +1266,18 @@ async def workflow_submit_work(
             wf = StageWorkflowState(
                 crm_card_id=card_id,
                 stage_name=stage_name,
-                current_substep_code=entries[0].stage_code if entries else None,
+                current_substep_code=entry.stage_code if entry else None,
                 status='in_progress'
             )
             db.add(wf)
-        wf.current_substep_code = entries[0].stage_code if entries else wf.current_substep_code
+        wf.current_substep_code = entry.stage_code if entry else wf.current_substep_code
         wf.updated_at = datetime.utcnow()
 
         # K11: Запись в историю
         db.add(ActionHistory(
             user_id=current_user.id, action_type='work_submitted',
             entity_type='crm_card', entity_id=card_id,
-            description=f'Сдача работы: {stage_name}'
+            description=f'Сдача работы: {stage_name} ({entry.stage_name if entry else ""})'
         ))
 
         db.commit()
@@ -1251,7 +1287,7 @@ async def workflow_submit_work(
             db, card_id, 'stage_complete', stage_name=stage_name
         ))
 
-        return {"status": "submitted", "substep": entries[0].stage_code if entries else None}
+        return {"status": "submitted", "substep": entry.stage_code if entry else None}
 
     except HTTPException:
         raise
@@ -1267,7 +1303,8 @@ async def workflow_accept_work(
     current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
-    """Приемка работы — записывает дату проверки в timeline"""
+    """Приемка работы — записывает дату проверки в timeline.
+    Ищет строку по executor_role (СДП/Менеджер), а не просто первую пустую."""
     try:
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
@@ -1277,18 +1314,21 @@ async def workflow_accept_work(
         stage_name = card.column_name
         stage_group = _resolve_stage_group(stage_name)
 
+        # Роли проверяющих (те, кто нажимает "Принять работу")
+        reviewer_roles = ['СДП', 'Менеджер']
+
         if stage_group:
-            entries = db.query(ProjectTimelineEntry).filter(
+            entry = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
                 ProjectTimelineEntry.stage_group == stage_group,
-                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.executor_role.in_(reviewer_roles),
                 ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-            ).order_by(ProjectTimelineEntry.sort_order).all()
+            ).order_by(ProjectTimelineEntry.sort_order).first()
 
-            if entries:
-                entry = entries[0]
+            if entry:
                 entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                 entry.updated_at = datetime.utcnow()
+                _server_recalculate_actual_days(db, contract_id)
 
         # Устанавливаем submitted_date у завершённых исполнителей текущей стадии
         stage_executors = db.query(StageExecutor).filter(
@@ -1351,20 +1391,20 @@ async def workflow_reject_work(
         contract_id = card.contract_id
         revision_file_path = body.get('revision_file_path', '')
 
-        # Записываем дату проверки СДП в timeline
-        # (первый незаполненный подэтап в текущей стадии = дата проверки)
+        # Записываем дату проверки СДП в timeline (ищем по роли СДП/Менеджер)
         stage_group = _resolve_stage_group(stage_name)
+        reviewer_roles = ['СДП', 'Менеджер']
         if stage_group and contract_id:
-            entries = db.query(ProjectTimelineEntry).filter(
+            entry = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
                 ProjectTimelineEntry.stage_group == stage_group,
-                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.executor_role.in_(reviewer_roles),
                 ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-            ).order_by(ProjectTimelineEntry.sort_order).all()
-            if entries:
-                entry = entries[0]
+            ).order_by(ProjectTimelineEntry.sort_order).first()
+            if entry:
                 entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                 entry.updated_at = datetime.utcnow()
+                _server_recalculate_actual_days(db, contract_id)
 
         # Сбрасываем completed у исполнителя текущей стадии
         # чтобы он увидел кнопку "Сдать работу" снова
@@ -1422,7 +1462,9 @@ async def workflow_client_send(
     current_user: Employee = Depends(require_permission("crm_cards.move")),
     db: Session = Depends(get_db)
 ):
-    """Отправить на согласование клиенту — приостанавливает дедлайн"""
+    """Отправить на согласование клиенту — приостанавливает дедлайн.
+    НЕ записывает дату в клиентскую строку — дата записывается при client-ok (согласовано).
+    Помечает промежуточные пустые строки как skipped."""
     card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Карточка не найдена")
@@ -1431,11 +1473,9 @@ async def workflow_client_send(
     contract_id = card.contract_id
     stage_group = _resolve_stage_group(stage_name)
 
-    # Пропускаем промежуточные подэтапы (проверка СДП, правки) если они не заполнены
-    # и записываем дату "Отправка клиенту"
     deadline_str = ''
     if stage_group:
-        # Помечаем все незаполненные подэтапы ДО записи "Клиент" как пропущенные
+        # Находим первую незаполненную клиентскую строку
         client_entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
@@ -1444,11 +1484,11 @@ async def workflow_client_send(
         ).order_by(ProjectTimelineEntry.sort_order).first()
 
         if client_entry:
-            # Пропускаем незаполненные подэтапы до клиентского
+            # Помечаем незаполненные НЕ-клиентские подэтапы до клиентского как пропущенные
             skipped_entries = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
                 ProjectTimelineEntry.stage_group == stage_group,
-                ProjectTimelineEntry.executor_role != 'header',
+                ProjectTimelineEntry.executor_role.notin_(['header', 'Клиент']),
                 ProjectTimelineEntry.sort_order < client_entry.sort_order,
                 ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
             ).all()
@@ -1456,10 +1496,8 @@ async def workflow_client_send(
                 se.status = 'skipped'
                 se.updated_at = datetime.utcnow()
 
-        if client_entry:
-            client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-
-            # Дедлайн = actual_date предыдущего подэтапа + norm_days рабочих дней
+            # НЕ записываем дату — она запишется при client-ok (согласовано)
+            # Считаем дедлайн согласования для уведомления
             norm_days = client_entry.norm_days or 3
             prev_entry = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
@@ -1518,7 +1556,8 @@ async def workflow_client_approved(
     current_user: Employee = Depends(require_permission("crm_cards.complete_approval")),
     db: Session = Depends(get_db)
 ):
-    """Клиент согласовал — записывает дату согласования в timeline, возобновляет дедлайн"""
+    """Клиент согласовал — записывает дату в клиентскую строку Отправка/Согласование.
+    Также записывает дату в следующую строку «Сбор правок» (роль СДП/Менеджер)."""
     card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Карточка не найдена")
@@ -1526,20 +1565,19 @@ async def workflow_client_approved(
     stage_name = card.column_name
     contract_id = card.contract_id
 
-    # Записываем дату согласования клиента в timeline
-    # (первый незаполненный подэтап после записи "Клиент")
     stage_group = _resolve_stage_group(stage_name)
     if stage_group and contract_id:
-        entries = db.query(ProjectTimelineEntry).filter(
+        # Записываем дату в клиентскую строку "Отправка клиенту / Согласование"
+        client_entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role != 'header',
+            ProjectTimelineEntry.executor_role == 'Клиент',
             ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).all()
-        if entries:
-            entry = entries[0]
-            entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-            entry.updated_at = datetime.utcnow()
+        ).order_by(ProjectTimelineEntry.sort_order).first()
+        if client_entry:
+            client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+            client_entry.updated_at = datetime.utcnow()
+        _server_recalculate_actual_days(db, contract_id)
 
     wf = db.query(StageWorkflowState).filter(
         StageWorkflowState.crm_card_id == card_id,
