@@ -63,7 +63,7 @@ async def get_salary_report(
                 emp = db.query(Employee).filter(Employee.id == emp_id).first()
                 employee_totals[emp_id] = {
                     'employee_id': emp_id,
-                    'employee_name': emp.full_name if emp else 'Неизвестный',
+                    'employee_name': s.employee_name or (emp.full_name if emp else 'Неизвестный'),
                     'position': emp.position if emp else '',
                     'total_amount': 0,
                     'advance_payment': 0,
@@ -114,7 +114,13 @@ async def create_salary(
     db: Session = Depends(get_db)
 ):
     """Создать запись о зарплате"""
-    salary = Salary(**salary_data.model_dump())
+    data = salary_data.model_dump()
+    # Денормализация: сохраняем имя сотрудника для истории
+    if data.get('employee_id') and not data.get('employee_name'):
+        emp = db.query(Employee).filter(Employee.id == data['employee_id']).first()
+        if emp:
+            data['employee_name'] = emp.full_name
+    salary = Salary(**data)
     db.add(salary)
     db.commit()
     db.refresh(salary)

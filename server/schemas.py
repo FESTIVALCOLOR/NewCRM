@@ -700,6 +700,7 @@ class PaymentBase(BaseModel):
     crm_card_id: Optional[int] = None
     supervision_card_id: Optional[int] = None
     employee_id: int
+    employee_name: Optional[str] = None
     role: str
     stage_name: Optional[str] = None
     calculated_amount: Optional[float] = 0.0
@@ -792,7 +793,6 @@ class PaymentResponse(PaymentBase):
     paid_by: Optional[int] = None
     reassigned: bool
     old_employee_id: Optional[int] = None
-    employee_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -854,6 +854,7 @@ class RateResponse(RateBase):
 class SalaryBase(BaseModel):
     contract_id: Optional[int] = None
     employee_id: int
+    employee_name: Optional[str] = None
     payment_type: str
     stage_name: Optional[str] = None
     amount: float

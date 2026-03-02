@@ -121,7 +121,7 @@ async def get_all_payments(
                 'crm_card_id': p.crm_card_id,
                 'supervision_card_id': p.supervision_card_id,
                 'employee_id': p.employee_id,
-                'employee_name': employee.full_name if employee else 'Неизвестный',
+                'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
                 'position': employee.position if employee else '',
                 'role': p.role,
                 'stage_name': p.stage_name,
@@ -195,7 +195,7 @@ async def get_all_payments(
                     'crm_card_id': None,
                     'supervision_card_id': None,
                     'employee_id': s.employee_id,
-                    'employee_name': employee.full_name if employee else 'Неизвестный',
+                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
                     'position': employee.position if employee else '',
                     'role': s.payment_type,  # payment_type в salaries = роль
                     'stage_name': s.stage_name,
@@ -435,7 +435,7 @@ async def get_payments_by_type(
                     'id': s.id,
                     'contract_id': s.contract_id,
                     'employee_id': s.employee_id,
-                    'employee_name': employee.full_name if employee else 'Неизвестный',
+                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
                     'position': employee.position if employee else '',
                     'role': s.payment_type,
                     'stage_name': s.stage_name,
@@ -473,7 +473,7 @@ async def get_payments_by_type(
                     'crm_card_id': p.crm_card_id,
                     'supervision_card_id': p.supervision_card_id,
                     'employee_id': p.employee_id,
-                    'employee_name': employee.full_name if employee else 'Неизвестный',
+                    'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
                     'position': employee.position if employee else '',
                     'role': p.role,
                     'stage_name': p.stage_name,
@@ -505,7 +505,7 @@ async def get_payments_by_type(
                     'id': s.id,
                     'contract_id': s.contract_id,
                     'employee_id': s.employee_id,
-                    'employee_name': employee.full_name if employee else 'Неизвестный',
+                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
                     'position': employee.position if employee else '',
                     'role': s.payment_type,
                     'stage_name': s.stage_name,
@@ -544,7 +544,7 @@ async def get_payments_by_type(
                     'id': p.id,
                     'contract_id': p.contract_id,
                     'employee_id': p.employee_id,
-                    'employee_name': employee.full_name if employee else 'Неизвестный',
+                    'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
                     'position': employee.position if employee else '',
                     'role': p.role,
                     'stage_name': p.stage_name,
@@ -574,7 +574,7 @@ async def get_payments_by_type(
                     'id': s.id,
                     'contract_id': s.contract_id,
                     'employee_id': s.employee_id,
-                    'employee_name': employee.full_name if employee else 'Неизвестный',
+                    'employee_name': s.employee_name or (employee.full_name if employee else 'Неизвестный'),
                     'position': employee.position if employee else '',
                     'role': s.payment_type,
                     'stage_name': s.stage_name,
@@ -823,6 +823,12 @@ async def create_payment(
         # payment_status остаётся NULL - платёж ещё не оплачен
         # Статус 'paid' устанавливается кнопкой "Оплачено" в UI
 
+        # Денормализация: сохраняем имя сотрудника для истории
+        if data.get('employee_id') and not data.get('employee_name'):
+            emp = db.query(Employee).filter(Employee.id == data['employee_id']).first()
+            if emp:
+                data['employee_name'] = emp.full_name
+
         payment = Payment(**data)
         db.add(payment)
         db.commit()
@@ -887,7 +893,7 @@ async def get_payments_for_contract(
 
         # Получаем имя сотрудника
         employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
-        payment_dict['employee_name'] = employee.full_name if employee else 'Неизвестный'
+        payment_dict['employee_name'] = payment.employee_name or (employee.full_name if employee else 'Неизвестный')
         payment_dict['position'] = employee.position if employee else ''  # ИСПРАВЛЕНИЕ: Добавлена должность
 
         # ИСПРАВЛЕНИЕ: Добавлены поля source и amount для совместимости
@@ -951,7 +957,7 @@ async def get_payments_for_supervision(
             'contract_id': payment.contract_id,
             'supervision_card_id': payment.supervision_card_id,
             'employee_id': payment.employee_id,
-            'employee_name': employee.full_name if employee else 'Неизвестный',
+            'employee_name': payment.employee_name or (employee.full_name if employee else 'Неизвестный'),
             'role': payment.role,
             'stage_name': payment.stage_name,
             'calculated_amount': float(payment.calculated_amount) if payment.calculated_amount else 0,
@@ -988,7 +994,7 @@ async def get_payments_by_supervision_card(
             'contract_id': payment.contract_id,
             'supervision_card_id': payment.supervision_card_id,
             'employee_id': payment.employee_id,
-            'employee_name': employee.full_name if employee else 'Неизвестный',
+            'employee_name': payment.employee_name or (employee.full_name if employee else 'Неизвестный'),
             'role': payment.role,
             'stage_name': payment.stage_name,
             'calculated_amount': float(payment.calculated_amount) if payment.calculated_amount else 0,
@@ -1026,7 +1032,7 @@ async def get_payments_for_crm(
             'contract_id': p.contract_id,
             'crm_card_id': p.crm_card_id,
             'employee_id': p.employee_id,
-            'employee_name': employee.full_name if employee else 'Неизвестный',
+            'employee_name': p.employee_name or (employee.full_name if employee else 'Неизвестный'),
             'position': employee.position if employee else '',
             'role': p.role,
             'stage_name': p.stage_name,
@@ -1061,7 +1067,7 @@ async def get_payment_by_id(
         raise HTTPException(status_code=404, detail="Платеж не найден")
     # Добавляем employee_name через JOIN
     employee = db.query(Employee).filter(Employee.id == payment.employee_id).first()
-    payment.employee_name = employee.full_name if employee else 'Неизвестный'
+    payment.employee_name = payment.employee_name or (employee.full_name if employee else 'Неизвестный')
     return payment
 
 

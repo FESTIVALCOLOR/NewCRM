@@ -652,6 +652,8 @@ class Payment(Base):
 
     # S-07: nullable чтобы сохранять платежи при удалении сотрудника (SET NULL)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    # Денормализация: имя сохраняется при создании, чтобы не терять при удалении сотрудника
+    employee_name = Column(String, nullable=True)
     role = Column(String, nullable=False)
     stage_name = Column(String)
 
@@ -712,6 +714,8 @@ class Salary(Base):
     contract_id = Column(Integer, ForeignKey("contracts.id"))
     # S-07: nullable чтобы сохранять зарплаты при удалении сотрудника (SET NULL)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    # Денормализация: имя сохраняется при создании, чтобы не терять при удалении сотрудника
+    employee_name = Column(String, nullable=True)
 
     payment_type = Column(String, nullable=False)
     stage_name = Column(String)

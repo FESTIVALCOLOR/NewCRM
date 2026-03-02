@@ -81,9 +81,14 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
         if amount <= 0:
             logger.warning(f"Пропуск авто-оплаты: card={card.id}, role={role}, stage={stage_name} — тариф не найден или area=0")
             continue
+        # Денормализация: сохраняем имя сотрудника для истории
+        emp = db.query(Employee).filter(Employee.id == emp_id).first()
+        emp_name = emp.full_name if emp else None
+
         payment = Payment(
             contract_id=card.contract_id,
             employee_id=emp_id,
+            employee_name=emp_name,
             role=role,
             stage_name=stage_name,
             calculated_amount=amount,
