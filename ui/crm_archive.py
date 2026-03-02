@@ -317,6 +317,13 @@ class ArchiveCardDetailsDialog(QDialog):
         self._active_sync_count = 0
         self._sync_ended.connect(self._on_sync_ended)
 
+        # ========== RESIZE SUPPORT ==========
+        self.resizing = False
+        self.resize_edge = None
+        self.resize_start_pos = None
+        self.resize_start_geometry = None
+        self.resize_margin = 8
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -345,7 +352,7 @@ class ArchiveCardDetailsDialog(QDialog):
             border_frame.setStyleSheet("""
                 QFrame#borderFrame {
                     background-color: #FFFFFF;
-                    border: none;
+                    border: 1px solid #E0E0E0;
                     border-top-left-radius: 10px;
                     border-top-right-radius: 10px;
                 }
@@ -1361,9 +1368,13 @@ class ArchiveCardDetailsDialog(QDialog):
         # Ширина: 
         target_width = 950
 
-        self.setMinimumWidth(950)
-        self.setMinimumHeight(target_height)
+        self.setMinimumWidth(700)
+        self.setMinimumHeight(400)
         self.resize(target_width, target_height)
+
+        # Включаем отслеживание мыши для resize-курсоров
+        self.setMouseTracking(True)
+        self.setAttribute(Qt.WA_Hover, True)
         # =======================================================  
             
     def _get_stage_columns(self):
@@ -1621,6 +1632,121 @@ class ArchiveCardDetailsDialog(QDialog):
         import threading
         t = threading.Thread(target=sync_thread, daemon=True)
         t.start()
+
+    # ========== RESIZE SUPPORT (аналогично CardEditDialog) ==========
+
+    def get_resize_edge(self, pos):
+        """Определение края/угла для изменения размера"""
+        rect = self.rect()
+        margin = self.resize_margin
+        on_left = pos.x() <= margin
+        on_right = pos.x() >= rect.width() - margin
+        on_top = pos.y() <= margin
+        on_bottom = pos.y() >= rect.height() - margin
+
+        if on_top and on_left:
+            return 'top-left'
+        elif on_top and on_right:
+            return 'top-right'
+        elif on_bottom and on_left:
+            return 'bottom-left'
+        elif on_bottom and on_right:
+            return 'bottom-right'
+        elif on_top:
+            return 'top'
+        elif on_bottom:
+            return 'bottom'
+        elif on_left:
+            return 'left'
+        elif on_right:
+            return 'right'
+        return None
+
+    def set_cursor_shape(self, edge):
+        """Установка формы курсора"""
+        if edge in ('top-left', 'bottom-right'):
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif edge in ('top-right', 'bottom-left'):
+            self.setCursor(Qt.SizeBDiagCursor)
+        elif edge in ('left', 'right'):
+            self.setCursor(Qt.SizeHorCursor)
+        elif edge in ('top', 'bottom'):
+            self.setCursor(Qt.SizeVerCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+    def mousePressEvent(self, event):
+        """Начало изменения размера"""
+        if event.button() == Qt.LeftButton:
+            edge = self.get_resize_edge(event.pos())
+            if edge:
+                self.resizing = True
+                self.resize_edge = edge
+                self.resize_start_pos = event.globalPos()
+                self.resize_start_geometry = self.geometry()
+                self.grabMouse()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Процесс изменения размера"""
+        if self.resizing and self.resize_edge:
+            delta = event.globalPos() - self.resize_start_pos
+            old = self.resize_start_geometry
+            x, y, w, h = old.x(), old.y(), old.width(), old.height()
+            edge = self.resize_edge
+            min_w, min_h = 700, 400
+
+            if 'left' in edge:
+                new_w = w - delta.x()
+                if new_w >= min_w:
+                    x = old.x() + delta.x()
+                    w = new_w
+            elif 'right' in edge:
+                new_w = w + delta.x()
+                if new_w >= min_w:
+                    w = new_w
+
+            if 'top' in edge:
+                new_h = h - delta.y()
+                if new_h >= min_h:
+                    y = old.y() + delta.y()
+                    h = new_h
+            elif 'bottom' in edge:
+                new_h = h + delta.y()
+                if new_h >= min_h:
+                    h = new_h
+
+            self.setGeometry(x, y, w, h)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Завершение изменения размера"""
+        if event.button() == Qt.LeftButton and self.resizing:
+            self.releaseMouse()
+            self.resizing = False
+            self.resize_edge = None
+            self.setCursor(Qt.ArrowCursor)
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def event(self, event):
+        """Обработка hover для смены курсора на границах"""
+        from PyQt5.QtCore import QEvent
+        if event.type() == QEvent.HoverMove:
+            if not self.resizing:
+                edge = self.get_resize_edge(event.pos())
+                self.set_cursor_shape(edge)
+        elif event.type() == QEvent.HoverLeave:
+            if not self.resizing:
+                self.setCursor(Qt.ArrowCursor)
+        return super().event(event)
+
+    # ========== SHOW / CENTER ==========
 
     def showEvent(self, event):
         """Центрирование при первом показе"""

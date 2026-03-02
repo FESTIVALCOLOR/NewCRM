@@ -7526,6 +7526,14 @@ class CardEditDialog(QDialog):
 
     def _init_deferred_step2(self):
         """Создание тяжёлых вкладок порциями (не блокирует UI)"""
+        # Защита от RuntimeError: диалог мог быть закрыт до срабатывания таймера
+        try:
+            if not hasattr(self, 'tabs') or self.tabs is None:
+                return
+            self.tabs.currentIndex()  # проверка что C++ объект жив
+        except RuntimeError:
+            return
+
         from PyQt5.QtWidgets import QApplication
         app = QApplication.instance()
         current_tab = self.tabs.currentIndex()
