@@ -578,7 +578,12 @@ class ArchiveCardDetailsDialog(QDialog):
                             'stage_completed': '#2E7D32', 'pause': '#F57F17',
                             'resume': '#388E3C', 'data_change': '#6A1B9A',
                             'file_upload': '#00695C', 'row_added': '#283593',
-                            'row_deleted': '#B71C1C',
+                            'row_deleted': '#B71C1C', 'accepted': '#1B5E20',
+                            'executor_assigned': '#E65100', 'executor_deleted': '#B71C1C',
+                            'work_submitted': '#0D47A1', 'work_accepted': '#1B5E20',
+                            'work_rejected': '#C62828', 'payment_created': '#4A148C',
+                            'payment_updated': '#6A1B9A', 'deadline_changed': '#E65100',
+                            'stages_reset': '#BF360C', 'approval_completed': '#2E7D32',
                         }
                         color = type_colors.get(entry_type, '#616161')
                         entry_label = QLabel(f"<span style='color: {color}; font-weight: bold;'>{created_at}</span> — {message}")

@@ -4895,6 +4895,12 @@ class CardEditDialog(QDialog):
         self._history_filter_combo = QComboBox()
         self._history_filter_combo.addItems([
             'Все действия',
+            'Перемещение карточки',
+            'Пауза / возобновление',
+            'Назначение исполнителей',
+            'Сдача / приёмка работы',
+            'Стадии и согласование',
+            'Оплаты',
             'Изменение дедлайна',
             'Загрузка файлов',
             'Удаление файлов',
@@ -5211,6 +5217,12 @@ class CardEditDialog(QDialog):
 
         # Маппинг фильтров на action_type
         filter_map = {
+            'Перемещение карточки': ['card_moved'],
+            'Пауза / возобновление': ['card_paused', 'card_resumed'],
+            'Назначение исполнителей': ['executor_assigned', 'executor_deleted', 'executor_completed'],
+            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance'],
+            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset'],
+            'Оплаты': ['payment_created', 'payment_updated'],
             'Изменение дедлайна': ['deadline_changed', 'executor_deadline_changed'],
             'Загрузка файлов': ['file_upload'],
             'Удаление файлов': ['file_delete'],
