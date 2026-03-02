@@ -226,6 +226,15 @@ class CrmMixin:
         )
         return self._handle_response(response)
 
+    def reset_stage_by_name(self, card_id: int, stage_name: str) -> Dict[str, Any]:
+        """Сбросить выполнение одной конкретной стадии по имени"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/crm/cards/{card_id}/reset-stage-by-name",
+            params={"stage_name": stage_name}
+        )
+        return self._handle_response(response)
+
     def get_submitted_stages(self, card_id: int) -> List[Dict[str, Any]]:
         """Получить отправленные стадии карточки"""
         response = self._request(

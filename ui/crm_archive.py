@@ -1366,68 +1366,154 @@ class ArchiveCardDetailsDialog(QDialog):
         self.resize(target_width, target_height)
         # =======================================================  
             
+    def _get_stage_columns(self):
+        """Получить список рабочих стадий для выбора при возврате из архива."""
+        if self.card_type == 'supervision':
+            return [
+                'Стадия 1: Закупка керамогранита',
+                'Стадия 2: Закупка сантехники',
+                'Стадия 3: Закупка оборудования',
+                'Стадия 4: Закупка дверей и окон',
+                'Стадия 5: Закупка настенных материалов',
+                'Стадия 6: Закупка напольных материалов',
+                'Стадия 7: Лепной декор',
+                'Стадия 8: Освещение',
+                'Стадия 9: Бытовая техника',
+                'Стадия 10: Закупка заказной мебели',
+                'Стадия 11: Закупка фабричной мебели',
+                'Стадия 12: Закупка декора',
+            ]
+        project_type = self.card_data.get('project_type', 'Индивидуальный')
+        if project_type == 'Индивидуальный':
+            return [
+                'Стадия 1: планировочные решения',
+                'Стадия 2: концепция дизайна',
+                'Стадия 3: рабочие чертежи',
+            ]
+        else:
+            return [
+                'Стадия 1: планировочные решения',
+                'Стадия 2: рабочие чертежи',
+                'Стадия 3: 3д визуализация (Дополнительная)',
+            ]
+
     def restore_to_active(self):
-        """Возврат проекта в активные"""
-        reply = CustomQuestionBox(
-            self,
-            'Подтверждение',
-            'Вернуть проект в активные (столбец "Выполненный проект")?'
-        ).exec_()
+        """Возврат проекта в активные — с выбором стадии"""
+        stages = self._get_stage_columns()
 
-        if reply == QDialog.Accepted:
-            try:
-                contract_id = self.card_data.get('contract_id')
-                card_id = self.card_data['id']
-                is_supervision = self.card_type == 'supervision'
+        # Диалог выбора стадии
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Возврат в активные')
+        dialog.setFixedSize(420, 200)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #ffffff; border: 1px solid #E0E0E0; }
+            QLabel { font-size: 13px; color: #333; }
+            QComboBox { font-size: 13px; padding: 6px; border: 1px solid #d9d9d9;
+                        border-radius: 4px; background: #fff; min-height: 28px; }
+        """)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
 
-                # 1. Обновляем статус договора
-                new_status = 'Авторский надзор' if is_supervision else 'В работе'
-                self.data.update_contract(contract_id, {
-                    'status': new_status,
-                    'termination_reason': None
-                })
-                print(f"[API] Статус договора {contract_id} изменен на '{new_status}'")
+        label = QLabel('В какую стадию вернуть проект?')
+        label.setStyleSheet('font-size: 14px; font-weight: bold;')
+        layout.addWidget(label)
 
-                # 2. Перемещаем карточку через правильный метод
+        desc = QLabel('Будет сброшена только выбранная стадия.\nОстальные завершённые стадии сохранятся.')
+        desc.setWordWrap(True)
+        desc.setStyleSheet('font-size: 12px; color: #757575;')
+        layout.addWidget(desc)
+
+        combo = QComboBox()
+        for stage in stages:
+            combo.addItem(stage)
+        layout.addWidget(combo)
+
+        layout.addStretch()
+
+        buttons_layout = QHBoxLayout()
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.setStyleSheet("""
+            QPushButton { background-color: #fff; color: #333; padding: 0px 20px;
+                          border-radius: 4px; border: 1px solid #d9d9d9; font-weight: bold; }
+            QPushButton:hover { background-color: #f5f5f5; }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+        buttons_layout.addWidget(cancel_btn)
+
+        buttons_layout.addStretch()
+
+        ok_btn = QPushButton('Вернуть')
+        ok_btn.setFixedHeight(36)
+        ok_btn.setStyleSheet("""
+            QPushButton { background-color: #ffd93c; color: #333; padding: 0px 30px;
+                          border-radius: 4px; border: none; font-weight: bold; }
+            QPushButton:hover { background-color: #f0c929; }
+        """)
+        ok_btn.clicked.connect(dialog.accept)
+        buttons_layout.addWidget(ok_btn)
+
+        layout.addLayout(buttons_layout)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        target_column = combo.currentText()
+
+        try:
+            contract_id = self.card_data.get('contract_id')
+            card_id = self.card_data['id']
+            is_supervision = self.card_type == 'supervision'
+
+            # 1. Обновляем статус договора
+            new_status = 'Авторский надзор' if is_supervision else 'В работе'
+            self.data.update_contract(contract_id, {
+                'status': new_status,
+                'termination_reason': None
+            })
+            print(f"[API] Статус договора {contract_id} изменен на '{new_status}'")
+
+            # 2. Перемещаем карточку в выбранную стадию
+            if is_supervision:
+                self.data.move_supervision_card(card_id, target_column)
+                print(f"[API] Карточка надзора {card_id} перемещена в '{target_column}'")
+            else:
+                self.data.move_crm_card(card_id, target_column)
+                print(f"[API] CRM карточка {card_id} перемещена в '{target_column}'")
+
+            # 3. Точечный сброс только выбранной стадии
+            if is_supervision:
+                # У надзора упрощённая модель — сбрасываем dan_completed
+                self.data.reset_supervision_stage_completion(card_id)
+                print(f"[API] Сброшен dan_completed для карточки надзора {card_id}")
+            else:
+                # Сбрасываем только выбранную стадию (не все)
+                self.data.reset_stage_by_name(card_id, target_column)
+                print(f"[API] Сброшена стадия '{target_column}' для карточки {card_id}")
+
+            self.accept()
+
+            # 4. Обновляем родительский виджет (CRM или надзор)
+            parent = self.parent()
+            while parent:
                 if is_supervision:
-                    self.data.move_supervision_card(card_id, 'Выполненный проект')
-                    print(f"[API] Карточка надзора {card_id} перемещена в 'Выполненный проект'")
+                    from ui.crm_supervision_tab import CrmSupervisionTab
+                    if isinstance(parent, CrmSupervisionTab):
+                        parent.refresh_current_tab()
+                        break
                 else:
-                    self.data.move_crm_card(card_id, 'Выполненный проект')
-                    print(f"[API] CRM карточка {card_id} перемещена в 'Выполненный проект'")
+                    from ui.crm_tab import CRMTab
+                    if isinstance(parent, CRMTab):
+                        parent.refresh_current_tab()
+                        break
+                parent = parent.parent()
 
-                # 3. Сброс стадий при возврате из архива
-                if is_supervision:
-                    self.data.reset_supervision_stage_completion(card_id)
-                    print(f"[API] Сброшены стадии надзора для карточки {card_id}")
-                else:
-                    self.data.reset_stage_completion(card_id)
-                    self.data.reset_approval_stages(card_id)
-                    self.data.update_crm_card(card_id, {'deadline': None, 'is_approved': 0})
-                    print(f"[API] Сброшены стадии и согласования CRM для карточки {card_id}")
-
-                self.accept()
-
-                # 4. Обновляем родительский виджет (CRM или надзор)
-                parent = self.parent()
-                while parent:
-                    if is_supervision:
-                        from ui.crm_supervision_tab import CrmSupervisionTab
-                        if isinstance(parent, CrmSupervisionTab):
-                            parent.refresh_current_tab()
-                            break
-                    else:
-                        from ui.crm_tab import CRMTab
-                        if isinstance(parent, CRMTab):
-                            parent.refresh_current_tab()
-                            break
-                    parent = parent.parent()
-
-            except Exception as e:
-                print(f"Ошибка возврата проекта: {e}")
-                import traceback
-                traceback.print_exc()
-                CustomMessageBox(self, 'Ошибка', f'Не удалось вернуть проект: {e}', 'error').exec_()
+        except Exception as e:
+            print(f"Ошибка возврата проекта: {e}")
+            import traceback
+            traceback.print_exc()
+            CustomMessageBox(self, 'Ошибка', f'Не удалось вернуть проект: {e}', 'error').exec_()
     
     def _show_sync_label(self):
         self._active_sync_count += 1

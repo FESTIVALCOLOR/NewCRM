@@ -2066,6 +2066,17 @@ class DataAccess(QObject):
 
         return True
 
+    def reset_stage_by_name(self, card_id: int, stage_name: str) -> bool:
+        """Сбросить выполнение одной конкретной стадии по имени (stage_name = column_name)"""
+        if self.is_online and self.api_client:
+            try:
+                result = self.api_client.reset_stage_by_name(card_id, stage_name)
+                return result is not None
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка API reset_stage_by_name: {e}")
+                return False
+        return False
+
     def reset_designer_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения дизайнера"""
         # Сначала сбрасываем локально
