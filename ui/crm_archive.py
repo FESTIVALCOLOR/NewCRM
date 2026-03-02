@@ -1419,7 +1419,7 @@ class ArchiveCardDetailsDialog(QDialog):
         label.setStyleSheet('font-size: 14px; font-weight: bold;')
         layout.addWidget(label)
 
-        desc = QLabel('Будет сброшена только выбранная стадия.\nОстальные завершённые стадии сохранятся.')
+        desc = QLabel('Будет сброшена выбранная стадия и все последующие.\nПредыдущие завершённые стадии сохранятся.')
         desc.setWordWrap(True)
         desc.setStyleSheet('font-size: 12px; color: #757575;')
         layout.addWidget(desc)
@@ -1482,15 +1482,18 @@ class ArchiveCardDetailsDialog(QDialog):
                 self.data.move_crm_card(card_id, target_column)
                 print(f"[API] CRM карточка {card_id} перемещена в '{target_column}'")
 
-            # 3. Точечный сброс только выбранной стадии
+            # 3. Каскадный сброс: выбранная стадия + все последующие
+            selected_idx = stages.index(target_column)
+            stages_to_reset = stages[selected_idx:]  # от выбранной до конца
+
             if is_supervision:
                 # У надзора упрощённая модель — сбрасываем dan_completed
                 self.data.reset_supervision_stage_completion(card_id)
                 print(f"[API] Сброшен dan_completed для карточки надзора {card_id}")
             else:
-                # Сбрасываем только выбранную стадию (не все)
-                self.data.reset_stage_by_name(card_id, target_column)
-                print(f"[API] Сброшена стадия '{target_column}' для карточки {card_id}")
+                # Каскадный сброс: от выбранной стадии и далее
+                self.data.reset_stage_by_name(card_id, stages_to_reset)
+                print(f"[API] Каскадный сброс {len(stages_to_reset)} стадий для карточки {card_id}: {stages_to_reset}")
 
             self.accept()
 

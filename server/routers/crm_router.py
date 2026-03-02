@@ -942,20 +942,20 @@ async def reset_crm_card_stages(
 @router.post("/cards/{card_id}/reset-stage-by-name")
 async def reset_crm_card_stage_by_name(
     card_id: int,
-    stage_name: str = Query(..., description="Имя стадии (column_name) для сброса"),
+    stage_names: List[str] = Query(..., description="Имена стадий (column_name) для каскадного сброса"),
     current_user: Employee = Depends(require_permission("crm_cards.reset_stages")),
     db: Session = Depends(get_db)
 ):
-    """Сбросить выполнение одной конкретной стадии карточки по stage_name"""
+    """Каскадный сброс стадий карточки — сбрасывает все указанные стадии (от выбранной и далее)"""
     try:
         card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
         if not card:
             raise HTTPException(status_code=404, detail="CRM карточка не найдена")
 
-        # Сбрасываем только StageExecutor с указанным stage_name
+        # Сбрасываем StageExecutor для всех указанных стадий
         stage_executors = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
-            StageExecutor.stage_name == stage_name
+            StageExecutor.stage_name.in_(stage_names)
         ).all()
 
         reset_count = 0
@@ -974,9 +974,9 @@ async def reset_crm_card_stage_by_name(
 
         return {
             "status": "success",
-            "message": f"Стадия '{stage_name}' сброшена ({reset_count} исполнителей)",
+            "message": f"Сброшено {len(stage_names)} стадий ({reset_count} исполнителей)",
             "card_id": card_id,
-            "stage_name": stage_name,
+            "stage_names": stage_names,
             "reset_count": reset_count,
         }
 
@@ -984,7 +984,7 @@ async def reset_crm_card_stage_by_name(
         raise
     except Exception as e:
         db.rollback()
-        logger.exception(f"Ошибка при сбросе стадии '{stage_name}' CRM карточки: {e}")
+        logger.exception(f"Ошибка при каскадном сбросе стадий CRM карточки: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
