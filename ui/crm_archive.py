@@ -1510,7 +1510,7 @@ class ArchiveCardDetailsDialog(QDialog):
 
         # Центрирование на родителе
         from utils.dialog_helpers import center_dialog_on_parent
-        dialog.showEvent = lambda e: (QDialog.showEvent(dialog, e), center_dialog_on_parent(dialog))
+        QTimer.singleShot(0, lambda: center_dialog_on_parent(dialog))
 
         if dialog.exec_() != QDialog.Accepted:
             return
