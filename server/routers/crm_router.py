@@ -718,6 +718,16 @@ async def assign_stage_executor(
         )
         db.add(activity)
 
+        # Бизнес-история назначения исполнителя
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='executor_assigned',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Назначен исполнитель: {executor.full_name} на стадию «{executor_data.stage_name}»'
+            + (f', дедлайн: {executor_data.deadline}' if executor_data.deadline else '')
+        ))
+
         db.commit()
         db.refresh(stage_executor)
 
@@ -787,6 +797,18 @@ async def complete_stage(
 
         if update_data.completed and not update_data.completed_date:
             stage_executor.completed_date = datetime.utcnow()
+
+        # Бизнес-история изменения стадии
+        if update_data.completed:
+            executor_emp = db.query(Employee).filter(Employee.id == stage_executor.executor_id).first()
+            executor_name = executor_emp.full_name if executor_emp else f'ID {stage_executor.executor_id}'
+            db.add(ActionHistory(
+                user_id=current_user.id,
+                action_type='stage_completed',
+                entity_type='crm_card',
+                entity_id=card_id,
+                description=f'Стадия завершена: «{stage_name}», исполнитель: {executor_name}'
+            ))
 
         db.commit()
         db.refresh(stage_executor)
@@ -891,6 +913,17 @@ async def delete_stage_executor(
         )
         db.add(log)
 
+        # Бизнес-история удаления исполнителя
+        executor_emp = db.query(Employee).filter(Employee.id == executor.executor_id).first()
+        executor_name = executor_emp.full_name if executor_emp else f'ID {executor.executor_id}'
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='executor_deleted',
+            entity_type='crm_card',
+            entity_id=executor.crm_card_id,
+            description=f'Удалён исполнитель: {executor_name} со стадии «{executor.stage_name}»'
+        ))
+
         db.delete(executor)
         db.commit()
 
@@ -926,6 +959,15 @@ async def reset_crm_card_stages(
             se.completed = False
             se.completed_date = None
             se.submitted_date = None
+
+        # Бизнес-история сброса стадий
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='stages_reset',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Сброшены все стадии ({len(stage_executors)} исполнителей)'
+        ))
 
         db.commit()
 
@@ -970,6 +1012,15 @@ async def reset_crm_card_stage_by_name(
         card.approval_stages = None
         card.approval_deadline = None
 
+        # Бизнес-история каскадного сброса стадий
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='stages_reset',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Каскадный сброс стадий: {", ".join(stage_names)} ({reset_count} исполнителей)'
+        ))
+
         db.commit()
 
         return {
@@ -1004,6 +1055,15 @@ async def reset_crm_card_approval(
         card.is_approved = False
         card.approval_stages = None
         card.approval_deadline = None
+
+        # Бизнес-история сброса согласований
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='approval_reset',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description='Сброшены все стадии согласования'
+        ))
 
         db.commit()
 
@@ -1534,6 +1594,18 @@ async def reset_designer_completion(
         if designer_executor:
             designer_executor.completed = False
             designer_executor.completed_date = None
+
+            # Бизнес-история сброса дизайнера
+            executor_emp = db.query(Employee).filter(Employee.id == designer_executor.executor_id).first()
+            executor_name = executor_emp.full_name if executor_emp else f'ID {designer_executor.executor_id}'
+            db.add(ActionHistory(
+                user_id=current_user.id,
+                action_type='designer_reset',
+                entity_type='crm_card',
+                entity_id=card_id,
+                description=f'Сброшена отметка дизайнера: {executor_name}, стадия «{designer_executor.stage_name}»'
+            ))
+
             db.commit()
 
         return {"status": "success", "message": "Отметка дизайнера сброшена"}
@@ -1567,6 +1639,18 @@ async def reset_draftsman_completion(
         if draftsman_executor:
             draftsman_executor.completed = False
             draftsman_executor.completed_date = None
+
+            # Бизнес-история сброса чертёжника
+            executor_emp = db.query(Employee).filter(Employee.id == draftsman_executor.executor_id).first()
+            executor_name = executor_emp.full_name if executor_emp else f'ID {draftsman_executor.executor_id}'
+            db.add(ActionHistory(
+                user_id=current_user.id,
+                action_type='draftsman_reset',
+                entity_type='crm_card',
+                entity_id=card_id,
+                description=f'Сброшена отметка чертёжника: {executor_name}, стадия «{draftsman_executor.stage_name}»'
+            ))
+
             db.commit()
 
         return {"status": "success", "message": "Отметка чертежника сброшена"}
@@ -1627,6 +1711,16 @@ async def complete_approval_stage(
         if stage_name == card.column_name:
             card.is_approved = True
 
+        # Бизнес-история завершения согласования
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='approval_completed',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Завершена стадия согласования: «{stage_name}»'
+            + (' (карточка согласована)' if card.is_approved else '')
+        ))
+
         db.commit()
 
         return {
@@ -1666,7 +1760,21 @@ async def update_stage_executor_deadline(
             raise HTTPException(status_code=404, detail="Назначение стадии не найдено")
 
         from datetime import datetime as dt
+        old_deadline = str(stage_executor.deadline) if stage_executor.deadline else 'не установлен'
         stage_executor.deadline = dt.fromisoformat(deadline).date() if deadline else None
+        new_deadline = deadline if deadline else 'снят'
+
+        # Бизнес-история изменения дедлайна
+        executor_emp = db.query(Employee).filter(Employee.id == stage_executor.executor_id).first()
+        executor_name = executor_emp.full_name if executor_emp else f'ID {stage_executor.executor_id}'
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='deadline_changed',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Изменён дедлайн: «{stage_name}», исполнитель: {executor_name}, {old_deadline} → {new_deadline}'
+        ))
+
         db.commit()
 
         return {"status": "success", "stage_name": stage_executor.stage_name, "deadline": deadline}
@@ -1718,6 +1826,18 @@ async def complete_stage_for_executor(
 
         stage_executor.completed = True
         stage_executor.completed_date = datetime.utcnow()
+
+        # Бизнес-история завершения стадии исполнителем
+        executor_emp = db.query(Employee).filter(Employee.id == executor_id).first()
+        executor_name = executor_emp.full_name if executor_emp else f'ID {executor_id}'
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='executor_completed',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Исполнитель завершил стадию: {executor_name}, «{stage_name}»'
+        ))
+
         db.commit()
 
         return {"status": "success", "stage_name": stage_name, "completed": True}

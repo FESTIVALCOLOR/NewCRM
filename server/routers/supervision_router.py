@@ -12,7 +12,7 @@ from typing import List, Optional
 from sqlalchemy import or_
 
 from database import (
-    get_db, Employee, Contract, ActivityLog, ProjectFile, Rate,
+    get_db, Employee, Contract, ActivityLog, ActionHistory, ProjectFile, Rate,
     SupervisionCard, SupervisionProjectHistory, StageExecutor,
     Payment, SupervisionTimelineEntry, MessengerChat,
 )
@@ -98,6 +98,16 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
             supervision_card_id=card.id,
         )
         db.add(payment)
+
+        # Бизнес-история авто-создания оплаты надзора
+        db.add(ActionHistory(
+            user_id=user_id,
+            action_type='payment_created',
+            entity_type='supervision_card',
+            entity_id=card.id,
+            description=f'Авто-оплата надзора: {emp_name or "ID " + str(emp_id)}, роль: {role}, стадия: «{stage_name}», сумма: {amount}'
+        ))
+
         logger.info(f"Авто-оплата: card={card.id}, role={role}, stage={stage_name}, amount={amount}")
 
 

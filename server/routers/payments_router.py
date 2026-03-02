@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from database import (
     get_db, Employee, Contract, Payment, Rate, Salary,
-    CRMCard, SupervisionCard, ActivityLog
+    CRMCard, SupervisionCard, ActivityLog, ActionHistory
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -841,6 +841,22 @@ async def create_payment(
             entity_id=payment.id
         )
         db.add(log)
+
+        # Бизнес-история создания платежа
+        emp_name = payment.employee_name or 'Неизвестный'
+        card_info = ''
+        if payment.crm_card_id:
+            card_info = f', CRM карточка #{payment.crm_card_id}'
+        elif payment.supervision_card_id:
+            card_info = f', карточка надзора #{payment.supervision_card_id}'
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='payment_created',
+            entity_type='payment',
+            entity_id=payment.id,
+            description=f'Создан платёж: {emp_name}, роль: {payment.role or "—"}, сумма: {payment.final_amount or 0}{card_info}'
+        ))
+
         db.commit()
 
         return payment
@@ -1095,6 +1111,24 @@ async def update_payment(
         entity_id=payment_id,
     )
     db.add(activity)
+
+    # Бизнес-история обновления платежа
+    changes = []
+    if 'employee_id' in update_fields:
+        new_emp = db.query(Employee).filter(Employee.id == update_fields['employee_id']).first()
+        changes.append(f'переназначен → {new_emp.full_name if new_emp else "ID " + str(update_fields["employee_id"])}')
+    if 'reassigned' in update_fields and update_fields['reassigned']:
+        changes.append('помечен как переназначенный')
+    if 'final_amount' in update_fields:
+        changes.append(f'сумма: {update_fields["final_amount"]}')
+    if changes:
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='payment_updated',
+            entity_type='payment',
+            entity_id=payment_id,
+            description=f'Обновлён платёж #{payment_id}: {", ".join(changes)}'
+        ))
 
     payment.updated_at = datetime.utcnow()
     db.commit()
