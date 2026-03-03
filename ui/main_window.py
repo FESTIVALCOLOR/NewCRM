@@ -139,8 +139,13 @@ class MainWindow(QMainWindow):
         #   TITLE BAR
         self.setWindowFlags(Qt.FramelessWindowHint)
 
-        # Добавляем нативные стили для Windows Snap Assist, Snap Layouts и DWM-скругления
-        self._enable_windows_snap()
+        # Windows: DWM скругляет углы на GPU (плавный resize)
+        # macOS/Linux: fallback на WA_TranslucentBackground (CSS border-radius)
+        import sys
+        if sys.platform == 'win32':
+            self._enable_windows_snap()
+        else:
+            self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Явная установка иконки для панели задач Windows
         # ИСПРАВЛЕНИЕ 13.02.2026: Используем Win32 API WM_SETICON — надежнее Qt setWindowIcon
@@ -155,10 +160,12 @@ class MainWindow(QMainWindow):
         # ==========   ==========
         main_container = QWidget()
         main_container.setObjectName("mainContainer")
-        main_container.setStyleSheet("""
-            QWidget#mainContainer {
-                background-color: #FFFFFF;
-            }
+        _radius = '10px' if sys.platform != 'win32' else '0px'
+        main_container.setStyleSheet(f"""
+            QWidget#mainContainer {{
+                background-color: {'transparent' if sys.platform != 'win32' else '#FFFFFF'};
+                border-radius: {_radius};
+            }}
         """)
         self.setCentralWidget(main_container)
 
@@ -172,11 +179,12 @@ class MainWindow(QMainWindow):
         from PyQt5.QtWidgets import QFrame
         border_frame = QFrame()
         border_frame.setObjectName("mainBorderFrame")
-        border_frame.setStyleSheet("""
-            QFrame#mainBorderFrame {
+        border_frame.setStyleSheet(f"""
+            QFrame#mainBorderFrame {{
                 background-color: #FFFFFF;
                 border: 1px solid #d9d9d9;
-            }
+                border-radius: {_radius};
+            }}
         """)
         container_layout.addWidget(border_frame)
         # ======================================================
