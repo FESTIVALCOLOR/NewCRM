@@ -836,7 +836,7 @@ class ExecutorSelectionDialog(QDialog):
                     'calculated_amount': balance_amount,
                     'final_amount': balance_amount,
                     'payment_type': 'Доплата',
-                    'report_month': ''
+                    'report_month': None
                 }
                 self.data.create_payment(balance_data)
                 print(f"[DataAccess] Индивидуальный проект: созданы аванс и доплата для {role}")
@@ -2542,13 +2542,13 @@ class ReassignExecutorDialog(QDialog):
 
         self.executor_combo = CustomComboBox()
 
-        # ИСПРАВЛЕНИЕ 30.01.2026: Получаем сотрудников включая двойные должности (secondary_position)
+        # Получаем сотрудников включая двойные должности (secondary_position), только активных
         try:
             all_employees = self.data.get_all_employees()
-            # Фильтруем по основной ИЛИ дополнительной должности
             executors = [e for e in all_employees
-                        if e.get('position') == self.position
-                        or e.get('secondary_position') == self.position]
+                        if (e.get('position') == self.position
+                            or e.get('secondary_position') == self.position)
+                        and e.get('status', '').lower() not in ('уволен', 'в резерве')]
             print(f"[DEBUG] Найдено сотрудников для должности '{self.position}': {len(executors)} (включая secondary_position)")
         except Exception as e:
             print(f"[DataAccess ERROR] Ошибка получения сотрудников: {e}")
@@ -3073,6 +3073,75 @@ class ReassignExecutorDialog(QDialog):
                         print(f"[DataAccess] Создан новый платеж ({payment_type}) для исполнителя {new_executor_id}, сумма={old_final:.2f}, {status_text}")
                     except Exception as e:
                         print(f"[WARN] Ошибка создания нового платежа ({payment_type}): {e}")
+
+                # Верификация: Дизайнер/Чертёжник ВСЕГДА имеют Аванс + Доплата.
+                # Проверяем что ОБА типа созданы для нового исполнителя.
+                expected_types = {'Аванс', 'Доплата'}
+                try:
+                    updated_payments = self.data.get_payments_for_contract(contract_id)
+                    new_exec_payments = [
+                        p for p in updated_payments
+                        if p.get('employee_id') == new_executor_id
+                        and p.get('role') == role
+                        and not p.get('reassigned')
+                        and (self.stage_keyword.lower() in (p.get('stage_name') or '').lower()
+                             or stage_name.lower() in (p.get('stage_name') or '').lower())
+                    ]
+                    new_types = {p.get('payment_type') for p in new_exec_payments}
+                    missing_types = expected_types - new_types
+
+                    if missing_types:
+                        print(f"[VERIFY] Недостающие типы оплат для нового исполнителя: {missing_types}")
+                        # Рассчитываем сумму
+                        full_amount = 0
+                        try:
+                            result = self.data.calculate_payment_amount(
+                                contract_id, new_executor_id, role, stage_name
+                            )
+                            full_amount = float(result) if result else 0
+                        except Exception:
+                            pass
+                        half_amount = full_amount / 2 if full_amount > 0 else 0
+
+                        for missing_type in missing_types:
+                            # Помечаем старую запись этого типа как переназначенную (если ещё не помечена)
+                            for old_p in updated_payments:
+                                if (old_p.get('employee_id') == old_executor_id
+                                    and old_p.get('role') == role
+                                    and old_p.get('payment_type') == missing_type
+                                    and not old_p.get('reassigned')
+                                    and (self.stage_keyword.lower() in (old_p.get('stage_name') or '').lower()
+                                         or stage_name.lower() in (old_p.get('stage_name') or '').lower())):
+                                    try:
+                                        self.data.update_payment(old_p['id'], {
+                                            'reassigned': True,
+                                            'report_month': current_month
+                                        })
+                                        print(f"[VERIFY] Старый платеж {old_p['id']} ({missing_type}) помечен как переназначенный")
+                                    except Exception:
+                                        pass
+                                    break
+
+                            new_report_month = None if missing_type == 'Доплата' else current_month
+                            missing_data = {
+                                'contract_id': contract_id,
+                                'crm_card_id': self.card_id,
+                                'employee_id': new_executor_id,
+                                'role': role,
+                                'stage_name': stage_name,
+                                'calculated_amount': half_amount,
+                                'final_amount': half_amount,
+                                'payment_type': missing_type,
+                                'report_month': new_report_month,
+                                'reassigned': False,
+                                'old_employee_id': old_executor_id
+                            }
+                            self.data.create_payment(missing_data)
+                            print(f"[VERIFY] Создан недостающий платеж ({missing_type}) для {new_executor_id}: {half_amount:.2f}")
+                    else:
+                        print(f"[VERIFY] Все типы оплат корректно созданы: {new_types}")
+                except Exception as e:
+                    print(f"[WARN] Ошибка верификации оплат: {e}")
             else:
                 # ИСПРАВЛЕНИЕ 29.01.2026: Если старых платежей нет - создаём новые для нового исполнителя
                 print(f"[INFO] Платежи для старого исполнителя не найдены, создаём новые для нового исполнителя")

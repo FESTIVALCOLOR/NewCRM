@@ -44,11 +44,12 @@ async def get_all_payments(
 
         if year:
             if include_null_month:
-                # ИСПРАВЛЕНИЕ 06.02.2026: Включаем платежи с NULL report_month (В работе)
+                # ИСПРАВЛЕНИЕ 06.02.2026: Включаем платежи с NULL/пустым report_month (В работе)
                 payments_query = payments_query.filter(
                     or_(
                         Payment.report_month.like(f'{year}%'),
-                        Payment.report_month.is_(None)
+                        Payment.report_month.is_(None),
+                        Payment.report_month == ''
                     )
                 )
             else:
