@@ -798,12 +798,17 @@ async def create_payment(
             Payment.contract_id == payment_data.contract_id,
             Payment.employee_id == payment_data.employee_id,
             Payment.stage_name == payment_data.stage_name,
-            Payment.role == payment_data.role
+            Payment.role == payment_data.role,
+            Payment.payment_type == payment_data.payment_type
         )
         if payment_data.crm_card_id:
             duplicate_query = duplicate_query.filter(Payment.crm_card_id == payment_data.crm_card_id)
         if payment_data.supervision_card_id:
             duplicate_query = duplicate_query.filter(Payment.supervision_card_id == payment_data.supervision_card_id)
+        # Исключаем переназначенные платежи из проверки
+        duplicate_query = duplicate_query.filter(
+            (Payment.reassigned == False) | (Payment.reassigned == None)
+        )
         existing = duplicate_query.first()
         if existing:
             raise HTTPException(
