@@ -813,6 +813,12 @@ class MainWindow(QMainWindow):
 
                     return True, HTCLIENT
 
+                WM_ERASEBKGND = 0x0014
+
+                if msg.message == WM_ERASEBKGND:
+                    # Подавляем стирание фона — убирает мигание при resize
+                    return True, 1
+
                 elif msg.message == WM_NCCALCSIZE:
                     # ВСЕГДА возвращаем 0: клиентская область = всё окно (убираем рамку)
                     return True, 0
