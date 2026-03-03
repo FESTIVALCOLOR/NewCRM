@@ -2360,6 +2360,10 @@ class CRMCard(QFrame):
         # Для замерщика разрешаем добавлять замер без can_edit, для остальных требуется can_edit
         if not has_measurement and can_add_measurement and (self.can_edit or is_surveyor):
             survey_btn = IconLoader.create_icon_button('calendar-plus', 'Добавить замер', 'Установить дату замера', icon_size=12)
+            # Белая иконка на оранжевом фоне
+            white_icon = IconLoader.load_colored('calendar-plus', '#FFFFFF', 12)
+            if white_icon and not white_icon.isNull():
+                survey_btn.setIcon(white_icon)
             survey_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #F39C12;
@@ -2392,6 +2396,10 @@ class CRMCard(QFrame):
         can_add_tech_task = _has_perm(self.employee, self.api_client, 'crm_cards.update')
         if self.can_edit and not has_tech_task and can_add_tech_task and not is_surveyor:
             tz_btn = IconLoader.create_icon_button('plus-circle', 'Добавить ТЗ', 'Добавить техническое задание', icon_size=12)
+            # Белая иконка на фиолетовом фоне
+            white_icon_tz = IconLoader.load_colored('plus-circle', '#FFFFFF', 12)
+            if white_icon_tz and not white_icon_tz.isNull():
+                tz_btn.setIcon(white_icon_tz)
             tz_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #9B59B6;

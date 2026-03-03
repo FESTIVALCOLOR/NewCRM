@@ -2896,14 +2896,22 @@ class ReassignExecutorDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self.center_on_screen()
+            self._center_on_parent()
 
-    def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 3 + screen.top()
-        self.move(x, y)
+    def _center_on_parent(self):
+        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        parent = self.parent()
+        if parent and parent.isVisible():
+            parent_geo = parent.frameGeometry()
+            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
+            self.move(x, y)
+        else:
+            from PyQt5.QtWidgets import QDesktopWidget
+            screen = QDesktopWidget().availableGeometry()
+            x = (screen.width() - self.width()) // 2 + screen.left()
+            y = (screen.height() - self.height()) // 3 + screen.top()
+            self.move(x, y)
 
     def _check_payment_exists(self, all_payments, contract_id, employee_id, role, stage_name, payment_type):
         """ИСПРАВЛЕНИЕ 01.02.2026: Проверка идемпотентности - существует ли уже такой платеж"""
@@ -3358,14 +3366,22 @@ class SurveyDateDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self.center_on_screen()
+            self._center_on_parent()
 
-    def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 3 + screen.top()
-        self.move(x, y)
+    def _center_on_parent(self):
+        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        parent = self.parent()
+        if parent and parent.isVisible():
+            parent_geo = parent.frameGeometry()
+            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
+            self.move(x, y)
+        else:
+            from PyQt5.QtWidgets import QDesktopWidget
+            screen = QDesktopWidget().availableGeometry()
+            x = (screen.width() - self.width()) // 2 + screen.left()
+            y = (screen.height() - self.height()) // 3 + screen.top()
+            self.move(x, y)
 
 
 class TechTaskDialog(QDialog):
@@ -3669,13 +3685,14 @@ class TechTaskDialog(QDialog):
 
             file_name = os.path.basename(file_path)
 
-            # ИСПРАВЛЕНИЕ 07.02.2026: Стили для диалога прогресса (#13)
             from PyQt5.QtWidgets import QProgressDialog, QApplication
             progress = QProgressDialog("Загрузка файла ТЗ на Яндекс.Диск...", None, 0, 0, self)
             progress.setWindowTitle("Загрузка")
+            progress.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
             progress.setWindowModality(Qt.WindowModal)
             progress.setCancelButton(None)
             progress.setMinimumDuration(0)
+            progress.setFixedSize(420, 100)
             progress.setValue(0)
             progress.setStyleSheet("""
                 QProgressDialog {
@@ -3688,6 +3705,8 @@ class TechTaskDialog(QDialog):
                     border-radius: 4px;
                     text-align: center;
                     background-color: #F5F5F5;
+                    min-height: 16px;
+                    max-height: 16px;
                 }
                 QProgressBar::chunk {
                     background-color: #ffd93c;
@@ -3696,6 +3715,7 @@ class TechTaskDialog(QDialog):
                 QLabel {
                     font-size: 12px;
                     color: #333333;
+                    padding: 8px;
                 }
             """)
             progress.show()
@@ -3818,14 +3838,22 @@ class TechTaskDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self.center_on_screen()
+            self._center_on_parent()
 
-    def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 3 + screen.top()
-        self.move(x, y)
+    def _center_on_parent(self):
+        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        parent = self.parent()
+        if parent and parent.isVisible():
+            parent_geo = parent.frameGeometry()
+            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
+            self.move(x, y)
+        else:
+            from PyQt5.QtWidgets import QDesktopWidget
+            screen = QDesktopWidget().availableGeometry()
+            x = (screen.width() - self.width()) // 2 + screen.left()
+            y = (screen.height() - self.height()) // 3 + screen.top()
+            self.move(x, y)
 
 
 class MeasurementDialog(QDialog):
@@ -4440,12 +4468,20 @@ class MeasurementDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self.center_on_screen()
+            self._center_on_parent()
 
-    def center_on_screen(self):
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().availableGeometry()
-        x = (screen.width() - self.width()) // 2 + screen.left()
-        y = (screen.height() - self.height()) // 3 + screen.top()
-        self.move(x, y)
+    def _center_on_parent(self):
+        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        parent = self.parent()
+        if parent and parent.isVisible():
+            parent_geo = parent.frameGeometry()
+            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
+            self.move(x, y)
+        else:
+            from PyQt5.QtWidgets import QDesktopWidget
+            screen = QDesktopWidget().availableGeometry()
+            x = (screen.width() - self.width()) // 2 + screen.left()
+            y = (screen.height() - self.height()) // 3 + screen.top()
+            self.move(x, y)
 

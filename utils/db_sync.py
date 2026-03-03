@@ -146,7 +146,12 @@ class DatabaseSynchronizer:
             count = self._sync_supervision_project_history()
             result['synced']['supervision_history'] = count
 
-            # 14. Завершение
+            # 14. Завершение — инвалидируем весь кеш DataAccess
+            try:
+                from utils.data_access import _global_cache
+                _global_cache.invalidate()
+            except ImportError:
+                pass
             report_progress("Синхронизация завершена")
 
         except Exception as e:
@@ -942,6 +947,7 @@ class DatabaseSynchronizer:
                     exists = cursor.fetchone()
 
                     # Подготовка данных с обработкой None значений
+                    # contract_id может быть NULL для окладов (salary_type payments)
                     payment_data = {
                         'contract_id': payment.get('contract_id'),
                         'crm_card_id': payment.get('crm_card_id'),
@@ -1620,6 +1626,12 @@ def verify_data_integrity(db_manager, api_client) -> Dict[str, Any]:
     """
     synchronizer = DatabaseSynchronizer(db_manager, api_client)
     return synchronizer.verify_integrity()
+
+
+def sync_all_data(api_client, db_manager, progress_callback=None) -> Dict[str, Any]:
+    """Полная синхронизация данных с сервера в локальную БД."""
+    synchronizer = DatabaseSynchronizer(db_manager, api_client)
+    return synchronizer.sync_all(progress_callback)
 
 
 class IntegrityChecker:
