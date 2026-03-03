@@ -158,10 +158,11 @@ async def delete_client(
     contracts = db.query(Contract).filter(Contract.client_id == client_id).all()
     if contracts:
         contract_numbers = [c.contract_number or f"ID {c.id}" for c in contracts]
+        numbers_preview = ", ".join(contract_numbers[:5])
         raise HTTPException(
             status_code=400,
             detail=f"Невозможно удалить клиента: есть {len(contracts)} связанных договоров "
-                   f"({', '.join(contract_numbers[:5)}). Удалите сначала договоры."
+                   f"({numbers_preview}). Удалите сначала договоры."
         )
 
     try:
