@@ -6,7 +6,7 @@
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QLineEdit, QListWidget,
                              QListWidgetItem, QApplication)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot, QEvent, QRectF, QPoint
-from PyQt5.QtGui import QRegion, QPainterPath
+
 
 
 class _SearchWorker(QThread):
@@ -200,10 +200,7 @@ class GlobalSearchWidget(QWidget):
         final_height = max(item_height + 12, min(content_height, max_height))
         self.results_list.setFixedHeight(final_height)
 
-        # Маска — обрезаем по border-radius чтобы фон не вылазил
-        path = QPainterPath()
-        path.addRoundedRect(QRectF(0, 0, drop_w, final_height), 6, 6)
-        self.results_list.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        # border-radius уже задан в CSS, setMask не нужен
 
     @pyqtSlot(str, list)
     def _on_search_finished(self, query, items):

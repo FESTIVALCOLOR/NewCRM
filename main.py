@@ -2,10 +2,6 @@
 import sys
 import os
 import ctypes
-import faulthandler
-
-# Включаем вывод Python traceback при segfault (SIGSEGV)
-faulthandler.enable()
 
 # Принудительная UTF-8 кодировка для вывода (Windows charmap fix)
 # PyInstaller windowed (console=False) может иметь stdout=None
@@ -19,6 +15,14 @@ for _stream_name in ('stdout', 'stderr'):
             _stream.reconfigure(encoding='utf-8', errors='replace')
         except Exception:
             pass
+
+# Включаем вывод Python traceback при segfault (SIGSEGV)
+# Вызываем ПОСЛЕ починки stderr (в windowed PyInstaller stderr=None)
+import faulthandler
+try:
+    faulthandler.enable()
+except Exception:
+    pass
 from PyQt5.QtWidgets import QApplication, QComboBox, QMenu, QWidget
 from PyQt5.QtCore import Qt, QObject, QEvent, QSize
 from PyQt5.QtGui import QIcon, QFont, QFontDatabase
@@ -124,9 +128,8 @@ def main():
             QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
         if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
             QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-        # Включаем поддержку композитинга для tooltip поверх полупрозрачных окон
-        if hasattr(Qt, 'AA_UseDesktopOpenGL'):
-            QApplication.setAttribute(Qt.AA_UseDesktopOpenGL, True)
+        # Рендеринг: Qt автоматически выбирает лучший бэкенд (Software/ANGLE/Desktop)
+        # НЕ форсируем AA_UseDesktopOpenGL — может вызвать createDIB failed на встроенных GPU
         # ==============================================
 
         # ========== ИСПРАВЛЕНИЕ ИКОНКИ В ПАНЕЛИ ЗАДАЧ WINDOWS ==========
@@ -193,47 +196,6 @@ def main():
 
         app_logger.info("Qt Application инициализировано")
 
-        # ========== ОТЛАДКА ПУТЕЙ ==========
-        print("\n" + "="*60)
-        print("ОТЛАДКА ПУТЕЙ К РЕСУРСАМ")
-        print("="*60)
-
-        if getattr(sys, 'frozen', False):
-            app_root = os.path.dirname(sys.executable)
-        else:
-            app_root = os.path.dirname(os.path.abspath(__file__))
-
-        print(f"Корень приложения: {app_root}")
-        app_logger.debug(f"Корень приложения: {app_root}")
-
-        icons_path = resource_path('resources/icons')
-        print(f"Путь к иконкам: {icons_path}")
-        print(f"Папка существует: {os.path.exists(icons_path)}")
-
-        required_icons = [
-            'arrow-down-circle.svg',
-            'arrow-up-circle.svg',
-            'arrow-left-circle.svg',
-            'arrow-right-circle.svg'
-        ]
-
-        print("\nПроверка SVG файлов:")
-        missing_icons = []
-        for icon in required_icons:
-            full_path = os.path.join(icons_path, icon)
-            exists = os.path.exists(full_path)
-            status = "[OK]" if exists else "[MISS]"
-            print(f"  {status} {icon}")
-            if not exists:
-                print(f"      Ожидаемый путь: {full_path}")
-                missing_icons.append(icon)
-
-        if missing_icons:
-            app_logger.warning(f"Отсутствуют иконки: {', '.join(missing_icons)}")
-
-        print("="*60 + "\n")
-        # ===================================
-    
         # ========== ЗАГРУЗКА ШРИФТА MANROPE ==========
         fonts_dir = resource_path('resources/fonts')
         manrope_loaded = False
@@ -288,16 +250,19 @@ def main():
         app_logger.info("Единые стили (unified_styles.py) применены")
         # ==================================================
 
-        # Инициализация базы данных
+        # Инициализация базы данных + окно логина
+        # DatabaseManager.__init__ выполняет initialize_database() + run_migrations()
+        # Оптимизация: все миграции на одном соединении (вместо 40+ open/close)
         app_logger.info("Инициализация базы данных...")
-        db = DatabaseManager()
-        db.initialize_database()
-        app_logger.info("База данных успешно инициализирована")
+        import time as _perf_time
+        _t0 = _perf_time.perf_counter()
+        _db_init = DatabaseManager()  # Только миграции, не сохраняем — LoginWindow создаст свой
+        _dt = (_perf_time.perf_counter() - _t0) * 1000
+        app_logger.info(f"База данных инициализирована за {_dt:.0f}ms")
 
         # Запуск окна входа
         app_logger.info("Запуск окна входа в систему")
         login_window = LoginWindow()
-
         login_window.show()
 
         app_logger.info("Приложение запущено успешно")
