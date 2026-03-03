@@ -2899,8 +2899,10 @@ class ReassignExecutorDialog(QDialog):
             self._center_on_parent()
 
     def _center_on_parent(self):
-        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        """Центрирование по top-level окну (или по экрану если нет родителя)"""
         parent = self.parent()
+        if parent:
+            parent = parent.window()
         if parent and parent.isVisible():
             parent_geo = parent.frameGeometry()
             x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
@@ -3369,8 +3371,10 @@ class SurveyDateDialog(QDialog):
             self._center_on_parent()
 
     def _center_on_parent(self):
-        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        """Центрирование по top-level окну (или по экрану если нет родителя)"""
         parent = self.parent()
+        if parent:
+            parent = parent.window()
         if parent and parent.isVisible():
             parent_geo = parent.frameGeometry()
             x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
@@ -3841,8 +3845,10 @@ class TechTaskDialog(QDialog):
             self._center_on_parent()
 
     def _center_on_parent(self):
-        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        """Центрирование по top-level окну (или по экрану если нет родителя)"""
         parent = self.parent()
+        if parent:
+            parent = parent.window()
         if parent and parent.isVisible():
             parent_geo = parent.frameGeometry()
             x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
@@ -4471,8 +4477,10 @@ class MeasurementDialog(QDialog):
             self._center_on_parent()
 
     def _center_on_parent(self):
-        """Центрирование по родительскому окну (или по экрану если нет родителя)"""
+        """Центрирование по top-level окну (или по экрану если нет родителя)"""
         parent = self.parent()
+        if parent:
+            parent = parent.window()
         if parent and parent.isVisible():
             parent_geo = parent.frameGeometry()
             x = parent_geo.x() + (parent_geo.width() - self.width()) // 2

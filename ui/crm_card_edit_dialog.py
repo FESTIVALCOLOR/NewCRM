@@ -5491,32 +5491,32 @@ class CardEditDialog(QDialog):
         else:
             ref_result = None
 
-            if ref_result:
-                references_path = ref_result.get('references_yandex_path')
-                photo_doc_path = ref_result.get('photo_documentation_yandex_path')
+        if ref_result:
+            references_path = ref_result.get('references_yandex_path')
+            photo_doc_path = ref_result.get('photo_documentation_yandex_path')
 
-                # Референсы
-                if references_path:
-                    html_link = f'<a href="{references_path}">Открыть папку с референсами</a>'
-                    if hasattr(self, 'project_data_references_label'):
-                        self.project_data_references_label.setText(html_link)
-                else:
-                    if hasattr(self, 'project_data_references_label'):
-                        self.project_data_references_label.setText('Не загружена')
-
-                # Фотофиксация
-                if photo_doc_path:
-                    html_link = f'<a href="{photo_doc_path}">Открыть папку с фотофиксацией</a>'
-                    if hasattr(self, 'project_data_photo_doc_label'):
-                        self.project_data_photo_doc_label.setText(html_link)
-                else:
-                    if hasattr(self, 'project_data_photo_doc_label'):
-                        self.project_data_photo_doc_label.setText('Не загружена')
+            # Референсы
+            if references_path:
+                html_link = f'<a href="{references_path}">Открыть папку с референсами</a>'
+                if hasattr(self, 'project_data_references_label'):
+                    self.project_data_references_label.setText(html_link)
             else:
                 if hasattr(self, 'project_data_references_label'):
                     self.project_data_references_label.setText('Не загружена')
+
+            # Фотофиксация
+            if photo_doc_path:
+                html_link = f'<a href="{photo_doc_path}">Открыть папку с фотофиксацией</a>'
+                if hasattr(self, 'project_data_photo_doc_label'):
+                    self.project_data_photo_doc_label.setText(html_link)
+            else:
                 if hasattr(self, 'project_data_photo_doc_label'):
                     self.project_data_photo_doc_label.setText('Не загружена')
+        else:
+            if hasattr(self, 'project_data_references_label'):
+                self.project_data_references_label.setText('Не загружена')
+            if hasattr(self, 'project_data_photo_doc_label'):
+                self.project_data_photo_doc_label.setText('Не загружена')
         # ================================
 
         # Проверяем файлы на Яндекс.Диске в фоновом режиме
@@ -5869,8 +5869,9 @@ class CardEditDialog(QDialog):
                 self.load_project_templates()
 
             # Обновляем метку фотофиксации
-            if result['photo_documentation_yandex_path']:
-                html_link = f'<a href="{result["photo_documentation_yandex_path"]}">Открыть папку с фотофиксацией</a>'
+            photo_doc_path = result.get('photo_documentation_yandex_path') or ''
+            if photo_doc_path:
+                html_link = f'<a href="{photo_doc_path}">Открыть папку с фотофиксацией</a>'
                 if hasattr(self, 'project_data_photo_doc_label'):
                     self.project_data_photo_doc_label.setText(html_link)
             else:
