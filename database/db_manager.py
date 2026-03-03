@@ -41,8 +41,10 @@ class DatabaseManager(DatabaseMigrations):
                 # Оптимизация: одно соединение для всех миграций
                 # вместо 40+ открытий/закрытий
                 self._shared_conn = True
-                self.connection = sqlite3.connect(self.db_path)
+                self.connection = sqlite3.connect(self.db_path, timeout=15)
                 self.connection.row_factory = sqlite3.Row
+                self.connection.execute("PRAGMA journal_mode=WAL")
+                self.connection.execute("PRAGMA busy_timeout=15000")
                 self.conn = self.connection
                 try:
                     # КРИТИЧНО: сначала создаём таблицы, потом мигрируем
@@ -153,8 +155,11 @@ class DatabaseManager(DatabaseMigrations):
         # возвращаем уже открытое соединение без переоткрытия
         if self._shared_conn and self.connection:
             return self.connection
-        self.connection = sqlite3.connect(self.db_path)
+        self.connection = sqlite3.connect(self.db_path, timeout=15)
         self.connection.row_factory = sqlite3.Row
+        # WAL mode: позволяет параллельные чтения + запись без блокировок
+        self.connection.execute("PRAGMA journal_mode=WAL")
+        self.connection.execute("PRAGMA busy_timeout=15000")
         self.conn = self.connection  # Alias для совместимости
         return self.connection
 

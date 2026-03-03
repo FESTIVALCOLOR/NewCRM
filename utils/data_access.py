@@ -296,6 +296,15 @@ class DataAccess(QObject):
         try:
             conn = self.db.connect()
             cursor = conn.cursor()
+            # Проверяем что server_id ещё не существует (защита от UNIQUE constraint)
+            cursor.execute(f"SELECT id FROM {table} WHERE id = ?", (server_id,))
+            if cursor.fetchone():
+                # server_id уже есть — удаляем локальную запись-дубликат
+                cursor.execute(f"DELETE FROM {table} WHERE id = ?", (local_id,))
+                conn.commit()
+                self.db.close()
+                _safe_log(f"[DataAccess] Удалён дубликат ID {local_id} в {table} (серверный {server_id} уже есть)")
+                return
             cursor.execute(f"UPDATE {table} SET id = ? WHERE id = ?", (server_id, local_id))
             conn.commit()
             self.db.close()
