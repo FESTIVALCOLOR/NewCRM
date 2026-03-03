@@ -5956,36 +5956,7 @@ class CardEditDialog(QDialog):
 
             self.data.update_crm_card(self.card_data["id"], updates)
 
-            # Записываем в историю изменения назначений сотрудников
-            role_names = {
-                'senior_manager_id': 'Старший менеджер проектов',
-                'sdp_id': 'СДП',
-                'gap_id': 'ГАП',
-                'manager_id': 'Менеджер',
-                'surveyor_id': 'Замерщик',
-            }
-            for field_name, role_name in role_names.items():
-                old_id = old_values.get(field_name)
-                new_id = updates.get(field_name)
-                if old_id != new_id and field_name in updates:
-                    # Находим имя нового сотрудника из комбобокса
-                    combo_map = {
-                        'senior_manager_id': 'senior_manager',
-                        'sdp_id': 'sdp',
-                        'gap_id': 'gap',
-                        'manager_id': 'manager',
-                        'surveyor_id': 'surveyor',
-                    }
-                    combo_name = combo_map.get(field_name)
-                    combo = getattr(self, combo_name, None) if combo_name else None
-                    new_name = combo.currentText() if combo else 'Неизвестный'
-                    if new_id is None:
-                        description = f"Снят {role_name}"
-                    elif old_id is None:
-                        description = f"Назначен {role_name}: {new_name}"
-                    else:
-                        description = f"Переназначен {role_name}: {new_name}"
-                    self._add_action_history('executor_assigned', description)
+            # История назначений записывается в on_employee_changed (до обновления card_data)
 
             # Обновляем статус контракта
             contract_id = self.card_data.get('contract_id')
@@ -6231,11 +6202,24 @@ class CardEditDialog(QDialog):
 
         field_name = role_to_field.get(role_name)
         if field_name:
+            old_employee_id = self.card_data.get(field_name)
             updates = {field_name: employee_id}
             self.data.update_crm_card(self.card_data["id"], updates)
             # Обновляем локальные данные карточки
             self.card_data[field_name] = employee_id
             print(f"OK Обновлено поле {field_name} в CRM карточке")
+
+            # Записываем в историю назначения/снятия сотрудника
+            if old_employee_id != employee_id:
+                employee_name = combo_box.currentText() if employee_id else ''
+                if employee_id is None:
+                    description = f"Снят {role_name}"
+                elif old_employee_id is None:
+                    description = f"Назначен {role_name}: {employee_name}"
+                else:
+                    description = f"Переназначен {role_name}: {employee_name}"
+                self._add_action_history('executor_assigned', description)
+                self.reload_project_history()
 
         try:
             # Удаляем существующие выплаты для этой роли

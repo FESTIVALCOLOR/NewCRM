@@ -557,14 +557,18 @@ class TestOnEmployeeChanged:
         obj.data = MagicMock()
         obj.data.is_multi_user = False
         obj.data.calculate_payment_amount.return_value = 5000
+        obj.employee = {'id': 1, 'full_name': 'Тест'}
 
         combo = MagicMock()
         combo.currentData.return_value = 55
+        combo.currentText.return_value = 'Тестовый Менеджер'
         obj.refresh_payments_tab = MagicMock()
 
         obj.on_employee_changed(combo, 'Менеджер')
         obj.data.update_crm_card.assert_called_once_with(1, {'manager_id': 55})
         assert obj.card_data['manager_id'] == 55
+        # Проверяем что история назначения записана
+        obj.data.add_action_history.assert_called()
 
     def test_sdp_creates_advance_and_balance(self):
         from ui.crm_card_edit_dialog import CardEditDialog
@@ -576,6 +580,7 @@ class TestOnEmployeeChanged:
         obj.data.get_payments_for_contract.return_value = []
         obj.data.calculate_payment_amount.return_value = 10000
         obj.refresh_payments_tab = MagicMock()
+        obj.employee = {'id': 1, 'full_name': 'Тест'}
 
         combo = MagicMock()
         combo.currentData.return_value = 30
@@ -596,6 +601,7 @@ class TestOnEmployeeChanged:
         obj.data = MagicMock()
         obj.data.is_multi_user = False
         obj.refresh_payments_tab = MagicMock()
+        obj.employee = {'id': 1, 'full_name': 'Тест'}
 
         combo = MagicMock()
         combo.currentData.return_value = 55
