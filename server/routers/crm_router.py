@@ -105,8 +105,10 @@ async def get_crm_cards(
         archived: Если True - возвращает архивные карточки (СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР)
     """
     try:
-        query = db.query(CRMCard).join(
+        query = db.query(CRMCard, Client.full_name.label('client_name')).join(
             Contract, CRMCard.contract_id == Contract.id
+        ).outerjoin(
+            Client, Contract.client_id == Client.id
         ).filter(
             Contract.project_type == project_type
         )
@@ -126,10 +128,14 @@ async def get_crm_cards(
                 )
             )
 
-        cards = query.order_by(
-            CRMCard.order_position,
+        rows = query.order_by(
+            CRMCard.order_position.nullslast(),
             CRMCard.id
         ).all()
+
+        # Распаковываем (CRMCard, client_name) из результата
+        cards = [row[0] for row in rows]
+        client_names = {row[0].id: row[1] for row in rows}
 
         # Batch-load all stage executors for all cards to avoid N+1 queries
         card_ids = [card.id for card in cards]
@@ -223,6 +229,7 @@ async def get_crm_cards(
                 'draftsman_completed': draftsman_executor.completed if draftsman_executor else False,
                 'draftsman_deadline': str(draftsman_executor.deadline) if draftsman_executor and draftsman_executor.deadline else None,
                 'order_position': card.order_position,
+                'client_name': client_names.get(card.id),
                 'created_at': card.created_at.isoformat() if card.created_at else None,
                 'updated_at': card.updated_at.isoformat() if card.updated_at else None,
             }
@@ -305,6 +312,8 @@ async def get_crm_card(
 
         # Поля из контракта
         if contract:
+            # Имя клиента
+            client = db.query(Client).filter(Client.id == contract.client_id).first() if contract.client_id else None
             result.update({
                 'contract_number': contract.contract_number,
                 'address': contract.address,
@@ -316,6 +325,7 @@ async def get_crm_card(
                 'floors': contract.floors if hasattr(contract, 'floors') else 1,
                 'contract_period': contract.contract_period,
                 'contract_status': contract.status,
+                'client_name': client.full_name if client else None,
             })
 
         return result
@@ -1643,77 +1653,88 @@ async def workflow_client_approved(
     if not card:
         raise HTTPException(status_code=404, detail="Карточка не найдена")
 
-    stage_name = card.column_name
-    contract_id = card.contract_id
+    try:
+        stage_name = card.column_name
+        contract_id = card.contract_id
 
-    stage_group = _resolve_stage_group(stage_name)
-    if stage_group and contract_id:
-        # Записываем дату в клиентскую строку "Отправка клиенту / Согласование"
-        client_entry = db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.contract_id == contract_id,
-            ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role == 'Клиент',
-            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).first()
-        if client_entry:
-            client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-            client_entry.updated_at = datetime.utcnow()
-        _server_recalculate_actual_days(db, contract_id)
+        stage_group = _resolve_stage_group(stage_name)
+        if stage_group and contract_id:
+            # Записываем дату в клиентскую строку "Отправка клиенту / Согласование"
+            client_entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role == 'Клиент',
+                or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == '')
+            ).order_by(ProjectTimelineEntry.sort_order).first()
+            if client_entry:
+                client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                client_entry.updated_at = datetime.utcnow()
+            _server_recalculate_actual_days(db, contract_id)
 
-    wf = db.query(StageWorkflowState).filter(
-        StageWorkflowState.crm_card_id == card_id,
-        StageWorkflowState.stage_name == stage_name
-    ).first()
-    if wf:
-        # K7: Пересчёт дедлайна — считаем дни паузы на согласовании клиента
-        if wf.client_approval_deadline_paused and wf.client_approval_started_at:
-            approval_pause_days = (datetime.utcnow() - wf.client_approval_started_at).days
-            if approval_pause_days > 0 and card.deadline:
-                try:
-                    dl = datetime.strptime(card.deadline, '%Y-%m-%d')
-                    dl += timedelta(days=approval_pause_days)
-                    card.deadline = dl.strftime('%Y-%m-%d')
-                    card.total_pause_days = (card.total_pause_days or 0) + approval_pause_days
-                    logger.info(f"K7: Client approval pause {approval_pause_days} days, card {card_id}")
-                except (ValueError, TypeError):
-                    pass
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if wf:
+            # K7: Пересчёт дедлайна — считаем дни паузы на согласовании клиента
+            if wf.client_approval_deadline_paused and wf.client_approval_started_at:
+                approval_pause_days = (datetime.utcnow() - wf.client_approval_started_at).days
+                if approval_pause_days > 0 and card.deadline:
+                    try:
+                        dl = datetime.strptime(card.deadline, '%Y-%m-%d')
+                        dl += timedelta(days=approval_pause_days)
+                        card.deadline = dl.strftime('%Y-%m-%d')
+                        card.total_pause_days = (card.total_pause_days or 0) + approval_pause_days
+                        logger.info(f"K7: Client approval pause {approval_pause_days} days, card {card_id}")
+                    except (ValueError, TypeError):
+                        pass
 
-            # Сдвигаем дедлайны исполнителей стадий
-            if approval_pause_days > 0:
-                executors = db.query(StageExecutor).filter(
-                    StageExecutor.crm_card_id == card_id
-                ).all()
-                for ex in executors:
-                    if ex.deadline:
-                        try:
-                            ex_dl = datetime.strptime(str(ex.deadline), '%Y-%m-%d')
-                            ex_dl += timedelta(days=approval_pause_days)
-                            ex.deadline = ex_dl.strftime('%Y-%m-%d')
-                        except (ValueError, TypeError):
-                            pass
+                # Сдвигаем дедлайны исполнителей стадий
+                if approval_pause_days > 0:
+                    executors = db.query(StageExecutor).filter(
+                        StageExecutor.crm_card_id == card_id
+                    ).all()
+                    for ex in executors:
+                        if ex.deadline:
+                            try:
+                                ex_dl = datetime.strptime(str(ex.deadline), '%Y-%m-%d')
+                                ex_dl += timedelta(days=approval_pause_days)
+                                ex.deadline = ex_dl.strftime('%Y-%m-%d')
+                            except (ValueError, TypeError):
+                                pass
 
-        wf.status = 'in_progress'
-        wf.client_approval_deadline_paused = False
-        wf.updated_at = datetime.utcnow()
+            wf.status = 'in_progress'
+            wf.client_approval_deadline_paused = False
+            wf.updated_at = datetime.utcnow()
 
-    # K11: Запись в историю
-    db.add(ActionHistory(
-        user_id=current_user.id, action_type='client_approved',
-        entity_type='crm_card', entity_id=card_id,
-        description=f'Клиент согласовал: {stage_name}'
-    ))
+        # K11: Запись в историю
+        db.add(ActionHistory(
+            user_id=current_user.id, action_type='client_approved',
+            entity_type='crm_card', entity_id=card_id,
+            description=f'Клиент согласовал: {stage_name}'
+        ))
 
-    # Обновляем дедлайн исполнителя по norm_days следующего подэтапа
-    _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+        # Обновляем дедлайн исполнителя по norm_days следующего подэтапа
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
-    db.commit()
+        db.commit()
 
-    # Хук: уведомление в чат о согласовании клиентом
-    asyncio.create_task(trigger_messenger_notification(
-        db, card_id, 'stage_complete', stage_name=f"{stage_name} (клиент согласовал)"
-    ))
+        # Хук: уведомление в чат о согласовании клиентом
+        try:
+            asyncio.create_task(trigger_messenger_notification(
+                db, card_id, 'stage_complete', stage_name=f"{stage_name} (клиент согласовал)"
+            ))
+        except Exception:
+            logger.warning(f"Не удалось отправить уведомление для карточки {card_id}")
 
-    return {"status": "client_approved"}
+        return {"status": "client_approved"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка при согласовании клиентом карточки {card_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при согласовании: {str(e)}")
 
 
 # =========================

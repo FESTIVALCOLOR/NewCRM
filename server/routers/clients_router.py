@@ -154,8 +154,18 @@ async def delete_client(
     if not client:
         raise HTTPException(status_code=404, detail="Клиент не найден")
 
+    # Проверяем наличие связанных договоров — запрещаем удаление
+    contracts = db.query(Contract).filter(Contract.client_id == client_id).all()
+    if contracts:
+        contract_numbers = [c.contract_number or f"ID {c.id}" for c in contracts]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Невозможно удалить клиента: есть {len(contracts)} связанных договоров "
+                   f"({', '.join(contract_numbers[:5)}). Удалите сначала договоры."
+        )
+
     try:
-        # Сначала удаляем все связанные договоры (каскадно удалит карточки, платежи и т.д.)
+        # Удаляем клиента (договоров нет, можно безопасно удалить)
         contracts = db.query(Contract).filter(Contract.client_id == client_id).all()
         for contract in contracts:
             # Удаляем timeline записи

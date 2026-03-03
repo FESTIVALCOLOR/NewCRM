@@ -322,11 +322,18 @@ async def create_rate(
     db: Session = Depends(get_db)
 ):
     """Создать тариф"""
-    rate = Rate(**rate_data.model_dump())
-    db.add(rate)
-    db.commit()
-    db.refresh(rate)
-    return rate
+    try:
+        rate = Rate(**rate_data.model_dump())
+        db.add(rate)
+        db.commit()
+        db.refresh(rate)
+        return rate
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка при создании тарифа: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании тарифа: {str(e)}")
 
 
 @router.put("/{rate_id}", response_model=RateResponse)
