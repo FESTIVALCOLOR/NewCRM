@@ -1174,7 +1174,7 @@ async def get_stage_history(
 def _server_recalculate_actual_days(db, contract_id: int):
     """Пересчёт actual_days (рабочие дни между последовательными actual_date) на сервере.
     Аналог _recalculate_days() из timeline_widget.py, но серверный."""
-    from utils.date_utils import networkdays as _nwd
+    from services.date_helpers import networkdays as _nwd
     entries = db.query(ProjectTimelineEntry).filter(
         ProjectTimelineEntry.contract_id == contract_id,
         ProjectTimelineEntry.executor_role != 'header'
