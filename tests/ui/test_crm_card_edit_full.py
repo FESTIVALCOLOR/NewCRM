@@ -1503,6 +1503,7 @@ class TestReloadProjectHistory:
         obj = _make_stub_dialog()
         obj.card_data = _make_card_data()
         obj.data = MagicMock()
+        obj.data.is_multi_user = False  # Локальный режим → через SQLite
         obj.data.db.connect.return_value.cursor.return_value.fetchall.return_value = []
         obj.info_layout = QVBoxLayout()
 

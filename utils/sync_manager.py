@@ -5,7 +5,7 @@
 """
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Callable
 import traceback
 import threading
@@ -100,7 +100,7 @@ class SyncManager(QObject):
             return
 
         self.is_running = True
-        self.last_sync_timestamp = datetime.utcnow()
+        self.last_sync_timestamp = datetime.now(timezone.utc)
 
         interval = sync_interval or self.DEFAULT_SYNC_INTERVAL
 
@@ -180,18 +180,24 @@ class SyncManager(QObject):
                     result['timestamp'].replace('Z', '+00:00')
                 )
 
+            # Инвалидируем кеш DataAccess при получении свежих данных
+            from utils.data_access import _global_cache
+
             clients = result.get('clients', [])
             if clients:
+                _global_cache.invalidate("clients")
                 self.clients_updated.emit(clients)
                 self.data_updated.emit('clients', clients)
 
             contracts = result.get('contracts', [])
             if contracts:
+                _global_cache.invalidate("contracts")
                 self.contracts_updated.emit(contracts)
                 self.data_updated.emit('contracts', contracts)
 
             employees = result.get('employees', [])
             if employees:
+                _global_cache.invalidate("employees")
                 self.employees_updated.emit(employees)
                 self.data_updated.emit('employees', employees)
 
@@ -246,7 +252,7 @@ class SyncManager(QObject):
             # mark_offline=False чтобы heartbeat не переводил в offline режим
             result = self.api_client._request(
                 'POST',
-                f"{self.api_client.base_url}/api/heartbeat",
+                f"{self.api_client.base_url}/api/v1/heartbeat",
                 json={'employee_id': self.employee_id},
                 retry=False,
                 timeout=10,
@@ -288,7 +294,7 @@ class SyncManager(QObject):
         try:
             response = self.api_client._request(
                 'POST',
-                f"{self.api_client.base_url}/api/locks",
+                f"{self.api_client.base_url}/api/v1/locks",
                 json={
                     'entity_type': entity_type,
                     'entity_id': entity_id,
@@ -332,7 +338,7 @@ class SyncManager(QObject):
         try:
             self.api_client._request(
                 'DELETE',
-                f"{self.api_client.base_url}/api/locks/{entity_type}/{entity_id}",
+                f"{self.api_client.base_url}/api/v1/locks/{entity_type}/{entity_id}",
                 retry=False,
                 timeout=5
             )
@@ -363,7 +369,7 @@ class SyncManager(QObject):
         try:
             response = self.api_client._request(
                 'GET',
-                f"{self.api_client.base_url}/api/locks/{entity_type}/{entity_id}",
+                f"{self.api_client.base_url}/api/v1/locks/{entity_type}/{entity_id}",
                 retry=False,
                 timeout=5
             )
@@ -385,7 +391,7 @@ class SyncManager(QObject):
         try:
             self.api_client._request(
                 'DELETE',
-                f"{self.api_client.base_url}/api/locks/user/{self.employee_id}",
+                f"{self.api_client.base_url}/api/v1/locks/user/{self.employee_id}",
                 retry=False,
                 timeout=5
             )

@@ -7,7 +7,7 @@ class ContractsMixin:
         """Получить список договоров"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/contracts",
+            f"{self.base_url}/api/v1/contracts",
             params={"skip": skip, "limit": limit}
         )
         return self._handle_response(response)
@@ -22,7 +22,7 @@ class ContractsMixin:
         """
         response = self._request(
             'GET',
-            f"{self.base_url}/api/contracts",
+            f"{self.base_url}/api/v1/contracts",
             params={"skip": skip, "limit": limit}
         )
         data = self._handle_response(response)
@@ -46,7 +46,7 @@ class ContractsMixin:
             params['year'] = year
         response = self._request(
             'GET',
-            f"{self.base_url}/api/contracts/count",
+            f"{self.base_url}/api/v1/contracts/count",
             params=params
         )
         result = self._handle_response(response)
@@ -54,14 +54,14 @@ class ContractsMixin:
 
     def get_contract(self, contract_id: int) -> Dict[str, Any]:
         """Получить договор по ID"""
-        response = self._request('GET', f"{self.base_url}/api/contracts/{contract_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/contracts/{contract_id}")
         return self._handle_response(response)
 
     def create_contract(self, contract_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создать новый договор"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/contracts",
+            f"{self.base_url}/api/v1/contracts",
             json=contract_data
         )
         return self._handle_response(response)
@@ -70,7 +70,7 @@ class ContractsMixin:
         """Обновить договор"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/contracts/{contract_id}",
+            f"{self.base_url}/api/v1/contracts/{contract_id}",
             json=contract_data
         )
         return self._handle_response(response)
@@ -91,14 +91,14 @@ class ContractsMixin:
         """
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/contracts/{contract_id}/files",
+            f"{self.base_url}/api/v1/contracts/{contract_id}/files",
             json=files_data
         )
         return self._handle_response(response)
 
     def delete_contract(self, contract_id: int) -> bool:
         """Удалить договор"""
-        response = self._request('DELETE', f"{self.base_url}/api/contracts/{contract_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/contracts/{contract_id}")
         self._handle_response(response)
         return True
 

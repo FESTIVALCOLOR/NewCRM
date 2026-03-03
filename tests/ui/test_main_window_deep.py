@@ -197,15 +197,19 @@ class TestMainWindowInit:
         assert w.windowFlags() & Qt.FramelessWindowHint
 
     def test_translucent_background(self, qtbot, mock_employee_admin):
-        """Атрибут WA_TranslucentBackground включён для border-radius."""
+        """На Windows WA_TranslucentBackground НЕ используется (DWM рендеринг), на других ОС — включён."""
+        import sys
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        assert w.testAttribute(Qt.WA_TranslucentBackground)
+        if sys.platform == 'win32':
+            assert not w.testAttribute(Qt.WA_TranslucentBackground)
+        else:
+            assert w.testAttribute(Qt.WA_TranslucentBackground)
 
     def test_minimum_size(self, qtbot, mock_employee_admin):
-        """Минимальный размер окна 800x600."""
+        """Минимальный размер окна 1400x800."""
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        assert w.minimumWidth() == 800
-        assert w.minimumHeight() == 600
+        assert w.minimumWidth() == 1400
+        assert w.minimumHeight() == 800
 
 
 # ========== 2. UI-элементы (8 тестов) ==========

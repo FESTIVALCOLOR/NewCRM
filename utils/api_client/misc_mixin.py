@@ -23,7 +23,7 @@ class MiscMixin:
         """Получить уведомления"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/notifications",
+            f"{self.base_url}/api/v1/notifications",
             params={"unread_only": unread_only}
         )
         return self._handle_response(response)
@@ -32,7 +32,7 @@ class MiscMixin:
         """Отметить уведомление как прочитанное"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/notifications/{notification_id}/read"
+            f"{self.base_url}/api/v1/notifications/{notification_id}/read"
         )
         return response.status_code == 200
 
@@ -54,7 +54,7 @@ class MiscMixin:
         """
         response = self._request(
             'POST',
-            f"{self.base_url}/api/sync",
+            f"{self.base_url}/api/v1/sync",
             json={
                 "last_sync_timestamp": last_sync_timestamp.isoformat(),
                 "entity_types": entity_types
@@ -70,7 +70,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/sync/stage-executors"
+                f"{self.base_url}/api/v1/sync/stage-executors"
             )
             return self._handle_response(response)
         except Exception as e:
@@ -82,7 +82,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/sync/approval-deadlines"
+                f"{self.base_url}/api/v1/sync/approval-deadlines"
             )
             return self._handle_response(response)
         except Exception as e:
@@ -94,7 +94,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/sync/action-history"
+                f"{self.base_url}/api/v1/sync/action-history"
             )
             return self._handle_response(response)
         except Exception as e:
@@ -106,7 +106,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/sync/supervision-history"
+                f"{self.base_url}/api/v1/sync/supervision-history"
             )
             return self._handle_response(response)
         except Exception as e:
@@ -117,7 +117,7 @@ class MiscMixin:
         """Получить историю действий для сущности"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/action-history/{entity_type}/{entity_id}"
+            f"{self.base_url}/api/v1/action-history/{entity_type}/{entity_id}"
         )
         return self._handle_response(response)
 
@@ -125,7 +125,7 @@ class MiscMixin:
         """Создать запись истории действий"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/action-history",
+            f"{self.base_url}/api/v1/action-history",
             json=history_data
         )
         return self._handle_response(response)
@@ -152,7 +152,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/project-templates",
+                f"{self.base_url}/api/v1/project-templates",
                 json={'contract_id': contract_id, 'template_url': template_url}
             )
             result = self._handle_response(response)
@@ -165,7 +165,7 @@ class MiscMixin:
         """Получить все шаблоны для договора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/project-templates/{contract_id}"
+            f"{self.base_url}/api/v1/project-templates/{contract_id}"
         )
         return self._handle_response(response)
 
@@ -174,7 +174,7 @@ class MiscMixin:
         try:
             response = self._request(
                 'DELETE',
-                f"{self.base_url}/api/project-templates/{template_id}"
+                f"{self.base_url}/api/v1/project-templates/{template_id}"
             )
             self._handle_response(response)
             return True
@@ -311,7 +311,7 @@ class MiscMixin:
             params["entity_types"] = entity_types
         response = self._request(
             'GET',
-            f"{self.base_url}/api/search",
+            f"{self.base_url}/api/v1/search",
             params=params
         )
         return self._handle_response(response)
@@ -319,24 +319,24 @@ class MiscMixin:
     def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Получить шаблон нормо-дней для типа/подтипа/агента"""
         params = {"project_type": project_type, "project_subtype": project_subtype, "agent_type": agent_type}
-        response = self._request('GET', f"{self.base_url}/api/norm-days/templates", params=params)
+        response = self._request('GET', f"{self.base_url}/api/v1/norm-days/templates", params=params)
         return self._handle_response(response)
 
     def save_norm_days_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Сохранить кастомный шаблон нормо-дней"""
-        response = self._request('PUT', f"{self.base_url}/api/norm-days/templates", json=data)
+        response = self._request('PUT', f"{self.base_url}/api/v1/norm-days/templates", json=data)
         return self._handle_response(response)
 
     def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Предпросмотр расчёта нормо-дней для указанной площади"""
-        response = self._request('POST', f"{self.base_url}/api/norm-days/templates/preview",
+        response = self._request('POST', f"{self.base_url}/api/v1/norm-days/templates/preview",
                                  json={"project_type": project_type, "project_subtype": project_subtype,
                                         "area": area, "agent_type": agent_type})
         return self._handle_response(response)
 
     def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
         """Сбросить кастомный шаблон нормо-дней (возврат к формулам)"""
-        response = self._request('POST', f"{self.base_url}/api/norm-days/templates/reset",
+        response = self._request('POST', f"{self.base_url}/api/v1/norm-days/templates/reset",
                                  json={"project_type": project_type, "project_subtype": project_subtype,
                                         "agent_type": agent_type})
         return self._handle_response(response)

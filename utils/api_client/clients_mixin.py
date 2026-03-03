@@ -7,7 +7,7 @@ class ClientsMixin:
         """Получить список клиентов"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/clients",
+            f"{self.base_url}/api/v1/clients",
             params={"skip": skip, "limit": limit}
         )
         return self._handle_response(response)
@@ -22,7 +22,7 @@ class ClientsMixin:
         """
         response = self._request(
             'GET',
-            f"{self.base_url}/api/clients",
+            f"{self.base_url}/api/v1/clients",
             params={"skip": skip, "limit": limit}
         )
         data = self._handle_response(response)
@@ -32,14 +32,14 @@ class ClientsMixin:
 
     def get_client(self, client_id: int) -> Dict[str, Any]:
         """Получить клиента по ID"""
-        response = self._request('GET', f"{self.base_url}/api/clients/{client_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/clients/{client_id}")
         return self._handle_response(response)
 
     def create_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создать нового клиента"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/clients",
+            f"{self.base_url}/api/v1/clients",
             json=client_data
         )
         return self._handle_response(response)
@@ -48,13 +48,13 @@ class ClientsMixin:
         """Обновить клиента"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/clients/{client_id}",
+            f"{self.base_url}/api/v1/clients/{client_id}",
             json=client_data
         )
         return self._handle_response(response)
 
     def delete_client(self, client_id: int) -> bool:
         """Удалить клиента"""
-        response = self._request('DELETE', f"{self.base_url}/api/clients/{client_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/clients/{client_id}")
         self._handle_response(response)
         return True

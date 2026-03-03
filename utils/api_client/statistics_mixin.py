@@ -19,7 +19,7 @@ class StatisticsMixin:
             params['city'] = city
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/dashboard",
+            f"{self.base_url}/api/v1/statistics/dashboard",
             params=params
         )
         return self._handle_response(response)
@@ -33,7 +33,7 @@ class StatisticsMixin:
             params['month'] = month
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/employees",
+            f"{self.base_url}/api/v1/statistics/employees",
             params=params
         )
         return self._handle_response(response)
@@ -45,7 +45,7 @@ class StatisticsMixin:
             params['project_type'] = project_type
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/contracts-by-period",
+            f"{self.base_url}/api/v1/statistics/contracts-by-period",
             params=params
         )
         return self._handle_response(response)
@@ -80,7 +80,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/projects",
+            f"{self.base_url}/api/v1/statistics/projects",
             params=params
         )
         return self._handle_response(response)
@@ -114,7 +114,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/supervision",
+            f"{self.base_url}/api/v1/statistics/supervision",
             params=params
         )
         return self._handle_response(response)
@@ -130,7 +130,7 @@ class StatisticsMixin:
             params['month'] = month
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/crm",
+            f"{self.base_url}/api/v1/statistics/crm",
             params=params
         )
         return self._handle_response(response)
@@ -160,7 +160,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/crm/filtered",
+            f"{self.base_url}/api/v1/statistics/crm/filtered",
             params=params
         )
         return self._handle_response(response)
@@ -193,7 +193,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/supervision/filtered",
+            f"{self.base_url}/api/v1/statistics/supervision/filtered",
             params=params
         )
         return self._handle_response(response)
@@ -208,7 +208,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/general",
+            f"{self.base_url}/api/v1/statistics/general",
             params=params
         )
         return self._handle_response(response)
@@ -231,7 +231,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/approvals",
+            f"{self.base_url}/api/v1/statistics/approvals",
             params=params
         )
         return self._handle_response(response)
@@ -245,7 +245,7 @@ class StatisticsMixin:
             params['project_type'] = project_type
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/funnel",
+            f"{self.base_url}/api/v1/statistics/funnel",
             params=params
         )
         return self._handle_response(response)
@@ -259,7 +259,7 @@ class StatisticsMixin:
             params['month'] = month
         response = self._request(
             'GET',
-            f"{self.base_url}/api/statistics/executor-load",
+            f"{self.base_url}/api/v1/statistics/executor-load",
             params=params
         )
         return self._handle_response(response)
@@ -296,7 +296,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/reports/employee-report",
+            f"{self.base_url}/api/v1/reports/employee-report",
             params=params
         )
         return self._handle_response(response)
@@ -311,7 +311,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/clients",
+            f"{self.base_url}/api/v1/dashboard/clients",
             params=params
         )
         return self._handle_response(response)
@@ -326,7 +326,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/contracts",
+            f"{self.base_url}/api/v1/dashboard/contracts",
             params=params
         )
         return self._handle_response(response)
@@ -339,7 +339,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/crm",
+            f"{self.base_url}/api/v1/dashboard/crm",
             params=params
         )
         return self._handle_response(response)
@@ -348,7 +348,7 @@ class StatisticsMixin:
         """Получить статистику для дашборда страницы Сотрудники"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/employees"
+            f"{self.base_url}/api/v1/dashboard/employees"
         )
         return self._handle_response(response)
 
@@ -362,7 +362,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries",
+            f"{self.base_url}/api/v1/dashboard/salaries",
             params=params
         )
         return self._handle_response(response)
@@ -390,7 +390,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries-by-type",
+            f"{self.base_url}/api/v1/dashboard/salaries-by-type",
             params=params
         )
         return self._handle_response(response)
@@ -407,7 +407,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries-all",
+            f"{self.base_url}/api/v1/dashboard/salaries-all",
             params=params
         )
         return self._handle_response(response)
@@ -427,7 +427,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries-individual",
+            f"{self.base_url}/api/v1/dashboard/salaries-individual",
             params=params
         )
         return self._handle_response(response)
@@ -447,7 +447,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries-template",
+            f"{self.base_url}/api/v1/dashboard/salaries-template",
             params=params
         )
         return self._handle_response(response)
@@ -467,7 +467,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries-salary",
+            f"{self.base_url}/api/v1/dashboard/salaries-salary",
             params=params
         )
         return self._handle_response(response)
@@ -487,7 +487,7 @@ class StatisticsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/salaries-supervision",
+            f"{self.base_url}/api/v1/dashboard/salaries-supervision",
             params=params
         )
         return self._handle_response(response)
@@ -510,7 +510,7 @@ class StatisticsMixin:
             params['project_type'] = project_type
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/reports/summary",
+            f"{self.base_url}/api/v1/dashboard/reports/summary",
             params=params
         )
         return self._handle_response(response)
@@ -522,7 +522,7 @@ class StatisticsMixin:
             params['year'] = year
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/reports/clients-dynamics",
+            f"{self.base_url}/api/v1/dashboard/reports/clients-dynamics",
             params=params
         )
         return self._handle_response(response)
@@ -539,7 +539,7 @@ class StatisticsMixin:
             params['city'] = city
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/reports/contracts-dynamics",
+            f"{self.base_url}/api/v1/dashboard/reports/contracts-dynamics",
             params=params
         )
         return self._handle_response(response)
@@ -556,7 +556,7 @@ class StatisticsMixin:
             params['month'] = month
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/reports/crm-analytics",
+            f"{self.base_url}/api/v1/dashboard/reports/crm-analytics",
             params=params
         )
         return self._handle_response(response)
@@ -573,7 +573,7 @@ class StatisticsMixin:
             params['month'] = month
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/reports/supervision-analytics",
+            f"{self.base_url}/api/v1/dashboard/reports/supervision-analytics",
             params=params
         )
         return self._handle_response(response)
@@ -590,7 +590,7 @@ class StatisticsMixin:
             params['month'] = month
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/reports/distribution",
+            f"{self.base_url}/api/v1/dashboard/reports/distribution",
             params=params
         )
         return self._handle_response(response)
@@ -599,7 +599,7 @@ class StatisticsMixin:
         """Получить список всех типов агентов"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/dashboard/agent-types"
+            f"{self.base_url}/api/v1/dashboard/agent-types"
         )
         return self._handle_response(response)
 
@@ -612,7 +612,7 @@ class StatisticsMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/dashboard/contract-years"
+                f"{self.base_url}/api/v1/dashboard/contract-years"
             )
             return self._handle_response(response)
         except Exception as e:

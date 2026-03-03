@@ -191,7 +191,7 @@ class CompatMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/previous-executor",
+                f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/previous-executor",
                 params={'position': position}
             )
             result = self._handle_response(response)
@@ -234,7 +234,7 @@ class CompatMixin:
         """Получить договоры по типу проекта"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/contracts",
+            f"{self.base_url}/api/v1/contracts",
             params={'project_type': project_type}
         )
         return self._handle_response(response)
@@ -267,7 +267,7 @@ class CompatMixin:
         """Получить все платежи"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments"
+            f"{self.base_url}/api/v1/payments"
         )
         return self._handle_response(response)
 
@@ -275,7 +275,7 @@ class CompatMixin:
         """Получить платежи по ID договора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments",
+            f"{self.base_url}/api/v1/payments",
             params={'contract_id': contract_id}
         )
         return self._handle_response(response)
@@ -284,7 +284,7 @@ class CompatMixin:
         """Получить платежи по ID сотрудника"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments",
+            f"{self.base_url}/api/v1/payments",
             params={'employee_id': employee_id}
         )
         return self._handle_response(response)
@@ -293,7 +293,7 @@ class CompatMixin:
         """Получить неоплаченные платежи"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments",
+            f"{self.base_url}/api/v1/payments",
             params={'is_paid': False}
         )
         return self._handle_response(response)
@@ -308,7 +308,7 @@ class CompatMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments",
+            f"{self.base_url}/api/v1/payments",
             params=params if params else None
         )
         return self._handle_response(response)
@@ -326,7 +326,7 @@ class CompatMixin:
 
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/payments/all-optimized",
+                f"{self.base_url}/api/v1/payments/all-optimized",
                 params=params
             )
             return self._handle_response(response)
@@ -343,7 +343,7 @@ class CompatMixin:
             params['quarter'] = quarter
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/summary",
+            f"{self.base_url}/api/v1/payments/summary",
             params=params
         )
         return self._handle_response(response)
@@ -352,7 +352,7 @@ class CompatMixin:
         """Получить ставки по типу проекта"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/rates",
+            f"{self.base_url}/api/v1/rates",
             params={'project_type': project_type}
         )
         return self._handle_response(response)
@@ -361,7 +361,7 @@ class CompatMixin:
         """Получить зарплаты по ID сотрудника"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/salaries",
+            f"{self.base_url}/api/v1/salaries",
             params={'employee_id': employee_id}
         )
         return self._handle_response(response)
@@ -370,20 +370,20 @@ class CompatMixin:
         """Получить файлы по ID договора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/files/contract/{contract_id}"
+            f"{self.base_url}/api/v1/files/contract/{contract_id}"
         )
         return self._handle_response(response)
 
     def get_file_templates(self) -> List[Dict[str, Any]]:
         """Получить шаблоны файлов
 
-        DEAD CODE: endpoint /api/file-templates не существует на сервере,
+        DEAD CODE: endpoint /api/v1/file-templates не существует на сервере,
         метод не используется в UI. Оставлен для обратной совместимости.
         """
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/file-templates"
+                f"{self.base_url}/api/v1/file-templates"
             )
             return self._handle_response(response)
         except Exception:
@@ -391,5 +391,5 @@ class CompatMixin:
 
     def get_cities(self) -> List[str]:
         """Получить список городов"""
-        response = self._request('GET', f"{self.base_url}/api/statistics/cities")
+        response = self._request('GET', f"{self.base_url}/api/v1/statistics/cities")
         return self._handle_response(response)

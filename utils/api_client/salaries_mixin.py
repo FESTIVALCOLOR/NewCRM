@@ -12,21 +12,21 @@ class SalariesMixin:
             params['employee_id'] = employee_id
         response = self._request(
             'GET',
-            f"{self.base_url}/api/salaries",
+            f"{self.base_url}/api/v1/salaries",
             params=params
         )
         return self._handle_response(response)
 
     def get_salary(self, salary_id: int) -> Dict[str, Any]:
         """Получить зарплату по ID"""
-        response = self._request('GET', f"{self.base_url}/api/salaries/{salary_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/salaries/{salary_id}")
         return self._handle_response(response)
 
     def create_salary(self, salary_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создать запись о зарплате"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/salaries",
+            f"{self.base_url}/api/v1/salaries",
             json=salary_data
         )
         return self._handle_response(response)
@@ -35,14 +35,14 @@ class SalariesMixin:
         """Обновить запись о зарплате"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/salaries/{salary_id}",
+            f"{self.base_url}/api/v1/salaries/{salary_id}",
             json=salary_data
         )
         return self._handle_response(response)
 
     def delete_salary(self, salary_id: int) -> bool:
         """Удалить запись о зарплате"""
-        response = self._request('DELETE', f"{self.base_url}/api/salaries/{salary_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/salaries/{salary_id}")
         self._handle_response(response)
         return True
 
@@ -57,7 +57,7 @@ class SalariesMixin:
             params['payment_type'] = payment_type
         response = self._request(
             'GET',
-            f"{self.base_url}/api/salaries/report",
+            f"{self.base_url}/api/v1/salaries/report",
             params=params
         )
         return self._handle_response(response)

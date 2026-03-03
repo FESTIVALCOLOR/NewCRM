@@ -15,7 +15,7 @@ class CrmMixin:
         """
         response = self._request(
             'GET',
-            f"{self.base_url}/api/crm/cards",
+            f"{self.base_url}/api/v1/crm/cards",
             params={"project_type": project_type}
         )
         return self._handle_response(response)
@@ -32,7 +32,7 @@ class CrmMixin:
         """
         # Пробуем получить через специальный endpoint
         try:
-            response = self._request('GET', f"{self.base_url}/api/crm/cards/{card_id}")
+            response = self._request('GET', f"{self.base_url}/api/v1/crm/cards/{card_id}")
             return self._handle_response(response)
         except Exception as e:
             print(f"[API] get_crm_card endpoint error: {e}")
@@ -64,7 +64,7 @@ class CrmMixin:
         """
         response = self._request(
             'POST',
-            f"{self.base_url}/api/crm/cards",
+            f"{self.base_url}/api/v1/crm/cards",
             json=card_data
         )
         return self._handle_response(response)
@@ -82,7 +82,7 @@ class CrmMixin:
         """
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/crm/cards/{card_id}",
+            f"{self.base_url}/api/v1/crm/cards/{card_id}",
             json=updates
         )
         return self._handle_response(response)
@@ -100,14 +100,14 @@ class CrmMixin:
         """
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/crm/cards/{card_id}/column",
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/column",
             json={"column_name": column_name}
         )
         return self._handle_response(response)
 
     def delete_crm_card(self, card_id: int) -> bool:
         """Удалить CRM карточку"""
-        response = self._request('DELETE', f"{self.base_url}/api/crm/cards/{card_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/crm/cards/{card_id}")
         self._handle_response(response)
         return True
 
@@ -129,7 +129,7 @@ class CrmMixin:
         """
         response = self._request(
             'POST',
-            f"{self.base_url}/api/crm/cards/{card_id}/stage-executor",
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/stage-executor",
             json=stage_data
         )
         return self._handle_response(response)
@@ -148,7 +148,7 @@ class CrmMixin:
         """
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/crm/cards/{card_id}/stage-executor/{stage_name}",
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/stage-executor/{stage_name}",
             json={"completed": completed}
         )
         return self._handle_response(response)
@@ -170,14 +170,14 @@ class CrmMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/crm/cards",
+            f"{self.base_url}/api/v1/crm/cards",
             params=params
         )
         return self._handle_response(response)
 
     def get_stage_executors(self, card_id: int) -> List[Dict[str, Any]]:
         """Получить исполнителей стадий для карточки"""
-        response = self._request('GET', f"{self.base_url}/api/crm/cards/{card_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/crm/cards/{card_id}")
         card_data = self._handle_response(response)
         return card_data.get('stage_executors', [])
 
@@ -185,14 +185,14 @@ class CrmMixin:
         """Обновить исполнителя стадии"""
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/crm/cards/{card_id}/stage-executor/{stage_name}",
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/stage-executor/{stage_name}",
             json=update_data
         )
         return self._handle_response(response)
 
     def delete_stage_executor(self, executor_id: int) -> bool:
         """Удалить назначение исполнителя"""
-        response = self._request('DELETE', f"{self.base_url}/api/crm/stage-executors/{executor_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/crm/stage-executors/{executor_id}")
         self._handle_response(response)
         return True
 
@@ -201,7 +201,7 @@ class CrmMixin:
         try:
             response = self._request(
                 'PATCH',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/stage-executor/{stage_name}/complete",
+                f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/stage-executor/{stage_name}/complete",
                 json={'executor_id': executor_id}
             )
             self._handle_response(response)
@@ -214,7 +214,7 @@ class CrmMixin:
         """Сбросить выполнение стадий карточки"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/crm/cards/{card_id}/reset-stages"
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/reset-stages"
         )
         return self._handle_response(response)
 
@@ -222,7 +222,7 @@ class CrmMixin:
         """Сбросить стадии согласования карточки"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/crm/cards/{card_id}/reset-approval"
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/reset-approval"
         )
         return self._handle_response(response)
 
@@ -230,7 +230,7 @@ class CrmMixin:
         """Каскадный сброс стадий — от выбранной и далее"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/crm/cards/{card_id}/reset-stage-by-name",
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/reset-stage-by-name",
             params={"stage_names": stage_names}
         )
         return self._handle_response(response)
@@ -239,7 +239,7 @@ class CrmMixin:
         """Получить отправленные стадии карточки"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/crm/cards/{card_id}/submitted-stages"
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/submitted-stages"
         )
         return self._handle_response(response)
 
@@ -247,7 +247,7 @@ class CrmMixin:
         """Получить историю стадий карточки"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/crm/cards/{card_id}/stage-history"
+            f"{self.base_url}/api/v1/crm/cards/{card_id}/stage-history"
         )
         return self._handle_response(response)
 
@@ -256,7 +256,7 @@ class CrmMixin:
         try:
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/reset-designer"
+                f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/reset-designer"
             )
             self._handle_response(response)
             return True
@@ -269,7 +269,7 @@ class CrmMixin:
         try:
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/reset-draftsman"
+                f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/reset-draftsman"
             )
             self._handle_response(response)
             return True
@@ -281,7 +281,7 @@ class CrmMixin:
         """Получить дедлайны стадий согласования"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/crm/cards/{crm_card_id}/approval-deadlines"
+            f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/approval-deadlines"
         )
         return self._handle_response(response)
 
@@ -290,7 +290,7 @@ class CrmMixin:
         try:
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/complete-approval-stage",
+                f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/complete-approval-stage",
                 json={'stage_name': stage_name}
             )
             self._handle_response(response)
@@ -305,7 +305,7 @@ class CrmMixin:
         try:
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/crm/cards/{crm_card_id}/manager-acceptance",
+                f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/manager-acceptance",
                 json={
                     'stage_name': stage_name,
                     'executor_name': executor_name,
@@ -322,23 +322,23 @@ class CrmMixin:
         """Получить список принятых стадий"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/crm/cards/{crm_card_id}/accepted-stages"
+            f"{self.base_url}/api/v1/crm/cards/{crm_card_id}/accepted-stages"
         )
         return self._handle_response(response)
 
     def get_workflow_state(self, card_id: int) -> List[Dict[str, Any]]:
         """Получить состояние рабочего процесса карточки"""
-        response = self._request('GET', f"{self.base_url}/api/crm/cards/{card_id}/workflow/state")
+        response = self._request('GET', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/state")
         return self._handle_response(response) or []
 
     def workflow_submit(self, card_id: int) -> Dict[str, Any]:
         """Сдача работы"""
-        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/submit")
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/submit")
         return self._handle_response(response)
 
     def workflow_accept(self, card_id: int) -> Dict[str, Any]:
         """Приемка работы"""
-        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/accept")
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/accept")
         return self._handle_response(response)
 
     def workflow_reject(self, card_id: int, corrections_path: str = '') -> Dict[str, Any]:
@@ -346,15 +346,15 @@ class CrmMixin:
         data = {}
         if corrections_path:
             data['revision_file_path'] = corrections_path
-        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/reject", json=data)
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/reject", json=data)
         return self._handle_response(response)
 
     def workflow_client_send(self, card_id: int) -> Dict[str, Any]:
         """Отправить на согласование клиенту"""
-        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/client-send")
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/client-send")
         return self._handle_response(response)
 
     def workflow_client_ok(self, card_id: int) -> Dict[str, Any]:
         """Клиент согласовал"""
-        response = self._request('POST', f"{self.base_url}/api/crm/cards/{card_id}/workflow/client-ok")
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/client-ok")
         return self._handle_response(response)

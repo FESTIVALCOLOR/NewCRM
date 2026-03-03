@@ -12,21 +12,21 @@ class RatesMixin:
             params['role'] = role
         response = self._request(
             'GET',
-            f"{self.base_url}/api/rates",
+            f"{self.base_url}/api/v1/rates",
             params=params
         )
         return self._handle_response(response)
 
     def get_rate(self, rate_id: int) -> Dict[str, Any]:
         """Получить тариф по ID"""
-        response = self._request('GET', f"{self.base_url}/api/rates/{rate_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/rates/{rate_id}")
         return self._handle_response(response)
 
     def create_rate(self, rate_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создать тариф"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/rates",
+            f"{self.base_url}/api/v1/rates",
             json=rate_data
         )
         return self._handle_response(response)
@@ -35,14 +35,14 @@ class RatesMixin:
         """Обновить тариф"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/rates/{rate_id}",
+            f"{self.base_url}/api/v1/rates/{rate_id}",
             json=rate_data
         )
         return self._handle_response(response)
 
     def delete_rate(self, rate_id: int) -> bool:
         """Удалить тариф"""
-        response = self._request('DELETE', f"{self.base_url}/api/rates/{rate_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/rates/{rate_id}")
         self._handle_response(response)
         return True
 
@@ -53,7 +53,7 @@ class RatesMixin:
             params['role'] = role
         response = self._request(
             'GET',
-            f"{self.base_url}/api/rates/template",
+            f"{self.base_url}/api/v1/rates/template",
             params=params
         )
         return self._handle_response(response)
@@ -62,7 +62,7 @@ class RatesMixin:
         """Сохранить шаблонный тариф"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/rates/template",
+            f"{self.base_url}/api/v1/rates/template",
             json={
                 'role': role,
                 'area_from': area_from,
@@ -82,7 +82,7 @@ class RatesMixin:
             data['stage_name'] = stage_name
         response = self._request(
             'POST',
-            f"{self.base_url}/api/rates/individual",
+            f"{self.base_url}/api/v1/rates/individual",
             json=data
         )
         return self._handle_response(response)
@@ -94,7 +94,7 @@ class RatesMixin:
             params['stage_name'] = stage_name
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/rates/individual",
+            f"{self.base_url}/api/v1/rates/individual",
             params=params
         )
         self._handle_response(response)
@@ -104,7 +104,7 @@ class RatesMixin:
         """Сохранить тариф надзора"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/rates/supervision",
+            f"{self.base_url}/api/v1/rates/supervision",
             json={
                 'stage_name': stage_name,
                 'executor_rate': executor_rate,
@@ -117,7 +117,7 @@ class RatesMixin:
         """Сохранить тариф замерщика"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/rates/surveyor",
+            f"{self.base_url}/api/v1/rates/surveyor",
             json={
                 'city': city,
                 'price': price

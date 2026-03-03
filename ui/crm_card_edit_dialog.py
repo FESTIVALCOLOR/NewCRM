@@ -154,14 +154,19 @@ class CardEditDialog(QDialog):
 
         user_id = self.employee.get('id') if self.employee else None
 
-        self.data.add_action_history(
-            user_id=user_id,
-            action_type=action_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            description=description
-        )
-        print(f"История действий записана: {action_type}")
+        try:
+            self.data.add_action_history(
+                user_id=user_id,
+                action_type=action_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                description=description
+            )
+            print(f"[HISTORY] Записано: {action_type} | entity={entity_type}/{entity_id} | user={user_id} | online={self.data.is_online}")
+        except Exception as e:
+            print(f"[HISTORY ERROR] {action_type}: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def truncate_filename(self, filename, max_length=50):
@@ -1443,9 +1448,7 @@ class CardEditDialog(QDialog):
 
                 description = f"Замер выполнен: {survey_date.toString('dd.MM.yyyy')} | Замерщик: {surveyor_name}"
 
-                # Используем contract как entity_type для соответствия с проверкой
-                contract_id = self.card_data.get('contract_id')
-                self._add_action_history('survey_complete', description, entity_type='contract', entity_id=contract_id)
+                self._add_action_history('survey_complete', description)
 
                 # Обновляем историю в UI
                 self.reload_project_history()
@@ -1695,8 +1698,7 @@ class CardEditDialog(QDialog):
                 # Добавляем запись в историю
                 if self.employee:
                     description = f"Дата замера изменена на {selected_date.toString('dd.MM.yyyy')}"
-                    contract_id = self.card_data.get('contract_id')
-                    self._add_action_history('survey_date_changed', description, entity_type='contract', entity_id=contract_id)
+                    self._add_action_history('survey_date_changed', description)
                     self.reload_project_history()
 
                 # Закрываем диалог без показа окна успеха
@@ -3620,8 +3622,7 @@ class CardEditDialog(QDialog):
                 # Добавляем запись в историю
                 if self.employee:
                     description = f"Дата ТЗ изменена на {selected_date.toString('dd.MM.yyyy')}"
-                    contract_id = self.card_data.get('contract_id')
-                    self._add_action_history('tech_task_date_changed', description, entity_type='contract', entity_id=contract_id)
+                    self._add_action_history('tech_task_date_changed', description)
                     self.reload_project_history()
 
                 # Закрываем диалог без показа окна успеха
@@ -5101,18 +5102,28 @@ class CardEditDialog(QDialog):
         stages = []
         if self.card_data.get('id'):
             try:
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                SELECT s.stage_name, s.assigned_date, s.deadline, s.submitted_date, s.completed, s.completed_date,
-                       e.full_name as executor_name
-                FROM stage_executors s
-                LEFT JOIN employees e ON s.executor_id = e.id
-                WHERE s.crm_card_id = ?
-                ORDER BY s.id DESC
-                ''', (self.card_data['id'],))
-                stages = cursor.fetchall()
-                conn.close()
+                if self.data.is_multi_user and self.data.api_client:
+                    # Загружаем через API
+                    try:
+                        stages = self.data.api_client.get_stage_executors(self.card_data['id'])
+                    except Exception as e:
+                        print(f"[WARN] Ошибка API загрузки стадий: {e}, fallback на локальную БД")
+                        stages = []
+
+                if not stages:
+                    # Fallback на локальную БД
+                    conn = self.data.db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                    SELECT s.stage_name, s.assigned_date, s.deadline, s.submitted_date, s.completed, s.completed_date,
+                           e.full_name as executor_name
+                    FROM stage_executors s
+                    LEFT JOIN employees e ON s.executor_id = e.id
+                    WHERE s.crm_card_id = ?
+                    ORDER BY s.id DESC
+                    ''', (self.card_data['id'],))
+                    stages = cursor.fetchall()
+                    conn.close()
             except Exception as e:
                 print(f" Ошибка загрузки истории стадий: {e}")
                 import traceback
@@ -5944,6 +5955,37 @@ class CardEditDialog(QDialog):
                 updates['surveyor_id'] = self.surveyor.currentData()
 
             self.data.update_crm_card(self.card_data["id"], updates)
+
+            # Записываем в историю изменения назначений сотрудников
+            role_names = {
+                'senior_manager_id': 'Старший менеджер проектов',
+                'sdp_id': 'СДП',
+                'gap_id': 'ГАП',
+                'manager_id': 'Менеджер',
+                'surveyor_id': 'Замерщик',
+            }
+            for field_name, role_name in role_names.items():
+                old_id = old_values.get(field_name)
+                new_id = updates.get(field_name)
+                if old_id != new_id and field_name in updates:
+                    # Находим имя нового сотрудника из комбобокса
+                    combo_map = {
+                        'senior_manager_id': 'senior_manager',
+                        'sdp_id': 'sdp',
+                        'gap_id': 'gap',
+                        'manager_id': 'manager',
+                        'surveyor_id': 'surveyor',
+                    }
+                    combo_name = combo_map.get(field_name)
+                    combo = getattr(self, combo_name, None) if combo_name else None
+                    new_name = combo.currentText() if combo else 'Неизвестный'
+                    if new_id is None:
+                        description = f"Снят {role_name}"
+                    elif old_id is None:
+                        description = f"Назначен {role_name}: {new_name}"
+                    else:
+                        description = f"Переназначен {role_name}: {new_name}"
+                    self._add_action_history('executor_assigned', description)
 
             # Обновляем статус контракта
             contract_id = self.card_data.get('contract_id')

@@ -15,14 +15,14 @@ class SupervisionMixin:
         """
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision/cards",
+            f"{self.base_url}/api/v1/supervision/cards",
             params={"status": status}
         )
         return self._handle_response(response)
 
     def get_supervision_card(self, card_id: int) -> Dict:
         """Получить одну карточку надзора"""
-        response = self._request('GET', f"{self.base_url}/api/supervision/cards/{card_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/supervision/cards/{card_id}")
         return self._handle_response(response)
 
     def create_supervision_card(self, card_data: Dict[str, Any]) -> Dict:
@@ -37,7 +37,7 @@ class SupervisionMixin:
         """
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision/cards",
+            f"{self.base_url}/api/v1/supervision/cards",
             json=card_data
         )
         return self._handle_response(response)
@@ -46,7 +46,7 @@ class SupervisionMixin:
         """Обновить карточку надзора"""
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/supervision/cards/{card_id}",
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}",
             json=updates
         )
         return self._handle_response(response)
@@ -55,7 +55,7 @@ class SupervisionMixin:
         """Переместить карточку надзора в другую колонку"""
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/supervision/cards/{card_id}/column",
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/column",
             json={"column_name": column_name}
         )
         return self._handle_response(response)
@@ -64,7 +64,7 @@ class SupervisionMixin:
         """Приостановить карточку надзора"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision/cards/{card_id}/pause",
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/pause",
             json={"pause_reason": pause_reason}
         )
         return self._handle_response(response)
@@ -76,7 +76,7 @@ class SupervisionMixin:
             data['employee_id'] = employee_id
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision/cards/{card_id}/resume",
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/resume",
             json=data if data else None
         )
         return self._handle_response(response)
@@ -85,7 +85,7 @@ class SupervisionMixin:
         """Удалить заказ надзора"""
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/supervision/orders/{supervision_card_id}",
+            f"{self.base_url}/api/v1/supervision/orders/{supervision_card_id}",
             params={'contract_id': contract_id}
         )
         self._handle_response(response)
@@ -98,7 +98,7 @@ class SupervisionMixin:
             data['stage_name'] = stage_name
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision/cards/{card_id}/complete-stage",
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/complete-stage",
             json=data
         )
         return self._handle_response(response)
@@ -107,7 +107,7 @@ class SupervisionMixin:
         """Сбросить выполнение стадий надзора"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision/cards/{card_id}/reset-stages"
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/reset-stages"
         )
         return self._handle_response(response)
 
@@ -115,7 +115,7 @@ class SupervisionMixin:
         """Получить адреса надзора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision/addresses"
+            f"{self.base_url}/api/v1/supervision/addresses"
         )
         return self._handle_response(response)
 
@@ -123,14 +123,14 @@ class SupervisionMixin:
         """Получить ID договора по ID карточки надзора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision/cards/{card_id}/contract"
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/contract"
         )
         result = self._handle_response(response)
         return result.get('contract_id')
 
     def get_supervision_history(self, card_id: int) -> List[Dict[str, Any]]:
         """Получить историю карточки надзора"""
-        response = self._request('GET', f"{self.base_url}/api/supervision/cards/{card_id}/history")
+        response = self._request('GET', f"{self.base_url}/api/v1/supervision/cards/{card_id}/history")
         return self._handle_response(response)
 
     def add_supervision_history(self, card_id: int, entry_type: str, message: str, employee_id: int) -> Dict[str, Any]:
@@ -150,7 +150,7 @@ class SupervisionMixin:
         }
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision/cards/{card_id}/history",
+            f"{self.base_url}/api/v1/supervision/cards/{card_id}/history",
             json=history_data
         )
         return self._handle_response(response)

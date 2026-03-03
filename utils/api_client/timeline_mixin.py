@@ -7,7 +7,7 @@ class TimelineMixin:
         """Получить таблицу сроков проекта"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/timeline/{contract_id}"
+            f"{self.base_url}/api/v1/timeline/{contract_id}"
         )
         return self._handle_response(response)
 
@@ -15,7 +15,7 @@ class TimelineMixin:
         """Инициализировать таблицу сроков проекта из шаблона"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/timeline/{contract_id}/init",
+            f"{self.base_url}/api/v1/timeline/{contract_id}/init",
             json=data
         )
         return self._handle_response(response)
@@ -24,7 +24,7 @@ class TimelineMixin:
         """Пересоздать таблицу сроков проекта (удалить и создать заново)"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/timeline/{contract_id}/reinit",
+            f"{self.base_url}/api/v1/timeline/{contract_id}/reinit",
             json=data
         )
         return self._handle_response(response)
@@ -33,7 +33,7 @@ class TimelineMixin:
         """Обновить запись таблицы сроков"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/timeline/{contract_id}/entry/{stage_code}",
+            f"{self.base_url}/api/v1/timeline/{contract_id}/entry/{stage_code}",
             json=data
         )
         return self._handle_response(response)
@@ -42,7 +42,7 @@ class TimelineMixin:
         """Получить сводку по таблице сроков"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/timeline/{contract_id}/summary"
+            f"{self.base_url}/api/v1/timeline/{contract_id}/summary"
         )
         return self._handle_response(response)
 
@@ -50,7 +50,7 @@ class TimelineMixin:
         """Экспорт таблицы сроков в Excel (возвращает байты файла)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/timeline/{contract_id}/export/excel"
+            f"{self.base_url}/api/v1/timeline/{contract_id}/export/excel"
         )
         if response.status_code == 200:
             return response.content
@@ -61,7 +61,7 @@ class TimelineMixin:
         """Экспорт таблицы сроков в PDF (возвращает байты файла)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/timeline/{contract_id}/export/pdf"
+            f"{self.base_url}/api/v1/timeline/{contract_id}/export/pdf"
         )
         if response.status_code == 200:
             return response.content
@@ -76,7 +76,7 @@ class TimelineMixin:
         """
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-timeline/{card_id}"
+            f"{self.base_url}/api/v1/supervision-timeline/{card_id}"
         )
         result = self._handle_response(response)
         # Новый формат: dict с ключом "entries"
@@ -91,7 +91,7 @@ class TimelineMixin:
         """Инициализировать таблицу сроков надзора"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/init",
+            f"{self.base_url}/api/v1/supervision-timeline/{card_id}/init",
             json=data or {}
         )
         return self._handle_response(response)
@@ -100,7 +100,7 @@ class TimelineMixin:
         """Обновить запись таблицы сроков надзора"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/entry/{stage_code}",
+            f"{self.base_url}/api/v1/supervision-timeline/{card_id}/entry/{stage_code}",
             json=data
         )
         return self._handle_response(response)
@@ -109,7 +109,7 @@ class TimelineMixin:
         """Получить сводку по таблице сроков надзора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/summary"
+            f"{self.base_url}/api/v1/supervision-timeline/{card_id}/summary"
         )
         return self._handle_response(response)
 
@@ -117,7 +117,7 @@ class TimelineMixin:
         """Экспорт таблицы сроков надзора в Excel (с/без комиссии)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/export/excel",
+            f"{self.base_url}/api/v1/supervision-timeline/{card_id}/export/excel",
             params={"include_commission": str(include_commission).lower()},
         )
         if response.status_code == 200:
@@ -129,7 +129,7 @@ class TimelineMixin:
         """Экспорт таблицы сроков надзора в PDF (с/без комиссии)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/supervision-timeline/{card_id}/export/pdf",
+            f"{self.base_url}/api/v1/supervision-timeline/{card_id}/export/pdf",
             params={"include_commission": str(include_commission).lower()},
         )
         if response.status_code == 200:

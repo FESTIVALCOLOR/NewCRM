@@ -7,7 +7,7 @@ class PaymentsMixin:
         """Получить все оплаты для договора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/contract/{contract_id}"
+            f"{self.base_url}/api/v1/payments/contract/{contract_id}"
         )
         return self._handle_response(response)
 
@@ -15,7 +15,7 @@ class PaymentsMixin:
         """Создать запись оплаты"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/payments",
+            f"{self.base_url}/api/v1/payments",
             json=payment_data
         )
         return self._handle_response(response)
@@ -24,7 +24,7 @@ class PaymentsMixin:
         """Получить данные платежа по ID"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/{payment_id}"
+            f"{self.base_url}/api/v1/payments/{payment_id}"
         )
         return self._handle_response(response)
 
@@ -32,7 +32,7 @@ class PaymentsMixin:
         """Обновить запись оплаты"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/payments/{payment_id}",
+            f"{self.base_url}/api/v1/payments/{payment_id}",
             json=payment_data
         )
         return self._handle_response(response)
@@ -41,7 +41,7 @@ class PaymentsMixin:
         """Удалить запись оплаты"""
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/payments/{payment_id}"
+            f"{self.base_url}/api/v1/payments/{payment_id}"
         )
         return self._handle_response(response)
 
@@ -58,7 +58,7 @@ class PaymentsMixin:
         """
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/payments/contract/{contract_id}/report-month",
+            f"{self.base_url}/api/v1/payments/contract/{contract_id}/report-month",
             json={'report_month': report_month}
         )
         return self._handle_response(response)
@@ -75,7 +75,7 @@ class PaymentsMixin:
             params['include_null_month'] = 'true'
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments",
+            f"{self.base_url}/api/v1/payments",
             params=params
         )
         return self._handle_response(response)
@@ -104,7 +104,7 @@ class PaymentsMixin:
 
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/by-type",
+            f"{self.base_url}/api/v1/payments/by-type",
             params=params
         )
         return self._handle_response(response)
@@ -113,7 +113,7 @@ class PaymentsMixin:
         """ДОБАВЛЕНО 30.01.2026: Получить платежи по ID карточки надзора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/by-supervision-card/{supervision_card_id}"
+            f"{self.base_url}/api/v1/payments/by-supervision-card/{supervision_card_id}"
         )
         return self._handle_response(response)
 
@@ -121,7 +121,7 @@ class PaymentsMixin:
         """Получить платежи для надзора"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/supervision/{contract_id}"
+            f"{self.base_url}/api/v1/payments/supervision/{contract_id}"
         )
         return self._handle_response(response)
 
@@ -129,7 +129,7 @@ class PaymentsMixin:
         """Получить выплаты для CRM (не надзор)"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/payments/crm/{contract_id}"
+            f"{self.base_url}/api/v1/payments/crm/{contract_id}"
         )
         return self._handle_response(response)
 
@@ -137,7 +137,7 @@ class PaymentsMixin:
         """Отметить платеж как выплаченный"""
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/payments/{payment_id}/mark-paid",
+            f"{self.base_url}/api/v1/payments/{payment_id}/mark-paid",
             params={'employee_id': employee_id}
         )
         return self._handle_response(response)
@@ -158,7 +158,7 @@ class PaymentsMixin:
 
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/payments/calculate",
+                f"{self.base_url}/api/v1/payments/calculate",
                 params=params
             )
             result = self._handle_response(response)
@@ -205,7 +205,7 @@ class PaymentsMixin:
 
             response = self._request(
                 'POST',
-                f"{self.base_url}/api/payments/recalculate",
+                f"{self.base_url}/api/v1/payments/recalculate",
                 params=params
             )
             return self._handle_response(response)
@@ -220,7 +220,7 @@ class PaymentsMixin:
             data['report_month'] = report_month
         response = self._request(
             'PATCH',
-            f"{self.base_url}/api/payments/{payment_id}/manual",
+            f"{self.base_url}/api/v1/payments/{payment_id}/manual",
             json=data
         )
         return self._handle_response(response)

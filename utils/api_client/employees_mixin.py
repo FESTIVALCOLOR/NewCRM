@@ -7,7 +7,7 @@ class EmployeesMixin:
         """Получить список сотрудников"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/employees",
+            f"{self.base_url}/api/v1/employees",
             params={"skip": skip, "limit": limit}
         )
         return self._handle_response(response)
@@ -22,14 +22,14 @@ class EmployeesMixin:
 
     def get_employee(self, employee_id: int) -> Dict[str, Any]:
         """Получить сотрудника по ID"""
-        response = self._request('GET', f"{self.base_url}/api/employees/{employee_id}")
+        response = self._request('GET', f"{self.base_url}/api/v1/employees/{employee_id}")
         return self._handle_response(response)
 
     def create_employee(self, employee_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создать нового сотрудника"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/employees",
+            f"{self.base_url}/api/v1/employees",
             json=employee_data
         )
         return self._handle_response(response, success_codes=[200, 201])
@@ -38,13 +38,13 @@ class EmployeesMixin:
         """Обновить сотрудника"""
         response = self._request(
             'PUT',
-            f"{self.base_url}/api/employees/{employee_id}",
+            f"{self.base_url}/api/v1/employees/{employee_id}",
             json=employee_data
         )
         return self._handle_response(response)
 
     def delete_employee(self, employee_id: int) -> bool:
         """Удалить сотрудника"""
-        response = self._request('DELETE', f"{self.base_url}/api/employees/{employee_id}")
+        response = self._request('DELETE', f"{self.base_url}/api/v1/employees/{employee_id}")
         self._handle_response(response)
         return True

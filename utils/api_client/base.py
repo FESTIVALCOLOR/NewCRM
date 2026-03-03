@@ -93,6 +93,11 @@ class APIClientBase:
         self.session = _AuthSession()  # Сессия с сохранением auth при same-host redirect
         # Отключаем прокси для API запросов (избегаем задержек через VPN/Clash)
         self.session.trust_env = False
+        # Оптимизация: увеличенный пул соединений для параллельных запросов
+        from requests.adapters import HTTPAdapter
+        adapter = HTTPAdapter(pool_connections=4, pool_maxsize=8, max_retries=0)
+        self.session.mount('https://', adapter)
+        self.session.mount('http://', adapter)
 
     def _request(
         self,
@@ -125,12 +130,12 @@ class APIClientBase:
             APIError: При других ошибках
         """
         # Автоматическое обновление токена перед запросом (если скоро истечёт)
-        if not url.endswith('/api/auth/refresh') and not url.endswith('/api/auth/login'):
+        if not url.endswith('/api/v1/auth/refresh') and not url.endswith('/api/v1/auth/login'):
             self._auto_refresh_if_needed()
 
         # Если недавно были offline - сразу выбрасываем исключение без запроса
         # НО: логин всегда должен пытаться подключиться к серверу
-        if mark_offline and self._is_recently_offline() and not url.endswith('/api/auth/login'):
+        if mark_offline and self._is_recently_offline() and not url.endswith('/api/v1/auth/login'):
             # Подавляем повторные сообщения об offline в консоли
             raise APIConnectionError(f"Offline режим (кеш): {url}")
 
@@ -166,8 +171,8 @@ class APIClientBase:
                 # Авторетрай на 401: обновляем токен и повторяем запрос однократно
                 if (response.status_code == 401
                         and self.refresh_token
-                        and not url.endswith('/api/auth/refresh')
-                        and not url.endswith('/api/auth/login')):
+                        and not url.endswith('/api/v1/auth/refresh')
+                        and not url.endswith('/api/v1/auth/login')):
                     old_token_tail = (self.token or '')[-20:]
                     refreshed = False
                     with self._refresh_lock:
