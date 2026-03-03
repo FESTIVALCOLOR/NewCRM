@@ -132,9 +132,8 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle(f'FESTIVAL COLOR - {self.employee["full_name"]}')
-        # Абсолютный минимум Qt (для Snap Assist на маленьких экранах)
-        # Рекомендуемый минимум 1400x800 контролируется в mouseMoveEvent
-        self.setMinimumSize(800, 600)
+        # Минимальный размер окна — 1400x800
+        self.setMinimumSize(1400, 800)
         self.resize(1400, 800)
 
         #   TITLE BAR
@@ -462,7 +461,7 @@ class MainWindow(QMainWindow):
                     # При maximized: восстанавливаем сохраненную геометрию
                     if self.restore_geometry:
                         # Восстанавливаем минимальный размер
-                        self.setMinimumSize(800, 600)
+                        self.setMinimumSize(1400, 800)
 
                         # Центрируем окно относительно курсора в области title bar
                         new_x = pos.x() - self.restore_geometry.width() // 2
@@ -488,7 +487,7 @@ class MainWindow(QMainWindow):
             if should_restore and self.restore_geometry and self.snap_position in ['left', 'right']:
                 self.setGeometry(self.restore_geometry)
                 # Восстанавливаем минимальный размер
-                self.setMinimumSize(800, 600)
+                self.setMinimumSize(1400, 800)
                 self.is_snapped = False
                 self.snap_position = None
                 self.restore_geometry = None
@@ -525,7 +524,7 @@ class MainWindow(QMainWindow):
         """Применение snap позиции"""
         if not self.is_snapped or not self.snap_position:
             # Не в режиме snap - восстанавливаем минимальный размер
-            self.setMinimumSize(800, 600)
+            self.setMinimumSize(1400, 800)
             self.setCursor(Qt.ArrowCursor)
             return
 
@@ -568,7 +567,7 @@ class MainWindow(QMainWindow):
                     self.snap_position = None
                     self.restore_geometry = None
                 # Восстанавливаем минимальный размер перед resize
-                self.setMinimumSize(800, 600)
+                self.setMinimumSize(1400, 800)
 
                 self.resizing = True
                 self.resize_edge = edge
@@ -860,7 +859,7 @@ class MainWindow(QMainWindow):
                 self.is_snapped = False
                 self.snap_position = None
                 # Восстанавливаем минимальный размер (абсолютный минимум)
-                self.setMinimumSize(800, 600)
+                self.setMinimumSize(1400, 800)
                 # Сбрасываем флаги resize на всякий случай
                 self.resizing = False
                 self.resize_edge = None
