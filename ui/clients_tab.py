@@ -203,15 +203,21 @@ class ClientsTab(QWidget):
             
     def ensure_data_loaded(self):
         """Ленивая загрузка: данные загружаются при первом показе таба.
-        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        При повторном переключении — пропускаем если кэш свежий (<30с)."""
+        import time as _time
+        now = _time.monotonic()
         first_time = not self._data_loaded
 
         if first_time:
             self._data_loaded = True
+            self._last_load_time = now
             self.data.prefer_local = True
             self.load_clients()
             self.data.prefer_local = False
+        elif now - getattr(self, '_last_load_time', 0) < 30:
+            return
         else:
+            self._last_load_time = now
             self.load_clients()
 
     def load_clients(self):

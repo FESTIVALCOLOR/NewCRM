@@ -640,11 +640,14 @@ class CRMSupervisionTab(QWidget):
 
     def ensure_data_loaded(self):
         """Ленивая загрузка: данные загружаются при первом показе таба.
-        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        При повторном переключении — пропускаем если кэш свежий (<30с)."""
+        import time as _time
+        now = _time.monotonic()
         first_time = not self._data_loaded
 
         if first_time:
             self._data_loaded = True
+            self._last_load_time = now
             self._loading_guard = True
             self.data.prefer_local = True
             try:
@@ -652,15 +655,18 @@ class CRMSupervisionTab(QWidget):
             finally:
                 self.data.prefer_local = False
                 self._loading_guard = False
+        elif now - getattr(self, '_last_load_time', 0) < 30:
+            return
         else:
-            # Повторное переключение: обновляем через кэш
+            self._last_load_time = now
             self.load_active_cards()
 
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей вкладки"""
         self.load_active_cards()
         if not self.is_dan_role:
-            self.load_archive_cards()
+            # Отложенная загрузка архива — не блокирует UI
+            QTimer.singleShot(200, self.load_archive_cards)
             
     def load_active_cards(self):
         """Загрузка активных карточек с fallback на локальную БД"""
@@ -1007,6 +1013,22 @@ class CRMSupervisionTab(QWidget):
                                         }
                                         self.data.create_payment(payment_data)
                                         print(f"    Создана оплата для СМП по стадии '{from_column}': {smp_amount} руб")
+
+                                # Верификация: проверяем дубли оплат для этой стадии
+                                if self.data.is_multi_user:
+                                    try:
+                                        all_stage_payments = self.data.get_payments_by_supervision_card(card_id)
+                                        stage_payments = [p for p in (all_stage_payments or []) if p.get('stage_name') == from_column]
+                                        for check_role in ['ДАН', 'Старший менеджер проектов']:
+                                            rp = [p for p in stage_payments if p.get('role') == check_role]
+                                            if len(rp) > 1:
+                                                print(f"[WARN] Обнаружено {len(rp)} оплат для {check_role} на стадии '{from_column}', ожидается 1")
+                                                sorted_rp = sorted(rp, key=lambda x: x.get('id', 0), reverse=True)
+                                                for dup in sorted_rp[1:]:
+                                                    self.data.delete_payment(dup['id'])
+                                                    print(f"[DEDUP] Удалена лишняя оплата ID={dup['id']} для {check_role}")
+                                    except Exception as e:
+                                        print(f"[WARN] Ошибка верификации дублей оплат: {e}")
                             else:
                                 # Если оплаты уже есть, обновляем отчетный месяц
                                 updated_count = self.data.execute_raw_update(

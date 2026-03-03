@@ -346,14 +346,15 @@ class CRMTab(QWidget):
     
     def ensure_data_loaded(self):
         """Ленивая загрузка: данные загружаются при первом показе таба.
-        При повторном переключении — обновляются через DataAccess кэш (30с TTL).
-        Если кэш инвалидирован (после create_contract), загружаются свежие данные из API."""
+        При повторном переключении — пропускаем если кэш свежий (<30с)."""
+        import time as _time
+        now = _time.monotonic()
         first_time = not self._data_loaded
 
         if first_time:
-            import time as _time
             _t0 = _time.perf_counter()
             self._data_loaded = True
+            self._last_load_time = now
             self._loading_guard = True
             self.data.prefer_local = True
             try:
@@ -373,9 +374,10 @@ class CRMTab(QWidget):
                     QTimer.singleShot(200, self._deferred_load_archive)
             else:
                 QTimer.singleShot(200, lambda t=other_type: self._deferred_load_other(t))
+        elif now - getattr(self, '_last_load_time', 0) < 30:
+            return
         else:
-            # Повторное переключение: обновляем текущую подвкладку через кэш
-            # (DataAccess кэш 30с TTL — при инвалидации после create/update загрузит из API)
+            self._last_load_time = now
             current_index = self.project_tabs.currentIndex()
             current_type = 'Индивидуальный' if current_index == 0 else 'Шаблонный'
             self.load_cards_for_type(current_type)
@@ -562,7 +564,6 @@ class CRMTab(QWidget):
                 'Используйте столбец "В ожидании" для приостановки.',
                 'warning'
             ).exec_()
-            self.load_cards_for_type(project_type)
             return
 
         # === ПРАВИЛО: Из "В ожидании" — только в прежний столбец или "Выполненный проект" ===
@@ -575,7 +576,6 @@ class CRMTab(QWidget):
                     f'Из "В ожидании" можно вернуть только в "{prev_col}" или "Выполненный проект".',
                     'warning'
                 ).exec_()
-                self.load_cards_for_type(project_type)
                 return
 
         # Проверяем нужен ли выбор исполнителя ПЕРЕД перемещением
@@ -585,7 +585,6 @@ class CRMTab(QWidget):
             _contract_id = _card_info.get('contract_id') if _card_info else None
             dialog = ExecutorSelectionDialog(self, card_id, to_column, project_type, self.api_client, contract_id=_contract_id)
             if dialog.exec_() != QDialog.Accepted:
-                self.load_cards_for_type(project_type)
                 return
 
         try:
@@ -601,9 +600,8 @@ class CRMTab(QWidget):
                         'затем переместите её на следующую стадию.',
                         'warning'
                     ).exec_()
-                    self.load_cards_for_type(project_type)
                     return
-                
+
                 if ('планировочные' in from_column or 'чертежи' in from_column) and card_data.get('draftsman_completed') == 1:
                     CustomMessageBox(
                         self,
@@ -613,7 +611,6 @@ class CRMTab(QWidget):
                         'затем переместите её на следующую стадию.',
                         'warning'
                     ).exec_()
-                    self.load_cards_for_type(project_type)
                     return
 
                 # ИСПРАВЛЕНИЕ: Проверка сдачи и принятия работы перед перемещением
@@ -659,7 +656,6 @@ class CRMTab(QWidget):
                                 f'<i>Сначала выполните все требования, затем переместите карточку.</i>',
                                 'warning'
                             ).exec_()
-                            self.load_cards_for_type(project_type)
                             return
                 else:
                     # Для всех остальных пользователей: строгая проверка
@@ -684,7 +680,6 @@ class CRMTab(QWidget):
                                     f'<i>Сначала выполните все требования, затем переместите карточку.</i>',
                                     'warning'
                                 ).exec_()
-                                self.load_cards_for_type(project_type)
                                 return
         except Exception as e:
             print(f"! Ошибка проверки принятия работы: {e}")
@@ -695,7 +690,6 @@ class CRMTab(QWidget):
             completion_dialog = ProjectCompletionDialog(self, card_id, self.api_client)
             if completion_dialog.exec_() != QDialog.Accepted:
                 print(f"Завершение отменено, карточка остается в '{from_column}'")
-                self.load_cards_for_type(project_type)
                 return
             # Диалог принят — продолжаем перемещение
             self._completion_accepted = True
@@ -1620,37 +1614,32 @@ class CRMCard(QFrame):
         # ============================
         
     def calculate_working_days(self, start_date, end_date):
-        """Подсчет рабочих дней между датами"""
+        """Подсчет оставшихся рабочих дней от start_date до end_date.
+
+        start_date НЕ считается (сегодня уже идёт), end_date считается.
+        Совпадает с логикой add_working_days: start + N раб.дней = deadline.
+        """
         if start_date > end_date:
             return -self.calculate_working_days(end_date, start_date)
-        
-        working_days = 0
-        current = start_date
-        
-        holidays = [
-            QDate(2024, 1, 1), QDate(2024, 1, 2), QDate(2024, 1, 3),
-            QDate(2024, 1, 4), QDate(2024, 1, 5), QDate(2024, 1, 6),
-            QDate(2024, 1, 7), QDate(2024, 1, 8),
-            QDate(2024, 2, 23), QDate(2024, 3, 8),
-            QDate(2024, 5, 1), QDate(2024, 5, 9),
-            QDate(2024, 6, 12), QDate(2024, 11, 4),
-            QDate(2025, 1, 1), QDate(2025, 1, 2), QDate(2025, 1, 3),
-            QDate(2025, 1, 4), QDate(2025, 1, 5), QDate(2025, 1, 6),
-            QDate(2025, 1, 7), QDate(2025, 1, 8),
-            QDate(2025, 2, 23), QDate(2025, 3, 8),
-            QDate(2025, 5, 1), QDate(2025, 5, 9),
-            QDate(2025, 6, 12), QDate(2025, 11, 4),
+
+        # Праздники РФ (месяц, день) — работает для любого года
+        russian_holidays = [
+            (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+            (2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4),
         ]
-        
+
+        working_days = 0
+        current = start_date.addDays(1)  # начинаем со следующего дня
+
         while current <= end_date:
-            day_of_week = current.dayOfWeek()
-            is_holiday = current in holidays
-            
+            day_of_week = current.dayOfWeek()  # Пн=1 .. Вс=7
+            is_holiday = (current.month(), current.day()) in russian_holidays
+
             if day_of_week < 6 and not is_holiday:
                 working_days += 1
-            
+
             current = current.addDays(1)
-        
+
         return working_days
 
     def _get_contract_yandex_folder(self, contract_id):

@@ -63,20 +63,22 @@ class PaymentsMixin:
         )
         return self._handle_response(response)
 
-    def get_year_payments(self, year: int, include_null_month: bool = False) -> List[Dict[str, Any]]:
-        """Получить платежи за год
+    def get_year_payments(self, year: int = None, include_null_month: bool = False) -> List[Dict[str, Any]]:
+        """Получить платежи за год (или все, если year=None)
 
         Args:
-            year: Год
+            year: Год (None = все годы)
             include_null_month: Включить платежи с NULL report_month (В работе)
         """
-        params = {'year': year}
+        params = {}
+        if year is not None:
+            params['year'] = year
         if include_null_month:
             params['include_null_month'] = 'true'
         response = self._request(
             'GET',
             f"{self.base_url}/api/v1/payments",
-            params=params
+            params=params if params else None
         )
         return self._handle_response(response)
 

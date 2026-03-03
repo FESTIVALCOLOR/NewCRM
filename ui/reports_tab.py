@@ -634,11 +634,20 @@ class ReportsTab(QWidget):
 
     def ensure_data_loaded(self):
         """Ленивая загрузка при первом показе вкладки.
-        При повторном переключении — обновляются данные."""
+        При повторном переключении — пропускаем если кэш свежий (<30с)."""
+        import time as _time
+        now = _time.monotonic()
         if not self._loading:
             if not self._data_loaded:
+                self._data_loaded = True
+                self._last_load_time = now
                 self._load_filter_options()
-            self.reload_all_sections()
+                self.reload_all_sections()
+            elif now - getattr(self, '_last_load_time', 0) < 30:
+                return
+            else:
+                self._last_load_time = now
+                self.reload_all_sections()
 
     def _load_filter_options(self):
         """Загрузить опции для ComboBox-фильтров из DataAccess"""

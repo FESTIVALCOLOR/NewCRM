@@ -1888,23 +1888,30 @@ class DatabaseManager(DatabaseMigrations):
         self.close()
         return payments
     
-    def get_year_payments(self, year, include_null_month=False):
+    def get_year_payments(self, year=None, include_null_month=False):
         """Получение выплат за год из всех источников с полными данными
 
         Args:
-            year: Год
+            year: Год (None = все годы)
             include_null_month: Включить платежи с NULL report_month (В работе)
         """
         conn = self.connect()
         cursor = conn.cursor()
 
         # Условие фильтрации по месяцу
-        if include_null_month:
+        if year is None:
+            # Без фильтра по году — все выплаты
+            month_cond_p = "1=1"
+            month_cond_s = "1=1"
+            query_params = ()
+        elif include_null_month:
             month_cond_p = "(p.report_month LIKE ? OR p.report_month IS NULL)"
             month_cond_s = "(s.report_month LIKE ? OR s.report_month IS NULL)"
+            query_params = (f'{year}%', f'{year}%', f'{year}%')
         else:
             month_cond_p = "p.report_month LIKE ?"
             month_cond_s = "s.report_month LIKE ?"
+            query_params = (f'{year}%', f'{year}%', f'{year}%')
 
         query = f'''
         SELECT
@@ -1950,7 +1957,7 @@ class DatabaseManager(DatabaseMigrations):
         WHERE {month_cond_s}
         '''
 
-        cursor.execute(query, (f'{year}%', f'{year}%', f'{year}%'))
+        cursor.execute(query, query_params)
 
         payments = [dict(row) for row in cursor.fetchall()]
         self.close()
@@ -3529,7 +3536,7 @@ class DatabaseManager(DatabaseMigrations):
 
                 if rate and rate['rate_per_m2']:
                     amount = area * rate['rate_per_m2']
-                    print(f"[INFO] Тариф надзора: {rate['rate_per_m2']} ₽/м², сумма: {amount} ₽")
+                    print(f"[INFO] Тариф надзора: {rate['rate_per_m2']} руб/м2, сумма: {amount} руб")
                     return amount
 
                 print(f"[WARN] Тариф для надзора не найден: роль={role}, стадия={stage_name}")
@@ -3693,7 +3700,7 @@ class DatabaseManager(DatabaseMigrations):
 
             month_display = report_month if report_month else "не указан"
             card_type = "CRM" if crm_card_id else ("Надзор" if supervision_card_id else "Общая")
-            print(f"[OK] Создана выплата ID={payment_id} ({card_type}): {role} - {calculated_amount:.2f} ₽ (месяц: {month_display})")
+            print(f"[OK] Создана выплата ID={payment_id} ({card_type}): {role} - {calculated_amount:.2f} руб (месяц: {month_display})")
             return payment_id
             
         except Exception as e:
@@ -3807,7 +3814,7 @@ class DatabaseManager(DatabaseMigrations):
             conn.commit()
             self.close()
 
-            print(f"[OK] Выплата ID={payment_id} обновлена вручную: {manual_amount:.2f} ₽")
+            print(f"[OK] Выплата ID={payment_id} обновлена вручную: {manual_amount:.2f} руб")
 
         except Exception as e:
             print(f"[ERROR] Ошибка обновления выплаты: {e}")

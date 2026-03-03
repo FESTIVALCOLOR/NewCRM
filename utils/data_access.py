@@ -1291,8 +1291,8 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payments_for_crm, fallback: {e}")
         return self.db.get_payments_for_crm(contract_id)
 
-    def get_year_payments(self, year: int, include_null_month: bool = False) -> List[Dict]:
-        """Получить платежи за год"""
+    def get_year_payments(self, year: int = None, include_null_month: bool = False) -> List[Dict]:
+        """Получить платежи за год (или все, если year=None)"""
         cache_key = f"payments:year:{year}:{include_null_month}"
         self._check_cache_on_mode_change()
         cached = _global_cache.get(cache_key)

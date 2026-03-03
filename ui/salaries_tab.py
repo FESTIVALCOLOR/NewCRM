@@ -1334,16 +1334,21 @@ class SalariesTab(QWidget):
 
     def ensure_data_loaded(self):
         """Ленивая загрузка: данные загружаются при первом показе таба.
-        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        При повторном переключении — пропускаем если кэш свежий (<30с)."""
+        import time as _time
+        now = _time.monotonic()
         first_time = not self._data_loaded
 
         if first_time:
             self._data_loaded = True
-            # Первая загрузка — из локальной БД для мгновенного отображения
+            self._last_load_time = now
             self._prefer_local_load = True
             self.load_all_payments()
             self._prefer_local_load = False
+        elif now - getattr(self, '_last_load_time', 0) < 30:
+            return
         else:
+            self._last_load_time = now
             self.load_all_payments()
 
     def load_all_payments(self, force_reload=False):
@@ -1379,26 +1384,13 @@ class SalariesTab(QWidget):
             self._all_payments_cache = all_payments
             self._cache_year = year
 
-            # Для периода "Все" загружаем дополнительные годы
-            # ИСПРАВЛЕНО 06.02.2026: Дедупликация по ID чтобы NULL платежи не дублировались
+            # Для периода "Все" — один запрос без фильтра по году
             if period == 'Все':
-                all_payments = []
-                seen_ids = set()  # Множество для отслеживания уже добавленных платежей
-                for y in range(2020, 2031):
-                    try:
-                        year_payments = self.data.get_year_payments(y, include_null_month=True)
-                    except Exception as e:
-                        print(f"[WARN] Ошибка загрузки выплат за {y}: {e}")
-                        year_payments = []
-
-                    # Дедупликация: добавляем только уникальные платежи
-                    for p in year_payments:
-                        # Уникальный ключ: (id, source) - source различает payments и salaries
-                        pid = (p.get('id'), p.get('source', 'CRM'))
-                        if pid not in seen_ids:
-                            all_payments.append(p)
-                            seen_ids.add(pid)
-
+                try:
+                    all_payments = self.data.get_year_payments(None, include_null_month=True)
+                except Exception as e:
+                    print(f"[WARN] Ошибка загрузки всех выплат: {e}")
+                    all_payments = []
                 payments = all_payments
             else:
                 payments = list(self._all_payments_cache)  # Копия кеша
