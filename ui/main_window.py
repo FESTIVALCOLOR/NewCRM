@@ -869,6 +869,23 @@ class MainWindow(QMainWindow):
 
         return super().nativeEvent(eventType, message)
 
+    def resizeEvent(self, event):
+        """Debounce перерисовки при resize — подавляет мигание на сложных страницах"""
+        super().resizeEvent(event)
+        # Блокируем обновление виджетов во время активного resize
+        if not hasattr(self, '_resize_debounce'):
+            self._resize_debounce = QTimer(self)
+            self._resize_debounce.setSingleShot(True)
+            self._resize_debounce.timeout.connect(self._on_resize_finished)
+        if not self._resize_debounce.isActive():
+            self.setUpdatesEnabled(False)
+        self._resize_debounce.start(30)
+
+    def _on_resize_finished(self):
+        """Resize завершён — разрешаем перерисовку"""
+        self.setUpdatesEnabled(True)
+        self.update()
+
     def leaveEvent(self, event):
         """Сброс курсора при выходе мыши за пределы окна"""
         if not self.resizing:
