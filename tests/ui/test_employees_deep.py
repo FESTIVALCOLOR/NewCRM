@@ -217,15 +217,16 @@ class TestEmployeesLazyLoading:
         tab.ensure_data_loaded()
         assert tab._data_loaded is True
 
-    def test_double_ensure_no_reload(self, qtbot, mock_data_access, mock_employee_admin):
-        """Повторный ensure_data_loaded не перезагружает данные."""
+    def test_double_ensure_reloads_via_cache(self, qtbot, mock_data_access, mock_employee_admin):
+        """Повторный ensure_data_loaded обновляет данные (через кэш DataAccess)."""
         mock_data_access.get_all_employees.return_value = []
         tab = _create_employees_tab(qtbot, mock_data_access, mock_employee_admin)
         tab.ensure_data_loaded()
         call_count = mock_data_access.get_all_employees.call_count
+        assert call_count >= 1
         tab.ensure_data_loaded()
-        # Не должно быть дополнительных вызовов
-        assert mock_data_access.get_all_employees.call_count == call_count
+        # При повторном вызове данные перезагружаются
+        assert mock_data_access.get_all_employees.call_count > call_count
 
 
 # ========== 5. Синхронизация (3 теста) ==========

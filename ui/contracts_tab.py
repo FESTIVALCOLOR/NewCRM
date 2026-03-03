@@ -155,12 +155,18 @@ class ContractsTab(QWidget):
         self.setLayout(layout)
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба"""
-        if not self._data_loaded:
+        """Ленивая загрузка: данные загружаются при первом показе таба.
+        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        first_time = not self._data_loaded
+
+        if first_time:
             self._data_loaded = True
             self.data.prefer_local = True
             self.load_contracts()
             self.data.prefer_local = False
+        else:
+            # Повторное переключение: обновляем через кэш
+            self.load_contracts()
 
     def load_contracts(self):
         """Загрузка списка договоров"""

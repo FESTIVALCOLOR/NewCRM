@@ -246,13 +246,15 @@ class TestSupervisionLazyLoading:
         tab.ensure_data_loaded()
         mock_data_access.get_supervision_cards_active.assert_called()
 
-    def test_double_ensure_no_reload(self, qtbot, mock_data_access, mock_employee_admin):
-        """Повторный ensure не перезагружает."""
+    def test_double_ensure_reloads_via_cache(self, qtbot, mock_data_access, mock_employee_admin):
+        """Повторный ensure обновляет данные (через кэш DataAccess)."""
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_admin)
         tab.ensure_data_loaded()
         cnt = mock_data_access.get_supervision_cards_active.call_count
+        assert cnt >= 1
         tab.ensure_data_loaded()
-        assert mock_data_access.get_supervision_cards_active.call_count == cnt
+        # При повторном вызове данные перезагружаются
+        assert mock_data_access.get_supervision_cards_active.call_count > cnt
 
 
 # ========== 5. Стадии и маппинг (6 тестов) ==========

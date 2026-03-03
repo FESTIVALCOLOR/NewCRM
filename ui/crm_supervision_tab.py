@@ -639,8 +639,11 @@ class CRMSupervisionTab(QWidget):
             traceback.print_exc()
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба"""
-        if not self._data_loaded:
+        """Ленивая загрузка: данные загружаются при первом показе таба.
+        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        first_time = not self._data_loaded
+
+        if first_time:
             self._data_loaded = True
             self._loading_guard = True
             self.data.prefer_local = True
@@ -649,6 +652,9 @@ class CRMSupervisionTab(QWidget):
             finally:
                 self.data.prefer_local = False
                 self._loading_guard = False
+        else:
+            # Повторное переключение: обновляем через кэш
+            self.load_active_cards()
 
     def load_cards_for_current_tab(self):
         """Загрузка карточек для текущей вкладки"""

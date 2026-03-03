@@ -846,13 +846,15 @@ class TestCRMLazyLoading:
         # get_crm_cards должен быть вызван
         mock_data_access.get_crm_cards.assert_called()
 
-    def test_double_ensure_no_reload(self, qtbot, mock_data_access, mock_employee_admin):
-        """Повторный ensure_data_loaded не перезагружает."""
+    def test_double_ensure_reloads_via_cache(self, qtbot, mock_data_access, mock_employee_admin):
+        """Повторный ensure_data_loaded обновляет данные (через кэш DataAccess)."""
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
         tab.ensure_data_loaded()
-        call_count = mock_data_access.get_crm_cards.call_count
+        call_count_after_first = mock_data_access.get_crm_cards.call_count
+        assert call_count_after_first >= 1
         tab.ensure_data_loaded()
-        assert mock_data_access.get_crm_cards.call_count == call_count
+        # При повторном вызове данные перезагружаются (кэш 30с TTL)
+        assert mock_data_access.get_crm_cards.call_count > call_count_after_first
 
 
 # ========== 13. Прочие диалоги и элементы (6 тестов) ==========

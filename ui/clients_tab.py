@@ -202,12 +202,17 @@ class ClientsTab(QWidget):
         self.clients_table.setCellWidget(row, 6, self.create_action_buttons(client))
             
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба"""
-        if not self._data_loaded:
+        """Ленивая загрузка: данные загружаются при первом показе таба.
+        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        first_time = not self._data_loaded
+
+        if first_time:
             self._data_loaded = True
             self.data.prefer_local = True
             self.load_clients()
             self.data.prefer_local = False
+        else:
+            self.load_clients()
 
     def load_clients(self):
         """Загрузка списка клиентов"""

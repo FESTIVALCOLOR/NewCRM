@@ -1333,13 +1333,18 @@ class SalariesTab(QWidget):
         self.load_all_payments()
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба"""
-        if not self._data_loaded:
+        """Ленивая загрузка: данные загружаются при первом показе таба.
+        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        first_time = not self._data_loaded
+
+        if first_time:
             self._data_loaded = True
             # Первая загрузка — из локальной БД для мгновенного отображения
             self._prefer_local_load = True
             self.load_all_payments()
             self._prefer_local_load = False
+        else:
+            self.load_all_payments()
 
     def load_all_payments(self, force_reload=False):
         """Загрузка всех выплат с применением фильтров и кешированием"""

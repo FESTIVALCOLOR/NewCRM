@@ -345,8 +345,12 @@ class CRMTab(QWidget):
         return widget
     
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба"""
-        if not self._data_loaded:
+        """Ленивая загрузка: данные загружаются при первом показе таба.
+        При повторном переключении — обновляются через DataAccess кэш (30с TTL).
+        Если кэш инвалидирован (после create_contract), загружаются свежие данные из API."""
+        first_time = not self._data_loaded
+
+        if first_time:
             import time as _time
             _t0 = _time.perf_counter()
             self._data_loaded = True
@@ -369,6 +373,12 @@ class CRMTab(QWidget):
                     QTimer.singleShot(200, self._deferred_load_archive)
             else:
                 QTimer.singleShot(200, lambda t=other_type: self._deferred_load_other(t))
+        else:
+            # Повторное переключение: обновляем текущую подвкладку через кэш
+            # (DataAccess кэш 30с TTL — при инвалидации после create/update загрузит из API)
+            current_index = self.project_tabs.currentIndex()
+            current_type = 'Индивидуальный' if current_index == 0 else 'Шаблонный'
+            self.load_cards_for_type(current_type)
 
     def _deferred_load_other(self, project_type):
         """Отложенная загрузка второй подвкладки и архива"""

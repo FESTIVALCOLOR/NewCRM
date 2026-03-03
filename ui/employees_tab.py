@@ -338,10 +338,15 @@ class EmployeesTab(QWidget):
         self.load_employees(department=self.current_department)
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба"""
-        if not self._data_loaded:
+        """Ленивая загрузка: данные загружаются при первом показе таба.
+        При повторном переключении — обновляются через DataAccess кэш (30с TTL)."""
+        first_time = not self._data_loaded
+
+        if first_time:
             self._data_loaded = True
             self._reload_employees(prefer_local=True)
+        else:
+            self._reload_employees(prefer_local=False)
 
     def load_employees(self, department=None):
         """Загрузка списка сотрудников с фильтрацией по отделу"""

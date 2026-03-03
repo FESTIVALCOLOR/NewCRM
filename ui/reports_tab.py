@@ -633,9 +633,11 @@ class ReportsTab(QWidget):
     # ===================================================================
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка при первом показе вкладки"""
-        if not self._data_loaded and not self._loading:
-            self._load_filter_options()
+        """Ленивая загрузка при первом показе вкладки.
+        При повторном переключении — обновляются данные."""
+        if not self._loading:
+            if not self._data_loaded:
+                self._load_filter_options()
             self.reload_all_sections()
 
     def _load_filter_options(self):
