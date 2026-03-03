@@ -814,10 +814,29 @@ class MainWindow(QMainWindow):
                     return True, HTCLIENT
 
                 WM_ERASEBKGND = 0x0014
+                WM_WINDOWPOSCHANGING = 0x0046
 
                 if msg.message == WM_ERASEBKGND:
                     # Подавляем стирание фона — убирает мигание при resize
                     return True, 1
+
+                elif msg.message == WM_WINDOWPOSCHANGING:
+                    # Подавляем копирование содержимого при resize (убирает горизонтальное мигание)
+                    SWP_NOCOPYBITS = 0x0100
+
+                    class WINDOWPOS(ctypes.Structure):
+                        _fields_ = [
+                            ('hwnd', wintypes.HWND),
+                            ('hwndInsertAfter', wintypes.HWND),
+                            ('x', ctypes.c_int),
+                            ('y', ctypes.c_int),
+                            ('cx', ctypes.c_int),
+                            ('cy', ctypes.c_int),
+                            ('flags', wintypes.UINT),
+                        ]
+
+                    wp = ctypes.cast(msg.lParam, ctypes.POINTER(WINDOWPOS)).contents
+                    wp.flags |= SWP_NOCOPYBITS
 
                 elif msg.message == WM_NCCALCSIZE:
                     # ВСЕГДА возвращаем 0: клиентская область = всё окно (убираем рамку)
