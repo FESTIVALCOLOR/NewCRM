@@ -1032,6 +1032,13 @@ class ProjectTimelineWidget(QWidget):
 
         date_str = new_date.toString('yyyy-MM-dd') if new_date.isValid() and new_date > QDate(2020, 1, 1) else ''
 
+        # Захватываем старую дату и название этапа для истории
+        old_date = ''
+        stage_name = stage_code
+        if entry_idx < len(self.entries):
+            old_date = self.entries[entry_idx].get('actual_date', '') or ''
+            stage_name = self.entries[entry_idx].get('stage_name', '') or stage_code
+
         # Обновляем запись
         if entry_idx < len(self.entries):
             self.entries[entry_idx]['actual_date'] = date_str
@@ -1049,8 +1056,36 @@ class ProjectTimelineWidget(QWidget):
             except Exception as e:
                 print(f"[TimelineWidget] Ошибка сохранения даты: {e}")
 
+        # Записываем в историю действий
+        if old_date != date_str and self.card_data.get('id'):
+            self._record_date_change(stage_name, old_date, date_str)
+
         # Полная перестройка таблицы (с итогами)
         self._populate_table()
+
+    def _record_date_change(self, stage_name, old_date, new_date):
+        """Записать изменение даты в историю действий"""
+        try:
+            card_id = self.card_data['id']
+            user_id = self.employee.get('id') if self.employee else None
+
+            if new_date and old_date:
+                description = f"Таблица сроков: {stage_name} — дата изменена с {old_date} на {new_date}"
+            elif new_date:
+                description = f"Таблица сроков: {stage_name} — установлена дата {new_date}"
+            else:
+                description = f"Таблица сроков: {stage_name} — дата очищена (было {old_date})"
+
+            self.data.add_action_history(
+                user_id=user_id,
+                action_type='timeline_date_changed',
+                entity_type='crm_card',
+                entity_id=card_id,
+                description=description
+            )
+            print(f"[HISTORY] Записано: timeline_date_changed | {stage_name} | card={card_id}")
+        except Exception as e:
+            print(f"[HISTORY ERROR] timeline_date_changed: {e}")
 
     def _recalculate_days(self):
         """Пересчёт кол-ва рабочих дней между последовательными датами.

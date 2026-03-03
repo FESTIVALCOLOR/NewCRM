@@ -5239,6 +5239,7 @@ class CardEditDialog(QDialog):
             'Удаление файлов': ['file_delete'],
             'Замер': ['survey_complete', 'survey_date_changed'],
             'Дата ТЗ': ['tech_task_date_changed'],
+            'Таблица сроков': ['timeline_date_changed'],
         }
 
         allowed_types = filter_map.get(filter_text)
@@ -6189,9 +6190,7 @@ class CardEditDialog(QDialog):
 
         employee_id = combo_box.currentData()
 
-        print(f"\n[EMPLOYEE_CHANGED] Роль: {role_name}, Employee ID: {employee_id}")
-
-        # Сначала обновляем информацию о сотруднике в БД
+        # Определяем поле в card_data
         role_to_field = {
             'Старший менеджер проектов': 'senior_manager_id',
             'СДП': 'sdp_id',
@@ -6201,25 +6200,34 @@ class CardEditDialog(QDialog):
         }
 
         field_name = role_to_field.get(role_name)
-        if field_name:
-            old_employee_id = self.card_data.get(field_name)
-            updates = {field_name: employee_id}
-            self.data.update_crm_card(self.card_data["id"], updates)
-            # Обновляем локальные данные карточки
-            self.card_data[field_name] = employee_id
-            print(f"OK Обновлено поле {field_name} в CRM карточке")
+        if not field_name:
+            return
 
-            # Записываем в историю назначения/снятия сотрудника
-            if old_employee_id != employee_id:
-                employee_name = combo_box.currentText() if employee_id else ''
-                if employee_id is None:
-                    description = f"Снят {role_name}"
-                elif old_employee_id is None:
-                    description = f"Назначен {role_name}: {employee_name}"
-                else:
-                    description = f"Переназначен {role_name}: {employee_name}"
-                self._add_action_history('executor_assigned', description)
-                self.reload_project_history()
+        old_employee_id = self.card_data.get(field_name)
+
+        # Пропускаем если сотрудник не изменился (защита от повторных вызовов сигнала)
+        if old_employee_id == employee_id:
+            return
+
+        print(f"\n[EMPLOYEE_CHANGED] Роль: {role_name}, Employee ID: {employee_id} (было: {old_employee_id})")
+
+        # Обновляем информацию о сотруднике в БД
+        updates = {field_name: employee_id}
+        self.data.update_crm_card(self.card_data["id"], updates)
+        # Обновляем локальные данные карточки
+        self.card_data[field_name] = employee_id
+        print(f"OK Обновлено поле {field_name} в CRM карточке")
+
+        # Записываем в историю назначения/снятия сотрудника
+        employee_name = combo_box.currentText() if employee_id else ''
+        if employee_id is None:
+            description = f"Снят {role_name}"
+        elif old_employee_id is None:
+            description = f"Назначен {role_name}: {employee_name}"
+        else:
+            description = f"Переназначен {role_name}: {employee_name}"
+        self._add_action_history('executor_assigned', description)
+        self.reload_project_history()
 
         try:
             # Удаляем существующие выплаты для этой роли
@@ -6407,6 +6415,24 @@ class CardEditDialog(QDialog):
                             print(f"Создана выплата ID={payment_id} для роли {role_name} (локально)")
             else:
                 print(f"[INFO] Сотрудник не назначен, выплаты удалены")
+
+            # Верификация: проверяем дубли на сервере и удаляем лишние
+            if self.data.is_multi_user and employee_id:
+                try:
+                    all_payments = self.data.get_payments_for_contract(contract_id)
+                    role_payments = [p for p in all_payments if p.get('role') == role_name]
+                    if len(role_payments) > 1:
+                        # Для СДП допускается 2 записи (аванс + доплата), для остальных — 1
+                        expected = 2 if role_name == 'СДП' else 1
+                        if len(role_payments) > expected:
+                            print(f"[WARN] Обнаружено {len(role_payments)} дублей оплат для {role_name}, ожидается {expected}")
+                            # Оставляем только последние expected записей (по id — новейшие)
+                            sorted_payments = sorted(role_payments, key=lambda p: p.get('id', 0), reverse=True)
+                            for dup in sorted_payments[expected:]:
+                                self.data.delete_payment(dup['id'])
+                                print(f"[DEDUP] Удалена лишняя оплата ID={dup['id']} для {role_name}")
+                except Exception as e:
+                    print(f"[WARN] Ошибка верификации дублей оплат: {e}")
 
             # Обновляем вкладку оплат
             self.refresh_payments_tab()

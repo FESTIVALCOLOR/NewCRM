@@ -2784,14 +2784,16 @@ class DatabaseManager(DatabaseMigrations):
             traceback.print_exc()
 
     def get_action_history(self, entity_type, entity_id):
-        """Получить историю действий по сущности"""
+        """Получить историю действий по сущности (с user_name из employees)"""
         try:
             conn = self.connect()
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM action_history
-                WHERE entity_type = ? AND entity_id = ?
-                ORDER BY action_date DESC
+                SELECT ah.*, e.full_name as user_name
+                FROM action_history ah
+                LEFT JOIN employees e ON ah.user_id = e.id
+                WHERE ah.entity_type = ? AND ah.entity_id = ?
+                ORDER BY ah.action_date DESC
             ''', (entity_type, entity_id))
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
             rows = cursor.fetchall()
