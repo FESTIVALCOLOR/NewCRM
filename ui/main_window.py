@@ -138,22 +138,14 @@ class MainWindow(QMainWindow):
 
         #   TITLE BAR
         self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)  #  border-radius
 
-        # Добавляем нативные стили для Windows Snap Assist и Snap Layouts
+        # Добавляем нативные стили для Windows Snap Assist, Snap Layouts и DWM-скругления
         self._enable_windows_snap()
 
         # Явная установка иконки для панели задач Windows
         # ИСПРАВЛЕНИЕ 13.02.2026: Используем Win32 API WM_SETICON — надежнее Qt setWindowIcon
         # для frameless окон с WS_CAPTION (которое добавляет _enable_windows_snap)
         self._set_taskbar_icon()
-
-        # ==========     ==========
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        palette.setColor(QPalette.Window, QColor(0, 0, 0, 0))  #   border-radius
-        self.setPalette(palette)
-        # =====================================================
 
         # ==========    ==========
         self.setMouseTracking(True)
@@ -165,8 +157,7 @@ class MainWindow(QMainWindow):
         main_container.setObjectName("mainContainer")
         main_container.setStyleSheet("""
             QWidget#mainContainer {
-                background-color: transparent;
-                border-radius: 10px;
+                background-color: #FFFFFF;
             }
         """)
         self.setCentralWidget(main_container)
@@ -185,7 +176,6 @@ class MainWindow(QMainWindow):
             QFrame#mainBorderFrame {
                 background-color: #FFFFFF;
                 border: 1px solid #d9d9d9;
-                border-radius: 10px;
             }
         """)
         container_layout.addWidget(border_frame)
@@ -639,12 +629,13 @@ class MainWindow(QMainWindow):
         return super().event(event)
 
     def _enable_windows_snap(self):
-        """Добавить нативные стили WS_THICKFRAME для Windows Snap Assist и Snap Layouts"""
+        """Добавить нативные стили WS_THICKFRAME + DWM скругления для Windows 11"""
         import sys
         if sys.platform != 'win32':
             return
         try:
             import ctypes
+            from ctypes import wintypes
             hwnd = int(self.winId())
             GWL_STYLE = -16
             WS_THICKFRAME = 0x00040000   # Рамка с изменением размера (нужна для Snap)
@@ -655,6 +646,25 @@ class MainWindow(QMainWindow):
             style = ctypes.windll.user32.GetWindowLongPtrW(hwnd, GWL_STYLE)
             style |= WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CAPTION
             ctypes.windll.user32.SetWindowLongPtrW(hwnd, GWL_STYLE, style)
+
+            # DWM: расширяем фрейм в клиентскую область — даёт тень и скругление
+            class MARGINS(ctypes.Structure):
+                _fields_ = [
+                    ('cxLeftWidth', ctypes.c_int),
+                    ('cxRightWidth', ctypes.c_int),
+                    ('cyTopHeight', ctypes.c_int),
+                    ('cyBottomHeight', ctypes.c_int),
+                ]
+            margins = MARGINS(0, 0, 1, 0)  # 1px top — включает DWM-фрейм
+            ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(margins))
+
+            # DWM: явно запросить скруглённые углы (Windows 11)
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33
+            DWMWCP_ROUND = ctypes.c_int(2)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
+                ctypes.byref(DWMWCP_ROUND), ctypes.sizeof(DWMWCP_ROUND)
+            )
 
             # Уведомляем Windows об изменении стилей
             SWP_FRAMECHANGED = 0x0020
