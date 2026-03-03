@@ -820,6 +820,9 @@ class MainWindow(QMainWindow):
                 elif msg.message == WM_GETMINMAXINFO:
                     # Корректные размеры при maximize (учитываем taskbar)
                     info = ctypes.cast(msg.lParam, ctypes.POINTER(MINMAXINFO)).contents
+                    # Минимальный размер окна — Windows будет его принудительно соблюдать
+                    info.ptMinTrackSize.x = 1400
+                    info.ptMinTrackSize.y = 800
                     # Получаем монитор для текущего окна
                     monitor = ctypes.windll.user32.MonitorFromWindow(
                         int(self.winId()),
