@@ -2475,6 +2475,17 @@ class SalariesTab(QWidget):
 
     def set_payment_status(self, payment, status, table, row, is_salary=False):
         """Установка статуса оплаты с toggle логикой"""
+        # Защита от двойного клика / повторного вызова
+        if getattr(self, '_status_updating', False):
+            return
+        self._status_updating = True
+        try:
+            self._do_set_payment_status(payment, status, table, row, is_salary)
+        finally:
+            self._status_updating = False
+
+    def _do_set_payment_status(self, payment, status, table, row, is_salary=False):
+        """Внутренняя логика установки статуса"""
         perm_name = 'salaries.mark_paid' if status == 'paid' else 'salaries.mark_to_pay'
         if not _has_perm(self.employee, self.api_client, perm_name):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на изменение статуса оплаты.', 'error').exec_()
@@ -2483,15 +2494,13 @@ class SalariesTab(QWidget):
             # Toggle логика: если статус уже установлен, то сбрасываем его
             current_status = payment.get('payment_status')
             if current_status == status:
-                # Сбрасываем статус
                 new_status = None
                 print(f"[OK] Сброс статуса для ID={payment['id']}")
             else:
-                # Устанавливаем новый статус
                 new_status = status
                 print(f"[OK] Установка статуса '{status}' для ID={payment['id']}")
 
-            # ИСПРАВЛЕНИЕ 06.02.2026: При установке статуса 'to_pay' или 'paid'
+            # При установке статуса 'to_pay' или 'paid'
             # устанавливаем report_month = текущий месяц если он NULL
             update_data = {'payment_status': new_status}
             current_report_month = payment.get('report_month')
@@ -2500,6 +2509,11 @@ class SalariesTab(QWidget):
                 update_data['report_month'] = datetime.now().strftime('%Y-%m')
                 print(f"[OK] Установлен report_month={update_data['report_month']} для ID={payment['id']}")
 
+            # Обновляем payment dict сразу для корректного toggle при следующем клике
+            payment['payment_status'] = new_status
+            if 'report_month' in update_data:
+                payment['report_month'] = update_data['report_month']
+
             # Используем DataAccess для обновления
             if is_salary:
                 self.data.update_salary(payment['id'], update_data)
@@ -2507,19 +2521,20 @@ class SalariesTab(QWidget):
                 self.data.update_payment(payment['id'], update_data)
             print(f"[DataAccess] Статус обновлен: ID={payment['id']}, status={new_status}")
 
-            # Обновляем все таблицы для синхронизации (инвалидируем кеш т.к. статус изменился)
+            # Обновляем только текущую активную вкладку (не все 5)
             self.invalidate_cache()
-            self.load_all_payments()
-            self.load_payment_type_data('Оклады')
-            self.load_payment_type_data('Индивидуальные проекты')
-            self.load_payment_type_data('Шаблонные проекты')
-            self.load_payment_type_data('Авторский надзор')
+            current_tab_idx = self.tabs.currentIndex()
+            tab_names = ['Все выплаты', 'Индивидуальные проекты', 'Шаблонные проекты', 'Оклады', 'Авторский надзор']
+            if current_tab_idx == 0:
+                self.load_all_payments()
+            elif current_tab_idx < len(tab_names):
+                self.load_payment_type_data(tab_names[current_tab_idx])
 
             # Синхронизируем с CRM если это payments
             if not is_salary:
                 self.sync_status_with_crm(payment, new_status)
 
-            # ИСПРАВЛЕНО 05.02.2026: Обновляем дашборд после изменения статуса
+            # Обновляем дашборд после изменения статуса
             main_window = self.window()
             if main_window and hasattr(main_window, 'refresh_current_dashboard'):
                 main_window.refresh_current_dashboard()

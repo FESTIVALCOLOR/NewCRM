@@ -1212,6 +1212,7 @@ class DataAccess(QObject):
 
     def update_payment(self, payment_id: int, payment_data: Dict) -> bool:
         """Обновить платёж"""
+        _global_cache.invalidate("payments")
         # Сначала обновляем локально
         self.db.update_payment(payment_id, payment_data)
 
@@ -1229,6 +1230,7 @@ class DataAccess(QObject):
 
     def delete_payment(self, payment_id: int) -> bool:
         """Удалить платёж"""
+        _global_cache.invalidate("payments")
         # Сначала удаляем локально
         self.db.delete_payment(payment_id)
 
