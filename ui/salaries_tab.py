@@ -2500,14 +2500,19 @@ class SalariesTab(QWidget):
                 new_status = status
                 print(f"[OK] Установка статуса '{status}' для ID={payment['id']}")
 
-            # При установке статуса 'to_pay' или 'paid'
-            # устанавливаем report_month = текущий месяц если он NULL
+            # Управление report_month:
+            # - Установка to_pay/paid при пустом месяце → ставим текущий месяц
+            # - Снятие to_pay (toggle off) → очищаем месяц обратно
             update_data = {'payment_status': new_status}
             current_report_month = payment.get('report_month')
             if new_status in ('to_pay', 'paid') and not current_report_month:
                 from datetime import datetime
                 update_data['report_month'] = datetime.now().strftime('%Y-%m')
                 print(f"[OK] Установлен report_month={update_data['report_month']} для ID={payment['id']}")
+            elif new_status is None and current_status == 'to_pay':
+                # Снятие "к оплате" — очищаем автоматически установленный месяц
+                update_data['report_month'] = None
+                print(f"[OK] Сброшен report_month для ID={payment['id']}")
 
             # Обновляем payment dict сразу для корректного toggle при следующем клике
             payment['payment_status'] = new_status
@@ -2521,28 +2526,100 @@ class SalariesTab(QWidget):
                 self.data.update_payment(payment['id'], update_data)
             print(f"[DataAccess] Статус обновлен: ID={payment['id']}, status={new_status}")
 
-            # Обновляем только текущую активную вкладку (не все 5)
+            # Мгновенное обновление UI без полной перезагрузки с сервера
             self.invalidate_cache()
-            current_tab_idx = self.tabs.currentIndex()
-            tab_names = ['Все выплаты', 'Индивидуальные проекты', 'Шаблонные проекты', 'Оклады', 'Авторский надзор']
-            if current_tab_idx == 0:
-                self.load_all_payments()
-            elif current_tab_idx < len(tab_names):
-                self.load_payment_type_data(tab_names[current_tab_idx])
+            self._update_row_visual(table, row, payment, new_status, is_salary)
 
             # Синхронизируем с CRM если это payments
             if not is_salary:
                 self.sync_status_with_crm(payment, new_status)
 
-            # Обновляем дашборд после изменения статуса
-            main_window = self.window()
-            if main_window and hasattr(main_window, 'refresh_current_dashboard'):
-                main_window.refresh_current_dashboard()
-
         except Exception as e:
             print(f"[ERROR] Ошибка установки статуса: {e}")
             import traceback
             traceback.print_exc()
+
+    def _update_row_visual(self, table, row, payment, new_status, is_salary=False):
+        """Мгновенное обновление визуала строки без перезагрузки с сервера"""
+        if row < 0 or row >= table.rowCount():
+            return
+
+        # Обновляем колонку "Отчетный месяц"
+        report_month = payment.get('report_month', '')
+        if report_month:
+            try:
+                from datetime import datetime
+                month_date = datetime.strptime(report_month, '%Y-%m')
+                months_ru = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+                month_text = f"{months_ru[month_date.month - 1]} {month_date.year}"
+            except Exception:
+                month_text = report_month
+        else:
+            month_text = ''
+
+        # Находим колонку "Отчетный месяц" — для "Все выплаты" это предпоследняя перед "Действия"
+        month_col = table.columnCount() - 2  # Предпоследняя колонка
+        month_item = table.item(row, month_col)
+        # Если ячейка заменена на QLabel (apply_row_color), ищем виджет
+        month_widget = table.cellWidget(row, month_col)
+        if month_widget and isinstance(month_widget, QLabel):
+            month_widget.setText(month_text)
+        elif month_item:
+            month_item.setText(month_text)
+
+        # Обновляем цвет строки и кнопки действий
+        last_col = table.columnCount() - 1
+        if new_status == 'to_pay':
+            color = '#FFE4B5'
+        elif new_status == 'paid':
+            color = '#D4EDDA'
+        else:
+            color = '#FFFFFF'
+
+        style = f"background-color: {color}; padding: 5px;"
+        for col in range(table.columnCount()):
+            existing_widget = table.cellWidget(row, col)
+            if existing_widget and col == last_col:
+                # Действия — обновляем фон контейнера
+                existing_widget.setStyleSheet(f"background-color: {color};")
+            elif existing_widget and isinstance(existing_widget, QLabel):
+                # QLabel от apply_row_color
+                existing_widget.setStyleSheet(style)
+            else:
+                item = table.item(row, col)
+                if item:
+                    if new_status:
+                        # Заменяем item на QLabel с цветом
+                        text = item.text()
+                        alignment = item.textAlignment()
+                        label = QLabel(text)
+                        label.setStyleSheet(style)
+                        label.setAlignment(Qt.Alignment(alignment))
+                        table.setCellWidget(row, col, label)
+                    else:
+                        # Сброс — убираем QLabel, восстанавливаем item
+                        table.removeCellWidget(row, col)
+
+        # Пересоздаём кнопки действий с новым статусом
+        if is_salary:
+            actions_widget = self.create_payment_actions(payment, 'Оклады')
+        else:
+            source = payment.get('source', 'CRM')
+            if source == 'CRM':
+                payment_type = payment.get('project_type', 'Индивидуальный')
+                if payment_type == 'Индивидуальный':
+                    pt = 'Индивидуальные проекты'
+                elif payment_type == 'Шаблонный':
+                    pt = 'Шаблонные проекты'
+                else:
+                    pt = 'Авторский надзор'
+                actions_widget = self.create_crm_payment_actions(payment, pt, table, row)
+            else:
+                actions_widget = self.create_payment_actions(payment, 'Оклады')
+        if actions_widget:
+            actions_widget.setStyleSheet(f"background-color: {color};")
+            table.setCellWidget(row, last_col, actions_widget)
 
     def _update_status_locally(self, payment_id: int, update_data: dict, is_salary: bool):
         """Обновление статуса и report_month в локальной БД"""
