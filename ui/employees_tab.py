@@ -347,7 +347,8 @@ class EmployeesTab(QWidget):
         if first_time:
             self._data_loaded = True
             self._last_load_time = now
-            self._reload_employees(prefer_local=True)
+            # Всегда через API — локальная БД может содержать устаревшие/тестовые данные
+            self._reload_employees(prefer_local=False)
         elif now - getattr(self, '_last_load_time', 0) < 30:
             return
         else:

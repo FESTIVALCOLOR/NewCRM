@@ -1119,6 +1119,20 @@ async def update_payment(
         raise HTTPException(status_code=404, detail="Платеж не найден")
 
     update_fields = payment_data.model_dump(exclude_unset=True)
+
+    # Синхронизация payment_status ↔ is_paid (защита от рассинхрона)
+    if 'payment_status' in update_fields and update_fields['payment_status'] == 'paid':
+        if 'is_paid' not in update_fields:
+            update_fields['is_paid'] = True
+        if 'paid_date' not in update_fields and not payment.paid_date:
+            update_fields['paid_date'] = datetime.utcnow()
+    if 'is_paid' in update_fields and update_fields['is_paid'] is True:
+        if 'payment_status' not in update_fields:
+            update_fields['payment_status'] = 'paid'
+    if 'payment_status' in update_fields and update_fields['payment_status'] != 'paid':
+        if 'is_paid' not in update_fields:
+            update_fields['is_paid'] = False
+
     for field, value in update_fields.items():
         setattr(payment, field, value)
 

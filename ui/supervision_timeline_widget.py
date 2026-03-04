@@ -917,6 +917,9 @@ class SupervisionTimelineWidget(QWidget):
             if fact_date:
                 prev_date = fact_date
 
+    # Маппинг код → читаемое название для истории
+    _STAGE_CODE_TO_NAME = dict(SUPERVISION_STAGES)
+
     def _save_entry(self, stage_code, updates):
         """Сохранение изменений на сервер"""
         if self.card_id and stage_code:
@@ -925,9 +928,10 @@ class SupervisionTimelineWidget(QWidget):
                 # Логирование в историю проекта
                 dialog = self._dialog
                 if dialog and hasattr(dialog, '_add_project_history'):
+                    stage_name = self._STAGE_CODE_TO_NAME.get(stage_code, stage_code)
                     fields = ', '.join(f'{k}={v}' for k, v in updates.items())
                     dialog._add_project_history(
-                        'data_change', f'Таблица сроков ({stage_code}): {fields}'
+                        'data_change', f'Таблица сроков ({stage_name}): {fields}'
                     )
             except Exception as e:
                 print(f"[SupervisionTimelineWidget] Ошибка сохранения: {e}")
