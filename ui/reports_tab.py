@@ -226,7 +226,7 @@ class ReportsTab(QWidget):
         self.filter_agent = self._create_filter_combo("Тип агента", layout)
         self.filter_city = self._create_filter_combo("Город", layout)
         self.filter_project_type = self._create_filter_combo("Тип проекта", layout, [
-            "Все", "Индивидуальный", "Шаблонный", "Авторский надзор"
+            "Все", "Индивидуальный", "Шаблонный"
         ])
 
         # Кнопка сброса фильтров — выровнена по нижнему краю с комбобоксами
@@ -419,7 +419,6 @@ class ReportsTab(QWidget):
             ("total", "Всего", "#FF9800"),
             ("individual", "Индивидуальных", "#F57C00"),
             ("template", "Шаблонных", "#C62828"),
-            ("supervision", "Надзор", "#388E3C"),
             ("amount", "Стоимость", "#F57C00"),
             ("avg", "Средний чек", "#E91E63"),
         ]
@@ -1012,10 +1011,8 @@ class ReportsTab(QWidget):
 
         total_ind = sum(d.get("individual_count", 0) or 0 for d in dynamics)
         total_tmpl = sum(d.get("template_count", 0) or 0 for d in dynamics)
-        total_sv = sum(d.get("supervision_count", 0) or 0 for d in dynamics)
         self._mini_contracts["individual"].set_value(str(total_ind))
         self._mini_contracts["template"].set_value(str(total_tmpl))
-        self._mini_contracts["supervision"].set_value(str(total_sv))
 
         amount = s.get("total_amount", 0) or 0
         avg = s.get("avg_amount", 0) or 0
@@ -1044,11 +1041,6 @@ class ReportsTab(QWidget):
                         "values": [d.get("template_count", 0) or 0 for d in dynamics],
                         "color": "#C62828"
                     },
-                    {
-                        "label": "Надзор",
-                        "values": [d.get("supervision_count", 0) or 0 for d in dynamics],
-                        "color": "#388E3C"
-                    },
                 ],
                 stacked=True
             )
@@ -1063,9 +1055,9 @@ class ReportsTab(QWidget):
                 },
             ])
 
-        # Pie по типам: individual, template, supervision
-        if total_ind or total_tmpl or total_sv:
-            self.chart_contracts_types.set_data(total_ind, total_tmpl, total_sv)
+        # Pie по типам: individual, template (без надзора)
+        if total_ind or total_tmpl:
+            self.chart_contracts_types.set_data(total_ind, total_tmpl, 0)
 
         # ТОП-10 городов
         if dist_city:

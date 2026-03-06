@@ -1107,7 +1107,10 @@ async def get_reports_summary(
     """Агрегация KPI-метрик с разбивкой по агентам для страницы Отчёты."""
     try:
         # --- Загрузить все договоры одним запросом, потом фильтровать в Python ---
-        query = db.query(Contract)
+        # Исключаем Авторский надзор — для него отдельная секция
+        query = db.query(Contract).filter(
+            Contract.project_type != 'Авторский надзор'
+        )
         if agent_type:
             query = query.filter(Contract.agent_type == agent_type)
         if city:
@@ -1292,7 +1295,10 @@ async def get_clients_dynamics(
         target_year = year or datetime.now().year
 
         # Загружаем все договоры за нужный год (фильтрация в Python)
-        all_contracts = db.query(Contract).all()
+        # Исключаем Авторский надзор — для него отдельная секция
+        all_contracts = db.query(Contract).filter(
+            Contract.project_type != 'Авторский надзор'
+        ).all()
         year_contracts = _apply_period_filter(all_contracts, target_year, None, None)
 
         # Загружаем типы клиентов
@@ -1388,7 +1394,10 @@ async def get_contracts_dynamics(
     try:
         target_year = year or datetime.now().year
 
-        query = db.query(Contract)
+        # Исключаем Авторский надзор — для него отдельная секция
+        query = db.query(Contract).filter(
+            Contract.project_type != 'Авторский надзор'
+        )
         if agent_type:
             query = query.filter(Contract.agent_type == agent_type)
         if city:
@@ -1397,10 +1406,10 @@ async def get_contracts_dynamics(
         all_contracts = query.all()
         year_contracts = _apply_period_filter(all_contracts, target_year, None, None)
 
-        # Группировка по периодам
+        # Группировка по периодам (только Индивидуальный и Шаблонный)
         period_data: dict = defaultdict(lambda: {
-            'individual_count': 0, 'template_count': 0, 'supervision_count': 0,
-            'individual_amount': 0.0, 'template_amount': 0.0, 'supervision_amount': 0.0,
+            'individual_count': 0, 'template_count': 0,
+            'individual_amount': 0.0, 'template_amount': 0.0,
         })
 
         for c in year_contracts:
@@ -1411,18 +1420,11 @@ async def get_contracts_dynamics(
             amount = c.total_amount or 0.0
             ptype = c.project_type or ''
 
-            # Авторский надзор определяем по статусу или project_type
-            if c.status == 'АВТОРСКИЙ НАДЗОР' or ptype == 'Авторский надзор':
-                period_data[period]['supervision_count'] += 1
-                period_data[period]['supervision_amount'] += amount
-            elif ptype == 'Индивидуальный':
-                period_data[period]['individual_count'] += 1
-                period_data[period]['individual_amount'] += amount
-            elif ptype == 'Шаблонный':
+            if ptype == 'Шаблонный':
                 period_data[period]['template_count'] += 1
                 period_data[period]['template_amount'] += amount
             else:
-                # Прочие типы считаем как индивидуальные
+                # Индивидуальный и прочие
                 period_data[period]['individual_count'] += 1
                 period_data[period]['individual_amount'] += amount
 
@@ -1437,20 +1439,18 @@ async def get_contracts_dynamics(
             d = period_data.get(period, {})
             ind_c = d.get('individual_count', 0)
             tmpl_c = d.get('template_count', 0)
-            sup_c = d.get('supervision_count', 0)
             ind_a = d.get('individual_amount', 0.0)
             tmpl_a = d.get('template_amount', 0.0)
-            sup_a = d.get('supervision_amount', 0.0)
             result.append({
                 'period': period,
                 'individual_count': ind_c,
                 'template_count': tmpl_c,
-                'supervision_count': sup_c,
-                'total_count': ind_c + tmpl_c + sup_c,
+                'supervision_count': 0,
+                'total_count': ind_c + tmpl_c,
                 'individual_amount': round(ind_a, 2),
                 'template_amount': round(tmpl_a, 2),
-                'supervision_amount': round(sup_a, 2),
-                'total_amount': round(ind_a + tmpl_a + sup_a, 2),
+                'supervision_amount': 0.0,
+                'total_amount': round(ind_a + tmpl_a, 2),
             })
 
         return result
@@ -1475,18 +1475,13 @@ async def get_crm_analytics(
 ):
     """CRM аналитика: воронка стадий, соблюдение сроков, длительность стадий."""
     try:
-        # Определяем таблицу: для Авторского надзора — SupervisionCard
-        use_supervision = (project_type == 'Авторский надзор')
+        # CRM аналитика работает только для Индивидуальный и Шаблонный.
+        # Авторский надзор обрабатывается в отдельном endpoint /reports/supervision-analytics
+        use_supervision = False
 
-        if use_supervision:
-            # Для надзора используем SupervisionCard
-            all_contracts = db.query(Contract).filter(
-                Contract.status == 'АВТОРСКИЙ НАДЗОР'
-            ).all()
-        else:
-            all_contracts = db.query(Contract).filter(
-                Contract.project_type == project_type
-            ).all()
+        all_contracts = db.query(Contract).filter(
+            Contract.project_type == project_type
+        ).all()
 
         # Фильтр по периоду
         filtered_contracts = _apply_period_filter(all_contracts, year, quarter, month)
@@ -1883,8 +1878,10 @@ async def get_distribution(
 ):
     """Универсальное распределение договоров по измерению (city|agent|project_type|subtype)."""
     try:
-        # Загружаем все договоры
-        all_contracts = db.query(Contract).all()
+        # Загружаем все договоры (исключаем Авторский надзор — для него отдельная секция)
+        all_contracts = db.query(Contract).filter(
+            Contract.project_type != 'Авторский надзор'
+        ).all()
         filtered = _apply_period_filter(all_contracts, year, quarter, month)
 
         # Функция извлечения значения измерения
