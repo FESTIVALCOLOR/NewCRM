@@ -1071,6 +1071,29 @@ class CardEditDialog(QDialog):
             buttons_layout.addWidget(self.open_chat_btn)
             buttons_layout.addWidget(self.delete_chat_btn)
 
+            self.invite_client_btn = IconLoader.create_icon_button(
+                'telegram', 'Пригласить клиента', 'Отправить клиенту email с ссылкой на чат', icon_size=14
+            )
+            self.invite_client_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E3F2FD;
+                    color: #1976D2;
+                    padding: 0px 14px;
+                    border-radius: 4px;
+                    border: 1px solid #90CAF9;
+                    font-weight: bold;
+                    max-height: 36px;
+                    min-height: 36px;
+                }
+                QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
+                QPushButton:pressed { background-color: #90CAF9; }
+                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+            """)
+            self.invite_client_btn.setFixedHeight(36)
+            self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
+            self.invite_client_btn.clicked.connect(self._on_invite_client)
+            buttons_layout.addWidget(self.invite_client_btn)
+
             # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
             self.start_script_btn = IconLoader.create_icon_button(
                 'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
@@ -6622,6 +6645,13 @@ class CardEditDialog(QDialog):
             self.create_chat_btn.setEnabled(not has_chat and is_online)
             self.open_chat_btn.setEnabled(has_chat)
             self.delete_chat_btn.setEnabled(has_chat and is_online)
+            if hasattr(self, 'invite_client_btn'):
+                # Активна если есть чат, есть invite_link и онлайн
+                has_invite_link = bool(
+                    self._messenger_chat_data and
+                    self._messenger_chat_data.get('chat', {}).get('invite_link')
+                )
+                self.invite_client_btn.setEnabled(has_chat and has_invite_link and is_online)
 
             # Кнопки скриптов доступны только при наличии чата и подключении к серверу
             if hasattr(self, 'start_script_btn'):
@@ -6703,6 +6733,25 @@ class CardEditDialog(QDialog):
             except Exception as e:
                 from ui.custom_message_box import CustomMessageBox
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{str(e)}', 'error').exec_()
+
+    def _on_invite_client(self):
+        """Отправить клиенту email с приглашением в проектный Telegram-чат"""
+        from ui.custom_message_box import CustomMessageBox
+        card_id = self.card_data.get('id')
+        if not card_id:
+            CustomMessageBox(self, 'Ошибка', 'Карточка не сохранена', 'warning').exec_()
+            return
+
+        try:
+            result = self.data_access.invite_client_to_chat(card_id)
+            if result and result.get('ok'):
+                msg = result.get('message', 'Приглашение отправлено')
+                CustomMessageBox(self, 'Готово', msg, 'info').exec_()
+            else:
+                detail = (result or {}).get('detail', 'Неизвестная ошибка')
+                CustomMessageBox(self, 'Ошибка', f'Не удалось отправить приглашение: {detail}', 'warning').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Не удалось отправить приглашение: {str(e)}', 'error').exec_()
 
     def _on_send_start_script(self):
         """Отправить начальный скрипт в чат"""

@@ -3544,3 +3544,8 @@ class DataAccess(QObject):
         if self._should_use_api():
             return self.api_client.send_employee_invite(employee_id)
         return False
+    def invite_client_to_chat(self, card_id: int) -> dict:
+        """Отправить клиенту email-приглашение в Telegram-чат проекта"""
+        if self._should_use_api():
+            return self.api_client.invite_client_to_chat(card_id)
+        return None

@@ -377,3 +377,14 @@ class MiscMixin:
         except Exception as e:
             print(f"[API] Ошибка отправки приглашения сотруднику: {e}")
             return False
+    def invite_client_to_chat(self, card_id: int) -> dict:
+        """Отправить клиенту email-приглашение в проектный Telegram-чат"""
+        try:
+            response = self._request(
+                'POST',
+                f"{self.base_url}/api/v1/crm/cards/{card_id}/invite-client"
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            print(f"[API] Ошибка отправки приглашения клиенту: {e}")
+            return None

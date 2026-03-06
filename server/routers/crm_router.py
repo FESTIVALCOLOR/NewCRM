@@ -2132,3 +2132,61 @@ async def get_accepted_stages(
         'accepted_by': h.user_id,
         'accepted_date': h.action_date.isoformat() if h.action_date else None
     } for h in history]
+
+@router.post("/cards/{card_id}/invite-client")
+async def invite_client_to_chat(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить клиенту email-приглашение в проектный Telegram-чат"""
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM карточка не найдена")
+
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    client = db.query(Client).filter(Client.id == contract.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    if not client.email:
+        raise HTTPException(status_code=422, detail="Email клиента не заполнен")
+
+    # Найти чат проекта
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=422, detail="Чат проекта не создан")
+
+    if not chat.invite_link:
+        raise HTTPException(status_code=422, detail="Ссылка-приглашение для чата не сформирована")
+
+    # Отправить письмо
+    try:
+        from email_service import EmailService
+        email_svc = EmailService()
+        manager_name = current_user.full_name
+        project_type = getattr(contract, 'project_type', 'Интерьерный проект')
+        project_address = getattr(contract, 'address', card.address or '')
+        sent = await email_svc.send_client_chat_invite(
+            to_email=client.email,
+            client_name=client.full_name or client.email,
+            project_address=project_address,
+            project_type=project_type or 'Интерьерный проект',
+            manager_name=manager_name,
+            invite_link=chat.invite_link,
+        )
+        if sent:
+            return {"ok": True, "message": f"Приглашение отправлено на {client.email}"}
+        else:
+            raise HTTPException(status_code=503, detail="Email-сервис недоступен")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"invite_client_to_chat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
