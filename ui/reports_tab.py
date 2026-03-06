@@ -344,7 +344,9 @@ class ReportsTab(QWidget):
             w.setLayout(flow_lo)
             self.kpi_layout.addWidget(w)
 
-        section.add_layout(self.kpi_layout)
+        kpi_widget = QWidget()
+        kpi_widget.setLayout(self.kpi_layout)
+        section.add_widget(kpi_widget)
         self.sections_layout.addWidget(section)
         self._pdf_sections.append(section)
 
@@ -400,7 +402,9 @@ class ReportsTab(QWidget):
         grid.setRowStretch(0, 1)
         grid.setRowStretch(1, 1)
 
-        section.add_layout(grid)
+        grid_widget = QWidget()
+        grid_widget.setLayout(grid)
+        section.add_widget(grid_widget)
         self.sections_layout.addWidget(section)
         self._pdf_sections.append(section)
 
@@ -454,7 +458,9 @@ class ReportsTab(QWidget):
         grid.setRowStretch(1, 1)
         grid.setRowStretch(2, 1)
 
-        section.add_layout(grid)
+        grid_widget = QWidget()
+        grid_widget.setLayout(grid)
+        section.add_widget(grid_widget)
         self.sections_layout.addWidget(section)
         self._pdf_sections.append(section)
 
@@ -622,7 +628,9 @@ class ReportsTab(QWidget):
         grid.setRowStretch(1, 1)
         grid.setRowStretch(2, 1)
 
-        section.add_layout(grid)
+        grid_widget = QWidget()
+        grid_widget.setLayout(grid)
+        section.add_widget(grid_widget)
 
         self.sections_layout.addWidget(section)
         self._pdf_sections.append(section)
@@ -744,57 +752,59 @@ class ReportsTab(QWidget):
         filters = self._get_current_filters()
 
         def _load():
-            try:
-                # Только временные фильтры для CRM и надзора
-                time_filters = {
-                    k: v for k, v in filters.items()
-                    if k in ("year", "quarter", "month")
-                }
+            # Только временные фильтры для CRM и надзора
+            time_filters = {
+                k: v for k, v in filters.items()
+                if k in ("year", "quarter", "month")
+            }
+            year_filter = filters.get("year")
 
-                summary = self.data_access.get_reports_summary(**filters)
+            def _safe_call(name, func, default=None):
+                """Безопасный вызов API — при ошибке возвращает default"""
+                try:
+                    result = func()
+                    logger.info(f"[Reports] {name}: OK, type={type(result).__name__}, "
+                                f"len={len(result) if isinstance(result, (dict, list)) else 'N/A'}")
+                    return result
+                except Exception as e:
+                    logger.error(f"[Reports] {name}: ОШИБКА — {e}")
+                    return default
 
-                year_filter = filters.get("year")
-                clients_dyn = self.data_access.get_reports_clients_dynamics(
-                    year=year_filter
-                )
-                contracts_dyn = self.data_access.get_reports_contracts_dynamics(
+            summary = _safe_call("summary",
+                lambda: self.data_access.get_reports_summary(**filters), {})
+            clients_dyn = _safe_call("clients_dynamics",
+                lambda: self.data_access.get_reports_clients_dynamics(year=year_filter), [])
+            contracts_dyn = _safe_call("contracts_dynamics",
+                lambda: self.data_access.get_reports_contracts_dynamics(
                     year=year_filter,
                     agent_type=filters.get("agent_type"),
-                    city=filters.get("city")
-                )
+                    city=filters.get("city")), [])
+            crm_ind = _safe_call("crm_individual",
+                lambda: self.data_access.get_reports_crm_analytics(
+                    project_type="Индивидуальный", **time_filters), {})
+            crm_tmpl = _safe_call("crm_template",
+                lambda: self.data_access.get_reports_crm_analytics(
+                    project_type="Шаблонный", **time_filters), {})
+            sv = _safe_call("supervision",
+                lambda: self.data_access.get_reports_supervision_analytics(**time_filters), {})
+            dist_agent = _safe_call("dist_agent",
+                lambda: self.data_access.get_reports_distribution("agent", **time_filters), [])
+            dist_city = _safe_call("dist_city",
+                lambda: self.data_access.get_reports_distribution("city", **time_filters), [])
 
-                crm_ind = self.data_access.get_reports_crm_analytics(
-                    project_type="Индивидуальный", **time_filters
-                )
-                crm_tmpl = self.data_access.get_reports_crm_analytics(
-                    project_type="Шаблонный", **time_filters
-                )
+            self._cache = {
+                "summary": summary or {},
+                "clients_dynamics": clients_dyn or [],
+                "contracts_dynamics": contracts_dyn or [],
+                "crm_individual": crm_ind or {},
+                "crm_template": crm_tmpl or {},
+                "supervision": sv or {},
+                "dist_agent": dist_agent or [],
+                "dist_city": dist_city or [],
+            }
 
-                sv = self.data_access.get_reports_supervision_analytics(**time_filters)
-
-                dist_agent = self.data_access.get_reports_distribution(
-                    "agent", **time_filters
-                )
-                dist_city = self.data_access.get_reports_distribution(
-                    "city", **time_filters
-                )
-
-                self._cache = {
-                    "summary": summary or {},
-                    "clients_dynamics": clients_dyn or [],
-                    "contracts_dynamics": contracts_dyn or [],
-                    "crm_individual": crm_ind or {},
-                    "crm_template": crm_tmpl or {},
-                    "supervision": sv or {},
-                    "dist_agent": dist_agent or [],
-                    "dist_city": dist_city or [],
-                }
-
-                # Обновить UI строго в главном потоке
-                QTimer.singleShot(0, self._update_all_ui)
-            except Exception as e:
-                logger.error(f"Ошибка загрузки данных отчётов: {e}")
-                self._loading = False
+            # Обновить UI строго в главном потоке
+            QTimer.singleShot(0, self._update_all_ui)
 
         thread = threading.Thread(target=_load, daemon=True)
         thread.start()
@@ -809,12 +819,24 @@ class ReportsTab(QWidget):
             self._update_kpi_section()
             self._update_clients_section()
             self._update_contracts_section()
+            logger.info("[Reports] KPI/Clients/Contracts updated OK")
+        except Exception as e:
+            logger.error(f"Ошибка обновления UI (KPI/Clients/Contracts): {e}", exc_info=True)
+        try:
             self._update_crm_section()
+            logger.info("[Reports] CRM section updated OK")
+        except Exception as e:
+            logger.error(f"Ошибка обновления UI (CRM): {e}", exc_info=True)
+        try:
             self._update_supervision_section()
+            logger.info("[Reports] Supervision section updated OK")
+        except Exception as e:
+            logger.error(f"Ошибка обновления UI (Supervision): {e}", exc_info=True)
+        try:
             self._data_loaded = True
             self.data_loaded.emit()
         except Exception as e:
-            logger.error(f"Ошибка обновления UI отчётов: {e}")
+            logger.error(f"Ошибка emit data_loaded: {e}")
         finally:
             self._loading = False
 
@@ -1086,9 +1108,9 @@ class ReportsTab(QWidget):
             ("crm_individual", self._crm_individual),
             ("crm_template", self._crm_template),
         ]:
-            data = self._cache.get(cache_key, {})
-            if not data:
-                continue
+            data = self._cache.get(cache_key) or {}
+            logger.info(f"[Reports] _update_crm_section({cache_key}): "
+                        f"data={bool(data)}, keys={list(data.keys()) if data else '[]'}")
 
             # Мини-KPI
             on_time = data.get("on_time_stats", {}) or {}
@@ -1146,9 +1168,9 @@ class ReportsTab(QWidget):
 
     def _update_supervision_section(self):
         """Обновить секцию авторского надзора"""
-        sv = self._cache.get("supervision", {})
-        if not sv:
-            return
+        sv = self._cache.get("supervision") or {}
+        logger.info(f"[Reports] _update_supervision_section: "
+                    f"data={bool(sv)}, keys={list(sv.keys()) if sv else '[]'}")
 
         # Фиксированные мини-карточки
         self._mini_supervision["total"].set_value(str(sv.get("total", 0) or 0))
