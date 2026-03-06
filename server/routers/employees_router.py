@@ -83,7 +83,8 @@ async def create_employee(
     # Создание
     employee = Employee(
         **employee_data.model_dump(exclude={'password'}),
-        password_hash=get_password_hash(employee_data.password)
+        password_hash=get_password_hash(employee_data.password),
+        invite_temp_password=employee_data.password,
     )
     db.add(employee)
     db.commit()
@@ -130,7 +131,9 @@ async def update_employee(
 
     # Если обновляется пароль
     if 'password' in update_data:
-        update_data['password_hash'] = get_password_hash(update_data.pop('password'))
+        plain = update_data.pop('password')
+        update_data['password_hash'] = get_password_hash(plain)
+        update_data['invite_temp_password'] = plain  # для invite-письма
 
     for field, value in update_data.items():
         setattr(employee, field, value)
