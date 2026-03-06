@@ -1432,16 +1432,10 @@ class CardEditDialog(QDialog):
                 print(f"[WARNING] Ошибка работы с оплатами замерщика: {e}")
             # ======================================================================
 
-            # Обновляем contracts.measurement_date в БД
-            conn = self.data.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE contracts
-                SET measurement_date = ?
-                WHERE id = ?
-            ''', (survey_date.toString('yyyy-MM-dd'), contract_id))
-            conn.commit()
-            self.data.db.close()
+            # Обновляем contracts.measurement_date через DataAccess (online + offline)
+            self.data.update_contract(contract_id, {
+                'measurement_date': survey_date.toString('yyyy-MM-dd')
+            })
 
             # Обновляем crm_cards.survey_date
             updates = {'survey_date': survey_date.toString('yyyy-MM-dd'), 'surveyor_id': surveyor_id}
@@ -1458,16 +1452,17 @@ class CardEditDialog(QDialog):
             self.refresh_payments_tab()
             self.refresh_project_info_tab()
 
-            # ИСПРАВЛЕНИЕ: Добавляем запись в историю проекта
+            # Добавляем запись в историю проекта
             if self.employee and existing is None:  # Только если это первый раз
                 from datetime import datetime
-                # Получаем имя замерщика
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT full_name FROM employees WHERE id = ?', (surveyor_id,))
-                surveyor_result = cursor.fetchone()
-                surveyor_name = surveyor_result['full_name'] if surveyor_result else 'Неизвестный'
-                conn.close()
+                # Получаем имя замерщика через DataAccess
+                surveyor_name = 'Неизвестный'
+                try:
+                    emp = self.data.get_employee(surveyor_id)
+                    if emp:
+                        surveyor_name = emp.get('full_name', 'Неизвестный')
+                except Exception:
+                    pass
 
                 description = f"Замер выполнен: {survey_date.toString('dd.MM.yyyy')} | Замерщик: {surveyor_name}"
 
@@ -2674,18 +2669,13 @@ class CardEditDialog(QDialog):
         if not contract_id:
             return
 
-        # Получаем данные замера из базы
-        conn = self.data.db.connect()
-        cursor = conn.cursor()
-        cursor.execute('SELECT measurement_image_link, measurement_file_name, measurement_date FROM contracts WHERE id = ?', (contract_id,))
-        result = cursor.fetchone()
-
-        if result:
+        # Получаем данные замера через DataAccess (API → fallback SQLite)
+        contract_data = self.data.get_contract(contract_id)
+        if contract_data:
             # Обновляем изображение замера
-            if result['measurement_image_link']:
-                measurement_link = result['measurement_image_link']
-                # Используем сохраненное имя файла, если оно есть
-                file_name = result['measurement_file_name'] if result['measurement_file_name'] else 'Замер'
+            measurement_link = contract_data.get('measurement_image_link', '')
+            if measurement_link:
+                file_name = contract_data.get('measurement_file_name') or 'Замер'
                 truncated_name = self.truncate_filename(file_name)
                 html_link = f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>'
                 if hasattr(self, 'project_data_survey_file_label'):
@@ -2695,15 +2685,14 @@ class CardEditDialog(QDialog):
                     self.project_data_survey_file_label.setText('Не загружен')
 
             # Обновляем дату замера
-            if result['measurement_date']:
+            measurement_date_str = contract_data.get('measurement_date', '')
+            if measurement_date_str:
                 from datetime import datetime
                 try:
-                    measurement_date = datetime.strptime(result['measurement_date'], '%Y-%m-%d')
+                    measurement_date = datetime.strptime(str(measurement_date_str)[:10], '%Y-%m-%d')
                     date_str = measurement_date.strftime('%d.%m.%Y')
-                    # Обновляем дату в "Данные по проекту"
                     if hasattr(self, 'project_data_survey_date_label'):
                         self.project_data_survey_date_label.setText(date_str)
-                    # Обновляем дату в "Редактирование"
                     if hasattr(self, 'survey_date_label'):
                         self.survey_date_label.setText(date_str)
                 except Exception:
@@ -2719,12 +2708,9 @@ class CardEditDialog(QDialog):
 
         # Обновляем surveyor в вкладке редактирования
         if card_id and hasattr(self, 'surveyor'):
-            cursor.execute('SELECT surveyor_id FROM crm_cards WHERE id = ?', (card_id,))
-            surveyor_id_result = cursor.fetchone()
-            if surveyor_id_result and surveyor_id_result['surveyor_id']:
-                self.set_combo_by_id(self.surveyor, surveyor_id_result['surveyor_id'])
-
-        conn.close()
+            surveyor_id = self.card_data.get('surveyor_id')
+            if surveyor_id:
+                self.set_combo_by_id(self.surveyor, surveyor_id)
 
     def delete_tech_task_file(self):
         """Удалить файл ТЗ из базы данных и с Яндекс.Диска"""
@@ -3813,18 +3799,10 @@ class CardEditDialog(QDialog):
                 self.card_data['survey_date'] = date_str
                 self.card_data['surveyor_id'] = surveyor_id
 
-                # Обновляем contracts.measurement_date
+                # Обновляем contracts.measurement_date через DataAccess
                 contract_id = self.card_data.get('contract_id')
                 if contract_id:
-                    conn = self.data.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE contracts
-                        SET measurement_date = ?
-                        WHERE id = ?
-                    ''', (date_str, contract_id))
-                    conn.commit()
-                    self.data.db.close()
+                    self.data.update_contract(contract_id, {'measurement_date': date_str})
 
                 # Обновляем оба label - в данных по проекту и в редактировании
                 self.project_data_survey_date_label.setText(selected_date.toString('dd.MM.yyyy'))
@@ -4790,48 +4768,25 @@ class CardEditDialog(QDialog):
             ''')
             layout.addWidget(survey_label)
 
-        # ========== НОВОЕ: ВЫПОЛНЕННЫЕ СТАДИИ ==========
-        # Показываем стадии, которые были отмечены как сданные (completed = 1)
+        # ========== ВЫПОЛНЕННЫЕ СТАДИИ (из card_data — API или локальная БД) ==========
         try:
-            conn = self.data.db.connect()
-            cursor = conn.cursor()
-
-            # ОТЛАДКА: Проверяем все записи в stage_executors для этой карточки
-            cursor.execute('''
-            SELECT se.stage_name, e.full_name as executor_name, se.completed, se.completed_date
-            FROM stage_executors se
-            LEFT JOIN employees e ON se.executor_id = e.id
-            WHERE se.crm_card_id = ?
-            ''', (self.card_data['id'],))
-
-            all_stages = cursor.fetchall()
-            for s in all_stages:
-                print(f"  - {s['stage_name']} | Исполнитель: {s['executor_name']} | Completed: {s['completed']} | Дата: {s['completed_date']}")
-
-            cursor.execute('''
-            SELECT se.stage_name, e.full_name as executor_name, se.completed_date
-            FROM stage_executors se
-            LEFT JOIN employees e ON se.executor_id = e.id
-            WHERE se.crm_card_id = ? AND se.completed = 1
-            ORDER BY se.completed_date ASC
-            ''', (self.card_data['id'],))
-
-            completed_stages = cursor.fetchall()
-            self.data.db.close()
+            stage_executors = self.card_data.get('stage_executors', [])
+            completed_stages = [
+                se for se in stage_executors
+                if se.get('completed') or se.get('completed') == 1
+            ]
+            # Сортируем по дате завершения
+            completed_stages.sort(key=lambda s: s.get('completed_date') or '')
 
             if completed_stages:
-                # Заголовок
                 completed_header = QLabel('Выполненные стадии:')
                 completed_header.setStyleSheet('font-size: 11px; font-weight: bold; color: #27AE60; margin-bottom: 4px; margin-top: 4px;')
                 layout.addWidget(completed_header)
 
-                # Контейнер для стадий
                 for stage in completed_stages:
-                    stage_dict = dict(stage) if not isinstance(stage, dict) else stage
-                    date_str = format_date(stage_dict.get('completed_date'))
-
+                    date_str = format_date(stage.get('completed_date'))
                     stage_label = QLabel(
-                        f"{stage_dict.get('stage_name', '')} | Исполнитель: {stage_dict.get('executor_name', '')} | Дата: {date_str}"
+                        f"{stage.get('stage_name', '')} | Исполнитель: {stage.get('executor_name', '')} | Дата: {date_str}"
                     )
                     stage_label.setStyleSheet('''
                         color: #27AE60;
@@ -4846,8 +4801,6 @@ class CardEditDialog(QDialog):
 
         except Exception as e:
             print(f" Ошибка загрузки выполненных стадий: {e}")
-            import traceback
-            traceback.print_exc()
         # ===============================================
 
         accepted_stages = self.data.get_accepted_stages(self.card_data['id'])
@@ -6019,10 +5972,8 @@ class CardEditDialog(QDialog):
                 else:
                     self.data.update_contract(contract_id, {'status': new_status})
 
-            # ИСПРАВЛЕНИЕ: Удаляем оплаты при снятии назначения сотрудника
+            # ИСПРАВЛЕНИЕ: Удаляем/переназначаем оплаты при смене сотрудника
             if contract_id:
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
                 payment_deleted = False
 
                 # Проверяем каждую роль
@@ -6038,66 +5989,47 @@ class CardEditDialog(QDialog):
                     old_id = old_values.get(field_name)
                     new_id = updates.get(field_name)
 
-                    # ИСПРАВЛЕНИЕ: Переназначение сотрудника (был А, стал Б)
+                    # Переназначение сотрудника (был А, стал Б)
                     if old_id is not None and new_id is not None and old_id != new_id:
-                        # Ищем запись оплаты старого сотрудника
-                        cursor.execute('''
-                        SELECT id, * FROM payments
-                        WHERE contract_id = ? AND employee_id = ? AND role = ?
-                        ''', (contract_id, old_id, role_name))
-
-                        old_payment = cursor.fetchone()
-                        if old_payment:
-                            # Помечаем старую запись как переназначенную
-                            cursor.execute('''
-                            UPDATE payments
-                            SET reassigned = 1, updated_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                            ''', (old_payment['id'],))
-
-                            # Создаем новую запись для нового сотрудника
-                            cursor.execute('''
-                            INSERT INTO payments (
-                                contract_id, crm_card_id, supervision_card_id,
-                                employee_id, role, stage_name,
-                                calculated_amount, manual_amount, final_amount,
-                                is_manual, payment_type, report_month,
-                                reassigned, old_employee_id
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-                            ''', (
-                                old_payment['contract_id'],
-                                old_payment['crm_card_id'],
-                                old_payment['supervision_card_id'],
-                                new_id,  # Новый сотрудник
-                                old_payment['role'],
-                                old_payment['stage_name'],
-                                old_payment['calculated_amount'],
-                                old_payment['manual_amount'],
-                                old_payment['final_amount'],
-                                old_payment['is_manual'],
-                                old_payment['payment_type'],
-                                old_payment['report_month'],
-                                old_id  # ID старого сотрудника
-                            ))
-
-                            payment_deleted = True
-                            print(f"Создана новая запись оплаты для роли '{role_name}' (ID: {new_id}), старая помечена как переназначенная")
+                        try:
+                            payments = self.data.get_payments_for_contract(contract_id)
+                            old_payments = [p for p in payments if p.get('employee_id') == old_id and p.get('role') == role_name]
+                            for old_payment in old_payments:
+                                # Помечаем старую запись как переназначенную
+                                self.data.update_payment(old_payment['id'], {
+                                    'reassigned': True
+                                })
+                                # Создаем новую запись для нового сотрудника
+                                new_payment_data = {
+                                    'contract_id': contract_id,
+                                    'crm_card_id': old_payment.get('crm_card_id'),
+                                    'employee_id': new_id,
+                                    'role': role_name,
+                                    'stage_name': old_payment.get('stage_name'),
+                                    'calculated_amount': old_payment.get('calculated_amount', 0),
+                                    'final_amount': old_payment.get('final_amount', 0),
+                                    'payment_type': old_payment.get('payment_type', 'Полная оплата'),
+                                    'report_month': old_payment.get('report_month'),
+                                }
+                                self.data.create_payment(new_payment_data)
+                                payment_deleted = True
+                                print(f"Переназначена оплата для роли '{role_name}' (было: {old_id}, стало: {new_id})")
+                        except Exception as e:
+                            print(f"[WARN] Ошибка переназначения оплат для {role_name}: {e}")
 
                     # Если был назначен сотрудник, а теперь "Не назначен" (None)
                     elif old_id is not None and new_id is None:
-                        cursor.execute('''
-                        DELETE FROM payments
-                        WHERE contract_id = ? AND employee_id = ? AND role = ?
-                        ''', (contract_id, old_id, role_name))
+                        try:
+                            payments = self.data.get_payments_for_contract(contract_id)
+                            for p in payments:
+                                if p.get('employee_id') == old_id and p.get('role') == role_name:
+                                    self.data.delete_payment(p['id'])
+                                    payment_deleted = True
+                                    print(f"Удалена оплата для роли '{role_name}' (ID сотрудника: {old_id})")
+                        except Exception as e:
+                            print(f"[WARN] Ошибка удаления оплат для {role_name}: {e}")
 
-                        if cursor.rowcount > 0:
-                            payment_deleted = True
-                            print(f"Удалена оплата для роли '{role_name}' (ID сотрудника: {old_id})")
-
-                conn.commit()
-                self.data.db.close()
-
-                # Обновляем вкладку оплат если были удаления
+                # Обновляем вкладку оплат если были изменения
                 if payment_deleted:
                     self.refresh_payments_tab()
 
@@ -6166,36 +6098,24 @@ class CardEditDialog(QDialog):
                 except Exception as sup_e:
                     print(f"[WARN] Ошибка создания карточки надзора: {sup_e}")
 
-            # ИСПРАВЛЕНИЕ: Установка отчетного месяца при закрытии проекта
+            # Установка отчетного месяца при закрытии проекта
             if new_status in ['СДАН', 'АВТОРСКИЙ НАДЗОР']:
                 current_month = QDate.currentDate().toString('yyyy-MM')
-
-                # Обновляем отчетный месяц для менеджеров и ГАП
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                UPDATE payments
-                SET report_month = ?
-                WHERE contract_id = ?
-                  AND role IN ('Старший менеджер проектов', 'Главный архитектор проектов', 'Менеджер проектов')
-                  AND (report_month IS NULL OR report_month = '')
-                ''', (current_month, contract_id))
-
-                # Обновляем доплату для СДП
-                cursor.execute('''
-                UPDATE payments
-                SET report_month = ?
-                WHERE contract_id = ?
-                  AND role = 'СДП'
-                  AND payment_type = 'Доплата'
-                  AND (report_month IS NULL OR report_month = '')
-                ''', (current_month, contract_id))
-
-                conn.commit()
-                self.data.db.close()
-
-                print(f"Отчетный месяц {current_month} установлен для менеджеров и доплаты СДП")
+                try:
+                    payments = self.data.get_payments_for_contract(contract_id)
+                    manager_roles = {'Старший менеджер проектов', 'Главный архитектор проектов', 'Менеджер проектов'}
+                    for p in payments:
+                        role = p.get('role', '')
+                        rm = p.get('report_month') or ''
+                        # Менеджеры и ГАП — устанавливаем отчетный месяц если пустой
+                        if role in manager_roles and not rm:
+                            self.data.update_payment(p['id'], {'report_month': current_month})
+                        # СДП Доплата — устанавливаем отчетный месяц если пустой
+                        if role == 'СДП' and p.get('payment_type') == 'Доплата' and not rm:
+                            self.data.update_payment(p['id'], {'report_month': current_month})
+                    print(f"Отчетный месяц {current_month} установлен для менеджеров и доплаты СДП")
+                except Exception as e:
+                    print(f"[WARN] Ошибка установки отчетного месяца: {e}")
 
         # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
         self.accept()
@@ -6268,17 +6188,18 @@ class CardEditDialog(QDialog):
                 except Exception as e:
                     print(f"[WARNING] Ошибка удаления выплат через API: {e}")
             else:
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('''
-                DELETE FROM payments
-                WHERE contract_id = ? AND role = ?
-                ''', (contract_id, role_name))
-                deleted_count = cursor.rowcount
-                if deleted_count > 0:
-                    print(f"Удалено {deleted_count} старых выплат для роли {role_name}")
-                conn.commit()
-                self.data.db.close()
+                # Оффлайн-режим: удаляем через DataAccess (попадёт в offline-очередь)
+                try:
+                    payments = self.data.get_payments_for_contract(contract_id)
+                    deleted_count = 0
+                    for p in payments:
+                        if p.get('role') == role_name:
+                            self.data.delete_payment(p['id'])
+                            deleted_count += 1
+                    if deleted_count > 0:
+                        print(f"Удалено {deleted_count} старых выплат для роли {role_name}")
+                except Exception as e:
+                    print(f"[WARNING] Ошибка удаления выплат локально: {e}")
 
             # Если выбран сотрудник (не "Не назначен"), создаем новые выплаты
             if employee_id:
@@ -6352,36 +6273,38 @@ class CardEditDialog(QDialog):
                         except Exception as e:
                             print(f"[WARNING] Ошибка создания выплат СДП через API: {e}, fallback на локальную БД")
 
-                    # Fallback на локальную БД если API не сработал
+                    # Fallback — создаём через DataAccess (offline-очередь если нет API)
                     if not payments_created:
-                        # Создаем через локальную БД
-                        conn = self.data.db.connect()
-                        cursor = conn.cursor()
+                        try:
+                            advance_data = {
+                                'contract_id': contract_id,
+                                'crm_card_id': self.card_data['id'],
+                                'employee_id': employee_id,
+                                'role': role_name,
+                                'stage_name': None,
+                                'calculated_amount': advance_amount,
+                                'final_amount': advance_amount,
+                                'payment_type': 'Аванс',
+                                'report_month': current_month
+                            }
+                            self.data.create_payment(advance_data)
 
-                        cursor.execute('''
-                        INSERT INTO payments
-                        (contract_id, crm_card_id, employee_id, role, stage_name, calculated_amount,
-                         final_amount, payment_type, report_month)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (contract_id, self.card_data['id'], employee_id, role_name, None, advance_amount,
-                              advance_amount, 'Аванс', current_month))
+                            balance_data = {
+                                'contract_id': contract_id,
+                                'crm_card_id': self.card_data['id'],
+                                'employee_id': employee_id,
+                                'role': role_name,
+                                'stage_name': None,
+                                'calculated_amount': balance_amount,
+                                'final_amount': balance_amount,
+                                'payment_type': 'Доплата',
+                                'report_month': None
+                            }
+                            self.data.create_payment(balance_data)
 
-                        advance_id = cursor.lastrowid
-
-                        cursor.execute('''
-                        INSERT INTO payments
-                        (contract_id, crm_card_id, employee_id, role, stage_name, calculated_amount,
-                         final_amount, payment_type, report_month)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (contract_id, self.card_data['id'], employee_id, role_name, None, balance_amount,
-                              balance_amount, 'Доплата', None))
-
-                        balance_id = cursor.lastrowid
-
-                        conn.commit()
-                        self.data.db.close()
-
-                        print(f"Созданы аванс (ID={advance_id}, {advance_amount:.2f} ₽) и доплата (ID={balance_id}, {balance_amount:.2f} ₽) для СДП (локально)")
+                            print(f"Созданы аванс ({advance_amount:.2f} ₽) и доплата ({balance_amount:.2f} ₽) для СДП через DataAccess")
+                        except Exception as e2:
+                            print(f"[ERROR] Ошибка создания выплат СДП: {e2}")
 
                 # Для остальных ролей - создаем одну выплату "Полная оплата"
                 else:
@@ -7505,26 +7428,19 @@ class CardEditDialog(QDialog):
                 print(f"[WARN] Ошибка обновления оплаты через API: {e}")
                 # Fallback на локальную БД
 
-        # Fallback или локальный режим - обновляем локальную БД
+        # Fallback или локальный режим - обновляем через DataAccess
         if not updated:
-            # Обновляем сумму
-            self.data.update_payment_manual(payment_id, amount)
-
-            # Обновляем отчетный месяц
             try:
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE payments
-                    SET report_month = ?,
-                        reassigned = 0
-                    WHERE id = ?
-                """, (report_month, payment_id))
-                conn.commit()
-                self.data.db.close()
-                print(f"[LOCAL] Оплата обновлена: ID={payment_id}, сумма={amount}, месяц={report_month}")
+                self.data.update_payment(payment_id, {
+                    'manual_amount': amount,
+                    'final_amount': amount,
+                    'is_manual': True,
+                    'report_month': report_month,
+                    'reassigned': False
+                })
+                print(f"[LOCAL] Оплата обновлена через DataAccess: ID={payment_id}, сумма={amount}, месяц={report_month}")
             except Exception as e:
-                print(f"[ERROR] Ошибка при обновлении отчетного месяца: {e}")
+                print(f"[ERROR] Ошибка при обновлении оплаты: {e}")
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
         dialog.accept()
@@ -7582,19 +7498,13 @@ class CardEditDialog(QDialog):
                         print(f"[WARN] Ошибка удаления оплаты через API: {e}")
                         # Fallback на локальную БД
 
-                # Fallback или локальный режим - удаляем из локальной БД
+                # Fallback или локальный режим - удаляем через DataAccess
                 if not deleted:
-                    conn = self.data.db.connect()
-                    cursor = conn.cursor()
-
-                    cursor.execute('''
-                    DELETE FROM payments
-                    WHERE id = ?
-                    ''', (payment_id,))
-
-                    conn.commit()
-                    self.data.db.close()
-                    print(f"[LOCAL] Оплата удалена: {role} - {employee_name} (ID: {payment_id})")
+                    try:
+                        self.data.delete_payment(payment_id)
+                        print(f"[LOCAL] Оплата удалена через DataAccess: {role} - {employee_name} (ID: {payment_id})")
+                    except Exception as e2:
+                        print(f"[ERROR] Ошибка удаления оплаты: {e2}")
 
                 # Показываем сообщение об успехе
                 CustomMessageBox(
@@ -7798,18 +7708,8 @@ class CardEditDialog(QDialog):
         if self.employee:
             from datetime import datetime
 
-            # Определяем тип проекта из contracts (а не из card_data!)
-            contract_id = self.card_data.get('contract_id')
-            if contract_id:
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT project_type FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                conn.close()
-                project_type = result['project_type'] if result else None
-            else:
-                project_type = None
-
+            # Определяем тип проекта из card_data (уже загружено из API)
+            project_type = self.card_data.get('project_type', '')
             is_template = project_type == 'Шаблонный'
 
             # Определяем название стадии для отображения
@@ -8108,18 +8008,8 @@ class CardEditDialog(QDialog):
             if self.employee:
                 from datetime import datetime
 
-                # Определяем тип проекта из contracts
-                contract_id = self.card_data.get('contract_id')
-                if contract_id:
-                    conn = self.data.db.connect()
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT project_type FROM contracts WHERE id = ?', (contract_id,))
-                    result = cursor.fetchone()
-                    conn.close()
-                    project_type = result['project_type'] if result else None
-                else:
-                    project_type = None
-
+                # Определяем тип проекта из card_data (уже загружено из API)
+                project_type = self.card_data.get('project_type', '')
                 is_template = project_type == 'Шаблонный'
 
                 # Определяем название стадии для более понятного описания с учетом типа проекта
@@ -8401,18 +8291,8 @@ class CardEditDialog(QDialog):
         if self.employee and len(variation_files) > 0:
             from datetime import datetime
 
-            # Определяем тип проекта из contracts
-            contract_id = self.card_data.get('contract_id')
-            if contract_id:
-                conn = self.data.db.connect()
-                cursor = conn.cursor()
-                cursor.execute('SELECT project_type FROM contracts WHERE id = ?', (contract_id,))
-                result = cursor.fetchone()
-                conn.close()
-                project_type = result['project_type'] if result else None
-            else:
-                project_type = None
-
+            # Определяем тип проекта из card_data (уже загружено из API)
+            project_type = self.card_data.get('project_type', '')
             is_template = project_type == 'Шаблонный'
 
             # Определяем название стадии для более понятного описания с учетом типа проекта

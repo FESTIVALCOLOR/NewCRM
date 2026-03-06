@@ -333,6 +333,7 @@ class DataAccess(QObject):
 
     def delete_client(self, client_id: int) -> bool:
         """Удалить клиента"""
+        _global_cache.invalidate("clients")
         # Сначала удаляем локально
         self.db.delete_client(client_id)
 
@@ -611,6 +612,7 @@ class DataAccess(QObject):
 
     def delete_employee(self, employee_id: int) -> bool:
         """Удалить сотрудника"""
+        _global_cache.invalidate("employees")
         self.db.delete_employee(employee_id)
 
         if self.is_online and self.api_client:
@@ -1369,6 +1371,7 @@ class DataAccess(QObject):
 
     def update_payment_manual(self, payment_id: int, amount: float, report_month: str = None) -> bool:
         """Обновить сумму платежа вручную"""
+        _global_cache.invalidate("payments")
         # Сначала обновляем локально (включая report_month)
         self.db.update_payment_manual(payment_id, amount, report_month=report_month)
 
@@ -2939,6 +2942,11 @@ class DataAccess(QObject):
                 return self.api_client.create_supervision_visit(card_id, data)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error create_supervision_visit: {e}")
+                self._queue_operation('create', 'supervision_visit', card_id,
+                                      {'card_id': card_id, **data})
+        elif self.api_client:
+            self._queue_operation('create', 'supervision_visit', card_id,
+                                  {'card_id': card_id, **data})
         return {'id': local_id} if local_id else None
 
     def update_supervision_visit(self, card_id: int, visit_id: int, data: dict) -> bool:
@@ -2949,6 +2957,11 @@ class DataAccess(QObject):
                 self.api_client.update_supervision_visit(card_id, visit_id, data)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_supervision_visit: {e}")
+                self._queue_operation('update', 'supervision_visit', visit_id,
+                                      {'card_id': card_id, 'visit_id': visit_id, **data})
+        elif self.api_client:
+            self._queue_operation('update', 'supervision_visit', visit_id,
+                                  {'card_id': card_id, 'visit_id': visit_id, **data})
         return True
 
     def delete_supervision_visit(self, card_id: int, visit_id: int) -> bool:
@@ -2959,6 +2972,11 @@ class DataAccess(QObject):
                 self.api_client.delete_supervision_visit(card_id, visit_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error delete_supervision_visit: {e}")
+                self._queue_operation('delete', 'supervision_visit', visit_id,
+                                      {'card_id': card_id, 'visit_id': visit_id})
+        elif self.api_client:
+            self._queue_operation('delete', 'supervision_visit', visit_id,
+                                  {'card_id': card_id, 'visit_id': visit_id})
         return True
 
     def export_supervision_visits_excel(self, card_id: int) -> bytes:

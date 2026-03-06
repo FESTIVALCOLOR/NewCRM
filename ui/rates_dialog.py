@@ -12,6 +12,7 @@ from utils.data_access import DataAccess
 from config import CITIES
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
+from ui.custom_question_box import CustomQuestionBox
 from ui.custom_combobox import CustomComboBox
 
 # Путь к иконкам для стилей
@@ -999,7 +1000,7 @@ class RatesDialog(QDialog):
                 for row in range(table.rowCount()):
                     role_item = table.item(row, 0)
                     if role_item and role_item.text() == role:
-                        spin = table.cellWidget(row, 1)
+                        spin = table.cellWidget(row, 2)  # Колонка 2 = цена
                         if spin:
                             spin.setValue(0)
                         break

@@ -173,7 +173,7 @@ class SupervisionCardEditDialog(QDialog):
 
             # Старший менеджер
             self.senior_manager = CustomComboBox()
-            managers = self.data.get_employees_by_position('Старший менеджер проектов')
+            managers = self.data.get_employees_by_position('Старший менеджер проектов') or []
             self.senior_manager.addItem('Не назначен', None)
             for manager in managers:
                 self.senior_manager.addItem(manager['full_name'], manager['id'])
@@ -184,7 +184,7 @@ class SupervisionCardEditDialog(QDialog):
             self.dan_label.setStyleSheet('font-weight: bold; font-size: 13px; padding: 4px 8px;')
             # Скрытый combo для совместимости (сохранение ID)
             self.dan = CustomComboBox()
-            dans = self.data.get_employees_by_position('ДАН')
+            dans = self.data.get_employees_by_position('ДАН') or []
             self.dan.addItem('Не назначен', None)
             for dan in dans:
                 self.dan.addItem(dan['full_name'], dan['id'])
@@ -218,7 +218,7 @@ class SupervisionCardEditDialog(QDialog):
 
             # Руководитель студии
             self.studio_director = CustomComboBox()
-            directors = self.data.get_employees_by_position('Руководитель студии')
+            directors = self.data.get_employees_by_position('Руководитель студии') or []
             self.studio_director.addItem('Не назначен', None)
             for director in directors:
                 self.studio_director.addItem(director['full_name'], director['id'])

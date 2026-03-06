@@ -633,9 +633,10 @@ class CRMTab(QWidget):
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
                         # S-05: Используем DataAccess вместо прямого SQL
                         info = self.data.get_stage_completion_info(card_id, from_column)
+                        if not info:
+                            info = {}
                         stage_info = info.get('stage')
                         approval_info = info.get('approval')
-                        self.data.db.close()
 
                         # Определяем статусы
                         submitted = stage_info and stage_info['submitted_date'] is not None
@@ -662,6 +663,8 @@ class CRMTab(QWidget):
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
                         # S-05: Используем DataAccess вместо прямого SQL
                         info = self.data.get_stage_completion_info(card_id, from_column)
+                        if not info:
+                            info = {}
                         stage_info = info.get('stage')
 
                         if stage_info:
@@ -1139,7 +1142,7 @@ class CRMTab(QWidget):
         """Загрузка данных для фильтров архива"""
         try:
             # Используем DataAccess (учитывает prefer_local)
-            cards = self.data.get_archived_crm_cards(project_type)
+            cards = self.data.get_archived_crm_cards(project_type) or []
 
             # Собираем уникальные города
             cities = set()
@@ -1153,7 +1156,7 @@ class CRMTab(QWidget):
                 city_combo.addItem(city, city)
 
             # Получаем всех агентов из базы данных
-            agents = self.data.get_all_agents()
+            agents = self.data.get_all_agents() or []
             for agent in agents:
                 agent_name = agent['name']
                 agent_combo.addItem(agent_name, agent_name)
@@ -1186,16 +1189,8 @@ class CRMTab(QWidget):
             city_filter = archive_widget.city_combo.currentData()
             agent_filter = archive_widget.agent_combo.currentData()
 
-            # Получаем все архивные карточки
-            # ИСПРАВЛЕНИЕ: Проверяем is_online перед API запросом
-            if self.data.is_online:
-                try:
-                    cards = self.data.get_archived_crm_cards(project_type)
-                except Exception as e:
-                    print(f"[WARN] API ошибка загрузки архива для фильтрации: {e}")
-                    cards = self.data.get_archived_crm_cards(project_type)
-            else:
-                cards = self.data.get_archived_crm_cards(project_type)
+            # Получаем все архивные карточки через DataAccess (API → fallback SQLite)
+            cards = self.data.get_archived_crm_cards(project_type) or []
 
             # Применяем фильтры
             filtered_cards = []
@@ -2368,8 +2363,9 @@ class CRMCard(QFrame):
                 QPushButton:hover { background-color: #E67E22; }
                 QPushButton:pressed { background-color: #D35400; }
             """)
-            # S2.2: Визуальный индикатор если нет права crm.update
-            has_update_perm_survey = _has_perm(self.employee, self.api_client, 'crm_cards.update')
+            # S2.2: Замерщик может добавлять замер без crm_cards.update
+            is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
+            has_update_perm_survey = is_surveyor or _has_perm(self.employee, self.api_client, 'crm_cards.update')
             survey_btn.setEnabled(has_update_perm_survey)
             if not has_update_perm_survey:
                 survey_btn.setStyleSheet(survey_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
@@ -2772,75 +2768,63 @@ class CRMCard(QFrame):
                 except Exception:
                     pass
 
-                # ========== НОВОЕ: ОБНОВЛЕНИЕ ОТЧЕТНОГО МЕСЯЦА ДОПЛАТЫ ==========
+                # ========== ОБНОВЛЕНИЕ ОТЧЕТНОГО МЕСЯЦА ДОПЛАТЫ (через DataAccess) ==========
                 try:
                     contract_id = self.card_data['contract_id']
                     contract = self.data.get_contract(contract_id)
+                    if not contract:
+                        print(f"[WARN] Договор {contract_id} не найден, пропускаем обновление report_month")
+                        raise Exception(f"Договор {contract_id} не найден")
                     current_month = QDate.currentDate().toString('yyyy-MM')
-                    
+
                     print(f"\n[ACCEPT WORK] Принятие работы:")
                     print(f"   Стадия: {current_column}")
                     print(f"   Исполнитель: {executor_name}")
                     print(f"   Текущий месяц: {current_month}")
-                    
-                    # Получаем ID исполнителя
-                    conn = self.data.db.connect()
-                    cursor = conn.cursor()
-                    
-                    # Находим ID исполнителя по имени
-                    cursor.execute('''
-                    SELECT id FROM employees WHERE full_name = ? LIMIT 1
-                    ''', (executor_name,))
-                    
-                    executor_row = cursor.fetchone()
-                    if not executor_row:
-                        print(f" Не найден исполнитель: {executor_name}")
-                        self.data.db.close()
-                        return
-                    
-                    executor_id = executor_row['id']
+
+                    # Находим ID исполнителя по имени через DataAccess
+                    executor_id = None
+                    employees = self.data.get_all_employees() or []
+                    for emp in employees:
+                        if emp.get('full_name') == executor_name:
+                            executor_id = emp.get('id')
+                            break
+
+                    if not executor_id:
+                        print(f"[WARN] Не найден исполнитель: {executor_name}")
+
                     print(f"   ID исполнителя: {executor_id}")
-                    
+
+                    # Получаем оплаты для договора через DataAccess
+                    payments = self.data.get_payments_for_contract(contract_id)
+
                     # ТОЛЬКО для индивидуальных проектов - обновляем отчетный месяц ДОПЛАТЫ
                     if contract['project_type'] == 'Индивидуальный':
-                        # ИСПРАВЛЕНИЕ: Убираем условие на пустой месяц, всегда обновляем
-                        cursor.execute('''
-                        UPDATE payments
-                        SET report_month = ?
-                        WHERE contract_id = ?
-                          AND employee_id = ?
-                          AND stage_name = ?
-                          AND payment_type = 'Доплата'
-                        ''', (current_month, contract_id, executor_id, current_column))
-
-                        rows_updated = cursor.rowcount
-
-                        if rows_updated > 0:
+                        updated = False
+                        for p in payments:
+                            if (p.get('employee_id') == executor_id and
+                                p.get('stage_name') == current_column and
+                                p.get('payment_type') == 'Доплата'):
+                                self.data.update_payment(p['id'], {'report_month': current_month})
+                                updated = True
+                        if updated:
                             print(f"   Отчетный месяц ДОПЛАТЫ установлен: {current_month}")
                         else:
                             print(f"    Не найдена доплата для обновления (contract_id={contract_id}, executor_id={executor_id}, stage={current_column})")
-                    
+
                     # Для шаблонных - устанавливаем отчетный месяц ПОЛНОЙ ОПЛАТЫ
                     elif contract['project_type'] == 'Шаблонный':
-                        # ИСПРАВЛЕНИЕ: Для чертежника устанавливаем месяц только после ВТОРОЙ стадии
                         can_set_month = True
 
                         if executor_role == 'чертёжник':
-                            # Проверяем, сколько стадий уже принято для этого чертежника
-                            # (включая текущую, которая уже была сохранена выше)
-                            cursor.execute('''
-                            SELECT COUNT(*) as accepted_count
-                            FROM manager_stage_acceptance
-                            WHERE crm_card_id = ? AND executor_name = ?
-                            ''', (self.card_data['id'], executor_name))
-
-                            result = cursor.fetchone()
-                            accepted_count = result['accepted_count'] if result else 0
-
+                            # Проверяем количество принятых стадий через DataAccess
+                            accepted = self.data.get_accepted_stages(self.card_data['id'])
+                            accepted_count = sum(
+                                1 for a in (accepted or [])
+                                if a.get('executor_name') == executor_name
+                            )
                             print(f"   Количество принятых стадий чертежника: {accepted_count}")
 
-                            # Если это первая стадия (accepted_count = 1), НЕ устанавливаем месяц
-                            # Только при второй и последующих (accepted_count >= 2) устанавливаем
                             if accepted_count < 2:
                                 can_set_month = False
                                 print(f"    Это первая стадия чертежника - месяц НЕ устанавливается")
@@ -2848,26 +2832,18 @@ class CRMCard(QFrame):
                                 print(f"   Это вторая или последующая стадия чертежника - месяц будет установлен")
 
                         if can_set_month:
-                            # ИСПРАВЛЕНИЕ: Убираем условие на пустой месяц, всегда обновляем
-                            cursor.execute('''
-                            UPDATE payments
-                            SET report_month = ?
-                            WHERE contract_id = ?
-                              AND employee_id = ?
-                              AND stage_name = ?
-                              AND payment_type = 'Полная оплата'
-                            ''', (current_month, contract_id, executor_id, current_column))
-
-                            rows_updated = cursor.rowcount
-
-                            if rows_updated > 0:
+                            updated = False
+                            for p in payments:
+                                if (p.get('employee_id') == executor_id and
+                                    p.get('stage_name') == current_column and
+                                    p.get('payment_type') == 'Полная оплата'):
+                                    self.data.update_payment(p['id'], {'report_month': current_month})
+                                    updated = True
+                            if updated:
                                 print(f"   Отчетный месяц ПОЛНОЙ ОПЛАТЫ установлен: {current_month}")
                             else:
                                 print(f"    Не найдена выплата для обновления (contract_id={contract_id}, executor_id={executor_id}, stage={current_column})")
-                    
-                    conn.commit()
-                    self.data.db.close()
-                    
+
                 except Exception as e:
                     print(f" Ошибка обновления отчетного месяца: {e}")
                     import traceback

@@ -508,7 +508,7 @@ class CRMSupervisionTab(QWidget):
         """Загрузка данных для фильтров архива"""
         try:
             # Получаем все архивные карточки для заполнения фильтров
-            cards = self.data.get_supervision_cards_archived()
+            cards = self.data.get_supervision_cards_archived() or []
 
             # Собираем уникальные города
             cities = set()
@@ -522,7 +522,7 @@ class CRMSupervisionTab(QWidget):
                 city_combo.addItem(city, city)
 
             # Получаем всех агентов из базы данных (локальные данные)
-            agents = self.data.get_all_agents()
+            agents = self.data.get_all_agents() or []
             for agent in agents:
                 agent_name = agent['name']
                 agent_combo.addItem(agent_name, agent_name)
@@ -549,7 +549,7 @@ class CRMSupervisionTab(QWidget):
             agent_filter = archive_widget.agent_combo.currentData()
 
             # Получаем все архивные карточки
-            cards = self.data.get_supervision_cards_archived()
+            cards = self.data.get_supervision_cards_archived() or []
 
             # Применяем фильтры
             filtered_cards = []
@@ -671,7 +671,7 @@ class CRMSupervisionTab(QWidget):
     def load_active_cards(self):
         """Загрузка активных карточек с fallback на локальную БД"""
         try:
-            cards = self.data.get_supervision_cards_active()
+            cards = self.data.get_supervision_cards_active() or []
         except Exception as e:
             print(f"[ERROR] Загрузка карточек надзора: {e}")
             self._show_critical_error(e, None)
