@@ -933,6 +933,9 @@ class SalariesTab(QWidget):
         layout.setContentsMargins(2, 1, 2, 1)
         layout.setSpacing(2)
 
+        # Определяем, является ли запись окладом (из таблицы salaries, а не payments)
+        is_salary = (payment.get('source') == 'Оклад')
+
         # Кнопка "К оплате" (иконка тега)
         # ИСПРАВЛЕНИЕ 06.02.2026: Черная иконка для неактивного состояния
         to_pay_btn = QPushButton()
@@ -968,7 +971,7 @@ class SalariesTab(QWidget):
         if _has_perm(self.employee, self.api_client, 'salaries.mark_to_pay'):
             to_pay_btn.setToolTip('Отметить к оплате')
             to_pay_btn.clicked.connect(
-                lambda: self.set_payment_status(payment, 'to_pay', table, row)
+                lambda: self.set_payment_status(payment, 'to_pay', table, row, is_salary=is_salary)
             )
         else:
             to_pay_btn.setEnabled(False)
@@ -1007,7 +1010,7 @@ class SalariesTab(QWidget):
         if _has_perm(self.employee, self.api_client, 'salaries.mark_paid'):
             paid_btn.setToolTip('Отметить как оплачено')
             paid_btn.clicked.connect(
-                lambda: self.set_payment_status(payment, 'paid', table, row)
+                lambda: self.set_payment_status(payment, 'paid', table, row, is_salary=is_salary)
             )
         else:
             paid_btn.setEnabled(False)
@@ -1064,30 +1067,36 @@ class SalariesTab(QWidget):
         return widget
 
     def edit_crm_payment(self, payment, payment_type):
-        """Редактирование выплаты CRM"""
+        """Редактирование выплаты CRM или оклада на проектной вкладке"""
         try:
-            dialog = EditPaymentDialog(self, payment, api_client=self.api_client)
-            if dialog.exec_() == QDialog.Accepted:
-                # Обновляем данные выплаты
-                payment_data = dialog.get_payment_data()
+            is_salary = (payment.get('source') == 'Оклад')
 
-                self.data.update_payment(payment['id'], {
-                    'final_amount': payment_data['amount'],
-                    'payment_type': payment_data['payment_type'],
-                    'report_month': payment_data['report_month'],
-                    'reassigned': False  # Сбрасываем флаг переназначения при редактировании
-                })
-                print(f"[DataAccess] Выплата обновлена: ID={payment['id']}")
+            if is_salary:
+                # Для окладов используем PaymentDialog
+                dialog = PaymentDialog(self, payment_data=payment, payment_type='Оклады', api_client=self.api_client)
+                if dialog.exec_() == QDialog.Accepted:
+                    print(f"[DataAccess] Оклад обновлен: ID={payment['id']}")
+            else:
+                dialog = EditPaymentDialog(self, payment, api_client=self.api_client)
+                if dialog.exec_() == QDialog.Accepted:
+                    payment_data = dialog.get_payment_data()
+                    self.data.update_payment(payment['id'], {
+                        'final_amount': payment_data['amount'],
+                        'payment_type': payment_data['payment_type'],
+                        'report_month': payment_data['report_month'],
+                        'reassigned': False
+                    })
+                    print(f"[DataAccess] Выплата обновлена: ID={payment['id']}")
 
-                # Обновляем таблицы (принудительная перезагрузка т.к. данные изменились)
-                self.invalidate_cache()
-                self.load_all_payments()
+            # Обновляем таблицы
+            self.invalidate_cache()
+            self.load_all_payments()
 
-                # Обновляем текущую подвкладку
-                current_idx = self.payment_tabs.currentIndex()
-                tab_names = ['Все выплаты', 'Индивидуальные проекты', 'Шаблонные проекты', 'Авторский надзор', 'Оклады']
-                if 0 < current_idx < len(tab_names):
-                    self.load_payment_type_data(tab_names[current_idx])
+            # Обновляем текущую подвкладку
+            current_idx = self.tabs.currentIndex()
+            tab_names = ['Все выплаты', 'Индивидуальные проекты', 'Шаблонные проекты', 'Оклады', 'Авторский надзор']
+            if 0 < current_idx < len(tab_names):
+                self.load_payment_type_data(tab_names[current_idx])
 
         except Exception as e:
             print(f" Ошибка редактирования выплаты: {e}")
@@ -1187,19 +1196,6 @@ class SalariesTab(QWidget):
             # Перезагружаем таблицу (инвалидируем кеш т.к. статус изменился)
             self.invalidate_cache()
             self.load_all_payments()
-            
-            # Подсвечиваем строку зеленым
-            table = self.sender().parent().parent()  # Получаем таблицу
-            for row in range(table.rowCount()):
-                if table.cellWidget(row, table.columnCount() - 1):
-                    # Проверяем ID выплаты
-                    # (логика проверки)
-                    for col in range(table.columnCount()):
-                        item = table.item(row, col)
-                        if item:
-                            item.setBackground(QColor('#D5F4E6'))  # Бледно-зеленый
-
-            # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
 
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Не удалось отметить: {e}', 'error').exec_()
@@ -1391,6 +1387,7 @@ class SalariesTab(QWidget):
                 except Exception as e:
                     print(f"[WARN] Ошибка загрузки всех выплат: {e}")
                     all_payments = []
+                self._all_payments_cache = all_payments
                 payments = all_payments
             else:
                 payments = list(self._all_payments_cache)  # Копия кеша
@@ -1862,8 +1859,8 @@ class SalariesTab(QWidget):
 
                 # Подсчитываем итоги
                 from datetime import datetime
-                current_month = self.month_filter.currentIndex() + 1
-                current_year = int(self.year_filter.currentText())
+                current_month = parent_widget.month_filter.currentIndex() + 1
+                current_year = parent_widget.year_filter.value()
                 current_month_str = f'{current_year}-{current_month:02d}'
 
                 total_month = 0
@@ -2223,27 +2220,6 @@ class SalariesTab(QWidget):
         table.setItem(row, 4, QTableWidgetItem(data['executor_name']))
         table.setItem(row, 5, QTableWidgetItem(f"{data['amount']:,.2f} ₽"))
     
-    def create_payment_actions(self, payment_data, payment_type):
-        """Создание кнопок действий для выплаты"""
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5)
-
-        if _has_perm(self.employee, self.api_client, 'salaries.update'):
-            edit_btn = QPushButton('')
-            edit_btn.setMaximumWidth(35)
-            edit_btn.clicked.connect(lambda: self.edit_payment(payment_data, payment_type))
-            layout.addWidget(edit_btn)
-
-        if _has_perm(self.employee, self.api_client, 'salaries.delete'):
-            delete_btn = QPushButton('[DELETE]')
-            delete_btn.setMaximumWidth(35)
-            delete_btn.clicked.connect(lambda: self.delete_payment(payment_data['id']))
-            layout.addWidget(delete_btn)
-
-        widget.setLayout(layout)
-        return widget
-    
     def _refresh_dashboard(self):
         """Обновить дашборд после изменения данных"""
         mw = self.window()
@@ -2308,12 +2284,15 @@ class SalariesTab(QWidget):
 
         if reply == QDialog.Accepted:
             salary_id = payment.get('id')
-            self.data.delete_salary(salary_id)
-            print(f"[DataAccess] Оклад ID={salary_id} удален")
-            self.invalidate_cache()
-            self.load_all_payments()
-            self.load_payment_type_data('Оклады')
-            self._refresh_dashboard()
+            try:
+                self.data.delete_salary(salary_id)
+                print(f"[DataAccess] Оклад ID={salary_id} удален")
+                self.invalidate_cache()
+                self.load_all_payments()
+                self.load_payment_type_data('Оклады')
+                self._refresh_dashboard()
+            except Exception as e:
+                CustomMessageBox(self, 'Ошибка', f'Не удалось удалить оклад:\n{e}', 'error').exec_()
 
     def delete_payment(self, payment_id):
         """Удаление выплаты"""
@@ -2883,9 +2862,57 @@ class PaymentDialog(QDialog):
         self.setMinimumWidth(600)
     
     def fill_data(self):
-        """Заполнение данных"""
-        # Реализация заполнения
-        pass
+        """Заполнение данных при редактировании"""
+        if not self.payment_data:
+            return
+
+        if self.payment_type == 'Оклады':
+            # Исполнитель
+            emp_id = self.payment_data.get('employee_id')
+            if emp_id is not None:
+                idx = self.employee_combo.findData(emp_id)
+                if idx >= 0:
+                    self.employee_combo.setCurrentIndex(idx)
+
+            # Тип проекта
+            project_type = self.payment_data.get('project_type', 'Индивидуальный')
+            idx = self.project_type_combo.findText(project_type)
+            if idx >= 0:
+                self.project_type_combo.setCurrentIndex(idx)
+
+            # Сумма
+            self.amount.setValue(self.payment_data.get('amount', 0) or 0)
+
+            # Отчетный месяц (формат "YYYY-MM")
+            report_month = self.payment_data.get('report_month', '')
+            if report_month and '-' in report_month:
+                try:
+                    parts = report_month.split('-')
+                    year = int(parts[0])
+                    month = int(parts[1])
+                    self.year_spin.setValue(year)
+                    self.month_combo.setCurrentIndex(month - 1)
+                except (ValueError, IndexError):
+                    pass
+        else:
+            # Для не-окладов: договор, исполнитель, сумма, предоплата
+            contract_id = self.payment_data.get('contract_id')
+            if contract_id is not None:
+                idx = self.contract_combo.findData(contract_id)
+                if idx >= 0:
+                    self.contract_combo.setCurrentIndex(idx)
+
+            emp_id = self.payment_data.get('employee_id')
+            if emp_id is not None:
+                idx = self.employee_combo.findData(emp_id)
+                if idx >= 0:
+                    self.employee_combo.setCurrentIndex(idx)
+
+            self.amount.setValue(self.payment_data.get('amount', 0) or 0)
+            self.advance.setValue(self.payment_data.get('advance_payment', 0) or 0)
+
+        # Комментарий
+        self.comments.setPlainText(self.payment_data.get('comments', '') or '')
     
     def save_payment(self):
         """Сохранение выплаты"""
@@ -2905,13 +2932,14 @@ class PaymentDialog(QDialog):
             payment_data['report_month'] = f"{year}-{month_index:02d}"
             payment_data['project_type'] = self.project_type_combo.currentText()
         
-        if self.payment_data:
-            self.data.update_salary(self.payment_data['id'], payment_data)
-        else:
-            self.data.create_salary(payment_data)
-        
-        # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
-        self.accept()
+        try:
+            if self.payment_data:
+                self.data.update_salary(self.payment_data['id'], payment_data)
+            else:
+                self.data.create_salary(payment_data)
+            self.accept()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить оклад:\n{e}', 'error').exec_()
     
     def showEvent(self, event):
         """Центрирование при первом показе"""
