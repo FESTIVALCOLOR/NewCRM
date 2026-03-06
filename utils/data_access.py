@@ -572,6 +572,24 @@ class DataAccess(QObject):
 
         return {'id': employee_id, **employee_data} if employee_id else None
 
+    def get_notification_settings(self, employee_id: int) -> Optional[Dict]:
+        """Получить настройки уведомлений сотрудника"""
+        if self._should_use_api():
+            return self.api_client.get_notification_settings(employee_id)
+        return None
+
+    def update_notification_settings(self, employee_id: int, data: Dict) -> Optional[Dict]:
+        """Обновить настройки уведомлений сотрудника"""
+        if self._should_use_api():
+            return self.api_client.update_notification_settings(employee_id, data)
+        return None
+
+    def send_employee_invite(self, employee_id: int) -> bool:
+        """Отправить приглашение сотруднику"""
+        if self._should_use_api():
+            return self.api_client.send_employee_invite(employee_id)
+        return False
+
     def update_employee(self, employee_id: int, employee_data: Dict) -> bool:
         """Обновить сотрудника"""
         _global_cache.invalidate("employees")

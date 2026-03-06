@@ -309,6 +309,30 @@ class EmployeesTab(QWidget):
                 delete_btn.clicked.connect(lambda checked, e=emp: self.delete_employee(e))
                 actions_layout.addWidget(delete_btn)
 
+            # Кнопка "Пригласить" — отправить welcome email + Telegram-ссылку
+            if self.can_edit:
+                invite_btn = IconLoader.create_icon_button('mail', '', 'Отправить приглашение', icon_size=12)
+                invite_btn.setFixedSize(20, 20)
+                invite_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #E8F4FD;
+                        border: 1px solid #B0D4F1;
+                        border-radius: 4px;
+                    }
+                    QPushButton:hover {
+                        background-color: #BDD9F2;
+                    }
+                    QPushButton:disabled {
+                        background-color: #E8F4E8;
+                        border: 1px solid #B0D4B0;
+                    }
+                ''')
+                # Если telegram уже подключён — кнопка показывает статус, но остаётся активной
+                if emp.get('telegram_user_id'):
+                    invite_btn.setToolTip('Telegram подключён. Можно отправить повторное приглашение')
+                invite_btn.clicked.connect(lambda checked, e=emp: self.send_invite(e))
+                actions_layout.addWidget(invite_btn)
+
             actions_widget.setLayout(actions_layout)
             self.employees_table.setCellWidget(row, 7, actions_widget)
 
@@ -474,6 +498,30 @@ class EmployeesTab(QWidget):
                 delete_btn.clicked.connect(lambda checked, e=emp: self.delete_employee(e))
                 actions_layout.addWidget(delete_btn)
 
+            # Кнопка "Пригласить" — отправить welcome email + Telegram-ссылку
+            if self.can_edit:
+                invite_btn = IconLoader.create_icon_button('mail', '', 'Отправить приглашение', icon_size=12)
+                invite_btn.setFixedSize(20, 20)
+                invite_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #E8F4FD;
+                        border: 1px solid #B0D4F1;
+                        border-radius: 4px;
+                    }
+                    QPushButton:hover {
+                        background-color: #BDD9F2;
+                    }
+                    QPushButton:disabled {
+                        background-color: #E8F4E8;
+                        border: 1px solid #B0D4B0;
+                    }
+                ''')
+                # Если telegram уже подключён — кнопка показывает статус, но остаётся активной
+                if emp.get('telegram_user_id'):
+                    invite_btn.setToolTip('Telegram подключён. Можно отправить повторное приглашение')
+                invite_btn.clicked.connect(lambda checked, e=emp: self.send_invite(e))
+                actions_layout.addWidget(invite_btn)
+
             actions_widget.setLayout(actions_layout)
             self.employees_table.setCellWidget(row, 7, actions_widget)
 
@@ -615,6 +663,41 @@ class EmployeesTab(QWidget):
                     f'Не удалось удалить сотрудника: {str(e)}',
                     'error'
                 ).exec_()
+
+    def send_invite(self, employee):
+        """Отправить приглашение сотруднику (welcome email + Telegram deep link)"""
+        emp_id = employee.get('id')
+        emp_name = employee.get('full_name', 'Сотрудник')
+        emp_email = employee.get('email', '')
+
+        if not emp_email:
+            CustomMessageBox(
+                self, 'Нет email',
+                f'Email сотрудника {emp_name} не заполнен.\nДобавьте email и повторите.',
+                'warning'
+            ).exec_()
+            return
+
+        try:
+            result = self.data.send_employee_invite(emp_id)
+            if result:
+                CustomMessageBox(
+                    self, 'Приглашение отправлено',
+                    f'Письмо с данными для входа и ссылкой на Telegram бот отправлено на {emp_email}.',
+                    'success'
+                ).exec_()
+            else:
+                CustomMessageBox(
+                    self, 'Ошибка',
+                    'Не удалось отправить приглашение. Проверьте настройки SMTP в администрировании.',
+                    'error'
+                ).exec_()
+        except Exception as e:
+            CustomMessageBox(
+                self, 'Ошибка',
+                f'Ошибка отправки приглашения: {e}',
+                'error'
+            ).exec_()
 
     def showEvent(self, event):
         """Центрирование при первом показе"""

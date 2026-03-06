@@ -656,6 +656,26 @@ async def move_crm_card_to_column(
                     db, card.id, 'stage_complete', stage_name=old_column
                 ))
 
+        # Уведомление менеджеру о смене стадии
+        try:
+            from services.notification_dispatcher import dispatch_notification
+            # Менеджер — тот кто владеет карточкой (берём из контракта)
+            manager_id = None
+            if contract:
+                manager_id = getattr(contract, 'manager_id', None) or getattr(contract, 'employee_id', None)
+            if manager_id and old_column != new_column:
+                asyncio.create_task(dispatch_notification(
+                    db=db,
+                    employee_id=manager_id,
+                    event_type="crm_stage_change",
+                    title="Изменение стадии проекта",
+                    message=f"Стадия изменена: «{old_column}» → «{new_column}»",
+                    related_entity_type="crm_card",
+                    related_entity_id=card_id,
+                ))
+        except Exception:
+            pass
+
         return {
             'id': card.id,
             'contract_id': card.contract_id,
@@ -757,6 +777,22 @@ async def assign_stage_executor(
 
         db.commit()
         db.refresh(stage_executor)
+
+        # Уведомление исполнителю о назначении
+        try:
+            import asyncio
+            from services.notification_dispatcher import dispatch_notification
+            asyncio.create_task(dispatch_notification(
+                db=db,
+                employee_id=executor_data.executor_id,
+                event_type="assigned",
+                title="Вы назначены исполнителем",
+                message=f"Стадия: «{executor_data.stage_name}»\nПроект: {contract.address if contract else 'N/A'}",
+                related_entity_type="crm_card",
+                related_entity_id=card_id,
+            ))
+        except Exception:
+            pass
 
         return {
             'id': stage_executor.id,
