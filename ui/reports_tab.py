@@ -1108,63 +1108,65 @@ class ReportsTab(QWidget):
             ("crm_individual", self._crm_individual),
             ("crm_template", self._crm_template),
         ]:
-            data = self._cache.get(cache_key) or {}
-            logger.info(f"[Reports] _update_crm_section({cache_key}): "
-                        f"data={bool(data)}, keys={list(data.keys()) if data else '[]'}")
+            try:
+                data = self._cache.get(cache_key) or {}
+                logger.info(f"[Reports] _update_crm_section({cache_key}): "
+                            f"data={bool(data)}, keys={list(data.keys()) if data else '[]'}")
 
-            # Мини-KPI
-            on_time = data.get("on_time_stats", {}) or {}
-            subtab["mini_cards"]["on_time_pct"].set_value(
-                f"{on_time.get('projects_pct', 0) or 0:.0f}%"
-            )
-            subtab["mini_cards"]["stages_on_time_pct"].set_value(
-                f"{on_time.get('stages_pct', 0) or 0:.0f}%"
-            )
-            subtab["mini_cards"]["avg_deviation"].set_value(
-                f"{on_time.get('avg_deviation_days', 0) or 0:.1f}"
-            )
-            subtab["mini_cards"]["paused"].set_value(
-                str(data.get("paused_count", 0) or 0)
-            )
-
-            # Воронка: FunnelBarChart.set_data принимает dict {stage: count}
-            funnel_list = data.get("funnel", []) or []
-            if funnel_list:
-                funnel_dict = {
-                    f.get("stage", "")[:35]: f.get("count", 0) or 0
-                    for f in funnel_list
-                }
-                subtab["funnel"].set_data(funnel_dict)
-
-            # Время стадий vs норматив: grouped bar
-            durations = data.get("stage_durations", []) or []
-            # Убрать "ДАТА НАЧАЛА РАЗРАБОТКИ" из диаграммы
-            durations = [d for d in durations
-                         if not d.get("stage", "").upper().startswith("ДАТА НАЧАЛА")]
-            if durations:
-                stage_labels = [d.get("stage", "") for d in durations]
-                subtab["stage_duration"].set_data(
-                    stage_labels,
-                    [
-                        {
-                            "label": "Норматив",
-                            "values": [d.get("norm_days", 0) or 0 for d in durations],
-                            "color": "#4CAF50"
-                        },
-                        {
-                            "label": "Факт (дни)",
-                            "values": [d.get("avg_actual_days", 0) or 0 for d in durations],
-                            "color": "#F57C00"
-                        },
-                    ],
-                    stacked=False,
-                    highlight_prefixes=["СТАДИЯ", "ЭТАП", "ДАТА"]
+                # Мини-KPI
+                on_time = data.get("on_time_stats", {}) or {}
+                subtab["mini_cards"]["on_time_pct"].set_value(
+                    f"{on_time.get('projects_pct', 0) or 0:.0f}%"
                 )
-                # Прокрутить скролл на середину графика
-                scroll = subtab.get("stage_scroll")
-                if scroll:
-                    QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
-                        s.horizontalScrollBar().maximum() // 2))
+                subtab["mini_cards"]["stages_on_time_pct"].set_value(
+                    f"{on_time.get('stages_pct', 0) or 0:.0f}%"
+                )
+                subtab["mini_cards"]["avg_deviation"].set_value(
+                    f"{on_time.get('avg_deviation_days', 0) or 0:.1f}"
+                )
+                subtab["mini_cards"]["paused"].set_value(
+                    str(data.get("paused_count", 0) or 0)
+                )
+
+                # Воронка: FunnelBarChart.set_data принимает dict {stage: count}
+                funnel_list = data.get("funnel", []) or []
+                if funnel_list:
+                    funnel_dict = {
+                        f.get("stage", "")[:35]: f.get("count", 0) or 0
+                        for f in funnel_list
+                    }
+                    subtab["funnel"].set_data(funnel_dict)
+
+                # Время стадий vs норматив: grouped bar
+                durations = data.get("stage_durations", []) or []
+                # Убрать "ДАТА НАЧАЛА РАЗРАБОТКИ" из диаграммы
+                durations = [d for d in durations
+                             if not d.get("stage", "").upper().startswith("ДАТА НАЧАЛА")]
+                if durations:
+                    stage_labels = [d.get("stage", "") for d in durations]
+                    subtab["stage_duration"].set_data(
+                        stage_labels,
+                        [
+                            {
+                                "label": "Норматив",
+                                "values": [d.get("norm_days", 0) or 0 for d in durations],
+                                "color": "#4CAF50"
+                            },
+                            {
+                                "label": "Факт (дни)",
+                                "values": [d.get("avg_actual_days", 0) or 0 for d in durations],
+                                "color": "#F57C00"
+                            },
+                        ],
+                        stacked=False
+                    )
+                    # Прокрутить скролл на середину графика
+                    scroll = subtab.get("stage_scroll")
+                    if scroll:
+                        QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
+                            s.horizontalScrollBar().maximum() // 2))
+            except Exception as e:
+                logger.error(f"[Reports] Ошибка обновления CRM ({cache_key}): {e}", exc_info=True)
 
     def _update_supervision_section(self):
         """Обновить секцию авторского надзора"""
