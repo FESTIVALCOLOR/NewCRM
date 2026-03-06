@@ -627,7 +627,7 @@ class TestMainWindowUpdates:
     def test_show_no_updates(self, qtbot, mock_employee_admin):
         """_show_no_updates обновляет статус."""
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        with patch('ui.main_window.QMessageBox') as MockMB:
+        with patch('ui.main_window.CustomMessageBox') as MockMB:
             w._show_no_updates()
             assert w.status_label.text() == "Обновлений нет"
             assert w.update_btn.isEnabled()
@@ -635,7 +635,7 @@ class TestMainWindowUpdates:
     def test_show_updates_disabled(self, qtbot, mock_employee_admin):
         """_show_updates_disabled обновляет статус."""
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        with patch('ui.main_window.QMessageBox') as MockMB:
+        with patch('ui.main_window.CustomMessageBox') as MockMB:
             w._show_updates_disabled()
             assert w.status_label.text() == "Обновления отключены"
             assert w.update_btn.isEnabled()
@@ -643,7 +643,7 @@ class TestMainWindowUpdates:
     def test_show_update_error(self, qtbot, mock_employee_admin):
         """_show_update_error обновляет статус."""
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        with patch('ui.main_window.QMessageBox') as MockMB:
+        with patch('ui.main_window.CustomMessageBox') as MockMB:
             w._show_update_error("Тестовая ошибка")
             assert w.status_label.text() == "Ошибка обновления"
             assert w.update_btn.isEnabled()

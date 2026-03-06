@@ -373,6 +373,11 @@ class LoginWindow(QWidget):
         )
     
     def login(self):
+        # Защита от повторного нажатия во время авторизации/синхронизации
+        if getattr(self, '_login_in_progress', False):
+            return
+        self._login_in_progress = True
+
         login = self.login_input.text().strip()
         password = self.password_input.text().strip()
 
@@ -384,6 +389,7 @@ class LoginWindow(QWidget):
                 'warning'
             ).exec_()
             app_logger.warning("Попытка входа с пустыми полями")
+            self._login_in_progress = False
             return
 
         # Многопользовательский режим - аутентификация через API
@@ -447,6 +453,7 @@ class LoginWindow(QWidget):
                         f'Для первого входа требуется подключение к серверу.',
                         'error'
                     ).exec_()
+                    self._login_in_progress = False
                     return
 
             except Exception as e:
@@ -478,6 +485,7 @@ class LoginWindow(QWidget):
                     error_msg,
                     'error'
                 ).exec_()
+            self._login_in_progress = False
             return
 
         # Локальный режим - аутентификация через SQLite БД
@@ -506,6 +514,7 @@ class LoginWindow(QWidget):
                 'Неверный логин или пароль!',
                 'error'
             ).exec_()
+            self._login_in_progress = False
 
     def _cache_password_for_offline(self, employee_id: int, password: str):
         """Кеширование пароля для offline-аутентификации"""

@@ -20,6 +20,7 @@ from ui.employees_tab import EmployeesTab
 from ui.salaries_tab import SalariesTab
 from ui.employee_reports_tab import EmployeeReportsTab
 from ui.global_search_widget import GlobalSearchWidget
+from ui.custom_message_box import CustomMessageBox
 from utils.tab_helpers import disable_wheel_on_tabwidget
 
 # Структуры Windows API для корректной работы Snap Assist
@@ -1603,33 +1604,21 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Обновлений нет")
         self.update_btn.setEnabled(True)
 
-        QMessageBox.information(
-            self,
-            "Обновления",
-            "У вас установлена последняя версия программы."
-        )
+        CustomMessageBox(self, "Обновления", "У вас установлена последняя версия программы.", 'success').exec_()
 
     def _show_updates_disabled(self):
         """Показать сообщение о выключенных обновлениях"""
         self.status_label.setText("Обновления отключены")
         self.update_btn.setEnabled(True)
 
-        QMessageBox.information(
-            self,
-            "Обновления",
-            "Проверка обновлений отключена в настройках."
-        )
+        CustomMessageBox(self, "Обновления", "Проверка обновлений отключена в настройках.", 'info').exec_()
 
     def _show_update_error(self, error):
         """Показать ошибку обновления"""
         self.status_label.setText("Ошибка обновления")
         self.update_btn.setEnabled(True)
 
-        QMessageBox.warning(
-            self,
-            "Ошибка обновления",
-            f"Не удалось проверить обновления:\n{error}"
-        )
+        CustomMessageBox(self, "Ошибка обновления", f"Не удалось проверить обновления:\n{error}", 'error').exec_()
     # ===================================================
 
     # ==========================================
