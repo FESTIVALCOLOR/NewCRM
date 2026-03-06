@@ -27,6 +27,13 @@ class NotificationSettingsWidget(QWidget):
         self._employees = []
         self._settings = {}
 
+        # Проверяем права текущего пользователя на оплаты
+        from utils.permissions import _has_perm
+        self._viewer_has_payment_perm = (
+            _has_perm(self.employee, self.api_client, 'payments.create') or
+            _has_perm(self.employee, self.api_client, 'payments.update')
+        )
+
         self._setup_ui()
         QTimer.singleShot(100, self._load_employees)
 
@@ -105,6 +112,10 @@ class NotificationSettingsWidget(QWidget):
         self._chk_deadline = QCheckBox("Предупреждение о дедлайне")
         self._chk_payment = QCheckBox("Создание оплаты")
         self._chk_supervision = QCheckBox("Новый надзор")
+
+        # Чекбокс оплаты виден только если у просматривающего есть права на оплаты
+        if not self._viewer_has_payment_perm:
+            self._chk_payment.setVisible(False)
 
         for chk in [self._chk_crm_stage, self._chk_assigned, self._chk_deadline,
                     self._chk_payment, self._chk_supervision]:

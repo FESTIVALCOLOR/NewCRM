@@ -309,10 +309,28 @@ class EmployeesTab(QWidget):
                 delete_btn.clicked.connect(lambda checked, e=emp: self.delete_employee(e))
                 actions_layout.addWidget(delete_btn)
 
-            # Кнопка "Пригласить" — отправить welcome email + Telegram-ссылку
-            if self.can_edit:
-                invite_btn = IconLoader.create_icon_button('user-plus', '', 'Отправить приглашение (email + Telegram)', icon_size=12)
-                invite_btn.setFixedSize(20, 20)
+            # Кнопка "Пригласить" — всегда видима, три состояния:
+            # 1) telegram_user_id заполнен → зелёная галочка, disabled
+            # 2) can_edit + есть email → синяя, активная
+            # 3) нет email или нет прав → серая, disabled
+            tg_connected = bool(emp.get('telegram_user_id'))
+            has_email = bool(emp.get('email'))
+            if tg_connected:
+                invite_btn = IconLoader.create_icon_button(
+                    'user-check', '', 'Telegram подключён', icon_size=12
+                )
+                invite_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #E8F5E9;
+                        border: 1px solid #81C784;
+                        border-radius: 4px;
+                    }
+                ''')
+                invite_btn.setEnabled(False)
+            elif self.can_edit and has_email:
+                invite_btn = IconLoader.create_icon_button(
+                    'user-plus', '', 'Отправить приглашение (email + Telegram)', icon_size=12
+                )
                 invite_btn.setStyleSheet('''
                     QPushButton {
                         background-color: #E8F4FD;
@@ -322,15 +340,23 @@ class EmployeesTab(QWidget):
                     QPushButton:hover {
                         background-color: #BDD9F2;
                     }
-                    QPushButton:disabled {
-                        background-color: #E8F4E8;
-                        border: 1px solid #B0D4B0;
+                ''')
+                invite_btn.clicked.connect(lambda checked, e=emp: self.send_invite(e))
+            else:
+                tooltip = 'Заполните email сотрудника для отправки приглашения' if not has_email else 'Нет прав на отправку приглашения'
+                invite_btn = IconLoader.create_icon_button(
+                    'user-plus', '', tooltip, icon_size=12
+                )
+                invite_btn.setStyleSheet('''
+                    QPushButton {
+                        background-color: #F5F5F5;
+                        border: 1px solid #D9D9D9;
+                        border-radius: 4px;
                     }
                 ''')
-                if emp.get('telegram_user_id'):
-                    invite_btn.setToolTip('Telegram подключён. Можно отправить повторное приглашение')
-                invite_btn.clicked.connect(lambda checked, e=emp: self.send_invite(e))
-                actions_layout.addWidget(invite_btn)
+                invite_btn.setEnabled(False)
+            invite_btn.setFixedSize(20, 20)
+            actions_layout.addWidget(invite_btn)
 
             actions_widget.setLayout(actions_layout)
             self.employees_table.setCellWidget(row, 7, actions_widget)

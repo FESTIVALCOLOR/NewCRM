@@ -233,6 +233,24 @@ class MainWindow(QMainWindow):
         info_bar.setLayout(info_bar_layout)
 
         from PyQt5.QtWidgets import QPushButton as _QPushButton
+        from utils.icon_loader import IconLoader as _IconLoader
+        notif_btn = _IconLoader.create_icon_button(
+            'settings', 'Настройки уведомлений', 'Настройки уведомлений', icon_size=12
+        )
+        notif_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 11px; color: #777; font-weight: 400;
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 2px 6px;
+            }
+            QPushButton:hover {
+                background: #f0f0f0; border-color: #d9d9d9; color: #333;
+            }
+        """)
+        notif_btn.setCursor(Qt.PointingHandCursor)
+        notif_btn.clicked.connect(self._open_notification_settings)
+        info_bar_layout.addWidget(notif_btn)
+
         info_label = _QPushButton(
             f'Пользователь: {self.employee["full_name"]} - должность: {position_text}'
         )
@@ -242,11 +260,8 @@ class MainWindow(QMainWindow):
                 background: transparent; border: none;
                 text-align: left; padding: 0;
             }
-            QPushButton:hover { color: #555; text-decoration: underline; }
         """)
-        info_label.setToolTip('Настройки уведомлений')
-        info_label.setCursor(Qt.PointingHandCursor)
-        info_label.clicked.connect(self._open_notification_settings)
+        info_label.setEnabled(False)
         info_bar_layout.addWidget(info_label)
 
         layout.addWidget(info_bar)
@@ -1499,29 +1514,53 @@ class MainWindow(QMainWindow):
     # ========== НАСТРОЙКИ УВЕДОМЛЕНИЙ ==========
     def _open_notification_settings(self):
         """Открыть диалог настроек уведомлений для текущего пользователя"""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QHBoxLayout
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFrame
+        from PyQt5.QtCore import Qt as _Qt
+        from ui.custom_title_bar import CustomTitleBar
         try:
             from ui.notification_settings_widget import NotificationSettingsWidget
         except ImportError:
             return
 
-        data_access = getattr(self, 'data', None)
-        if data_access is None:
-            # Ищем data_access через текущую вкладку
-            try:
-                current = self.tabs.currentWidget()
-                data_access = getattr(current, 'data', None)
-            except Exception:
-                pass
+        # Создаём DataAccess напрямую — не ищем через вкладки
+        from utils.data_access import DataAccess
+        data_access = DataAccess(api_client=self.api_client, db=self.db)
 
         dlg = QDialog(self)
         dlg.setWindowTitle('Настройки уведомлений')
-        dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        dlg.setMinimumWidth(480)
-        dlg.setStyleSheet('border: 1px solid #E0E0E0;')
+        dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+        dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+        dlg.setMinimumWidth(500)
 
-        layout = QVBoxLayout(dlg)
-        layout.setContentsMargins(0, 0, 0, 8)
+        outer_layout = QVBoxLayout(dlg)
+        outer_layout.setContentsMargins(1, 1, 1, 1)
+        outer_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+        outer_layout.addWidget(border_frame)
+
+        border_layout = QVBoxLayout(border_frame)
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(dlg, 'Настройки уведомлений', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
 
         widget = NotificationSettingsWidget(
             parent=dlg,
@@ -1529,23 +1568,7 @@ class MainWindow(QMainWindow):
             data_access=data_access,
             employee=self.employee,
         )
-        layout.addWidget(widget)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.setContentsMargins(16, 0, 16, 0)
-        btn_layout.addStretch()
-        close_btn = QPushButton('Закрыть')
-        close_btn.setFixedHeight(32)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background: #f5f5f5; border: 1px solid #d9d9d9;
-                border-radius: 6px; padding: 0 20px; font-size: 13px;
-            }
-            QPushButton:hover { background: #ebebeb; }
-        """)
-        close_btn.clicked.connect(dlg.accept)
-        btn_layout.addWidget(close_btn)
-        layout.addLayout(btn_layout)
+        border_layout.addWidget(widget)
 
         dlg.exec_()
 
