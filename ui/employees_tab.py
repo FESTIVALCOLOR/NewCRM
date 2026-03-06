@@ -311,7 +311,7 @@ class EmployeesTab(QWidget):
 
             # Кнопка "Пригласить" — отправить welcome email + Telegram-ссылку
             if self.can_edit:
-                invite_btn = IconLoader.create_icon_button('mail', '', 'Отправить приглашение', icon_size=12)
+                invite_btn = IconLoader.create_icon_button('user-plus', '', 'Отправить приглашение (email + Telegram)', icon_size=12)
                 invite_btn.setFixedSize(20, 20)
                 invite_btn.setStyleSheet('''
                     QPushButton {
@@ -666,6 +666,41 @@ class EmployeesTab(QWidget):
             self._reload_employees(prefer_local=True)
         except Exception as e:
             print(f"[ERROR] Ошибка синхронизации сотрудников: {e}")
+    def send_invite(self, employee):
+        """Отправить приглашение сотруднику (welcome email + Telegram deep link)"""
+        emp_id = employee.get('id')
+        emp_name = employee.get('full_name', 'Сотрудник')
+        emp_email = employee.get('email', '')
+
+        if not emp_email:
+            CustomMessageBox(
+                self, 'Нет email',
+                f'Email сотрудника {emp_name} не заполнен.\nДобавьте email и повторите.',
+                'warning'
+            ).exec_()
+            return
+
+        try:
+            result = self.data.send_employee_invite(emp_id)
+            if result:
+                CustomMessageBox(
+                    self, 'Приглашение отправлено',
+                    f'Письмо с данными для входа и ссылкой на Telegram бот отправлено на {emp_email}.',
+                    'success'
+                ).exec_()
+            else:
+                CustomMessageBox(
+                    self, 'Ошибка',
+                    'Не удалось отправить приглашение. Проверьте настройки SMTP в администрировании.',
+                    'error'
+                ).exec_()
+        except Exception as e:
+            CustomMessageBox(
+                self, 'Ошибка',
+                f'Ошибка отправки приглашения: {e}',
+                'error'
+            ).exec_()
+
 
 class EmployeeDialog(QDialog):
     def __init__(self, parent, employee_data=None, view_only=False):
@@ -999,12 +1034,12 @@ class EmployeeDialog(QDialog):
         """Открыть диалог администрирования"""
         try:
             from ui.admin_dialog import AdminDialog
-            data_access = getattr(self.parent(), 'data', None) if self.parent() else None
+            data_access = getattr(self, 'data', None)
             dlg = AdminDialog(
                 parent=self,
                 api_client=self.api_client,
                 data_access=data_access,
-                employee=self.current_user,
+                employee=self.employee,
             )
             dlg.exec_()
         except Exception as e:
@@ -1633,41 +1668,6 @@ class PermissionsDialog(QDialog):
             print(f"[PermissionsDialog] Ошибка сброса прав: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось сбросить: {str(e)}', 'warning').exec_()
 
-    def send_invite(self, employee):
-        """Отправить приглашение сотруднику (welcome email + Telegram deep link)"""
-        emp_id = employee.get('id')
-        emp_name = employee.get('full_name', 'Сотрудник')
-        emp_email = employee.get('email', '')
-
-        if not emp_email:
-            CustomMessageBox(
-                self, 'Нет email',
-                f'Email сотрудника {emp_name} не заполнен.\nДобавьте email и повторите.',
-                'warning'
-            ).exec_()
-            return
-
-        try:
-            result = self.data.send_employee_invite(emp_id)
-            if result:
-                CustomMessageBox(
-                    self, 'Приглашение отправлено',
-                    f'Письмо с данными для входа и ссылкой на Telegram бот отправлено на {emp_email}.',
-                    'success'
-                ).exec_()
-            else:
-                CustomMessageBox(
-                    self, 'Ошибка',
-                    'Не удалось отправить приглашение. Проверьте настройки SMTP в администрировании.',
-                    'error'
-                ).exec_()
-        except Exception as e:
-            CustomMessageBox(
-                self, 'Ошибка',
-                f'Ошибка отправки приглашения: {e}',
-                'error'
-            ).exec_()
-
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
@@ -2028,7 +2028,7 @@ class EmployeeDialog(QDialog):
         """Открыть диалог администрирования"""
         try:
             from ui.admin_dialog import AdminDialog
-            data_access = getattr(self.parent(), 'data', None) if self.parent() else None
+            data_access = getattr(self, 'data', None)
             dlg = AdminDialog(
                 parent=self,
                 api_client=self.api_client,
