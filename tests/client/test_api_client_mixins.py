@@ -63,7 +63,7 @@ class TestAuthMixin:
         req.assert_called_once()
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert '/api/auth/login' in args[1]
+        assert '/api/v1/auth/login' in args[1]
         assert kwargs['data'] == {'username': 'admin', 'password': 'secret'}
 
         # Проверяем результат и побочные эффекты
@@ -128,7 +128,7 @@ class TestAuthMixin:
         req.assert_called_once()
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert '/api/auth/logout' in args[1]
+        assert '/api/v1/auth/logout' in args[1]
         assert result is True
         # Токены должны быть очищены
         assert api.token is None
@@ -151,7 +151,7 @@ class TestAuthMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/auth/me')
+        assert args[1].endswith('/api/v1/auth/me')
         assert result == user_data
 
 
@@ -171,7 +171,7 @@ class TestClientsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert '/api/clients' in args[1]
+        assert '/api/v1/clients' in args[1]
         assert kwargs['params'] == {'skip': 10, 'limit': 50}
         assert result == clients
 
@@ -193,7 +193,7 @@ class TestClientsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/clients/5')
+        assert args[1].endswith('/api/v1/clients/5')
         assert result == client_data
 
     def test_create_client(self, api):
@@ -206,7 +206,7 @@ class TestClientsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert '/api/clients' in args[1]
+        assert '/api/v1/clients' in args[1]
         assert kwargs['json'] == new_client
         assert result == created
 
@@ -220,7 +220,7 @@ class TestClientsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/clients/3')
+        assert args[1].endswith('/api/v1/clients/3')
         assert kwargs['json'] == updates
         assert result == updated
 
@@ -232,7 +232,7 @@ class TestClientsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'DELETE'
-        assert args[1].endswith('/api/clients/7')
+        assert args[1].endswith('/api/v1/clients/7')
         assert result is True
 
     def test_get_clients_paginated(self, api):
@@ -280,7 +280,7 @@ class TestContractsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert '/api/contracts' in args[1]
+        assert '/api/v1/contracts' in args[1]
         assert kwargs['params'] == {'skip': 5, 'limit': 25}
         assert result == contracts
 
@@ -292,7 +292,7 @@ class TestContractsMixin:
             result = api.get_contract(10)
 
         args, _ = req.call_args
-        assert args[1].endswith('/api/contracts/10')
+        assert args[1].endswith('/api/v1/contracts/10')
         assert result == contract
 
     def test_create_contract(self, api):
@@ -318,7 +318,7 @@ class TestContractsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/contracts/10')
+        assert args[1].endswith('/api/v1/contracts/10')
         assert kwargs['json'] == updates
         assert result == updated
 
@@ -330,7 +330,7 @@ class TestContractsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'DELETE'
-        assert args[1].endswith('/api/contracts/15')
+        assert args[1].endswith('/api/v1/contracts/15')
         assert result is True
 
     def test_get_contracts_count_no_filters(self, api):
@@ -340,7 +340,7 @@ class TestContractsMixin:
             result = api.get_contracts_count()
 
         args, kwargs = req.call_args
-        assert args[1].endswith('/api/contracts/count')
+        assert args[1].endswith('/api/v1/contracts/count')
         assert kwargs['params'] == {}
         assert result == 42
 
@@ -386,7 +386,7 @@ class TestContractsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert args[1].endswith('/api/contracts/3/files')
+        assert args[1].endswith('/api/v1/contracts/3/files')
         assert kwargs['json'] == files_data
 
     def test_check_contract_number_exists_true(self, api):
@@ -433,7 +433,7 @@ class TestEmployeesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert '/api/employees' in args[1]
+        assert '/api/v1/employees' in args[1]
         assert kwargs['params'] == {'skip': 0, 'limit': 100}
         assert result == employees
 
@@ -454,7 +454,7 @@ class TestEmployeesMixin:
             result = api.get_employee(3)
 
         args, _ = req.call_args
-        assert args[1].endswith('/api/employees/3')
+        assert args[1].endswith('/api/v1/employees/3')
         assert result == emp
 
     def test_create_employee(self, api):
@@ -482,7 +482,7 @@ class TestEmployeesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/employees/3')
+        assert args[1].endswith('/api/v1/employees/3')
         assert kwargs['json'] == updates
         assert result == updated
 
@@ -494,7 +494,7 @@ class TestEmployeesMixin:
 
         args, _ = req.call_args
         assert args[0] == 'DELETE'
-        assert args[1].endswith('/api/employees/8')
+        assert args[1].endswith('/api/v1/employees/8')
         assert result is True
 
     def test_get_employees_by_position(self, api):
@@ -536,7 +536,7 @@ class TestCrmMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert '/api/crm/cards' in args[1]
+        assert '/api/v1/crm/cards' in args[1]
         assert kwargs['params'] == {'project_type': 'Индивидуальный'}
         assert result == cards
 
@@ -570,7 +570,7 @@ class TestCrmMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert args[1].endswith('/api/crm/cards/5')
+        assert args[1].endswith('/api/v1/crm/cards/5')
         assert kwargs['json'] == updates
 
     def test_move_crm_card(self, api):
@@ -581,7 +581,7 @@ class TestCrmMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert args[1].endswith('/api/crm/cards/5/column')
+        assert args[1].endswith('/api/v1/crm/cards/5/column')
         assert kwargs['json'] == {'column_name': 'В работе'}
 
     def test_delete_crm_card(self, api):
@@ -592,7 +592,7 @@ class TestCrmMixin:
 
         args, _ = req.call_args
         assert args[0] == 'DELETE'
-        assert args[1].endswith('/api/crm/cards/5')
+        assert args[1].endswith('/api/v1/crm/cards/5')
         assert result is True
 
     def test_assign_stage_executor(self, api):
@@ -604,7 +604,7 @@ class TestCrmMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert '/api/crm/cards/10/stage-executor' in args[1]
+        assert '/api/v1/crm/cards/10/stage-executor' in args[1]
         assert kwargs['json'] == stage_data
 
     def test_complete_stage(self, api):
@@ -646,7 +646,7 @@ class TestCrmMixin:
 
         args, _ = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/crm/cards/7/workflow/submit')
+        assert args[1].endswith('/api/v1/crm/cards/7/workflow/submit')
 
     def test_workflow_reject_with_path(self, api):
         """workflow_reject — передаёт revision_file_path."""

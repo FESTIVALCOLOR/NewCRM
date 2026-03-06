@@ -1167,6 +1167,34 @@ async def get_stage_history(
     return result
 
 
+@router.get("/cards/{card_id}/action-history")
+async def get_crm_card_action_history(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получить историю действий карточки CRM"""
+    history = db.query(ActionHistory).filter(
+        ActionHistory.entity_type == 'crm_card',
+        ActionHistory.entity_id == card_id
+    ).order_by(ActionHistory.action_date.desc()).all()
+
+    result = []
+    for item in history:
+        employee = db.query(Employee).filter(Employee.id == item.user_id).first()
+        result.append({
+            'id': item.id,
+            'user_id': item.user_id,
+            'user_name': employee.full_name if employee else 'Неизвестно',
+            'action_type': item.action_type,
+            'entity_type': item.entity_type,
+            'entity_id': item.entity_id,
+            'description': item.description,
+            'action_date': item.action_date.strftime('%Y-%m-%d %H:%M:%S') if item.action_date else None
+        })
+    return result
+
+
 # =========================
 # WORKFLOW ENDPOINTS (CRM)
 # =========================

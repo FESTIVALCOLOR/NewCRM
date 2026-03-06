@@ -661,11 +661,11 @@ class TestRequest:
             api._request('GET', 'http://test-server:8000/api/test')
 
     def test_recently_offline_allows_login(self, api):
-        """Offline кеш НЕ блокирует /api/auth/login."""
+        """Offline кеш НЕ блокирует /api/v1/auth/login."""
         api._mark_offline()
         mock_resp = _mock_response(200, json_data={"token": "abc"})
         with patch.object(api.session, 'request', return_value=mock_resp):
-            result = api._request('POST', 'http://test-server:8000/api/auth/login')
+            result = api._request('POST', 'http://test-server:8000/api/v1/auth/login')
         assert result.status_code == 200
 
     def test_mark_offline_false_does_not_mark(self, api):
