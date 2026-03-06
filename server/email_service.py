@@ -213,26 +213,38 @@ hr {{ border:none;border-top:1px solid #f0f0f0;margin:22px 0; }}
     <div class="step-content">
       <div class="step-title">Войдите в программу</div>
       <p class="step-desc">Введите эти данные при первом запуске программы:</p>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="color:#aaa;font-size:12px;width:56px;flex-shrink:0;">Логин</span>
-          <div class="copy-field" data-value="{login}" onclick="copyField(this)">
-            <span class="copy-text">{login}</span>
-            <button class="copy-btn" title="Скопировать">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </button>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="color:#aaa;font-size:12px;width:56px;flex-shrink:0;">Пароль</span>
-          <div class="copy-field" data-value="{password}" onclick="copyField(this)">
-            <span class="copy-text">{password}</span>
-            <button class="copy-btn" title="Скопировать">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
+      <table cellpadding="0" cellspacing="0" style="margin-top:8px;border-collapse:separate;border-spacing:0 8px;">
+        <tr>
+          <td style="color:#aaa;font-size:12px;width:56px;padding-right:12px;white-space:nowrap;vertical-align:middle;">Логин</td>
+          <td style="vertical-align:middle;">
+            <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.82);border:1px solid rgba(124,58,237,0.25);border-radius:8px;overflow:hidden;">
+              <tr>
+                <td style="padding:9px 14px;font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:#1a1a1a;letter-spacing:0.5px;">{login}</td>
+                <td style="padding:5px 8px;vertical-align:middle;border-left:1px solid rgba(124,58,237,0.15);">
+                  <span style="display:inline-block;background:rgba(124,58,237,0.10);border:1px solid rgba(124,58,237,0.25);border-radius:6px;padding:4px 6px;color:#7C3AED;line-height:0;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="color:#aaa;font-size:12px;width:56px;padding-right:12px;white-space:nowrap;vertical-align:middle;">Пароль</td>
+          <td style="vertical-align:middle;">
+            <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.82);border:1px solid rgba(124,58,237,0.25);border-radius:8px;overflow:hidden;">
+              <tr>
+                <td style="padding:9px 14px;font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:#1a1a1a;letter-spacing:0.5px;">{password}</td>
+                <td style="padding:5px 8px;vertical-align:middle;border-left:1px solid rgba(124,58,237,0.15);">
+                  <span style="display:inline-block;background:rgba(124,58,237,0.10);border:1px solid rgba(124,58,237,0.25);border-radius:6px;padding:4px 6px;color:#7C3AED;line-height:0;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </div>
   </div>
   <hr>
