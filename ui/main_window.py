@@ -232,37 +232,32 @@ class MainWindow(QMainWindow):
         info_bar_layout.setSpacing(10)
         info_bar.setLayout(info_bar_layout)
 
-        from PyQt5.QtWidgets import QPushButton as _QPushButton
+        from PyQt5.QtWidgets import QLabel as _QLabel
         from utils.icon_loader import IconLoader as _IconLoader
-        notif_btn = _IconLoader.create_icon_button(
-            'settings', 'Настройки уведомлений', 'Настройки уведомлений', icon_size=12
+        # Текст с именем пользователя (не кликабельный)
+        info_label = _QLabel(
+            f'Пользователь: {self.employee["full_name"]} - должность: {position_text}'
         )
+        info_label.setStyleSheet("font-size: 11px; color: #999; font-weight: 400;")
+        info_bar_layout.addWidget(info_label)
+
+        # Маленькая квадратная кнопка настроек уведомлений — после имени
+        notif_btn = _IconLoader.create_icon_button(
+            'settings', '', 'Настройки уведомлений', icon_size=12
+        )
+        notif_btn.setFixedSize(22, 22)
         notif_btn.setStyleSheet("""
             QPushButton {
-                font-size: 11px; color: #777; font-weight: 400;
                 background: transparent; border: 1px solid transparent;
-                border-radius: 4px; padding: 2px 6px;
+                border-radius: 4px; padding: 0;
             }
             QPushButton:hover {
-                background: #f0f0f0; border-color: #d9d9d9; color: #333;
+                background: #f0f0f0; border-color: #d9d9d9;
             }
         """)
         notif_btn.setCursor(Qt.PointingHandCursor)
         notif_btn.clicked.connect(self._open_notification_settings)
         info_bar_layout.addWidget(notif_btn)
-
-        info_label = _QPushButton(
-            f'Пользователь: {self.employee["full_name"]} - должность: {position_text}'
-        )
-        info_label.setStyleSheet("""
-            QPushButton {
-                font-size: 11px; color: #999; font-weight: 400;
-                background: transparent; border: none;
-                text-align: left; padding: 0;
-            }
-        """)
-        info_label.setEnabled(False)
-        info_bar_layout.addWidget(info_label)
 
         layout.addWidget(info_bar)
         
