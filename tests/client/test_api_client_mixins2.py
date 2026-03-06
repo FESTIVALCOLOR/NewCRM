@@ -59,7 +59,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert '/api/supervision/cards' in args[1]
+        assert '/api/v1/supervision/cards' in args[1]
         assert kwargs['params'] == {'status': 'active'}
         assert result == cards
 
@@ -81,7 +81,7 @@ class TestSupervisionMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/supervision/cards/5')
+        assert args[1].endswith('/api/v1/supervision/cards/5')
         assert result == card
 
     def test_create_supervision_card(self, api):
@@ -94,7 +94,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert '/api/supervision/cards' in args[1]
+        assert '/api/v1/supervision/cards' in args[1]
         assert kwargs['json'] == data
         assert result == created
 
@@ -107,7 +107,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert args[1].endswith('/api/supervision/cards/5')
+        assert args[1].endswith('/api/v1/supervision/cards/5')
         assert kwargs['json'] == updates
 
     def test_move_supervision_card(self, api):
@@ -118,7 +118,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert args[1].endswith('/api/supervision/cards/5/column')
+        assert args[1].endswith('/api/v1/supervision/cards/5/column')
         assert kwargs['json'] == {'column_name': 'Завершён'}
 
     def test_pause_supervision_card(self, api):
@@ -129,7 +129,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/supervision/cards/3/pause')
+        assert args[1].endswith('/api/v1/supervision/cards/3/pause')
         assert kwargs['json'] == {'pause_reason': 'Ожидание материалов'}
 
     def test_resume_supervision_card(self, api):
@@ -140,7 +140,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/supervision/cards/3/resume')
+        assert args[1].endswith('/api/v1/supervision/cards/3/resume')
         # Без employee_id — json=None
         assert kwargs['json'] is None
 
@@ -161,7 +161,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'DELETE'
-        assert '/api/supervision/orders/5' in args[1]
+        assert '/api/v1/supervision/orders/5' in args[1]
         assert kwargs['params'] == {'contract_id': 10}
         assert result is True
 
@@ -174,7 +174,7 @@ class TestSupervisionMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/supervision/cards/5/history')
+        assert args[1].endswith('/api/v1/supervision/cards/5/history')
         assert result == history
 
     def test_add_supervision_history(self, api):
@@ -185,7 +185,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/supervision/cards/5/history')
+        assert args[1].endswith('/api/v1/supervision/cards/5/history')
         assert kwargs['json'] == {
             'entry_type': 'comment',
             'message': 'Тестовый комментарий',
@@ -200,7 +200,7 @@ class TestSupervisionMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/supervision/cards/5/complete-stage')
+        assert args[1].endswith('/api/v1/supervision/cards/5/complete-stage')
         assert kwargs['json'] == {'stage_name': 'Замер'}
 
     def test_get_supervision_addresses(self, api):
@@ -212,7 +212,7 @@ class TestSupervisionMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/supervision/addresses')
+        assert args[1].endswith('/api/v1/supervision/addresses')
         assert result == addresses
 
 
@@ -232,7 +232,7 @@ class TestPaymentsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/payments/contract/10')
+        assert args[1].endswith('/api/v1/payments/contract/10')
         assert result == payments
 
     def test_create_payment(self, api):
@@ -245,7 +245,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/payments')
+        assert args[1].endswith('/api/v1/payments')
         assert kwargs['json'] == data
         assert result == created
 
@@ -258,7 +258,7 @@ class TestPaymentsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/payments/5')
+        assert args[1].endswith('/api/v1/payments/5')
         assert result == payment
 
     def test_update_payment(self, api):
@@ -270,7 +270,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/payments/5')
+        assert args[1].endswith('/api/v1/payments/5')
         assert kwargs['json'] == data
 
     def test_delete_payment(self, api):
@@ -281,7 +281,7 @@ class TestPaymentsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'DELETE'
-        assert args[1].endswith('/api/payments/5')
+        assert args[1].endswith('/api/v1/payments/5')
 
     def test_mark_payment_as_paid(self, api):
         """mark_payment_as_paid — PATCH /api/payments/{id}/mark-paid с employee_id в params."""
@@ -291,7 +291,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert args[1].endswith('/api/payments/5/mark-paid')
+        assert args[1].endswith('/api/v1/payments/5/mark-paid')
         assert kwargs['params'] == {'employee_id': 3}
 
     def test_calculate_payment_amount(self, api):
@@ -304,7 +304,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/payments/calculate')
+        assert args[1].endswith('/api/v1/payments/calculate')
         assert kwargs['params'] == {
             'contract_id': 10,
             'employee_id': 3,
@@ -341,7 +341,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/payments')
+        assert args[1].endswith('/api/v1/payments')
         assert kwargs['params'] == {'year': 2025}
         assert result == payments
 
@@ -362,7 +362,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PATCH'
-        assert '/api/payments/contract/10/report-month' in args[1]
+        assert '/api/v1/payments/contract/10/report-month' in args[1]
         assert kwargs['json'] == {'report_month': '2025-06'}
 
     def test_recalculate_payments(self, api):
@@ -373,7 +373,7 @@ class TestPaymentsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/payments/recalculate')
+        assert args[1].endswith('/api/v1/payments/recalculate')
         assert kwargs['params'] == {'contract_id': 10, 'role': 'Дизайнер'}
 
 
@@ -393,7 +393,7 @@ class TestFilesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/files/contract/10')
+        assert args[1].endswith('/api/v1/files/contract/10')
         assert kwargs['params'] == {}
         assert result == files
 
@@ -416,7 +416,7 @@ class TestFilesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/files')
+        assert args[1].endswith('/api/v1/files')
         assert kwargs['json'] == data
         assert result == created
 
@@ -428,7 +428,7 @@ class TestFilesMixin:
 
         args, _ = req.call_args
         assert args[0] == 'DELETE'
-        assert args[1].endswith('/api/files/50')
+        assert args[1].endswith('/api/v1/files/50')
         assert result is True
 
     def test_upload_file_to_yandex(self, api):
@@ -439,7 +439,7 @@ class TestFilesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/files/upload')
+        assert args[1].endswith('/api/v1/files/upload')
         # Проверяем что files передаётся как кортеж (filename, bytes)
         assert 'files' in kwargs
         assert kwargs['files'] == {'file': ('photo.jpg', b'file-bytes')}
@@ -453,7 +453,7 @@ class TestFilesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/files/validate')
+        assert args[1].endswith('/api/v1/files/validate')
         assert kwargs['json'] == {'file_ids': [1, 2, 3], 'auto_clean': True}
 
     def test_create_yandex_folder(self, api):
@@ -464,7 +464,7 @@ class TestFilesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/files/folder')
+        assert args[1].endswith('/api/v1/files/folder')
         assert kwargs['params'] == {'folder_path': '/disk/projects/new'}
 
     def test_get_yandex_public_link(self, api):
@@ -475,7 +475,7 @@ class TestFilesMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/files/public-link')
+        assert args[1].endswith('/api/v1/files/public-link')
         assert kwargs['params'] == {'yandex_path': '/disk/file.pdf'}
 
 
@@ -495,7 +495,7 @@ class TestStatisticsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/statistics/dashboard')
+        assert args[1].endswith('/api/v1/statistics/dashboard')
         assert kwargs['params'] == {'year': 2025, 'month': 6}
         assert result == stats
 
@@ -517,7 +517,7 @@ class TestStatisticsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/statistics/projects')
+        assert args[1].endswith('/api/v1/statistics/projects')
         assert kwargs['params'] == {'project_type': 'Индивидуальный', 'year': 2025}
         assert result == stats
 
@@ -530,7 +530,7 @@ class TestStatisticsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/statistics/funnel')
+        assert args[1].endswith('/api/v1/statistics/funnel')
         assert kwargs['params'] == {'year': 2025}
         assert result == funnel
 
@@ -545,7 +545,7 @@ class TestStatisticsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/reports/employee-report')
+        assert args[1].endswith('/api/v1/reports/employee-report')
         assert kwargs['params'] == {
             'project_type': 'Индивидуальный',
             'period': 'За год',
@@ -575,7 +575,7 @@ class TestStatisticsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/statistics/supervision')
+        assert args[1].endswith('/api/v1/statistics/supervision')
         assert kwargs['params'] == {'year': 2025, 'city': 'Москва'}
 
     def test_get_general_statistics(self, api):
@@ -586,7 +586,7 @@ class TestStatisticsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/statistics/general')
+        assert args[1].endswith('/api/v1/statistics/general')
         assert kwargs['params'] == {'year': 2025, 'quarter': 3}
 
 
@@ -606,7 +606,7 @@ class TestTimelineMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/timeline/10')
+        assert args[1].endswith('/api/v1/timeline/10')
         assert result == timeline
 
     def test_init_project_timeline(self, api):
@@ -618,7 +618,7 @@ class TestTimelineMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/timeline/10/init')
+        assert args[1].endswith('/api/v1/timeline/10/init')
         assert kwargs['json'] == data
 
     def test_update_timeline_entry(self, api):
@@ -630,7 +630,7 @@ class TestTimelineMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/timeline/10/entry/measurement')
+        assert args[1].endswith('/api/v1/timeline/10/entry/measurement')
         assert kwargs['json'] == data
 
     def test_get_timeline_summary(self, api):
@@ -642,7 +642,7 @@ class TestTimelineMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/timeline/10/summary')
+        assert args[1].endswith('/api/v1/timeline/10/summary')
         assert result == summary
 
     def test_export_timeline_excel(self, api):
@@ -654,7 +654,7 @@ class TestTimelineMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/timeline/10/export/excel')
+        assert args[1].endswith('/api/v1/timeline/10/export/excel')
         assert result == excel_content
 
     def test_get_supervision_timeline_dict_format(self, api):
@@ -666,7 +666,7 @@ class TestTimelineMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/supervision-timeline/5')
+        assert args[1].endswith('/api/v1/supervision-timeline/5')
         assert result == data
 
     def test_get_supervision_timeline_list_format(self, api):
@@ -695,7 +695,7 @@ class TestPermissionsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/permissions/3')
+        assert args[1].endswith('/api/v1/permissions/3')
         assert result == perms
 
     def test_set_employee_permissions(self, api):
@@ -707,7 +707,7 @@ class TestPermissionsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/permissions/3')
+        assert args[1].endswith('/api/v1/permissions/3')
         assert kwargs['json'] == {'permissions': permissions}
 
     def test_get_role_permissions_matrix(self, api):
@@ -719,7 +719,7 @@ class TestPermissionsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/permissions/role-matrix')
+        assert args[1].endswith('/api/v1/permissions/role-matrix')
         assert result == matrix
 
     def test_save_role_permissions_matrix(self, api):
@@ -731,7 +731,7 @@ class TestPermissionsMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'PUT'
-        assert args[1].endswith('/api/permissions/role-matrix')
+        assert args[1].endswith('/api/v1/permissions/role-matrix')
         assert kwargs['json'] == data
 
     def test_get_permission_definitions(self, api):
@@ -746,7 +746,7 @@ class TestPermissionsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/permissions/definitions')
+        assert args[1].endswith('/api/v1/permissions/definitions')
         assert result == definitions
 
     def test_reset_employee_permissions(self, api):
@@ -757,7 +757,7 @@ class TestPermissionsMixin:
 
         args, _ = req.call_args
         assert args[0] == 'POST'
-        assert args[1].endswith('/api/permissions/3/reset-to-defaults')
+        assert args[1].endswith('/api/v1/permissions/3/reset-to-defaults')
 
 
 # ===========================================================================
@@ -795,7 +795,7 @@ class TestMiscMixin:
 
         args, kwargs = req.call_args
         assert args[0] == 'GET'
-        assert args[1].endswith('/api/search')
+        assert args[1].endswith('/api/v1/search')
         assert kwargs['params'] == {
             'q': 'Иванов',
             'limit': 20,
