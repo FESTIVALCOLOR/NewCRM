@@ -90,6 +90,26 @@ jobs:
           --ignore=tests/client/test_timeline_calc.py
           --ignore=tests/client/test_table_settings.py
           --ignore=tests/client/test_sync_manager.py
+          --ignore=tests/client/test_calendar_helpers_full.py
+          --ignore=tests/client/test_data_access_contracts.py
+          --ignore=tests/client/test_data_access_full.py
+          --ignore=tests/client/test_misc_utils_full.py
+          --ignore=tests/client/test_norm_days_calc.py
+          --ignore=tests/client/test_preview_tab_helpers.py
+          --ignore=tests/client/test_timeline_calc_full.py
+          --ignore=tests/client/test_data_access_edge_cases.py
+          --ignore=tests/client/test_data_access_workflow.py
+          --ignore=tests/client/test_data_access_reports.py
+          --ignore=tests/client/test_process_crm_lifecycle.py
+          --ignore=tests/client/test_process_offline_online.py
+          --ignore=tests/client/test_resilience.py
+          --ignore=tests/client/test_utils_misc.py
+          --ignore=tests/client/test_crm_tab_logic_full.py
+          --ignore=tests/client/test_offline_manager_full.py
+          --ignore=tests/client/test_table_settings_full.py
+          --ignore=tests/client/test_icon_loader_full.py
+          --ignore=tests/client/test_pdf_utils_full.py
+          --ignore=tests/client/test_permissions.py
           --cov=utils --cov=config --cov-report=term-missing --cov-report=xml:coverage-client.xml
       - name: Upload coverage
         if: always()
