@@ -1072,24 +1072,23 @@ class CardEditDialog(QDialog):
             buttons_layout.addWidget(self.delete_chat_btn)
 
             self.invite_client_btn = IconLoader.create_icon_button(
-                'telegram', 'Пригласить клиента', 'Отправить клиенту email с ссылкой на чат', icon_size=14
+                'telegram', '', 'Пригласить клиента — отправить email со ссылкой на чат', icon_size=16
             )
             self.invite_client_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #E3F2FD;
-                    color: #1976D2;
-                    padding: 0px 14px;
                     border-radius: 4px;
                     border: 1px solid #90CAF9;
-                    font-weight: bold;
                     max-height: 36px;
                     min-height: 36px;
+                    max-width: 36px;
+                    min-width: 36px;
                 }
                 QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
                 QPushButton:pressed { background-color: #90CAF9; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                QPushButton:disabled { background-color: #fafafa; border-color: #e6e6e6; }
             """)
-            self.invite_client_btn.setFixedHeight(36)
+            self.invite_client_btn.setFixedSize(36, 36)
             self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
             self.invite_client_btn.clicked.connect(self._on_invite_client)
             buttons_layout.addWidget(self.invite_client_btn)

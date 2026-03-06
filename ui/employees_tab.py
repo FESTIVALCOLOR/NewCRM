@@ -154,7 +154,7 @@ class EmployeesTab(QWidget):
         # - Колонка 7 (Действия) фиксирована 110px
         self.employees_table.setup_proportional_resize(
             column_ratios=[0.05, 0.22, 0.18, 0.14, 0.18, 0.13, 0.10],  # Пропорции для колонок 0-6
-            fixed_columns={7: 110},  # Действия = 110px фиксированно
+            fixed_columns={7: 140},  # Действия = 140px фиксированно (4 кнопки)
             min_width=50
         )
 

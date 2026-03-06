@@ -231,8 +231,21 @@ class MainWindow(QMainWindow):
         info_bar_layout.setSpacing(10)
         info_bar.setLayout(info_bar_layout)
 
-        info_label = QLabel(f'Пользователь: {self.employee["full_name"]} - должность: {position_text}')
-        info_label.setStyleSheet('font-size: 11px; color: #999; font-weight: 400; background: transparent;')
+        from PyQt5.QtWidgets import QPushButton as _QPushButton
+        info_label = _QPushButton(
+            f'Пользователь: {self.employee["full_name"]} - должность: {position_text}'
+        )
+        info_label.setStyleSheet("""
+            QPushButton {
+                font-size: 11px; color: #999; font-weight: 400;
+                background: transparent; border: none;
+                text-align: left; padding: 0;
+            }
+            QPushButton:hover { color: #555; text-decoration: underline; }
+        """)
+        info_label.setToolTip('Настройки уведомлений')
+        info_label.setCursor(Qt.PointingHandCursor)
+        info_label.clicked.connect(self._open_notification_settings)
         info_bar_layout.addWidget(info_label)
 
         layout.addWidget(info_bar)
@@ -745,13 +758,9 @@ class MainWindow(QMainWindow):
             if QApplication.instance():
                 self.setWindowIcon(QApplication.instance().windowIcon())
 
-    def showEvent(self, event):
-        """Переопределяем showEvent для повторной установки иконки"""
-        super().showEvent(event)
-        # Повторно устанавливаем иконку при каждом показе окна
+    def _restore_taskbar_icon(self):
+        """Повторная установка иконки при показе окна (Windows сбрасывает после WS_CAPTION)"""
         self._set_taskbar_icon()
-        # Отложенная повторная установка: Windows может сбросить иконку
-        # после применения WS_CAPTION/WM_NCCALCSIZE
         if not hasattr(self, '_icon_timer_done'):
             self._icon_timer_done = True
             QTimer.singleShot(500, self._set_taskbar_icon)
@@ -1445,8 +1454,9 @@ class MainWindow(QMainWindow):
             self.dashboards[self.current_dashboard_key].refresh()
 
     def showEvent(self, event):
-        """Отложенная инициализация тяжёлых компонентов после показа окна"""
+        """Отложенная инициализация тяжёлых компонентов + установка иконки"""
         super().showEvent(event)
+        self._restore_taskbar_icon()
         if not hasattr(self, '_shown_deferred'):
             self._shown_deferred = True
             QTimer.singleShot(0, self._init_deferred)
@@ -1484,6 +1494,59 @@ class MainWindow(QMainWindow):
 
         # Загрузка данных первой вкладки + показ дашборда (дашборд создастся по требованию)
         self.on_tab_changed(self.tabs.currentIndex())
+
+    # ========== НАСТРОЙКИ УВЕДОМЛЕНИЙ ==========
+    def _open_notification_settings(self):
+        """Открыть диалог настроек уведомлений для текущего пользователя"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QHBoxLayout
+        try:
+            from ui.notification_settings_widget import NotificationSettingsWidget
+        except ImportError:
+            return
+
+        data_access = getattr(self, 'data', None)
+        if data_access is None:
+            # Ищем data_access через текущую вкладку
+            try:
+                current = self.tabs.currentWidget()
+                data_access = getattr(current, 'data', None)
+            except Exception:
+                pass
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Настройки уведомлений')
+        dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        dlg.setMinimumWidth(480)
+        dlg.setStyleSheet('border: 1px solid #E0E0E0;')
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(0, 0, 0, 8)
+
+        widget = NotificationSettingsWidget(
+            parent=dlg,
+            api_client=self.api_client,
+            data_access=data_access,
+            employee=self.employee,
+        )
+        layout.addWidget(widget)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(16, 0, 16, 0)
+        btn_layout.addStretch()
+        close_btn = QPushButton('Закрыть')
+        close_btn.setFixedHeight(32)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: #f5f5f5; border: 1px solid #d9d9d9;
+                border-radius: 6px; padding: 0 20px; font-size: 13px;
+            }
+            QPushButton:hover { background: #ebebeb; }
+        """)
+        close_btn.clicked.connect(dlg.accept)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        dlg.exec_()
 
     # ========== СИСТЕМА ОБНОВЛЕНИЯ ПРОГРАММЫ ==========
     def check_for_updates_manual(self):

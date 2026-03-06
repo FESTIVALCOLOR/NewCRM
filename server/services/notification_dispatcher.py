@@ -71,6 +71,21 @@ async def dispatch_notification(
             db.commit()
             return
 
+        # 3.1 Для уведомлений об оплатах — проверить право доступа
+        if event_type == 'payment':
+            from permissions import check_permission
+            employee_obj = db.query(Employee).filter_by(id=employee_id).first()
+            if not employee_obj:
+                db.commit()
+                return
+            has_payment_access = (
+                check_permission(employee_obj, 'payments.create', db) or
+                check_permission(employee_obj, 'payments.update', db)
+            )
+            if not has_payment_access:
+                db.commit()
+                return
+
         db.commit()
 
         # 4. Отправить через Telegram если включён
