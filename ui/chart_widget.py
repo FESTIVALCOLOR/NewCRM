@@ -362,8 +362,8 @@ class StackedBarChartWidget(ChartBase):
         if not self.canvas or not categories or not series:
             return
 
-        # Автовысота при большом количестве категорий с повёрнутыми подписями
         n_cat = len(categories)
+        # Автовысота при большом количестве категорий с повёрнутыми подписями
         if n_cat > 10:
             fig_h = max(3.2, 3.2 + (n_cat - 10) * 0.12)
             self.figure.set_size_inches(5, fig_h)
@@ -373,13 +373,13 @@ class StackedBarChartWidget(ChartBase):
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('white')
 
-        # Обрезка длинных категорий
-        short_categories = [self._truncate(c, 12) for c in categories]
+        # Определяем нужен ли поворот меток
+        need_rotation = n_cat > 6 or any(len(c) > 6 for c in categories)
+        # При повороте можно показывать более длинные подписи
+        trunc_len = 20 if need_rotation else 12
+        short_categories = [self._truncate(c, trunc_len) for c in categories]
         n_categories = len(short_categories)
         x = range(n_categories)
-
-        # Определяем нужен ли поворот меток
-        need_rotation = n_categories > 6 or any(len(c) > 6 for c in short_categories)
         rotation = 45 if need_rotation else 0
         ha = 'right' if need_rotation else 'center'
 

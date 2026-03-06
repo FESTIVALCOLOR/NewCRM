@@ -1143,8 +1143,20 @@ class ReportsTab(QWidget):
                 durations = [d for d in durations
                              if not d.get("stage", "").upper().startswith("ДАТА НАЧАЛА")]
                 if durations:
+                    n_stages = len(durations)
                     stage_labels = [d.get("stage", "") for d in durations]
-                    subtab["stage_duration"].set_data(
+
+                    # Расширить figure для горизонтального скролла
+                    widget = subtab["stage_duration"]
+                    fig_w = max(5, n_stages * 0.6)
+                    fig_h = max(4.0, 3.2 + max(0, n_stages - 10) * 0.12)
+                    widget.figure.set_size_inches(fig_w, fig_h)
+                    dpi = widget.figure.get_dpi()
+                    pw, ph = int(fig_w * dpi), int(fig_h * dpi)
+                    widget.setFixedSize(pw, ph)
+                    widget.canvas.setFixedSize(pw, ph)
+
+                    widget.set_data(
                         stage_labels,
                         [
                             {
@@ -1160,9 +1172,11 @@ class ReportsTab(QWidget):
                         ],
                         stacked=False
                     )
-                    # Прокрутить скролл на середину графика
+
+                    # Обновить высоту скролла под новый размер
                     scroll = subtab.get("stage_scroll")
                     if scroll:
+                        scroll.setMinimumHeight(ph + 20)
                         QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
                             s.horizontalScrollBar().maximum() // 2))
             except Exception as e:
