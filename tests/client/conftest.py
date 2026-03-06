@@ -21,10 +21,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @pytest.fixture(autouse=True)
 def clear_data_cache():
     """Очистить кеш DataAccess между тестами для изоляции."""
-    from utils.data_access import _global_cache
-    _global_cache.invalidate()
-    yield
-    _global_cache.invalidate()
+    try:
+        from utils.data_access import _global_cache
+        _global_cache.invalidate()
+        yield
+        _global_cache.invalidate()
+    except (ImportError, AttributeError):
+        # PyQt5 недоступен в CI без графического окружения — пропускаем очистку кэша
+        yield
 
 
 # ============================================================================

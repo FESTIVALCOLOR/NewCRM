@@ -165,6 +165,7 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
     "Менеджер": {
         "access.crm", "access.supervision", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "crm_cards.assign_executor",
     },
     "ДАН": {
         "access.supervision",

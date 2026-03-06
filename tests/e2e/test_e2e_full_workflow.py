@@ -171,7 +171,7 @@ class TestFullBusinessWorkflow:
                 json={
                     "stage_name": "Стадия 1: планировочные решения",
                     "executor_id": designer["id"],
-                    "deadline": "2026-03-01",
+                    "deadline": "2027-06-01",
                 }
             )
             assert resp.status_code == 200

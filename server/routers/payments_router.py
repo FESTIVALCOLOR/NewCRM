@@ -848,9 +848,18 @@ async def create_payment(
         )
         db.add(log)
 
-        # Бизнес-история создания платежа (привязываем к CRM карточке для отображения в истории)
+        # Бизнес-история создания платежа
         emp_name = payment.employee_name or 'Неизвестный'
         pay_desc = f'Создан платёж: {emp_name}, роль: {payment.role or "—"}, сумма: {payment.final_amount or 0}'
+        # Запись для самого платежа (для API /action-history/payment/{id})
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='payment_created',
+            entity_type='payment',
+            entity_id=payment.id,
+            description=pay_desc
+        ))
+        # Дополнительная запись для карточки (для отображения в истории карточки)
         if payment.crm_card_id:
             db.add(ActionHistory(
                 user_id=current_user.id,
@@ -865,14 +874,6 @@ async def create_payment(
                 action_type='payment_created',
                 entity_type='supervision_card',
                 entity_id=payment.supervision_card_id,
-                description=pay_desc
-            ))
-        else:
-            db.add(ActionHistory(
-                user_id=current_user.id,
-                action_type='payment_created',
-                entity_type='payment',
-                entity_id=payment.id,
                 description=pay_desc
             ))
 
