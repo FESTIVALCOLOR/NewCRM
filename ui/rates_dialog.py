@@ -11,8 +11,7 @@ from utils.resource_path import resource_path
 from utils.data_access import DataAccess
 from config import CITIES
 from ui.custom_title_bar import CustomTitleBar
-from ui.custom_message_box import CustomMessageBox
-from ui.custom_question_box import CustomQuestionBox
+from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from ui.custom_combobox import CustomComboBox
 
 # Путь к иконкам для стилей
@@ -985,11 +984,10 @@ class RatesDialog(QDialog):
 
     def reset_rate(self, role):
         """Сброс тарифа (удаление из БД)"""
-        reply = CustomMessageBox(
+        reply = CustomQuestionBox(
             self,
             'Подтверждение',
-            f'Удалить тариф для роли "{role}"?',
-            'question'
+            f'Удалить тариф для роли "{role}"?'
         ).exec_()
 
         if reply == QDialog.Accepted:
