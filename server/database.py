@@ -687,68 +687,6 @@ class Payment(Base):
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     # Денормализация: имя сохраняется при создании, чтобы не терять при удалении сотрудника
     employee_name = Column(String, nullable=True)
-    role = Column(String, nullable=False)
-    stage_name = Column(String)
-
-    calculated_amount = Column(Float, nullable=False)
-    manual_amount = Column(Float)
-    final_amount = Column(Float, nullable=False)
-
-    is_manual = Column(Boolean, default=False)
-    payment_type = Column(String)  # Полная оплата, Аванс, Доплата, Оклад
-    report_month = Column(String)
-    payment_status = Column(String)
-
-    is_paid = Column(Boolean, default=False)
-    paid_date = Column(DateTime)
-    paid_by = Column(Integer, ForeignKey("employees.id"))
-
-    reassigned = Column(Boolean, default=False)
-    old_employee_id = Column(Integer)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Связи
-    employee = relationship("Employee", foreign_keys=[employee_id])
-
-
-class Rate(Base):
-    """Тарифы"""
-    __tablename__ = "rates"
-
-    id = Column(Integer, primary_key=True, index=True)
-    project_type = Column(String)  # Индивидуальный, Шаблонный, Авторский надзор
-    role = Column(String)
-    stage_name = Column(String)
-
-    rate_per_m2 = Column(Float)
-    area_from = Column(Float)
-    area_to = Column(Float)
-    fixed_price = Column(Float)
-    price = Column(Float)  # Цена (для шаблонных)
-
-    # Для авторского надзора
-    executor_rate = Column(Float)
-    manager_rate = Column(Float)
-
-    city = Column(String)
-    surveyor_price = Column(Float)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class Salary(Base):
-    """Зарплаты/оклады"""
-    __tablename__ = "salaries"
-
-    id = Column(Integer, primary_key=True, index=True)
-    contract_id = Column(Integer, ForeignKey("contracts.id"))
-    # S-07: nullable чтобы сохранять зарплаты при удалении сотрудника (SET NULL)
-    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
-    # Денормализация: имя сохраняется при создании, чтобы не терять при удалении сотрудника
-    employee_name = Column(String, nullable=True)
 
     payment_type = Column(String, nullable=False)
     stage_name = Column(String)

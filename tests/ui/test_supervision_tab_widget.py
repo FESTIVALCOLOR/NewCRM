@@ -64,7 +64,7 @@ def _create_supervision_tab(qtbot, employee, active_cards=None, archived_cards=N
     with patch('ui.crm_supervision_tab.DataAccess', return_value=mock_da), \
          patch('ui.crm_supervision_tab.IconLoader') as mock_icon, \
          patch('ui.crm_supervision_tab.YandexDiskManager'), \
-         patch('ui.crm_supervision_tab._has_perm', side_effect=lambda emp, api, perm: perm != 'supervision.move' or emp.get('position', '') not in ('ДАН', 'Дизайнер', 'Чертёжник', 'Замерщик', 'Менеджер')), \
+         patch('ui.crm_supervision_tab._has_perm', return_value=True), \
          patch('ui.crm_supervision_tab.debounce_click', side_effect=lambda fn: fn):
         mock_icon.load.return_value = MagicMock()
         mock_icon.create_action_button.return_value = QPushButton()

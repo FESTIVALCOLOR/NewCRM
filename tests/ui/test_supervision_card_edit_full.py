@@ -32,26 +32,15 @@ from unittest.mock import patch, MagicMock, PropertyMock, call
 
 # ========== Вспомогательные функции ==========
 
-class _FakeIconLoader:
-    """Fake IconLoader — возвращает реальные Qt-объекты, без MagicMock."""
-    @staticmethod
-    def load(*args, **kwargs):
-        return QIcon()
-    @staticmethod
-    def load_colored(*args, **kwargs):
-        return QIcon()
-    @staticmethod
-    def create_action_button(*args, **kwargs):
-        return QPushButton()
-    @staticmethod
-    def create_icon_button(*args, **kwargs):
-        return QPushButton()
-    @staticmethod
-    def get_icon(*args, **kwargs):
-        return QIcon()
-    @staticmethod
-    def get_icon_path(*args, **kwargs):
-        return ''
+def _mock_icon_loader():
+    """Mock IconLoader возвращающий реальные виджеты."""
+    mock = MagicMock()
+    mock.create_icon_button.side_effect = lambda *a, **k: QPushButton()
+    mock.create_action_button.side_effect = lambda *a, **k: QPushButton()
+    mock.get_icon.return_value = QIcon()
+    mock.get_icon_path.return_value = ''
+    mock.load.return_value = QIcon()
+    return mock
 
 
 def _make_mock_data_access():
@@ -118,14 +107,16 @@ def _create_dialog(qtbot, employee, card_data=None, mock_da=None):
     parent_widget = MagicMock()
     parent_widget.data = mock_da
 
+    icon_mock = _mock_icon_loader()
+
     with patch('ui.supervision_card_edit_dialog.DataAccess', return_value=mock_da), \
-         patch('ui.supervision_card_edit_dialog.IconLoader', _FakeIconLoader), \
+         patch('ui.supervision_card_edit_dialog.IconLoader', icon_mock), \
          patch('ui.supervision_card_edit_dialog.YandexDiskManager'), \
          patch('ui.supervision_card_edit_dialog.YANDEX_DISK_TOKEN', 'fake_token'), \
          patch('ui.supervision_card_edit_dialog.CustomTitleBar', return_value=QLabel('Title')), \
          patch('ui.supervision_card_edit_dialog.CustomComboBox', QComboBox), \
          patch('ui.supervision_card_edit_dialog.CustomDateEdit') as MockDateEdit, \
-         patch('ui.supervision_card_edit_dialog._has_perm', side_effect=lambda emp, api, perm: perm != 'supervision.move' or emp.get('position', '') not in ('ДАН', 'Дизайнер', 'Чертёжник', 'Замерщик', 'Менеджер')), \
+         patch('ui.supervision_card_edit_dialog._has_perm', return_value=True), \
          patch('ui.supervision_card_edit_dialog.add_today_button_to_dateedit'), \
          patch('ui.supervision_card_edit_dialog.create_progress_dialog', return_value=MagicMock()):
 
@@ -247,11 +238,11 @@ class TestSupervisionCardEditDialogTabs:
         tab_texts = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
         assert 'Информация о проекте' in tab_texts
 
-    def test_visits_tab_present(self, qtbot, mock_employee_admin):
-        """Вкладка 'Таблица выездов и дефектов' присутствует."""
+    def test_files_tab_present(self, qtbot, mock_employee_admin):
+        """Вкладка 'Файлы надзора' присутствует."""
         dialog, _ = _create_dialog(qtbot, mock_employee_admin)
         tab_texts = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-        assert 'Таблица выездов и дефектов' in tab_texts
+        assert 'Файлы надзора' in tab_texts
 
     def test_admin_tab_count(self, qtbot, mock_employee_admin):
         """Администратор видит 5 вкладок (Редактирование + 4 отложенных)."""

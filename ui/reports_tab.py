@@ -26,7 +26,7 @@ from ui.chart_widget import (
 from utils.data_access import DataAccess
 from utils.resource_path import resource_path
 from utils.pdf_utils import (
-    register_fonts, make_page_footer, pdf_section_header,
+    register_fonts, make_page_footer, pdf_section_header, pdf_hr,
     grab_widget_png, chart_to_png, fit_image, open_file,
 )
 
@@ -633,21 +633,10 @@ class ReportsTab(QWidget):
     # ===================================================================
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка при первом показе вкладки.
-        При повторном переключении — пропускаем если кэш свежий (<30с)."""
-        import time as _time
-        now = _time.monotonic()
-        if not self._loading:
-            if not self._data_loaded:
-                self._data_loaded = True
-                self._last_load_time = now
-                self._load_filter_options()
-                self.reload_all_sections()
-            elif now - getattr(self, '_last_load_time', 0) < 30:
-                return
-            else:
-                self._last_load_time = now
-                self.reload_all_sections()
+        """Ленивая загрузка при первом показе вкладки"""
+        if not self._data_loaded and not self._loading:
+            self._load_filter_options()
+            self.reload_all_sections()
 
     def _load_filter_options(self):
         """Загрузить опции для ComboBox-фильтров из DataAccess"""
@@ -1622,23 +1611,21 @@ class ReportsTab(QWidget):
             elements = []
 
             # === ШАПКА ===
-            logo_path = resource_path("resources/logo_pdf.png")
-            if not os.path.exists(logo_path):
-                logo_path = resource_path("resources/logo.png")
+            logo_path = resource_path("resources/logo.png")
             if os.path.exists(logo_path):
                 try:
-                    logo = RLImage(logo_path, width=35 * mm, height=20 * mm,
-                                   kind='proportional')
+                    logo = RLImage(logo_path, width=18 * mm, height=18 * mm)
                     logo.hAlign = 'CENTER'
                     elements.append(logo)
-                    elements.append(Spacer(1, 4 * mm))
+                    elements.append(Spacer(1, 2 * mm))
                 except Exception:
                     pass
 
             elements.append(Paragraph(
-                'ОТЧЁТЫ И СТАТИСТИКА', style_title
+                'Interior Studio — Отчёты и Статистика', style_title
             ))
-            elements.append(Spacer(1, 3 * mm))
+            elements.append(pdf_hr(PAGE_W_MM))
+            elements.append(Spacer(1, 2 * mm))
 
             filters_info = []
             for label, combo in [

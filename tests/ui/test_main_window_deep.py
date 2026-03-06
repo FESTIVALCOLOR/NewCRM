@@ -63,44 +63,7 @@ def _create_mw(qtbot, employee_data, api_client=None):
     mock_db = MagicMock()
     mock_da = MagicMock()
 
-    # Патч DataAccess внутри dashboards — чтобы stats возвращали числа, а не MagicMock
-    _zero_stats = {
-        'total_clients': 0, 'total_individual': 0, 'total_legal': 0,
-        'clients_by_year': 0, 'agent_clients_total': 0, 'agent_clients_by_year': 0,
-        'individual_orders': 0, 'individual_area': 0,
-        'template_orders': 0, 'template_area': 0,
-        'agent_orders_by_year': 0, 'agent_area_by_year': 0,
-        'total_orders': 0, 'total_area': 0,
-        'active_orders': 0, 'archive_orders': 0,
-        'agent_active_orders': 0, 'agent_archive_orders': 0,
-        'active_employees': 0, 'reserve_employees': 0,
-        'active_admin': 0, 'active_project': 0,
-        'active_execution': 0, 'nearest_birthday': '',
-        'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-        'avg_salary': 0, 'employees_paid': 0, 'max_salary': 0,
-        'total_amount': 0, 'year_amount': 0, 'month_amount': 0,
-        'avg_amount': 0, 'total_count': 0, 'year_count': 0,
-        'agent_amount': 0, 'agent_count': 0,
-    }
-    mock_dashboard_da = MagicMock()
-    mock_dashboard_da.get_clients_dashboard_stats.return_value = _zero_stats
-    mock_dashboard_da.get_contracts_dashboard_stats.return_value = _zero_stats
-    mock_dashboard_da.get_crm_dashboard_stats.return_value = _zero_stats
-    mock_dashboard_da.get_employees_dashboard_stats.return_value = _zero_stats
-    mock_dashboard_da.get_salaries_dashboard_stats.return_value = _zero_stats
-    mock_dashboard_da.get_salaries_all_payments_stats.return_value = _zero_stats
-    mock_dashboard_da.get_salaries_individual_stats.return_value = _zero_stats
-    mock_dashboard_da.get_salaries_template_stats.return_value = _zero_stats
-    mock_dashboard_da.get_salaries_salary_stats.return_value = _zero_stats
-    mock_dashboard_da.get_salaries_supervision_stats.return_value = _zero_stats
-    mock_dashboard_da.get_contract_years.return_value = [2026]
-    mock_dashboard_da.get_agent_types.return_value = ['Прямой', 'Агент']
-
     patches = []
-    # Патч DataAccess в dashboards модуле (создаёт дашборды с реальными числами)
-    patches.append(patch('ui.dashboards.DataAccess', return_value=mock_dashboard_da))
-    patches.append(patch('ui.dashboard_widget.create_colored_icon', return_value=None))
-
     for target in _STANDARD_PATCHES:
         if target == 'database.db_manager.DatabaseManager':
             patches.append(patch(target, return_value=mock_db))
@@ -122,23 +85,21 @@ def _create_mw(qtbot, employee_data, api_client=None):
         else:
             patches.append(patch(target, side_effect=_make_fake_tab))
 
-    from contextlib import ExitStack
-    stack = ExitStack()
     for p in patches:
-        stack.enter_context(p)
+        p.start()
 
-    from ui.main_window import MainWindow
-    w = MainWindow(employee_data=employee_data, api_client=api_client)
-    # Отключаем closeEvent чтобы тест не блокировался на диалоге подтверждения
-    w.closeEvent = lambda e: e.accept()
-    qtbot.addWidget(w)
-    # Запускаем отложённую инициализацию вкладок
-    w._init_deferred()
-
-    # Сохраняем ExitStack для очистки после теста
-    w._patch_stack = stack
-
-    return w, mock_db, mock_da
+    try:
+        from ui.main_window import MainWindow
+        w = MainWindow(employee_data=employee_data, api_client=api_client)
+        # Отключаем closeEvent чтобы тест не блокировался на диалоге подтверждения
+        w.closeEvent = lambda e: e.accept()
+        qtbot.addWidget(w)
+        # Запускаем отложённую инициализацию вкладок
+        w._init_deferred()
+        return w, mock_db, mock_da
+    finally:
+        for p in patches:
+            p.stop()
 
 
 # ========== 1. Инициализация и структура (10 тестов) ==========
@@ -197,19 +158,15 @@ class TestMainWindowInit:
         assert w.windowFlags() & Qt.FramelessWindowHint
 
     def test_translucent_background(self, qtbot, mock_employee_admin):
-        """На Windows WA_TranslucentBackground НЕ используется (DWM рендеринг), на других ОС — включён."""
-        import sys
+        """Атрибут WA_TranslucentBackground включён для border-radius."""
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        if sys.platform == 'win32':
-            assert not w.testAttribute(Qt.WA_TranslucentBackground)
-        else:
-            assert w.testAttribute(Qt.WA_TranslucentBackground)
+        assert w.testAttribute(Qt.WA_TranslucentBackground)
 
     def test_minimum_size(self, qtbot, mock_employee_admin):
-        """Минимальный размер окна 1400x800."""
+        """Минимальный размер окна 800x600."""
         w, _, _ = _create_mw(qtbot, mock_employee_admin)
-        assert w.minimumWidth() == 1400
-        assert w.minimumHeight() == 800
+        assert w.minimumWidth() == 800
+        assert w.minimumHeight() == 600
 
 
 # ========== 2. UI-элементы (8 тестов) ==========

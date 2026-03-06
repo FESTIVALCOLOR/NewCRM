@@ -109,11 +109,11 @@ class TestPaymentContract:
 
 @pytest.mark.e2e
 class TestAgentContract:
-    """Контракт: GET /api/v1/agents → AgentResponse"""
+    """Контракт: GET /api/agents → AgentResponse"""
 
     def test_agents_list_contract(self, api_base, admin_headers, agent_contract_keys):
         """Каждый агент содержит обязательные ключи"""
-        resp = api_get(api_base, "/api/v1/agents", admin_headers)
+        resp = api_get(api_base, "/api/agents", admin_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)

@@ -4,7 +4,7 @@
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QLabel, QTabWidget, QTableWidget
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QLabel
 
 
 # ─── Патчи для импортов ─────────────────────────────────────────────────
@@ -422,67 +422,3 @@ class TestArchiveCardDetailsDialog:
         """Тип карточки supervision"""
         card_type = 'supervision'
         assert card_type == 'supervision'
-
-    def _payments_tab_logic(self, card_data, card_type='crm',
-                            can_view_payments=True, has_crm_payments=True,
-                            has_sup_payments=True):
-        """Воспроизвести логику из crm_archive.py init_ui (строки 695-721)
-        для определения show_payments_tab."""
-        contract_id = card_data.get('contract_id')
-        show_payments_tab = False
-        payments_tab_title = 'Оплаты'
-
-        if can_view_payments and contract_id:
-            if card_type == 'supervision':
-                payments_tab_title = 'Оплаты надзора'
-                show_payments_tab = True
-            elif card_type == 'crm':
-                payments_tab_title = 'Оплаты'
-                show_payments_tab = True
-
-        return show_payments_tab, payments_tab_title
-
-    def test_payments_tab_shown_for_crm_sdan(self):
-        """Вкладка Оплаты отображается для архивных CRM с СДАН."""
-        card_data = {'contract_id': 100, 'contract_status': 'СДАН'}
-        show, title = self._payments_tab_logic(card_data, card_type='crm')
-        assert show is True
-        assert title == 'Оплаты'
-
-    def test_payments_tab_shown_for_crm_nadzor(self):
-        """Вкладка Оплаты для АВТОРСКИЙ НАДЗОР."""
-        card_data = {'contract_id': 200, 'contract_status': 'АВТОРСКИЙ НАДЗОР'}
-        show, title = self._payments_tab_logic(card_data, card_type='crm')
-        assert show is True
-
-    def test_payments_tab_shown_for_crm_rastorgnut(self):
-        """Вкладка Оплаты для РАСТОРГНУТ."""
-        card_data = {'contract_id': 300, 'contract_status': 'РАСТОРГНУТ'}
-        show, title = self._payments_tab_logic(card_data, card_type='crm')
-        assert show is True
-
-    def test_payments_tab_shown_for_status_key_fallback(self):
-        """Вкладка Оплаты при ключе status (вместо contract_status)."""
-        card_data = {'contract_id': 400, 'status': 'СДАН'}
-        show, title = self._payments_tab_logic(card_data, card_type='crm')
-        assert show is True
-
-    def test_supervision_payments_tab_shown(self):
-        """Вкладка Оплаты надзора для карточек supervision."""
-        card_data = {'contract_id': 500, 'contract_status': 'АВТОРСКИЙ НАДЗОР'}
-        show, title = self._payments_tab_logic(card_data, card_type='supervision')
-        assert show is True
-        assert title == 'Оплаты надзора'
-
-    def test_payments_tab_hidden_without_permission(self):
-        """Вкладка Оплаты скрыта без прав доступа."""
-        card_data = {'contract_id': 100, 'contract_status': 'СДАН'}
-        show, _ = self._payments_tab_logic(card_data, card_type='crm',
-                                           can_view_payments=False)
-        assert show is False
-
-    def test_payments_tab_hidden_without_contract_id(self):
-        """Вкладка Оплаты скрыта без contract_id."""
-        card_data = {'contract_status': 'СДАН'}
-        show, _ = self._payments_tab_logic(card_data, card_type='crm')
-        assert show is False

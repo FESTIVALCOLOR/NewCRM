@@ -836,7 +836,7 @@ class ExecutorSelectionDialog(QDialog):
                     'calculated_amount': balance_amount,
                     'final_amount': balance_amount,
                     'payment_type': 'Доплата',
-                    'report_month': None
+                    'report_month': ''
                 }
                 self.data.create_payment(balance_data)
                 print(f"[DataAccess] Индивидуальный проект: созданы аванс и доплата для {role}")
@@ -1062,14 +1062,9 @@ class ProjectCompletionDialog(QDialog):
             # 2. Создаём карточку надзора (если нужно)
             if 'АВТОРСКИЙ НАДЗОР' in status:
                 print(f"\n Создание карточки надзора для договора {contract_id}...")
-                # Получаем дедлайн CRM карточки для plan_date надзора
-                crm_card = self.data.get_crm_card(self.card_id) if hasattr(self, 'card_id') else None
-                crm_deadline = crm_card.get('deadline', '') if crm_card else ''
                 supervision_data = {
                     'contract_id': contract_id,
-                    'column_name': 'Новый заказ',
-                    'start_date': QDate.currentDate().toString('yyyy-MM-dd'),
-                    'deadline': crm_deadline or ''
+                    'column_name': 'Новый заказ'
                 }
                 result = self.data.create_supervision_card(supervision_data)
                 supervision_card_id = result.get('id') if isinstance(result, dict) else result
@@ -1820,7 +1815,7 @@ class CRMStatisticsDialog(QDialog):
         from utils.pdf_utils import build_table_pdf
         _logger = logging.getLogger(__name__)
 
-        default_name = f'Отчет Статистика CRM {self.project_type} от {QDate.currentDate().toString("dd.MM.yyyy")}'
+        default_name = f'Отчет CRM {self.project_type} {QDate.currentDate().toString("yyyy-MM-dd")}'
         filename, _ = QFileDialog.getSaveFileName(
             self, 'Сохранить PDF', default_name, 'PDF файлы (*.pdf)'
         )
@@ -2542,13 +2537,13 @@ class ReassignExecutorDialog(QDialog):
 
         self.executor_combo = CustomComboBox()
 
-        # Получаем сотрудников включая двойные должности (secondary_position), только активных
+        # ИСПРАВЛЕНИЕ 30.01.2026: Получаем сотрудников включая двойные должности (secondary_position)
         try:
             all_employees = self.data.get_all_employees()
+            # Фильтруем по основной ИЛИ дополнительной должности
             executors = [e for e in all_employees
-                        if (e.get('position') == self.position
-                            or e.get('secondary_position') == self.position)
-                        and e.get('status', '').lower() not in ('уволен', 'в резерве')]
+                        if e.get('position') == self.position
+                        or e.get('secondary_position') == self.position]
             print(f"[DEBUG] Найдено сотрудников для должности '{self.position}': {len(executors)} (включая secondary_position)")
         except Exception as e:
             print(f"[DataAccess ERROR] Ошибка получения сотрудников: {e}")
@@ -2896,24 +2891,14 @@ class ReassignExecutorDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self._center_on_parent()
+            self.center_on_screen()
 
-    def _center_on_parent(self):
-        """Центрирование по top-level окну (или по экрану если нет родителя)"""
-        parent = self.parent()
-        if parent:
-            parent = parent.window()
-        if parent and parent.isVisible():
-            parent_geo = parent.frameGeometry()
-            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
-            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
-            self.move(x, y)
-        else:
-            from PyQt5.QtWidgets import QDesktopWidget
-            screen = QDesktopWidget().availableGeometry()
-            x = (screen.width() - self.width()) // 2 + screen.left()
-            y = (screen.height() - self.height()) // 3 + screen.top()
-            self.move(x, y)
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 3 + screen.top()
+        self.move(x, y)
 
     def _check_payment_exists(self, all_payments, contract_id, employee_id, role, stage_name, payment_type):
         """ИСПРАВЛЕНИЕ 01.02.2026: Проверка идемпотентности - существует ли уже такой платеж"""
@@ -3073,75 +3058,6 @@ class ReassignExecutorDialog(QDialog):
                         print(f"[DataAccess] Создан новый платеж ({payment_type}) для исполнителя {new_executor_id}, сумма={old_final:.2f}, {status_text}")
                     except Exception as e:
                         print(f"[WARN] Ошибка создания нового платежа ({payment_type}): {e}")
-
-                # Верификация: Дизайнер/Чертёжник ВСЕГДА имеют Аванс + Доплата.
-                # Проверяем что ОБА типа созданы для нового исполнителя.
-                expected_types = {'Аванс', 'Доплата'}
-                try:
-                    updated_payments = self.data.get_payments_for_contract(contract_id)
-                    new_exec_payments = [
-                        p for p in updated_payments
-                        if p.get('employee_id') == new_executor_id
-                        and p.get('role') == role
-                        and not p.get('reassigned')
-                        and (self.stage_keyword.lower() in (p.get('stage_name') or '').lower()
-                             or stage_name.lower() in (p.get('stage_name') or '').lower())
-                    ]
-                    new_types = {p.get('payment_type') for p in new_exec_payments}
-                    missing_types = expected_types - new_types
-
-                    if missing_types:
-                        print(f"[VERIFY] Недостающие типы оплат для нового исполнителя: {missing_types}")
-                        # Рассчитываем сумму
-                        full_amount = 0
-                        try:
-                            result = self.data.calculate_payment_amount(
-                                contract_id, new_executor_id, role, stage_name
-                            )
-                            full_amount = float(result) if result else 0
-                        except Exception:
-                            pass
-                        half_amount = full_amount / 2 if full_amount > 0 else 0
-
-                        for missing_type in missing_types:
-                            # Помечаем старую запись этого типа как переназначенную (если ещё не помечена)
-                            for old_p in updated_payments:
-                                if (old_p.get('employee_id') == old_executor_id
-                                    and old_p.get('role') == role
-                                    and old_p.get('payment_type') == missing_type
-                                    and not old_p.get('reassigned')
-                                    and (self.stage_keyword.lower() in (old_p.get('stage_name') or '').lower()
-                                         or stage_name.lower() in (old_p.get('stage_name') or '').lower())):
-                                    try:
-                                        self.data.update_payment(old_p['id'], {
-                                            'reassigned': True,
-                                            'report_month': current_month
-                                        })
-                                        print(f"[VERIFY] Старый платеж {old_p['id']} ({missing_type}) помечен как переназначенный")
-                                    except Exception:
-                                        pass
-                                    break
-
-                            new_report_month = None if missing_type == 'Доплата' else current_month
-                            missing_data = {
-                                'contract_id': contract_id,
-                                'crm_card_id': self.card_id,
-                                'employee_id': new_executor_id,
-                                'role': role,
-                                'stage_name': stage_name,
-                                'calculated_amount': half_amount,
-                                'final_amount': half_amount,
-                                'payment_type': missing_type,
-                                'report_month': new_report_month,
-                                'reassigned': False,
-                                'old_employee_id': old_executor_id
-                            }
-                            self.data.create_payment(missing_data)
-                            print(f"[VERIFY] Создан недостающий платеж ({missing_type}) для {new_executor_id}: {half_amount:.2f}")
-                    else:
-                        print(f"[VERIFY] Все типы оплат корректно созданы: {new_types}")
-                except Exception as e:
-                    print(f"[WARN] Ошибка верификации оплат: {e}")
             else:
                 # ИСПРАВЛЕНИЕ 29.01.2026: Если старых платежей нет - создаём новые для нового исполнителя
                 print(f"[INFO] Платежи для старого исполнителя не найдены, создаём новые для нового исполнителя")
@@ -3437,24 +3353,14 @@ class SurveyDateDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self._center_on_parent()
+            self.center_on_screen()
 
-    def _center_on_parent(self):
-        """Центрирование по top-level окну (или по экрану если нет родителя)"""
-        parent = self.parent()
-        if parent:
-            parent = parent.window()
-        if parent and parent.isVisible():
-            parent_geo = parent.frameGeometry()
-            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
-            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
-            self.move(x, y)
-        else:
-            from PyQt5.QtWidgets import QDesktopWidget
-            screen = QDesktopWidget().availableGeometry()
-            x = (screen.width() - self.width()) // 2 + screen.left()
-            y = (screen.height() - self.height()) // 3 + screen.top()
-            self.move(x, y)
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 3 + screen.top()
+        self.move(x, y)
 
 
 class TechTaskDialog(QDialog):
@@ -3758,14 +3664,13 @@ class TechTaskDialog(QDialog):
 
             file_name = os.path.basename(file_path)
 
+            # ИСПРАВЛЕНИЕ 07.02.2026: Стили для диалога прогресса (#13)
             from PyQt5.QtWidgets import QProgressDialog, QApplication
             progress = QProgressDialog("Загрузка файла ТЗ на Яндекс.Диск...", None, 0, 0, self)
             progress.setWindowTitle("Загрузка")
-            progress.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
             progress.setWindowModality(Qt.WindowModal)
             progress.setCancelButton(None)
             progress.setMinimumDuration(0)
-            progress.setFixedSize(420, 100)
             progress.setValue(0)
             progress.setStyleSheet("""
                 QProgressDialog {
@@ -3778,8 +3683,6 @@ class TechTaskDialog(QDialog):
                     border-radius: 4px;
                     text-align: center;
                     background-color: #F5F5F5;
-                    min-height: 16px;
-                    max-height: 16px;
                 }
                 QProgressBar::chunk {
                     background-color: #ffd93c;
@@ -3788,7 +3691,6 @@ class TechTaskDialog(QDialog):
                 QLabel {
                     font-size: 12px;
                     color: #333333;
-                    padding: 8px;
                 }
             """)
             progress.show()
@@ -3911,24 +3813,14 @@ class TechTaskDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self._center_on_parent()
+            self.center_on_screen()
 
-    def _center_on_parent(self):
-        """Центрирование по top-level окну (или по экрану если нет родителя)"""
-        parent = self.parent()
-        if parent:
-            parent = parent.window()
-        if parent and parent.isVisible():
-            parent_geo = parent.frameGeometry()
-            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
-            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
-            self.move(x, y)
-        else:
-            from PyQt5.QtWidgets import QDesktopWidget
-            screen = QDesktopWidget().availableGeometry()
-            x = (screen.width() - self.width()) // 2 + screen.left()
-            y = (screen.height() - self.height()) // 3 + screen.top()
-            self.move(x, y)
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 3 + screen.top()
+        self.move(x, y)
 
 
 class MeasurementDialog(QDialog):
@@ -4092,9 +3984,9 @@ class MeasurementDialog(QDialog):
         for surv in surveyors:
             self.surveyor_combo.addItem(surv['full_name'], surv['id'])
 
-        # Блокируем выбор замерщика если нет прав на назначение
-        from utils.permissions import _has_perm
-        if not _has_perm(self.employee, getattr(self, 'api_client', None), 'crm_cards.assign_executor'):
+        # Блокируем выбор замерщика для самого замерщика
+        from ui.crm_tab import _emp_has_pos
+        if _emp_has_pos(self.employee, 'Замерщик'):
             self.surveyor_combo.setEnabled(False)
 
         layout.addWidget(self.surveyor_combo)
@@ -4543,22 +4435,12 @@ class MeasurementDialog(QDialog):
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
-            self._center_on_parent()
+            self.center_on_screen()
 
-    def _center_on_parent(self):
-        """Центрирование по top-level окну (или по экрану если нет родителя)"""
-        parent = self.parent()
-        if parent:
-            parent = parent.window()
-        if parent and parent.isVisible():
-            parent_geo = parent.frameGeometry()
-            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
-            y = parent_geo.y() + (parent_geo.height() - self.height()) // 3
-            self.move(x, y)
-        else:
-            from PyQt5.QtWidgets import QDesktopWidget
-            screen = QDesktopWidget().availableGeometry()
-            x = (screen.width() - self.width()) // 2 + screen.left()
-            y = (screen.height() - self.height()) // 3 + screen.top()
-            self.move(x, y)
+    def center_on_screen(self):
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 3 + screen.top()
+        self.move(x, y)
 

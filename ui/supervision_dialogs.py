@@ -584,7 +584,7 @@ class SupervisionStatisticsDialog(QDialog):
         from utils.pdf_utils import build_table_pdf
         _logger = logging.getLogger(__name__)
 
-        default_name = f'Отчет Статистика авторского надзора от {QDate.currentDate().toString("dd.MM.yyyy")}'
+        default_name = f'Отчет АН {QDate.currentDate().toString("yyyy-MM-dd")}'
         filename, _ = QFileDialog.getSaveFileName(
             self, 'Сохранить PDF', default_name, 'PDF файлы (*.pdf)'
         )
@@ -1025,14 +1025,13 @@ class AddProjectNoteDialog(QDialog):
 class SupervisionStageDeadlineDialog(QDialog):
     """Диалог установки дедлайна для стадии надзора"""
 
-    def __init__(self, parent, card_id, stage_name, api_client=None, employee=None):
+    def __init__(self, parent, card_id, stage_name, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
         self.stage_name = stage_name
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
-        self.employee = employee or getattr(parent, 'employee', None)
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -1191,41 +1190,22 @@ class SupervisionStageDeadlineDialog(QDialog):
         self.setMinimumWidth(500)
     
     def save_deadline(self):
-        """Сохранение дедлайна в карточку и в таблицу сроков (plan_date)"""
-        from utils.permissions import _has_perm
-        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.deadlines'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на управление дедлайнами.', 'error').exec_()
-            return
+        """Сохранение дедлайна"""
         deadline = self.deadline_widget.date().toString('yyyy-MM-dd')
 
         try:
             self.data.update_supervision_card(self.card_id, {
                 'deadline': deadline
             })
-
-            # Обновляем plan_date в таблице сроков для текущей стадии
-            try:
-                timeline_data = self.data.get_supervision_timeline(self.card_id) or {}
-                # get_supervision_timeline возвращает {'entries': [...], 'totals': {...}}
-                timeline_entries = timeline_data.get('entries', []) if isinstance(timeline_data, dict) else timeline_data
-                for entry in timeline_entries:
-                    if entry.get('stage_name') == self.stage_name:
-                        stage_code = entry.get('stage_code', '')
-                        self.data.update_supervision_timeline_entry(
-                            self.card_id, stage_code, {'plan_date': deadline}
-                        )
-                        print(f"[DEADLINE] plan_date обновлён для стадии '{self.stage_name}' (code={stage_code}): {deadline}")
-                        break
-            except Exception as e:
-                print(f"[WARN] Не удалось обновить plan_date в timeline: {e}")
-
+            
+            # ========== ЗАМЕНИЛИ на CustomMessageBox ==========
             CustomMessageBox(
-                self,
-                'Успех',
-                f'Дедлайн установлен на {self.deadline_widget.date().toString("dd.MM.yyyy")}!',
+                self, 
+                'Успех', 
+                f'Дедлайн установлен на {self.deadline_widget.date().toString("dd.MM.yyyy")}!', 
                 'success'
             ).exec_()
-
+            
             self.accept()
             
         except Exception as e:
@@ -1253,14 +1233,13 @@ class SupervisionStageDeadlineDialog(QDialog):
 class SupervisionReassignDANDialog(QDialog):
     """ИСПРАВЛЕНИЕ 28.01.2026: Диалог переназначения ДАН для надзора"""
 
-    def __init__(self, parent, card_id, current_dan_name, api_client=None, employee=None):
+    def __init__(self, parent, card_id, current_dan_name, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
         self.current_dan_name = current_dan_name
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
-        self.employee = employee or getattr(parent, 'employee', None)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -1409,10 +1388,6 @@ class SupervisionReassignDANDialog(QDialog):
 
     def save_reassignment(self):
         """Сохранение нового назначения ДАН"""
-        from utils.permissions import _has_perm
-        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.assign_executor'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на переназначение исполнителей.', 'error').exec_()
-            return
         new_dan_id = self.dan_combo.currentData()
 
         if not new_dan_id:
@@ -1567,21 +1542,23 @@ class SupervisionReassignDANDialog(QDialog):
             self.center_on_screen()
 
     def center_on_screen(self):
-        from utils.dialog_helpers import center_dialog_on_parent
-        center_dialog_on_parent(self)
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 2 + screen.top()
+        self.move(x, y)
 
 
 class AssignExecutorsDialog(QDialog):
     """Диалог назначения исполнителей (ДАН и СМП) при перемещении карточки на рабочую стадию"""
 
-    def __init__(self, parent, card_id, stage_name, api_client=None, employee=None):
+    def __init__(self, parent, card_id, stage_name, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
         self.stage_name = stage_name
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
-        self.employee = employee or getattr(parent, 'employee', None)
         self.assigned_dan_id = None
         self.assigned_smp_id = None
 
@@ -1739,21 +1716,16 @@ class AssignExecutorsDialog(QDialog):
 
     def save_and_continue(self):
         """Сохранение назначенных исполнителей"""
-        from utils.permissions import _has_perm
-        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.assign_executor'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на назначение исполнителей.', 'error').exec_()
-            return
         self.assigned_dan_id = self.dan_combo.currentData()
         self.assigned_smp_id = self.smp_combo.currentData()
 
         # Проверяем, что хотя бы один исполнитель назначен
         if not self.assigned_dan_id and not self.assigned_smp_id:
-            CustomMessageBox(
+            QMessageBox.warning(
                 self,
                 'Внимание',
-                'Необходимо назначить хотя бы одного исполнителя (ДАН или Старшего менеджера)',
-                'warning'
-            ).exec_()
+                'Необходимо назначить хотя бы одного исполнителя (ДАН или Старшего менеджера)'
+            )
             return
 
         # Сохраняем в БД
@@ -1776,22 +1748,23 @@ class AssignExecutorsDialog(QDialog):
             self.center_on_screen()
 
     def center_on_screen(self):
-        from utils.dialog_helpers import center_dialog_on_parent
-        center_dialog_on_parent(self)
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 2 + screen.top()
+        self.move(x, y)
 
 
 class SupervisionFileUploadDialog(QDialog):
     """Диалог загрузки файла для карточки авторского надзора с выбором стадии и даты"""
 
-    def __init__(self, parent, card_data, stages, api_client=None, simple_mode=False, employee=None):
+    def __init__(self, parent, card_data, stages, api_client=None):
         super().__init__(parent)
         self.card_data = card_data
         self.stages = stages  # Список стадий для выбора
-        self.simple_mode = simple_mode  # True = только файл, стадия, дата (без бюджета)
         self.data = DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
-        self.employee = employee or getattr(parent, 'employee', None)
         self.selected_file_path = None
         self.result_data = None  # Для передачи данных родителю
 
@@ -1909,84 +1882,74 @@ class SupervisionFileUploadDialog(QDialog):
 
         # Выбор даты
         self.date_edit = CustomDateEdit()
-        self.date_edit.setCalendarPopup(True)
-        self.date_edit.setDisplayFormat('dd.MM.yyyy')
         self.date_edit.setFixedHeight(28)
         self.date_edit.setDate(QDate.currentDate())
         form_layout.addRow('Дата:', self.date_edit)
 
-        if self.simple_mode:
-            # Простой режим: только файл, стадия, дата — без полей бюджета
-            pass
-        else:
-            # Разделитель
-            separator = QFrame()
-            separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet('color: #E0E0E0;')
-            form_layout.addRow(separator)
+        # Разделитель
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet('color: #E0E0E0;')
+        form_layout.addRow(separator)
 
-            # Доп. поля: данные для таблицы сроков надзора
-            fields_hint = QLabel('Данные для таблицы сроков (необязательно)')
-            fields_hint.setStyleSheet('color: #888; font-size: 10px; font-style: italic;')
-            form_layout.addRow(fields_hint)
+        # Доп. поля: данные для таблицы сроков надзора
+        fields_hint = QLabel('Данные для таблицы сроков (необязательно)')
+        fields_hint.setStyleSheet('color: #888; font-size: 10px; font-style: italic;')
+        form_layout.addRow(fields_hint)
 
-        if not self.simple_mode:
-            field_style = '''
-                QLineEdit {
-                    border: 1px solid #E0E0E0;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                    font-size: 12px;
-                    background-color: #FAFAFA;
-                }
-                QLineEdit:focus {
-                    border-color: #ffd93c;
-                    background-color: #FFFFFF;
-                }
-            '''
+        field_style = '''
+            QLineEdit {
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 12px;
+                background-color: #FAFAFA;
+            }
+            QLineEdit:focus {
+                border-color: #ffd93c;
+                background-color: #FFFFFF;
+            }
+        '''
 
-            # Бюджет план
-            self.budget_planned_edit = QLineEdit()
-            self.budget_planned_edit.setFixedHeight(28)
-            self.budget_planned_edit.setPlaceholderText('0')
-            self.budget_planned_edit.setStyleSheet(field_style)
-            form_layout.addRow('Бюджет план:', self.budget_planned_edit)
+        # Бюджет план
+        self.budget_planned_edit = QLineEdit()
+        self.budget_planned_edit.setFixedHeight(28)
+        self.budget_planned_edit.setPlaceholderText('0')
+        self.budget_planned_edit.setStyleSheet(field_style)
+        form_layout.addRow('Бюджет план:', self.budget_planned_edit)
 
-            # Бюджет факт
-            self.budget_actual_edit = QLineEdit()
-            self.budget_actual_edit.setFixedHeight(28)
-            self.budget_actual_edit.setPlaceholderText('0')
-            self.budget_actual_edit.setStyleSheet(field_style)
-            form_layout.addRow('Бюджет факт:', self.budget_actual_edit)
+        # Бюджет факт
+        self.budget_actual_edit = QLineEdit()
+        self.budget_actual_edit.setFixedHeight(28)
+        self.budget_actual_edit.setPlaceholderText('0')
+        self.budget_actual_edit.setStyleSheet(field_style)
+        form_layout.addRow('Бюджет факт:', self.budget_actual_edit)
 
-            # Поставщик
-            self.supplier_edit = QLineEdit()
-            self.supplier_edit.setFixedHeight(28)
-            self.supplier_edit.setPlaceholderText('Название поставщика')
-            self.supplier_edit.setStyleSheet(field_style)
-            form_layout.addRow('Поставщик:', self.supplier_edit)
+        # Поставщик
+        self.supplier_edit = QLineEdit()
+        self.supplier_edit.setFixedHeight(28)
+        self.supplier_edit.setPlaceholderText('Название поставщика')
+        self.supplier_edit.setStyleSheet(field_style)
+        form_layout.addRow('Поставщик:', self.supplier_edit)
 
-            # Комиссия
-            self.commission_edit = QLineEdit()
-            self.commission_edit.setFixedHeight(28)
-            self.commission_edit.setPlaceholderText('0')
-            self.commission_edit.setStyleSheet(field_style)
-            form_layout.addRow('Комиссия:', self.commission_edit)
+        # Комиссия
+        self.commission_edit = QLineEdit()
+        self.commission_edit.setFixedHeight(28)
+        self.commission_edit.setPlaceholderText('0')
+        self.commission_edit.setStyleSheet(field_style)
+        form_layout.addRow('Комиссия:', self.commission_edit)
 
-            # Примечания
-            self.notes_edit = QLineEdit()
-            self.notes_edit.setFixedHeight(28)
-            self.notes_edit.setPlaceholderText('Примечания')
-            self.notes_edit.setStyleSheet(field_style)
-            form_layout.addRow('Примечания:', self.notes_edit)
+        # Примечания
+        self.notes_edit = QLineEdit()
+        self.notes_edit.setFixedHeight(28)
+        self.notes_edit.setPlaceholderText('Примечания')
+        self.notes_edit.setStyleSheet(field_style)
+        form_layout.addRow('Примечания:', self.notes_edit)
 
         layout.addLayout(form_layout)
 
         # Подсказка
-        if self.simple_mode:
-            hint = QLabel('После загрузки файл будет привязан к выбранной стадии.')
-        else:
-            hint = QLabel('После загрузки файл будет привязан к выбранной стадии.\nДанные бюджета и поставщика обновятся в таблице сроков.')
+        hint = QLabel('После загрузки файл будет привязан к выбранной стадии.\nДанные бюджета и поставщика обновятся в таблице сроков.')
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic; margin-top: 10px;')
         hint.setAlignment(Qt.AlignCenter)
@@ -2087,10 +2050,6 @@ class SupervisionFileUploadDialog(QDialog):
 
     def upload_file(self):
         """Подготовить данные и закрыть диалог"""
-        from utils.permissions import _has_perm
-        if self.employee and not _has_perm(self.employee, self.api_client, 'supervision.files_upload'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на загрузку файлов.', 'error').exec_()
-            return
         if not self.selected_file_path:
             return
 
@@ -2106,16 +2065,13 @@ class SupervisionFileUploadDialog(QDialog):
             'stage': stage,
             'date': date,
             'file_name': os.path.basename(self.selected_file_path),
-        }
-        if not self.simple_mode:
             # Доп. поля для таблицы сроков
-            self.result_data.update({
-                'budget_planned': self._parse_number(self.budget_planned_edit.text()),
-                'budget_actual': self._parse_number(self.budget_actual_edit.text()),
-                'supplier': self.supplier_edit.text().strip(),
-                'commission': self._parse_number(self.commission_edit.text()),
-                'notes': self.notes_edit.text().strip(),
-            })
+            'budget_planned': self._parse_number(self.budget_planned_edit.text()),
+            'budget_actual': self._parse_number(self.budget_actual_edit.text()),
+            'supplier': self.supplier_edit.text().strip(),
+            'commission': self._parse_number(self.commission_edit.text()),
+            'notes': self.notes_edit.text().strip(),
+        }
 
         self.accept()
 
@@ -2132,135 +2088,8 @@ class SupervisionFileUploadDialog(QDialog):
             self.center_on_screen()
 
     def center_on_screen(self):
-        from utils.dialog_helpers import center_dialog_on_parent
-        center_dialog_on_parent(self)
-
-
-class SupervisionStartDateDialog(QDialog):
-    """Диалог изменения даты начала надзора — кастомный календарь в стиле проекта"""
-
-    def __init__(self, parent=None, current_date=None, data=None):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.selected_date = current_date or QDate.currentDate()
-
-        border_widget = QFrame(self)
-        border_widget.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border: 1px solid #E0E0E0;
-                border-radius: 10px;
-            }
-        """)
-
-        border_layout = QVBoxLayout()
-        border_layout.setContentsMargins(0, 0, 0, 0)
-        border_layout.setSpacing(0)
-
-        title_bar = CustomTitleBar(self, 'Изменить дату начала', simple_mode=True)
-        title_bar.setStyleSheet("""
-            CustomTitleBar {
-                background-color: #FFFFFF;
-                border-bottom: 1px solid #E0E0E0;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-            }
-        """)
-        border_layout.addWidget(title_bar)
-
-        content_widget = QWidget()
-        content_widget.setStyleSheet("""
-            QWidget {
-                background-color: #FFFFFF;
-                border-bottom-left-radius: 10px;
-                border-bottom-right-radius: 10px;
-            }
-        """)
-
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        label = QLabel('Выберите новую дату начала:')
-        label.setStyleSheet('font-size: 12px; font-weight: bold; color: #333;')
-        label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(label)
-
-        date_layout = QHBoxLayout()
-        date_layout.addStretch()
-
-        from ui.custom_dateedit import CustomDateEdit
-        from utils.calendar_helpers import add_today_button_to_dateedit
-
-        self.date_widget = CustomDateEdit()
-        self.date_widget.setCalendarPopup(True)
-        add_today_button_to_dateedit(self.date_widget)
-        self.date_widget.setDate(current_date or QDate.currentDate())
-        self.date_widget.setDisplayFormat('dd.MM.yyyy')
-        self.date_widget.setMinimumWidth(150)
-        self.date_widget.setStyleSheet("""
-            QDateEdit {
-                padding: 6px;
-                border: 1px solid #CCC;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-        """)
-        date_layout.addWidget(self.date_widget)
-        date_layout.addStretch()
-        layout.addLayout(date_layout)
-
-        # Кнопки
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        cancel_btn = QPushButton('Отмена')
-        cancel_btn.setFixedSize(100, 32)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E0E0E0; color: #333;
-                border: none; border-radius: 4px;
-                font-weight: bold; font-size: 11px;
-            }
-            QPushButton:hover { background-color: #D0D0D0; }
-        """)
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(cancel_btn)
-
-        save_btn = QPushButton('Сохранить')
-        save_btn.setFixedSize(100, 32)
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50; color: white;
-                border: none; border-radius: 4px;
-                font-weight: bold; font-size: 11px;
-            }
-            QPushButton:hover { background-color: #45a049; }
-        """)
-        save_btn.clicked.connect(self._save)
-        btn_layout.addWidget(save_btn)
-
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
-
-        content_widget.setLayout(layout)
-        border_layout.addWidget(content_widget)
-        border_widget.setLayout(border_layout)
-
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(border_widget)
-
-        self.setMinimumWidth(400)
-
-    def _save(self):
-        self.selected_date = self.date_widget.date()
-        self.accept()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not hasattr(self, '_centered'):
-            self._centered = True
-            from utils.dialog_helpers import center_dialog_on_parent
-            center_dialog_on_parent(self)
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().availableGeometry()
+        x = (screen.width() - self.width()) // 2 + screen.left()
+        y = (screen.height() - self.height()) // 2 + screen.top()
+        self.move(x, y)

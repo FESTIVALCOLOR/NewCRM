@@ -12,7 +12,7 @@ from typing import List, Optional
 from sqlalchemy import or_
 
 from database import (
-    get_db, Employee, Contract, ActivityLog, ActionHistory, ProjectFile, Rate,
+    get_db, Employee, Contract, ActivityLog, ProjectFile, Rate,
     SupervisionCard, SupervisionProjectHistory, StageExecutor,
     Payment, SupervisionTimelineEntry, MessengerChat,
 )
@@ -78,17 +78,9 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
         if not emp_id:
             continue
         amount = _calc_supervision_payment_amount(db, card.contract_id, role, stage_name)
-        if amount <= 0:
-            logger.warning(f"Пропуск авто-оплаты: card={card.id}, role={role}, stage={stage_name} — тариф не найден или area=0")
-            continue
-        # Денормализация: сохраняем имя сотрудника для истории
-        emp = db.query(Employee).filter(Employee.id == emp_id).first()
-        emp_name = emp.full_name if emp else None
-
         payment = Payment(
             contract_id=card.contract_id,
             employee_id=emp_id,
-            employee_name=emp_name,
             role=role,
             stage_name=stage_name,
             calculated_amount=amount,
@@ -98,16 +90,6 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
             supervision_card_id=card.id,
         )
         db.add(payment)
-
-        # Бизнес-история авто-создания оплаты надзора
-        db.add(ActionHistory(
-            user_id=user_id,
-            action_type='payment_created',
-            entity_type='supervision_card',
-            entity_id=card.id,
-            description=f'Авто-оплата надзора: {emp_name or "ID " + str(emp_id)}, роль: {role}, стадия: «{stage_name}», сумма: {amount}'
-        ))
-
         logger.info(f"Авто-оплата: card={card.id}, role={role}, stage={stage_name}, amount={amount}")
 
 
@@ -185,7 +167,6 @@ async def get_supervision_cards(
             contract = card.contract
             senior_manager_name = card.senior_manager.full_name if card.senior_manager else None
             dan_name = card.dan.full_name if card.dan else None
-            studio_director_name = card.studio_director.full_name if card.studio_director else None
 
             card_data = {
                 'id': card.id,
@@ -195,7 +176,6 @@ async def get_supervision_cards(
                 'tags': card.tags,
                 'senior_manager_id': card.senior_manager_id,
                 'dan_id': card.dan_id,
-                'studio_director_id': card.studio_director_id,
                 'dan_completed': card.dan_completed,
                 'is_paused': card.is_paused,
                 'pause_reason': card.pause_reason,
@@ -203,7 +183,6 @@ async def get_supervision_cards(
                 'total_pause_days': card.total_pause_days or 0,
                 'senior_manager_name': senior_manager_name,
                 'dan_name': dan_name,
-                'studio_director_name': studio_director_name,
                 'contract_number': contract.contract_number,
                 'address': contract.address,
                 'area': contract.area,
@@ -256,10 +235,6 @@ async def get_supervision_card(
         if not card:
             raise HTTPException(status_code=404, detail="Карточка надзора не найдена")
 
-        senior_manager_name = card.senior_manager.full_name if card.senior_manager else None
-        dan_name = card.dan.full_name if card.dan else None
-        studio_director_name = card.studio_director.full_name if card.studio_director else None
-
         return {
             'id': card.id,
             'contract_id': card.contract_id,
@@ -268,15 +243,11 @@ async def get_supervision_card(
             'tags': card.tags,
             'senior_manager_id': card.senior_manager_id,
             'dan_id': card.dan_id,
-            'studio_director_id': card.studio_director_id,
             'dan_completed': card.dan_completed,
             'is_paused': card.is_paused,
             'pause_reason': card.pause_reason,
             'paused_at': card.paused_at.isoformat() if card.paused_at else None,
             'total_pause_days': card.total_pause_days or 0,
-            'senior_manager_name': senior_manager_name,
-            'dan_name': dan_name,
-            'studio_director_name': studio_director_name,
             'created_at': card.created_at.isoformat() if card.created_at else None,
             'updated_at': card.updated_at.isoformat() if card.updated_at else None,
         }
@@ -318,7 +289,6 @@ async def create_supervision_card(
             "tags": card.tags,
             "senior_manager_id": card.senior_manager_id,
             "dan_id": card.dan_id,
-            "studio_director_id": card.studio_director_id,
             "dan_completed": card.dan_completed,
             "is_paused": card.is_paused,
             "pause_reason": card.pause_reason,

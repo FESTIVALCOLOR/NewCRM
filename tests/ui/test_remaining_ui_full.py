@@ -491,45 +491,15 @@ class TestTimelineCalc:
 
 def _create_dashboard(qtbot, cls_name):
     with patch('ui.dashboards.DataAccess') as MockDA, \
-         patch('ui.dashboard_widget.create_colored_icon', return_value=None):
-        mock_da = MagicMock()
-        MockDA.return_value = mock_da
-        mock_da.get_agent_types.return_value = ['Прямой', 'Агент']
-        mock_da.get_all_clients.return_value = []
-        mock_da.get_all_contracts.return_value = []
-        mock_da.get_all_employees.return_value = []
-        mock_da.get_crm_cards.return_value = []
-        mock_da.get_salaries.return_value = []
-        # Числовые значения для stats — иначе MagicMock не поддерживает :,.0f
-        _zero_stats = {
-            'total_clients': 0, 'total_individual': 0, 'total_legal': 0,
-            'clients_by_year': 0, 'agent_clients_total': 0, 'agent_clients_by_year': 0,
-            'individual_orders': 0, 'individual_area': 0,
-            'template_orders': 0, 'template_area': 0,
-            'agent_orders_by_year': 0, 'agent_area_by_year': 0,
-            'total_orders': 0, 'total_area': 0,
-            'active_orders': 0, 'archive_orders': 0,
-            'agent_active_orders': 0, 'agent_archive_orders': 0,
-            'active_employees': 0, 'reserve_employees': 0,
-            'active_admin': 0, 'active_project': 0,
-            'active_execution': 0, 'nearest_birthday': '',
-            'total_paid': 0, 'paid_by_year': 0, 'paid_by_month': 0,
-            'avg_salary': 0, 'employees_paid': 0, 'max_salary': 0,
-            'total_amount': 0, 'year_amount': 0, 'month_amount': 0,
-            'avg_amount': 0, 'total_count': 0, 'year_count': 0,
-            'agent_amount': 0, 'agent_count': 0,
-        }
-        mock_da.get_clients_dashboard_stats.return_value = _zero_stats
-        mock_da.get_contracts_dashboard_stats.return_value = _zero_stats
-        mock_da.get_crm_dashboard_stats.return_value = _zero_stats
-        mock_da.get_employees_dashboard_stats.return_value = _zero_stats
-        mock_da.get_salaries_dashboard_stats.return_value = _zero_stats
-        mock_da.get_salaries_all_payments_stats.return_value = _zero_stats
-        mock_da.get_salaries_individual_stats.return_value = _zero_stats
-        mock_da.get_salaries_template_stats.return_value = _zero_stats
-        mock_da.get_salaries_salary_stats.return_value = _zero_stats
-        mock_da.get_salaries_supervision_stats.return_value = _zero_stats
-        mock_da.get_contract_years.return_value = [2026, 2025]
+         patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+         patch('ui.dashboard_widget.os.path.exists', return_value=False):
+        MockDA.return_value = MagicMock()
+        MockDA.return_value.get_agent_types.return_value = ['Прямой', 'Агент']
+        MockDA.return_value.get_all_clients.return_value = []
+        MockDA.return_value.get_all_contracts.return_value = []
+        MockDA.return_value.get_all_employees.return_value = []
+        MockDA.return_value.get_crm_cards.return_value = []
+        MockDA.return_value.get_salaries.return_value = []
         mock_db = MagicMock()
         import ui.dashboards as dashboards_mod
         cls = getattr(dashboards_mod, cls_name)
@@ -538,7 +508,7 @@ def _create_dashboard(qtbot, cls_name):
         else:
             w = cls(db_manager=mock_db, api_client=None)
         qtbot.addWidget(w)
-        return w, mock_da
+        return w, MockDA.return_value
 
 
 class TestDashboardsCreation:
@@ -1256,8 +1226,7 @@ class TestDashboardWidgetBase:
 
     def test_create_colored_icon_no_file(self):
         from ui.dashboard_widget import create_colored_icon
-        with patch('ui.dashboard_widget.resource_path', return_value='/nonexistent'), \
-             patch('builtins.print'):
+        with patch('ui.dashboard_widget.resource_path', return_value='/nonexistent'):
             result = create_colored_icon('test.svg', '#FF0000')
             assert result is None
 
@@ -1271,14 +1240,16 @@ class TestDashboardWidgetBase:
             # Может вернуть QPixmap или None зависит от Qt
 
     def test_dashboard_creation(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             w = DashboardWidget(db_manager=MagicMock(), api_client=None)
             qtbot.addWidget(w)
             assert isinstance(w, QWidget)
 
     def test_dashboard_has_db(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             mock_db = MagicMock()
             w = DashboardWidget(db_manager=mock_db, api_client=None)
@@ -1286,7 +1257,8 @@ class TestDashboardWidgetBase:
             assert w.db is mock_db
 
     def test_dashboard_api_client(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             mock_api = MagicMock()
             w = DashboardWidget(db_manager=MagicMock(), api_client=mock_api)
@@ -1294,14 +1266,16 @@ class TestDashboardWidgetBase:
             assert w.api_client is mock_api
 
     def test_dashboard_update_metric_method(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             w = DashboardWidget(db_manager=MagicMock())
             qtbot.addWidget(w)
             assert hasattr(w, 'update_metric') or hasattr(w, 'load_data')
 
     def test_dashboard_create_metric_card(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             w = DashboardWidget(db_manager=MagicMock())
             qtbot.addWidget(w)
@@ -1310,14 +1284,16 @@ class TestDashboardWidgetBase:
                 assert card is not None
 
     def test_dashboard_is_qwidget(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             w = DashboardWidget(db_manager=MagicMock())
             qtbot.addWidget(w)
             assert isinstance(w, QWidget)
 
     def test_dashboard_has_layout(self, qtbot):
-        with patch('ui.dashboard_widget.create_colored_icon', return_value=None):
+        with patch('ui.dashboard_widget.resource_path', return_value='/fake'), \
+             patch('ui.dashboard_widget.os.path.exists', return_value=False):
             from ui.dashboard_widget import DashboardWidget
             w = DashboardWidget(db_manager=MagicMock())
             qtbot.addWidget(w)

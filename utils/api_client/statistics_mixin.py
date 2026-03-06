@@ -595,6 +595,109 @@ class StatisticsMixin:
         )
         return self._handle_response(response)
 
+    def get_reports_summary(self, year=None, quarter=None, month=None, agent_type=None,
+                             city=None, project_type=None) -> Dict[str, Any]:
+        """Получить KPI-метрики для страницы отчётов"""
+        params = {}
+        if year:
+            params['year'] = year
+        if quarter:
+            params['quarter'] = quarter
+        if month:
+            params['month'] = month
+        if agent_type:
+            params['agent_type'] = agent_type
+        if city:
+            params['city'] = city
+        if project_type:
+            params['project_type'] = project_type
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/dashboard/reports/summary",
+            params=params
+        )
+        return self._handle_response(response)
+
+    def get_reports_clients_dynamics(self, year=None, granularity="month") -> Dict[str, Any]:
+        """Получить динамику клиентов по месяцам/кварталам"""
+        params = {'granularity': granularity}
+        if year:
+            params['year'] = year
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/dashboard/reports/clients-dynamics",
+            params=params
+        )
+        return self._handle_response(response)
+
+    def get_reports_contracts_dynamics(self, year=None, granularity="month",
+                                        agent_type=None, city=None) -> Dict[str, Any]:
+        """Получить динамику договоров по месяцам"""
+        params = {'granularity': granularity}
+        if year:
+            params['year'] = year
+        if agent_type:
+            params['agent_type'] = agent_type
+        if city:
+            params['city'] = city
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/dashboard/reports/contracts-dynamics",
+            params=params
+        )
+        return self._handle_response(response)
+
+    def get_reports_crm_analytics(self, project_type="Индивидуальный", year=None,
+                                   quarter=None, month=None) -> Dict[str, Any]:
+        """Получить CRM аналитику: воронка, просрочки, время стадий"""
+        params = {'project_type': project_type}
+        if year:
+            params['year'] = year
+        if quarter:
+            params['quarter'] = quarter
+        if month:
+            params['month'] = month
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/dashboard/reports/crm-analytics",
+            params=params
+        )
+        return self._handle_response(response)
+
+    def get_reports_supervision_analytics(self, year=None, quarter=None,
+                                           month=None) -> Dict[str, Any]:
+        """Получить аналитику авторского надзора"""
+        params = {}
+        if year:
+            params['year'] = year
+        if quarter:
+            params['quarter'] = quarter
+        if month:
+            params['month'] = month
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/dashboard/reports/supervision-analytics",
+            params=params
+        )
+        return self._handle_response(response)
+
+    def get_reports_distribution(self, dimension, year=None, quarter=None,
+                                  month=None) -> Dict[str, Any]:
+        """Получить распределение по измерению (city/agent/project_type/subtype)"""
+        params = {'dimension': dimension}
+        if year:
+            params['year'] = year
+        if quarter:
+            params['quarter'] = quarter
+        if month:
+            params['month'] = month
+        response = self._request(
+            'GET',
+            f"{self.base_url}/api/dashboard/reports/distribution",
+            params=params
+        )
+        return self._handle_response(response)
+
     def get_agent_types(self) -> List[str]:
         """Получить список всех типов агентов"""
         response = self._request(

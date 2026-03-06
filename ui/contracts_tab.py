@@ -24,7 +24,7 @@ import json
 import os
 import threading
 from utils.button_debounce import debounce_click
-from utils.permissions import _has_perm
+from ui.crm_tab import _has_perm
 
 # ========== ИМПОРТ ДИАЛОГОВ (вынесены в contract_dialogs.py) ==========
 from ui.contract_dialogs import (
@@ -86,12 +86,11 @@ class ContractsTab(QWidget):
         refresh_btn.clicked.connect(self.load_contracts)
         header_layout.addWidget(refresh_btn)
 
-        if _has_perm(self.employee, self.api_client, 'contracts.create'):
-            add_btn = IconLoader.create_action_button(
-                'add', 'Создать новый договор',
-                bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
-            add_btn.clicked.connect(lambda checked: self.add_contract())
-            header_layout.addWidget(add_btn)
+        add_btn = IconLoader.create_action_button(
+            'add', 'Создать новый договор',
+            bg_color='#ffd93c', hover_color='#ffdb4d', icon_color='#000000')
+        add_btn.clicked.connect(lambda checked: self.add_contract())
+        header_layout.addWidget(add_btn)
 
         layout.addLayout(header_layout)
 
@@ -155,23 +154,12 @@ class ContractsTab(QWidget):
         self.setLayout(layout)
 
     def ensure_data_loaded(self):
-        """Ленивая загрузка: данные загружаются при первом показе таба.
-        При повторном переключении — пропускаем если кэш свежий (<30с)."""
-        import time as _time
-        now = _time.monotonic()
-        first_time = not self._data_loaded
-
-        if first_time:
+        """Ленивая загрузка: данные загружаются при первом показе таба"""
+        if not self._data_loaded:
             self._data_loaded = True
-            self._last_load_time = now
             self.data.prefer_local = True
             self.load_contracts()
             self.data.prefer_local = False
-        elif now - getattr(self, '_last_load_time', 0) < 30:
-            return
-        else:
-            self._last_load_time = now
-            self.load_contracts()
 
     def load_contracts(self):
         """Загрузка списка договоров"""
@@ -179,24 +167,13 @@ class ContractsTab(QWidget):
         self.contracts_table.setSortingEnabled(False)
 
         # Загружаем договоры через DataAccess (API с fallback на локальную БД)
-        try:
-            contracts = self.data.get_all_contracts()
-        except Exception as e:
-            CustomMessageBox(self, "Ошибка загрузки", f"Не удалось загрузить договоры: {e}", "warning").exec_()
-            contracts = None
-
-        if not contracts:
-            self.contracts_table.setRowCount(0)
-            self.contracts_table.setSortingEnabled(True)
-            print("[DB REFRESH] Нет данных о договорах")
-            return
-
+        contracts = self.data.get_all_contracts()
         print(f"[DB REFRESH] Загружено {len(contracts)} договоров")
         # Загружаем клиентов для отображения имен
         clients_dict = {}
         try:
             clients = self.data.get_all_clients()
-            clients_dict = {c['id']: c for c in (clients or [])}
+            clients_dict = {c['id']: c for c in clients}
         except Exception:
             pass
 
@@ -337,7 +314,7 @@ class ContractsTab(QWidget):
             actions_layout.addWidget(view_btn)
             actions_layout.addWidget(edit_btn)
 
-            if _has_perm(self.employee, self.api_client, 'contracts.delete'):
+            if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
                 delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=12)
                 delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''
@@ -382,9 +359,6 @@ class ContractsTab(QWidget):
     @debounce_click
     def add_contract(self):
         """Добавление договора"""
-        if not _has_perm(self.employee, self.api_client, 'contracts.create'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на создание договоров.', 'error').exec_()
-            return
         dialog = ContractDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self.load_contracts()
@@ -398,9 +372,6 @@ class ContractsTab(QWidget):
 
     def edit_contract(self, contract_data):
         """Редактирование договора"""
-        if not _has_perm(self.employee, self.api_client, 'contracts.update'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование договоров.', 'error').exec_()
-            return
         dialog = ContractDialog(self, contract_data)
         if dialog.exec_() == QDialog.Accepted:
             self.load_contracts()
@@ -409,10 +380,7 @@ class ContractsTab(QWidget):
 
     @debounce_click(delay_ms=2000)
     def delete_contract(self, contract_data):
-        """Удаление договора"""
-        if not _has_perm(self.employee, self.api_client, 'contracts.delete'):
-            CustomMessageBox(self, 'Ошибка', 'У вас нет прав на удаление договоров.', 'error').exec_()
-            return
+        """Удаление договора - ИСПРАВЛЕНО 01.02.2026: добавлен fallback и offline поддержка"""
         reply = CustomQuestionBox(
             self,
             'Подтверждение удаления',
@@ -698,7 +666,7 @@ class ContractsTab(QWidget):
             actions_layout.addWidget(view_btn)
             actions_layout.addWidget(edit_btn)
 
-            if _has_perm(self.employee, self.api_client, 'contracts.delete'):
+            if self.employee.get('position', '') == 'Руководитель студии' or self.employee.get('secondary_position', '') == 'Руководитель студии':
                 delete_btn = IconLoader.create_icon_button('delete2', '', 'Удалить заказ', icon_size=12)
                 delete_btn.setFixedSize(20, 20)
                 delete_btn.setStyleSheet('''

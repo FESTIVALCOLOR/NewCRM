@@ -2,7 +2,6 @@
 """Глубокие тесты AdminDialog, DashboardTab, EmployeeReportsTab"""
 
 import pytest
-import sys
 from unittest.mock import patch, MagicMock, PropertyMock
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QTabWidget, QGroupBox
 from PyQt5.QtCore import Qt
@@ -297,22 +296,8 @@ class TestEmployeeReportsTab:
         mock.load.return_value = QIcon()
         return mock
 
-    @staticmethod
-    def _ensure_module_clean():
-        """Гарантировать чистый импорт ui.employee_reports_tab.
-
-        Если модуль был ранее загружен с ошибкой (частичный импорт),
-        он может не содержать всех атрибутов. Удаляем из кеша чтобы
-        patch() смог его переимпортировать корректно.
-        """
-        import importlib
-        mod = sys.modules.get('ui.employee_reports_tab')
-        if mod is not None and not hasattr(mod, 'apply_no_focus_delegate'):
-            del sys.modules['ui.employee_reports_tab']
-
     def test_creation(self, qtbot, mock_da):
         from PyQt5.QtWidgets import QComboBox
-        self._ensure_module_clean()
         with patch('ui.employee_reports_tab.DatabaseManager'), \
              patch('ui.employee_reports_tab.DataAccess', return_value=mock_da), \
              patch('ui.employee_reports_tab.CustomComboBox', QComboBox), \
@@ -326,7 +311,6 @@ class TestEmployeeReportsTab:
 
     def test_report_tabs_exist(self, qtbot, mock_da):
         from PyQt5.QtWidgets import QComboBox
-        self._ensure_module_clean()
         with patch('ui.employee_reports_tab.DatabaseManager'), \
              patch('ui.employee_reports_tab.DataAccess', return_value=mock_da), \
              patch('ui.employee_reports_tab.CustomComboBox', QComboBox), \

@@ -369,6 +369,14 @@ class MetricCard(QGroupBox):
         """Обновить значение метрики"""
         self.value_label.setText(str(value))
 
+    def resizeEvent(self, event):
+        """Маска по border-radius — убирает вылезание фона в углах"""
+        super().resizeEvent(event)
+        from PyQt5.QtGui import QPainterPath, QRegion
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 8, 8)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
     def get_filter_value(self, filter_type):
         """Получить значение фильтра"""
         if filter_type in self.filter_buttons:
@@ -628,6 +636,13 @@ class KPICard(QFrame):
                 border-radius: 4px;
             """)
 
+    def resizeEvent(self, event):
+        """Маска по border-radius — убирает вылезание фона в углах"""
+        super().resizeEvent(event)
+        from PyQt5.QtGui import QPainterPath, QRegion
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
 
 class MiniKPICard(QFrame):
@@ -696,3 +711,10 @@ class MiniKPICard(QFrame):
         """Установить значение метрики"""
         self.value_label.setText(str(value))
 
+    def resizeEvent(self, event):
+        """Маска по border-radius — убирает вылезание фона в углах"""
+        super().resizeEvent(event)
+        from PyQt5.QtGui import QPainterPath, QRegion
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 8, 8)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))

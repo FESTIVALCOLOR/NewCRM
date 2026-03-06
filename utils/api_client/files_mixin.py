@@ -10,7 +10,7 @@ class FilesMixin:
             params['stage'] = stage
         response = self._request(
             'GET',
-            f"{self.base_url}/api/v1/files/contract/{contract_id}",
+            f"{self.base_url}/api/files/contract/{contract_id}",
             params=params
         )
         return self._handle_response(response)
@@ -19,7 +19,7 @@ class FilesMixin:
         """Создать запись о файле"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/v1/files",
+            f"{self.base_url}/api/files",
             json=file_data
         )
         return self._handle_response(response)
@@ -28,7 +28,7 @@ class FilesMixin:
         """Удалить запись о файле"""
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/v1/files/{file_id}"
+            f"{self.base_url}/api/files/{file_id}"
         )
         self._handle_response(response)
         return True
@@ -37,7 +37,7 @@ class FilesMixin:
         """Получить файлы, загруженные после указанного timestamp"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/v1/files/updated",
+            f"{self.base_url}/api/files/updated",
             params={"since": since},
             retry=False,
             timeout=5
@@ -48,7 +48,7 @@ class FilesMixin:
         """Пакетная проверка существования файлов на Яндекс.Диске"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/v1/files/validate",
+            f"{self.base_url}/api/files/validate",
             json={"file_ids": file_ids, "auto_clean": auto_clean}
         )
         return self._handle_response(response)
@@ -59,7 +59,7 @@ class FilesMixin:
         """
         response = self._request(
             'POST',
-            f"{self.base_url}/api/v1/files/scan/{contract_id}",
+            f"{self.base_url}/api/files/scan/{contract_id}",
             params={'scope': scope},
             timeout=60  # Сканирование может быть долгим
         )
@@ -72,7 +72,7 @@ class FilesMixin:
         upload_headers = {k: v for k, v in self.headers.items() if k.lower() != 'content-type'}
         response = self._request(
             'POST',
-            f"{self.base_url}/api/v1/files/upload",
+            f"{self.base_url}/api/files/upload",
             files={'file': (filename, file_bytes)},
             params={'yandex_path': yandex_path},
             headers=upload_headers
@@ -83,7 +83,7 @@ class FilesMixin:
         """Создать папку на Яндекс.Диске"""
         response = self._request(
             'POST',
-            f"{self.base_url}/api/v1/files/folder",
+            f"{self.base_url}/api/files/folder",
             params={'folder_path': folder_path}
         )
         return self._handle_response(response)
@@ -92,7 +92,7 @@ class FilesMixin:
         """Получить публичную ссылку на файл"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/v1/files/public-link",
+            f"{self.base_url}/api/files/public-link",
             params={'yandex_path': yandex_path}
         )
         return self._handle_response(response)
@@ -101,7 +101,7 @@ class FilesMixin:
         """Получить список файлов в папке Яндекс.Диска"""
         response = self._request(
             'GET',
-            f"{self.base_url}/api/v1/files/list",
+            f"{self.base_url}/api/files/list",
             params={'folder_path': folder_path}
         )
         return self._handle_response(response)
@@ -110,7 +110,7 @@ class FilesMixin:
         """Удалить файл с Яндекс.Диска"""
         response = self._request(
             'DELETE',
-            f"{self.base_url}/api/v1/files/yandex",
+            f"{self.base_url}/api/files/yandex",
             params={'yandex_path': yandex_path}
         )
         return self._handle_response(response)
@@ -147,7 +147,7 @@ class FilesMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/v1/files/all"
+                f"{self.base_url}/api/files/all"
             )
             return self._handle_response(response)
         except Exception as e:
@@ -159,7 +159,7 @@ class FilesMixin:
         try:
             response = self._request(
                 'GET',
-                f"{self.base_url}/api/v1/files/{file_id}",
+                f"{self.base_url}/api/files/{file_id}",
                 mark_offline=False  # Не переходим в offline при ошибке
             )
             file_info = self._handle_response(response)
@@ -174,7 +174,7 @@ class FilesMixin:
         try:
             response = self._request(
                 'PATCH',
-                f"{self.base_url}/api/v1/files/{file_id}/order",
+                f"{self.base_url}/api/files/{file_id}/order",
                 json={'file_order': new_order}
             )
             self._handle_response(response)

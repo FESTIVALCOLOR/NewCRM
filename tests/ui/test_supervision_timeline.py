@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 pytest.importorskip("PyQt5")
 
 from PyQt5.QtWidgets import QApplication, QTableWidget, QPushButton, QLabel, QComboBox
-from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QDate
 from unittest.mock import patch, MagicMock
 
@@ -20,20 +19,6 @@ def qapp():
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     app = QApplication.instance() or QApplication(sys.argv)
     yield app
-
-
-def _mock_icon_loader():
-    """IconLoader с реальными QPushButton вместо MagicMock."""
-    mock = MagicMock()
-    mock.load = MagicMock(return_value=QIcon())
-    mock.create_icon_button = MagicMock(
-        side_effect=lambda *a, **k: QPushButton(a[1] if len(a) > 1 else '')
-    )
-    mock.create_action_button = MagicMock(
-        side_effect=lambda *a, **k: QPushButton(k.get('tooltip', ''))
-    )
-    mock.get_icon_path = MagicMock(return_value='')
-    return mock
 
 
 def _make_card_data(card_id=42):
@@ -98,7 +83,7 @@ class TestSupervisionTimelineWidget:
 
     def test_create_widget(self, qapp):
         """Виджет SupervisionTimelineWidget создаётся без ошибок."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()
@@ -111,7 +96,7 @@ class TestSupervisionTimelineWidget:
 
     def test_widget_has_table(self, qapp):
         """Виджет содержит QTableWidget."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()
@@ -124,8 +109,8 @@ class TestSupervisionTimelineWidget:
             widget.close()
 
     def test_table_column_count(self, qapp):
-        """Таблица имеет столбцы согласно COLUMNS."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        """Таблица имеет 11 столбцов согласно COLUMNS."""
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()
@@ -133,12 +118,12 @@ class TestSupervisionTimelineWidget:
                 card_data=_make_card_data(),
                 data=mock_da,
             )
-            assert widget.table.columnCount() == len(widget.COLUMNS)
+            assert widget.table.columnCount() == 11
             widget.close()
 
     def test_table_headers(self, qapp):
         """Заголовки таблицы соответствуют COLUMNS."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()
@@ -146,7 +131,9 @@ class TestSupervisionTimelineWidget:
                 card_data=_make_card_data(),
                 data=mock_da,
             )
-            expected = widget.COLUMNS
+            expected = ['Стадия', 'План. дата', 'Факт. дата', 'Дней',
+                        'Бюджет план', 'Бюджет факт', 'Экономия',
+                        'Поставщик', 'Комиссия', 'Статус', 'Примечания']
             for col, expected_header in enumerate(expected):
                 actual = widget.table.horizontalHeaderItem(col).text()
                 assert actual == expected_header, f"Столбец {col}: ожидалось '{expected_header}', получено '{actual}'"
@@ -155,7 +142,7 @@ class TestSupervisionTimelineWidget:
     def test_populate_table_with_entries(self, qapp):
         """Таблица заполняется строками при наличии данных."""
         entries = _make_sample_entries()
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data(entries=entries)
@@ -169,7 +156,7 @@ class TestSupervisionTimelineWidget:
 
     def test_summary_labels_present(self, qapp):
         """Виджет содержит сводные метки для бюджетов."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()
@@ -184,7 +171,7 @@ class TestSupervisionTimelineWidget:
 
     def test_export_buttons_present(self, qapp):
         """Кнопки экспорта в Excel и PDF присутствуют."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()
@@ -192,9 +179,9 @@ class TestSupervisionTimelineWidget:
                 card_data=_make_card_data(),
                 data=mock_da,
             )
-            assert hasattr(widget, 'btn_excel_comm')
-            assert hasattr(widget, 'btn_pdf_comm')
-            assert 'Excel' in widget.btn_excel_comm.text()
+            assert hasattr(widget, 'btn_excel')
+            assert hasattr(widget, 'btn_pdf')
+            assert widget.btn_excel.text() == 'Экспорт в Excel'
             widget.close()
 
     def test_networkdays_function(self, qapp):
@@ -216,7 +203,7 @@ class TestSupervisionTimelineWidget:
         entries[0]['actual_date'] = '2026-01-15'
         entries[1]['actual_date'] = '2026-01-22'
 
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data(entries=entries)
@@ -232,7 +219,7 @@ class TestSupervisionTimelineWidget:
 
     def test_address_label_shows_address(self, qapp):
         """Метка адреса отображает адрес из данных контракта."""
-        with patch('ui.supervision_timeline_widget.IconLoader', _mock_icon_loader()), \
+        with patch('ui.supervision_timeline_widget.IconLoader'), \
              patch('utils.calendar_helpers.add_today_button_to_dateedit', return_value=MagicMock()):
             from ui.supervision_timeline_widget import SupervisionTimelineWidget
             mock_da = _make_mock_data()

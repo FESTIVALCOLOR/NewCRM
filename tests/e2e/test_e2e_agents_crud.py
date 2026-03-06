@@ -17,8 +17,8 @@ class TestAgentsCrud:
     """Тесты CRUD агентов"""
 
     def test_get_all_agents(self, api_base, admin_headers):
-        """GET /api/v1/agents — получить список агентов"""
-        resp = api_get(api_base, "/api/v1/agents", admin_headers)
+        """GET /api/agents — получить список агентов"""
+        resp = api_get(api_base, "/api/agents", admin_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
@@ -31,10 +31,10 @@ class TestAgentsCrud:
             assert len(agent["name"]) > 0, "name агента не должен быть пустым"
 
     def test_add_agent(self, api_base, admin_headers):
-        """POST /api/v1/agents — добавить нового агента"""
+        """POST /api/agents — добавить нового агента"""
         agent_name = f"{TEST_PREFIX}АГЕНТ"
         resp = api_post(
-            api_base, "/api/v1/agents", admin_headers,
+            api_base, "/api/agents", admin_headers,
             json={"name": agent_name, "color": "#FF5733"}
         )
         assert resp.status_code in (200, 400)  # 400 если уже существует
@@ -45,27 +45,27 @@ class TestAgentsCrud:
             assert isinstance(data["id"], int), "id в ответе создания агента должен быть целым числом"
             assert data["id"] > 0, "id агента должен быть положительным"
             # Проверяем что агент появился в списке
-            list_resp = api_get(api_base, "/api/v1/agents", admin_headers)
+            list_resp = api_get(api_base, "/api/agents", admin_headers)
             agents = list_resp.json()
             assert any(a.get("full_name") == agent_name or a.get("name") == agent_name for a in agents)
 
     def test_update_agent_color(self, api_base, admin_headers):
-        """PATCH /api/v1/agents/{name}/color — обновить цвет агента"""
+        """PATCH /api/agents/{name}/color — обновить цвет агента"""
         # Используем существующего агента
-        resp = api_get(api_base, "/api/v1/agents", admin_headers)
+        resp = api_get(api_base, "/api/agents", admin_headers)
         agents = resp.json()
         if agents:
             agent_name = agents[0].get("full_name") or agents[0].get("name", "ФЕСТИВАЛЬ")
             patch_resp = api_patch(
-                api_base, f"/api/v1/agents/{agent_name}/color", admin_headers,
+                api_base, f"/api/agents/{agent_name}/color", admin_headers,
                 json={"color": "#FFD93C"}
             )
             assert patch_resp.status_code in (200, 404)
 
     def test_update_nonexistent_agent(self, api_base, admin_headers):
-        """PATCH /api/v1/agents/NONEXISTENT/color — несуществующий агент"""
+        """PATCH /api/agents/NONEXISTENT/color — несуществующий агент"""
         resp = api_patch(
-            api_base, "/api/v1/agents/NONEXISTENT_999/color", admin_headers,
+            api_base, "/api/agents/NONEXISTENT_999/color", admin_headers,
             json={"color": "#000000"}
         )
         assert resp.status_code in (404, 422)
@@ -75,12 +75,12 @@ class TestAgentsCrud:
         # Создаём агента специально для удаления
         agent_name = f"{TEST_PREFIX}УДАЛЯЕМЫЙ"
         create_resp = api_post(
-            api_base, "/api/v1/agents", admin_headers,
+            api_base, "/api/agents", admin_headers,
             json={"name": agent_name, "color": "#AABBCC"}
         )
         if create_resp.status_code == 400:
             # Агент уже существует — найдём его id
-            list_resp = api_get(api_base, "/api/v1/agents", admin_headers,
+            list_resp = api_get(api_base, "/api/agents", admin_headers,
                                 params={"include_deleted": "false"})
             agents = list_resp.json()
             agent = next((a for a in agents if a.get("name") == agent_name), None)
@@ -93,14 +93,14 @@ class TestAgentsCrud:
             agent_id = create_resp.json()["id"]
 
         # Удаляем агента
-        del_resp = api_delete(api_base, f"/api/v1/agents/{agent_id}", admin_headers)
+        del_resp = api_delete(api_base, f"/api/agents/{agent_id}", admin_headers)
         assert del_resp.status_code in (200, 204, 409), (
             f"DELETE агента: ожидается 200/204/409, получено {del_resp.status_code}"
         )
 
         if del_resp.status_code in (200, 204):
             # Проверяем что агент больше не в активном списке
-            list_resp = api_get(api_base, "/api/v1/agents", admin_headers)
+            list_resp = api_get(api_base, "/api/agents", admin_headers)
             assert list_resp.status_code == 200
             agents = list_resp.json()
             # После мягкого удаления агент должен отсутствовать в списке (без include_deleted)
@@ -114,7 +114,7 @@ class TestAgentsCrud:
 
         # Первый запрос — создаём агента
         first_resp = api_post(
-            api_base, "/api/v1/agents", admin_headers,
+            api_base, "/api/agents", admin_headers,
             json={"name": agent_name, "color": "#123456"}
         )
         # Первый запрос: 200 (создан) или 400 (уже был создан ранее)
@@ -122,7 +122,7 @@ class TestAgentsCrud:
 
         # Второй запрос с тем же именем — обязательно 400
         second_resp = api_post(
-            api_base, "/api/v1/agents", admin_headers,
+            api_base, "/api/agents", admin_headers,
             json={"name": agent_name, "color": "#654321"}
         )
         assert second_resp.status_code == 400, (
@@ -133,6 +133,6 @@ class TestAgentsCrud:
         assert "detail" in error_data, "Ответ ошибки должен содержать ключ detail"
 
     def test_agents_require_auth(self, api_base):
-        """GET /api/v1/agents без токена — 401"""
-        resp = api_get(api_base, "/api/v1/agents", {})
+        """GET /api/agents без токена — 401"""
+        resp = api_get(api_base, "/api/agents", {})
         assert resp.status_code in (401, 403)

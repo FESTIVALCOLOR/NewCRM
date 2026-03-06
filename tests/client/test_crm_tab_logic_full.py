@@ -128,14 +128,10 @@ class TestLoadUserPermissions:
         emp = {'id': 5, 'role': 'admin'}
         _load_user_permissions(emp, None)
         assert 5 in _user_permissions_cache
-        # Проверяем формат кортежа (perms, timestamp)
-        cached = _user_permissions_cache[5]
-        assert isinstance(cached, tuple) and len(cached) == 2
 
     def test_returns_cached_value(self):
-        import time
         from ui.crm_tab import _load_user_permissions, _user_permissions_cache
-        _user_permissions_cache[6] = ({'custom_perm'}, time.time())
+        _user_permissions_cache[6] = {'custom_perm'}
         emp = {'id': 6, 'role': 'user'}
         result = _load_user_permissions(emp, None)
         assert result == {'custom_perm'}
@@ -158,22 +154,19 @@ class TestHasPerm:
         assert _has_perm(emp, None, 'anything') is True
 
     def test_user_with_perm(self):
-        import time
         from ui.crm_tab import _has_perm, _user_permissions_cache
-        _user_permissions_cache[11] = ({'view_crm', 'edit_crm'}, time.time())
+        _user_permissions_cache[11] = {'view_crm', 'edit_crm'}
         emp = {'id': 11, 'role': 'user'}
         assert _has_perm(emp, None, 'view_crm') is True
 
     def test_user_without_perm(self):
-        import time
         from ui.crm_tab import _has_perm, _user_permissions_cache
-        _user_permissions_cache[12] = ({'view_crm'}, time.time())
+        _user_permissions_cache[12] = {'view_crm'}
         emp = {'id': 12, 'role': 'user'}
         assert _has_perm(emp, None, 'delete_crm') is False
 
     def test_user_with_no_perms(self):
-        import time
         from ui.crm_tab import _has_perm, _user_permissions_cache
-        _user_permissions_cache[13] = (set(), time.time())
+        _user_permissions_cache[13] = set()
         emp = {'id': 13, 'role': 'user'}
         assert _has_perm(emp, None, 'view_crm') is False

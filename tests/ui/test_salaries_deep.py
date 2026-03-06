@@ -225,16 +225,14 @@ class TestSalariesLazyLoading:
         tab.ensure_data_loaded()
         assert tab._data_loaded is True
 
-    def test_double_ensure_reloads_via_cache(self, qtbot, mock_data_access, mock_employee_admin):
-        """Повторный ensure_data_loaded обновляет данные (через кэш DataAccess)."""
+    def test_double_ensure_no_reload(self, qtbot, mock_data_access, mock_employee_admin):
+        """Повторный ensure_data_loaded не перезагружает данные."""
         mock_data_access.get_year_payments.return_value = []
         tab = _create_salaries_tab(qtbot, mock_data_access, mock_employee_admin)
         tab.ensure_data_loaded()
         call_count = mock_data_access.get_year_payments.call_count
-        assert call_count >= 1
         tab.ensure_data_loaded()
-        # При повторном вызове данные перезагружаются
-        assert mock_data_access.get_year_payments.call_count > call_count
+        assert mock_data_access.get_year_payments.call_count == call_count
 
     def test_ensure_data_loaded_uses_prefer_local(self, qtbot, mock_data_access, mock_employee_admin):
         """Первая загрузка использует prefer_local для мгновенного отображения."""

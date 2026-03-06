@@ -288,22 +288,19 @@ class TestCrmTabCardMoveCallbacks:
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
         mock_data_access.get_crm_cards.return_value = []
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('PyQt5.QtWidgets.QMessageBox') as mock_qmb:
             tab.on_card_moved(300, 'Стадия 1: планировочные решения', 'Новый заказ', 'Индивидуальный')
-            mock_cls.assert_called_once()
-            assert mock_cls.call_args[0][3] == 'warning'
+            mock_qmb.warning.assert_called_once()
 
     def test_move_within_same_column_allowed(self, qtbot, mock_data_access, mock_employee_admin):
         """Перемещение в ту же колонку не блокируется правилом 'Новый заказ'."""
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
         mock_data_access.get_crm_cards.return_value = []
         # Перемещение Новый заказ -> Новый заказ не должно показать предупреждение
-        mock_msg = MagicMock()
-        with patch('ui.crm_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('PyQt5.QtWidgets.QMessageBox') as mock_qmb:
             # Этот вызов пройдет правило "нельзя в Новый заказ" (from==to=='Новый заказ')
             tab.on_card_moved(300, 'Новый заказ', 'Новый заказ', 'Индивидуальный')
-            mock_cls.assert_not_called()
+            mock_qmb.warning.assert_not_called()
 
     def test_move_from_ozhidanie_wrong_column_blocked(self, qtbot, mock_data_access, mock_employee_admin):
         """Из 'В ожидании' можно вернуть только в прежний столбец или 'Выполненный проект'."""
@@ -312,11 +309,9 @@ class TestCrmTabCardMoveCallbacks:
         mock_data_access.get_crm_cards.return_value = []
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('PyQt5.QtWidgets.QMessageBox') as mock_qmb:
             tab.on_card_moved(300, 'В ожидании', 'Стадия 2: концепция дизайна', 'Индивидуальный')
-            mock_cls.assert_called_once()
-            assert mock_cls.call_args[0][3] == 'warning'
+            mock_qmb.warning.assert_called_once()
 
     def test_move_from_ozhidanie_to_prev_column_allowed(self, qtbot, mock_data_access, mock_employee_admin):
         """Из 'В ожидании' в прежний столбец — разрешено."""
@@ -328,11 +323,10 @@ class TestCrmTabCardMoveCallbacks:
         mock_data_access.get_stage_completion_info.return_value = {'stage': None, 'approval': None}
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_tab.CustomMessageBox', return_value=mock_msg) as mock_cls, \
+        with patch('PyQt5.QtWidgets.QMessageBox') as mock_qmb, \
              patch.object(tab, 'requires_executor_selection', return_value=False):
             tab.on_card_moved(300, 'В ожидании', 'Стадия 1: планировочные решения', 'Индивидуальный')
-            mock_cls.assert_not_called()
+            mock_qmb.warning.assert_not_called()
 
     def test_move_calls_update_crm_card_column(self, qtbot, mock_data_access, mock_employee_admin):
         """При успешном перемещении вызывается update_crm_card_column или move_crm_card."""
@@ -892,11 +886,9 @@ class TestSupervisionTabMoveCallbacks:
         mock_data_access.get_supervision_cards_archived.return_value = []
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_supervision_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('ui.crm_supervision_tab.QMessageBox') as mock_qmb:
             tab.on_card_moved(500, 'Стадия 1: Закупка керамогранита', 'Новый заказ')
-            mock_cls.assert_called_once()
-            assert mock_cls.call_args[0][3] == 'warning'
+            mock_qmb.warning.assert_called_once()
 
     def test_move_noviy_to_noviy_not_blocked(self, qtbot, mock_data_access, mock_employee_admin):
         """Перемещение из 'Новый заказ' в 'Новый заказ' не блокируется."""
@@ -904,10 +896,9 @@ class TestSupervisionTabMoveCallbacks:
         mock_data_access.get_supervision_cards_archived.return_value = []
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_supervision_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('ui.crm_supervision_tab.QMessageBox') as mock_qmb:
             tab.on_card_moved(500, 'Новый заказ', 'Новый заказ')
-            mock_cls.assert_not_called()
+            mock_qmb.warning.assert_not_called()
 
     def test_move_from_ozhidanie_wrong_column(self, qtbot, mock_data_access, mock_employee_admin):
         """Из 'В ожидании' можно только в прежний столбец или 'Выполненный проект'."""
@@ -917,11 +908,9 @@ class TestSupervisionTabMoveCallbacks:
         mock_data_access.get_supervision_cards_archived.return_value = []
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_supervision_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('ui.crm_supervision_tab.QMessageBox') as mock_qmb:
             tab.on_card_moved(500, 'В ожидании', 'Стадия 5: Закупка настенных материалов')
-            mock_cls.assert_called_once()
-            assert mock_cls.call_args[0][3] == 'warning'
+            mock_qmb.warning.assert_called_once()
 
     def test_move_from_ozhidanie_to_vipolnenniy_allowed(self, qtbot, mock_data_access, mock_employee_admin):
         """Из 'В ожидании' в 'Выполненный проект' — разрешено."""
@@ -932,10 +921,9 @@ class TestSupervisionTabMoveCallbacks:
         mock_data_access.add_supervision_history.return_value = None
         tab = _create_supervision_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        mock_msg = MagicMock()
-        with patch('ui.crm_supervision_tab.CustomMessageBox', return_value=mock_msg) as mock_cls:
+        with patch('ui.crm_supervision_tab.QMessageBox') as mock_qmb:
             tab.on_card_moved(500, 'В ожидании', 'Выполненный проект')
-            mock_cls.assert_not_called()
+            mock_qmb.warning.assert_not_called()
 
     def test_update_tab_counters(self, qtbot, mock_data_access, mock_employee_admin):
         """update_tab_counters обновляет текст вкладок."""
