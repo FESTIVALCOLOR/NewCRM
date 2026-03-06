@@ -757,11 +757,18 @@ class EmployeesTab(QWidget):
 
         try:
             result = self.data.send_employee_invite(emp_id)
-            if result:
+            if result is True:
                 CustomMessageBox(
                     self, 'Приглашение отправлено',
                     f'Письмо с данными для входа и ссылкой на Telegram бот отправлено на {emp_email}.',
                     'success'
+                ).exec_()
+            elif isinstance(result, str) and result:
+                # Сервер вернул конкретную причину ошибки
+                CustomMessageBox(
+                    self, 'Ошибка отправки',
+                    f'Не удалось отправить письмо:\n{result}',
+                    'error'
                 ).exec_()
             else:
                 CustomMessageBox(

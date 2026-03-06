@@ -300,7 +300,7 @@ body {{ font-family:'Segoe UI',Arial,sans-serif;background:#f0f0f0;padding:30px 
 
         except Exception as e:
             logger.error(f"Ошибка отправки email на {to_email}: {e}")
-            return False
+            raise
 
 
 # Синглтон

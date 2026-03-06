@@ -366,14 +366,22 @@ class MiscMixin:
             print(f"[API] Ошибка обновления настроек уведомлений: {e}")
             return None
 
-    def send_employee_invite(self, employee_id: int) -> bool:
-        """Отправить приглашение сотруднику (welcome email + Telegram deep link)"""
+    def send_employee_invite(self, employee_id: int):
+        """Отправить приглашение сотруднику (welcome email + Telegram deep link).
+        Возвращает True при успехе, строку с ошибкой при неудаче, False при сетевой ошибке."""
         try:
             response = self._request(
                 'POST',
                 f"{self.base_url}/api/v1/employees/{employee_id}/send-invite"
             )
-            return response.status_code == 200
+            if response.status_code == 200:
+                return True
+            # Извлекаем detail из ответа сервера для показа пользователю
+            try:
+                detail = response.json().get('detail', '')
+            except Exception:
+                detail = ''
+            return detail or f"HTTP {response.status_code}"
         except Exception as e:
             print(f"[API] Ошибка отправки приглашения сотруднику: {e}")
             return False

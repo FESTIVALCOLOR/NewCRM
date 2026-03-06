@@ -205,13 +205,16 @@ async def send_employee_invite(
     if not email_svc.available:
         raise HTTPException(status_code=503, detail="Email-сервис не настроен")
 
-    ok = await email_svc.send_welcome_email(
-        to_email=employee.email,
-        employee_name=employee.full_name,
-        login=employee.login or "",
-        password="(задан администратором)",
-        telegram_token=token,
-    )
+    try:
+        ok = await email_svc.send_welcome_email(
+            to_email=employee.email,
+            employee_name=employee.full_name,
+            login=employee.login or "",
+            password="(задан администратором)",
+            telegram_token=token,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка SMTP: {e}")
 
     if not ok:
         raise HTTPException(status_code=500, detail="Ошибка отправки письма")
