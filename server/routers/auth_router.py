@@ -179,6 +179,9 @@ async def login(
     employee.last_login = datetime.utcnow()
     employee.is_online = True
     employee.current_session_token = access_token
+    # Очистка временного пароля после первого входа
+    if employee.invite_temp_password:
+        employee.invite_temp_password = None
 
     # Создание сессии с refresh_token
     session = UserSession(

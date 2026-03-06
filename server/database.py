@@ -76,6 +76,9 @@ class Employee(Base):
     telegram_link_token = Column(String(32), nullable=True, index=True)
     telegram_link_token_expires = Column(DateTime, nullable=True)
 
+    # Временный пароль для invite-письма (plaintext, очищается после первого входа)
+    invite_temp_password = Column(String, nullable=True)
+
     # Даты
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -198,10 +198,14 @@ async def send_employee_invite(
     employee.telegram_link_token = token
     employee.telegram_link_token_expires = datetime.utcnow() + timedelta(days=7)
 
-    # Генерация временного пароля и сохранение в БД
+    # Временный пароль: используем существующий или генерируем новый
     from auth import get_password_hash
-    temp_password = secrets.token_urlsafe(8)
-    employee.password_hash = get_password_hash(temp_password)
+    if employee.invite_temp_password:
+        temp_password = employee.invite_temp_password
+    else:
+        temp_password = secrets.token_urlsafe(8)
+        employee.invite_temp_password = temp_password
+        employee.password_hash = get_password_hash(temp_password)
 
     db.commit()
 
