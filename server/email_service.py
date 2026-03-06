@@ -103,72 +103,6 @@ class EmailService:
 
         return await self._send_email(to_email, subject, html_body)
 
-    async def _send_email(
-        self, to_email: str, subject: str, html_body: str
-    ) -> bool:
-        """Отправить email через SMTP"""
-        try:
-            msg = MIMEMultipart("alternative")
-            msg["From"] = f"{self._from_name} <{self._username}>"
-            msg["To"] = to_email
-            msg["Subject"] = subject
-
-            # Текстовая версия
-            text_part = MIMEText(
-                f"Вас пригласили в проектный чат. "
-                f"Присоединяйтесь: {subject}",
-                "plain", "utf-8"
-            )
-            html_part = MIMEText(html_body, "html", "utf-8")
-
-            msg.attach(text_part)
-            msg.attach(html_part)
-
-            # SSL контекст
-            tls_context = ssl.create_default_context()
-
-            if self._use_tls and self._port == 465:
-                # SSL/TLS (порт 465)
-                await aiosmtplib.send(
-                    msg,
-                    hostname=self._host,
-                    port=self._port,
-                    username=self._username,
-                    password=self._password,
-                    use_tls=True,
-                    tls_context=tls_context,
-                )
-            else:
-                # STARTTLS (порт 587)
-                await aiosmtplib.send(
-                    msg,
-                    hostname=self._host,
-                    port=self._port,
-                    username=self._username,
-                    password=self._password,
-                    start_tls=True,
-                    tls_context=tls_context,
-                )
-
-            logger.info(f"Email отправлен на {to_email}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Ошибка отправки email на {to_email}: {e}")
-            return False
-
-
-# Синглтон
-_email_service: Optional[EmailService] = None
-
-
-def get_email_service() -> EmailService:
-    """Получить экземпляр EmailService"""
-    global _email_service
-    if _email_service is None:
-        _email_service = EmailService()
-    return _email_service
-
     async def send_welcome_email(
         self,
         to_email: str,
@@ -327,10 +261,8 @@ body {{ font-family:'Segoe UI',Arial,sans-serif;background:#f0f0f0;padding:30px 
             msg["To"] = to_email
             msg["Subject"] = subject
 
-            # Текстовая версия
             text_part = MIMEText(
-                f"Вас пригласили в проектный чат. "
-                f"Присоединяйтесь: {subject}",
+                f"Вас пригласили. Присоединяйтесь: {subject}",
                 "plain", "utf-8"
             )
             html_part = MIMEText(html_body, "html", "utf-8")
@@ -338,7 +270,6 @@ body {{ font-family:'Segoe UI',Arial,sans-serif;background:#f0f0f0;padding:30px 
             msg.attach(text_part)
             msg.attach(html_part)
 
-            # SSL контекст
             tls_context = ssl.create_default_context()
 
             if self._use_tls and self._port == 465:

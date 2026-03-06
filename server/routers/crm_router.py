@@ -2168,8 +2168,8 @@ async def invite_client_to_chat(
 
     # Отправить письмо
     try:
-        from email_service import EmailService
-        email_svc = EmailService()
+        from email_service import get_email_service
+        email_svc = get_email_service()
         manager_name = current_user.full_name
         project_type = getattr(contract, 'project_type', 'Интерьерный проект')
         project_address = getattr(contract, 'address', card.address or '')
