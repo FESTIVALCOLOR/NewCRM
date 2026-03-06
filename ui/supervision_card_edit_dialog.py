@@ -1463,11 +1463,9 @@ class SupervisionCardEditDialog(QDialog):
 
     def _save_payment_locally(self, payment_id, amount, report_month):
         """Вспомогательный метод для сохранения платежа (через DataAccess)"""
-        self.data.update_payment_manual(payment_id, amount)
-        self.data.execute_raw_update(
-            "UPDATE payments SET report_month = ?, reassigned = 0 WHERE id = ?",
-            (report_month, payment_id)
-        )
+        self.data.update_payment_manual(payment_id, amount, report_month=report_month)
+        # Сбрасываем reassigned через DataAccess (не raw SQL)
+        self.data.update_payment(payment_id, {'reassigned': False})
 
     def _finish_save_manual_amount(self, payment_id, amount, report_month, dialog):
         """Завершение сохранения ручной суммы - обновление UI"""
@@ -2627,7 +2625,7 @@ class SupervisionCardEditDialog(QDialog):
             return
 
         try:
-            # Удаляем файл через DataAccess
+            # Удаляем файл через DataAccess (удаляет и локально, и через API)
             if self.data.is_multi_user:
                 try:
                     self.data.delete_file_record(file_id)
@@ -2636,13 +2634,11 @@ class SupervisionCardEditDialog(QDialog):
                     print(f"[ERROR] Ошибка удаления файла с сервера: {api_err}")
                     CustomMessageBox(self, 'Ошибка', f'Не удалось удалить файл с сервера: {api_err}', 'error').exec_()
                     return
-                # Удаляем из локальной БД после успешного удаления на сервере
-                self.data.execute_raw_update('DELETE FROM project_files WHERE id = ?', (file_id,))
             else:
                 # Offline: удаляем локально и с ЯД напрямую
                 if self.yandex_disk and yandex_path:
                     self.yandex_disk.delete_file(yandex_path)
-                self.data.execute_raw_update('DELETE FROM project_files WHERE id = ?', (file_id,))
+                self.data.delete_file_record(file_id)
 
             CustomMessageBox(self, 'Успех', 'Файл удален', 'success').exec_()
 
@@ -3337,12 +3333,14 @@ class SupervisionCardEditDialog(QDialog):
             traceback.print_exc()
 
     def _delete_payments_locally(self, role_name):
-        """Вспомогательный метод для удаления платежей (через DataAccess)"""
+        """Вспомогательный метод для удаления платежей (через DataAccess API)"""
         try:
-            deleted_count = self.data.execute_raw_update(
-                "DELETE FROM payments WHERE supervision_card_id = ? AND role = ?",
-                (self.card_data['id'], role_name)
-            )
+            payments = self.data.get_payments_by_supervision_card(self.card_data['id']) or []
+            deleted_count = 0
+            for p in payments:
+                if p.get('role') == role_name:
+                    self.data.delete_payment(p['id'])
+                    deleted_count += 1
             if deleted_count > 0:
                 print(f"[DataAccess] Удалено {deleted_count} старых оплат надзора для роли {role_name}")
         except Exception as e:

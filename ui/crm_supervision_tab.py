@@ -797,14 +797,10 @@ class CRMSupervisionTab(QWidget):
         """Переключение вкладок"""
         if getattr(self, '_loading_guard', False):
             return
-        self.data.prefer_local = True
-        try:
-            if index == 0:
-                self.load_active_cards()
-            elif index == 1:
-                self.load_archive_cards()
-        finally:
-            self.data.prefer_local = False
+        if index == 0:
+            self.load_active_cards()
+        elif index == 1:
+            self.load_archive_cards()
     
     def _get_sync_manager(self):
         """Получить SyncManager из главного окна"""

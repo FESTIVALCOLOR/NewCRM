@@ -1723,7 +1723,7 @@ class AssignExecutorsDialog(QDialog):
 
     def _load_managers(self):
         """Загрузка списка старших менеджеров"""
-        managers = self.data.get_employees_by_position('Старший менеджер проектов')
+        managers = self.data.get_employees_by_position('Старший менеджер проектов') or []
 
         self.smp_combo.addItem('Не назначен', None)
         for manager in managers:
@@ -1731,7 +1731,7 @@ class AssignExecutorsDialog(QDialog):
 
     def _load_dans(self):
         """Загрузка списка ДАН"""
-        dans = self.data.get_employees_by_position('ДАН')
+        dans = self.data.get_employees_by_position('ДАН') or []
 
         self.dan_combo.addItem('Не назначен', None)
         for dan in dans:
