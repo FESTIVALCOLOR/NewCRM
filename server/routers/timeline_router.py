@@ -378,7 +378,6 @@ async def export_timeline_pdf(
 
     def _add_subtotal(label):
         """Вставить строку «Итого этапа»."""
-        nonlocal stage_actual_sum, stage_norm_sum
         row_idx = len(rows) + 1
         rows.append([
             Paragraph(f'<b>Итого {label}:</b>', bold_style),
