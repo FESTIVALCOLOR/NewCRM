@@ -2125,8 +2125,10 @@ class SupervisionFileUploadDialog(QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Подключаем сигнал изменения стадии
-        self.stage_combo.currentIndexChanged.connect(self.update_upload_button)
+        # Подключаем сигнал изменения стадии (однократно, иначе утечка при повторных showEvent)
+        if not hasattr(self, '_signals_connected'):
+            self._signals_connected = True
+            self.stage_combo.currentIndexChanged.connect(self.update_upload_button)
         if not hasattr(self, '_centered'):
             self._centered = True
             self.center_on_screen()

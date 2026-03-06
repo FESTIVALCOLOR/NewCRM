@@ -934,20 +934,14 @@ class CRMSupervisionTab(QWidget):
                         from datetime import datetime
                         current_month = datetime.now().strftime('%Y-%m')
 
-                        # Получаем contract_id через DataAccess
-                        card_rows = self.data.execute_raw_query(
-                            'SELECT contract_id FROM supervision_cards WHERE id = ?', (card_id,)
-                        )
-                        card_row = card_rows[0] if card_rows else None
+                        # Получаем contract_id через DataAccess (не прямой SQL)
+                        card_api_data_for_contract = self.data.get_supervision_card(card_id)
+                        contract_id = (card_api_data_for_contract or {}).get('contract_id')
 
-                        if card_row:
-                            contract_id = card_row['contract_id']
-
-                            # Проверяем, есть ли уже оплаты для этой стадии
-                            existing_payments = self.data.execute_raw_query(
-                                'SELECT id FROM payments WHERE supervision_card_id = ? AND stage_name = ?',
-                                (card_id, from_column)
-                            )
+                        if contract_id:
+                            # Проверяем, есть ли уже оплаты для этой стадии через DataAccess
+                            all_card_payments = self.data.get_payments_by_supervision_card(card_id) or []
+                            existing_payments = [p for p in all_card_payments if p.get('stage_name') == from_column]
 
                             # Если оплат для этой стадии нет, создаем их
                             if not existing_payments:
@@ -1030,13 +1024,12 @@ class CRMSupervisionTab(QWidget):
                                     except Exception as e:
                                         print(f"[WARN] Ошибка верификации дублей оплат: {e}")
                             else:
-                                # Если оплаты уже есть, обновляем отчетный месяц
-                                updated_count = self.data.execute_raw_update(
-                                    """UPDATE payments SET report_month = ?
-                                    WHERE supervision_card_id = ? AND stage_name = ?
-                                    AND (report_month IS NULL OR report_month = '')""",
-                                    (current_month, card_id, from_column)
-                                )
+                                # Если оплаты уже есть, обновляем отчетный месяц через DataAccess
+                                updated_count = 0
+                                for ep in existing_payments:
+                                    if not ep.get('report_month'):
+                                        self.data.update_payment(ep['id'], {'report_month': current_month})
+                                        updated_count += 1
 
                                 if updated_count > 0:
                                     print(f"    + Обновлен отчетный месяц ({current_month}) для {updated_count} оплат стадии '{from_column}'"
@@ -1888,6 +1881,8 @@ class SupervisionCard(QFrame):
                             reason
                         )
                 self.refresh_parent_tab()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Укажите причину приостановки', 'warning').exec_()
                 
     def resume_card(self):
         """Возобновление карточки"""

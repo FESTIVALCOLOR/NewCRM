@@ -87,16 +87,12 @@ class SupervisionTimelineWidget(QWidget):
 
         self.card_id = card_data.get('id')
 
-        # Получаем данные контракта
+        # Получаем данные контракта (точечный запрос вместо загрузки всех)
         self.contract_data = {}
         contract_id = card_data.get('contract_id')
         if contract_id:
             try:
-                contracts = self.data.get_all_contracts()
-                for c in contracts:
-                    if c.get('id') == contract_id:
-                        self.contract_data = c
-                        break
+                self.contract_data = self.data.get_contract(contract_id) or {}
             except Exception:
                 pass
 

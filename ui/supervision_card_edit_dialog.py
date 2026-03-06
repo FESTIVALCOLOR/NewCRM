@@ -2978,7 +2978,8 @@ class SupervisionCardEditDialog(QDialog):
 
     def connect_autosave_signals(self):
         """ИСПРАВЛЕНИЕ: Подключение сигналов для автосохранения данных при изменении"""
-        self.senior_manager.currentIndexChanged.connect(self.auto_save_field)
+        # senior_manager НЕ подключаем здесь — он уже подключен к on_employee_changed
+        # который делает update_supervision_card + обновление платежей
         # ДАН заблокирован — auto_save вызывается из reassign_dan → load_data
         self.studio_director.currentIndexChanged.connect(self.auto_save_field)
         # start_date_edit теперь read-only — изменяется только через кнопку "Изменить дату"
@@ -3128,16 +3129,14 @@ class SupervisionCardEditDialog(QDialog):
 
     def _resume_from_edit_tab(self):
         """Возобновление карточки из вкладки редактирования"""
-        from ui.custom_message_box import CustomMessageBox
-        reply = CustomMessageBox(
+        from ui.custom_message_box import CustomQuestionBox
+        reply = CustomQuestionBox(
             self, 'Подтверждение',
-            'Возобновить работу над проектом?\nДедлайн будет продлён на время приостановки.',
-            'question'
+            'Возобновить работу над проектом?\nДедлайн будет продлён на время приостановки.'
         )
-        reply.exec_()
-
-        # CustomMessageBox возвращает result() == QDialog.Accepted при подтверждении
-        if reply.result() == QDialog.Accepted:
+        if reply.exec_() != QDialog.Accepted:
+            return
+        if True:
             try:
                 # Рассчитываем дни приостановки для продления дедлайна
                 paused_at_str = self.card_data.get('paused_at', '')
