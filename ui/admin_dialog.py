@@ -101,6 +101,10 @@ class AdminDialog(QDialog):
         self._tab_agents_cities = self._create_agents_cities_tab()
         self._tabs.addTab(self._tab_agents_cities, "Агенты и города")
 
+        # --- Вкладка 6: Уведомления ---
+        self._tab_notifications = self._create_notifications_tab()
+        self._tabs.addTab(self._tab_notifications, "Уведомления")
+
         content_layout.addWidget(self._tabs)
 
         # Нижняя панель
@@ -298,5 +302,40 @@ class AdminDialog(QDialog):
         except Exception as e:
             print(f"[WARN] Не удалось загрузить AgentsCitiesWidget: {e}")
             lbl = self._tab_agents_cities.findChild(QLabel)
+            if lbl:
+                lbl.setText(f"Ошибка загрузки: {e}")
+    # ================================================================
+    # Вкладка: Уведомления
+    # ================================================================
+
+    def _create_notifications_tab(self):
+        """Вкладка настроек уведомлений для сотрудников"""
+        from PyQt5.QtCore import QTimer
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(QLabel("Загрузка..."))
+        QTimer.singleShot(200, self._init_notifications_widget)
+        return w
+
+    def _init_notifications_widget(self):
+        """Инициализация виджета настроек уведомлений"""
+        try:
+            from ui.notification_settings_widget import NotificationSettingsWidget
+            widget = NotificationSettingsWidget(
+                parent=self._tab_notifications,
+                api_client=self.api_client,
+                data_access=self.data_access,
+                employee=self.employee,
+            )
+            layout = self._tab_notifications.layout()
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            layout.addWidget(widget)
+        except Exception as e:
+            print(f"[WARN] Не удалось загрузить NotificationSettingsWidget: {e}")
+            lbl = self._tab_notifications.findChild(QLabel)
             if lbl:
                 lbl.setText(f"Ошибка загрузки: {e}")

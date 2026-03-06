@@ -218,6 +218,21 @@ async def startup_event():
     finally:
         db.close()
 
+    # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
+    try:
+        from telegram_bot_handlers import router as bot_router, AIOGRAM_AVAILABLE as BOT_AVAILABLE
+        if BOT_AVAILABLE and bot_router is not None:
+            from aiogram import Dispatcher as BotDispatcher
+            import asyncio
+            tg = get_telegram_service()
+            if tg.bot_available:
+                dp = BotDispatcher()
+                dp.include_router(bot_router)
+                asyncio.create_task(dp.start_polling(tg._bot, handle_signals=False))
+                logger.info("Telegram Bot polling запущен")
+    except Exception as e:
+        logger.warning(f"Telegram Bot polling: {e}")
+
 
 
 
@@ -410,6 +425,9 @@ from routers.messenger_router import (
 app.include_router(crm_router, prefix="/api/v1/crm")
 app.include_router(messenger_router, prefix="/api/v1/messenger")
 app.include_router(sync_messenger_router, prefix="/api/v1/sync")
+
+from routers.notifications_router import router as notifications_router
+app.include_router(notifications_router, prefix="/api/v1")
 
 
 # =========================

@@ -1292,3 +1292,32 @@ class LockRequest(BaseModel):
     entity_type: str
     entity_id: int
     employee_id: Optional[int] = None
+
+
+# =========================
+# УВЕДОМЛЕНИЯ
+# =========================
+
+class NotificationSettingsResponse(BaseModel):
+    employee_id: int
+    telegram_enabled: bool
+    email_enabled: bool
+    notify_crm_stage: bool
+    notify_assigned: bool
+    notify_deadline: bool
+    notify_payment: bool
+    notify_supervision: bool
+    telegram_connected: bool  # вычисляемое: telegram_user_id is not None
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationSettingsUpdate(BaseModel):
+    telegram_enabled: bool = True
+    email_enabled: bool = False
+    notify_crm_stage: bool = True
+    notify_assigned: bool = True
+    notify_deadline: bool = True
+    notify_payment: bool = False
+    notify_supervision: bool = False

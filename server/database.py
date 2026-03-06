@@ -71,6 +71,11 @@ class Employee(Base):
     # Цвет агента (для сотрудников с position='Агент')
     agent_color = Column(String)
 
+    # Telegram личное подключение (для уведомлений)
+    telegram_user_id = Column(BigInteger, nullable=True)
+    telegram_link_token = Column(String(32), nullable=True, index=True)
+    telegram_link_token_expires = Column(DateTime, nullable=True)
+
     # Даты
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -79,6 +84,8 @@ class Employee(Base):
     sessions = relationship("UserSession", back_populates="employee", cascade="all, delete-orphan")
     permissions = relationship("UserPermission", back_populates="employee", foreign_keys="[UserPermission.employee_id]", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="employee", cascade="all, delete-orphan")
+    notification_settings = relationship("NotificationSettings",
+        back_populates="employee", uselist=False, cascade="all, delete-orphan")
 
 
 class UserSession(Base):
@@ -238,6 +245,32 @@ class Notification(Base):
 
     # Связи
     employee = relationship("Employee", back_populates="notifications")
+
+class NotificationSettings(Base):
+    """Настройки уведомлений для сотрудника"""
+    __tablename__ = "notification_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), unique=True, nullable=False)
+
+    # Каналы
+    telegram_enabled = Column(Boolean, default=True)
+    email_enabled = Column(Boolean, default=False)
+
+    # Типы событий
+    notify_crm_stage = Column(Boolean, default=True)
+    notify_assigned = Column(Boolean, default=True)
+    notify_deadline = Column(Boolean, default=True)
+    notify_payment = Column(Boolean, default=False)
+    notify_supervision = Column(Boolean, default=False)
+
+    # Временные метки
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Связи
+    employee = relationship("Employee", back_populates="notification_settings")
+
 
 
 class FileStorage(Base):

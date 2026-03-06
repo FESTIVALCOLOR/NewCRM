@@ -3526,3 +3526,21 @@ class DataAccess(QObject):
                                    '_action': 'update', **update_data})
 
         return {'success': True}
+
+    def get_notification_settings(self, employee_id: int):
+        """Получить настройки уведомлений сотрудника"""
+        if self._should_use_api():
+            return self.api_client.get_notification_settings(employee_id)
+        return None
+
+    def update_notification_settings(self, employee_id: int, data) -> None:
+        """Обновить настройки уведомлений сотрудника"""
+        if self._should_use_api():
+            return self.api_client.update_notification_settings(employee_id, data)
+        return None
+
+    def send_employee_invite(self, employee_id: int) -> bool:
+        """Отправить приглашение сотруднику"""
+        if self._should_use_api():
+            return self.api_client.send_employee_invite(employee_id)
+        return False

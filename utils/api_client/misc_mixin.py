@@ -340,3 +340,40 @@ class MiscMixin:
                                  json={"project_type": project_type, "project_subtype": project_subtype,
                                         "agent_type": agent_type})
         return self._handle_response(response)
+
+    def get_notification_settings(self, employee_id: int):
+        """Получить настройки уведомлений сотрудника"""
+        try:
+            response = self._request(
+                'GET',
+                f"{self.base_url}/api/v1/notifications/settings/{employee_id}"
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            print(f"[API] Ошибка получения настроек уведомлений: {e}")
+            return None
+
+    def update_notification_settings(self, employee_id: int, data):
+        """Обновить настройки уведомлений сотрудника"""
+        try:
+            response = self._request(
+                'PUT',
+                f"{self.base_url}/api/v1/notifications/settings/{employee_id}",
+                json=data
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            print(f"[API] Ошибка обновления настроек уведомлений: {e}")
+            return None
+
+    def send_employee_invite(self, employee_id: int) -> bool:
+        """Отправить приглашение сотруднику (welcome email + Telegram deep link)"""
+        try:
+            response = self._request(
+                'POST',
+                f"{self.base_url}/api/v1/employees/{employee_id}/send-invite"
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"[API] Ошибка отправки приглашения сотруднику: {e}")
+            return False
