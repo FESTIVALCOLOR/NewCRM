@@ -1394,7 +1394,8 @@ class ContractDialog(QDialog):
         for max_area, days in thresholds:
             if area <= max_area:
                 return days
-        return 0
+        # Площадь > 500 м² — возвращаем максимальный срок из таблицы
+        return thresholds[-1][1]
 
     @staticmethod
     def _calc_template_contract_term(template_subtype, area, floors=1):
@@ -2083,23 +2084,9 @@ class ContractDialog(QDialog):
                 if update_data:
                     try:
                         self.data.update_contract(contract_id, update_data)
-                        print(f"[REPAIR] Обновлена серверная БД: {list(update_data.keys())}")
+                        print(f"[REPAIR] Обновлена БД: {list(update_data.keys())}")
                     except Exception as e:
-                        print(f"[REPAIR] Ошибка обновления сервера: {e}")
-                    try:
-                        from database.db_manager import DatabaseManager
-                        local_db = DatabaseManager()
-                        conn = local_db.connect()
-                        cursor = conn.cursor()
-                        for key, value in update_data.items():
-                            try:
-                                cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
-                            except Exception:
-                                pass
-                        conn.commit()
-                        local_db.close()
-                    except Exception:
-                        pass
+                        print(f"[REPAIR] Ошибка обновления: {e}")
 
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, self.refresh_file_labels)
@@ -2206,28 +2193,12 @@ class ContractDialog(QDialog):
 
                 if needs_update:
                     print(f"[VERIFY-CT] Обновляем БД: {list(update_data.keys())}")
-                    # Обновляем локальную БД
-                    from database.db_manager import DatabaseManager
-                    local_db = DatabaseManager()
-                    conn = local_db.connect()
-                    cursor = conn.cursor()
-                    for key, value in update_data.items():
-                        try:
-                            cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
-                        except Exception:
-                            pass
-                    conn.commit()
-                    local_db.close()
-                    print(f"[VERIFY-CT] Обновлена локальная БД")
-
-                    # Обновляем серверную БД
                     try:
                         self.data.update_contract(contract_id, update_data)
-                        print(f"[VERIFY-CT] Обновлена серверная БД")
+                        print(f"[VERIFY-CT] Обновлена БД")
                     except Exception as e:
-                        print(f"[VERIFY-CT] Ошибка обновления сервера: {e}")
+                        print(f"[VERIFY-CT] Ошибка обновления: {e}")
 
-                    # Обновляем UI через QTimer (thread-safe)
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, self.refresh_file_labels)
                 else:
@@ -2517,23 +2488,9 @@ class ContractDialog(QDialog):
                 if needs_update:
                     print(f"[INFO SYNC] Обновляем БД: {update_data}")
                     # Обновляем локальную БД
-                    from database.db_manager import DatabaseManager
-                    local_db = DatabaseManager()
-                    conn = local_db.connect()
-                    cursor = conn.cursor()
-                    for key, value in update_data.items():
-                        try:
-                            cursor.execute(f'UPDATE contracts SET {key} = ? WHERE id = ?', (value, contract_id))
-                        except Exception:
-                            pass
-                    conn.commit()
-                    local_db.close()
-                    print(f"[OK SYNC] Обновлена локальная БД: {list(update_data.keys())}")
-
-                    # Также обновляем серверную БД
                     try:
                         self.data.update_contract(contract_id, update_data)
-                        print(f"[OK SYNC] Обновлена серверная БД")
+                        print(f"[OK SYNC] Обновлена БД: {list(update_data.keys())}")
                     except Exception as e:
                         print(f"[ERROR] Не удалось обновить через DataAccess: {e}")
                     print(f"[OK SYNC] Синхронизация завершена! Добавлено полей: {len(update_data)}")

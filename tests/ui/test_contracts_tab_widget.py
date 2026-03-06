@@ -799,9 +799,9 @@ class TestContractTermCalculation:
         assert ContractDialog._calc_contract_term(2, 70) == 30
 
     def test_calc_full_project_over_500m(self):
-        """Полный проект, площадь > 500 м2 => 0 (не определён)."""
+        """Полный проект, площадь > 500 м2 => максимальный срок (160 дней)."""
         from ui.contract_dialogs import ContractDialog
-        assert ContractDialog._calc_contract_term(1, 600) == 0
+        assert ContractDialog._calc_contract_term(1, 600) == 160
 
     def test_calc_template_standard_90m(self):
         """Шаблонный Стандарт, <= 90 м2, 1 этаж => 20 раб. дней."""

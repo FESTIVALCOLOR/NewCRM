@@ -39,9 +39,9 @@ class TestCalcContractTerm:
         calc, _ = _get_calc_methods()
         assert calc(1, 500) == 160
 
-    def test_full_project_over_500sqm_returns_zero(self):
+    def test_full_project_over_500sqm_returns_max(self):
         calc, _ = _get_calc_methods()
-        assert calc(1, 501) == 0
+        assert calc(1, 501) == 160
 
     def test_sketch_project_70sqm(self):
         calc, _ = _get_calc_methods()
