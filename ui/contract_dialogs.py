@@ -216,6 +216,7 @@ class ContractDialog(QDialog):
         self.db = self.data.db
         self.api_client = self.data.api_client
         self._uploading_files = 0  # Счётчик загружаемых файлов
+        self.offline_manager = getattr(parent, 'offline_manager', None)
 
         # Инициализация YandexDiskManager
         try:
@@ -329,7 +330,7 @@ class ContractDialog(QDialog):
         self.client_combo.lineEdit().setStyleSheet("padding-left: 8px; padding-right: 8px;")
 
         # Загрузка клиентов через DataAccess (API с fallback на локальную БД)
-        self.all_clients = self.data.get_all_clients()
+        self.all_clients = self.data.get_all_clients() or []
         for client in self.all_clients:
             name = client['full_name'] if client['client_type'] == 'Физическое лицо' else client['organization_name']
             self.client_combo.addItem(f"{name} ({client['phone']})", client['id'])
@@ -401,7 +402,7 @@ class ContractDialog(QDialog):
         main_layout_form.addRow('Агент:', self.agent_combo)
 
         self.city_combo = CustomComboBox()
-        cities = self.data.get_all_cities()
+        cities = self.data.get_all_cities() or []
         for city in cities:
             self.city_combo.addItem(city.get('name', ''))
         main_layout_form.addRow('Город:', self.city_combo)
@@ -1267,7 +1268,7 @@ class ContractDialog(QDialog):
             # БЛОКИРУЕМ QDateEdit (запрещаем открытие календаря)
             for child in self.findChildren((QDateEdit, CustomDateEdit)):
                 child.setEnabled(False)
-                child.setStyleSheet('QDateEdit:disabled { background-color: #F0F0F0; color: }')  # Серый фон
+                child.setStyleSheet('QDateEdit:disabled { background-color: #F0F0F0; color: #666666; }')  # Серый фон
 
             # БЛОКИРУЕМ QSpinBox (кол-во этажей и т.д.)
             for child in self.findChildren(QSpinBox):
@@ -2785,8 +2786,12 @@ class ContractDialog(QDialog):
             # Сохраняем в атрибуты
             if project_type == 'individual':
                 self.contract_file_path = public_link
+                self.contract_file_yandex_path_attr = yandex_path
+                self.contract_file_name_attr = file_name
             else:
                 self.template_contract_file_path = public_link
+                self.template_contract_file_yandex_path_attr = yandex_path
+                self.template_contract_file_name_attr = file_name
 
             # Сохраняем в базу данных, если договор уже существует
             if self.contract_data and self.contract_data.get('id'):
@@ -3311,7 +3316,7 @@ class ContractDialog(QDialog):
             'Удалить загруженный чек?',
             'Удалить', 'Отмена'
         ).exec_()
-        if reply != QMessageBox.Yes:
+        if reply != QDialog.Accepted:
             return
 
         try:
@@ -3633,6 +3638,11 @@ class ContractDialog(QDialog):
             'third_payment': 0 if project_type == 'Шаблонный' else self.third_payment.value(),
             'contract_period': contract_period,
             'contract_file_link': contract_file_link,
+            'contract_file_yandex_path': getattr(self, 'contract_file_yandex_path_attr', '') or (self.contract_data or {}).get('contract_file_yandex_path', '') or '',
+            'contract_file_name': getattr(self, 'contract_file_name_attr', '') or (self.contract_data or {}).get('contract_file_name', '') or '',
+            'template_contract_file_link': getattr(self, 'template_contract_file_path', '') or '',
+            'template_contract_file_yandex_path': getattr(self, 'template_contract_file_yandex_path_attr', '') or (self.contract_data or {}).get('template_contract_file_yandex_path', '') or '',
+            'template_contract_file_name': getattr(self, 'template_contract_file_name_attr', '') or (self.contract_data or {}).get('template_contract_file_name', '') or '',
             'tech_task_link': tech_task_link,
             'tech_task_yandex_path': tech_task_yandex_path,
             'tech_task_file_name': tech_task_file_name,
