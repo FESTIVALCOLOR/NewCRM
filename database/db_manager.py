@@ -69,6 +69,7 @@ class DatabaseManager(DatabaseMigrations):
                     self.create_performance_indexes()
                     self.add_missing_fields_rates_payments_salaries()
                     self.fix_payments_contract_id_nullable()
+                    self.add_invite_temp_password_to_employees()
                 finally:
                     self._shared_conn = False
                     if self.connection:

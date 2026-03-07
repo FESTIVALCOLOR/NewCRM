@@ -1915,3 +1915,19 @@ class DatabaseMigrations:
             self.close()
         except Exception as e:
             print(f"[MIGRATION] Ошибка создания таблиц timeline: {e}")
+
+    def add_invite_temp_password_to_employees(self):
+        """Миграция: добавление поля invite_temp_password в employees"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(employees)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'invite_temp_password' not in columns:
+                print("[>] Выполняется миграция: добавление invite_temp_password в employees...")
+                cursor.execute("ALTER TABLE employees ADD COLUMN invite_temp_password TEXT")
+                conn.commit()
+                print("[OK] Поле invite_temp_password добавлено")
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции invite_temp_password: {e}")
