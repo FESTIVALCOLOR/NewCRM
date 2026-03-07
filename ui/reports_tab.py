@@ -534,19 +534,11 @@ class ReportsTab(QWidget):
         funnel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(funnel)
 
-        # Время стадий vs норматив — в горизонтальном скролле для большого числа стадий
+        # Время стадий vs норматив — на всю ширину
         stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
-        stage_scroll = QScrollArea()
-        stage_scroll.setWidgetResizable(False)
-        stage_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        stage_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        stage_scroll.setWidget(stage_duration)
-        stage_scroll.setFrameShape(QFrame.NoFrame)
-        stage_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        stage_scroll.setMinimumHeight(480)
-        stage_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        stage_scroll.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        layout.addWidget(stage_scroll)
+        stage_duration.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        stage_duration.setMinimumHeight(420)
+        layout.addWidget(stage_duration)
 
         # Прижимаем контент к верху — spacer забирает лишнюю высоту
         layout.addStretch(1)
@@ -557,7 +549,6 @@ class ReportsTab(QWidget):
             "mini_flow_w": mini_flow_w,
             "funnel": funnel,
             "stage_duration": stage_duration,
-            "stage_scroll": stage_scroll,
         }
 
     # ===================================================================
@@ -1143,20 +1134,8 @@ class ReportsTab(QWidget):
                 durations = [d for d in durations
                              if not d.get("stage", "").upper().startswith("ДАТА НАЧАЛА")]
                 if durations:
-                    n_stages = len(durations)
                     stage_labels = [d.get("stage", "") for d in durations]
-
-                    # Расширить figure для горизонтального скролла
-                    widget = subtab["stage_duration"]
-                    fig_w = max(5, n_stages * 0.6)
-                    fig_h = max(4.0, 3.2 + max(0, n_stages - 10) * 0.12)
-                    widget.figure.set_size_inches(fig_w, fig_h)
-                    dpi = widget.figure.get_dpi()
-                    pw, ph = int(fig_w * dpi), int(fig_h * dpi)
-                    widget.setFixedSize(pw, ph)
-                    widget.canvas.setFixedSize(pw, ph)
-
-                    widget.set_data(
+                    subtab["stage_duration"].set_data(
                         stage_labels,
                         [
                             {
@@ -1172,13 +1151,6 @@ class ReportsTab(QWidget):
                         ],
                         stacked=False
                     )
-
-                    # Обновить высоту скролла под новый размер
-                    scroll = subtab.get("stage_scroll")
-                    if scroll:
-                        scroll.setMinimumHeight(ph + 20)
-                        QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
-                            s.horizontalScrollBar().maximum() // 2))
             except Exception as e:
                 logger.error(f"[Reports] Ошибка обновления CRM ({cache_key}): {e}", exc_info=True)
 
