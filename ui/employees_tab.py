@@ -943,18 +943,61 @@ class EmployeeDialog(QDialog):
         
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
-        
-        if self.employee_data:
-            self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
-            login_layout.addRow('Новый пароль:', self.password)
-        else:
-            self.password.setPlaceholderText('Минимум 6 символов, буква + цифра')
-            login_layout.addRow('Пароль*:', self.password)
-        
+        pw_widget = QWidget()
+        pw_layout = QHBoxLayout(pw_widget)
+        pw_layout.setContentsMargins(0, 0, 0, 0)
+        pw_layout.setSpacing(2)
+        pw_layout.addWidget(self.password)
+        self._eye_btn = QPushButton()
+        self._eye_btn.setCheckable(True)
+        self._eye_btn.setFixedSize(28, 28)
+        self._eye_btn.setToolTip('Показать/скрыть пароль')
+        self._eye_btn.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn.setStyleSheet(
+            'QPushButton { border: none; background: transparent; }'
+            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+        )
+        self._eye_btn.toggled.connect(
+            lambda checked, le=self.password, btn=self._eye_btn: (
+                le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+            )
+        )
+        pw_layout.addWidget(self._eye_btn)
+
         self.password_confirm = QLineEdit()
         self.password_confirm.setEchoMode(QLineEdit.Password)
+        pw_confirm_widget = QWidget()
+        pw_confirm_layout = QHBoxLayout(pw_confirm_widget)
+        pw_confirm_layout.setContentsMargins(0, 0, 0, 0)
+        pw_confirm_layout.setSpacing(2)
+        pw_confirm_layout.addWidget(self.password_confirm)
+        self._eye_btn_confirm = QPushButton()
+        self._eye_btn_confirm.setCheckable(True)
+        self._eye_btn_confirm.setFixedSize(28, 28)
+        self._eye_btn_confirm.setToolTip('Показать/скрыть пароль')
+        self._eye_btn_confirm.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn_confirm.setStyleSheet(
+            'QPushButton { border: none; background: transparent; }'
+            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+        )
+        self._eye_btn_confirm.toggled.connect(
+            lambda checked, le=self.password_confirm, btn=self._eye_btn_confirm: (
+                le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+            )
+        )
+        pw_confirm_layout.addWidget(self._eye_btn_confirm)
+
+        if self.employee_data:
+            self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
+            login_layout.addRow('Пароль:', pw_widget)
+        else:
+            self.password.setPlaceholderText('Минимум 6 символов, буква + цифра')
+            login_layout.addRow('Пароль*:', pw_widget)
+
         self.password_confirm.setPlaceholderText('Повторите пароль')
-        login_layout.addRow('Подтверждение:', self.password_confirm)
+        login_layout.addRow('Подтверждение:', pw_confirm_widget)
         
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
@@ -1153,7 +1196,11 @@ class EmployeeDialog(QDialog):
             self.email.setText(self.employee_data.get('email', ''))
             self.address.setPlainText(self.employee_data.get('address', ''))
             self.login.setText(self.employee_data['login'])
-        
+            temp_pw = self.employee_data.get('invite_temp_password') or ''
+            if temp_pw:
+                self.password.setText(temp_pw)
+                self.password_confirm.setText(temp_pw)
+
     def save_employee(self):
         """Сохранение сотрудника"""
         from utils.permissions import _has_perm
@@ -1937,18 +1984,61 @@ class EmployeeDialog(QDialog):
         
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
-        
-        if self.employee_data:
-            self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
-            login_layout.addRow('Новый пароль:', self.password)
-        else:
-            self.password.setPlaceholderText('Минимум 6 символов, буква + цифра')
-            login_layout.addRow('Пароль*:', self.password)
-        
+        pw_widget = QWidget()
+        pw_layout = QHBoxLayout(pw_widget)
+        pw_layout.setContentsMargins(0, 0, 0, 0)
+        pw_layout.setSpacing(2)
+        pw_layout.addWidget(self.password)
+        self._eye_btn = QPushButton()
+        self._eye_btn.setCheckable(True)
+        self._eye_btn.setFixedSize(28, 28)
+        self._eye_btn.setToolTip('Показать/скрыть пароль')
+        self._eye_btn.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn.setStyleSheet(
+            'QPushButton { border: none; background: transparent; }'
+            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+        )
+        self._eye_btn.toggled.connect(
+            lambda checked, le=self.password, btn=self._eye_btn: (
+                le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+            )
+        )
+        pw_layout.addWidget(self._eye_btn)
+
         self.password_confirm = QLineEdit()
         self.password_confirm.setEchoMode(QLineEdit.Password)
+        pw_confirm_widget = QWidget()
+        pw_confirm_layout = QHBoxLayout(pw_confirm_widget)
+        pw_confirm_layout.setContentsMargins(0, 0, 0, 0)
+        pw_confirm_layout.setSpacing(2)
+        pw_confirm_layout.addWidget(self.password_confirm)
+        self._eye_btn_confirm = QPushButton()
+        self._eye_btn_confirm.setCheckable(True)
+        self._eye_btn_confirm.setFixedSize(28, 28)
+        self._eye_btn_confirm.setToolTip('Показать/скрыть пароль')
+        self._eye_btn_confirm.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn_confirm.setStyleSheet(
+            'QPushButton { border: none; background: transparent; }'
+            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+        )
+        self._eye_btn_confirm.toggled.connect(
+            lambda checked, le=self.password_confirm, btn=self._eye_btn_confirm: (
+                le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+            )
+        )
+        pw_confirm_layout.addWidget(self._eye_btn_confirm)
+
+        if self.employee_data:
+            self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
+            login_layout.addRow('Пароль:', pw_widget)
+        else:
+            self.password.setPlaceholderText('Минимум 6 символов, буква + цифра')
+            login_layout.addRow('Пароль*:', pw_widget)
+
         self.password_confirm.setPlaceholderText('Повторите пароль')
-        login_layout.addRow('Подтверждение:', self.password_confirm)
+        login_layout.addRow('Подтверждение:', pw_confirm_widget)
         
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
@@ -2147,7 +2237,11 @@ class EmployeeDialog(QDialog):
             self.email.setText(self.employee_data.get('email', ''))
             self.address.setPlainText(self.employee_data.get('address', ''))
             self.login.setText(self.employee_data['login'])
-        
+            temp_pw = self.employee_data.get('invite_temp_password') or ''
+            if temp_pw:
+                self.password.setText(temp_pw)
+                self.password_confirm.setText(temp_pw)
+
     def save_employee(self):
         """Сохранение сотрудника"""
         from utils.permissions import _has_perm

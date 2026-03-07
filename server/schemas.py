@@ -151,6 +151,7 @@ class EmployeeResponse(EmployeeBase):
     last_login: Optional[datetime] = None
     agent_color: Optional[str] = None
     created_at: datetime
+    invite_temp_password: Optional[str] = None
 
     class Config:
         from_attributes = True
