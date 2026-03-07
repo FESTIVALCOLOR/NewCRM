@@ -1149,7 +1149,8 @@ class ReportsTab(QWidget):
                                 "color": "#F57C00"
                             },
                         ],
-                        stacked=False
+                        stacked=False,
+                        highlight_prefixes=["СТАДИЯ", "ЭТАП", "ДАТА"]
                     )
             except Exception as e:
                 logger.error(f"[Reports] Ошибка обновления CRM ({cache_key}): {e}", exc_info=True)

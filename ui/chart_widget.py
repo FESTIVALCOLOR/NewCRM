@@ -352,12 +352,15 @@ class StackedBarChartWidget(ChartBase):
         super().__init__(title, parent)
         self.setMinimumHeight(260)
 
-    def set_data(self, categories: list, series: list, stacked=True):
+    def set_data(self, categories: list, series: list, stacked=True,
+                 highlight_prefixes=None):
         """
         Args:
             categories: Подписи по оси X
             series: [{"label": ..., "values": [...], "color": ...}, ...]
             stacked: True — стопкой, False — grouped
+            highlight_prefixes: Список префиксов для выделения жирным и
+                                разделения вертикальной линией (например ["СТАДИЯ", "ЭТАП"])
         """
         if not self.canvas or not categories or not series:
             return
@@ -424,6 +427,21 @@ class StackedBarChartWidget(ChartBase):
         ax.spines['left'].set_color('#E0E0E0')
         ax.spines['bottom'].set_color('#E0E0E0')
         ax.grid(axis='y', linestyle='--', alpha=0.3, color='#DDD')
+
+        # Выделение групп стадий: жирные подписи + вертикальные разделители
+        if highlight_prefixes and categories:
+            prefixes_upper = [p.upper() for p in highlight_prefixes]
+            tick_labels = ax.get_xticklabels()
+            for i, cat in enumerate(categories):
+                cat_upper = cat.upper()
+                is_group_start = any(cat_upper.startswith(p) for p in prefixes_upper)
+                if is_group_start and i < len(tick_labels):
+                    tick_labels[i].set_fontweight('bold')
+                    tick_labels[i].set_color('#222')
+                    # Вертикальная серая линия-разделитель перед группой
+                    if i > 0:
+                        ax.axvline(x=i - 0.5, color='#CCCCCC', linewidth=0.8,
+                                   linestyle='--', alpha=0.6)
 
         if self.chart_title:
             ax.set_title(self.chart_title, fontsize=11, fontweight='bold',
