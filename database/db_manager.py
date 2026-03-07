@@ -1740,6 +1740,24 @@ class DatabaseManager(DatabaseMigrations):
             return dict(row)
         return None
 
+    def remove_stale_records(self, table: str, valid_ids: list):
+        """Удалить из локальной таблицы записи, которых нет на сервере.
+        Вызывается после успешного полного получения данных с API."""
+        if not valid_ids:
+            return
+        conn = self.connect()
+        try:
+            placeholders = ','.join('?' * len(valid_ids))
+            conn.execute(
+                f'DELETE FROM {table} WHERE id NOT IN ({placeholders})',
+                valid_ids
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[db] remove_stale_records({table}): {e}")
+        finally:
+            self.close()
+
     def delete_employee(self, employee_id):
         """Удаление сотрудника"""
         conn = self.connect()

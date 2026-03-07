@@ -173,6 +173,16 @@ class DataAccess(QObject):
 
     # ==================== КЛИЕНТЫ ====================
 
+    def _reconcile_local(self, table: str, api_records: list):
+        """Удалить из локальной SQLite записи, которых нет на сервере.
+        Вызывается только при полной загрузке всех записей с API."""
+        try:
+            valid_ids = [r['id'] for r in api_records if isinstance(r, dict) and 'id' in r]
+            if valid_ids:
+                self.db.remove_stale_records(table, valid_ids)
+        except Exception as e:
+            _safe_log(f"[DataAccess] reconcile {table}: {e}")
+
     def get_all_clients(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
         """Получить всех клиентов.
 
@@ -188,6 +198,8 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.get_clients(skip=skip, limit=limit)
                 _global_cache.set(cache_key, result)
+                if skip == 0 and limit >= 10000:
+                    self._reconcile_local('clients', result)
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_clients, fallback: {e}")
@@ -365,6 +377,8 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.get_contracts(skip=skip, limit=limit)
                 _global_cache.set(cache_key, result)
+                if skip == 0 and limit >= 10000:
+                    self._reconcile_local('contracts', result)
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_contracts, fallback: {e}")
@@ -524,6 +538,7 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.get_employees(skip=0, limit=10000)
                 _global_cache.set(cache_key, result)
+                self._reconcile_local('employees', result)
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_employees, fallback: {e}")
