@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QDateEdit, QCheckBox, QGroupBox, QTextEdit, QFrame,
                              QTabWidget)
 from ui.custom_dateedit import CustomDateEdit
-from PyQt5.QtCore import Qt, QDate, QTimer
+from PyQt5.QtCore import Qt, QDate, QTimer, QSize
 from database.db_manager import DatabaseManager
 from config import POSITIONS
 from utils.icon_loader import IconLoader
@@ -950,17 +950,18 @@ class EmployeeDialog(QDialog):
         pw_layout.addWidget(self.password)
         self._eye_btn = QPushButton()
         self._eye_btn.setCheckable(True)
-        self._eye_btn.setFixedSize(28, 28)
-        self._eye_btn.setToolTip('Показать/скрыть пароль')
-        self._eye_btn.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn.setFixedSize(24, 24)
+        self._eye_btn.setIcon(IconLoader.load('eye-off'))
+        self._eye_btn.setIconSize(QSize(14, 14))
         self._eye_btn.setStyleSheet(
-            'QPushButton { border: none; background: transparent; }'
-            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+            'QPushButton { border: none; background: transparent; padding: 0; }'
+            'QPushButton:hover { background: #efefef; border-radius: 3px; }'
         )
         self._eye_btn.toggled.connect(
             lambda checked, le=self.password, btn=self._eye_btn: (
                 le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
-                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off')),
+                btn.setIconSize(QSize(14, 14)),
             )
         )
         pw_layout.addWidget(self._eye_btn)
@@ -974,17 +975,18 @@ class EmployeeDialog(QDialog):
         pw_confirm_layout.addWidget(self.password_confirm)
         self._eye_btn_confirm = QPushButton()
         self._eye_btn_confirm.setCheckable(True)
-        self._eye_btn_confirm.setFixedSize(28, 28)
-        self._eye_btn_confirm.setToolTip('Показать/скрыть пароль')
-        self._eye_btn_confirm.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn_confirm.setFixedSize(24, 24)
+        self._eye_btn_confirm.setIcon(IconLoader.load('eye-off'))
+        self._eye_btn_confirm.setIconSize(QSize(14, 14))
         self._eye_btn_confirm.setStyleSheet(
-            'QPushButton { border: none; background: transparent; }'
-            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+            'QPushButton { border: none; background: transparent; padding: 0; }'
+            'QPushButton:hover { background: #efefef; border-radius: 3px; }'
         )
         self._eye_btn_confirm.toggled.connect(
             lambda checked, le=self.password_confirm, btn=self._eye_btn_confirm: (
                 le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
-                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off')),
+                btn.setIconSize(QSize(14, 14)),
             )
         )
         pw_confirm_layout.addWidget(self._eye_btn_confirm)
@@ -1991,17 +1993,18 @@ class EmployeeDialog(QDialog):
         pw_layout.addWidget(self.password)
         self._eye_btn = QPushButton()
         self._eye_btn.setCheckable(True)
-        self._eye_btn.setFixedSize(28, 28)
-        self._eye_btn.setToolTip('Показать/скрыть пароль')
-        self._eye_btn.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn.setFixedSize(24, 24)
+        self._eye_btn.setIcon(IconLoader.load('eye-off'))
+        self._eye_btn.setIconSize(QSize(14, 14))
         self._eye_btn.setStyleSheet(
-            'QPushButton { border: none; background: transparent; }'
-            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+            'QPushButton { border: none; background: transparent; padding: 0; }'
+            'QPushButton:hover { background: #efefef; border-radius: 3px; }'
         )
         self._eye_btn.toggled.connect(
             lambda checked, le=self.password, btn=self._eye_btn: (
                 le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
-                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off')),
+                btn.setIconSize(QSize(14, 14)),
             )
         )
         pw_layout.addWidget(self._eye_btn)
@@ -2015,17 +2018,18 @@ class EmployeeDialog(QDialog):
         pw_confirm_layout.addWidget(self.password_confirm)
         self._eye_btn_confirm = QPushButton()
         self._eye_btn_confirm.setCheckable(True)
-        self._eye_btn_confirm.setFixedSize(28, 28)
-        self._eye_btn_confirm.setToolTip('Показать/скрыть пароль')
-        self._eye_btn_confirm.setIcon(IconLoader.load('eye-off', 16))
+        self._eye_btn_confirm.setFixedSize(24, 24)
+        self._eye_btn_confirm.setIcon(IconLoader.load('eye-off'))
+        self._eye_btn_confirm.setIconSize(QSize(14, 14))
         self._eye_btn_confirm.setStyleSheet(
-            'QPushButton { border: none; background: transparent; }'
-            'QPushButton:hover { background: #f0f0f0; border-radius: 4px; }'
+            'QPushButton { border: none; background: transparent; padding: 0; }'
+            'QPushButton:hover { background: #efefef; border-radius: 3px; }'
         )
         self._eye_btn_confirm.toggled.connect(
             lambda checked, le=self.password_confirm, btn=self._eye_btn_confirm: (
                 le.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password),
-                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off', 16)),
+                btn.setIcon(IconLoader.load('eye' if checked else 'eye-off')),
+                btn.setIconSize(QSize(14, 14)),
             )
         )
         pw_confirm_layout.addWidget(self._eye_btn_confirm)
