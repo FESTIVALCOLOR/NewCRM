@@ -619,7 +619,7 @@ class EmployeesTab(QWidget):
             return
         dialog = EmployeeDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            self._reload_employees(prefer_local=True)
+            self._reload_employees(prefer_local=False)
             self._refresh_dashboard()
             
     def view_employee(self, employee_data):
@@ -647,7 +647,7 @@ class EmployeesTab(QWidget):
         
         dialog = EmployeeDialog(self, employee_data)
         if dialog.exec_() == QDialog.Accepted:
-            self._reload_employees(prefer_local=True)
+            self._reload_employees(prefer_local=False)
             self._refresh_dashboard()
 
     def delete_employee(self, employee_data):
@@ -703,7 +703,7 @@ class EmployeesTab(QWidget):
                     'success'
                 ).exec_()
 
-                self._reload_employees(prefer_local=True)
+                self._reload_employees(prefer_local=False)
                 self._refresh_dashboard()
 
             except Exception as e:
@@ -738,7 +738,7 @@ class EmployeesTab(QWidget):
 
             print(f"[SYNC] Получено обновление сотрудников: {len(updated_employees)} записей")
             # Обновляем из локальной БД (данные уже синхронизированы), не блокируя UI
-            self._reload_employees(prefer_local=True)
+            self._reload_employees(prefer_local=False)
         except Exception as e:
             print(f"[ERROR] Ошибка синхронизации сотрудников: {e}")
     def send_invite(self, employee):
@@ -1823,7 +1823,7 @@ class PermissionsDialog(QDialog):
 
             print(f"[SYNC] Получено обновление сотрудников: {len(updated_employees)} записей")
             # Обновляем из локальной БД (данные уже синхронизированы), не блокируя UI
-            self._reload_employees(prefer_local=True)
+            self._reload_employees(prefer_local=False)
         except Exception as e:
             print(f"[ERROR] Ошибка синхронизации сотрудников: {e}")
 
