@@ -137,6 +137,19 @@ def _count_business_days(start_date, end_date):
     return days
 
 
+def _add_business_days(start_date, days: int):
+    """Добавить рабочие дни (пн-пт + праздники РФ) к дате."""
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    current = start_date
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if _is_working_day(current):
+            added += 1
+    return current
+
+
 router = APIRouter(tags=["supervision"])
 
 
@@ -488,8 +501,8 @@ async def move_supervision_card_to_column(
                         if te.plan_date:
                             try:
                                 plan_dt = datetime.strptime(te.plan_date, '%Y-%m-%d')
-                                plan_dt += timedelta(days=pause_days)
-                                te.plan_date = plan_dt.strftime('%Y-%m-%d')
+                                new_dt = _add_business_days(plan_dt, pause_days)
+                                te.plan_date = new_dt.strftime('%Y-%m-%d')
                             except (ValueError, TypeError):
                                 pass
                     logger.info(f"Supervision card {card_id} auto-resumed from 'В ожидании', pause_days={pause_days}")
@@ -507,7 +520,7 @@ async def move_supervision_card_to_column(
                 if card.deadline:
                     try:
                         dl = datetime.strptime(card.deadline, '%Y-%m-%d')
-                        dl += timedelta(days=pause_days)
+                        dl = _add_business_days(dl, pause_days)
                         card.deadline = dl.strftime('%Y-%m-%d')
                     except (ValueError, TypeError):
                         pass
@@ -660,8 +673,8 @@ async def resume_supervision_card(
                 if te.plan_date:
                     try:
                         plan_dt = datetime.strptime(te.plan_date, '%Y-%m-%d')
-                        plan_dt += timedelta(days=pause_days)
-                        te.plan_date = plan_dt.strftime('%Y-%m-%d')
+                        new_dt = _add_business_days(plan_dt, pause_days)
+                        te.plan_date = new_dt.strftime('%Y-%m-%d')
                     except (ValueError, TypeError):
                         pass
             logger.info(f"K2: Supervision card {card_id} resumed, pause_days={pause_days}, shifted {len(timeline_entries)} entries")
@@ -670,7 +683,7 @@ async def resume_supervision_card(
         if pause_days > 0 and card.deadline:
             try:
                 dl = datetime.strptime(card.deadline, '%Y-%m-%d')
-                dl += timedelta(days=pause_days)
+                dl = _add_business_days(dl, pause_days)
                 card.deadline = dl.strftime('%Y-%m-%d')
             except (ValueError, TypeError):
                 pass

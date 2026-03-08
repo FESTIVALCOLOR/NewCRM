@@ -3134,52 +3134,26 @@ class SupervisionCardEditDialog(QDialog):
             return
         if True:
             try:
-                # Рассчитываем дни приостановки для продления дедлайна
-                paused_at_str = self.card_data.get('paused_at', '')
-                pause_days = 0
-                if paused_at_str:
-                    if 'T' in paused_at_str:
-                        paused_at_str = paused_at_str.split('T')[0]
-                    if ' ' in paused_at_str:
-                        paused_at_str = paused_at_str.split(' ')[0]
-                    from datetime import datetime, date
-                    try:
-                        paused_date = datetime.strptime(paused_at_str, '%Y-%m-%d').date()
-                        pause_days = (date.today() - paused_date).days
-                    except Exception:
-                        pass
-
+                # Сервер сам сдвигает deadline и plan_dates на рабочие дни паузы
                 self.data.resume_supervision_card(
                     self.card_data['id'],
                     self.employee['id']
                 )
 
-                # Продлеваем дедлайн на дни приостановки
-                if pause_days > 0 and self.card_data.get('deadline'):
-                    deadline_str = self.card_data['deadline']
-                    if 'T' in deadline_str:
-                        deadline_str = deadline_str.split('T')[0]
-                    from datetime import datetime, timedelta
-                    try:
-                        deadline_date = datetime.strptime(deadline_str, '%Y-%m-%d').date()
-                        new_deadline = deadline_date + timedelta(days=pause_days)
-                        new_deadline_str = new_deadline.strftime('%Y-%m-%d')
-
-                        # Сохраняем новый дедлайн
-                        update_data = {'deadline': new_deadline_str}
-                        self.data.update_supervision_card(
-                            self.card_data['id'], update_data
-                        )
-
-                        self.card_data['deadline'] = new_deadline_str
+                # Получаем обновлённые данные с сервера (дедлайн уже сдвинут)
+                updated = self.data.get_supervision_card(self.card_data['id'])
+                if updated and isinstance(updated, dict):
+                    new_deadline = updated.get('deadline', '')
+                    if new_deadline:
+                        if 'T' in new_deadline:
+                            new_deadline = new_deadline.split('T')[0]
+                        self.card_data['deadline'] = new_deadline
                         self._loading_data = True
-                        dl = QDate.fromString(new_deadline_str, 'yyyy-MM-dd')
+                        dl = QDate.fromString(new_deadline, 'yyyy-MM-dd')
                         self.deadline.setDate(dl)
                         if hasattr(self, 'deadline_label'):
                             self.deadline_label.setText(dl.toString('dd.MM.yyyy'))
                         self._loading_data = False
-                    except Exception as e:
-                        print(f"[WARN] Ошибка продления дедлайна: {e}")
 
                 # Обновляем состояние
                 self.card_data['is_paused'] = False

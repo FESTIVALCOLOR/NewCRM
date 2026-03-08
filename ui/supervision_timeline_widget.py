@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate, QUrl
 from PyQt5.QtGui import QDoubleValidator, QDesktopServices
 from utils.calendar_helpers import add_today_button_to_dateedit
+from utils.date_utils import networkdays
 from utils.icon_loader import IconLoader
 from utils.table_settings import apply_no_focus_delegate
 from datetime import datetime, timedelta
@@ -34,30 +35,6 @@ STATUS_COLORS = {
 
 STATUS_OPTIONS = ['Не начато', 'В работе', 'Закуплено', 'Доставлено', 'Просрочено']
 
-
-def networkdays(start_date, end_date):
-    """Расчёт рабочих дней"""
-    if not start_date or not end_date:
-        return 0
-    if isinstance(start_date, str):
-        try:
-            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-        except ValueError:
-            return 0
-    if isinstance(end_date, str):
-        try:
-            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-        except ValueError:
-            return 0
-    if end_date < start_date:
-        return 0
-    count = 0
-    current = start_date
-    while current < end_date:
-        if current.weekday() < 5:
-            count += 1
-        current += timedelta(days=1)
-    return count
 
 
 class SupervisionTimelineWidget(QWidget):
