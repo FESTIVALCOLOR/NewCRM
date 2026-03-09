@@ -200,9 +200,12 @@ class TestSupervisionTimelineWidget:
     def test_networkdays_function(self, qapp):
         """Функция networkdays корректно считает рабочие дни."""
         from ui.supervision_timeline_widget import networkdays
-        # Пн–Пт = 4 рабочих дня (с Пн по Пт не включая Пт)
-        result = networkdays('2026-01-05', '2026-01-09')
+        # Март: обычная неделя без праздников, Пн–Пт = 4 рабочих дня
+        result = networkdays('2026-03-02', '2026-03-06')
         assert result == 4
+        # Январь 5-8 — праздники РФ, должно быть 0
+        result_jan = networkdays('2026-01-05', '2026-01-09')
+        assert result_jan == 0, "5-8 января — праздники, рабочих дней = 0"
 
     def test_networkdays_zero_for_invalid(self, qapp):
         """networkdays возвращает 0 для пустых дат."""
