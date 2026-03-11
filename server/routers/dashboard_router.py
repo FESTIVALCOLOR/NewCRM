@@ -638,10 +638,14 @@ async def get_salaries_all_dashboard(
             ).scalar()
             paid_by_year = float(payments_year or 0) + float(salaries_year or 0)
 
-            # Индивидуальные за год (payments + оклады с project_type='Индивидуальный' )
+            # Индивидуальные за год (payments через CRMCard→Contract + оклады)
             ind_payments = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Payment.report_month.like(f'{year}-%'),
                 Contract.project_type == 'Индивидуальный'
@@ -655,10 +659,14 @@ async def get_salaries_all_dashboard(
             ).scalar()
             individual_by_year = float(ind_payments or 0) + float(ind_salaries or 0)
 
-            # Шаблонные за год
+            # Шаблонные за год (payments через CRMCard→Contract + оклады)
             tmpl_payments = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Payment.report_month.like(f'{year}-%'),
                 Contract.project_type == 'Шаблонный'
@@ -731,11 +739,15 @@ async def get_salaries_individual_dashboard(
     """Дашборд 'Индивидуальные': total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
     Учитываются payments (CRM) + salaries (оклады с project_type='Индивидуальный' )"""
     try:
-        # Всего выплачено и средний чек (payments)
+        # Всего выплачено и средний чек (payments через CRMCard→Contract)
         total_result = db.query(
             func.coalesce(func.sum(Payment.final_amount), 0),
             func.coalesce(func.avg(Payment.final_amount), 0)
-        ).join(Contract).filter(
+        ).join(
+            CRMCard, Payment.crm_card_id == CRMCard.id
+        ).join(
+            Contract, CRMCard.contract_id == Contract.id
+        ).filter(
             Payment.payment_status == 'paid',
             Contract.project_type == 'Индивидуальный'
         ).first()
@@ -756,7 +768,11 @@ async def get_salaries_individual_dashboard(
             year_result = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0),
                 func.count(Payment.id)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Contract.project_type == 'Индивидуальный',
                 Payment.report_month.like(f'{year}-%')
@@ -780,7 +796,11 @@ async def get_salaries_individual_dashboard(
         if year and month:
             paid_by_month = float(db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Contract.project_type == 'Индивидуальный',
                 Payment.report_month == f'{year}-{month:02d}'
@@ -799,7 +819,11 @@ async def get_salaries_individual_dashboard(
         if agent_type:
             by_agent = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Contract.project_type == 'Индивидуальный',
                 Contract.agent_type == agent_type
@@ -832,11 +856,15 @@ async def get_salaries_template_dashboard(
     """Дашборд 'Шаблонные': total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
     Учитываются payments (CRM) + salaries (оклады с project_type='Шаблонный' )"""
     try:
-        # Всего выплачено и средний чек (payments)
+        # Всего выплачено и средний чек (payments через CRMCard→Contract)
         total_result = db.query(
             func.coalesce(func.sum(Payment.final_amount), 0),
             func.coalesce(func.avg(Payment.final_amount), 0)
-        ).join(Contract).filter(
+        ).join(
+            CRMCard, Payment.crm_card_id == CRMCard.id
+        ).join(
+            Contract, CRMCard.contract_id == Contract.id
+        ).filter(
             Payment.payment_status == 'paid',
             Contract.project_type == 'Шаблонный'
         ).first()
@@ -858,7 +886,11 @@ async def get_salaries_template_dashboard(
             year_result = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0),
                 func.count(Payment.id)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Contract.project_type == 'Шаблонный',
                 Payment.report_month.like(f'{year}-%')
@@ -882,7 +914,11 @@ async def get_salaries_template_dashboard(
         if year and month:
             paid_by_month = float(db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Contract.project_type == 'Шаблонный',
                 Payment.report_month == f'{year}-{month:02d}'
@@ -901,7 +937,11 @@ async def get_salaries_template_dashboard(
         if agent_type:
             by_agent = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
-            ).join(Contract).filter(
+            ).join(
+                CRMCard, Payment.crm_card_id == CRMCard.id
+            ).join(
+                Contract, CRMCard.contract_id == Contract.id
+            ).filter(
                 Payment.payment_status == 'paid',
                 Contract.project_type == 'Шаблонный',
                 Contract.agent_type == agent_type

@@ -413,16 +413,20 @@ class SalariesTab(QWidget):
         self.all_payments_warning.setVisible(False)
         layout.addWidget(self.all_payments_warning)
 
-        # Итого
-        self.totals_label = QLabel()
-        self.totals_label.setStyleSheet('''
-            font-size: 14px; 
-            font-weight: bold; 
-            padding: 10px;
-            background-color: #ffffff;
-            border-radius: 5px;
-        ''')
-        layout.addWidget(self.totals_label)
+        # Итого — split layout: слева "по фильтру", справа "за год" + "за всё время"
+        totals_container = QWidget()
+        totals_container.setStyleSheet('background-color: #ffffff; border-radius: 5px;')
+        totals_h = QHBoxLayout(totals_container)
+        totals_h.setContentsMargins(10, 8, 10, 8)
+        self.totals_label_left = QLabel()
+        self.totals_label_left.setStyleSheet('font-size: 14px; font-weight: bold;')
+        self.totals_label_right = QLabel()
+        self.totals_label_right.setStyleSheet('font-size: 14px; font-weight: bold;')
+        self.totals_label_right.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        totals_h.addWidget(self.totals_label_left)
+        totals_h.addStretch()
+        totals_h.addWidget(self.totals_label_right)
+        layout.addWidget(totals_container)
         
         widget.setLayout(layout)
         return widget
@@ -751,17 +755,22 @@ class SalariesTab(QWidget):
         warning_label.setVisible(False)
         layout.addWidget(warning_label)
 
-        # Метка для итогов
-        totals_label = QLabel()
-        totals_label.setObjectName(f'totals_{payment_type}')
-        totals_label.setStyleSheet('''
-            font-size: 14px;
-            font-weight: bold;
-            padding: 10px;
-            background-color: #ffffff;
-            border-radius: 5px;
-        ''')
-        layout.addWidget(totals_label)
+        # Итого — split layout: слева "по фильтру", справа "за год" + "за всё время"
+        totals_container = QWidget()
+        totals_container.setStyleSheet('background-color: #ffffff; border-radius: 5px;')
+        totals_h = QHBoxLayout(totals_container)
+        totals_h.setContentsMargins(10, 8, 10, 8)
+        totals_left = QLabel()
+        totals_left.setObjectName(f'totals_left_{payment_type}')
+        totals_left.setStyleSheet('font-size: 14px; font-weight: bold;')
+        totals_right = QLabel()
+        totals_right.setObjectName(f'totals_right_{payment_type}')
+        totals_right.setStyleSheet('font-size: 14px; font-weight: bold;')
+        totals_right.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        totals_h.addWidget(totals_left)
+        totals_h.addStretch()
+        totals_h.addWidget(totals_right)
+        layout.addWidget(totals_container)
 
         widget.setLayout(layout)
         return widget
@@ -1668,9 +1677,17 @@ class SalariesTab(QWidget):
             else:
                 self.all_payments_warning.setVisible(False)
 
-        self.totals_label.setText(
-            f'Итого по фильтру: {total_month:,.2f} ₽  |  '
-            f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
+        # Итого за всё время (из кеша)
+        if self._all_payments_cache:
+            total_all_time = sum(p['amount'] for p in self._all_payments_cache)
+        else:
+            total_all_time = total_month
+
+        self.totals_label_left.setText(
+            f'Итого по фильтру: {total_month:,.2f} ₽{reassigned_text}'
+        )
+        self.totals_label_right.setText(
+            f'Итого за год: {total_year:,.2f} ₽  |  Итого за всё время: {total_all_time:,.2f} ₽'
         )
 
         # Оптимизация: включаем обновление виджета после заполнения
@@ -1928,12 +1945,16 @@ class SalariesTab(QWidget):
                 # Подсчёт за всё время
                 total_all = sum(item.get('final_amount') or item.get('amount', 0) for item in data)
 
-                # Обновляем метку итогов
-                totals_label = parent_widget.findChild(QLabel, f'totals_{payment_type}')
-                if totals_label:
-                    totals_label.setText(
-                        f'Итого по фильтру: {total_all:,.2f} ₽  |  '
-                        f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
+                # Обновляем метки итогов (split layout)
+                totals_left = parent_widget.findChild(QLabel, f'totals_left_{payment_type}')
+                totals_right = parent_widget.findChild(QLabel, f'totals_right_{payment_type}')
+                if totals_left:
+                    totals_left.setText(
+                        f'Итого по фильтру: {total_all:,.2f} ₽{reassigned_text}'
+                    )
+                if totals_right:
+                    totals_right.setText(
+                        f'Итого за год: {total_year:,.2f} ₽  |  Итого за всё время: {total_all:,.2f} ₽'
                     )
 
                 # Включаем сортировку после загрузки данных
@@ -2152,26 +2173,30 @@ class SalariesTab(QWidget):
             except (ValueError, IndexError):
                 continue
 
-        # Подсчёт за всё время (все видимые строки)
-        total_all = 0.0
+        # Подсчёт по фильтру (видимые строки) и за всё время (все строки)
+        total_filtered = 0.0
+        total_all_time = 0.0
         for row in range(table.rowCount()):
-            if table.isRowHidden(row):
-                continue
             amount_item = table.item(row, amount_col)
             if not amount_item:
                 continue
             amount_text = amount_item.text().replace(' ', '').replace(',', '').replace('₽', '').strip()
             try:
-                total_all += float(amount_text)
+                amount_val = float(amount_text)
             except ValueError:
                 continue
+            total_all_time += amount_val
+            if not table.isRowHidden(row):
+                total_filtered += amount_val
 
-        # Обновляем метку итогов
-        totals_label = parent_widget.findChild(QLabel, f'totals_{payment_type}')
-        if totals_label:
-            totals_label.setText(
-                f'Итого по фильтру: {total_all:,.2f} ₽  |  '
-                f'Итого за год: {total_year:,.2f} ₽'
+        # Обновляем метки итогов (split layout)
+        totals_left = parent_widget.findChild(QLabel, f'totals_left_{payment_type}')
+        totals_right = parent_widget.findChild(QLabel, f'totals_right_{payment_type}')
+        if totals_left:
+            totals_left.setText(f'Итого по фильтру: {total_filtered:,.2f} ₽')
+        if totals_right:
+            totals_right.setText(
+                f'Итого за год: {total_year:,.2f} ₽  |  Итого за всё время: {total_all_time:,.2f} ₽'
             )
 
     def reset_payment_type_filters(self, parent_widget, payment_type):
