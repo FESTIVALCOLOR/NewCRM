@@ -246,7 +246,7 @@ async def upload_file_to_yandex(
         if not yandex_path:
             # Защита от path traversal в имени файла
             safe_filename = os.path.basename(file.filename or "unnamed")
-            yandex_path = f"/uploads/{safe_filename}"
+            yandex_path = f"/CRM/Временные файлы/{safe_filename}"
         else:
             # Защита от path traversal: запрещаем ".." в пути
             if ".." in yandex_path:
