@@ -215,6 +215,26 @@ async def send_employee_invite(
     if not email_svc.available:
         raise HTTPException(status_code=503, detail="Email-сервис не настроен")
 
+    # Получить реальный bot_username из Telegram API
+    bot_username = "festival_color_crm_bot"  # fallback
+    try:
+        from telegram_service import get_telegram_service
+        tg = get_telegram_service()
+        if tg.bot_available:
+            bot_info = await tg._bot.get_me()
+            if bot_info.username:
+                bot_username = bot_info.username
+    except Exception as e:
+        logger.warning(f"Не удалось получить bot_username: {e}")
+
+    # Получить ссылку на скачивание из настроек
+    from routers.messenger_router import load_messenger_settings
+    messenger_settings = load_messenger_settings(db)
+    download_link = messenger_settings.get(
+        "app_download_url",
+        "https://disk.yandex.ru/d/5LT3jFbE5ISHpA"
+    )
+
     try:
         ok = await email_svc.send_welcome_email(
             to_email=employee.email,
@@ -222,6 +242,8 @@ async def send_employee_invite(
             login=employee.login or "",
             password=temp_password,
             telegram_token=token,
+            bot_username=bot_username,
+            download_link=download_link,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка SMTP: {e}")

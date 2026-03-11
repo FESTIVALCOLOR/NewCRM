@@ -514,6 +514,11 @@ class MessengerAdminDialog(QDialog):
         self._smtp_from_name.setStyleSheet(_INPUT_STYLE)
         form.addRow("Имя отправителя:", self._smtp_from_name)
 
+        self._app_download_url = QLineEdit()
+        self._app_download_url.setPlaceholderText("https://disk.yandex.ru/d/...")
+        self._app_download_url.setStyleSheet(_INPUT_STYLE)
+        form.addRow("Ссылка на скачивание:", self._app_download_url)
+
         layout.addLayout(form)
 
         # Статус Email
@@ -831,6 +836,9 @@ class MessengerAdminDialog(QDialog):
             )
             self._smtp_from_name.setText(
                 self._settings.get("smtp_from_name", "Festival Color CRM")
+            )
+            self._app_download_url.setText(
+                self._settings.get("app_download_url", "")
             )
         except Exception as e:
             logger.error(f"Ошибка загрузки настроек: {e}")
@@ -1430,6 +1438,7 @@ class MessengerAdminDialog(QDialog):
             {"setting_key": "smtp_password", "setting_value": self._smtp_password.text().strip()},
             {"setting_key": "smtp_use_tls", "setting_value": "true" if self._smtp_tls.isChecked() else "false"},
             {"setting_key": "smtp_from_name", "setting_value": self._smtp_from_name.text().strip() or "Festival Color CRM"},
+            {"setting_key": "app_download_url", "setting_value": self._app_download_url.text().strip()},
         ]
 
         try:
