@@ -4,7 +4,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTabWidget, QHeaderView, QDialog, QFormLayout,
                              QDoubleSpinBox, QSpinBox, QTextEdit, QMessageBox, QGroupBox, QFrame,
                              QStyledItemDelegate, QStyleOptionViewItem, QScrollArea, QSizePolicy)
-from PyQt5.QtCore import Qt, QDate, QModelIndex, QSize, QPropertyAnimation, QParallelAnimationGroup, QTimer
+from PyQt5.QtCore import Qt, QDate, QModelIndex, QSize, QPropertyAnimation, QParallelAnimationGroup, QTimer, QStringListModel, QEvent
+from PyQt5.QtWidgets import QCompleter
 from PyQt5.QtGui import QColor, QPainter
 from database.db_manager import DatabaseManager
 from ui.custom_title_bar import CustomTitleBar
@@ -106,6 +107,43 @@ class SalariesTab(QWidget):
         self._payment_type_cache = {}  # Кеш данных по типам: {'Оклады': [], 'Индивидуальные проекты': [], ...}
 
         self.init_ui()
+
+    def _setup_searchable_combo(self, combo, placeholder='Введите для поиска...'):
+        """Настройка комбобокса с возможностью ручного ввода и поиска по подстроке"""
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        combo.lineEdit().setPlaceholderText(placeholder)
+        combo.lineEdit().installEventFilter(self)
+        combo.setProperty('_searchable', True)
+        completer = QCompleter()
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        completer.popup().setStyleSheet(
+            'QAbstractItemView { background-color: white; color: #333; '
+            'selection-background-color: #FFF2CC; selection-color: #333; '
+            'border: 1px solid #E0E0E0; }'
+        )
+        combo.setCompleter(completer)
+        combo.view().setStyleSheet(
+            'QAbstractItemView { background-color: white; color: #333; '
+            'selection-background-color: #FFF2CC; selection-color: #333; }'
+        )
+
+    def _update_searchable_combo_items(self, combo, items):
+        """Обновить список элементов searchable комбобокса и его completer"""
+        completer = combo.completer()
+        if completer:
+            model = QStringListModel(items)
+            completer.setModel(model)
+
+    def eventFilter(self, obj, event):
+        """Очистка текста searchable combo при клике мышкой"""
+        if event.type() == QEvent.MouseButtonPress:
+            parent = obj.parent()
+            if isinstance(parent, QComboBox) and parent.property('_searchable'):
+                obj.clear()
+        return super().eventFilter(obj, event)
 
     def invalidate_cache(self):
         """Инвалидация кеша данных - вызывать при изменении выплат"""
@@ -238,7 +276,9 @@ class SalariesTab(QWidget):
         self.address_filter = CustomComboBox()
         self.address_filter.addItem('Все', None)
         self.address_filter.setMinimumWidth(200)
+        self._setup_searchable_combo(self.address_filter, 'Поиск по адресу...')
         self.address_filter.currentIndexChanged.connect(self.apply_all_payments_filters)
+        self.address_filter.lineEdit().returnPressed.connect(self.apply_all_payments_filters)
         row2_layout.addWidget(self.address_filter)
 
         row2_layout.addWidget(QLabel('Исполнитель: '))
@@ -263,8 +303,7 @@ class SalariesTab(QWidget):
         row3_layout.addWidget(QLabel('Тип агента:'))
         self.agent_type_filter = CustomComboBox()
         self.agent_type_filter.addItem('Все', None)
-        self.agent_type_filter.addItem('Фестиваль', 'Фестиваль')
-        self.agent_type_filter.addItem('Петрович', 'Петрович')
+        self.agent_type_filter.setMinimumWidth(120)
         self.agent_type_filter.currentIndexChanged.connect(self.apply_all_payments_filters)
         row3_layout.addWidget(self.agent_type_filter)
 
@@ -487,6 +526,7 @@ class SalariesTab(QWidget):
             address_filter = CustomComboBox()
             address_filter.addItem('Все', None)
             address_filter.setMinimumWidth(150)
+            self._setup_searchable_combo(address_filter, 'Поиск по адресу...')
             row2_layout.addWidget(address_filter)
 
             row2_layout.addWidget(QLabel('Исполнитель:'))
@@ -520,24 +560,24 @@ class SalariesTab(QWidget):
         row2_layout.addStretch()
         filters_layout.addLayout(row2_layout)
 
-        # Третья строка: дополнительные фильтры для не-окладов
-        if payment_type != 'Оклады':
-            row3_layout = QHBoxLayout()
+        # Третья строка: дополнительные фильтры
+        row3_layout = QHBoxLayout()
 
+        if payment_type != 'Оклады':
             row3_layout.addWidget(QLabel('Тип агента:'))
             agent_type_filter = CustomComboBox()
             agent_type_filter.addItem('Все', None)
             agent_type_filter.setMinimumWidth(120)
             row3_layout.addWidget(agent_type_filter)
 
-            row3_layout.addWidget(QLabel('Статус оплаты:'))
-            status_filter = CustomComboBox()
-            status_filter.addItems(['Все', 'К оплате', 'Оплачено'])
-            status_filter.setMinimumWidth(150)
-            row3_layout.addWidget(status_filter)
+        row3_layout.addWidget(QLabel('Статус оплаты:'))
+        status_filter = CustomComboBox()
+        status_filter.addItems(['Все', 'К оплате', 'Оплачено'])
+        status_filter.setMinimumWidth(150)
+        row3_layout.addWidget(status_filter)
 
-            row3_layout.addStretch()
-            filters_layout.addLayout(row3_layout)
+        row3_layout.addStretch()
+        filters_layout.addLayout(row3_layout)
 
         # Кнопка сброса фильтров
         reset_layout = QHBoxLayout()
@@ -573,11 +613,11 @@ class SalariesTab(QWidget):
         widget.quarter_filter = quarter_filter
         widget.employee_filter = employee_filter
 
+        widget.status_filter = status_filter
         if payment_type != 'Оклады':
             widget.address_filter = address_filter
             widget.position_filter = position_filter
             widget.agent_type_filter = agent_type_filter
-            widget.status_filter = status_filter
         else:
             widget.project_type_filter = project_type_filter
 
@@ -596,11 +636,12 @@ class SalariesTab(QWidget):
         employee_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
 
         # Подключаем фильтры в зависимости от типа
+        status_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
         if payment_type != 'Оклады':
             address_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
+            address_filter.lineEdit().returnPressed.connect(lambda: self.apply_payment_type_filters(payment_type))
             position_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
             agent_type_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
-            status_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
         else:
             project_type_filter.currentIndexChanged.connect(lambda: self.apply_payment_type_filters(payment_type))
 
@@ -1109,29 +1150,6 @@ class SalariesTab(QWidget):
                 'error'
             ).exec_()
 
-    def _update_payment_locally(self, payment_id: int, payment_data: dict):
-        """Обновление платежа в локальной БД"""
-        try:
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-            UPDATE payments
-            SET final_amount = ?,
-                payment_type = ?,
-                report_month = ?
-            WHERE id = ?
-            ''', (
-                payment_data['amount'],
-                payment_data['payment_type'],
-                payment_data['report_month'],
-                payment_id
-            ))
-            conn.commit()
-            self.db.close()
-        except Exception as e:
-            print(f"[SalariesTab] Ошибка локального обновления платежа ID={payment_id}: {e}")
-            raise
-
     def edit_payment_from_all(self, payment, is_salary):
         """Редактирование выплаты из таблицы 'Все выплаты'"""
         if not _has_perm(self.employee, self.api_client, 'salaries.update'):
@@ -1456,26 +1474,31 @@ class SalariesTab(QWidget):
         addresses = sorted(set(p.get('address', '') for p in payments if p.get('address')))
         employees = sorted(set(p.get('employee_name', '') for p in payments if p.get('employee_name')))
         positions = sorted(set(p.get('position', '') for p in payments if p.get('position')))
-        # agent_types теперь фиксированные (Фестиваль, Петрович) - не загружаем динамически
+        agent_types = sorted(set(p.get('agent_type', '') for p in payments if p.get('agent_type')))
 
         # Обновляем комбобоксы фильтров (сохраняя текущие выборы если возможно)
-        current_address = self.address_filter.currentData()
+        current_address = self.address_filter.currentText() if self.address_filter.currentIndex() > 0 else None
         current_employee = self.employee_filter.currentData()
         current_position = self.position_filter.currentData()
+        current_agent_type = self.agent_type_filter.currentData()
 
         # Блокируем сигналы чтобы избежать рекурсии
         self.address_filter.blockSignals(True)
         self.employee_filter.blockSignals(True)
         self.position_filter.blockSignals(True)
+        self.agent_type_filter.blockSignals(True)
 
         self.address_filter.clear()
         self.address_filter.addItem('Все', None)
         for addr in addresses:
             self.address_filter.addItem(addr, addr)
         if current_address:
-            index = self.address_filter.findData(current_address)
+            index = self.address_filter.findText(current_address)
             if index >= 0:
                 self.address_filter.setCurrentIndex(index)
+            else:
+                # Восстанавливаем набранный пользователем текст (частичный поиск)
+                self.address_filter.lineEdit().setText(current_address)
 
         self.employee_filter.clear()
         self.employee_filter.addItem('Все', None)
@@ -1495,15 +1518,29 @@ class SalariesTab(QWidget):
             if index >= 0:
                 self.position_filter.setCurrentIndex(index)
 
-        # agent_type_filter и payment_subtype_filter имеют фиксированные значения - не обновляем
+        # Обновляем типы агентов динамически из данных
+        self.agent_type_filter.clear()
+        self.agent_type_filter.addItem('Все', None)
+        for agent in agent_types:
+            self.agent_type_filter.addItem(agent, agent)
+        if current_agent_type:
+            index = self.agent_type_filter.findData(current_agent_type)
+            if index >= 0:
+                self.agent_type_filter.setCurrentIndex(index)
 
         # Разблокируем сигналы
         self.address_filter.blockSignals(False)
         self.employee_filter.blockSignals(False)
         self.position_filter.blockSignals(False)
+        self.agent_type_filter.blockSignals(False)
+
+        # Обновляем completer для searchable адресного фильтра
+        self._update_searchable_combo_items(self.address_filter, addresses)
 
         # Применяем фильтры (кешируем значения фильтров перед циклом)
-        f_address = self.address_filter.currentData()
+        # Для searchable адресного фильтра используем текст (подстрочный поиск)
+        f_address_text = self.address_filter.currentText().strip()
+        f_address = None if (not f_address_text or f_address_text == 'Все') else f_address_text
         f_employee = self.employee_filter.currentData()
         f_position = self.position_filter.currentData()
         f_agent_type = self.agent_type_filter.currentData()
@@ -1513,7 +1550,7 @@ class SalariesTab(QWidget):
 
         filtered_payments = []
         for payment in payments:
-            if f_address and payment.get('address') != f_address:
+            if f_address and f_address.lower() not in (payment.get('address') or '').lower():
                 continue
             if f_employee and payment.get('employee_name') != f_employee:
                 continue
@@ -1528,7 +1565,8 @@ class SalariesTab(QWidget):
                 if actual_subtype != f_subtype:
                     continue
             if f_project_type != 'Все':
-                if f_project_type != payment.get('project_type', ''):
+                pt = payment.get('project_type', '')
+                if pt != f_project_type and pt != 'Все':
                     continue
             if f_status != 'Все':
                 status = payment.get('payment_status', '')
@@ -1740,9 +1778,11 @@ class SalariesTab(QWidget):
                     # Заполнение в зависимости от типа
                     if payment_type == 'Оклады':
                         # Для окладов: Исполнитель, Тип проекта, Сумма оклада, Отчетный месяц, Комментарий, Действия
-                        table.setItem(row, col, QTableWidgetItem(item['employee_name']))
+                        emp_item = QTableWidgetItem(item['employee_name'])
+                        emp_item.setData(Qt.UserRole, item.get('payment_status'))
+                        table.setItem(row, col, emp_item)
                         col += 1
-                        table.setItem(row, col, QTableWidgetItem(item.get('project_type', 'Индивидуальный')))
+                        table.setItem(row, col, QTableWidgetItem(item.get('project_type', 'Все')))
                         col += 1
                         amount_item = QTableWidgetItem(f"{item.get('amount', 0):,.2f} ₽")
                         amount_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -1925,11 +1965,13 @@ class SalariesTab(QWidget):
         employee_filter = parent_widget.employee_filter.currentData()
 
         # Дополнительные фильтры в зависимости от типа
+        status_filter = parent_widget.status_filter.currentText()
         if payment_type != 'Оклады':
-            address_filter = parent_widget.address_filter.currentData()
+            # Для searchable адресного фильтра используем текст (подстрочный поиск)
+            addr_text = parent_widget.address_filter.currentText().strip()
+            address_filter = None if (not addr_text or addr_text == 'Все') else addr_text
             position_filter = parent_widget.position_filter.currentData()
             agent_type_filter = parent_widget.agent_type_filter.currentData()
-            status_filter = parent_widget.status_filter.currentText()
         else:
             project_type_filter = parent_widget.project_type_filter.currentData()
 
@@ -1988,10 +2030,10 @@ class SalariesTab(QWidget):
 
             # Дополнительные фильтры для не-окладов
             if payment_type != 'Оклады' and show_row:
-                # Фильтр по адресу
+                # Фильтр по адресу (подстрочный поиск, case-insensitive)
                 if address_filter:
                     address_item = table.item(row, 1)
-                    if address_item and address_filter not in address_item.text():
+                    if address_item and address_filter.lower() not in address_item.text().lower():
                         show_row = False
 
                 # Фильтр по должности
@@ -2020,8 +2062,20 @@ class SalariesTab(QWidget):
                 # Фильтр по типу проекта для окладов
                 if payment_type == 'Оклады' and project_type_filter and show_row:
                     project_type_item = table.item(row, 1)
-                    if project_type_item and project_type_item.text() != project_type_filter:
-                        show_row = False
+                    if project_type_item:
+                        pt_text = project_type_item.text()
+                        # "Все" проходит любой фильтр
+                        if pt_text != project_type_filter and pt_text != 'Все':
+                            show_row = False
+
+                # Фильтр по статусу оплаты для окладов
+                if payment_type == 'Оклады' and status_filter and status_filter != 'Все' and show_row:
+                    status_item = table.item(row, 0)
+                    if status_item:
+                        row_status = status_item.data(Qt.UserRole)
+                        expected_status = 'to_pay' if status_filter == 'К оплате' else 'paid'
+                        if row_status != expected_status:
+                            show_row = False
 
             table.setRowHidden(row, not show_row)
 
@@ -2116,21 +2170,23 @@ class SalariesTab(QWidget):
         parent_widget.year_filter.setValue(QDate.currentDate().year())
         parent_widget.employee_filter.setCurrentIndex(0)  # Все
 
+        # Сброс status_filter (есть у всех вкладок)
+        parent_widget.status_filter.blockSignals(True)
+        parent_widget.status_filter.setCurrentIndex(0)
+        parent_widget.status_filter.blockSignals(False)
+
         if payment_type != 'Оклады':
             parent_widget.address_filter.blockSignals(True)
             parent_widget.position_filter.blockSignals(True)
             parent_widget.agent_type_filter.blockSignals(True)
-            parent_widget.status_filter.blockSignals(True)
 
             parent_widget.address_filter.setCurrentIndex(0)
             parent_widget.position_filter.setCurrentIndex(0)
             parent_widget.agent_type_filter.setCurrentIndex(0)
-            parent_widget.status_filter.setCurrentIndex(0)
 
             parent_widget.address_filter.blockSignals(False)
             parent_widget.position_filter.blockSignals(False)
             parent_widget.agent_type_filter.blockSignals(False)
-            parent_widget.status_filter.blockSignals(False)
         else:
             parent_widget.project_type_filter.blockSignals(True)
             parent_widget.project_type_filter.setCurrentIndex(0)
@@ -2529,8 +2585,15 @@ class SalariesTab(QWidget):
         else:
             month_text = ''
 
-        # Находим колонку "Отчетный месяц" — для "Все выплаты" это предпоследняя перед "Действия"
-        month_col = table.columnCount() - 2  # Предпоследняя колонка
+        # Находим колонку "Отчетный месяц" по заголовку таблицы
+        month_col = -1
+        for c in range(table.columnCount()):
+            header = table.horizontalHeaderItem(c)
+            if header and 'месяц' in header.text().lower():
+                month_col = c
+                break
+        if month_col < 0:
+            month_col = table.columnCount() - 2  # Fallback
         month_item = table.item(row, month_col)
         # Если ячейка заменена на QLabel (apply_row_color), ищем виджет
         month_widget = table.cellWidget(row, month_col)
@@ -2573,50 +2636,25 @@ class SalariesTab(QWidget):
                         table.removeCellWidget(row, col)
 
         # Пересоздаём кнопки действий с новым статусом
-        if is_salary:
-            actions_widget = self.create_payment_actions(payment, 'Оклады')
+        # Определяем метод по таблице, чтобы использовать тот же формат кнопок что при загрузке
+        table_name = table.objectName() if table else ''
+        if table is self.all_payments_table:
+            # Вкладка "Все выплаты"
+            actions_widget = self.create_all_payments_actions(payment, is_salary, table, row)
+        elif table_name == 'table_Оклады':
+            # Вкладка "Оклады"
+            actions_widget = self.create_salary_payment_actions(payment, 'Оклады', table, row)
+        elif table_name.startswith('table_'):
+            # Вкладки проектов (Индивидуальные, Шаблонные, Авторский надзор)
+            pt = table_name.replace('table_', '')
+            actions_widget = self.create_crm_payment_actions(payment, pt, table, row)
+        elif is_salary:
+            actions_widget = self.create_salary_payment_actions(payment, 'Оклады', table, row)
         else:
-            source = payment.get('source', 'CRM')
-            if source == 'CRM':
-                payment_type = payment.get('project_type', 'Индивидуальный')
-                if payment_type == 'Индивидуальный':
-                    pt = 'Индивидуальные проекты'
-                elif payment_type == 'Шаблонный':
-                    pt = 'Шаблонные проекты'
-                else:
-                    pt = 'Авторский надзор'
-                actions_widget = self.create_crm_payment_actions(payment, pt, table, row)
-            else:
-                actions_widget = self.create_payment_actions(payment, 'Оклады')
+            actions_widget = self.create_crm_payment_actions(payment, 'Индивидуальные проекты', table, row)
         if actions_widget:
             actions_widget.setStyleSheet(f"background-color: {color};")
             table.setCellWidget(row, last_col, actions_widget)
-
-    def _update_status_locally(self, payment_id: int, update_data: dict, is_salary: bool):
-        """Обновление статуса и report_month в локальной БД"""
-        try:
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            table_name = 'salaries' if is_salary else 'payments'
-
-            # Формируем SET часть запроса динамически
-            set_parts = []
-            values = []
-            for key, value in update_data.items():
-                set_parts.append(f'{key} = ?')
-                values.append(value)
-            values.append(payment_id)
-
-            cursor.execute(f'''
-            UPDATE {table_name}
-            SET {', '.join(set_parts)}
-            WHERE id = ?
-            ''', values)
-            conn.commit()
-            self.db.close()
-        except Exception as e:
-            print(f"[SalariesTab] Ошибка локального обновления статуса ID={payment_id}: {e}")
-            raise
 
     def apply_row_color(self, table, row, status, is_reassigned=False, employee_col=2):
         """Применение цвета к строке в зависимости от статуса и переназначения"""
@@ -2742,7 +2780,7 @@ class PaymentDialog(QDialog):
 
             # Тип проекта
             self.project_type_combo = CustomComboBox()
-            self.project_type_combo.addItems(['Индивидуальный', 'Шаблонный', 'Авторский надзор'])
+            self.project_type_combo.addItems(['Все', 'Индивидуальный', 'Шаблонный', 'Авторский надзор'])
             form_layout.addRow('Тип проекта:', self.project_type_combo)
 
             # Сумма
@@ -2875,7 +2913,7 @@ class PaymentDialog(QDialog):
                     self.employee_combo.setCurrentIndex(idx)
 
             # Тип проекта
-            project_type = self.payment_data.get('project_type', 'Индивидуальный')
+            project_type = self.payment_data.get('project_type', 'Все')
             idx = self.project_type_combo.findText(project_type)
             if idx >= 0:
                 self.project_type_combo.setCurrentIndex(idx)

@@ -2033,7 +2033,7 @@ class DatabaseManager(DatabaseMigrations):
             FROM salaries s
             JOIN employees e ON s.employee_id = e.id
             LEFT JOIN contracts c ON s.contract_id = c.id
-            WHERE s.project_type = ?
+            WHERE s.project_type = ? OR s.project_type = 'Все' OR s.project_type IS NULL
 
             ORDER BY 1 DESC
             ''', (project_type_filter,))
@@ -2065,7 +2065,7 @@ class DatabaseManager(DatabaseMigrations):
             FROM salaries s
             JOIN employees e ON s.employee_id = e.id
             LEFT JOIN contracts c ON s.contract_id = c.id
-            WHERE s.project_type = ?
+            WHERE s.project_type = ? OR s.project_type = 'Все' OR s.project_type IS NULL
 
             ORDER BY 1 DESC
             ''', (project_type_filter, project_type_filter))
@@ -3042,14 +3042,21 @@ class DatabaseManager(DatabaseMigrations):
             return []
             
     def get_crm_card_data(self, card_id):
-        """Получение данных карточки для проверок"""
+        """Получение данных карточки для проверок и диалога редактирования"""
         try:
             conn = self.connect()
             cursor = conn.cursor()
 
             cursor.execute('''
             SELECT cc.*,
-                   -- ИСПРАВЛЕНИЕ 26.01.2026: Добавлены имена исполнителей для диалога переназначения
+                   -- ИСПРАВЛЕНИЕ: Имена команды проекта (менеджер, СДП, ГАП и др.)
+                   e1.full_name as senior_manager_name,
+                   e2.full_name as sdp_name,
+                   e3.full_name as gap_name,
+                   e4.full_name as manager_name,
+                   e5.full_name as surveyor_name,
+
+                   -- Имена исполнителей из stage_executors
                    (SELECT e.full_name
                     FROM stage_executors se
                     JOIN employees e ON se.executor_id = e.id
@@ -3089,6 +3096,11 @@ class DatabaseManager(DatabaseMigrations):
                       AND (se.stage_name LIKE '%чертежи%' OR se.stage_name LIKE '%планировочные%')
                     ORDER BY se.id DESC LIMIT 1) as draftsman_deadline
             FROM crm_cards cc
+            LEFT JOIN employees e1 ON cc.senior_manager_id = e1.id
+            LEFT JOIN employees e2 ON cc.sdp_id = e2.id
+            LEFT JOIN employees e3 ON cc.gap_id = e3.id
+            LEFT JOIN employees e4 ON cc.manager_id = e4.id
+            LEFT JOIN employees e5 ON cc.surveyor_id = e5.id
             WHERE cc.id = ?
             ''', (card_id,))
 
@@ -5374,18 +5386,17 @@ class DatabaseManager(DatabaseMigrations):
     def get_salaries_all_payments_stats(self, year=None, month=None):
         """Статистика для дашборда 'Все выплаты'
         Возвращает: total_paid, paid_by_year, paid_by_month, individual_by_year, template_by_year, supervision_by_year
+        Учитываются payments (CRM) + salaries (оклады)
         """
         try:
             conn = self.connect()
             cursor = conn.cursor()
 
-            # Всего выплачено
-            cursor.execute("""
-                SELECT COALESCE(SUM(final_amount), 0)
-                FROM payments
-                WHERE payment_status = 'paid'
-            """)
-            total_paid = cursor.fetchone()[0]
+            # Всего выплачено (payments + salaries)
+            cursor.execute("SELECT COALESCE(SUM(final_amount), 0) FROM payments WHERE payment_status = 'paid'")
+            total_paid = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid'")
+            total_paid += cursor.fetchone()[0] or 0
 
             # За год
             paid_by_year = 0
@@ -5394,67 +5405,61 @@ class DatabaseManager(DatabaseMigrations):
             supervision_by_year = 0
 
             if year:
-                cursor.execute("""
-                    SELECT COALESCE(SUM(final_amount), 0)
-                    FROM payments
-                    WHERE payment_status = 'paid'
-                    AND report_month LIKE ?
-                """, (f'{year}-%',))
-                paid_by_year = cursor.fetchone()[0]
+                year_pattern = f'{year}-%'
+                # Payments за год
+                cursor.execute("SELECT COALESCE(SUM(final_amount), 0) FROM payments WHERE payment_status = 'paid' AND report_month LIKE ?", (year_pattern,))
+                paid_by_year = cursor.fetchone()[0] or 0
+                # + Salaries за год
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ?", (year_pattern,))
+                paid_by_year += cursor.fetchone()[0] or 0
 
-                # Индивидуальные за год
+                # Индивидуальные за год (payments + оклады 'Индивидуальный'/'Все')
                 cursor.execute("""
                     SELECT COALESCE(SUM(p.final_amount), 0)
-                    FROM payments p
-                    JOIN contracts c ON p.contract_id = c.id
-                    WHERE p.payment_status = 'paid'
-                    AND p.report_month LIKE ?
-                    AND c.project_type = 'Индивидуальный'
-                """, (f'{year}-%',))
-                individual_by_year = cursor.fetchone()[0]
+                    FROM payments p JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid' AND p.report_month LIKE ? AND c.project_type = 'Индивидуальный'
+                """, (year_pattern,))
+                individual_by_year = cursor.fetchone()[0] or 0
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type IN ('Индивидуальный', 'Все')", (year_pattern,))
+                individual_by_year += cursor.fetchone()[0] or 0
 
                 # Шаблонные за год
                 cursor.execute("""
                     SELECT COALESCE(SUM(p.final_amount), 0)
-                    FROM payments p
-                    JOIN contracts c ON p.contract_id = c.id
-                    WHERE p.payment_status = 'paid'
-                    AND p.report_month LIKE ?
-                    AND c.project_type = 'Шаблонный'
-                """, (f'{year}-%',))
-                template_by_year = cursor.fetchone()[0]
+                    FROM payments p JOIN contracts c ON p.contract_id = c.id
+                    WHERE p.payment_status = 'paid' AND p.report_month LIKE ? AND c.project_type = 'Шаблонный'
+                """, (year_pattern,))
+                template_by_year = cursor.fetchone()[0] or 0
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type IN ('Шаблонный', 'Все')", (year_pattern,))
+                template_by_year += cursor.fetchone()[0] or 0
 
                 # Авторский надзор за год
                 cursor.execute("""
-                    SELECT COALESCE(SUM(p.final_amount), 0)
-                    FROM payments p
-                    JOIN contracts c ON p.contract_id = c.id
-                    WHERE p.payment_status = 'paid'
-                    AND p.report_month LIKE ?
-                    AND c.status = 'АВТОРСКИЙ НАДЗОР'
-                """, (f'{year}-%',))
-                supervision_by_year = cursor.fetchone()[0]
+                    SELECT COALESCE(SUM(final_amount), 0) FROM payments
+                    WHERE payment_status = 'paid' AND report_month LIKE ? AND supervision_card_id IS NOT NULL
+                """, (year_pattern,))
+                supervision_by_year = cursor.fetchone()[0] or 0
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type IN ('Авторский надзор', 'Все')", (year_pattern,))
+                supervision_by_year += cursor.fetchone()[0] or 0
 
-            # За месяц
+            # За месяц (payments + salaries)
             paid_by_month = 0
             if year and month:
-                cursor.execute("""
-                    SELECT COALESCE(SUM(final_amount), 0)
-                    FROM payments
-                    WHERE payment_status = 'paid'
-                    AND report_month = ?
-                """, (f'{year}-{month:02d}',))
-                paid_by_month = cursor.fetchone()[0]
+                month_str = f'{year}-{month:02d}'
+                cursor.execute("SELECT COALESCE(SUM(final_amount), 0) FROM payments WHERE payment_status = 'paid' AND report_month = ?", (month_str,))
+                paid_by_month = cursor.fetchone()[0] or 0
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month = ?", (month_str,))
+                paid_by_month += cursor.fetchone()[0] or 0
 
             self.close()
 
             return {
-                'total_paid': total_paid or 0,
-                'paid_by_year': paid_by_year or 0,
-                'paid_by_month': paid_by_month or 0,
-                'individual_by_year': individual_by_year or 0,
-                'template_by_year': template_by_year or 0,
-                'supervision_by_year': supervision_by_year or 0
+                'total_paid': total_paid,
+                'paid_by_year': paid_by_year,
+                'paid_by_month': paid_by_month,
+                'individual_by_year': individual_by_year,
+                'template_by_year': template_by_year,
+                'supervision_by_year': supervision_by_year
             }
 
         except Exception as e:
