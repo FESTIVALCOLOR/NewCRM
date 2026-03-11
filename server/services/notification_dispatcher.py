@@ -55,9 +55,19 @@ async def dispatch_notification(
         ).first()
 
         if not settings:
-            # Нет настроек — только запись в БД, без отправки
-            db.commit()
-            return
+            # Нет явных настроек — создаём дефолтные (telegram включён, assigned/stage/deadline включены)
+            settings = NotificationSettings(
+                employee_id=employee_id,
+                telegram_enabled=True,
+                email_enabled=False,
+                notify_crm_stage=True,
+                notify_assigned=True,
+                notify_deadline=True,
+                notify_payment=False,
+                notify_supervision=False,
+            )
+            db.add(settings)
+            db.flush()
 
         # 3. Проверить флаг типа события
         event_flag_map = {

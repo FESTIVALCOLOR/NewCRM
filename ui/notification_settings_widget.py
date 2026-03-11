@@ -169,7 +169,7 @@ class NotificationSettingsWidget(QWidget):
 
         if is_director and self.data_access:
             try:
-                employees = self.data_access.get_employees() or []
+                employees = self.data_access.get_all_employees() or []
                 self._employees = [e for e in employees if e.get('status') == 'активный']
             except Exception:
                 self._employees = []

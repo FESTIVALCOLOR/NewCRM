@@ -152,6 +152,7 @@ class EmployeeResponse(EmployeeBase):
     agent_color: Optional[str] = None
     created_at: datetime
     invite_temp_password: Optional[str] = None
+    telegram_user_id: Optional[int] = None
 
     class Config:
         from_attributes = True
