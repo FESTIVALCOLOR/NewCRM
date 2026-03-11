@@ -496,10 +496,8 @@ async def get_payments_by_type(
                     'reassigned': p.reassigned if hasattr(p, 'reassigned') else False
                 })
 
-            # Добавляем оклады с типом "Авторский надзор" + оклады с типом "Все" (общефирменные)
-            salaries = db.query(Salary).filter(
-                or_(Salary.project_type == project_type_filter, Salary.project_type == 'Все', Salary.project_type.is_(None))
-            ).all()
+            # Добавляем оклады с типом "Авторский надзор"
+            salaries = db.query(Salary).filter(Salary.project_type == project_type_filter).all()
             for s in salaries:
                 employee = db.query(Employee).filter(Employee.id == s.employee_id).first()
                 contract = db.query(Contract).filter(Contract.id == s.contract_id).first() if s.contract_id else None
@@ -567,10 +565,8 @@ async def get_payments_by_type(
                     'old_employee_id': p.old_employee_id if hasattr(p, 'old_employee_id') else None
                 })
 
-            # Добавляем оклады с этим типом проекта + оклады с типом "Все" (общефирменные)
-            salaries = db.query(Salary).filter(
-                or_(Salary.project_type == project_type_filter, Salary.project_type == 'Все', Salary.project_type.is_(None))
-            ).all()
+            # Добавляем оклады с этим типом проекта
+            salaries = db.query(Salary).filter(Salary.project_type == project_type_filter).all()
             for s in salaries:
                 employee = db.query(Employee).filter(Employee.id == s.employee_id).first()
                 contract = db.query(Contract).filter(Contract.id == s.contract_id).first() if s.contract_id else None

@@ -2033,7 +2033,7 @@ class DatabaseManager(DatabaseMigrations):
             FROM salaries s
             JOIN employees e ON s.employee_id = e.id
             LEFT JOIN contracts c ON s.contract_id = c.id
-            WHERE s.project_type = ? OR s.project_type = 'Все' OR s.project_type IS NULL
+            WHERE s.project_type = ?
 
             ORDER BY 1 DESC
             ''', (project_type_filter,))
@@ -2065,7 +2065,7 @@ class DatabaseManager(DatabaseMigrations):
             FROM salaries s
             JOIN employees e ON s.employee_id = e.id
             LEFT JOIN contracts c ON s.contract_id = c.id
-            WHERE s.project_type = ? OR s.project_type = 'Все' OR s.project_type IS NULL
+            WHERE s.project_type = ?
 
             ORDER BY 1 DESC
             ''', (project_type_filter, project_type_filter))
@@ -5413,14 +5413,14 @@ class DatabaseManager(DatabaseMigrations):
                 cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ?", (year_pattern,))
                 paid_by_year += cursor.fetchone()[0] or 0
 
-                # Индивидуальные за год (payments + оклады 'Индивидуальный'/'Все')
+                # Индивидуальные за год (payments + оклады с project_type='Индивидуальный')
                 cursor.execute("""
                     SELECT COALESCE(SUM(p.final_amount), 0)
                     FROM payments p JOIN contracts c ON p.contract_id = c.id
                     WHERE p.payment_status = 'paid' AND p.report_month LIKE ? AND c.project_type = 'Индивидуальный'
                 """, (year_pattern,))
                 individual_by_year = cursor.fetchone()[0] or 0
-                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type IN ('Индивидуальный', 'Все')", (year_pattern,))
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type = 'Индивидуальный'", (year_pattern,))
                 individual_by_year += cursor.fetchone()[0] or 0
 
                 # Шаблонные за год
@@ -5430,7 +5430,7 @@ class DatabaseManager(DatabaseMigrations):
                     WHERE p.payment_status = 'paid' AND p.report_month LIKE ? AND c.project_type = 'Шаблонный'
                 """, (year_pattern,))
                 template_by_year = cursor.fetchone()[0] or 0
-                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type IN ('Шаблонный', 'Все')", (year_pattern,))
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type = 'Шаблонный'", (year_pattern,))
                 template_by_year += cursor.fetchone()[0] or 0
 
                 # Авторский надзор за год
@@ -5439,7 +5439,7 @@ class DatabaseManager(DatabaseMigrations):
                     WHERE payment_status = 'paid' AND report_month LIKE ? AND supervision_card_id IS NOT NULL
                 """, (year_pattern,))
                 supervision_by_year = cursor.fetchone()[0] or 0
-                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type IN ('Авторский надзор', 'Все')", (year_pattern,))
+                cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM salaries WHERE payment_status = 'paid' AND report_month LIKE ? AND project_type = 'Авторский надзор'", (year_pattern,))
                 supervision_by_year += cursor.fetchone()[0] or 0
 
             # За месяц (payments + salaries)

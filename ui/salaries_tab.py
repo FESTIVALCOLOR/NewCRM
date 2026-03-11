@@ -1566,7 +1566,7 @@ class SalariesTab(QWidget):
                     continue
             if f_project_type != 'Все':
                 pt = payment.get('project_type', '')
-                if pt != f_project_type and pt != 'Все':
+                if pt != f_project_type:
                     continue
             if f_status != 'Все':
                 status = payment.get('payment_status', '')
@@ -1605,7 +1605,7 @@ class SalariesTab(QWidget):
             self.all_payments_table.setItem(row, 2, QTableWidgetItem(payment['employee_name']))
 
             # Должность
-            self.all_payments_table.setItem(row, 3, QTableWidgetItem(payment['position']))
+            self.all_payments_table.setItem(row, 3, QTableWidgetItem(payment.get('position') or '-'))
 
             # Сумма к выплате
             amount_item = QTableWidgetItem(f"{payment['amount']:,.2f} ₽")
@@ -1621,11 +1621,12 @@ class SalariesTab(QWidget):
             self.all_payments_table.setItem(row, 5, QTableWidgetItem(payment_subtype))
 
             # Адрес договора
-            self.all_payments_table.setItem(row, 6, QTableWidgetItem(payment.get('address', '-')))
+            address = payment.get('address') or '-'
+            self.all_payments_table.setItem(row, 6, QTableWidgetItem(address))
 
             # Отчетный месяц - форматируем
-            report_month = payment.get('report_month', 'Не установлен')
-            if report_month and report_month != 'Не установлен':
+            report_month = payment.get('report_month') or '-'
+            if report_month and report_month not in ('-', 'Не установлен'):
                 try:
                     parts = report_month.split('-')
                     if len(parts) == 2:
@@ -1668,7 +1669,7 @@ class SalariesTab(QWidget):
                 self.all_payments_warning.setVisible(False)
 
         self.totals_label.setText(
-            f'Итого за период: {total_month:,.2f} ₽  |  '
+            f'Итого по фильтру: {total_month:,.2f} ₽  |  '
             f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
         )
 
@@ -1924,11 +1925,14 @@ class SalariesTab(QWidget):
                 reassigned_count = sum(1 for item in data if item.get('reassigned', False))
                 reassigned_text = f'  |  Перераспределено: {reassigned_count}' if reassigned_count > 0 else ''
 
+                # Подсчёт за всё время
+                total_all = sum(item.get('final_amount') or item.get('amount', 0) for item in data)
+
                 # Обновляем метку итогов
                 totals_label = parent_widget.findChild(QLabel, f'totals_{payment_type}')
                 if totals_label:
                     totals_label.setText(
-                        f'Итого за месяц: {total_month:,.2f} ₽  |  '
+                        f'Итого по фильтру: {total_all:,.2f} ₽  |  '
                         f'Итого за год: {total_year:,.2f} ₽{reassigned_text}'
                     )
 
@@ -2065,7 +2069,7 @@ class SalariesTab(QWidget):
                     if project_type_item:
                         pt_text = project_type_item.text()
                         # "Все" проходит любой фильтр
-                        if pt_text != project_type_filter and pt_text != 'Все':
+                        if pt_text != project_type_filter:
                             show_row = False
 
                 # Фильтр по статусу оплаты для окладов
@@ -2148,11 +2152,25 @@ class SalariesTab(QWidget):
             except (ValueError, IndexError):
                 continue
 
+        # Подсчёт за всё время (все видимые строки)
+        total_all = 0.0
+        for row in range(table.rowCount()):
+            if table.isRowHidden(row):
+                continue
+            amount_item = table.item(row, amount_col)
+            if not amount_item:
+                continue
+            amount_text = amount_item.text().replace(' ', '').replace(',', '').replace('₽', '').strip()
+            try:
+                total_all += float(amount_text)
+            except ValueError:
+                continue
+
         # Обновляем метку итогов
         totals_label = parent_widget.findChild(QLabel, f'totals_{payment_type}')
         if totals_label:
             totals_label.setText(
-                f'Итого за месяц: {total_month:,.2f} ₽  |  '
+                f'Итого по фильтру: {total_all:,.2f} ₽  |  '
                 f'Итого за год: {total_year:,.2f} ₽'
             )
 

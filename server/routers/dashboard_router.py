@@ -638,7 +638,7 @@ async def get_salaries_all_dashboard(
             ).scalar()
             paid_by_year = float(payments_year or 0) + float(salaries_year or 0)
 
-            # Индивидуальные за год (payments + оклады с project_type='Индивидуальный' или 'Все')
+            # Индивидуальные за год (payments + оклады с project_type='Индивидуальный' )
             ind_payments = db.query(
                 func.coalesce(func.sum(Payment.final_amount), 0)
             ).join(Contract).filter(
@@ -651,7 +651,7 @@ async def get_salaries_all_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%'),
-                Salary.project_type.in_(['Индивидуальный', 'Все'])
+                Salary.project_type == 'Индивидуальный'
             ).scalar()
             individual_by_year = float(ind_payments or 0) + float(ind_salaries or 0)
 
@@ -668,7 +668,7 @@ async def get_salaries_all_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%'),
-                Salary.project_type.in_(['Шаблонный', 'Все'])
+                Salary.project_type == 'Шаблонный'
             ).scalar()
             template_by_year = float(tmpl_payments or 0) + float(tmpl_salaries or 0)
 
@@ -685,7 +685,7 @@ async def get_salaries_all_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%'),
-                Salary.project_type.in_(['Авторский надзор', 'Все'])
+                Salary.project_type == 'Авторский надзор'
             ).scalar()
             supervision_by_year = float(sup_payments or 0) + float(sup_salaries or 0)
 
@@ -729,7 +729,7 @@ async def get_salaries_individual_dashboard(
     db: Session = Depends(get_db)
 ):
     """Дашборд 'Индивидуальные': total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
-    Учитываются payments (CRM) + salaries (оклады с project_type='Индивидуальный' или 'Все')"""
+    Учитываются payments (CRM) + salaries (оклады с project_type='Индивидуальный' )"""
     try:
         # Всего выплачено и средний чек (payments)
         total_result = db.query(
@@ -746,7 +746,7 @@ async def get_salaries_individual_dashboard(
             func.coalesce(func.sum(Salary.amount), 0)
         ).filter(
             Salary.payment_status == 'paid',
-            Salary.project_type.in_(['Индивидуальный', 'Все'])
+            Salary.project_type == 'Индивидуальный'
         ).scalar() or 0)
 
         # За год и кол-во выплат
@@ -770,7 +770,7 @@ async def get_salaries_individual_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%'),
-                Salary.project_type.in_(['Индивидуальный', 'Все'])
+                Salary.project_type == 'Индивидуальный'
             ).first()
             paid_by_year += float(sal_year[0] or 0)
             payments_count += int(sal_year[1] or 0)
@@ -791,7 +791,7 @@ async def get_salaries_individual_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month == f'{year}-{month:02d}',
-                Salary.project_type.in_(['Индивидуальный', 'Все'])
+                Salary.project_type == 'Индивидуальный'
             ).scalar() or 0)
 
         # По агенту (оклады не привязаны к агентам)
@@ -830,7 +830,7 @@ async def get_salaries_template_dashboard(
     db: Session = Depends(get_db)
 ):
     """Дашборд 'Шаблонные': total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
-    Учитываются payments (CRM) + salaries (оклады с project_type='Шаблонный' или 'Все')"""
+    Учитываются payments (CRM) + salaries (оклады с project_type='Шаблонный' )"""
     try:
         # Всего выплачено и средний чек (payments)
         total_result = db.query(
@@ -847,7 +847,7 @@ async def get_salaries_template_dashboard(
             func.coalesce(func.sum(Salary.amount), 0)
         ).filter(
             Salary.payment_status == 'paid',
-            Salary.project_type.in_(['Шаблонный', 'Все'])
+            Salary.project_type == 'Шаблонный'
         ).scalar() or 0)
         total_paid = total_paid_payments + total_paid_salaries
 
@@ -872,7 +872,7 @@ async def get_salaries_template_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%'),
-                Salary.project_type.in_(['Шаблонный', 'Все'])
+                Salary.project_type == 'Шаблонный'
             ).first()
             paid_by_year += float(sal_year[0] or 0)
             payments_count += int(sal_year[1] or 0)
@@ -893,7 +893,7 @@ async def get_salaries_template_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month == f'{year}-{month:02d}',
-                Salary.project_type.in_(['Шаблонный', 'Все'])
+                Salary.project_type == 'Шаблонный'
             ).scalar() or 0)
 
         # По агенту (оклады не привязаны к агентам — только payments)
@@ -998,7 +998,7 @@ async def get_salaries_supervision_dashboard(
     db: Session = Depends(get_db)
 ):
     """Дашборд 'Авторский надзор': total_paid, paid_by_year, paid_by_month, by_agent, avg_payment, payments_count
-    Учитываются payments (supervision) + salaries (оклады с project_type='Авторский надзор' или 'Все')"""
+    Учитываются payments (supervision) + salaries (оклады с project_type='Авторский надзор' )"""
     try:
         # Всего выплачено и средний чек (payments)
         total_result = db.query(
@@ -1015,7 +1015,7 @@ async def get_salaries_supervision_dashboard(
             func.coalesce(func.sum(Salary.amount), 0)
         ).filter(
             Salary.payment_status == 'paid',
-            Salary.project_type.in_(['Авторский надзор', 'Все'])
+            Salary.project_type == 'Авторский надзор'
         ).scalar() or 0)
 
         # За год и кол-во выплат
@@ -1039,7 +1039,7 @@ async def get_salaries_supervision_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month.like(f'{year}-%'),
-                Salary.project_type.in_(['Авторский надзор', 'Все'])
+                Salary.project_type == 'Авторский надзор'
             ).first()
             paid_by_year += float(sal_year[0] or 0)
             payments_count += int(sal_year[1] or 0)
@@ -1060,7 +1060,7 @@ async def get_salaries_supervision_dashboard(
             ).filter(
                 Salary.payment_status == 'paid',
                 Salary.report_month == f'{year}-{month:02d}',
-                Salary.project_type.in_(['Авторский надзор', 'Все'])
+                Salary.project_type == 'Авторский надзор'
             ).scalar() or 0)
 
         # По агенту (оклады не привязаны к агентам)
