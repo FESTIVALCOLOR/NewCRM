@@ -190,14 +190,30 @@ class RejectWithCorrectionsDialog(QDialog):
 
                         # Загружаем файл
                         yd.upload_file(self.selected_file, yandex_file_path)
+                    else:
+                        CustomMessageBox(self, 'Ошибка',
+                            'Не удалось создать папку правок на Яндекс.Диске.',
+                            'error').exec_()
+                        self.send_btn.setEnabled(True)
+                        self.send_btn.setText('Отправить на исправление')
+                        return
                 else:
-                    print("[WARN] Нет папки договора или токена ЯД — файл не загружен")
+                    CustomMessageBox(self, 'Ошибка',
+                        'Не найдена папка договора на Яндекс.Диске или не настроен токен.\n'
+                        'Файл не может быть загружен.',
+                        'error').exec_()
+                    self.send_btn.setEnabled(True)
+                    self.send_btn.setText('Отправить на исправление')
+                    return
 
             except Exception as e:
                 print(f"[ERROR] Ошибка загрузки файла правок: {e}")
-                CustomMessageBox(self, 'Предупреждение',
-                    f'Файл правок не удалось загрузить на Яндекс.Диск:\n{e}\n\nИсправление все равно будет отправлено.',
-                    'warning').exec_()
+                CustomMessageBox(self, 'Ошибка',
+                    f'Не удалось загрузить файл правок:\n{e}',
+                    'error').exec_()
+                self.send_btn.setEnabled(True)
+                self.send_btn.setText('Отправить на исправление')
+                return
 
         self.accept()
 
@@ -793,6 +809,20 @@ class ExecutorSelectionDialog(QDialog):
                 print(f"[ERROR] Договор с ID={contract_id} не найден в БД")
                 raise Exception(f"Договор ID={contract_id} не найден")
 
+            # FIX Баг 7: Проверка дублирования оплат перед созданием
+            # Если для этого исполнителя на этой стадии уже есть оплаты — пропускаем
+            existing_payments = self.data.get_payments_for_contract(contract_id) or []
+            has_existing = any(
+                p.get('employee_id') == executor_id and
+                p.get('stage_name') == self.stage_name and
+                not p.get('reassigned')
+                for p in existing_payments
+            )
+            if has_existing:
+                print(f"[IDEMPOTENT] Оплаты для исполнителя {executor_id} на стадии {self.stage_name} уже существуют — пропускаем")
+                self.accept()
+                return
+
             # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена поддержка стадии 3д визуализации (#18)
             # Определяем роль исполнителя
             if 'концепция' in self.stage_name or 'визуализация' in self.stage_name.lower():
@@ -898,9 +928,11 @@ class ExecutorSelectionDialog(QDialog):
         center_dialog_on_parent(self)
 
 class ProjectCompletionDialog(QDialog):
-    def __init__(self, parent, card_id, api_client=None):
+    def __init__(self, parent, card_id, api_client=None, project_type='Индивидуальный'):
         super().__init__(parent)
         self.card_id = card_id
+        self.project_type = project_type
+        self.payment_pending = False  # Флаг: проект ожидает оплаты (СДАН отложен)
         self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
@@ -987,35 +1019,48 @@ class ProjectCompletionDialog(QDialog):
         layout.addLayout(form_layout)
         layout.addWidget(self.termination_reason_group)
         
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+
         save_btn = QPushButton('Завершить проект')
         save_btn.clicked.connect(self.complete_project)
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27AE60;
-                color: white;
-                padding: 12px 20px;
-                border-radius: 4px;
-                font-size: 12px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover { background-color: #229954; }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
-        layout.addWidget(save_btn)
-        
+        save_btn.setFixedHeight(36)
+
         cancel_btn = QPushButton('Отмена')
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: #95A5A6;
-                color: white;
-                padding: 12px 20px;
-                border-radius: 4px;
-                font-size: 12px;
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover { background-color: #7F8C8D; }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         """)
-        layout.addWidget(cancel_btn)
+        cancel_btn.setFixedHeight(36)
+
+        buttons_layout.addWidget(save_btn)
+        buttons_layout.addWidget(cancel_btn)
+        layout.addLayout(buttons_layout)
         
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
@@ -1044,9 +1089,53 @@ class ProjectCompletionDialog(QDialog):
 
             # Формируем данные для обновления договора
             contract_status = status.replace('Проект ', '').replace('передан в ', '')
+            today_str = QDate.currentDate().toString('yyyy-MM-dd')
+
+            # === ПРОВЕРКА ФИНАЛЬНОГО ПЛАТЕЖА ДЛЯ СТАТУСА "СДАН" ===
+            if 'СДАН' in contract_status and 'РАСТОРГНУТ' not in contract_status:
+                contract = self.data.get_contract(contract_id) if contract_id else None
+                payment_ok = True
+                if contract:
+                    if self.project_type == 'Индивидуальный':
+                        payment_ok = bool(contract.get('third_payment_paid_date'))
+                    else:  # Шаблонный
+                        payment_ok = bool(contract.get('advance_payment_paid_date'))
+
+                if not payment_ok:
+                    # Финальный платёж не проведён — ставим статус "Выполненный проект" (ожидание оплаты)
+                    self.payment_pending = True
+                    updates = {
+                        'status': 'Выполненный проект',
+                        'status_changed_date': today_str  # Дата готовности проекта
+                    }
+                    self.data.update_contract(contract_id, updates)
+                    print(f"[PAYMENT] Проект ожидает финального платежа. Статус: Выполненный проект")
+
+                    if self.project_type == 'Индивидуальный':
+                        payment_name = '3-й платёж (доплата)'
+                    else:
+                        payment_name = 'оплата'
+
+                    CustomMessageBox(
+                        self, 'Ожидание оплаты',
+                        f'<b>Проект завершён, но ожидается подтверждение финального платежа.</b><br><br>'
+                        f'Карточка перемещена в "Выполненные".<br>'
+                        f'Для перемещения в архив необходимо подтвердить {payment_name} '
+                        f'в карточке договора.<br><br>'
+                        f'<i>После подтверждения оплаты карточка автоматически переместится в архив.</i>',
+                        'info'
+                    ).exec_()
+
+                    # Устанавливаем отчетный месяц
+                    current_month = QDate.currentDate().toString('yyyy-MM')
+                    self.data.set_payments_report_month(contract_id, current_month)
+
+                    self.accept()
+                    return
+
             updates = {
                 'status': contract_status,
-                'status_changed_date': QDate.currentDate().toString('yyyy-MM-dd')
+                'status_changed_date': today_str
             }
 
             if 'РАСТОРГНУТ' in status:
@@ -1077,12 +1166,11 @@ class ProjectCompletionDialog(QDialog):
 
             # 3. Устанавливаем отчетный месяц
             current_month = QDate.currentDate().toString('yyyy-MM')
-            try:
-                self.data.set_payments_report_month(contract_id, current_month)
+            result = self.data.set_payments_report_month(contract_id, current_month)
+            if result:
                 print(f"[DataAccess] Установлен отчетный месяц {current_month}")
-            except Exception as e:
-                print(f"[WARN] Ошибка установки отчетного месяца: {e}")
-                # Fallback на локальную БД
+            else:
+                print(f"[WARN] API не установил отчетный месяц, обновляем через DataAccess")
                 self._set_report_month_locally(contract_id, current_month)
 
             print(f"Проект завершен со статусом: {contract_status}")
@@ -1111,22 +1199,17 @@ class ProjectCompletionDialog(QDialog):
         self._set_report_month_locally(contract_id, current_month)
 
     def _set_report_month_locally(self, contract_id, current_month):
-        """Установка отчетного месяца локально"""
+        """Установка отчетного месяца через DataAccess"""
         try:
-            conn = self.db.connect()
-            cursor = conn.cursor()
-            cursor.execute('''
-            UPDATE payments
-            SET report_month = ?
-            WHERE contract_id = ?
-              AND (report_month IS NULL OR report_month = '')
-            ''', (current_month, contract_id))
-            rows_updated = cursor.rowcount
-            conn.commit()
-            self.db.close()
-            print(f"[LOCAL] Установлен отчетный месяц {current_month} для {rows_updated} выплат")
+            payments = self.data.get_payments_for_contract(contract_id) or []
+            updated = 0
+            for p in payments:
+                if not p.get('report_month'):
+                    self.data.update_payment(p['id'], {'report_month': current_month})
+                    updated += 1
+            print(f"[DataAccess] Установлен отчетный месяц {current_month} для {updated} выплат")
         except Exception as e:
-            print(f"[ERROR] Ошибка установки отчетного месяца локально: {e}")
+            print(f"[ERROR] Ошибка установки отчетного месяца: {e}")
     
     def showEvent(self, event):
         """Центрирование при первом показе"""
@@ -2775,122 +2858,19 @@ class ReassignExecutorDialog(QDialog):
                 print(f"[DataAccess ERROR] Ошибка переназначения: {e}")
                 import traceback
                 traceback.print_exc()
-                # Пробуем fallback на raw SQL
-                print("[INFO] Пытаемся сохранить локально...")
-
-            # Fallback на локальную БД
-            conn = self.db.connect()
-            cursor = conn.cursor()
-
-            # Находим старого исполнителя и ID записи stage_executors
-            cursor.execute('''
-            SELECT id, executor_id FROM stage_executors
-            WHERE crm_card_id = ? AND stage_name LIKE ?
-            ORDER BY id DESC LIMIT 1
-            ''', (self.card_id, f'%{self.stage_keyword}%'))
-
-            record = cursor.fetchone()
-            if record:
-                record_id = record['id']
-                old_executor_id = record['executor_id']
-
-                # Обновляем исполнителя и дедлайн (сбрасываем статус завершения)
-                cursor.execute('''
-                UPDATE stage_executors
-                SET executor_id = ?, deadline = ?, completed = 0, completed_date = NULL
-                WHERE id = ?
-                ''', (new_executor_id, new_deadline, record_id))
-
-                print(f"Исполнитель переназначен: executor_id={new_executor_id}, deadline={new_deadline}")
-
-                # Переносим оплату со старого исполнителя на нового
-                # Находим карточку для получения contract_id
-                cursor.execute('SELECT contract_id FROM crm_cards WHERE id = ?', (self.card_id,))
-                card_record = cursor.fetchone()
-
-                if card_record and old_executor_id and new_executor_id != old_executor_id:
-                    contract_id = card_record['contract_id']
-
-                    # Определяем роль по должности
-                    role_map = {
-                        'Дизайнер': 'Дизайнер',
-                        'Чертёжник': 'Чертёжник'
-                    }
-                    role = role_map.get(self.position, self.position)
-
-                    # Ищем оплату старого исполнителя по этой стадии
-                    cursor.execute('''
-                    SELECT id FROM payments
-                    WHERE contract_id = ?
-                      AND employee_id = ?
-                      AND role = ?
-                      AND stage_name LIKE ?
-                    ''', (contract_id, old_executor_id, role, f'%{self.stage_keyword}%'))
-
-                    payment_record = cursor.fetchone()
-
-                    if payment_record:
-                        # Помечаем старую запись как переназначенную
-                        cursor.execute('''
-                        UPDATE payments
-                        SET reassigned = 1, updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                        ''', (payment_record['id'],))
-
-                        # Получаем данные старой записи
-                        cursor.execute('SELECT * FROM payments WHERE id = ?', (payment_record['id'],))
-                        old_payment = cursor.fetchone()
-
-                        # Создаем новую запись для нового исполнителя
-                        cursor.execute('''
-                        INSERT INTO payments (
-                            contract_id, crm_card_id, supervision_card_id,
-                            employee_id, role, stage_name,
-                            calculated_amount, manual_amount, final_amount,
-                            is_manual, payment_type, report_month,
-                            reassigned, old_employee_id
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-                        ''', (
-                            old_payment['contract_id'],
-                            old_payment['crm_card_id'],
-                            old_payment['supervision_card_id'],
-                            new_executor_id,  # Новый исполнитель
-                            old_payment['role'],
-                            old_payment['stage_name'],
-                            old_payment['calculated_amount'],
-                            old_payment['manual_amount'],
-                            old_payment['final_amount'],
-                            old_payment['is_manual'],
-                            old_payment['payment_type'],
-                            old_payment['report_month'],
-                            old_executor_id  # Сохраняем ID старого исполнителя
-                        ))
-
-                        print(f"Создана новая запись оплаты для исполнителя {new_executor_id}, старая запись помечена как переназначенная")
-                    else:
-                        print(f" Оплата для старого исполнителя не найдена (возможно, еще не создана)")
-
-                conn.commit()
-            else:
-                conn.close()
-                self.db.close()
-                CustomMessageBox(self, 'Ошибка', 'Не найдена запись для переназначения', 'error').exec_()
+                CustomMessageBox(
+                    self, 'Ошибка',
+                    f'Не удалось переназначить исполнителя.\n'
+                    f'Проверьте подключение к серверу и попробуйте снова.\n\n{e}',
+                    'error'
+                ).exec_()
                 return
-
-            self.db.close()
-
-            # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех"
-            self.accept()
 
         except Exception as e:
             print(f"[ERROR] Критическая ошибка переназначения: {e}")
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось переназначить исполнителя:\n{str(e)}', 'error').exec_()
-            try:
-                self.db.close()
-            except Exception:
-                pass
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -3074,9 +3054,12 @@ class ReassignExecutorDialog(QDialog):
                     except Exception as e:
                         print(f"[WARN] Ошибка создания нового платежа ({payment_type}): {e}")
 
-                # Верификация: Дизайнер/Чертёжник ВСЕГДА имеют Аванс + Доплата.
-                # Проверяем что ОБА типа созданы для нового исполнителя.
-                expected_types = {'Аванс', 'Доплата'}
+                # Верификация: проверяем что все ожидаемые типы оплат созданы для нового исполнителя.
+                # Индивидуальные проекты: Аванс + Доплата; Шаблонные: Полная оплата.
+                if self.project_type == 'Шаблонный':
+                    expected_types = {'Полная оплата'}
+                else:
+                    expected_types = {'Аванс', 'Доплата'}
                 try:
                     updated_payments = self.data.get_payments_for_contract(contract_id)
                     new_exec_payments = [
@@ -3482,7 +3465,7 @@ class TechTaskDialog(QDialog):
         self.init_ui()
         self.load_existing_file()
 
-    def truncate_filename(self, filename, max_length=50):
+    def truncate_filename(self, filename, max_length=25):
         """Обрезает длинное имя файла с многоточием в середине"""
         if len(filename) <= max_length:
             return filename
@@ -3730,7 +3713,7 @@ class TechTaskDialog(QDialog):
             self,
             "Выберите PDF файл тех.задания",
             "",
-            "PDF Files (*.pdf)"
+            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
         )
 
         if not file_path:
@@ -3957,7 +3940,7 @@ class MeasurementDialog(QDialog):
         self.init_ui()
         self.load_existing_measurement()
 
-    def truncate_filename(self, filename, max_length=50):
+    def truncate_filename(self, filename, max_length=25):
         """Обрезает длинное имя файла с многоточием в середине"""
         if len(filename) <= max_length:
             return filename

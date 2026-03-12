@@ -25,7 +25,7 @@ PERMISSION_GROUPS = {
     'Доступ к страницам': [
         'access.clients', 'access.contracts', 'access.crm', 'access.supervision',
         'access.reports', 'access.employees', 'access.salaries',
-        'access.employee_reports', 'access.admin',
+        'access.employee_reports', 'access.admin', 'access.dashboards',
     ],
     'Сотрудники': ['employees.create', 'employees.update', 'employees.delete'],
     'Клиенты': ['clients.create', 'clients.view', 'clients.update', 'clients.delete'],
@@ -78,11 +78,12 @@ ROLES = [
 _ACCESS_ALL = {
     "access.clients", "access.contracts", "access.crm", "access.supervision",
     "access.reports", "access.employees", "access.salaries", "access.employee_reports",
-    "access.admin",
+    "access.admin", "access.dashboards",
 }
 _ACCESS_MANAGER = {
     "access.clients", "access.contracts", "access.crm", "access.supervision",
     "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.dashboards",
 }
 _BASE_MANAGER = {
     # Клиенты CRUD
@@ -122,17 +123,18 @@ DEFAULT_ROLE_PERMISSIONS = {
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
     },
     "СДП": {
-        "access.crm", "access.reports", "access.employees",
+        "access.crm", "access.reports", "access.employees", "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
     },
     "ГАП": {
-        "access.crm", "access.reports", "access.employees",
+        "access.crm", "access.reports", "access.employees", "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
     },
     "Менеджер": {
         "access.crm", "access.supervision", "access.reports", "access.employees",
+        "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
     },
     "ДАН": {
@@ -166,6 +168,7 @@ PERMISSION_DESCRIPTIONS = {
     "access.salaries": "Доступ к странице Зарплаты",
     "access.employee_reports": "Доступ к Отчетам по сотрудникам",
     "access.admin": "Доступ к администрированию",
+    "access.dashboards": "Показ дашбордов внизу страницы",
     # Сотрудники
     "employees.create": "Создание сотрудников",
     "employees.update": "Редактирование сотрудников",

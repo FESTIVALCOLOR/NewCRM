@@ -1423,6 +1423,14 @@ class MainWindow(QMainWindow):
     def switch_dashboard(self, dashboard_key):
         """Переключение дашборда через QStackedWidget (lazy creation)"""
         try:
+            # Проверка права access.dashboards
+            if dashboard_key and hasattr(self, 'employee') and self.employee:
+                from utils.permissions import _has_perm
+                if not _has_perm(self.employee, getattr(self, 'api_client', None), 'access.dashboards'):
+                    self.dashboard_stack.hide()
+                    self.current_dashboard_key = None
+                    return
+
             if dashboard_key:
                 # Lazy creation: создаём дашборд при первом обращении
                 if dashboard_key not in self.dashboards and dashboard_key in self._dashboard_factories:

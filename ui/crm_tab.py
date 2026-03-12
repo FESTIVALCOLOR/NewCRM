@@ -578,6 +578,48 @@ class CRMTab(QWidget):
                 ).exec_()
                 return
 
+        # === ПРАВИЛО: Запрет перемещения назад (кроме руководителей) ===
+        if from_column not in ['Новый заказ', 'В ожидании'] and to_column not in ['В ожидании', 'Выполненный проект']:
+            if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
+                # Определяем порядок колонок
+                if project_type == 'Шаблонный':
+                    column_order = [
+                        'Новый заказ',
+                        'Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи',
+                        'Стадия 3: 3д визуализация (Дополнительная)',
+                        'Выполненный проект'
+                    ]
+                else:
+                    column_order = [
+                        'Новый заказ',
+                        'Стадия 1: планировочные решения', 'Стадия 2: концепция дизайна',
+                        'Стадия 3: рабочие чертежи',
+                        'Выполненный проект'
+                    ]
+                from_idx = column_order.index(from_column) if from_column in column_order else -1
+                to_idx = column_order.index(to_column) if to_column in column_order else -1
+                if from_idx >= 0 and to_idx >= 0 and to_idx < from_idx:
+                    CustomMessageBox(
+                        self, 'Перемещение запрещено',
+                        f'Нельзя переместить карточку назад: "{from_column}" → "{to_column}".\n'
+                        'Используйте столбец "В ожидании" для приостановки проекта.',
+                        'warning'
+                    ).exec_()
+                    return
+
+        # === ПРОВЕРКА ОПЛАТЫ АВАНСА (Индивидуальные проекты) ===
+        # Без оплаты аванса нельзя перемещать карточку на рабочие стадии
+        if project_type == 'Индивидуальный' and to_column.startswith('Стадия'):
+            if not self._check_advance_payment(card_id, project_type):
+                CustomMessageBox(
+                    self, 'Оплата не подтверждена',
+                    '<b>Перемещение на стадию невозможно!</b><br><br>'
+                    'Для начала работы необходимо подтвердить оплату аванса (1-й платёж).<br><br>'
+                    '<i>Откройте карточку договора и отметьте аванс как оплаченный.</i>',
+                    'warning'
+                ).exec_()
+                return
+
         # Проверяем нужен ли выбор исполнителя ПЕРЕД перемещением
         if self.requires_executor_selection(to_column):
             # Получаем contract_id для передачи в диалог (для norm_days)
@@ -686,29 +728,43 @@ class CRMTab(QWidget):
                                 return
         except Exception as e:
             print(f"! Ошибка проверки принятия работы: {e}")
+            CustomMessageBox(
+                self, 'Ошибка',
+                f'Ошибка проверки готовности стадии: {e}\n\nПеремещение отменено.',
+                'error'
+            ).exec_()
+            return
 
         # Диалог завершения проекта ПЕРЕД перемещением, чтобы отмена не перемещала карточку
         if to_column == 'Выполненный проект':
             print(f"Показываем диалог завершения ПЕРЕД перемещением")
-            completion_dialog = ProjectCompletionDialog(self, card_id, self.api_client)
+            completion_dialog = ProjectCompletionDialog(self, card_id, self.api_client, project_type=project_type)
             if completion_dialog.exec_() != QDialog.Accepted:
                 print(f"Завершение отменено, карточка остается в '{from_column}'")
                 return
             # Диалог принят — продолжаем перемещение
             self._completion_accepted = True
+            self._payment_pending = getattr(completion_dialog, 'payment_pending', False)
 
         try:
+            from utils.api_client.exceptions import APIResponseError
             # Перемещение карточки: API-first с fallback на локальную БД
             api_success = False
             if self.data.is_online:
                 try:
                     self.data.move_crm_card(card_id, to_column)
                     api_success = True
+                except APIResponseError as api_error:
+                    # Бизнес-ошибка — сервер отклонил перемещение, НЕ делаем fallback
+                    print(f"! [API BUSINESS ERROR] {api_error}")
+                    CustomMessageBox(self, 'Перемещение отклонено',
+                                     f'Сервер отклонил перемещение: {api_error}', 'warning').exec_()
+                    return
                 except Exception as api_error:
                     print(f"! [API ERROR] {api_error}")
 
             if not api_success:
-                # Fallback: обновляем через DataAccess (который тоже попробует API, затем локально)
+                # Fallback: обновляем через DataAccess (оффлайн или сетевая ошибка)
                 self.data.update_crm_card_column(card_id, to_column)
 
         except Exception as e:
@@ -751,15 +807,35 @@ class CRMTab(QWidget):
             except Exception as e:
                 print(f"! Ошибка сброса дедлайна: {e}")
 
-        if from_column == 'Новый заказ' and to_column != 'Выполненный проект':
-            try:
-                card_data = self.data.get_crm_card(card_id)
-                contract_id = card_data.get('contract_id') if card_data else None
-                if contract_id:
+        # FIX: Синхронизация статуса договора с колонкой CRM-карточки
+        try:
+            card_data = self.data.get_crm_card(card_id)
+            contract_id = card_data.get('contract_id') if card_data else None
+            if contract_id:
+                if to_column == 'Выполненный проект':
+                    # НЕ перезаписываем статус если CompletionDialog уже установил его
+                    # (СДАН, АВТОРСКИЙ НАДЗОР, РАСТОРГНУТ или "Выполненный проект" с ожиданием оплаты)
+                    if not getattr(self, '_completion_accepted', False):
+                        self.data.update_contract(contract_id, {'status': 'Выполненный проект'})
+                        print(f"+ Статус изменен на 'Выполненный проект'")
+                    else:
+                        # Дополнительно: если оплата ожидается, ставим status_changed_date как дату готовности
+                        if getattr(self, '_payment_pending', False):
+                            print(f"+ Статус уже установлен диалогом завершения (ожидание оплаты)")
+                        else:
+                            print(f"+ Статус уже установлен диалогом завершения (не перезаписываем)")
+                elif to_column == 'В ожидании':
+                    self.data.update_contract(contract_id, {'status': 'В ожидании'})
+                    print(f"+ Статус изменен на 'В ожидании'")
+                elif from_column in ('Новый заказ', 'В ожидании'):
                     self.data.update_contract(contract_id, {'status': 'В работе'})
-                print(f"+ Статус изменен на 'В работе'")
-            except Exception as e:
-                print(f"! Ошибка установки статуса: {e}")
+                    print(f"+ Статус изменен на 'В работе'")
+        except Exception as e:
+            print(f"! Ошибка установки статуса: {e}")
+
+        # Сброс флагов завершения
+        self._completion_accepted = False
+        self._payment_pending = False
 
         # ИСПРАВЛЕНИЕ 07.02.2026: Выбор исполнителя теперь происходит ДО перемещения (в начале функции)
         # Старый код удален, см. блок в начале on_card_moved()
@@ -775,6 +851,49 @@ class CRMTab(QWidget):
 
         print(f"{'='*60}\n")
         
+    def _get_contract_for_card(self, card_id):
+        """Получить данные договора по ID CRM карточки"""
+        try:
+            contract_id = self.data.get_contract_id_by_crm_card(card_id)
+            if contract_id:
+                return self.data.get_contract(contract_id)
+        except Exception as e:
+            print(f"[PAYMENT CHECK] Ошибка получения договора для карточки {card_id}: {e}")
+        return None
+
+    def _check_advance_payment(self, card_id, project_type):
+        """Проверка оплаты аванса (1-й платёж) для индивидуальных проектов.
+        Возвращает True если аванс оплачен или проверка не требуется."""
+        if project_type != 'Индивидуальный':
+            return True
+        contract = self._get_contract_for_card(card_id)
+        if not contract:
+            return True  # Нет договора — пропускаем проверку
+        return bool(contract.get('advance_payment_paid_date'))
+
+    def _check_second_payment(self, card_id, project_type):
+        """Проверка 2-го платежа (доплата) для индивидуальных проектов.
+        Возвращает True если 2-й платёж оплачен или проверка не требуется."""
+        if project_type != 'Индивидуальный':
+            return True
+        contract = self._get_contract_for_card(card_id)
+        if not contract:
+            return True
+        return bool(contract.get('additional_payment_paid_date'))
+
+    def _check_final_payment(self, card_id, project_type):
+        """Проверка финального платежа перед архивацией.
+        Индивидуальные: third_payment_paid_date.
+        Шаблонные: advance_payment_paid_date (единственный платёж).
+        Возвращает True если оплачено."""
+        contract = self._get_contract_for_card(card_id)
+        if not contract:
+            return True
+        if project_type == 'Индивидуальный':
+            return bool(contract.get('third_payment_paid_date'))
+        else:  # Шаблонный
+            return bool(contract.get('advance_payment_paid_date'))
+
     def requires_executor_selection(self, column_name):
         """Проверка, требуется ли выбор исполнителя"""
         # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена стадия 3д визуализации (#18)
@@ -809,17 +928,15 @@ class CRMTab(QWidget):
     def refresh_current_tab(self):
         """Обновление текущей активной вкладки"""
         current_index = self.project_tabs.currentIndex()
-        # Активные карточки — из локальной БД (мгновенно)
-        self.data.prefer_local = True
-        try:
-            if current_index == 0:
-                self.load_cards_for_type('Индивидуальный')
-            elif current_index == 1:
-                self.load_cards_for_type('Шаблонный')
-        finally:
-            self.data.prefer_local = False
+        # ИСПРАВЛЕНИЕ: НЕ используем prefer_local — карточки могут быть только в API
+        # (например, созданные другим пользователем или тестом).
+        # Кэш DataAccess (TTL=30с) обеспечит быстродействие при частых обновлениях.
+        if current_index == 0:
+            self.load_cards_for_type('Индивидуальный')
+        elif current_index == 1:
+            self.load_cards_for_type('Шаблонный')
 
-        # Архив — через API (локальная БД не содержит crm_cards)
+        # Архив — через API (локальная БД не содержит архивные crm_cards)
         if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             if current_index == 0:
                 self.load_archive_cards('Индивидуальный')
@@ -1485,10 +1602,11 @@ class CRMColumn(BaseKanbanColumn):
             }
         """)
         
-        self.cards_list.setFocusPolicy(Qt.NoFocus)
+        self.cards_list.setFocusPolicy(Qt.ClickFocus)
         self.cards_list.setSpacing(5)
         self.cards_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
-        
+        self.cards_list.itemDoubleClicked.connect(self._on_card_double_clicked)
+
         layout.addWidget(self.cards_list, 1)
         self.setLayout(layout)
 
@@ -1512,6 +1630,12 @@ class CRMColumn(BaseKanbanColumn):
             if is_3d_viz and is_template:
                 print(f"[CRM] Сворачиваю колонку по умолчанию: {self.column_name}")
                 self._collapse_column()
+
+    def _on_card_double_clicked(self, item):
+        """Двойной клик по карточке канбана → редактирование."""
+        card_widget = self.cards_list.itemWidget(item)
+        if card_widget and hasattr(card_widget, 'edit_card'):
+            card_widget.edit_card()
 
     # _collapse_column, _expand_column, toggle_collapse, update_header_count
     # наследуются из BaseKanbanColumn
@@ -1714,7 +1838,11 @@ class CRMCard(QFrame):
         
         if self.card_data.get('designer_deadline') or self.card_data.get('draftsman_deadline') or self.card_data.get('deadline'):
             height += 28
-        
+
+        # Индикатор ожидания оплаты в колонке "Выполненный проект"
+        if current_column == 'Выполненный проект':
+            height += 40
+
         if self.employee and _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             if ('концепция дизайна' in current_column and self.card_data.get('designer_completed') == 1) or \
                (('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1):
@@ -1875,6 +2003,22 @@ class CRMCard(QFrame):
         separator.setFixedHeight(1)
         layout.addWidget(separator, 0)
 
+        # Текущий подэтап (из StageWorkflowState)
+        current_substep = self.card_data.get('current_substep_name')
+        workflow_status = self.card_data.get('workflow_status')
+        if current_substep:
+            substep_text = current_substep
+            if workflow_status == 'revision':
+                substep_text = f"На исправлении: {current_substep}"
+            elif workflow_status == 'client_approval':
+                substep_text = f"Согласование: {current_substep}"
+            substep_label = QLabel(substep_text)
+            substep_label.setStyleSheet(
+                'font-size: 9px; color: #E67E22; font-weight: bold; padding: 2px 0;'
+            )
+            substep_label.setWordWrap(True)
+            layout.addWidget(substep_label, 0)
+
         # 3. Площадь, город и тип агента на одной строке
         info_row = QHBoxLayout()
         info_row.setSpacing(8)
@@ -1895,8 +2039,14 @@ class CRMCard(QFrame):
             area_icon.setEnabled(False)
             info_layout.addWidget(area_icon, 0, Qt.AlignVCenter)
 
-            # Текст площади
-            area_label = QLabel(f"{self.card_data['area']} м²")
+            # Текст площади (+ этажи для шаблонных если > 1)
+            area_val = self.card_data['area']
+            floors = self.card_data.get('floors') or 1
+            if floors > 1:
+                area_text = f"{area_val}м² ({floors}эт)"
+            else:
+                area_text = f"{area_val} м²"
+            area_label = QLabel(area_text)
             area_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
             area_label.setAlignment(Qt.AlignVCenter)
             info_layout.addWidget(area_label, 0, Qt.AlignVCenter)
@@ -2106,6 +2256,37 @@ class CRMCard(QFrame):
                     layout.addWidget(deadline_container, 0)
                 
         
+        # 6.4. ИНДИКАТОР "ОЖИДАЕТСЯ ПОДТВЕРЖДЕНИЕ ОПЛАТЫ" в колонке Выполненный проект
+        if current_column == 'Выполненный проект':
+            # Проверяем статус финального платежа
+            try:
+                contract_id = self.card_data.get('contract_id')
+                if contract_id:
+                    contract = self.data.get_contract(contract_id)
+                    if contract:
+                        payment_ok = True
+                        if project_type == 'Индивидуальный':
+                            payment_ok = bool(contract.get('third_payment_paid_date'))
+                        else:  # Шаблонный
+                            payment_ok = bool(contract.get('advance_payment_paid_date'))
+
+                        if not payment_ok:
+                            payment_label = QLabel('Ожидается подтверждение оплаты')
+                            payment_label.setWordWrap(True)
+                            payment_label.setAlignment(Qt.AlignCenter)
+                            payment_label.setStyleSheet('''
+                                color: #E67E22;
+                                background-color: #FFF3E0;
+                                padding: 8px 12px;
+                                border-radius: 4px;
+                                font-size: 10px;
+                                font-weight: bold;
+                                border: 2px solid #F39C12;
+                            ''')
+                            layout.addWidget(payment_label, 0)
+            except Exception as e:
+                print(f"[PAYMENT INDICATOR] Ошибка проверки оплаты: {e}")
+
         # 6.5. ИНДИКАТОР "РАБОТА СДАНА" + КНОПКА "ПРИНЯТЬ РАБОТУ"
         # Менеджер может принимать/отклонять работу только в шаблонных проектах
         is_template_project = self.card_data.get('project_type', '') == 'Шаблонный'
@@ -2309,6 +2490,7 @@ class CRMCard(QFrame):
             edit_btn.setEnabled(has_update_perm)
             if not has_update_perm:
                 edit_btn.setStyleSheet(edit_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
+            edit_btn.setAccessibleName("Редактирование карточки")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
             buttons_added = True
@@ -2913,6 +3095,28 @@ class CRMCard(QFrame):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на отправку клиенту', 'error').exec_()
             return
         current_column = self.card_data.get('column_name', '')
+        project_type = self.card_data.get('project_type', '')
+
+        # === ПРОВЕРКА 2-го ПЛАТЕЖА (Индивидуальные, Стадия 3: рабочие чертежи) ===
+        if project_type == 'Индивидуальный' and 'Стадия 3' in current_column and 'рабочие чертежи' in current_column:
+            contract_id = self.card_data.get('contract_id')
+            contract = None
+            if contract_id:
+                try:
+                    contract = self.data.get_contract(contract_id)
+                except Exception:
+                    pass
+            if contract and not contract.get('additional_payment_paid_date'):
+                CustomMessageBox(
+                    self, 'Оплата не подтверждена',
+                    '<b>Отправка клиенту невозможна!</b><br><br>'
+                    'Для отправки готового проекта клиенту необходимо подтвердить '
+                    'оплату 2-го платежа (доплата).<br><br>'
+                    '<i>Откройте карточку договора и отметьте 2-й платёж как оплаченный.</i>',
+                    'warning'
+                ).exec_()
+                return
+
         reply = CustomQuestionBox(
             self,
             'Согласование с клиентом',
@@ -2959,6 +3163,13 @@ class CRMCard(QFrame):
                 parent = parent.parent()
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Ошибка: {e}', 'error').exec_()
+
+    def mouseDoubleClickEvent(self, event):
+        """Двойной клик по карточке → редактирование."""
+        if self.can_edit:
+            self.edit_card()
+        else:
+            super().mouseDoubleClickEvent(event)
 
     def edit_card(self):
         """Редактирование карточки"""

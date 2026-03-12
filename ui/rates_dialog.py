@@ -304,7 +304,7 @@ class RatesDialog(QDialog):
         
         self.template_role_combo = CustomComboBox()
         # ИСПРАВЛЕНИЕ 06.02.2026: Добавлены СМП и Менеджер для шаблонных проектов (#17)
-        self.template_role_combo.addItems(['Дизайнер', 'Чертёжник', 'ГАП', 'Старший менеджер проектов', 'Менеджер', 'СДП'])
+        self.template_role_combo.addItems(['Чертёжник', 'ГАП', 'Дизайнер', 'Старший менеджер проектов', 'Менеджер', 'СДП'])
         self.template_role_combo.currentTextChanged.connect(self.load_template_ranges)
         role_layout.addWidget(self.template_role_combo)
         
@@ -315,9 +315,9 @@ class RatesDialog(QDialog):
         table = QTableWidget()
         table.setObjectName('template_rates_table')
         apply_no_focus_delegate(table)
-        table.setColumnCount(4)
+        table.setColumnCount(5)
         table.setHorizontalHeaderLabels([
-            'Площадь от (м²)', 'Площадь до (м²)', 'Стоимость (₽)', 'Действия'
+            'Площадь от (м²)', 'Площадь до (м²)', 'Стоимость (₽)', 'Действия', ''
         ])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         table.verticalHeader().setDefaultSectionSize(36)
@@ -544,7 +544,7 @@ class RatesDialog(QDialog):
                             city_item = table_surveyor.item(row, 0)
                             if city_item and city_item.text() == city:
                                 spin = table_surveyor.cellWidget(row, 1)
-                                if spin and price:
+                                if spin and price is not None:
                                     spin.blockSignals(True)
                                     spin.setValue(float(price))
                                     spin.blockSignals(False)
@@ -851,6 +851,30 @@ class RatesDialog(QDialog):
                             self.save_template_range(r, f.value(), t.value(), p.value())
                     )
                     table.setCellWidget(row, 3, save_btn)
+
+                    # Кнопка удаления
+                    rate_id = rate.get('id')
+                    if rate_id:
+                        del_btn = QPushButton('Удалить')
+                        del_btn.setFixedHeight(28)
+                        del_btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: #ff4444;
+                                color: white;
+                                padding: 0px 6px;
+                                border-radius: 3px;
+                                font-size: 10px;
+                                font-weight: bold;
+                                max-height: 28px;
+                                min-height: 28px;
+                            }
+                            QPushButton:hover { background-color: #cc0000; }
+                            QPushButton:pressed { background-color: #aa0000; }
+                        """)
+                        del_btn.clicked.connect(
+                            lambda checked, rid=rate_id: self.delete_template_range(rid)
+                        )
+                        table.setCellWidget(row, 4, del_btn)
                     # ========================================
             else:
                 # Пустая таблица - добавляем стартовые строки
@@ -981,6 +1005,25 @@ class RatesDialog(QDialog):
             import traceback
             traceback.print_exc()
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить: {e}', 'error').exec_()
+
+    def delete_template_range(self, rate_id):
+        """Удаление диапазона шаблонного тарифа"""
+        reply = CustomQuestionBox(
+            self,
+            'Подтверждение',
+            'Удалить этот диапазон?'
+        ).exec_()
+        if reply != QDialog.Accepted:
+            return
+        try:
+            result = self.data_access.delete_rate(rate_id)
+            if result:
+                CustomMessageBox(self, 'Успех', 'Диапазон удалён', 'success').exec_()
+                self.load_template_ranges()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось удалить диапазон', 'error').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Ошибка удаления: {e}', 'error').exec_()
 
     def reset_rate(self, role):
         """Сброс тарифа (удаление из БД)"""
@@ -1123,9 +1166,17 @@ class RatesDialog(QDialog):
             print(f"[ERROR] Ошибка в _offer_recalculate_payments: {e}")
 
     def save_surveyor_rate(self, city, price):
-        """ИСПРАВЛЕНИЕ 30.01.2026: Сохранение тарифа замерщика с проверкой is_online"""
+        """Сохранение тарифа замерщика с проверкой результата"""
         try:
-            self.data_access.save_surveyor_rate(city, price)
+            result = self.data_access.save_surveyor_rate(city, price)
+            if result is None:
+                CustomMessageBox(
+                    self,
+                    'Ошибка',
+                    f'Не удалось сохранить тариф замера для {city}.\nПроверьте подключение к серверу.',
+                    'error'
+                ).exec_()
+                return
             print(f"[DataAccess] Тариф замерщика сохранён: {city} = {price}")
             CustomMessageBox(
                 self,

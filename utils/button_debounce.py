@@ -25,7 +25,9 @@ def debounce_click(func=None, *, delay_ms=1000):
     def decorator(f):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
-            key = id(f)
+            # Ключ = (id функции, id экземпляра) чтобы debounce не шарился между экземплярами
+            self_id = id(args[0]) if args else 0
+            key = (id(f), self_id)
             now = time.monotonic()
             if key in _last_click_time and (now - _last_click_time[key]) < delay_ms / 1000:
                 return None
