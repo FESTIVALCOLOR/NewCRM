@@ -373,11 +373,20 @@ class ContractsTab(QWidget):
             mw.refresh_current_dashboard()
 
     def _invalidate_crm_cache(self):
-        """Сбросить кэш CRM-вкладки, чтобы новые карточки отобразились при переключении"""
+        """Сбросить кэш и сразу обновить CRM/Supervision канбаны"""
         mw = self.window()
         crm_tab = getattr(mw, 'crm_tab', None)
-        if crm_tab and hasattr(crm_tab, '_data_loaded'):
-            crm_tab._data_loaded = False
+        if crm_tab:
+            if hasattr(crm_tab, '_data_loaded'):
+                crm_tab._data_loaded = False
+            if hasattr(crm_tab, 'refresh_current_tab'):
+                crm_tab.refresh_current_tab()
+        sup_tab = getattr(mw, 'crm_supervision_tab', None)
+        if sup_tab:
+            if hasattr(sup_tab, '_data_loaded'):
+                sup_tab._data_loaded = False
+            if hasattr(sup_tab, 'refresh_current_tab'):
+                sup_tab.refresh_current_tab()
 
     @debounce_click
     def add_contract(self):
@@ -453,15 +462,7 @@ class ContractsTab(QWidget):
 
                 self.load_contracts()
                 self._refresh_dashboard()
-                # Обновляем CRM и Supervision канбаны — удалённая карточка должна исчезнуть сразу
                 self._invalidate_crm_cache()
-                mw = self.window()
-                crm_tab = getattr(mw, 'crm_tab', None)
-                if crm_tab and hasattr(crm_tab, 'refresh_current_tab'):
-                    crm_tab.refresh_current_tab()
-                sup_tab = getattr(mw, 'crm_supervision_tab', None)
-                if sup_tab and hasattr(sup_tab, 'refresh_current_tab'):
-                    sup_tab.refresh_current_tab()
 
             except Exception as e:
                 print(f"[ERROR] Ошибка удаления договора: {e}")
