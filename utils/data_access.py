@@ -418,7 +418,7 @@ class DataAccess(QObject):
         """Создать договор"""
         _global_cache.invalidate("contracts")
         _global_cache.invalidate("crm_cards")
-        # Сначала сохраняем локально (add_contract также создаёт CRM карточку)
+        # Сначала сохраняем локально
         contract_id = self.db.add_contract(contract_data)
 
         if self.is_online and self.api_client:
@@ -439,9 +439,32 @@ class DataAccess(QObject):
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_contract: {e}")
+                import traceback
+                _safe_log(f"[DataAccess] Traceback: {traceback.format_exc()}")
                 self._queue_operation('create', 'contract', contract_id, contract_data)
+
+                # FIX: При offline-создании договора также создаём CRM-карточку локально,
+                # чтобы она отобразилась на канбане до синхронизации с сервером
+                if contract_id and contract_data.get('project_type') != 'Авторский надзор':
+                    try:
+                        self.db.add_crm_card({
+                            'contract_id': contract_id,
+                            'column_name': 'Новый заказ'
+                        })
+                        _safe_log(f"[DataAccess] Создана локальная CRM карточка для offline-договора {contract_id}")
+                    except Exception as card_err:
+                        _safe_log(f"[DataAccess] Ошибка создания локальной CRM карточки: {card_err}")
         elif self.api_client:
             self._queue_operation('create', 'contract', contract_id, contract_data)
+            # Также создаём CRM-карточку локально для offline-режима
+            if contract_id and contract_data.get('project_type') != 'Авторский надзор':
+                try:
+                    self.db.add_crm_card({
+                        'contract_id': contract_id,
+                        'column_name': 'Новый заказ'
+                    })
+                except Exception:
+                    pass
 
         return {'id': contract_id, **contract_data} if contract_id else None
 
@@ -753,37 +776,110 @@ class DataAccess(QObject):
 
     def update_crm_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку в другую колонку"""
+        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
+
         _global_cache.invalidate("crm_cards")
-        # Сначала обновляем локально
-        self.db.update_crm_card_column(card_id, column)
 
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.update_crm_card(card_id, {'column_name': column})
+                # API успешно — обновляем локально
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
                 return result is not None
-            except Exception as e:
+            except APIResponseError as e:
+                if e.status_code in (422, 400, 409):
+                    raise
                 _safe_log(f"[DataAccess] Ошибка API update_crm_card_column: {e}")
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
                 self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
-        elif self.api_client:
-            self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+            except (APIConnectionError, APITimeoutError) as e:
+                _safe_log(f"[DataAccess] Сеть update_crm_card_column: {e}")
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
+                self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка update_crm_card_column: {e}")
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
+        else:
+            # Оффлайн — обновляем локально
+            self.db.update_crm_card_column(card_id, column)
+            if self.api_client:
+                self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
 
         return True
 
     # ==================== CRM WORKFLOW ====================
 
     def move_crm_card(self, card_id: int, column: str) -> bool:
-        """Переместить CRM карточку в другую колонку (через workflow или напрямую)"""
+        """Переместить CRM карточку в другую колонку (через workflow или напрямую).
+
+        Raises:
+            APIResponseError: При бизнес-ошибках (422/400/409) — запрещённое перемещение.
+        """
+        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
+
         _global_cache.invalidate("crm_cards")
-        # Сначала обновляем локально
-        self.db.update_crm_card_column(card_id, column)
+        _global_cache.invalidate("contracts")
 
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.move_crm_card(card_id, column)
+                # API успешно — обновляем локальную БД
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
+                # Обновить статус контракта локально (сервер уже обновил в PostgreSQL)
+                try:
+                    if result and isinstance(result, dict):
+                        contract_id = result.get('contract_id')
+                        if contract_id:
+                            new_status = None
+                            if column == 'Выполненный проект':
+                                new_status = 'Выполненный проект'
+                            elif column == 'В ожидании':
+                                new_status = 'В ожидании'
+                            elif 'Стадия' in column:
+                                new_status = 'В работе'
+                            if new_status:
+                                self.db.update_contract(contract_id, {'status': new_status})
+                except Exception:
+                    pass
                 return result is not None
-            except Exception as e:
+            except APIResponseError as e:
+                if e.status_code in (422, 400, 409):
+                    # Бизнес-ошибка — НЕ обновляем локально, пропускаем наверх
+                    raise
                 _safe_log(f"[DataAccess] Ошибка API move_crm_card: {e}")
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
                 self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+            except (APIConnectionError, APITimeoutError) as e:
+                _safe_log(f"[DataAccess] Сеть move_crm_card: {e}")
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
+                self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка move_crm_card: {e}")
+                try:
+                    self.db.update_crm_card_column(card_id, column)
+                except Exception:
+                    pass
         elif self.api_client:
             self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
 
@@ -806,7 +902,9 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_submit: API недоступен")
             return None
         try:
-            return self.api_client.workflow_submit(card_id)
+            result = self.api_client.workflow_submit(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_submit: {e}")
             return None
@@ -817,7 +915,9 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_accept: API недоступен")
             return None
         try:
-            return self.api_client.workflow_accept(card_id)
+            result = self.api_client.workflow_accept(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_accept: {e}")
             return None
@@ -831,7 +931,9 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_reject: API недоступен")
             return None
         try:
-            return self.api_client.workflow_reject(card_id, corrections_path=corrections_path or '')
+            result = self.api_client.workflow_reject(card_id, corrections_path=corrections_path or '')
+            _global_cache.invalidate("crm_cards")
+            return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_reject: {e}")
             return None
@@ -842,7 +944,9 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_client_send: API недоступен")
             return None
         try:
-            return self.api_client.workflow_client_send(card_id)
+            result = self.api_client.workflow_client_send(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_client_send: {e}")
             return None
@@ -853,7 +957,9 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_client_ok: API недоступен")
             return None
         try:
-            return self.api_client.workflow_client_ok(card_id)
+            result = self.api_client.workflow_client_ok(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_client_ok: {e}")
             return None
@@ -1998,28 +2104,74 @@ class DataAccess(QObject):
     # ==================== STAGE EXECUTORS ====================
 
     def assign_stage_executor(self, card_id: int, data: Dict) -> Optional[Dict]:
-        """Назначить исполнителя на стадию"""
-        # Сначала сохраняем локально
-        try:
-            self.db.assign_stage_executor(
-                card_id,
-                data.get('stage_name', ''),
-                data.get('executor_id'),
-                data.get('assigned_by'),
-                data.get('deadline'))
-        except Exception as e:
-            _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
+        """Назначить исполнителя на стадию.
+
+        Raises:
+            APIResponseError: При бизнес-ошибках (422/400/409) — назначение отклонено сервером.
+        """
+        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
 
         if self.is_online and self.api_client:
             try:
-                return self.api_client.assign_stage_executor(card_id, data)
-            except Exception as e:
+                result = self.api_client.assign_stage_executor(card_id, data)
+                # API успешно — сохраняем локально
+                try:
+                    self.db.assign_stage_executor(
+                        card_id,
+                        data.get('stage_name', ''),
+                        data.get('executor_id'),
+                        data.get('assigned_by'),
+                        data.get('deadline'))
+                except Exception as e:
+                    _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
+                return result
+            except APIResponseError as e:
+                if e.status_code in (422, 400, 409):
+                    # Бизнес-ошибка — НЕ сохраняем локально, пропускаем наверх
+                    raise
                 _safe_log(f"[DataAccess] Ошибка API assign_stage_executor: {e}")
+                # Прочие ошибки — сохраняем локально + очередь
+                try:
+                    self.db.assign_stage_executor(
+                        card_id, data.get('stage_name', ''),
+                        data.get('executor_id'), data.get('assigned_by'),
+                        data.get('deadline'))
+                except Exception:
+                    pass
                 self._queue_operation('create', 'stage_executor', card_id,
                                       {'card_id': card_id, '_action': 'assign', **data})
-        elif self.api_client:
-            self._queue_operation('create', 'stage_executor', card_id,
-                                  {'card_id': card_id, '_action': 'assign', **data})
+            except (APIConnectionError, APITimeoutError) as e:
+                _safe_log(f"[DataAccess] Сеть assign_stage_executor: {e}")
+                try:
+                    self.db.assign_stage_executor(
+                        card_id, data.get('stage_name', ''),
+                        data.get('executor_id'), data.get('assigned_by'),
+                        data.get('deadline'))
+                except Exception:
+                    pass
+                self._queue_operation('create', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'assign', **data})
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка assign_stage_executor: {e}")
+                try:
+                    self.db.assign_stage_executor(
+                        card_id, data.get('stage_name', ''),
+                        data.get('executor_id'), data.get('assigned_by'),
+                        data.get('deadline'))
+                except Exception:
+                    pass
+        else:
+            # Оффлайн — сохраняем локально
+            try:
+                self.db.assign_stage_executor(
+                    card_id, data.get('stage_name', ''),
+                    data.get('executor_id'), data.get('assigned_by'),
+                    data.get('deadline'))
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
+            if self.api_client:
+                self._queue_operation('create', 'stage_executor', card_id,
+                                      {'card_id': card_id, '_action': 'assign', **data})
 
         return {'success': True}
 
@@ -2034,6 +2186,7 @@ class DataAccess(QObject):
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
+                _global_cache.invalidate("crm_cards")
                 if isinstance(result, bool):
                     return {'success': result} if result else None
                 return result
@@ -2047,6 +2200,7 @@ class DataAccess(QObject):
                                   {'card_id': card_id, 'stage_name': stage_name,
                                    'executor_id': executor_id, '_action': 'complete'})
 
+        _global_cache.invalidate("crm_cards")
         return {'success': True}
 
     def get_incomplete_stage_executors(self, card_id: int, stage_name: str) -> list:
@@ -2117,6 +2271,7 @@ class DataAccess(QObject):
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_designer_completion(card_id)
+                _global_cache.invalidate("crm_cards")
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_designer_completion: {e}")
@@ -2139,6 +2294,7 @@ class DataAccess(QObject):
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.reset_draftsman_completion(card_id)
+                _global_cache.invalidate("crm_cards")
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_draftsman_completion: {e}")
@@ -2184,6 +2340,7 @@ class DataAccess(QObject):
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
+                _global_cache.invalidate("crm_cards")
                 if isinstance(result, bool):
                     return {'success': result} if result else None
                 return result

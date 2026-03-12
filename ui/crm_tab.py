@@ -927,6 +927,9 @@ class CRMTab(QWidget):
        
     def refresh_current_tab(self):
         """Обновление текущей активной вкладки"""
+        # Принудительно сбрасываем кеш — пользователь нажал refresh или завершил workflow
+        from utils.data_access import _global_cache
+        _global_cache.invalidate("crm_cards")
         current_index = self.project_tabs.currentIndex()
         # ИСПРАВЛЕНИЕ: НЕ используем prefer_local — карточки могут быть только в API
         # (например, созданные другим пользователем или тестом).
@@ -1459,6 +1462,9 @@ class CRMTab(QWidget):
         """
         try:
             print(f"[SYNC] Получено обновление CRM карточек: {len(updated_cards)} записей")
+            # Сбрасываем кеш CRM карточек — данные могли измениться
+            from utils.data_access import _global_cache
+            _global_cache.invalidate("crm_cards")
             # Обновляем из локальной БД (данные уже синхронизированы), не блокируя UI
             self.data.prefer_local = True
             try:
