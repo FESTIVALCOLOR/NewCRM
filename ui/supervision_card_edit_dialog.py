@@ -30,6 +30,8 @@ class SupervisionCardEditDialog(QDialog):
     # Сигналы для потокобезопасной загрузки файлов
     supervision_upload_completed = pyqtSignal(str, str, str, str, str, int)  # file_name, stage, date, public_link, yandex_path, contract_id
     supervision_upload_error = pyqtSignal(str)  # error_msg
+    _report_upload_completed = pyqtSignal(str, str, str, str, int)  # yandex_path, public_link, file_name, file_type_stage, contract_id
+    _report_upload_error = pyqtSignal(str)  # error_msg
     _reload_files_signal = pyqtSignal()  # потокобезопасный сигнал для перезагрузки списка файлов
     _sync_ended = pyqtSignal()  # Сигнал завершения фоновой синхронизации
 
@@ -93,6 +95,8 @@ class SupervisionCardEditDialog(QDialog):
         # Подключаем сигналы загрузки файлов
         self.supervision_upload_completed.connect(self._on_supervision_upload_completed)
         self.supervision_upload_error.connect(self._on_supervision_upload_error)
+        self._report_upload_completed.connect(self._on_report_upload_completed)
+        self._report_upload_error.connect(self._on_report_upload_error)
         self._reload_files_signal.connect(lambda: self.load_supervision_files(validate=False))
 
     def _get_contract_yandex_folder(self, contract_id):
@@ -174,9 +178,15 @@ class SupervisionCardEditDialog(QDialog):
             # Старший менеджер
             self.senior_manager = CustomComboBox()
             managers = self.data.get_employees_by_position('Старший менеджер проектов') or []
+            directors = self.data.get_employees_by_position('Руководитель студии') or []
             self.senior_manager.addItem('Не назначен', None)
             for manager in managers:
                 self.senior_manager.addItem(manager['full_name'], manager['id'])
+            # Руководитель студии может назначить себя на любую роль
+            added_mgr_ids = {m['id'] for m in managers}
+            for d in directors:
+                if d['id'] not in added_mgr_ids:
+                    self.senior_manager.addItem(d['full_name'], d['id'])
             form_layout.addRow('Старший менеджер:', self.senior_manager)
 
             # ДАН (отображается как текст — изменяется только через кнопку "Переназначить")
@@ -188,6 +198,11 @@ class SupervisionCardEditDialog(QDialog):
             self.dan.addItem('Не назначен', None)
             for dan in dans:
                 self.dan.addItem(dan['full_name'], dan['id'])
+            # Руководитель студии может назначить себя на роль ДАН
+            added_dan_ids = {d['id'] for d in dans}
+            for d in directors:
+                if d['id'] not in added_dan_ids:
+                    self.dan.addItem(d['full_name'], d['id'])
             self.dan.setVisible(False)
 
             dan_row = QHBoxLayout()
@@ -2497,36 +2512,14 @@ class SupervisionCardEditDialog(QDialog):
                     public_link = yd.get_public_link(yandex_path)
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 100))
                     QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
-
-                    # Сохраняем как supervision_reports
-                    from PyQt5.QtCore import QTimer
-                    def save_report():
-                        try:
-                            file_data = {
-                                'contract_id': contract_id,
-                                'stage': 'supervision_reports',
-                                'file_type': stage,
-                                'yandex_path': yandex_path,
-                                'public_link': public_link or '',
-                                'file_name': file_name,
-                            }
-                            self.data.add_project_file(file_data)
-                            CustomMessageBox(self, 'Успех', f'Отчёт "{file_name}" успешно загружен', 'success').exec_()
-                            self.refresh_files_list()
-                        except Exception as e:
-                            print(f"[ERROR] Ошибка сохранения отчёта: {e}")
-                    QTimer.singleShot(0, save_report)
+                    self._report_upload_completed.emit(yandex_path, public_link or '', file_name, stage, contract_id)
                 else:
                     QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, lambda: CustomMessageBox(
-                        self, 'Ошибка', 'Не удалось загрузить файл', 'error').exec_())
+                    self._report_upload_error.emit("Не удалось загрузить файл")
 
             except Exception as e:
                 QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, lambda: CustomMessageBox(
-                    self, 'Ошибка', f'Ошибка загрузки: {e}', 'error').exec_())
+                self._report_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread, daemon=True)
         thread.start()
@@ -2610,6 +2603,28 @@ class SupervisionCardEditDialog(QDialog):
         CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки: {error_msg}', 'error').exec_()
         print(f"[ERROR] Ошибка загрузки файла надзора: {error_msg}")
 
+    def _on_report_upload_completed(self, yandex_path, public_link, file_name, file_type_stage, contract_id):
+        """Обработчик успешной загрузки отчёта надзора (главный поток)"""
+        try:
+            file_data = {
+                'contract_id': contract_id,
+                'stage': 'supervision_reports',
+                'file_type': file_type_stage,
+                'yandex_path': yandex_path,
+                'public_link': public_link,
+                'file_name': file_name,
+            }
+            self.data.add_project_file(file_data)
+            CustomMessageBox(self, 'Успех', f'Отчёт "{file_name}" успешно загружен', 'success').exec_()
+            self.refresh_files_list()
+        except Exception as e:
+            print(f"[ERROR] Ошибка сохранения отчёта: {e}")
+
+    def _on_report_upload_error(self, error_msg):
+        """Обработчик ошибки загрузки отчёта надзора"""
+        CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки: {error_msg}', 'error').exec_()
+        print(f"[ERROR] Ошибка загрузки отчёта: {error_msg}")
+
     def delete_supervision_file(self, file_id, yandex_path):
         """Удаление файла надзора"""
         if not _has_perm(self.employee, self.api_client, 'supervision.files_delete'):
@@ -2687,20 +2702,25 @@ class SupervisionCardEditDialog(QDialog):
             self.load_supervision_files()
 
     def _add_action_history(self, action_type: str, description: str, entity_type: str = 'supervision_card', entity_id: int = None):
-        """ИСПРАВЛЕНИЕ 06.02.2026: Добавление метода записи истории действий (#22)"""
+        """Добавление записи в историю действий надзора"""
         if entity_id is None:
-            entity_id = self.card_data['id']
+            entity_id = self.card_data.get('id')
 
         user_id = self.employee.get('id') if self.employee else None
 
-        self.data.add_action_history(
-            user_id=user_id,
-            action_type=action_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            description=description
-        )
-        print(f"[DataAccess] История действий надзора записана: {action_type}")
+        try:
+            self.data.add_action_history(
+                user_id=user_id,
+                action_type=action_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                description=description
+            )
+            print(f"[HISTORY] Записано: {action_type} | entity={entity_type}/{entity_id} | user={user_id}")
+        except Exception as e:
+            print(f"[HISTORY ERROR] {action_type}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _add_project_history(self, entry_type: str, message: str):
         """Запись в журнал истории проекта надзора"""

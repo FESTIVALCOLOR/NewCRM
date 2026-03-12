@@ -2252,30 +2252,21 @@ class CardEditDialog(QDialog):
                 if result:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 3))
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                    QTimer.singleShot(0, lambda: self.tech_task_upload_completed.emit(
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    self.tech_task_upload_completed.emit(
                         result['public_link'],
                         result['yandex_path'],
                         result['file_name'],
                         contract_id
-                    ))
+                    )
                 else:
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                    QTimer.singleShot(0, lambda: self.tech_task_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск"))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    self.tech_task_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
 
             except Exception as e:
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _err = str(e)
-                QTimer.singleShot(0, lambda: self.tech_task_upload_error.emit(_err))
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.tech_task_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -2407,32 +2398,22 @@ class CardEditDialog(QDialog):
                 if uploaded_files:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, len(file_paths)))
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
 
                     # Получаем ссылку на папку
                     folder_path = yd.get_stage_folder_path(contract_folder, 'references')
                     folder_link = yd.get_public_link(folder_path)
 
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
                     _link = folder_link if folder_link else folder_path
-                    _cid = contract_id
-                    QTimer.singleShot(0, lambda: self.references_upload_completed.emit(_link, _cid))
+                    self.references_upload_completed.emit(_link, contract_id)
                 else:
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                    QTimer.singleShot(0, lambda: self.references_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск"))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    self.references_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск")
 
             except Exception as e:
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _err = str(e)
-                QTimer.singleShot(0, lambda: self.references_upload_error.emit(_err))
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.references_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -2535,32 +2516,22 @@ class CardEditDialog(QDialog):
                 if uploaded_files:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, len(file_paths)))
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
 
                     # Получаем ссылку на папку
                     folder_path = yd.get_stage_folder_path(contract_folder, 'photo_documentation')
                     folder_link = yd.get_public_link(folder_path)
 
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
                     _link = folder_link if folder_link else folder_path
-                    _cid = contract_id
-                    QTimer.singleShot(0, lambda: self.photo_doc_upload_completed.emit(_link, _cid))
+                    self.photo_doc_upload_completed.emit(_link, contract_id)
                 else:
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                    QTimer.singleShot(0, lambda: self.photo_doc_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск"))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    self.photo_doc_upload_error.emit("Не удалось загрузить файлы на Яндекс.Диск")
 
             except Exception as e:
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _err = str(e)
-                QTimer.singleShot(0, lambda: self.photo_doc_upload_error.emit(_err))
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.photo_doc_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -5574,9 +5545,8 @@ class CardEditDialog(QDialog):
                     self.data.update_contract(contract_id, update_data)
                     print(f"[VERIFY] Контракт обновлён через DataAccess")
 
-                    # Обновляем UI через QTimer (thread-safe)
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, self.refresh_file_labels)
+                    # Обновляем UI — emit сигнал (AutoConnection → QueuedConnection из потока)
+                    self.files_verification_completed.emit()
                 else:
                     print(f"[VERIFY] Все contract-level файлы на месте")
 
@@ -5585,10 +5555,8 @@ class CardEditDialog(QDialog):
                 print(f"[ERROR] Ошибка при проверке файлов на Яндекс.Диске: {e}")
                 traceback.print_exc()
             finally:
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
                 try:
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, self._sync_ended.emit)
+                    self._sync_ended.emit()
                 except RuntimeError:
                     pass  # Диалог уже закрыт
 
@@ -5651,9 +5619,7 @@ class CardEditDialog(QDialog):
                 if not all_files:
                     print(f"[VALIDATE] Нет файлов стадий для contract_id={contract_id}")
                     if new_files_found:
-                        # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                        from PyQt5.QtCore import QTimer
-                        QTimer.singleShot(0, self._reload_stage_files_signal.emit)
+                        self._reload_stage_files_signal.emit()
                     return
 
                 print(f"[VALIDATE] Найдено {len(all_files)} файлов стадий, проверяем...")
@@ -5706,12 +5672,9 @@ class CardEditDialog(QDialog):
 
                 if ui_needs_update:
                     try:
-                        # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                        from PyQt5.QtCore import QTimer
-                        QTimer.singleShot(0, self._reload_stage_files_signal.emit)
-                        # Обновляем лейблы ТЗ/замер/референсы/фотофиксация
+                        self._reload_stage_files_signal.emit()
                         if contract_updated:
-                            QTimer.singleShot(100, self.refresh_file_labels)
+                            self.files_verification_completed.emit()
                     except RuntimeError:
                         pass  # Диалог уже закрыт
 
@@ -5721,9 +5684,7 @@ class CardEditDialog(QDialog):
                 traceback.print_exc()
             finally:
                 try:
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, self._sync_ended.emit)
+                    self._sync_ended.emit()
                 except RuntimeError:
                     pass  # Диалог уже закрыт
 
@@ -7892,19 +7853,13 @@ class CardEditDialog(QDialog):
                             traceback.print_exc()
                             # Продолжаем - файл уже сохранен локально
 
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _stage = stage
-                QTimer.singleShot(0, lambda: self.stage_files_uploaded.emit(_stage))
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.stage_files_uploaded.emit(stage)
             except Exception as e:
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _err = str(e)
-                QTimer.singleShot(0, lambda: self.stage_upload_error.emit(_err))
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.stage_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -8067,11 +8022,8 @@ class CardEditDialog(QDialog):
                 )
 
                 if not uploaded_files:
-                    # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
-                    # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                    QTimer.singleShot(0, lambda: self.stage_upload_error.emit("Не удалось загрузить файлы"))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                    self.stage_upload_error.emit("Не удалось загрузить файлы")
                     return
 
                 # Генерируем превью и сохраняем в БД
@@ -8130,25 +8082,16 @@ class CardEditDialog(QDialog):
                             traceback.print_exc()
                             # Продолжаем - файл уже сохранен локально
 
-                # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                 QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, total_steps))
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _stage = stage
-                QTimer.singleShot(0, lambda: self.stage_files_uploaded.emit(_stage))
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.stage_files_uploaded.emit(stage)
 
             except Exception as e:
                 print(f"[ERROR] Ошибка загрузки файлов: {e}")
                 import traceback
                 traceback.print_exc()
-                # ИСПРАВЛЕНИЕ: Закрываем прогресс из главного потока через QTimer
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
-                # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
-                _err = str(e)
-                QTimer.singleShot(0, lambda: self.stage_upload_error.emit(_err))
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+                self.stage_upload_error.emit(str(e))
 
         thread = threading.Thread(target=upload_thread)
         thread.start()
@@ -8251,9 +8194,7 @@ class CardEditDialog(QDialog):
 
         # Завершаем прогресс
         progress.setValue(total_steps)
-        # ИСПРАВЛЕНИЕ: Закрываем прогресс через QTimer для безопасности
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(0, progress.close)
+        progress.close()
 
         # Добавляем запись в историю проекта
         if self.employee and len(variation_files) > 0:
@@ -8479,9 +8420,8 @@ class CardEditDialog(QDialog):
 
     def _on_preview_loaded_from_thread(self, file_id, pixmap):
         """Callback из потока загрузки - переводит в главный поток через QTimer"""
-        # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety (вызывается из PreviewLoaderThread)
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(0, lambda: self.preview_loaded.emit(file_id, pixmap))
+        # Прямой emit — PyQt AutoConnection обеспечивает QueuedConnection из потока
+        self.preview_loaded.emit(file_id, pixmap)
 
     def _on_preview_loaded(self, file_id, pixmap):
         """Обработчик сигнала - обновляет превью в UI (выполняется в главном потоке)"""

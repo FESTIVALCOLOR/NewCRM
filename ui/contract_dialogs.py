@@ -366,6 +366,9 @@ class ContractDialog(QDialog):
         """)
 
         self.client_combo.lineEdit().setPlaceholderText('Начните вводить имя клиента...')
+        # Очистка поля при клике мышкой для быстрого поиска
+        self.client_combo.lineEdit().installEventFilter(self)
+        self.client_combo.setProperty('_searchable', True)
 
         client_layout.addRow('Выберите клиента*:', self.client_combo)
 
@@ -1317,19 +1320,28 @@ class ContractDialog(QDialog):
         from PyQt5.QtWidgets import QDesktopWidget
         available_screen = QDesktopWidget().availableGeometry()
         
-        # 85-90% от высоты экрана
-        min_height = max(int(available_screen.height() * 0.85), 820)
-        max_height = min(int(available_screen.height() * 0.90), 950)
-        max_width = min(int(available_screen.width() * 0.65), 800)
-        
-        self.setMinimumWidth(720)
+        # 90-95% от высоты экрана
+        min_height = max(int(available_screen.height() * 0.90), 900)
+        max_height = min(int(available_screen.height() * 0.95), 1100)
+        max_width = min(int(available_screen.width() * 0.70), 900)
+
+        self.setMinimumWidth(800)
         self.setMaximumWidth(max_width)
         self.setMinimumHeight(min_height)
         self.setMaximumHeight(max_height)
 
         # Устанавливаем начальный размер
-        self.resize(720, min_height)
+        self.resize(800, min_height)
         # ===================================================
+
+    def eventFilter(self, obj, event):
+        """Очистка текста searchable combo при клике мышкой"""
+        from PyQt5.QtCore import QEvent
+        if event.type() == QEvent.MouseButtonPress:
+            parent = obj.parent()
+            if isinstance(parent, QComboBox) and parent.property('_searchable'):
+                obj.clear()
+        return super().eventFilter(obj, event)
 
     def showEvent(self, event):
         """Центрируем диалог при показе (когда размеры уже правильно установлены)"""
@@ -1399,29 +1411,42 @@ class ContractDialog(QDialog):
 
     @staticmethod
     def _calc_template_contract_term(template_subtype, area, floors=1):
-        """Расчёт срока для шаблонных проектов (рабочие дни)"""
-        sub = template_subtype.lower()
-        if 'ванной' in sub:
-            if 'визуализац' in sub:
-                return 20
-            return 10
+        """Расчёт срока для шаблонных проектов (рабочие дни).
 
-        # Стандарт / Стандарт с визуализацией
+        Таблица базовых сроков (Стандарт / Стандарт+Визуал / Ванная / Ванная+Визуал):
+          до 90 м²:  20 / 45 / 10 / 20
+          90-140:     30 / 70 / 10 / 20
+          140-190:    40 / 95 / 10 / 20
+          190-240:    50 / 120 / 10 / 20
+          240-290:    60 / 145 / 10 / 20
+          290-340:    70 / 170 / 10 / 20
+
+        Этажность (только Стандарт и Стандарт+Визуал):
+          +10 раб. дней за каждый дополнительный этаж (Стандарт)
+          +20 раб. дней за каждый дополнительный этаж (Стандарт+Визуал)
+        """
+        sub = template_subtype.lower()
+        has_viz = 'визуализац' in sub
+
+        # Ванная — фиксированный срок, этажность не применяется
+        if 'ванн' in sub:
+            return 20 if has_viz else 10
+
+        # Стандарт / Стандарт с визуализацией — базовый срок по площади
         if area <= 90:
             base_days = 20
         else:
             extra = int((area - 90 - 1) // 50) + 1
             base_days = 20 + extra * 10
 
+        # Этажность: +10 дней (Стандарт) или +20 дней (Стандарт+Визуал) за каждый доп. этаж
         if floors > 1:
-            for _ in range(1, floors):
-                if area <= 90:
-                    base_days += 10
-                else:
-                    extra = int((area - 90 - 1) // 50) + 1
-                    base_days += 10 + extra * 10
+            extra_floors = floors - 1
+            floor_bonus = 20 if has_viz else 10
+            base_days += extra_floors * floor_bonus
 
-        if 'визуализац' in sub:
+        # Визуализация: добавочный срок
+        if has_viz:
             if area <= 90:
                 base_days += 25
             else:
@@ -1541,13 +1566,16 @@ class ContractDialog(QDialog):
         # Таблица
         tbl = QTableWidget()
         tbl.setColumnCount(4)
-        tbl.setHorizontalHeaderLabels(['Площадь до (м\u00b2)', 'Полный', 'Эскизный', 'Планировочный'])
+        tbl.setHorizontalHeaderLabels(['Площадь (м\u00b2)', 'Полный', 'Эскизный', 'Планировочный'])
         areas = [70, 100, 130, 160, 190, 220, 250, 300, 350, 400, 450, 500]
+        area_labels = ['до 70']
+        for i in range(1, len(areas)):
+            area_labels.append(f'от {areas[i-1]} до {areas[i]}')
         tbl.setRowCount(len(areas))
         tbl.verticalHeader().setVisible(False)
         for r, a in enumerate(areas):
             for col, val in enumerate([
-                str(a),
+                area_labels[r],
                 str(self._calc_contract_term(1, a)),
                 str(self._calc_contract_term(2, a)),
                 str(self._calc_contract_term(3, a)),
@@ -1605,7 +1633,7 @@ class ContractDialog(QDialog):
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         dlg.setAttribute(Qt.WA_TranslucentBackground, False)
-        dlg.setFixedSize(560, 400)
+        dlg.setFixedSize(560, 440)
 
         outer = QVBoxLayout(dlg)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1634,7 +1662,11 @@ class ContractDialog(QDialog):
 
         desc = QLabel('Срок договора (рабочих дней) для шаблонных проектов.\n'
                        'Стандарт и Стандарт с визуализацией зависят от площади и этажей.\n'
-                       'Ванная комната \u2014 фиксированный срок.')
+                       'Ванная комната \u2014 фиксированный срок.\n'
+                       '\n'
+                       'Этажность: Стандарт +10 раб. дн. за каждый доп. этаж,\n'
+                       'Стандарт+Визуал. +20 раб. дн. за каждый доп. этаж.\n'
+                       'Для проектов ванной комнаты этажность не применяется.')
         desc.setStyleSheet('font-size: 11px; color: #666; background: transparent;')
         desc.setWordWrap(True)
         cl.addWidget(desc)
@@ -1642,15 +1674,18 @@ class ContractDialog(QDialog):
         tbl = QTableWidget()
         tbl.setColumnCount(5)
         tbl.setHorizontalHeaderLabels([
-            'Площадь до (м\u00b2)', 'Стандарт', 'Стандарт+Визуал.',
+            'Площадь (м\u00b2)', 'Стандарт', 'Стандарт+Визуал.',
             'Ванная', 'Ванная+Визуал.'
         ])
         areas = [90, 140, 190, 240, 290, 340]
+        area_labels = ['до 90']
+        for i in range(1, len(areas)):
+            area_labels.append(f'от {areas[i-1]} до {areas[i]}')
         tbl.setRowCount(len(areas))
         tbl.verticalHeader().setVisible(False)
         for r, a in enumerate(areas):
             for col, val in enumerate([
-                str(a),
+                area_labels[r],
                 str(self._calc_template_contract_term('Стандарт', a, 1)),
                 str(self._calc_template_contract_term('Стандарт с визуализацией', a, 1)),
                 str(self._calc_template_contract_term('Проект ванной комнаты', a, 1)),
@@ -1702,7 +1737,7 @@ class ContractDialog(QDialog):
         center_dialog_on_parent(dlg)
         dlg.exec_()
 
-    def truncate_filename(self, filename, max_length=30):
+    def truncate_filename(self, filename, max_length=22):
         """Обрезает длинное имя файла с многоточием в середине"""
         if len(filename) <= max_length:
             return filename
@@ -2088,12 +2123,14 @@ class ContractDialog(QDialog):
                     except Exception as e:
                         print(f"[REPAIR] Ошибка обновления: {e}")
 
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, self.refresh_file_labels)
+                    self.files_verification_completed.emit()
             except Exception as e:
                 print(f"[REPAIR] Ошибка: {e}")
             finally:
-                self._sync_ended.emit()
+                try:
+                    self._sync_ended.emit()
+                except RuntimeError:
+                    pass
 
         thread = threading.Thread(target=repair, daemon=True)
         thread.start()
@@ -2199,8 +2236,7 @@ class ContractDialog(QDialog):
                     except Exception as e:
                         print(f"[VERIFY-CT] Ошибка обновления: {e}")
 
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, self.refresh_file_labels)
+                    self.files_verification_completed.emit()
                 else:
                     print(f"[VERIFY-CT] Все файлы договора на месте")
 
@@ -2209,7 +2245,10 @@ class ContractDialog(QDialog):
                 print(f"[ERROR] Ошибка при проверке файлов на Яндекс.Диске: {e}")
                 traceback.print_exc()
             finally:
-                self._sync_ended.emit()
+                try:
+                    self._sync_ended.emit()
+                except RuntimeError:
+                    pass
 
         thread = threading.Thread(target=check_files, daemon=True)
         thread.start()
@@ -2495,9 +2534,7 @@ class ContractDialog(QDialog):
                         print(f"[ERROR] Не удалось обновить через DataAccess: {e}")
                     print(f"[OK SYNC] Синхронизация завершена! Добавлено полей: {len(update_data)}")
 
-                    # Обновляем UI через QTimer (thread-safe)
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, self.refresh_file_labels)
+                    self.files_verification_completed.emit()
                 else:
                     print(f"[INFO SYNC] Новых файлов для синхронизации не найдено")
 
@@ -2506,7 +2543,10 @@ class ContractDialog(QDialog):
                 import traceback
                 traceback.print_exc()
             finally:
-                self._sync_ended.emit()
+                try:
+                    self._sync_ended.emit()
+                except RuntimeError:
+                    pass
 
         # Запускаем синхронизацию в фоновом потоке
         thread = threading.Thread(target=sync_files, daemon=True)
@@ -2655,9 +2695,9 @@ class ContractDialog(QDialog):
 
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Выберите PDF файл договора",
+            "Выберите файл договора",
             "",
-            "PDF Files (*.pdf)"
+            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
         )
 
         if not file_path:
@@ -2713,8 +2753,7 @@ class ContractDialog(QDialog):
                 if result:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 3))
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.contract_file_upload_completed.emit(
                         result['public_link'],
                         result['yandex_path'],
@@ -2722,13 +2761,13 @@ class ContractDialog(QDialog):
                         project_type
                     )
                 else:
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    from PyQt5.QtCore import QMetaObject, Qt
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.contract_file_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
 
             except Exception as e:
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                 import traceback
                 traceback.print_exc()
                 self.contract_file_upload_error.emit(str(e))
@@ -2805,9 +2844,9 @@ class ContractDialog(QDialog):
 
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Выберите PDF файл тех.задания",
+            "Выберите файл тех.задания",
             "",
-            "PDF Files (*.pdf)"
+            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
         )
 
         if not file_path:
@@ -2863,21 +2902,20 @@ class ContractDialog(QDialog):
                 if result:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 3))
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.tech_task_upload_completed.emit(
                         result['public_link'],
                         result['yandex_path'],
                         result['file_name']
                     )
                 else:
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    from PyQt5.QtCore import QMetaObject, Qt
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.tech_task_upload_error.emit("Не удалось загрузить файл на Яндекс.Диск")
 
             except Exception as e:
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                 import traceback
                 traceback.print_exc()
                 self.tech_task_upload_error.emit(str(e))
@@ -2965,7 +3003,7 @@ class ContractDialog(QDialog):
         """Загрузка файла акта/письма в папку Документы на ЯД"""
         file_path, _ = QFileDialog.getOpenFileName(
             self, f"Выберите файл: {display_name}", "",
-            "PDF Files (*.pdf);;Документы (*.pdf *.docx *.doc)"
+            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
         )
         if not file_path:
             return
@@ -3006,19 +3044,18 @@ class ContractDialog(QDialog):
                 if result:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 3))
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.doc_file_upload_completed.emit(
                         prefix, result['public_link'], result['yandex_path'], result['file_name']
                     )
                 else:
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    from PyQt5.QtCore import QMetaObject, Qt
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.doc_file_upload_error.emit(prefix, "Не удалось загрузить файл на Яндекс.Диск")
 
             except Exception as e:
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                 import traceback
                 traceback.print_exc()
                 self.doc_file_upload_error.emit(prefix, str(e))
@@ -3100,7 +3137,12 @@ class ContractDialog(QDialog):
             return
 
         # Проверяем сумму платежа
-        money_input = getattr(self, prefix, None)
+        # Для шаблонного проекта виджет суммы — template_paid_amount, а не advance_payment
+        is_individual = self.contract_data.get('project_type', '') == 'Индивидуальный'
+        if not is_individual and prefix == 'advance_payment':
+            money_input = getattr(self, 'template_paid_amount', None)
+        else:
+            money_input = getattr(self, prefix, None)
         if money_input and money_input.value() <= 0:
             CustomMessageBox(self, 'Ошибка', 'Укажите сумму платежа перед отметкой оплаты', 'warning').exec_()
             return
@@ -3152,9 +3194,70 @@ class ContractDialog(QDialog):
                     tpl_paid_amt.setReadOnly(True)
                     tpl_paid_amt.setStyleSheet(_locked_style)
 
+            # === АВТО-АРХИВАЦИЯ: если это финальный платёж и карточка в "Выполненный проект" ===
+            self._try_auto_archive_after_payment(prefix)
+
         except Exception as e:
             print(f"[ERROR] Ошибка отметки оплаты {prefix}: {e}")
             CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить дату оплаты: {e}', 'error').exec_()
+
+    def _try_auto_archive_after_payment(self, prefix):
+        """Проверка и автоматическая архивация CRM карточки после финального платежа"""
+        try:
+            contract_id = self.contract_data.get('id')
+            if not contract_id:
+                return
+
+            project_type = self.contract_data.get('project_type', '')
+            is_individual = project_type == 'Индивидуальный'
+
+            # Определяем, является ли этот платёж финальным
+            is_final_payment = False
+            if is_individual and prefix == 'third_payment':
+                is_final_payment = True
+            elif not is_individual and prefix == 'advance_payment':
+                # Для шаблонных — единственный платёж (advance) является финальным
+                is_final_payment = True
+
+            if not is_final_payment:
+                return
+
+            # Получаем CRM карточку для этого договора
+            crm_card_id = self.data.db.get_crm_card_id_by_contract(contract_id)
+            if not crm_card_id:
+                return
+
+            crm_card = self.data.get_crm_card(crm_card_id)
+            if not crm_card:
+                return
+
+            current_column = crm_card.get('column_name', '')
+            if current_column != 'Выполненный проект':
+                return
+
+            # Карточка в "Выполненный проект" и финальный платёж проведён → архивируем
+            print(f"[AUTO-ARCHIVE] Финальный платёж проведён. Архивация карточки {crm_card_id}")
+
+            # Обновляем статус договора на СДАН
+            self.data.update_contract(contract_id, {'status': 'СДАН'})
+            self.contract_data['status'] = 'СДАН'
+            print(f"[AUTO-ARCHIVE] Статус договора обновлён на СДАН")
+
+            # Устанавливаем отчетный месяц если ещё не установлен
+            current_month = QDate.currentDate().toString('yyyy-MM')
+            self.data.set_payments_report_month(contract_id, current_month)
+
+            CustomMessageBox(
+                self, 'Проект архивирован',
+                '<b>Финальный платёж подтверждён!</b><br><br>'
+                'Карточка проекта автоматически перемещена в архив.',
+                'success'
+            ).exec_()
+
+        except Exception as e:
+            print(f"[AUTO-ARCHIVE ERROR] {e}")
+            import traceback
+            traceback.print_exc()
 
     def _upload_receipt_file(self, prefix):
         """Загрузка чека платежа в папку Документы на ЯД"""
@@ -3221,19 +3324,18 @@ class ContractDialog(QDialog):
                 if result:
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 3))
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.doc_file_upload_completed.emit(
                         receipt_prefix, result['public_link'], result['yandex_path'], result['file_name']
                     )
                 else:
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, progress.close)
+                    from PyQt5.QtCore import QMetaObject, Qt
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                     self.doc_file_upload_error.emit(receipt_prefix, "Не удалось загрузить чек на Яндекс.Диск")
 
             except Exception as e:
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, progress.close)
+                from PyQt5.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
                 import traceback
                 traceback.print_exc()
                 self.doc_file_upload_error.emit(receipt_prefix, str(e))
@@ -3543,6 +3645,16 @@ class ContractDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', 'Укажите номер договора', 'warning').exec_()
             return
 
+        # Валидация client_id — обязательное поле для API
+        if self.client_combo.currentData() is None:
+            CustomMessageBox(
+                self, 'Ошибка',
+                'Выберите клиента из списка.\n\n'
+                'Начните вводить имя клиента и выберите из выпадающего списка.',
+                'warning'
+            ).exec_()
+            return
+
         contract_number = self.contract_number.text().strip()
 
         # Получаем ID текущего договора для исключения из проверки
@@ -3734,10 +3846,19 @@ class ContractDialog(QDialog):
                 result = self.data.create_contract(contract_data)
                 if result:
                     new_contract_id = result.get('id')
+                    print(f"[CONTRACT] Договор создан, id={new_contract_id}")
+                else:
+                    print(f"[CONTRACT] Ошибка: create_contract вернул {result}")
 
-                # ПРИМЕЧАНИЕ: CRM карточка создается автоматически:
-                # - В локальном режиме: db_manager.add_contract() вызывает _create_crm_card()
-                # - В API режиме: сервер создает карточку при создании договора
+                # CRM карточка создаётся сервером атомарно.
+                # Fallback: если DataAccess._ensure_crm_card_exists не сработал
+                if new_contract_id and contract_data.get('project_type') != 'Авторский надзор':
+                    try:
+                        self.data._ensure_crm_card_exists(
+                            {'id': new_contract_id}, contract_data
+                        )
+                    except Exception as e:
+                        print(f"[CONTRACT] Ошибка проверки CRM карточки: {e}")
 
                 # Создание папки на Яндекс.Диске для нового договора
                 if new_contract_id and self.yandex_disk:
