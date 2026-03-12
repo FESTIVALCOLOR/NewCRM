@@ -692,6 +692,10 @@ class YandexDiskManager:
                 print(f"[ERROR] Неизвестная стадия: {stage}")
                 return []
 
+            # Уведомляем о подготовке папки
+            if progress_callback:
+                progress_callback(0, len(local_files), '', 'preparing')
+
             # Создаем все родительские папки и саму папку стадии
             # Для stage2_concept и stage2_3d нужно создать родительскую папку "2 стадия"
             if stage in ['stage2_concept', 'stage2_3d']:

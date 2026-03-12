@@ -2380,8 +2380,10 @@ class CardEditDialog(QDialog):
                 def update_progress(current, total, fname, phase):
                     if cancel_event.is_set():
                         return
-                    # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    if phase == 'preparing':
+                        QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, "Подготовка папки на Яндекс.Диске..."))
+                        return
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, current))
                     percent = int((current / total) * 100)
                     label_text = f"Загрузка: {fname}\n({current}/{total} файлов - {percent}%)"
@@ -2499,8 +2501,10 @@ class CardEditDialog(QDialog):
                 def update_progress(current, total, fname, phase):
                     if cancel_event.is_set():
                         return
-                    # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    if phase == 'preparing':
+                        QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, "Подготовка папки на Яндекс.Диске..."))
+                        return
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, current))
                     percent = int((current / total) * 100)
                     label_text = f"Загрузка: {fname}\n({current}/{total} файлов - {percent}%)"
@@ -7780,9 +7784,11 @@ class CardEditDialog(QDialog):
                 def update_upload_progress(current, total, file_name, phase):
                     if cancel_event.is_set():
                         return
+                    if phase == 'preparing':
+                        QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, "Подготовка папки на Яндекс.Диске..."))
+                        return
                     step = current + 1
                     percent = int((step / total) * 50)  # первые 50% - загрузка
-                    # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
                     label_text = f"Загрузка на Яндекс.Диск: {file_name}\n{step}/{total} ({percent}%)"
                     QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
@@ -8007,8 +8013,10 @@ class CardEditDialog(QDialog):
                     nonlocal current_step
                     if cancel_event.is_set():
                         return
+                    if phase == 'preparing':
+                        QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, "Подготовка папки на Яндекс.Диске..."))
+                        return
                     current_step = index
-                    # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, current_step))
                     percent = int((current_step / total_steps) * 100)
                     label_text = f"Загрузка: {fname}\n({index}/{len(file_paths)} файлов - {percent}%)"
