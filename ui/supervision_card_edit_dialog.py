@@ -351,14 +351,19 @@ class SupervisionCardEditDialog(QDialog):
         self._info_placeholder = QWidget()
         self.project_info_tab_index = self.tabs.addTab(self._info_placeholder, 'Информация о проекте')
 
-        # Надпись синхронизации
+        # Надпись синхронизации — отдельная строка над кнопками, по центру
         self.sync_label = QLabel('Синхронизация...')
         self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
+        self.sync_label.setAlignment(Qt.AlignCenter)
+        self.sync_label.setFixedHeight(16)
         self.sync_label.setVisible(False)
 
         self._deferred_tabs_ready = False
 
         layout.addWidget(self.tabs, 1)
+
+        # Надпись синхронизации над кнопками
+        layout.addWidget(self.sync_label)
 
         # Кнопки
         buttons_layout = QHBoxLayout()
@@ -379,7 +384,6 @@ class SupervisionCardEditDialog(QDialog):
             delete_btn.clicked.connect(self.delete_order)
             buttons_layout.addWidget(delete_btn)
 
-        buttons_layout.addWidget(self.sync_label)
         buttons_layout.addStretch()
 
         # --- Кнопки чата (надзор) ---

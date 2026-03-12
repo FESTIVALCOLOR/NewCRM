@@ -1155,15 +1155,17 @@ class ContractDialog(QDialog):
         common_group.setLayout(common_layout)
         layout.addWidget(common_group)
         
-        # Надпись синхронизации
+        # Надпись синхронизации — отдельная строка над кнопками, по центру
         self.sync_label = QLabel('Синхронизация...')
         self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
+        self.sync_label.setAlignment(Qt.AlignCenter)
+        self.sync_label.setFixedHeight(16)
         self.sync_label.setVisible(False)
+        layout.addWidget(self.sync_label)
 
         # Кнопки
         if not self.view_only:
             buttons_layout = QHBoxLayout()
-            buttons_layout.addWidget(self.sync_label)
             buttons_layout.addStretch()
 
             self.save_btn = QPushButton('Сохранить')
@@ -1234,7 +1236,6 @@ class ContractDialog(QDialog):
                 QPushButton:pressed { background-color: #C0C0C0; }
             """)
             view_buttons_layout = QHBoxLayout()
-            view_buttons_layout.addWidget(self.sync_label)
             view_buttons_layout.addStretch()
             view_buttons_layout.addWidget(close_btn)
             layout.addLayout(view_buttons_layout)

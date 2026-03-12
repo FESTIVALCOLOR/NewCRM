@@ -990,10 +990,13 @@ class CardEditDialog(QDialog):
 
         layout.addWidget(self.tabs, 1)
 
-        # Надпись синхронизации
+        # Надпись синхронизации — отдельная строка над кнопками, по центру
         self.sync_label = QLabel('Синхронизация...')
         self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
+        self.sync_label.setAlignment(Qt.AlignCenter)
+        self.sync_label.setFixedHeight(16)
         self.sync_label.setVisible(False)
+        layout.addWidget(self.sync_label)
 
         # Кнопки
         if not self.view_only:
@@ -1018,8 +1021,6 @@ class CardEditDialog(QDialog):
                 delete_btn.setFixedHeight(36)
                 delete_btn.clicked.connect(self.delete_order)
                 buttons_layout.addWidget(delete_btn)
-
-            buttons_layout.addWidget(self.sync_label)
 
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
@@ -1210,9 +1211,8 @@ class CardEditDialog(QDialog):
             disable_wheel_on_tabwidget(self.tabs)
 
             self.setEnabled(False)
-            view_buttons_layout = QHBoxLayout()
             self.sync_label.setEnabled(True)
-            view_buttons_layout.addWidget(self.sync_label)
+            view_buttons_layout = QHBoxLayout()
             view_buttons_layout.addStretch()
             close_btn = QPushButton('Закрыть')
             close_btn.setEnabled(True)

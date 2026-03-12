@@ -241,7 +241,6 @@ class YandexDiskManager:
             # Создаем подпапку
             subfolder_path = f"{contract_folder_path}/{subfolder_name}"
             self.create_folder(subfolder_path)
-            time.sleep(0.2)
 
             # Формируем полный путь к файлу на Яндекс.Диске
             yandex_file_path = f"{subfolder_path}/{file_name}"
@@ -703,18 +702,15 @@ class YandexDiskManager:
                 parent_folder = f"{clean_contract_folder}/2 стадия - Концепция дизайна"
                 print(f"[INFO] Создание родительской папки: {parent_folder}")
                 self.create_folder(parent_folder)
-                time.sleep(0.2)
 
                 # Создаем папку подсекции (Концепция-коллажи или 3D визуализация)
                 subsection_folder = self.get_stage_folder_path(contract_folder_path, stage, variation=None)
                 if subsection_folder:
                     print(f"[INFO] Создание папки подсекции: {subsection_folder}")
                     self.create_folder(subsection_folder)
-                    time.sleep(0.2)
 
             print(f"[INFO] Создание папки стадии: {stage_folder}")
             self.create_folder(stage_folder)
-            time.sleep(0.2)
 
             uploaded_files = []
             total_files = len(local_files)
@@ -732,7 +728,6 @@ class YandexDiskManager:
 
                     # Загружаем файл
                     self.upload_file(local_file, yandex_path)
-                    time.sleep(0.3)
 
                     # Получаем публичную ссылку
                     public_link = self.get_public_link(yandex_path)
