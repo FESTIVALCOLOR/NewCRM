@@ -26,6 +26,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     "access.salaries": "Доступ к странице Зарплаты",
     "access.employee_reports": "Доступ к странице Отчеты по сотрудникам",
     "access.admin": "Доступ к администрированию",
+    "access.dashboards": "Показ дашбордов внизу страницы",
     # === Сотрудники ===
     "employees.create": "Создание сотрудников",
     "employees.update": "Редактирование сотрудников",

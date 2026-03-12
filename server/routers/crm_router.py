@@ -31,14 +31,14 @@ from services.notification_service import trigger_messenger_notification
 
 
 def _add_business_days(start_date, days: int):
-    """Добавить рабочие дни (пн-пт) к дате."""
+    """Добавить рабочие дни (пн-пт + праздники РФ) к дате."""
     if isinstance(start_date, str):
         start_date = datetime.strptime(start_date, '%Y-%m-%d')
     current = start_date
     added = 0
     while added < days:
         current += timedelta(days=1)
-        if current.weekday() < 5:
+        if _is_working_day(current):
             added += 1
     return current
 
@@ -150,6 +150,23 @@ async def get_crm_cards(
         executor_employee_ids = list(set(se.executor_id for se in all_executors if se.executor_id))
         executor_employees_map = {e.id: e for e in db.query(Employee).filter(Employee.id.in_(executor_employee_ids)).all()} if executor_employee_ids else {}
 
+        # Batch-load workflow states для отображения текущего подэтапа
+        all_wf_states = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id.in_(card_ids)
+        ).all() if card_ids else []
+        wf_states_by_card = {}
+        for wf in all_wf_states:
+            wf_states_by_card[(wf.crm_card_id, wf.stage_name)] = wf
+
+        # Batch-load substep names из ProjectTimelineEntry
+        substep_codes = [wf.current_substep_code for wf in all_wf_states if wf.current_substep_code]
+        substep_name_map = {}
+        if substep_codes:
+            substep_entries = db.query(ProjectTimelineEntry.stage_code, ProjectTimelineEntry.stage_name).filter(
+                ProjectTimelineEntry.stage_code.in_(substep_codes)
+            ).all()
+            substep_name_map = {e.stage_code: e.stage_name for e in substep_entries}
+
         result = []
         for card in cards:
             contract = card.contract
@@ -232,6 +249,10 @@ async def get_crm_cards(
                 'client_name': client_names.get(card.id),
                 'created_at': card.created_at.isoformat() if card.created_at else None,
                 'updated_at': card.updated_at.isoformat() if card.updated_at else None,
+                # Текущий подэтап из StageWorkflowState
+                'current_substep_code': (lambda wf: wf.current_substep_code if wf else None)(wf_states_by_card.get((card.id, card.column_name))),
+                'current_substep_name': (lambda wf: substep_name_map.get(wf.current_substep_code) if wf and wf.current_substep_code else None)(wf_states_by_card.get((card.id, card.column_name))),
+                'workflow_status': (lambda wf: wf.status if wf else None)(wf_states_by_card.get((card.id, card.column_name))),
             }
             result.append(card_data)
 
@@ -597,13 +618,37 @@ async def move_crm_card_to_column(
             if old_column != 'В ожидании' and new_column != 'В ожидании':
                 old_idx = CRM_COLUMN_ORDER.index(old_column) if old_column in CRM_COLUMN_ORDER else -1
                 new_idx = CRM_COLUMN_ORDER.index(new_column) if new_column in CRM_COLUMN_ORDER else -1
-                if old_idx >= 0 and new_idx >= 0 and abs(new_idx - old_idx) > 1:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Нельзя перескакивать стадии: {old_column} → {new_column}"
-                    )
+                if old_idx >= 0 and new_idx >= 0:
+                    if new_idx < old_idx:
+                        # FIX Баг 3: Запрет перемещения назад для обычных пользователей
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Нельзя переместить карточку назад: {old_column} → {new_column}. Используйте 'В ожидании'."
+                        )
+                    if new_idx - old_idx > 1:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Нельзя перескакивать стадии: {old_column} → {new_column}"
+                        )
 
         card.column_name = new_column
+
+        # FIX Баг 6: Синхронизация статуса договора с колонкой CRM-карточки
+        # Статус договора должен отражать текущую стадию для корректной статистики
+        if contract and old_column != new_column:
+            if new_column == 'Выполненный проект':
+                contract.status = 'Выполненный проект'
+                contract.status_changed_date = datetime.utcnow().strftime('%Y-%m-%d')
+            elif new_column == 'В ожидании':
+                contract.status = 'В ожидании'
+                contract.status_changed_date = datetime.utcnow().strftime('%Y-%m-%d')
+            elif old_column == 'Новый заказ' and 'Стадия' in new_column:
+                contract.status = 'В работе'
+                contract.status_changed_date = datetime.utcnow().strftime('%Y-%m-%d')
+            elif old_column == 'В ожидании' and new_column != 'Новый заказ':
+                # Возврат из паузы — возвращаем "В работе"
+                contract.status = 'В работе'
+                contract.status_changed_date = datetime.utcnow().strftime('%Y-%m-%d')
 
         # При перемещении вперёд: помечаем незаполненные подэтапы предыдущей стадии как skipped
         if old_column != new_column and new_column != 'В ожидании' and old_column != 'В ожидании':
@@ -1355,12 +1400,27 @@ async def workflow_submit_work(
         # Роли исполнителей (те, кто нажимает "Сдать работу")
         executor_roles = ['Чертежник', 'Дизайнер', 'ГАП']
 
-        entry = db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.contract_id == contract_id,
-            ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role.in_(executor_roles),
-            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).first()
+        # Проверяем workflow state — если revision, обновляем тот же подэтап (не следующий)
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+
+        entry = None
+        if wf and wf.status == 'revision' and wf.current_substep_code:
+            # После исправления — НЕ ищем следующий подэтап, обновляем текущий
+            entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_code == wf.current_substep_code
+            ).first()
+        else:
+            # Обычная сдача — ищем первый незаполненный подэтап
+            entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role.in_(executor_roles),
+                ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+            ).order_by(ProjectTimelineEntry.sort_order).first()
 
         if entry:
             entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
@@ -1368,10 +1428,6 @@ async def workflow_submit_work(
             _server_recalculate_actual_days(db, contract_id)
 
         # Обновляем workflow state
-        wf = db.query(StageWorkflowState).filter(
-            StageWorkflowState.crm_card_id == card_id,
-            StageWorkflowState.stage_name == stage_name
-        ).first()
         if not wf:
             wf = StageWorkflowState(
                 crm_card_id=card_id,
@@ -1381,6 +1437,7 @@ async def workflow_submit_work(
             )
             db.add(wf)
         wf.current_substep_code = entry.stage_code if entry else wf.current_substep_code
+        wf.status = 'in_progress'
         wf.updated_at = datetime.utcnow()
 
         # K11: Запись в историю
@@ -1704,16 +1761,14 @@ async def workflow_client_approved(
             StageWorkflowState.stage_name == stage_name
         ).first()
         if wf:
-            # K7: Пересчёт дедлайна — считаем дни паузы на согласовании клиента
+            # K7: Пересчёт дедлайна — считаем РАБОЧИЕ дни паузы на согласовании клиента
             if wf.client_approval_deadline_paused and wf.client_approval_started_at:
-                approval_pause_days = (datetime.utcnow() - wf.client_approval_started_at).days
+                approval_pause_days = _count_business_days(wf.client_approval_started_at, datetime.utcnow())
                 if approval_pause_days > 0 and card.deadline:
                     try:
-                        dl = datetime.strptime(card.deadline, '%Y-%m-%d')
-                        dl += timedelta(days=approval_pause_days)
-                        card.deadline = dl.strftime('%Y-%m-%d')
+                        card.deadline = _add_working_days_to_date(card.deadline, approval_pause_days)
                         card.total_pause_days = (card.total_pause_days or 0) + approval_pause_days
-                        logger.info(f"K7: Client approval pause {approval_pause_days} days, card {card_id}")
+                        logger.info(f"K7: Client approval pause {approval_pause_days} business days, card {card_id}")
                     except (ValueError, TypeError):
                         pass
 
@@ -1725,9 +1780,7 @@ async def workflow_client_approved(
                     for ex in executors:
                         if ex.deadline:
                             try:
-                                ex_dl = datetime.strptime(str(ex.deadline), '%Y-%m-%d')
-                                ex_dl += timedelta(days=approval_pause_days)
-                                ex.deadline = ex_dl.strftime('%Y-%m-%d')
+                                ex.deadline = _add_working_days_to_date(str(ex.deadline), approval_pause_days)
                             except (ValueError, TypeError):
                                 pass
 

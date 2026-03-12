@@ -47,6 +47,33 @@ async def get_project_timeline(
     entries = db.query(ProjectTimelineEntry).filter(
         ProjectTimelineEntry.contract_id == contract_id
     ).order_by(ProjectTimelineEntry.sort_order).all()
+
+    # Пересчёт actual_days на лету при загрузке (чтобы всегда актуальные)
+    from services.date_helpers import networkdays as _nwd
+    prev_date = None
+    changed = False
+    for entry in entries:
+        if (entry.executor_role or '') == 'header':
+            continue
+        actual_date = entry.actual_date
+        if actual_date and prev_date:
+            try:
+                days = _nwd(prev_date, actual_date)
+                new_val = max(days, 0)
+            except Exception:
+                new_val = 0
+            if entry.actual_days != new_val:
+                entry.actual_days = new_val
+                changed = True
+        else:
+            if not actual_date and entry.actual_days:
+                entry.actual_days = 0
+                changed = True
+        if actual_date:
+            prev_date = actual_date
+    if changed:
+        db.commit()
+
     return [
         {c.name: getattr(e, c.name) for c in e.__table__.columns}
         for e in entries
