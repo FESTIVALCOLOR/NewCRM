@@ -682,12 +682,8 @@ async def scan_contract_files_on_yandex(
                             logger.info(f"Scan: обновлён references_yandex_path: {ref_link}")
                     except Exception as e:
                         logger.warning(f"Scan: не удалось получить ссылку на Референсы: {e}")
-            else:
-                # Файлов нет — очищаем ссылку если была
-                if contract.references_yandex_path:
-                    logger.info(f"Scan: папка референсов пуста, очищаем references_yandex_path")
-                    contract.references_yandex_path = ''
-                    contract_updated = True
+            # НЕ очищаем ссылку — она устанавливается клиентом при upload
+            # и ведёт на папку, а не на отдельный файл в project_files
 
             photo_files = [f for f in found_files if f['stage'] == 'photo_documentation']
             if photo_files:
@@ -704,12 +700,7 @@ async def scan_contract_files_on_yandex(
                             logger.info(f"Scan: обновлён photo_documentation_yandex_path: {photo_link}")
                     except Exception as e:
                         logger.warning(f"Scan: не удалось получить ссылку на Фотофиксацию: {e}")
-            else:
-                # Файлов нет — очищаем ссылку если была
-                if contract.photo_documentation_yandex_path:
-                    logger.info(f"Scan: папка фотофиксации пуста, очищаем photo_documentation_yandex_path")
-                    contract.photo_documentation_yandex_path = ''
-                    contract_updated = True
+            # НЕ очищаем ссылку — аналогично референсам
 
         if new_files or contract_updated:
             db.commit()

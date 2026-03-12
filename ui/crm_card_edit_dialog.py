@@ -5709,6 +5709,9 @@ class CardEditDialog(QDialog):
                         # ИСПРАВЛЕНИЕ R-03: emit через QTimer для thread-safety
                         from PyQt5.QtCore import QTimer
                         QTimer.singleShot(0, self._reload_stage_files_signal.emit)
+                        # Обновляем лейблы ТЗ/замер/референсы/фотофиксация
+                        if contract_updated:
+                            QTimer.singleShot(100, self.refresh_file_labels)
                     except RuntimeError:
                         pass  # Диалог уже закрыт
 
