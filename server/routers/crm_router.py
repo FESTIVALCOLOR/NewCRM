@@ -1567,6 +1567,7 @@ async def workflow_reject_work(
         # Записываем дату проверки СДП в timeline (ищем по роли СДП/Менеджер)
         stage_group = _resolve_stage_group(stage_name)
         reviewer_roles = ['СДП', 'Менеджер']
+        next_correction_code = None
         if stage_group and contract_id:
             entry = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
@@ -1578,6 +1579,19 @@ async def workflow_reject_work(
                 entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                 entry.updated_at = datetime.utcnow()
                 _server_recalculate_actual_days(db, contract_id)
+
+                # Ищем следующий подэтап правки (Чертежник/Дизайнер/ГАП) после проверки СДП
+                executor_roles = ['Чертежник', 'Дизайнер', 'ГАП']
+                correction_entry = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.executor_role.in_(executor_roles),
+                    ProjectTimelineEntry.sort_order > entry.sort_order,
+                    ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+                ).order_by(ProjectTimelineEntry.sort_order).first()
+                if correction_entry:
+                    next_correction_code = correction_entry.stage_code
+                    logger.info(f"Card {card_id} reject: next correction substep = {next_correction_code}")
 
         # Сбрасываем completed у исполнителя текущей стадии
         # чтобы он увидел кнопку "Сдать работу" снова
@@ -1601,7 +1615,8 @@ async def workflow_reject_work(
                 stage_name=stage_name,
                 status='revision',
                 revision_count=1,
-                revision_file_path=revision_file_path or None
+                revision_file_path=revision_file_path or None,
+                current_substep_code=next_correction_code
             )
             db.add(wf)
         else:
@@ -1609,6 +1624,8 @@ async def workflow_reject_work(
             wf.revision_count = (wf.revision_count or 0) + 1
             if revision_file_path:
                 wf.revision_file_path = revision_file_path
+            if next_correction_code:
+                wf.current_substep_code = next_correction_code
             wf.updated_at = datetime.utcnow()
 
         # K11: Запись в историю

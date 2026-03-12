@@ -296,6 +296,15 @@ class YandexDiskManager:
                 print(f"[YD] Папка создана: {folder_path}")
                 return True
             elif response.status_code == 409:
+                # 409 может быть "уже существует" или "родительская папка не существует"
+                try:
+                    err_data = response.json()
+                    err_code = err_data.get('error', '')
+                except Exception:
+                    err_code = ''
+                if 'DoesntExist' in err_code or 'not found' in err_code.lower():
+                    print(f"[ERROR] Родительская папка не существует: {folder_path} ({err_code})")
+                    return False
                 print(f"[YD] Папка уже существует: {folder_path}")
                 return True
             else:
@@ -645,24 +654,60 @@ class YandexDiskManager:
         if contract_folder_path.startswith('disk:'):
             contract_folder_path = contract_folder_path[5:]
 
-        # Определяем папку стадии
-        stage_folder = ''
+        # Определяем ключевое слово для поиска реальной папки на ЯД
         sl = stage_name.lower()
         if 'стадия 1' in sl or 'планировочн' in sl:
-            stage_folder = f"{contract_folder_path}/1 стадия - Планировочное решение"
+            search_pattern = '1 стадия'
+            fallback = '1 стадия - Планировочное решение'
         elif 'стадия 2' in sl and ('концепция' in sl or 'дизайн' in sl):
-            stage_folder = f"{contract_folder_path}/2 стадия - Концепция дизайна"
-        elif 'стадия 2' in sl or 'стадия 3' in sl and 'чертеж' in sl:
-            stage_folder = f"{contract_folder_path}/3 стадия - Чертежный проект"
-        elif 'стадия 3' in sl:
-            stage_folder = f"{contract_folder_path}/3 стадия - Чертежный проект"
+            search_pattern = '2 стадия'
+            fallback = '2 стадия - Концепция дизайна'
+        elif 'стадия 3' in sl or 'чертеж' in sl:
+            search_pattern = '3 стадия'
+            fallback = '3 стадия - Чертежный проект'
+        elif 'стадия 2' in sl:
+            search_pattern = '2 стадия'
+            fallback = '2 стадия - Концепция дизайна'
+        else:
+            search_pattern = None
+            fallback = None
 
+        # Ищем реальное имя папки стадии на Яндекс.Диске (для обхода мисматча тире - / –)
+        stage_folder = ''
+        if search_pattern:
+            stage_folder = self._find_stage_folder_on_disk(contract_folder_path, search_pattern)
+        if not stage_folder and fallback:
+            stage_folder = f"{contract_folder_path}/{fallback}"
         if not stage_folder:
             stage_folder = contract_folder_path
 
         corrections_path = f"{stage_folder}/правки"
-        self.create_folder(corrections_path)
-        return corrections_path
+        if self.create_folder(corrections_path):
+            return corrections_path
+        return ''
+
+    def _find_stage_folder_on_disk(self, contract_folder_path, search_pattern):
+        """Поиск реальной папки стадии на Яндекс.Диске по ключевому паттерну"""
+        try:
+            headers = {'Authorization': f'OAuth {self.token}'}
+            url = f'{self.base_url}/resources'
+            params = {
+                'path': contract_folder_path,
+                'fields': '_embedded.items.name,_embedded.items.type',
+                'limit': 50
+            }
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get('_embedded', {}).get('items', [])
+                for item in items:
+                    if item.get('type') == 'dir' and search_pattern in item.get('name', ''):
+                        found = f"{contract_folder_path}/{item['name']}"
+                        print(f"[YD] Найдена папка стадии: {found}")
+                        return found
+        except Exception as e:
+            print(f"[WARN] Ошибка поиска папки стадии: {e}")
+        return ''
 
     def upload_stage_files(self, local_files, contract_folder_path, stage, variation=None, progress_callback=None, skip_per_file_publish=False):
         """Загрузка множественных файлов для стадии

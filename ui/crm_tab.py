@@ -1843,7 +1843,13 @@ class CRMCard(QFrame):
         if current_column == 'Выполненный проект':
             height += 40
 
-        if self.employee and _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+        # Кнопки приёмки/исправления — только для тех, кто реально видит их
+        is_template_project = project_type == 'Шаблонный'
+        is_only_manager = _emp_only_pos(self.employee, 'Менеджер')
+        can_review_hint = self.employee and _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval')
+        if is_only_manager and not is_template_project:
+            can_review_hint = False
+        if can_review_hint:
             if ('концепция дизайна' in current_column and self.card_data.get('designer_completed') == 1) or \
                (('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1):
                 height += 100  # work_done_label (wordWrap, до 4 строк)
