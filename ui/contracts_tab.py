@@ -453,12 +453,15 @@ class ContractsTab(QWidget):
 
                 self.load_contracts()
                 self._refresh_dashboard()
-                # Обновляем CRM канбан — удалённая карточка должна исчезнуть сразу
+                # Обновляем CRM и Supervision канбаны — удалённая карточка должна исчезнуть сразу
                 self._invalidate_crm_cache()
                 mw = self.window()
                 crm_tab = getattr(mw, 'crm_tab', None)
                 if crm_tab and hasattr(crm_tab, 'refresh_current_tab'):
                     crm_tab.refresh_current_tab()
+                sup_tab = getattr(mw, 'crm_supervision_tab', None)
+                if sup_tab and hasattr(sup_tab, 'refresh_current_tab'):
+                    sup_tab.refresh_current_tab()
 
             except Exception as e:
                 print(f"[ERROR] Ошибка удаления договора: {e}")
