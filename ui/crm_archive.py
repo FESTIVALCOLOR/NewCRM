@@ -1593,8 +1593,8 @@ class ArchiveCardDetailsDialog(QDialog):
             parent = self.parent()
             while parent:
                 if is_supervision:
-                    from ui.crm_supervision_tab import CrmSupervisionTab
-                    if isinstance(parent, CrmSupervisionTab):
+                    from ui.crm_supervision_tab import CRMSupervisionTab
+                    if isinstance(parent, CRMSupervisionTab):
                         parent.refresh_current_tab()
                         break
                 else:
