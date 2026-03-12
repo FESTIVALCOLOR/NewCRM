@@ -2387,12 +2387,13 @@ class CardEditDialog(QDialog):
                     label_text = f"Загрузка: {fname}\n({current}/{total} файлов - {percent}%)"
                     QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
 
-                # Загружаем файлы
+                # Загружаем файлы (без публикации каждого — нужна только ссылка на папку)
                 uploaded_files = yd.upload_stage_files(
                     file_paths,
                     contract_folder,
                     'references',
-                    progress_callback=update_progress
+                    progress_callback=update_progress,
+                    skip_per_file_publish=True
                 )
 
                 if uploaded_files:
@@ -2505,12 +2506,13 @@ class CardEditDialog(QDialog):
                     label_text = f"Загрузка: {fname}\n({current}/{total} файлов - {percent}%)"
                     QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
 
-                # Загружаем файлы
+                # Загружаем файлы (без публикации каждого — нужна только ссылка на папку)
                 uploaded_files = yd.upload_stage_files(
                     file_paths,
                     contract_folder,
                     'photo_documentation',
-                    progress_callback=update_progress
+                    progress_callback=update_progress,
+                    skip_per_file_publish=True
                 )
 
                 if uploaded_files:

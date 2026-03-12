@@ -162,8 +162,8 @@ class YandexDiskManager:
 
                 # Успешная публикация или уже опубликован
                 if publish_response.status_code in [200, 201, 409]:
-                    # Задержка для обработки на стороне Яндекс.Диска
-                    time.sleep(1.0)
+                    # Короткая задержка для обработки на стороне Яндекс.Диска
+                    time.sleep(0.3)
 
                     # Шаг 2: Получаем метаданные с public_url
                     meta_url = f'{self.base_url}/resources'
@@ -664,7 +664,7 @@ class YandexDiskManager:
         self.create_folder(corrections_path)
         return corrections_path
 
-    def upload_stage_files(self, local_files, contract_folder_path, stage, variation=None, progress_callback=None):
+    def upload_stage_files(self, local_files, contract_folder_path, stage, variation=None, progress_callback=None, skip_per_file_publish=False):
         """Загрузка множественных файлов для стадии
 
         Args:
@@ -673,6 +673,7 @@ class YandexDiskManager:
             stage: идентификатор стадии ('measurement', 'stage1', 'stage2_concept', 'stage2_3d', 'stage3')
             variation: номер вариации (опционально, для stage2_concept и stage2_3d)
             progress_callback: функция обратного вызова для обновления прогресса (current, total, file_name)
+            skip_per_file_publish: если True, не получать публичную ссылку для каждого файла (используется для references/photo_documentation, где нужна только ссылка на папку)
 
         Returns:
             list of dict с данными загруженных файлов
@@ -729,8 +730,11 @@ class YandexDiskManager:
                     # Загружаем файл
                     self.upload_file(local_file, yandex_path)
 
-                    # Получаем публичную ссылку
-                    public_link = self.get_public_link(yandex_path)
+                    # Получаем публичную ссылку (пропускаем для references/photo_doc — там нужна только ссылка на папку)
+                    if skip_per_file_publish:
+                        public_link = yandex_path
+                    else:
+                        public_link = self.get_public_link(yandex_path)
 
                     uploaded_files.append({
                         'file_name': file_name,
