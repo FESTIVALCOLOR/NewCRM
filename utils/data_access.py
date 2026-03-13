@@ -2550,8 +2550,15 @@ class DataAccess(QObject):
 
             conn.commit()
             db.close()
+            inserted = len(server_ids - local_ids)
+            updated = len(server_ids & local_ids)
+            deleted = len(ids_to_delete) if ids_to_delete else 0
+            _safe_log(f"[DataAccess] sync_project_files_to_local: contract={contract_id}, "
+                       f"вставлено={inserted}, обновлено={updated}, удалено={deleted}")
         except Exception as e:
-            _safe_log(f"[DataAccess] _sync_project_files_to_local: {e}")
+            _safe_log(f"[DataAccess] _sync_project_files_to_local ОШИБКА: {e}")
+            import traceback
+            traceback.print_exc()
 
     def add_project_file(self, data: Dict = None, **kwargs) -> Optional[Dict]:
         """Добавить файл проекта (принимает Dict или именованные аргументы)"""

@@ -5593,10 +5593,14 @@ class CardEditDialog(QDialog):
                 from database.db_manager import DatabaseManager
 
                 # Шаг 1: Сканируем ЯД на наличие новых файлов (не в БД)
+                # ОПТИМИЗАЦИЯ: пропускаем скан ЯД если файлы стадий уже загружены из API/БД
+                # Скан нужен ТОЛЬКО если файлов ещё нет — для первичного обнаружения на ЯД
                 new_files_found = False
                 contract_updated = False
-                if is_online:
+                skip_scan = getattr(self, '_stage_files_from_api', False)
+                if is_online and not skip_scan:
                     try:
+                        print(f"[YD-SYNC] Запуск сканирования ЯД для contract_id={contract_id}")
                         scan_result = self.data.scan_contract_files(contract_id)
                         new_count = scan_result.get('new_files_added', 0)
                         contract_updated = scan_result.get('contract_updated', False)
@@ -5607,7 +5611,6 @@ class CardEditDialog(QDialog):
                             print(f"[YD-SYNC] Новых файлов не найдено")
                         if contract_updated:
                             print(f"[YD-SYNC] Контракт обновлён (references/photo_documentation)")
-                            # Синхронизируем локальную БД с обновлённым контрактом
                             try:
                                 from utils.db_sync import sync_all_data
                                 sync_all_data(self.data.api_client, self.data.db)
@@ -5615,6 +5618,8 @@ class CardEditDialog(QDialog):
                                 print(f"[YD-SYNC] Ошибка синхронизации БД: {sync_e}")
                     except Exception as scan_err:
                         print(f"[YD-SYNC] Ошибка сканирования ЯД: {scan_err}")
+                elif skip_scan:
+                    print(f"[YD-SYNC] Скан ЯД пропущен — файлы стадий уже загружены из БД")
 
                 # Шаг 2: Загружаем актуальный список файлов
                 all_files = []
@@ -8248,6 +8253,7 @@ class CardEditDialog(QDialog):
         """Загрузка файлов ВСЕХ стадий через DataAccess (API → fallback на локальную БД)"""
         contract_id = self.card_data.get('contract_id')
         if not contract_id:
+            self._stage_files_from_api = False
             return
 
         # Через DataAccess: API (серверная БД) с fallback на локальную SQLite
@@ -8256,6 +8262,13 @@ class CardEditDialog(QDialog):
 
         if not all_files:
             all_files = []
+
+        # Флаг: файлы получены из API/локальной БД — скан ЯД не нужен
+        stage_files = [f for f in all_files if f.get('stage') in
+                       ('stage1', 'stage2_concept', 'stage2_3d', 'stage3')]
+        self._stage_files_from_api = len(stage_files) > 0
+        print(f"[BATCH] Загружено {len(all_files)} файлов ({len(stage_files)} стадийных), "
+              f"скан ЯД {'пропустим' if self._stage_files_from_api else 'нужен'}")
 
         # Фильтруем правки
         all_files = [f for f in all_files if '/правки/' not in (f.get('yandex_path') or '').lower()]
