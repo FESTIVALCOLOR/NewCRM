@@ -3827,11 +3827,11 @@ class ContractDialog(QDialog):
                 # Обновляем договор через DataAccess (API + локальная БД)
                 self.data.update_contract(self.contract_data['id'], contract_data)
 
-                # Переименование папки на Яндекс.Диске при изменении данных
-                old_folder_path = old_contract.get('yandex_folder_path', '')
-                if folder_changed and old_folder_path and self.yandex_disk:
+                # Обновление yandex_folder_path на сервере при изменении данных папки
+                # Переименование папки на Яндекс.Диске выполняет db_manager.update_contract() через async thread.
+                # Здесь только синхронизируем путь на сервере (PostgreSQL).
+                if folder_changed and self.yandex_disk:
                     try:
-                        # Строим новый путь к папке
                         new_folder_path = self.yandex_disk.build_contract_folder_path(
                             agent_type=new_agent_type,
                             project_type=new_project_type,
@@ -3839,48 +3839,11 @@ class ContractDialog(QDialog):
                             address=new_address,
                             area=new_area
                         )
-
-                        # Перемещаем папку (переименовываем)
-                        if self.yandex_disk.move_folder(old_folder_path, new_folder_path):
-                            # Обновляем путь в БД через DataAccess
-                            self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
-                            print(f"[OK] Папка переименована: {old_folder_path} -> {new_folder_path}")
-                        else:
-                            # Яндекс.Диск недоступен - добавляем в offline очередь
-                            print(f"[WARNING] Не удалось переименовать папку на Яндекс.Диске, добавляем в очередь")
-                            if self.offline_manager:
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.UPDATE,
-                                    'yandex_folder',
-                                    self.contract_data['id'],
-                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
-                                )
-                                # Сохраняем новый путь через DataAccess (будет актуален после синхронизации)
-                                self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                        # Обновляем путь на сервере (локальную БД уже обновил db_manager)
+                        self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                        print(f"[OK] yandex_folder_path обновлён на сервере: {new_folder_path}")
                     except Exception as e:
-                        print(f"[WARNING] Ошибка переименования папки: {e}")
-                        # При ошибке тоже добавляем в очередь
-                        if self.offline_manager and old_folder_path:
-                            try:
-                                new_folder_path = self.yandex_disk.build_contract_folder_path(
-                                    agent_type=new_agent_type,
-                                    project_type=new_project_type,
-                                    city=new_city,
-                                    address=new_address,
-                                    area=new_area
-                                )
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.UPDATE,
-                                    'yandex_folder',
-                                    self.contract_data['id'],
-                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
-                                )
-                                self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
-                                print(f"[QUEUE] Переименование папки добавлено в очередь: {old_folder_path} -> {new_folder_path}")
-                            except Exception as queue_error:
-                                print(f"[ERROR] Не удалось добавить в очередь: {queue_error}")
+                        print(f"[WARNING] Ошибка обновления yandex_folder_path: {e}")
             else:
                 # Создание нового договора через DataAccess
                 new_contract_id = None
