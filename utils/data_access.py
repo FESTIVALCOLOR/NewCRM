@@ -2487,10 +2487,71 @@ class DataAccess(QObject):
         """Получить файлы проекта"""
         if self._should_use_api():
             try:
-                return self.api_client.get_project_files(contract_id, stage)
+                api_files = self.api_client.get_project_files(contract_id, stage)
+                # Сохраняем в локальную БД для офлайн-доступа и предотвращения
+                # повторного сканирования ЯД при следующем открытии карточки
+                if api_files and not stage:
+                    self._sync_project_files_to_local(contract_id, api_files)
+                return api_files
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_project_files, fallback: {e}")
         return self.db.get_project_files(contract_id, stage)
+
+    def _sync_project_files_to_local(self, contract_id: int, api_files: List[Dict]):
+        """Синхронизировать файлы проекта из API в локальную SQLite"""
+        try:
+            from database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            conn = db.connect()
+            cursor = conn.cursor()
+
+            # Получаем существующие локальные файлы по contract_id
+            cursor.execute("SELECT id FROM project_files WHERE contract_id = ?", (contract_id,))
+            local_ids = set(row[0] for row in cursor.fetchall())
+            server_ids = set(f['id'] for f in api_files if f.get('id'))
+
+            # Удаляем локальные записи, которых нет на сервере
+            ids_to_delete = local_ids - server_ids
+            if ids_to_delete:
+                cursor.execute(
+                    f"DELETE FROM project_files WHERE id IN ({','.join('?' * len(ids_to_delete))})",
+                    tuple(ids_to_delete)
+                )
+
+            # Upsert серверных файлов
+            for f in api_files:
+                fid = f.get('id')
+                if not fid:
+                    continue
+                if fid in local_ids:
+                    cursor.execute("""
+                        UPDATE project_files SET
+                            contract_id=?, stage=?, file_type=?, public_link=?,
+                            yandex_path=?, file_name=?, file_order=?, variation=?
+                        WHERE id=?
+                    """, (
+                        f.get('contract_id', contract_id), f.get('stage', ''),
+                        f.get('file_type', ''), f.get('public_link', ''),
+                        f.get('yandex_path', ''), f.get('file_name', ''),
+                        f.get('file_order', 0), f.get('variation', 1), fid
+                    ))
+                else:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO project_files
+                            (id, contract_id, stage, file_type, public_link,
+                             yandex_path, file_name, file_order, variation)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        fid, f.get('contract_id', contract_id), f.get('stage', ''),
+                        f.get('file_type', ''), f.get('public_link', ''),
+                        f.get('yandex_path', ''), f.get('file_name', ''),
+                        f.get('file_order', 0), f.get('variation', 1)
+                    ))
+
+            conn.commit()
+            db.close()
+        except Exception as e:
+            _safe_log(f"[DataAccess] _sync_project_files_to_local: {e}")
 
     def add_project_file(self, data: Dict = None, **kwargs) -> Optional[Dict]:
         """Добавить файл проекта (принимает Dict или именованные аргументы)"""
