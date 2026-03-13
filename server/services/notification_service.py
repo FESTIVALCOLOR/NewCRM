@@ -42,6 +42,16 @@ def decline_name_dative(full_name: str) -> str:
         return full_name
 
 
+def _tg_mention(employee) -> str:
+    """Форматировать имя сотрудника как Telegram-упоминание (кликабельная ссылка).
+    Если telegram_user_id задан — HTML-ссылка tg://user?id=XXX, иначе просто имя."""
+    name = employee.full_name or ''
+    tg_id = getattr(employee, 'telegram_user_id', None)
+    if tg_id:
+        return f'<a href="tg://user?id={tg_id}">{name}</a>'
+    return name
+
+
 def build_script_context(db: Session, card, contract) -> dict:
     """Собрать контекст переменных для скриптов"""
     ctx = {
@@ -76,27 +86,27 @@ def build_script_context(db: Session, card, contract) -> dict:
     if card.manager_id:
         mgr = db.query(Employee).filter(Employee.id == card.manager_id).first()
         if mgr:
-            ctx['manager_name'] = mgr.full_name or ''
+            ctx['manager_name'] = _tg_mention(mgr)
             ctx['manager_name_dat'] = decline_name_dative(mgr.full_name or '')
 
     # Старший менеджер
     if card.senior_manager_id:
         sm = db.query(Employee).filter(Employee.id == card.senior_manager_id).first()
         if sm:
-            ctx['senior_manager'] = sm.full_name or ''
+            ctx['senior_manager'] = _tg_mention(sm)
             ctx['senior_manager_dat'] = decline_name_dative(sm.full_name or '')
 
     # СДП
     if card.sdp_id:
         sdp = db.query(Employee).filter(Employee.id == card.sdp_id).first()
         if sdp:
-            ctx['sdp'] = sdp.full_name or ''
+            ctx['sdp'] = _tg_mention(sdp)
             ctx['sdp_dat'] = decline_name_dative(sdp.full_name or '')
 
     # Руководитель студии
     director = db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
     if director:
-        ctx['director'] = director.full_name or ''
+        ctx['director'] = _tg_mention(director)
         ctx['director_dat'] = decline_name_dative(director.full_name or '')
 
     return ctx
@@ -224,6 +234,29 @@ async def trigger_messenger_notification(
             context=ctx,
         )
 
+        # Отправить PDF-памятку, если привязана к скрипту
+        if msg_id and script.memo_file_path:
+            try:
+                import tempfile
+                import os
+                from yandex_disk_service import get_yandex_disk_service
+                yd = get_yandex_disk_service()
+                # Определяем имя файла из пути
+                memo_filename = os.path.basename(script.memo_file_path)
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=os.path.splitext(memo_filename)[1]
+                ) as tmp:
+                    yd.download_file(script.memo_file_path, tmp.name)
+                    await tg.send_document(
+                        chat_id=chat.telegram_chat_id,
+                        file_path=tmp.name,
+                        caption=memo_filename,
+                    )
+                os.unlink(tmp.name)
+                logger.info(f"PDF-памятка отправлена: {memo_filename}")
+            except Exception as e:
+                logger.warning(f"Не удалось отправить PDF-памятку: {e}")
+
         # Записать в лог
         if msg_id:
             log_entry = MessengerMessageLog(
@@ -318,13 +351,13 @@ async def trigger_supervision_notification(
         if sv_card.senior_manager_id:
             sm = own_db.query(Employee).filter(Employee.id == sv_card.senior_manager_id).first()
             if sm:
-                ctx['senior_manager'] = sm.full_name or ''
+                ctx['senior_manager'] = _tg_mention(sm)
 
         # ДАН
         if sv_card.dan_id:
             dan = own_db.query(Employee).filter(Employee.id == sv_card.dan_id).first()
             if dan:
-                ctx['dan'] = dan.full_name or ''
+                ctx['dan'] = _tg_mention(dan)
 
         # Отправить через Telegram
         tg = get_telegram_service()
@@ -333,6 +366,27 @@ async def trigger_supervision_notification(
             template=script.message_template,
             context=ctx,
         )
+
+        # Отправить PDF-памятку, если привязана
+        if msg_id and script.memo_file_path:
+            try:
+                import tempfile
+                import os
+                from yandex_disk_service import get_yandex_disk_service
+                yd = get_yandex_disk_service()
+                memo_filename = os.path.basename(script.memo_file_path)
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=os.path.splitext(memo_filename)[1]
+                ) as tmp:
+                    yd.download_file(script.memo_file_path, tmp.name)
+                    await tg.send_document(
+                        chat_id=chat.telegram_chat_id,
+                        file_path=tmp.name,
+                        caption=memo_filename,
+                    )
+                os.unlink(tmp.name)
+            except Exception as e:
+                logger.warning(f"Не удалось отправить PDF-памятку надзора: {e}")
 
         if msg_id:
             log_entry = MessengerMessageLog(
