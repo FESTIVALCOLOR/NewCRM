@@ -516,6 +516,8 @@ class DataAccess(QObject):
 
     def delete_contract(self, contract_id: int) -> bool:
         """Удалить договор"""
+        _global_cache.invalidate("contracts")
+        _global_cache.invalidate("crm_cards")
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.delete_contract(contract_id)

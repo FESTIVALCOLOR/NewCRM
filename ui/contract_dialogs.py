@@ -407,8 +407,8 @@ class ContractDialog(QDialog):
         self.city_combo = CustomComboBox()
         cities = self.data.get_all_cities() or []
         # Сортировка: СПБ первым, Москва вторым, остальные по алфавиту
-        priority = {'Санкт-Петербург': 0, 'Москва': 1}
-        city_names = [c.get('name', '') for c in cities if c.get('name')]
+        priority = {'СПБ': 0, 'Санкт-Петербург': 0, 'МСК': 1, 'Москва': 1}
+        city_names = [c.get('name', '') for c in cities if c.get('name') and not c.get('name', '').startswith('__')]
         city_names.sort(key=lambda n: (priority.get(n, 2), n))
         for name in city_names:
             self.city_combo.addItem(name)
