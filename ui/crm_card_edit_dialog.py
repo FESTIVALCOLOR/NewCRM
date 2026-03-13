@@ -8302,7 +8302,7 @@ class CardEditDialog(QDialog):
                 variations[variation] = []
             variations[variation].append(file_data)
         for variation, variation_files in variations.items():
-            gallery.load_files(variation_files, variation)
+            gallery.load_files_for_variation(variation, variation_files, self.load_preview_for_file)
 
     def reload_stage_files(self, stage):
         """Перезагрузка файлов стадии (API → fallback на локальную БД)"""
