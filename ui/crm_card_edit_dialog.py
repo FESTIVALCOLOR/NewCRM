@@ -7518,12 +7518,6 @@ class CardEditDialog(QDialog):
             self._update_project_data_file_labels()
             app.processEvents()
 
-            # История по проекту
-            if self.project_info_tab_index >= 0:
-                info_widget = self.create_project_info_widget()
-                self.tabs.removeTab(self.project_info_tab_index)
-                self.tabs.insertTab(self.project_info_tab_index, info_widget, 'История по проекту')
-
             # Оплаты
             if self.payments_tab_index >= 0:
                 payments_widget = self.create_payments_tab()
@@ -7531,6 +7525,12 @@ class CardEditDialog(QDialog):
                 self.tabs.insertTab(self.payments_tab_index, payments_widget, 'Оплаты')
         finally:
             self.data.prefer_local = False
+
+        # История по проекту — грузим через API (записи payment_created создаются сервером)
+        if self.project_info_tab_index >= 0:
+            info_widget = self.create_project_info_widget()
+            self.tabs.removeTab(self.project_info_tab_index)
+            self.tabs.insertTab(self.project_info_tab_index, info_widget, 'История по проекту')
 
         app.processEvents()
 
