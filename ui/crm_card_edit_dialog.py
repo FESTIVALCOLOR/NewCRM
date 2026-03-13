@@ -8246,17 +8246,14 @@ class CardEditDialog(QDialog):
             self.stage2_3d_gallery.remove_variation_tab(variation)
 
     def _load_all_stage_files_batch(self):
-        """Загрузка файлов ВСЕХ стадий из локальной БД (мгновенно)"""
-        from database.db_manager import DatabaseManager
-
+        """Загрузка файлов ВСЕХ стадий через DataAccess (API → fallback на локальную БД)"""
         contract_id = self.card_data.get('contract_id')
         if not contract_id:
             return
 
-        # Читаем из локальной БД — мгновенно, без сетевых задержек
-        # Фоновый validate_stage_files_on_yandex обновит при необходимости
-        db = DatabaseManager()
-        all_files = db.get_project_files(contract_id)
+        # Через DataAccess: API (серверная БД) с fallback на локальную SQLite
+        # Необходимо для видимости файлов, загруженных другими пользователями
+        all_files = self.data.get_project_files(contract_id)
 
         if not all_files:
             all_files = []
