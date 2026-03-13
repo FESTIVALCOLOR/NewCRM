@@ -5668,8 +5668,6 @@ class CardEditDialog(QDialog):
                                 removed_ids.append(fid)
                                 print(f"[VALIDATE] Файл не найден: {yp}")
 
-                ui_needs_update = new_files_found or contract_updated
-
                 if removed_ids:
                     if not server_validated:
                         local_db2 = DatabaseManager()
@@ -5680,17 +5678,18 @@ class CardEditDialog(QDialog):
                                 print(f"[VALIDATE] Ошибка удаления файла {fid}: {del_err}")
                         local_db2.close()
                     print(f"[VALIDATE] Удалено {len(removed_ids)} мёртвых файлов из локальной БД")
-                    ui_needs_update = True
                 else:
                     print(f"[VALIDATE] Все файлы стадий на месте")
 
-                if ui_needs_update:
-                    try:
-                        self._reload_stage_files_signal.emit()
-                        if contract_updated:
-                            self.files_verification_completed.emit()
-                    except RuntimeError:
-                        pass  # Диалог уже закрыт
+                # ВСЕГДА перезагружаем UI файлов стадий после валидации:
+                # _load_all_stage_files_batch мог не получить файлы (если локальная БД пуста),
+                # а validate загрузил актуальный список из API — нужно показать в UI
+                try:
+                    self._reload_stage_files_signal.emit()
+                    if contract_updated:
+                        self.files_verification_completed.emit()
+                except RuntimeError:
+                    pass  # Диалог уже закрыт
 
             except Exception as e:
                 import traceback
