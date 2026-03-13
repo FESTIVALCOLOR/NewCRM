@@ -1831,9 +1831,17 @@ class CRMCard(QFrame):
         else:
             height += 35
         
+        # Лейбл текущего подэтапа (Согласование: ..., Ожидает проверки: ..., и т.д.)
+        if self.card_data.get('current_substep_name'):
+            height += 22  # wordWrap, 1-2 строки
+
+        # Счётчик правок ("Правки: N")
+        if self.card_data.get('revision_count', 0) > 0:
+            height += 18
+
         if self.card_data.get('tags'):
             height += 28
-        
+
         if self.card_data.get('designer_deadline') or self.card_data.get('draftsman_deadline') or self.card_data.get('deadline'):
             height += 28
 
@@ -1852,6 +1860,9 @@ class CRMCard(QFrame):
                (('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1):
                 height += 100  # work_done_label (wordWrap, до 4 строк)
                 height += 114  # 3 кнопки: Принять(28+6) + На исправление(28+6) + Клиенту(28+6)
+            # Кнопка "Клиент согласовал" при статусе client_approval
+            elif self.card_data.get('workflow_status') == 'client_approval':
+                height += 30  # 19px кнопка + 11px отступ
 
         buttons_count = 0
         if self.employee:
@@ -2424,14 +2435,17 @@ class CRMCard(QFrame):
                     QPushButton {
                         background-color: #27AE60;
                         color: white;
-                        padding: 4px 8px;
+                        border: none;
+                        padding: 4px 12px;
                         border-radius: 4px;
-                        font-size: 10px;
+                        font-size: 11px;
                         font-weight: bold;
+                        max-height: 19px;
+                        min-height: 19px;
                     }
-                    QPushButton:hover { background-color: #1E8449; }
+                    QPushButton:hover { background-color: #229954; }
+                    QPushButton:pressed { background-color: #1E8449; }
                 """)
-                client_ok_btn.setFixedHeight(24)
                 client_ok_btn.clicked.connect(self.client_approved)
                 layout.addWidget(client_ok_btn, 0)
 

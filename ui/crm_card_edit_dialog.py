@@ -7520,6 +7520,10 @@ class CardEditDialog(QDialog):
             # После создания виджета — обновляем labels файлов из кэшированного контракта
             # (load_data() выполнился ДО создания виджетов, hasattr возвращал False)
             self._update_project_data_file_labels()
+            # Перезагружаем файлы стадий в НОВЫЕ виджеты (старые уничтожены при removeTab).
+            # Файлы уже в локальной БД (sync_project_files_to_local в load_data),
+            # prefer_local=True → загрузка из SQLite без API-вызова.
+            self._load_all_stage_files_batch()
             app.processEvents()
 
             # Оплаты
