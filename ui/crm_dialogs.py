@@ -61,7 +61,7 @@ class RejectWithCorrectionsDialog(QDialog):
         layout.addWidget(title)
 
         # Описание
-        desc = QLabel(f'Стадия: {self.stage_name}\n\nВыберите файл с правками для загрузки на Яндекс.Диск (необязательно):')
+        desc = QLabel(f'Стадия: {self.stage_name}\n\nВыберите файл с правками для загрузки на Яндекс.Диск:')
         desc.setWordWrap(True)
         desc.setStyleSheet('font-size: 11px; color: #555;')
         layout.addWidget(desc)
@@ -113,7 +113,7 @@ class RejectWithCorrectionsDialog(QDialog):
         btn_row.addWidget(cancel_btn)
 
         self.send_btn = QPushButton('Отправить на исправление')
-        self.send_btn.setStyleSheet("""
+        self._send_btn_active_style = """
             QPushButton {
                 background-color: #E74C3C;
                 color: white;
@@ -126,8 +126,23 @@ class RejectWithCorrectionsDialog(QDialog):
                 max-height: 20px;
             }
             QPushButton:hover { background-color: #C0392B; }
-        """)
+        """
+        self._send_btn_disabled_style = """
+            QPushButton {
+                background-color: #CCC;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 16px;
+                font-size: 11px;
+                font-weight: bold;
+                min-height: 20px;
+                max-height: 20px;
+            }
+        """
+        self.send_btn.setStyleSheet(self._send_btn_disabled_style)
         self.send_btn.setFixedHeight(28)
+        self.send_btn.setEnabled(False)
         self.send_btn.clicked.connect(self._submit)
         btn_row.addWidget(self.send_btn)
 
@@ -145,6 +160,8 @@ class RejectWithCorrectionsDialog(QDialog):
             import os
             self.file_label.setText(os.path.basename(file_path))
             self.file_label.setStyleSheet('font-size: 10px; color: #333; padding: 4px 8px; border: 1px solid #27AE60; border-radius: 4px; background-color: #E8F8F5;')
+            self.send_btn.setEnabled(True)
+            self.send_btn.setStyleSheet(self._send_btn_active_style)
 
     def _submit(self):
         """Отправка: загрузка файла на ЯД (если выбран) и закрытие диалога"""

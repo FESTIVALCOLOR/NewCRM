@@ -8,6 +8,72 @@ Contract Test Fixtures: общие фикстуры для проверки со
 """
 
 import pytest
+import requests
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from config import API_BASE_URL
+
+
+# ============================================================
+# AUTO-SKIP: пропуск contract тестов если сервер недоступен
+# ============================================================
+
+def _check_server():
+    try:
+        resp = requests.get(f"{API_BASE_URL}/health", timeout=3, verify=False)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+_server_available = _check_server()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Пропустить contract тесты если сервер недоступен."""
+    if _server_available:
+        return
+    skip_marker = pytest.mark.skip(reason="API сервер недоступен — contract тесты пропущены")
+    for item in items:
+        if "contract" in str(item.fspath):
+            item.add_marker(skip_marker)
+
+
+# ============================================================
+# СЕРВЕРНЫЕ ФИКСТУРЫ
+# ============================================================
+
+@pytest.fixture(scope="session")
+def api_base():
+    """Базовый URL API сервера."""
+    return API_BASE_URL
+
+
+@pytest.fixture(scope="session")
+def admin_token(api_base):
+    """Авторизация admin -> Bearer token."""
+    _session = requests.Session()
+    _session.verify = False
+    response = _session.post(
+        f"{api_base}/api/auth/login",
+        data={"username": "admin", "password": "admin123"},
+        timeout=15
+    )
+    assert response.status_code == 200, (
+        f"Не удалось авторизоваться: {response.status_code} {response.text}"
+    )
+    data = response.json()
+    assert "access_token" in data
+    _session.close()
+    return data["access_token"]
+
+
+@pytest.fixture(scope="session")
+def admin_headers(admin_token):
+    """HTTP headers с Bearer token администратора."""
+    return {"Authorization": f"Bearer {admin_token}"}
 
 
 # ============================================================

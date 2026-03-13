@@ -534,11 +534,19 @@ class ReportsTab(QWidget):
         funnel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(funnel)
 
-        # Время стадий vs норматив — на всю ширину
+        # Время стадий vs норматив — в горизонтальном скролле для большого числа стадий
         stage_duration = StackedBarChartWidget(f"Время стадий vs норматив — {project_type}")
-        stage_duration.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        stage_duration.setMinimumHeight(420)
-        layout.addWidget(stage_duration)
+        stage_scroll = QScrollArea()
+        stage_scroll.setWidgetResizable(False)
+        stage_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        stage_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        stage_scroll.setWidget(stage_duration)
+        stage_scroll.setFrameShape(QFrame.NoFrame)
+        stage_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        stage_scroll.setMinimumHeight(480)
+        stage_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        stage_scroll.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        layout.addWidget(stage_scroll)
 
         # Прижимаем контент к верху — spacer забирает лишнюю высоту
         layout.addStretch(1)
@@ -549,6 +557,7 @@ class ReportsTab(QWidget):
             "mini_flow_w": mini_flow_w,
             "funnel": funnel,
             "stage_duration": stage_duration,
+            "stage_scroll": stage_scroll,
         }
 
     # ===================================================================
@@ -1152,6 +1161,11 @@ class ReportsTab(QWidget):
                         stacked=False,
                         highlight_prefixes=["СТАДИЯ", "ЭТАП", "ДАТА"]
                     )
+                    # Прокрутить скролл на середину графика
+                    scroll = subtab.get("stage_scroll")
+                    if scroll:
+                        QTimer.singleShot(0, lambda s=scroll: s.horizontalScrollBar().setValue(
+                            s.horizontalScrollBar().maximum() // 2))
             except Exception as e:
                 logger.error(f"[Reports] Ошибка обновления CRM ({cache_key}): {e}", exc_info=True)
 

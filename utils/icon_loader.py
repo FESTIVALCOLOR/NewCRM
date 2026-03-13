@@ -117,6 +117,11 @@ class IconLoader:
         if tooltip:
             btn.setToolTip(tooltip)
 
+        # Accessibility: имя для UIA (pywinauto, screen readers)
+        accessible_name = text or tooltip
+        if accessible_name:
+            btn.setAccessibleName(accessible_name)
+
         # Если текста нет - это кнопка только с иконкой
         # Устанавливаем свойство для QSS стилей
         if not text:
@@ -154,6 +159,7 @@ class IconLoader:
 
         if tooltip:
             btn.setToolTip(tooltip)
+            btn.setAccessibleName(tooltip)
 
         # Явные CSS размеры — гарантируют размер фона независимо от каскада
         btn.setStyleSheet(f'''

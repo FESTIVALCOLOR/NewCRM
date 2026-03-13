@@ -211,10 +211,15 @@ CRM КРАШНУЛСЯ:
 1. Получить список изменённых файлов
 2. Определить категории тестов по маппингу:
    - `server/` → `tests/e2e/`, `tests/backend/`
+   - `server/` (API валидация) → `tests/fuzz/` (если сервер доступен)
    - `ui/` → `tests/ui/`, `tests/frontend/`
+   - `ui/` + `utils/data_access.py` → `tests/ui_real/` (если сервер доступен)
+   - `ui/` (визуальные изменения) → `tests/visual/`
    - `database/` → `tests/db/`
    - `utils/api_client.py` → `tests/api_client/`, `tests/client/`
+   - `utils/` (расчёты) → `tests/property/`
    - Всегда → `tests/ -m critical`
+   - НЕ запускать `tests/integration/` (только ручной) и `tests/fuzz/` (долго) автоматически
 3. Написать недостающие тесты для непокрытых участков
 4. Запустить тесты: `.venv\Scripts\python.exe -m pytest [путь] -v --timeout=60`
 
@@ -760,6 +765,21 @@ send_task_notification(
 
 # Клиентские unit-тесты
 .venv\Scripts\python.exe -m pytest tests/client/ -v
+
+# API Fuzzing (Schemathesis, нужен сервер)
+FUZZ_BASE_URL=https://crm.festivalcolor.ru .venv\Scripts\python.exe -m pytest tests/fuzz/ -v -m fuzz
+
+# Property-based (Hypothesis, без сервера)
+.venv\Scripts\python.exe -m pytest tests/property/ -v -m property
+
+# Реальные UI тесты (pytest-qt + DataAccess, нужен сервер)
+QT_QPA_PLATFORM=offscreen .venv\Scripts\python.exe -m pytest tests/ui_real/ -v -m ui_real
+
+# Visual regression (offscreen)
+QT_QPA_PLATFORM=offscreen .venv\Scripts\python.exe -m pytest tests/visual/ -v -m visual
+
+# Integration (pywinauto, ТОЛЬКО ручной, < 10 мин)
+.venv\Scripts\python.exe -m pytest tests/integration/ -v --timeout=600
 
 # ВАЖНО: UI логи НЕ читать через Read!
 .venv/Scripts/python.exe tests/ui/parse_results.py <файл_логов>

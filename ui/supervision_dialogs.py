@@ -476,18 +476,30 @@ class SupervisionStatisticsDialog(QDialog):
     def load_executors(self):
         """Загрузка ДАН'ов"""
         try:
-            dans = self.data.get_employees_by_position('ДАН')
+            dans = self.data.get_employees_by_position('ДАН') or []
             for dan in dans:
                 self.executor_combo.addItem(dan['full_name'], dan['id'])
+            # Руководитель студии может быть назначен ДАН
+            added_ids = {d['id'] for d in dans}
+            directors = self.data.get_employees_by_position('Руководитель студии') or []
+            for d in directors:
+                if d['id'] not in added_ids:
+                    self.executor_combo.addItem(d['full_name'], d['id'])
         except Exception as e:
             print(f"Ошибка загрузки ДАН'ов: {e}")
 
     def load_managers(self):
         """Загрузка менеджеров"""
         try:
-            managers = self.data.get_employees_by_position('Старший менеджер проектов')
+            managers = self.data.get_employees_by_position('Старший менеджер проектов') or []
             for mgr in managers:
                 self.manager_combo.addItem(mgr['full_name'], mgr['id'])
+            # Руководитель студии может быть назначен старшим менеджером
+            added_ids = {m['id'] for m in managers}
+            directors = self.data.get_employees_by_position('Руководитель студии') or []
+            for d in directors:
+                if d['id'] not in added_ids:
+                    self.manager_combo.addItem(d['full_name'], d['id'])
         except Exception as e:
             print(f"Ошибка загрузки менеджеров: {e}")
     
@@ -1338,15 +1350,21 @@ class SupervisionReassignDANDialog(QDialog):
         form_layout = QFormLayout()
         self.dan_combo = CustomComboBox()
 
-        dans = self.data.get_employees_by_position('ДАН')
+        dans = self.data.get_employees_by_position('ДАН') or []
+        directors = self.data.get_employees_by_position('Руководитель студии') or []
 
-        if not dans:
+        if not dans and not directors:
             CustomMessageBox(self, 'Внимание', 'Нет доступных сотрудников с должностью "ДАН"', 'warning').exec_()
             self.reject()
             return
 
         for dan in dans:
             self.dan_combo.addItem(dan['full_name'], dan['id'])
+        # Руководитель студии может назначить себя на роль ДАН
+        added_ids = {d['id'] for d in dans}
+        for d in directors:
+            if d['id'] not in added_ids:
+                self.dan_combo.addItem(d['full_name'], d['id'])
 
         try:
             card_data = self.data.get_supervision_card(self.card_id)
@@ -1729,6 +1747,13 @@ class AssignExecutorsDialog(QDialog):
         for manager in managers:
             self.smp_combo.addItem(manager['full_name'], manager['id'])
 
+        # Руководитель студии может назначить себя на любую роль
+        added_ids = {m['id'] for m in managers}
+        directors = self.data.get_employees_by_position('Руководитель студии') or []
+        for d in directors:
+            if d['id'] not in added_ids:
+                self.smp_combo.addItem(d['full_name'], d['id'])
+
     def _load_dans(self):
         """Загрузка списка ДАН"""
         dans = self.data.get_employees_by_position('ДАН') or []
@@ -1736,6 +1761,13 @@ class AssignExecutorsDialog(QDialog):
         self.dan_combo.addItem('Не назначен', None)
         for dan in dans:
             self.dan_combo.addItem(dan['full_name'], dan['id'])
+
+        # Руководитель студии может назначить себя на любую роль
+        added_ids = {d['id'] for d in dans}
+        directors = self.data.get_employees_by_position('Руководитель студии') or []
+        for d in directors:
+            if d['id'] not in added_ids:
+                self.dan_combo.addItem(d['full_name'], d['id'])
 
     def save_and_continue(self):
         """Сохранение назначенных исполнителей"""

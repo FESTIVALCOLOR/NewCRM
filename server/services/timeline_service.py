@@ -267,31 +267,34 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
 
 
 def calc_template_contract_term(template_subtype: str, area: float, floors: int = 1) -> int:
-    """Расчёт срока для шаблонных проектов (рабочие дни)"""
-    sub = template_subtype.lower()
-    if 'ванной' in sub:
-        if 'визуализац' in sub:
-            return 20
-        return 10
+    """Расчёт срока для шаблонных проектов (рабочие дни).
 
-    # Стандарт / Стандарт с визуализацией
+    Этажность (только Стандарт и Стандарт+Визуал):
+      +10 раб. дней за каждый доп. этаж (Стандарт)
+      +20 раб. дней за каждый доп. этаж (Стандарт+Визуал)
+    """
+    sub = template_subtype.lower()
+    has_viz = 'визуализац' in sub
+
+    # Ванная — фиксированный срок, этажность не применяется
+    if 'ванн' in sub:
+        return 20 if has_viz else 10
+
+    # Стандарт / Стандарт с визуализацией — базовый срок по площади
     if area <= 90:
         base_days = 20
     else:
         extra = int((area - 90 - 1) // 50) + 1
         base_days = 20 + extra * 10
 
-    # Доп. этажи
+    # Этажность: +10 (Стандарт) или +20 (Стандарт+Визуал) за каждый доп. этаж
     if floors > 1:
-        for _ in range(1, floors):
-            if area <= 90:
-                base_days += 10
-            else:
-                extra = int((area - 90 - 1) // 50) + 1
-                base_days += 10 + extra * 10
+        extra_floors = floors - 1
+        floor_bonus = 20 if has_viz else 10
+        base_days += extra_floors * floor_bonus
 
     # Визуализация
-    if 'визуализац' in sub:
+    if has_viz:
         if area <= 90:
             base_days += 25
         else:

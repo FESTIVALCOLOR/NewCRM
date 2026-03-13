@@ -965,8 +965,11 @@ class CardEditDialog(QDialog):
         self.timeline_widget = None
         self._is_executor = is_executor
 
-        self._timeline_placeholder = QWidget()
-        self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
+        # Таблица сроков — только для руководителей, менеджеров, СДП, ГАП
+        self._timeline_tab_index = -1
+        if not is_executor:
+            self._timeline_placeholder = QWidget()
+            self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
 
         self._project_data_placeholder = QWidget()
         self.project_data_tab_index = self.tabs.addTab(self._project_data_placeholder, 'Данные по проекту')
@@ -1025,146 +1028,151 @@ class CardEditDialog(QDialog):
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
 
-            # --- Кнопки чата ---
-            self.create_chat_btn = IconLoader.create_icon_button(
-                'message-circle', 'Создать чат', 'Создать чат в мессенджере', icon_size=14
-            )
-            self.create_chat_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffd93c;
-                    color: #ffffff;
-                    padding: 0px 16px;
-                    border-radius: 4px;
-                    border: 1px solid #e6c236;
-                    font-weight: bold;
-                    max-height: 36px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background-color: #ffdb4d; border-color: #d9b530; }
-                QPushButton:pressed { background-color: #e6c236; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.create_chat_btn.setFixedHeight(36)
-            self.create_chat_btn.clicked.connect(self._on_create_chat)
+            # --- Кнопки чата (только для руководителей, менеджеров, СДП, ГАП) ---
+            if not is_executor:
+                self._has_chat_buttons = True
+                self.create_chat_btn = IconLoader.create_icon_button(
+                    'message-circle', 'Создать чат', 'Создать чат в мессенджере', icon_size=14
+                )
+                self.create_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffd93c;
+                        color: #ffffff;
+                        padding: 0px 16px;
+                        border-radius: 4px;
+                        border: 1px solid #e6c236;
+                        font-weight: bold;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #ffdb4d; border-color: #d9b530; }
+                    QPushButton:pressed { background-color: #e6c236; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.create_chat_btn.setFixedHeight(36)
+                self.create_chat_btn.clicked.connect(self._on_create_chat)
 
-            self.open_chat_btn = IconLoader.create_icon_button(
-                'external-link', 'Открыть чат', 'Открыть чат в мессенджере', icon_size=14
-            )
-            self.open_chat_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #333333;
-                    padding: 0px 16px;
-                    border-radius: 4px;
-                    border: 1px solid #d9d9d9;
-                    font-weight: bold;
-                    max-height: 36px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
-                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.open_chat_btn.setFixedHeight(36)
-            self.open_chat_btn.clicked.connect(self._on_open_chat)
+                self.open_chat_btn = IconLoader.create_icon_button(
+                    'external-link', 'Открыть чат', 'Открыть чат в мессенджере', icon_size=14
+                )
+                self.open_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #333333;
+                        padding: 0px 16px;
+                        border-radius: 4px;
+                        border: 1px solid #d9d9d9;
+                        font-weight: bold;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                    QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.open_chat_btn.setFixedHeight(36)
+                self.open_chat_btn.clicked.connect(self._on_open_chat)
 
-            self.delete_chat_btn = IconLoader.create_icon_button(
-                'trash', 'Удалить чат', 'Удалить чат из мессенджера', icon_size=14
-            )
-            self.delete_chat_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #F44336;
-                    padding: 0px 16px;
-                    border-radius: 4px;
-                    border: 1px solid #F44336;
-                    font-weight: bold;
-                    max-height: 36px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background-color: #FFF5F5; border-color: #E74C3C; }
-                QPushButton:pressed { background-color: #FFEBEE; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.delete_chat_btn.setFixedHeight(36)
-            self.delete_chat_btn.clicked.connect(self._on_delete_chat)
+                self.delete_chat_btn = IconLoader.create_icon_button(
+                    'trash', 'Удалить чат', 'Удалить чат из мессенджера', icon_size=14
+                )
+                self.delete_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #F44336;
+                        padding: 0px 16px;
+                        border-radius: 4px;
+                        border: 1px solid #F44336;
+                        font-weight: bold;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #FFF5F5; border-color: #E74C3C; }
+                    QPushButton:pressed { background-color: #FFEBEE; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.delete_chat_btn.setFixedHeight(36)
+                self.delete_chat_btn.clicked.connect(self._on_delete_chat)
 
-            buttons_layout.addWidget(self.create_chat_btn)
-            buttons_layout.addWidget(self.open_chat_btn)
-            buttons_layout.addWidget(self.delete_chat_btn)
+                buttons_layout.addWidget(self.create_chat_btn)
+                buttons_layout.addWidget(self.open_chat_btn)
+                buttons_layout.addWidget(self.delete_chat_btn)
 
-            self.invite_client_btn = IconLoader.create_icon_button(
-                'telegram', '', 'Пригласить клиента — отправить email со ссылкой на чат', icon_size=16
-            )
-            self.invite_client_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #E3F2FD;
-                    border-radius: 4px;
-                    border: 1px solid #90CAF9;
-                    max-height: 36px;
-                    min-height: 36px;
-                    max-width: 36px;
-                    min-width: 36px;
-                }
-                QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
-                QPushButton:pressed { background-color: #90CAF9; }
-                QPushButton:disabled { background-color: #fafafa; border-color: #e6e6e6; }
-            """)
-            self.invite_client_btn.setFixedSize(36, 36)
-            self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
-            self.invite_client_btn.clicked.connect(self._on_invite_client)
-            buttons_layout.addWidget(self.invite_client_btn)
+                self.invite_client_btn = IconLoader.create_icon_button(
+                    'telegram', '', 'Пригласить клиента — отправить email со ссылкой на чат', icon_size=16
+                )
+                self.invite_client_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E3F2FD;
+                        border-radius: 4px;
+                        border: 1px solid #90CAF9;
+                        max-height: 36px;
+                        min-height: 36px;
+                        max-width: 36px;
+                        min-width: 36px;
+                    }
+                    QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
+                    QPushButton:pressed { background-color: #90CAF9; }
+                    QPushButton:disabled { background-color: #fafafa; border-color: #e6e6e6; }
+                """)
+                self.invite_client_btn.setFixedSize(36, 36)
+                self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
+                self.invite_client_btn.clicked.connect(self._on_invite_client)
+                buttons_layout.addWidget(self.invite_client_btn)
 
-            # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
-            self.start_script_btn = IconLoader.create_icon_button(
-                'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
-            )
-            self.start_script_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #333333;
-                    padding: 0px;
-                    border-radius: 2px;
-                    border: 1px solid #d9d9d9;
-                    min-width: 36px; max-width: 36px;
-                    min-height: 36px; max-height: 36px;
-                }
-                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
-                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.start_script_btn.setFixedSize(36, 36)
-            self.start_script_btn.clicked.connect(self._on_send_start_script)
+                # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
+                self.start_script_btn = IconLoader.create_icon_button(
+                    'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
+                )
+                self.start_script_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #333333;
+                        padding: 0px;
+                        border-radius: 2px;
+                        border: 1px solid #d9d9d9;
+                        min-width: 36px; max-width: 36px;
+                        min-height: 36px; max-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                    QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.start_script_btn.setFixedSize(36, 36)
+                self.start_script_btn.clicked.connect(self._on_send_start_script)
 
-            self.end_script_btn = IconLoader.create_icon_button(
-                'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
-            )
-            self.end_script_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #333333;
-                    padding: 0px;
-                    border-radius: 2px;
-                    border: 1px solid #d9d9d9;
-                    min-width: 36px; max-width: 36px;
-                    min-height: 36px; max-height: 36px;
-                }
-                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
-                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.end_script_btn.setFixedSize(36, 36)
-            self.end_script_btn.clicked.connect(self._on_send_end_script)
+                self.end_script_btn = IconLoader.create_icon_button(
+                    'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
+                )
+                self.end_script_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #333333;
+                        padding: 0px;
+                        border-radius: 2px;
+                        border: 1px solid #d9d9d9;
+                        min-width: 36px; max-width: 36px;
+                        min-height: 36px; max-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                    QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.end_script_btn.setFixedSize(36, 36)
+                self.end_script_btn.clicked.connect(self._on_send_end_script)
 
-            buttons_layout.addWidget(self.start_script_btn)
-            buttons_layout.addWidget(self.end_script_btn)
+                buttons_layout.addWidget(self.start_script_btn)
+                buttons_layout.addWidget(self.end_script_btn)
 
-            # Кнопка "Настройки чатов" перенесена в Администрирование (ui/admin_dialog.py)
+                # Кнопка "Настройки чатов" перенесена в Администрирование (ui/admin_dialog.py)
+
+                # Флаг для отложенной инициализации чата (после setLayout)
+                self._need_chat_init = True
+            else:
+                self._has_chat_buttons = False
+                self._need_chat_init = False
 
             buttons_layout.addStretch()
-
-            # Флаг для отложенной инициализации чата (после setLayout)
-            self._need_chat_init = True
 
             save_btn = QPushButton('Сохранить')
             save_btn.clicked.connect(self.save_changes)
@@ -7527,23 +7535,25 @@ class CardEditDialog(QDialog):
         app.processEvents()
 
         # Таблица сроков — данные только на сервере, грузим через API
-        try:
-            from ui.timeline_widget import ProjectTimelineWidget
-            # Определяем readonly режим для архивных карточек
-            _archive_statuses = ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР')
-            _contract_status = self.card_data.get('contract_status', '') or ''
-            _is_archive = _contract_status in _archive_statuses
-            self.timeline_widget = ProjectTimelineWidget(
-                card_data=self.card_data, data=self.data, db=self.db,
-                api_client=self.api_client, employee=self.employee, parent=self,
-                readonly=_is_archive
-            )
-            # Подписываемся на обновление дедлайна из таймлайна
-            self.timeline_widget.deadline_updated.connect(self._on_timeline_deadline_updated)
-            self.tabs.removeTab(self._timeline_tab_index)
-            self.tabs.insertTab(self._timeline_tab_index, self.timeline_widget, 'Таблица сроков')
-        except Exception as e:
-            print(f"[CardEditDialog] Ошибка создания таблицы сроков: {e}")
+        # Только для не-исполнителей (руководители, менеджеры, СДП, ГАП)
+        if self._timeline_tab_index >= 0:
+            try:
+                from ui.timeline_widget import ProjectTimelineWidget
+                # Определяем readonly режим для архивных карточек
+                _archive_statuses = ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР')
+                _contract_status = self.card_data.get('contract_status', '') or ''
+                _is_archive = _contract_status in _archive_statuses
+                self.timeline_widget = ProjectTimelineWidget(
+                    card_data=self.card_data, data=self.data, db=self.db,
+                    api_client=self.api_client, employee=self.employee, parent=self,
+                    readonly=_is_archive
+                )
+                # Подписываемся на обновление дедлайна из таймлайна
+                self.timeline_widget.deadline_updated.connect(self._on_timeline_deadline_updated)
+                self.tabs.removeTab(self._timeline_tab_index)
+                self.tabs.insertTab(self._timeline_tab_index, self.timeline_widget, 'Таблица сроков')
+            except Exception as e:
+                print(f"[CardEditDialog] Ошибка создания таблицы сроков: {e}")
 
         self.tabs.setCurrentIndex(current_tab)
 

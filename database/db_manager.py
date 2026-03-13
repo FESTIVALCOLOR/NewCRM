@@ -134,6 +134,13 @@ class DatabaseManager(DatabaseMigrations):
 
             def _upload():
                 try:
+                    # Инициализация COM в фоновом потоке — без этого SSL-вызовы
+                    # конфликтуют с Qt STA и Windows выбрасывает 0x8001010d
+                    try:
+                        import pythoncom
+                        pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+                    except Exception:
+                        pass
                     from config import YANDEX_DISK_BACKUPS
                     yd = YandexDiskManager.get_instance(YANDEX_DISK_TOKEN)
                     yd.create_folder(YANDEX_DISK_BACKUPS)
