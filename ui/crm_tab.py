@@ -2405,25 +2405,48 @@ class CRMCard(QFrame):
                     reject_btn.clicked.connect(self.reject_work)
                     layout.addWidget(reject_btn, 0)
 
-                # Кнопка "Клиент согласовал" — при статусе client_approval
-                if current_wf_status == 'client_approval':
-                    client_ok_btn = QPushButton('Клиент согласовал')
-                    client_ok_btn.setStyleSheet("""
-                        QPushButton {
-                            background-color: #27AE60;
-                            color: white;
-                            padding: 4px 12px;
-                            border-radius: 4px;
-                            font-size: 10px;
-                            font-weight: bold;
-                            min-height: 20px;
-                            max-height: 20px;
-                        }
-                        QPushButton:hover { background-color: #1E8449; }
-                    """)
-                    client_ok_btn.setFixedHeight(28)
-                    client_ok_btn.clicked.connect(self.client_approved)
-                    layout.addWidget(client_ok_btn, 0)
+        # Кнопка "Клиент согласовал" — при статусе client_approval
+        # ВЫНЕСЕНА из блока completed_info, т.к. после client-send completed сбрасывается
+        if self.employee and can_review_work:
+            try:
+                if not current_wf_status:
+                    wf_states = self.data.get_workflow_state(self.card_data['id']) or []
+                    for s in wf_states:
+                        if s.get('stage_name') == current_column:
+                            current_wf_status = s.get('status')
+                            break
+            except Exception:
+                pass
+            if current_wf_status == 'client_approval':
+                # Лейбл "На согласовании у клиента"
+                client_label = QLabel('На согласовании у клиента')
+                client_label.setStyleSheet('''
+                    color: white;
+                    background-color: #F39C12;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                ''')
+                layout.addWidget(client_label, 0)
+
+                client_ok_btn = QPushButton('Клиент согласовал')
+                client_ok_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #27AE60;
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        font-weight: bold;
+                        min-height: 20px;
+                        max-height: 20px;
+                    }
+                    QPushButton:hover { background-color: #1E8449; }
+                """)
+                client_ok_btn.setFixedHeight(28)
+                client_ok_btn.clicked.connect(self.client_approved)
+                layout.addWidget(client_ok_btn, 0)
 
         # 7. КНОПКИ
         buttons_added = False

@@ -1669,11 +1669,16 @@ async def workflow_client_send(
         ).order_by(ProjectTimelineEntry.sort_order).first()
 
         if client_entry:
-            # Помечаем незаполненные НЕ-клиентские подэтапы до клиентского как пропущенные
+            # Помечаем незаполненные строки как пропущенные:
+            # Только строки ПОСЛЕ reviewer_entry и ДО client_entry
+            # (строки правок/повторных проверок между reviewer и client)
+            # Строки ДО reviewer_entry НЕ трогаем — они могут быть ещё не пройдены
+            skip_after = reviewer_entry.sort_order if reviewer_entry else 0
             skipped_entries = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
                 ProjectTimelineEntry.stage_group == stage_group,
                 ProjectTimelineEntry.executor_role.notin_(['header', 'Клиент']),
+                ProjectTimelineEntry.sort_order > skip_after,
                 ProjectTimelineEntry.sort_order < client_entry.sort_order,
                 ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
             ).all()
