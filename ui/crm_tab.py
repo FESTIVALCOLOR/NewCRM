@@ -1913,6 +1913,17 @@ class CRMCard(QFrame):
 
         reviewer = get_reviewer_name(current_column, project_type)
 
+        # Проверяем workflow_status из StageWorkflowState (приоритет)
+        workflow_status = self.card_data.get('workflow_status')
+        if workflow_status == 'pending_review':
+            return f"Ожидает проверки {reviewer}"
+        if workflow_status == 'revision':
+            return "На исправлении"
+        if workflow_status == 'client_approval':
+            return "На согласовании у клиента"
+        if workflow_status == 'pending_decision':
+            return f"Ожидает решения {reviewer}"
+
         # Проверяем статус работы дизайнера (Стадия 2: концепция дизайна — только индивидуальные)
         if 'Стадия 2' in current_column and 'концепция' in current_column:
             designer_name = self.card_data.get('designer_name')
@@ -2020,16 +2031,35 @@ class CRMCard(QFrame):
         workflow_status = self.card_data.get('workflow_status')
         if current_substep:
             substep_text = current_substep
-            if workflow_status == 'revision':
+            substep_color = '#E67E22'
+            if workflow_status == 'pending_review':
+                substep_text = f"Ожидает проверки: {current_substep}"
+                substep_color = '#8E44AD'
+            elif workflow_status == 'revision':
                 substep_text = f"На исправлении: {current_substep}"
+                substep_color = '#E74C3C'
             elif workflow_status == 'client_approval':
                 substep_text = f"Согласование: {current_substep}"
+                substep_color = '#3498DB'
+            elif workflow_status == 'pending_decision':
+                substep_text = f"Ожидает решения: {current_substep}"
+                substep_color = '#8E44AD'
             substep_label = QLabel(substep_text)
             substep_label.setStyleSheet(
-                'font-size: 9px; color: #E67E22; font-weight: bold; padding: 2px 0;'
+                f'font-size: 9px; color: {substep_color}; font-weight: bold; padding: 2px 0;'
             )
             substep_label.setWordWrap(True)
             layout.addWidget(substep_label, 0)
+
+        # Счётчик правок
+        revision_count = self.card_data.get('revision_count', 0)
+        if revision_count > 0:
+            rev_label = QLabel(f"Правки: {revision_count}")
+            rev_label.setStyleSheet(
+                'color: #E74C3C; font-size: 9px; font-weight: bold; '
+                'padding: 1px 6px; background-color: transparent;'
+            )
+            layout.addWidget(rev_label, 0)
 
         # 3. Площадь, город и тип агента на одной строке
         info_row = QHBoxLayout()
@@ -2331,75 +2361,60 @@ class CRMCard(QFrame):
                 ''')
                 layout.addWidget(work_done_label, 0)
                 
-                # ========== КНОПКА "ПРИНЯТЬ РАБОТУ" (SVG) ==========
-                accept_btn = IconLoader.create_icon_button('accept', 'Принять работу', 'Принять выполненную работу', icon_size=12)
-                accept_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #1E8449;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
-                    }
-                    QPushButton:hover { background-color: #17703C; }
-                """)
-                accept_btn.setFixedHeight(28)
-                accept_btn.clicked.connect(self.accept_work)
-                layout.addWidget(accept_btn, 0)
-
-                # Кнопка "Отправить на исправление"
-                reject_btn = QPushButton('На исправление')
-                reject_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #E74C3C;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
-                    }
-                    QPushButton:hover { background-color: #C0392B; }
-                """)
-                reject_btn.setFixedHeight(28)
-                reject_btn.clicked.connect(self.reject_work)
-                layout.addWidget(reject_btn, 0)
-
-                # Кнопка "Отправить на согласование"
-                client_send_btn = QPushButton('Клиенту на согласование')
-                client_send_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #3498DB;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
-                    }
-                    QPushButton:hover { background-color: #2980B9; }
-                """)
-                client_send_btn.setFixedHeight(28)
-                client_send_btn.clicked.connect(self.send_to_client)
-                layout.addWidget(client_send_btn, 0)
-
-                # Кнопка "Клиент согласовал" — показывается когда статус workflow = client_approval
+                # Определяем текущий workflow_status
                 try:
                     wf_states = self.data.get_workflow_state(self.card_data['id']) or []
-                    is_client_approval = any(
-                        s.get('status') == 'client_approval'
-                        and s.get('stage_name') == current_column
-                        for s in wf_states
-                    )
+                    current_wf_status = None
+                    for s in wf_states:
+                        if s.get('stage_name') == current_column:
+                            current_wf_status = s.get('status')
+                            break
                 except Exception:
-                    is_client_approval = False
+                    current_wf_status = None
 
-                if is_client_approval:
+                # Кнопка "Отправить клиенту" (объединяет accept + client-send)
+                # Показывается когда исполнитель сдал работу (pending_review)
+                if current_wf_status in ('pending_review', None):
+                    send_client_btn = QPushButton('Отправить клиенту')
+                    send_client_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #1E8449;
+                            color: white;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 20px;
+                            max-height: 20px;
+                        }
+                        QPushButton:hover { background-color: #17703C; }
+                    """)
+                    send_client_btn.setFixedHeight(28)
+                    send_client_btn.clicked.connect(self.send_to_client_combined)
+                    layout.addWidget(send_client_btn, 0)
+
+                # Кнопка "На исправление"
+                if current_wf_status in ('pending_review', None):
+                    reject_btn = QPushButton('На исправление')
+                    reject_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #E74C3C;
+                            color: white;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 20px;
+                            max-height: 20px;
+                        }
+                        QPushButton:hover { background-color: #C0392B; }
+                    """)
+                    reject_btn.setFixedHeight(28)
+                    reject_btn.clicked.connect(self.reject_work)
+                    layout.addWidget(reject_btn, 0)
+
+                # Кнопка "Клиент согласовал" — при статусе client_approval
+                if current_wf_status == 'client_approval':
                     client_ok_btn = QPushButton('Клиент согласовал')
                     client_ok_btn.setStyleSheet("""
                         QPushButton {
@@ -3101,8 +3116,9 @@ class CRMCard(QFrame):
             except Exception as e:
                 CustomMessageBox(self, 'Ошибка', f'Не удалось отправить на исправление: {e}', 'error').exec_()
 
-    def send_to_client(self):
-        """Отправить на согласование клиенту"""
+    def send_to_client_combined(self):
+        """Отправить клиенту (объединяет принятие + отправку на согласование).
+        Вся бизнес-логика (дата reviewer, report_month, reset completion) на сервере в client-send."""
         if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на отправку клиенту', 'error').exec_()
             return
@@ -3131,8 +3147,8 @@ class CRMCard(QFrame):
 
         reply = CustomQuestionBox(
             self,
-            'Согласование с клиентом',
-            f'Отправить работу по стадии "{current_column}" на согласование клиенту?\n\n'
+            'Отправить клиенту',
+            f'Принять работу и отправить клиенту по стадии "{current_column}"?\n\n'
             f'Дедлайн будет приостановлен до получения ответа.'
         ).exec_()
         if reply == QDialog.Accepted:
@@ -3141,7 +3157,7 @@ class CRMCard(QFrame):
                     self.data.workflow_client_send(self.card_data['id'])
                 CustomMessageBox(
                     self, 'Отправлено',
-                    f'Работа отправлена клиенту на согласование.\nДедлайн приостановлен.',
+                    f'Работа принята и отправлена клиенту на согласование.\nДедлайн приостановлен.',
                     'success'
                 ).exec_()
                 parent = self.parent()
@@ -3153,20 +3169,52 @@ class CRMCard(QFrame):
             except Exception as e:
                 CustomMessageBox(self, 'Ошибка', f'Не удалось отправить клиенту: {e}', 'error').exec_()
 
+    def send_to_client(self):
+        """Оставлен для обратной совместимости — вызывает send_to_client_combined"""
+        self.send_to_client_combined()
+
     def client_approved(self):
-        """Клиент согласовал работу"""
+        """Клиент согласовал работу — с возможным выбором следующего круга"""
         if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на согласование работы.', 'error').exec_()
             return
         current_column = self.card_data.get('column_name', '')
         try:
+            result = None
             if self.data.is_multi_user:
-                self.data.workflow_client_ok(self.card_data['id'])
-            CustomMessageBox(
-                self, 'Согласовано',
-                f'Клиент согласовал работу по стадии "{current_column}".\nДедлайн возобновлен.',
-                'success'
-            ).exec_()
+                result = self.data.workflow_client_ok(self.card_data['id'])
+
+            if result and result.get('has_next_round'):
+                next_name = result.get('next_round_name', 'круг 2')
+                reply = CustomQuestionBox(
+                    self,
+                    'Этап согласован',
+                    f'Клиент согласовал работу по стадии "{current_column}".\n\n'
+                    f'Перейти к "{next_name}" или закрыть этап?\n\n'
+                    f'Да — перейти к следующему кругу\n'
+                    f'Нет — закрыть этап (пропустить оставшиеся круги)'
+                ).exec_()
+                if reply == QDialog.Accepted:
+                    self.data.workflow_advance_round(self.card_data['id'])
+                    CustomMessageBox(
+                        self, 'Следующий круг',
+                        f'Переход к "{next_name}". Дедлайн возобновлен.',
+                        'success'
+                    ).exec_()
+                else:
+                    self.data.workflow_close_stage(self.card_data['id'])
+                    CustomMessageBox(
+                        self, 'Этап закрыт',
+                        f'Оставшиеся круги пропущены. Дедлайн возобновлен.',
+                        'success'
+                    ).exec_()
+            else:
+                CustomMessageBox(
+                    self, 'Согласовано',
+                    f'Клиент согласовал работу по стадии "{current_column}".\nДедлайн возобновлен.',
+                    'success'
+                ).exec_()
+
             parent = self.parent()
             while parent:
                 if isinstance(parent, CRMTab):

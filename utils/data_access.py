@@ -964,6 +964,50 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_client_ok: {e}")
             return None
 
+    def workflow_advance_round(self, card_id: int) -> Optional[Dict]:
+        """Перейти к следующему кругу правок (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_advance_round: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_advance_round(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_advance_round: {e}")
+            return None
+
+    def workflow_close_stage(self, card_id: int) -> Optional[Dict]:
+        """Закрыть этап — пропустить оставшиеся круги (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_close_stage: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_close_stage(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_close_stage: {e}")
+            return None
+
+    def workflow_add_extra_round(self, card_id: int, stage_name: str,
+                                  executor_role: str = 'Чертежник', reviewer_role: str = 'СДП',
+                                  norm_days_work: int = 3, norm_days_review: int = 1) -> Optional[Dict]:
+        """Добавить дополнительный платный круг правок (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_add_extra_round: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_add_extra_round(
+                card_id, stage_name, executor_role, reviewer_role,
+                norm_days_work, norm_days_review
+            )
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_add_extra_round: {e}")
+            return None
+
     def get_contract_id_by_crm_card(self, card_id: int) -> Optional[int]:
         """Получить ID договора по ID CRM карточки"""
         if self._should_use_api():

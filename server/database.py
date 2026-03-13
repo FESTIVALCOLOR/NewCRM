@@ -664,7 +664,8 @@ class StageWorkflowState(Base):
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=False, index=True)
     stage_name = Column(String(255), nullable=False)
     current_substep_code = Column(String(30))
-    status = Column(String(30), default='in_progress')  # in_progress, revision, client_approval, completed
+    current_substage_group = Column(String(100), nullable=True)  # текущая substage_group (Подэтап 1.2 и т.д.)
+    status = Column(String(30), default='in_progress')  # in_progress, pending_review, revision, client_approval, pending_decision, completed
     revision_count = Column(Integer, default=0)
     revision_file_path = Column(Text)
     client_approval_started_at = Column(DateTime)
