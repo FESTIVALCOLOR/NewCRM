@@ -2419,33 +2419,19 @@ class CRMCard(QFrame):
             except Exception:
                 pass
             if current_wf_status == 'client_approval':
-                # Лейбл "На согласовании у клиента"
-                client_label = QLabel('На согласовании у клиента')
-                client_label.setStyleSheet('''
-                    color: white;
-                    background-color: #F39C12;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
-                ''')
-                layout.addWidget(client_label, 0)
-
                 client_ok_btn = QPushButton('Клиент согласовал')
                 client_ok_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #27AE60;
                         color: white;
-                        padding: 4px 12px;
+                        padding: 4px 8px;
                         border-radius: 4px;
                         font-size: 10px;
                         font-weight: bold;
-                        min-height: 20px;
-                        max-height: 20px;
                     }
                     QPushButton:hover { background-color: #1E8449; }
                 """)
-                client_ok_btn.setFixedHeight(28)
+                client_ok_btn.setFixedHeight(24)
                 client_ok_btn.clicked.connect(self.client_approved)
                 layout.addWidget(client_ok_btn, 0)
 
