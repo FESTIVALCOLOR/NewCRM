@@ -777,10 +777,10 @@ class ProjectTimelineWidget(QWidget):
                 elif has_date and norm_days_val > 0:
                     if actual_days <= norm_days_val:
                         status_text = 'В срок'
-                        row_bg = '#E8F5E9' if is_in_scope else '#FFFFFF'
+                        row_bg = '#E8F5E9'
                     else:
                         status_text = 'Просрочен'
-                        row_bg = '#FFEBEE' if is_in_scope else '#FFFFFF'
+                        row_bg = '#FFEBEE'
                 elif not is_in_scope:
                     row_bg = '#E0E0E0'
 
