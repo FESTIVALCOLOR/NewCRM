@@ -1919,13 +1919,13 @@ class CRMCard(QFrame):
         # Проверяем workflow_status из StageWorkflowState (приоритет)
         workflow_status = self.card_data.get('workflow_status')
         if workflow_status == 'pending_review':
-            return f"Ожидает проверки {reviewer}"
+            return f"Проверка {reviewer}"
         if workflow_status == 'revision':
             return "На исправлении"
         if workflow_status == 'client_approval':
-            return "На согласовании у клиента"
+            return "Согласование клиента"
         if workflow_status == 'pending_decision':
-            return f"Ожидает решения {reviewer}"
+            return f"Решение {reviewer}"
 
         # Проверяем статус работы дизайнера (Стадия 2: концепция дизайна — только индивидуальные)
         if 'Стадия 2' in current_column and 'концепция' in current_column:
@@ -2002,11 +2002,11 @@ class CRMCard(QFrame):
             status_label.setStyleSheet('''
                 background-color: transparent;
                 color: #27AE60;
-                font-size: 9px;
+                font-size: 8px;
                 font-weight: bold;
-                padding: 2px 6px;
-                border: 2px solid #27AE60;
-                border-radius: 4px;
+                padding: 1px 4px;
+                border: 1px solid #27AE60;
+                border-radius: 3px;
             ''')
             status_label.setFixedHeight(20)
             status_label.setAlignment(Qt.AlignCenter)
