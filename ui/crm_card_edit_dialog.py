@@ -7921,8 +7921,6 @@ class CardEditDialog(QDialog):
                 from ui.custom_message_box import CustomMessageBox
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить файл с сервера: {api_err}', 'error').exec_()
                 return
-            # Удаляем из локальной БД после успешного удаления на сервере
-            self.data.delete_project_file(file_id)
         else:
             # Offline режим: удаляем локально и с ЯД напрямую
             file_info = self.data.delete_project_file(file_id)
