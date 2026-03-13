@@ -374,6 +374,11 @@ class ContractsTab(QWidget):
 
     def _invalidate_crm_cache(self):
         """Сбросить кэш и сразу обновить CRM/Supervision канбаны"""
+        # Всегда сбрасываем глобальный кеш — даже если вкладка CRM ещё не создана (lazy)
+        from utils.data_access import _global_cache
+        _global_cache.invalidate("crm_cards")
+        _global_cache.invalidate("supervision_cards")
+
         mw = self.window()
         crm_tab = getattr(mw, 'crm_tab', None)
         if crm_tab:

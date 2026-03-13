@@ -356,14 +356,14 @@ class CRMTab(QWidget):
             self._data_loaded = True
             self._last_load_time = now
             self._loading_guard = True
-            self.data.prefer_local = True
             try:
                 # Загружаем ТОЛЬКО текущую подвкладку (Индивидуальный или Шаблонный)
+                # НЕ используем prefer_local — карточки могут быть только в API
+                # (созданные при добавлении договора, ещё не синхронизированы в SQLite)
                 current_index = self.project_tabs.currentIndex()
                 current_type = 'Индивидуальный' if current_index == 0 else 'Шаблонный'
                 self.load_cards_for_type(current_type)
             finally:
-                self.data.prefer_local = False
                 self._loading_guard = False
             print(f"[PERF] ensure_data_loaded БЛОКИРОВКА: {(_time.perf_counter()-_t0)*1000:.0f}ms")
             # Вторую подвкладку и архив загружаем отложенно, не блокируя UI
@@ -384,11 +384,7 @@ class CRMTab(QWidget):
 
     def _deferred_load_other(self, project_type):
         """Отложенная загрузка второй подвкладки и архива"""
-        self.data.prefer_local = True
-        try:
-            self.load_cards_for_type(project_type)
-        finally:
-            self.data.prefer_local = False
+        self.load_cards_for_type(project_type)
         # Архив — ещё позже
         if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
             QTimer.singleShot(300, self._deferred_load_archive)
@@ -513,15 +509,11 @@ class CRMTab(QWidget):
         # Пропускаем если ensure_data_loaded уже загружает данные
         if getattr(self, '_loading_guard', False):
             return
-        # Активные карточки — из локальной БД (мгновенно)
-        self.data.prefer_local = True
-        try:
-            if index == 0:
-                self.load_cards_for_type('Индивидуальный')
-            elif index == 1:
-                self.load_cards_for_type('Шаблонный')
-        finally:
-            self.data.prefer_local = False
+        # Активные карточки — через API (кеш _global_cache обеспечивает быстродействие)
+        if index == 0:
+            self.load_cards_for_type('Индивидуальный')
+        elif index == 1:
+            self.load_cards_for_type('Шаблонный')
 
         # Архив — через API (локальная БД не содержит crm_cards)
         if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
