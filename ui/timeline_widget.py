@@ -8,7 +8,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
     QTableWidgetItem, QPushButton, QHeaderView, QDateEdit,
-    QAbstractItemView, QFileDialog, QDialog
+    QAbstractItemView, QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QBrush
@@ -116,7 +116,7 @@ class ProjectTimelineWidget(QWidget):
         self.employee = employee
         self.entries = []
         self._loading = False
-        self._readonly = readonly  # Режим только чтения (для архива)
+        self._readonly = readonly
 
         # Получаем данные контракта из локальной БД (мгновенно, без API)
         contract_id = card_data.get('contract_id')
@@ -284,22 +284,6 @@ class ProjectTimelineWidget(QWidget):
         """)
         self.btn_pdf.clicked.connect(self._export_pdf)
         btn_layout.addWidget(self.btn_pdf)
-
-        # Кнопка "Добавить круг правок" — только для руководителей/менеджеров/СДП/ГАП
-        emp_pos = (self.employee or {}).get('position', '')
-        can_add_round = emp_pos in ('Руководитель', 'Менеджер', 'СДП', 'ГАП', 'Старший дизайнер')
-        if can_add_round and not self._readonly:
-            self.btn_add_round = QPushButton('Добавить круг правок')
-            self.btn_add_round.setFixedHeight(32)
-            self.btn_add_round.setStyleSheet("""
-                QPushButton {
-                    background-color: #7B1FA2; color: white; border: none;
-                    border-radius: 4px; padding: 0 16px; font-size: 12px;
-                }
-                QPushButton:hover { background-color: #6A1B9A; }
-            """)
-            self.btn_add_round.clicked.connect(self._add_extra_round)
-            btn_layout.addWidget(self.btn_add_round)
 
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
@@ -633,16 +617,6 @@ class ProjectTimelineWidget(QWidget):
             '_deadline_date': deadline_date_str,
         })
 
-        # Строка "Дата готовности проекта" — заполняется при перемещении в "Выполненные"
-        ready_date = self.contract_data.get('status_changed_date', '')
-        contract_status = self.contract_data.get('status', '')
-        # Показываем дату готовности если статус "Выполненный проект" или архивный
-        if contract_status in ('Выполненный проект', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'):
-            display_rows.append({
-                '_type': 'project_ready_date',
-                '_ready_date': ready_date,
-            })
-
         return display_rows
 
     @staticmethod
@@ -689,35 +663,6 @@ class ProjectTimelineWidget(QWidget):
                     for col in range(num_cols):
                         lbl = self._make_cell_label(texts[col], bg, aligns[col], bold=True, font_size=11)
                         self.table.setCellWidget(row, col, lbl)
-                    continue
-
-                # --- ДАТА ГОТОВНОСТИ ПРОЕКТА ---
-                if row_type == 'project_ready_date':
-                    self.table.setRowHeight(row, 36)
-                    bg = '#E8F5E9'
-                    ready_date = dr.get('_ready_date', '')
-                    date_text = ''
-                    if ready_date:
-                        try:
-                            rd = QDate.fromString(ready_date, 'yyyy-MM-dd')
-                            if rd.isValid():
-                                date_text = rd.toString('dd.MM.yyyy')
-                        except Exception:
-                            pass
-
-                    title_lbl = self._make_cell_label(
-                        'Дата готовности проекта:', bg, 'left', bold=True, font_size=12, color='#2E7D32'
-                    )
-                    self.table.setCellWidget(row, 0, title_lbl)
-
-                    date_lbl = self._make_cell_label(
-                        date_text or 'Не установлена', bg, 'center', bold=True, font_size=12,
-                        color='#2E7D32' if date_text else '#999999'
-                    )
-                    self.table.setCellWidget(row, 1, date_lbl)
-
-                    for col in range(2, num_cols):
-                        self.table.setCellWidget(row, col, self._make_cell_label('', bg))
                     continue
 
                 # --- ОБЩИЙ ИТОГ ---
@@ -926,20 +871,19 @@ class ProjectTimelineWidget(QWidget):
                     date_label.setToolTip(tooltip)
                     date_label.setMinimumWidth(80)
 
-                    date_layout.addWidget(date_label, 1)
+                    # Кнопка-карандаш для перехода в режим редактирования
+                    pencil_btn = IconLoader.create_action_button(
+                        'edit', tooltip='Редактировать дату',
+                        bg_color='transparent', hover_color='#E3F2FD',
+                        icon_size=14, button_size=22, icon_color='#666666'
+                    )
+                    pencil_btn.clicked.connect(
+                        lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date:
+                            self._enable_date_edit(r, ei, sc, ad)
+                    )
 
-                    # Кнопка-карандаш для перехода в режим редактирования (скрыта в readonly)
-                    if not self._readonly:
-                        pencil_btn = IconLoader.create_action_button(
-                            'edit', tooltip='Редактировать дату',
-                            bg_color='transparent', hover_color='#E3F2FD',
-                            icon_size=14, button_size=22, icon_color='#666666'
-                        )
-                        pencil_btn.clicked.connect(
-                            lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date:
-                                self._enable_date_edit(r, ei, sc, ad)
-                        )
-                        date_layout.addWidget(pencil_btn, 0)
+                    date_layout.addWidget(date_label, 1)
+                    date_layout.addWidget(pencil_btn, 0)
                     self.table.setCellWidget(row, 1, date_container)
 
                 # Кол 2: Кол-во дней
@@ -1162,58 +1106,6 @@ class ProjectTimelineWidget(QWidget):
 
             if actual_date:
                 prev_date = actual_date
-
-    def _add_extra_round(self):
-        """Добавить дополнительный платный круг правок"""
-        from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
-        card_id = self.card_data.get('id')
-        stage_name = self.card_data.get('column_name', '')
-
-        if not card_id or not stage_name:
-            CustomMessageBox(self, 'Ошибка', 'Не удалось определить карточку или стадию', 'error').exec_()
-            return
-
-        # Определяем роли для текущей стадии
-        project_type = self.card_data.get('project_type', '')
-        if project_type == 'Индивидуальный':
-            if 'Стадия 1' in stage_name or 'Стадия 2' in stage_name:
-                reviewer_role = 'СДП'
-            else:
-                reviewer_role = 'ГАП'
-            executor_role = 'Чертёжник' if 'Стадия 1' in stage_name or 'Стадия 3' in stage_name else 'Дизайнер'
-        else:
-            if 'Стадия 1' in stage_name or 'Стадия 3' in stage_name:
-                reviewer_role = 'Менеджер'
-            else:
-                reviewer_role = 'ГАП'
-            executor_role = 'Чертёжник'
-
-        reply = CustomQuestionBox(
-            self,
-            'Добавить круг правок',
-            f'Добавить дополнительный платный круг правок?\n\n'
-            f'Стадия: {stage_name}\n'
-            f'Исполнитель: {executor_role}\n'
-            f'Проверяющий: {reviewer_role}\n\n'
-            f'Нормо-дни: 3 (работа) + 1 (проверка)'
-        ).exec_()
-        if reply == QDialog.Accepted:
-            try:
-                result = self.data.workflow_add_extra_round(
-                    card_id, stage_name, executor_role, reviewer_role,
-                    norm_days_work=3, norm_days_review=1
-                )
-                if result:
-                    CustomMessageBox(
-                        self, 'Успех',
-                        'Дополнительный круг правок добавлен.\nТаблица обновится.',
-                        'success'
-                    ).exec_()
-                    self._load_data_async()
-                else:
-                    CustomMessageBox(self, 'Ошибка', 'Не удалось добавить круг правок', 'error').exec_()
-            except Exception as e:
-                CustomMessageBox(self, 'Ошибка', f'Ошибка: {e}', 'error').exec_()
 
     def _export_excel(self):
         """Экспорт в Excel через API"""

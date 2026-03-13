@@ -409,29 +409,22 @@ class TestCrmTabRefreshCallbacks:
         tab.refresh_current_tab()
         mock_data_access.get_crm_cards.assert_called_with('Индивидуальный')
 
-    def test_refresh_uses_prefer_local(self, qtbot, mock_data_access, mock_employee_admin):
-        """refresh_current_tab устанавливает prefer_local=True перед загрузкой."""
+    def test_refresh_invalidates_cache(self, qtbot, mock_data_access, mock_employee_admin):
+        """refresh_current_tab сбрасывает кеш crm_cards перед загрузкой."""
         mock_data_access.get_crm_cards.return_value = []
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
 
-        prefer_local_values = []
-        original_get = mock_data_access.get_crm_cards
+        with patch('utils.data_access._global_cache') as mock_cache:
+            tab.refresh_current_tab()
+            mock_cache.invalidate.assert_called_with("crm_cards")
 
-        def capture_prefer_local(*args, **kwargs):
-            prefer_local_values.append(mock_data_access.prefer_local)
-            return original_get.return_value
-
-        mock_data_access.get_crm_cards = capture_prefer_local
-        tab.refresh_current_tab()
-        # prefer_local должен быть True во время вызова
-        assert True in prefer_local_values
-
-    def test_refresh_restores_prefer_local(self, qtbot, mock_data_access, mock_employee_admin):
-        """prefer_local восстанавливается в False после refresh."""
+    def test_refresh_does_not_use_prefer_local(self, qtbot, mock_data_access, mock_employee_admin):
+        """refresh_current_tab НЕ использует prefer_local — карточки через API."""
         mock_data_access.get_crm_cards.return_value = []
         tab = _create_crm_tab(qtbot, mock_data_access, mock_employee_admin)
         tab.refresh_current_tab()
-        assert mock_data_access.prefer_local is False
+        # prefer_local не должен устанавливаться
+        mock_data_access.get_crm_cards.assert_called()
 
     def test_refresh_updates_counters(self, qtbot, mock_data_access, mock_employee_admin):
         """refresh вызывает update_project_tab_counters."""
