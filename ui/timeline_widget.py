@@ -46,7 +46,8 @@ def calc_area_coefficient(area: float) -> int:
 
 
 def networkdays(start_date, end_date):
-    """Расчёт рабочих дней между двумя датами (с учётом праздников РФ)"""
+    """Расчёт рабочих дней между двумя датами ВКЛЮЧИТЕЛЬНО (аналог Excel NETWORKDAYS).
+    Если start == end и это рабочий день → 1."""
     if not start_date or not end_date:
         return 0
     if isinstance(start_date, str):
@@ -66,7 +67,7 @@ def networkdays(start_date, end_date):
     from utils.date_utils import is_working_day
     count = 0
     current = start_date
-    while current < end_date:
+    while current <= end_date:
         if is_working_day(current):
             count += 1
         current += timedelta(days=1)
