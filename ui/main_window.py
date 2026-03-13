@@ -1661,10 +1661,26 @@ class MainWindow(QMainWindow):
             self.online_indicator.setText(f"{count} онлайн")
 
         # Формируем tooltip со списком пользователей
-        if users:
-            user_names = [u.get('full_name', 'Неизвестный') for u in users]
-            tooltip = "Пользователи онлайн:\n" + "\n".join(f"- {name}" for name in user_names)
+        # Исполнители и замерщики видят только количество, но не список имён
+        position = self.employee.get('position', '')
+        hidden_roles = {'Дизайнер', 'Чертёжник', 'Замерщик', 'ДАН'}
+        can_see_names = position not in hidden_roles
+
+        if users and can_see_names:
+            lines = ''.join(
+                f'<tr><td style="padding:2px 6px;">- {u.get("full_name", "Неизвестный")}</td></tr>'
+                for u in users
+            )
+            tooltip = (
+                f'<table style="white-space:nowrap;">'
+                f'<tr><td style="padding:2px 6px;font-weight:bold;">Пользователи онлайн:</td></tr>'
+                f'{lines}</table>'
+            )
             self.online_indicator.setToolTip(tooltip)
+        elif count > 0:
+            self.online_indicator.setToolTip(f"{count} онлайн")
+        else:
+            self.online_indicator.setToolTip("")
 
     def _on_online_users_updated(self, users: list):
         """Обработчик обновления списка онлайн пользователей"""
@@ -1755,6 +1771,12 @@ class MainWindow(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             # Удаляем eventFilter перед выходом
             QApplication.instance().removeEventFilter(self)
+            # Отправляем logout на сервер (снимает is_online)
+            try:
+                if hasattr(self, 'api_client') and self.api_client:
+                    self.api_client.logout()
+            except Exception as e:
+                print(f"[WARNING] Ошибка logout при закрытии: {e}")
             # Останавливаем sync_manager перед выходом
             if self.sync_manager:
                 self.sync_manager.stop()
