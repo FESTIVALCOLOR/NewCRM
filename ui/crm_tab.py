@@ -2328,6 +2328,7 @@ class CRMCard(QFrame):
         can_review_work = _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval')
         if is_only_manager and not is_template_project:
             can_review_work = False
+        current_wf_status = None
         if self.employee and can_review_work:
             completed_info = []
             
