@@ -1750,6 +1750,94 @@ class CRMColumn(BaseKanbanColumn):
             
     # clear_cards наследуется из BaseKanbanColumn
 
+
+class _WorkflowChoiceDialog(QDialog):
+    """Диалог выбора действия workflow с цветными кнопками."""
+
+    def __init__(self, parent, title, message, buttons):
+        """buttons: list of (text, bg_color, hover_color, value)"""
+        super().__init__(parent)
+        self._choice = None
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        from ui.custom_title_bar import CustomTitleBar
+        title_bar = CustomTitleBar(self, title, simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
+        content_layout = QVBoxLayout()
+        content_layout.setSpacing(12)
+        content_layout.setContentsMargins(28, 20, 28, 28)
+
+        msg_label = QLabel(message)
+        msg_label.setWordWrap(True)
+        msg_label.setAlignment(Qt.AlignCenter)
+        msg_label.setStyleSheet("font-size: 11px; color: #333; padding: 10px; background-color: #ffffff;")
+        content_layout.addWidget(msg_label)
+
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(8)
+        for text, bg, hover, value in buttons:
+            btn = QPushButton(text)
+            btn.setFixedHeight(36)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {bg}; color: white;
+                    padding: 0px 20px; font-weight: bold;
+                    border-radius: 4px; border: none;
+                    font-size: 11px;
+                    min-height: 36px; max-height: 36px;
+                }}
+                QPushButton:hover {{ background-color: {hover}; }}
+            """)
+            btn.clicked.connect(lambda checked, v=value: self._select(v))
+            btn_layout.addWidget(btn)
+        content_layout.addLayout(btn_layout)
+
+        content.setLayout(content_layout)
+        border_layout.addWidget(content)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
+        self.setFixedWidth(360)
+
+    def _select(self, value):
+        self._choice = value
+        self.accept()
+
+    def exec_choice(self):
+        self.exec_()
+        return self._choice
+
+
 class CRMCard(QFrame):
     def __init__(self, card_data, can_edit, db, employee=None, api_client=None):
         super().__init__()
@@ -2442,18 +2530,17 @@ class CRMCard(QFrame):
                     send_client_btn = QPushButton('Отправить клиенту')
                     send_client_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #1E8449;
+                            background-color: #58D68D;
                             color: white;
                             padding: 4px 12px;
                             border-radius: 4px;
                             font-size: 10px;
                             font-weight: bold;
-                            min-height: 20px;
-                            max-height: 20px;
+                            min-height: 22px;
+                            max-height: 22px;
                         }
-                        QPushButton:hover { background-color: #17703C; }
+                        QPushButton:hover { background-color: #48C77D; }
                     """)
-                    send_client_btn.setFixedHeight(28)
                     send_client_btn.clicked.connect(self.send_to_client_combined)
                     layout.addWidget(send_client_btn, 0)
 
@@ -2462,18 +2549,17 @@ class CRMCard(QFrame):
                     reject_btn = QPushButton('На исправление')
                     reject_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #E74C3C;
+                            background-color: #F1948A;
                             color: white;
                             padding: 4px 12px;
                             border-radius: 4px;
                             font-size: 10px;
                             font-weight: bold;
-                            min-height: 20px;
-                            max-height: 20px;
+                            min-height: 22px;
+                            max-height: 22px;
                         }
-                        QPushButton:hover { background-color: #C0392B; }
+                        QPushButton:hover { background-color: #E57373; }
                     """)
-                    reject_btn.setFixedHeight(28)
                     reject_btn.clicked.connect(self.reject_work)
                     layout.addWidget(reject_btn, 0)
 
@@ -2498,10 +2584,10 @@ class CRMCard(QFrame):
                         border: none;
                         padding: 4px 12px;
                         border-radius: 4px;
-                        font-size: 11px;
+                        font-size: 10px;
                         font-weight: bold;
-                        max-height: 19px;
-                        min-height: 19px;
+                        min-height: 22px;
+                        max-height: 22px;
                     }
                     QPushButton:hover { background-color: #229954; }
                     QPushButton:pressed { background-color: #1E8449; }
@@ -2514,13 +2600,13 @@ class CRMCard(QFrame):
                 sign_act_btn = QPushButton('Акт подписан')
                 sign_act_btn.setStyleSheet("""
                     QPushButton {
-                        background-color: #9B59B6; color: white;
+                        background-color: #85C1E9; color: white;
                         border: none; border-radius: 4px;
-                        padding: 5px 10px; font-size: 11px;
+                        padding: 4px 12px; font-size: 10px;
                         font-weight: bold;
-                        max-height: 19px; min-height: 19px;
+                        min-height: 22px; max-height: 22px;
                     }
-                    QPushButton:hover { background-color: #8E44AD; }
+                    QPushButton:hover { background-color: #6CB2D9; }
                 """)
                 sign_act_btn.clicked.connect(
                     lambda checked, cid=self.card_data['id']: self.sign_act(cid)
@@ -2564,10 +2650,10 @@ class CRMCard(QFrame):
                             border: none;
                             padding: 4px 12px;
                             border-radius: 4px;
-                            font-size: 11px;
+                            font-size: 10px;
                             font-weight: bold;
-                            max-height: 19px;
-                            min-height: 19px;
+                            min-height: 22px;
+                            max-height: 22px;
                         }
                     """)
                     layout.addWidget(waiting_btn, 0)
@@ -2577,18 +2663,18 @@ class CRMCard(QFrame):
                 submit_btn = IconLoader.create_icon_button('submit', 'Сдать работу', 'Отметить работу как выполненную', icon_size=12)
                 submit_btn.setStyleSheet("""
                     QPushButton {
-                        background-color: #27AE60;
+                        background-color: #58D68D;
                         color: white;
                         border: none;
                         padding: 4px 12px;
                         border-radius: 4px;
-                        font-size: 11px;
+                        font-size: 10px;
                         font-weight: bold;
-                        max-height: 19px;
-                        min-height: 19px;
+                        min-height: 22px;
+                        max-height: 22px;
                     }
-                    QPushButton:hover { background-color: #229954; }
-                    QPushButton:pressed { background-color: #1E8449; }
+                    QPushButton:hover { background-color: #48C77D; }
+                    QPushButton:pressed { background-color: #3AB86E; }
                 """)
                 submit_btn.clicked.connect(self.submit_work)
                 layout.addWidget(submit_btn, 0)
@@ -3308,16 +3394,18 @@ class CRMCard(QFrame):
                 is_last = result.get('is_last_round', False)
 
                 if has_next:
-                    # Есть следующий круг — диалог "Перейти / Закрыть"
-                    reply = CustomQuestionBox(
+                    # Есть следующий круг — диалог с цветными кнопками
+                    dlg = _WorkflowChoiceDialog(
                         self,
                         'Клиент согласовал',
-                        f'Клиент согласовал работу по стадии "{current_column}".\n\n'
-                        f'Перейти к "{next_name}" или закрыть этап?\n\n'
-                        f'Да — перейти к {next_name}\n'
-                        f'Нет — закрыть этап'
-                    ).exec_()
-                    if reply == QDialog.Accepted:
+                        f'Клиент согласовал работу по стадии\n"{current_column}".',
+                        buttons=[
+                            (f'Перейти к "{next_name}"', '#85C1E9', '#6CB2D9', 'advance'),
+                            ('Закрыть этап', '#58D68D', '#48C77D', 'close'),
+                        ]
+                    )
+                    choice = dlg.exec_choice()
+                    if choice == 'advance':
                         self.data.workflow_advance_round(self.card_data['id'])
                         CustomMessageBox(
                             self, 'Следующий круг',
@@ -3332,16 +3420,18 @@ class CRMCard(QFrame):
                             'success'
                         ).exec_()
                 elif is_last:
-                    # Последний круг — предложить платный круг или закрыть
-                    reply = CustomQuestionBox(
+                    # Последний круг — закрыть или платный круг
+                    dlg = _WorkflowChoiceDialog(
                         self,
                         'Клиент согласовал',
-                        f'Клиент согласовал работу по стадии "{current_column}".\n\n'
-                        f'Закрыть этап или добавить платный круг правок?\n\n'
-                        f'Да — закрыть этап\n'
-                        f'Нет — добавить платный круг правок'
-                    ).exec_()
-                    if reply == QDialog.Accepted:
+                        f'Клиент согласовал работу по стадии\n"{current_column}".',
+                        buttons=[
+                            ('Закрыть этап', '#58D68D', '#48C77D', 'close'),
+                            ('Платный круг правок', '#F0B27A', '#E5A06A', 'paid'),
+                        ]
+                    )
+                    choice = dlg.exec_choice()
+                    if choice == 'close':
                         self.data.workflow_close_stage(self.card_data['id'])
                         CustomMessageBox(
                             self, 'Этап закрыт',
