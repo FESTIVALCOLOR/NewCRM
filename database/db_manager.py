@@ -1,7 +1,7 @@
 import sqlite3
 import shutil
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import threading
 try:
@@ -149,6 +149,31 @@ class DatabaseManager(DatabaseMigrations):
                     yd_path = f'{yd_folder}/{backups[-1]}'
                     yd.upload_file(latest, yd_path)
                     print(f"[BACKUP] SQLite бэкап выгружен на Яндекс.Диск: {yd_path}")
+
+                    # Ротация: удаляем бэкапы старше 14 дней
+                    try:
+                        KEEP_DAYS = 14
+                        cutoff = datetime.now() - timedelta(days=KEEP_DAYS)
+                        items = yd.get_folder_contents(yd_folder)
+                        deleted = 0
+                        for item in items:
+                            name = item.get('name', '')
+                            if not name.endswith('.db'):
+                                continue
+                            # Извлекаем дату из имени: interior_studio_YYYYMMDD_HHMMSS.db
+                            try:
+                                parts = name.rsplit('.', 1)[0]  # убираем .db
+                                date_str = '_'.join(parts.split('_')[-2:])  # YYYYMMDD_HHMMSS
+                                file_date = datetime.strptime(date_str, '%Y%m%d_%H%M%S')
+                                if file_date < cutoff:
+                                    yd.delete_file(f'{yd_folder}/{name}')
+                                    deleted += 1
+                            except (ValueError, IndexError):
+                                continue
+                        if deleted:
+                            print(f"[BACKUP] Удалено старых бэкапов с Яндекс.Диска: {deleted}")
+                    except Exception as e:
+                        print(f"[WARN] Ротация бэкапов на Яндекс.Диске: {e}")
                 except Exception as e:
                     print(f"[WARN] Не удалось выгрузить бэкап на Яндекс.Диск: {e}")
 

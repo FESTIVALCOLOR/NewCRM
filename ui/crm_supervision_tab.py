@@ -124,6 +124,9 @@ class CRMSupervisionTab(QWidget):
         # Вкладки: Активные / Архив
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+            }
             QTabBar::tab {
                 padding: 6px 16px;
                 font-size: 12px;
@@ -132,14 +135,17 @@ class CRMSupervisionTab(QWidget):
                 border-bottom: none;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
-                background-color: #E8E8E8;                
+                background-color: #E8E8E8;
                 min-width: 180px;
+            }
+            QTabBar::tab:first {
+                border-bottom-left-radius: 4px;
             }
             QTabBar::tab:selected {
                 background-color: white;
-                border-bottom: 1px solid #d9d9d9;
+                border-bottom: 2px solid #F57C00;
             }
-            QTabBar::tab:hover {
+            QTabBar::tab:hover:!selected {
                 background-color: #F0F0F0;
             }
         """)

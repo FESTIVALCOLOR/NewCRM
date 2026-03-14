@@ -992,6 +992,19 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_close_stage: {e}")
             return None
 
+    def workflow_sign_act(self, card_id: int) -> Optional[Dict]:
+        """Подписание акта — финальный шаг стадии (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_sign_act: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_sign_act(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_sign_act: {e}")
+            return None
+
     def workflow_add_extra_round(self, card_id: int, stage_name: str,
                                   executor_role: str = 'Чертежник', reviewer_role: str = 'СДП',
                                   norm_days_work: int = 3, norm_days_review: int = 1) -> Optional[Dict]:

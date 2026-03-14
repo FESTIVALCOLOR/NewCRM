@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 
                              QLabel, QScrollArea, QFrame, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QMessageBox, QDateEdit,
-                             QListWidget, QListWidgetItem, QTabWidget, QTextEdit,
+                             QListWidget, QListWidgetItem, QTabWidget, QTabBar, QTextEdit,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
                              QTableWidgetItem, QDoubleSpinBox)
 from ui.custom_dateedit import CustomDateEdit
@@ -101,6 +101,20 @@ class DraggableListWidget(BaseDraggableList):
             source_column.project_type
         ))
             
+class SyncedTabBar(QTabBar):
+    """TabBar, синхронизирующий ширину вкладок с референсным QTabWidget"""
+    def __init__(self, ref_tab_widget, parent=None):
+        super().__init__(parent)
+        self._ref = ref_tab_widget
+
+    def tabSizeHint(self, index):
+        hint = super().tabSizeHint(index)
+        ref_bar = self._ref.tabBar()
+        if index < ref_bar.count():
+            hint.setWidth(ref_bar.tabSizeHint(index).width())
+        return hint
+
+
 class CRMTab(QWidget):
     def __init__(self, employee, can_edit=True, api_client=None, parent=None):
         super().__init__(parent)
@@ -145,7 +159,6 @@ class CRMTab(QWidget):
         self.project_tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: none;
-                border-radius: 4px;
             }
             QTabBar::tab {
                 padding: 6px 16px;
@@ -160,23 +173,42 @@ class CRMTab(QWidget):
             }
             QTabBar::tab:selected {
                 background-color: white;
-                border-bottom: 1px solid #d9d9d9;
+                border-bottom: 2px solid #ffd93c;
             }
-            QTabBar::tab:hover {
+            QTabBar::tab:hover:!selected {
                 background-color: #F0F0F0;
             }
         """)
-        
+
         # === ИНДИВИДУАЛЬНЫЕ ПРОЕКТЫ ===
         individual_main_widget = QWidget()
         individual_main_layout = QVBoxLayout()
         individual_main_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.individual_subtabs = QTabWidget()
+        self.individual_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
         self.individual_subtabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+            }
             QTabBar::tab {
-                padding: 4px 16px;
-                font-size: 11px;
+                padding: 6px 16px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid #d9d9d9;
+                border-bottom: none;
+                border-radius: 0px;
+                background-color: #E8E8E8;
+            }
+            QTabBar::tab:first {
+                border-bottom-left-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom: 2px solid #F57C00;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #F0F0F0;
             }
         """)
         
@@ -199,10 +231,29 @@ class CRMTab(QWidget):
             template_main_layout.setContentsMargins(0, 0, 0, 0)
             
             self.template_subtabs = QTabWidget()
+            self.template_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
             self.template_subtabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: none;
+                }
                 QTabBar::tab {
-                    padding: 4px 16px;
-                    font-size: 11px;
+                    padding: 6px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: 1px solid #d9d9d9;
+                    border-bottom: none;
+                    border-radius: 0px;
+                    background-color: #E8E8E8;
+                }
+                QTabBar::tab:first {
+                    border-bottom-left-radius: 4px;
+                }
+                QTabBar::tab:selected {
+                    background-color: white;
+                    border-bottom: 2px solid #F57C00;
+                }
+                QTabBar::tab:hover:!selected {
+                    background-color: #F0F0F0;
                 }
             """)
             
@@ -1419,12 +1470,11 @@ class CRMTab(QWidget):
             if card_data.get('sdp_id') == employee_id:
                 return True
 
-        # Дизайнер
+        # Дизайнер — видит карточку даже после сдачи работы (статус "Ожидайте проверку")
         if _emp_has_pos(self.employee, 'Дизайнер'):
             if column_name == 'Стадия 2: концепция дизайна':
                 designer_name = card_data.get('designer_name')
-                designer_completed = card_data.get('designer_completed', 0)
-                return (designer_name == employee_name) and (designer_completed != 1)
+                return (designer_name == employee_name)
 
         # Чертёжник
         if _emp_has_pos(self.employee, 'Чертёжник'):
@@ -1433,10 +1483,10 @@ class CRMTab(QWidget):
             else:
                 allowed_columns = ['Стадия 1: планировочные решения', 'Стадия 2: рабочие чертежи']
 
+            # Чертёжник видит карточку даже после сдачи работы (статус "Ожидайте проверку")
             if column_name in allowed_columns:
                 draftsman_name = card_data.get('draftsman_name')
-                draftsman_completed = card_data.get('draftsman_completed', 0)
-                return (draftsman_name == employee_name) and (draftsman_completed != 1)
+                return (draftsman_name == employee_name)
 
         # Замерщик
         if _emp_has_pos(self.employee, 'Замерщик'):
@@ -1926,6 +1976,10 @@ class CRMCard(QFrame):
             return "Согласование клиента"
         if workflow_status == 'pending_decision':
             return f"Решение {reviewer}"
+        if workflow_status == 'act_signing':
+            return "Подписание акта"
+        if workflow_status == 'stage_completed':
+            return "Этап завершён"
 
         # Проверяем статус работы дизайнера (Стадия 2: концепция дизайна — только индивидуальные)
         if 'Стадия 2' in current_column and 'концепция' in current_column:
@@ -2047,6 +2101,12 @@ class CRMCard(QFrame):
             elif workflow_status == 'pending_decision':
                 substep_text = f"Ожидает решения: {current_substep}"
                 substep_color = '#8E44AD'
+            elif workflow_status == 'act_signing':
+                substep_text = f"Подписание акта: {current_substep}"
+                substep_color = '#9B59B6'
+            elif workflow_status == 'stage_completed':
+                substep_text = f"Этап завершён: {current_substep}"
+                substep_color = '#27AE60'
             substep_label = QLabel(substep_text)
             substep_label.setStyleSheet(
                 f'font-size: 9px; color: {substep_color}; font-weight: bold; padding: 2px 0;'
@@ -2449,6 +2509,24 @@ class CRMCard(QFrame):
                 client_ok_btn.clicked.connect(self.client_approved)
                 layout.addWidget(client_ok_btn, 0)
 
+            # Кнопка "Акт подписан" при act_signing
+            if current_wf_status == 'act_signing':
+                sign_act_btn = QPushButton('Акт подписан')
+                sign_act_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #9B59B6; color: white;
+                        border: none; border-radius: 4px;
+                        padding: 5px 10px; font-size: 11px;
+                        font-weight: bold;
+                        max-height: 19px; min-height: 19px;
+                    }
+                    QPushButton:hover { background-color: #8E44AD; }
+                """)
+                sign_act_btn.clicked.connect(
+                    lambda checked, cid=self.card_data['id']: self.sign_act(cid)
+                )
+                layout.addWidget(sign_act_btn, 0)
+
         # 7. КНОПКИ
         buttons_added = False
 
@@ -2469,23 +2547,30 @@ class CRMCard(QFrame):
                     work_already_submitted = True
 
             if work_already_submitted:
-                # Работа уже сдана — показываем неактивную кнопку "Ожидайте проверку"
-                waiting_btn = QPushButton('Ожидайте проверку')
-                waiting_btn.setEnabled(False)
-                waiting_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #95A5A6;
-                        color: white;
-                        border: none;
-                        padding: 4px 12px;
-                        border-radius: 4px;
-                        font-size: 11px;
-                        font-weight: bold;
-                        max-height: 19px;
-                        min-height: 19px;
-                    }
-                """)
-                layout.addWidget(waiting_btn, 0)
+                # Работа уже сдана — показываем статус "Ожидайте проверку"
+                wf_status = self.card_data.get('workflow_status')
+                if wf_status == 'pending_review':
+                    # Яркая метка при активном ожидании проверки
+                    wait_label = QLabel('Ожидайте проверку')
+                    wait_label.setStyleSheet('color: #E67E22; font-size: 10px; font-weight: bold;')
+                    layout.addWidget(wait_label, 0)
+                else:
+                    waiting_btn = QPushButton('Работа сдана')
+                    waiting_btn.setEnabled(False)
+                    waiting_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #95A5A6;
+                            color: white;
+                            border: none;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 11px;
+                            font-weight: bold;
+                            max-height: 19px;
+                            min-height: 19px;
+                        }
+                    """)
+                    layout.addWidget(waiting_btn, 0)
                 buttons_added = True
             elif self.is_assigned_to_current_user(self.employee):
                 # ========== КНОПКА "СДАТЬ РАБОТУ" (SVG) ==========
@@ -3189,8 +3274,25 @@ class CRMCard(QFrame):
         """Оставлен для обратной совместимости — вызывает send_to_client_combined"""
         self.send_to_client_combined()
 
+    def sign_act(self, card_id):
+        """Подписание акта — финальный шаг стадии."""
+        try:
+            result = self.data.workflow_sign_act(card_id)
+            if result:
+                CustomMessageBox(self, 'Акт подписан', 'Акт подписан. Этап завершён.', 'success').exec_()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось подписать акт.', 'error').exec_()
+            parent = self.parent()
+            while parent:
+                if isinstance(parent, CRMTab):
+                    parent.refresh_current_tab()
+                    break
+                parent = parent.parent()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Ошибка подписания акта: {e}', 'error').exec_()
+
     def client_approved(self):
-        """Клиент согласовал работу — с возможным выбором следующего круга"""
+        """Клиент согласовал работу — три варианта: следующий круг, платный круг, закрыть этап"""
         if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на согласование работы.', 'error').exec_()
             return
@@ -3200,28 +3302,65 @@ class CRMCard(QFrame):
             if self.data.is_multi_user:
                 result = self.data.workflow_client_ok(self.card_data['id'])
 
-            if result and result.get('has_next_round'):
-                next_name = result.get('next_round_name', 'круг 2')
-                reply = CustomQuestionBox(
-                    self,
-                    'Этап согласован',
-                    f'Клиент согласовал работу по стадии "{current_column}".\n\n'
-                    f'Перейти к "{next_name}" или закрыть этап?\n\n'
-                    f'Да — перейти к следующему кругу\n'
-                    f'Нет — закрыть этап (пропустить оставшиеся круги)'
-                ).exec_()
-                if reply == QDialog.Accepted:
-                    self.data.workflow_advance_round(self.card_data['id'])
-                    CustomMessageBox(
-                        self, 'Следующий круг',
-                        f'Переход к "{next_name}". Дедлайн возобновлен.',
-                        'success'
+            if result:
+                has_next = result.get('has_next_round', False)
+                next_name = result.get('next_round_name', '')
+                is_last = result.get('is_last_round', False)
+
+                if has_next:
+                    # Есть следующий круг — диалог "Перейти / Закрыть"
+                    reply = CustomQuestionBox(
+                        self,
+                        'Клиент согласовал',
+                        f'Клиент согласовал работу по стадии "{current_column}".\n\n'
+                        f'Перейти к "{next_name}" или закрыть этап?\n\n'
+                        f'Да — перейти к {next_name}\n'
+                        f'Нет — закрыть этап'
                     ).exec_()
+                    if reply == QDialog.Accepted:
+                        self.data.workflow_advance_round(self.card_data['id'])
+                        CustomMessageBox(
+                            self, 'Следующий круг',
+                            f'Переход к "{next_name}". Дедлайн возобновлен.',
+                            'success'
+                        ).exec_()
+                    else:
+                        self.data.workflow_close_stage(self.card_data['id'])
+                        CustomMessageBox(
+                            self, 'Этап закрыт',
+                            f'Оставшиеся круги пропущены. Дедлайн возобновлен.',
+                            'success'
+                        ).exec_()
+                elif is_last:
+                    # Последний круг — предложить платный круг или закрыть
+                    reply = CustomQuestionBox(
+                        self,
+                        'Клиент согласовал',
+                        f'Клиент согласовал работу по стадии "{current_column}".\n\n'
+                        f'Закрыть этап или добавить платный круг правок?\n\n'
+                        f'Да — закрыть этап\n'
+                        f'Нет — добавить платный круг правок'
+                    ).exec_()
+                    if reply == QDialog.Accepted:
+                        self.data.workflow_close_stage(self.card_data['id'])
+                        CustomMessageBox(
+                            self, 'Этап закрыт',
+                            f'Этап закрыт. Дедлайн возобновлен.',
+                            'success'
+                        ).exec_()
+                    else:
+                        self.data.workflow_add_extra_round(self.card_data['id'], current_column)
+                        CustomMessageBox(
+                            self, 'Платный круг',
+                            'Добавлен платный круг правок.',
+                            'success'
+                        ).exec_()
                 else:
+                    # Нет следующего круга и не последний — закрыть этап
                     self.data.workflow_close_stage(self.card_data['id'])
                     CustomMessageBox(
                         self, 'Этап закрыт',
-                        f'Оставшиеся круги пропущены. Дедлайн возобновлен.',
+                        f'Клиент согласовал работу по стадии "{current_column}".\nЭтап закрыт.',
                         'success'
                     ).exec_()
             else:

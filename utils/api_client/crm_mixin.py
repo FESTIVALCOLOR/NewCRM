@@ -369,6 +369,11 @@ class CrmMixin:
         response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/close-stage")
         return self._handle_response(response)
 
+    def workflow_sign_act(self, card_id: int) -> Dict[str, Any]:
+        """Подписание акта — финальный шаг стадии"""
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/sign-act")
+        return self._handle_response(response)
+
     def workflow_add_extra_round(self, card_id: int, stage_name: str,
                                   executor_role: str = 'Чертежник', reviewer_role: str = 'СДП',
                                   norm_days_work: int = 3, norm_days_review: int = 1) -> Dict[str, Any]:

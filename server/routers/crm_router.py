@@ -1615,13 +1615,33 @@ async def workflow_reject_work(
             if current_entry:
                 # Дата проверки reviewer (СДП/ГАП/Менеджер) — первая пустая после текущего исполнителя
                 reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
-                reviewer_entry = db.query(ProjectTimelineEntry).filter(
+                current_substage = current_entry.substage_group
+
+                # Базовый фильтр для reviewer-строк
+                reviewer_base = db.query(ProjectTimelineEntry).filter(
                     ProjectTimelineEntry.contract_id == contract_id,
                     ProjectTimelineEntry.stage_group == stage_group,
                     ProjectTimelineEntry.executor_role.in_(reviewer_roles),
                     ProjectTimelineEntry.sort_order > current_entry.sort_order,
+                )
+                # Ограничиваем рамками substage_group (если иерархическая стадия)
+                if current_substage and current_substage.strip():
+                    reviewer_base = reviewer_base.filter(
+                        ProjectTimelineEntry.substage_group == current_substage
+                    )
+
+                # 1. Сначала ищем первую пустую строку reviewer
+                reviewer_entry = reviewer_base.filter(
                     (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
                 ).order_by(ProjectTimelineEntry.sort_order).first()
+
+                # 2. Если пустой нет и это повторный reject — перезаписываем последнюю заполненную
+                if not reviewer_entry and wf.revision_count > 1:
+                    reviewer_entry = reviewer_base.filter(
+                        ProjectTimelineEntry.actual_date.isnot(None),
+                        ProjectTimelineEntry.actual_date != '',
+                    ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+
                 if reviewer_entry:
                     reviewer_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                     reviewer_entry.updated_at = datetime.utcnow()
@@ -1661,7 +1681,8 @@ async def workflow_reject_work(
             description=f'Отправлено на правки: {stage_name} (итерация {wf.revision_count})'
         ))
 
-        # НЕ обновляем дедлайн — правки не двигают timeline
+        # Пересчитываем дедлайн — правки сдвигают timeline
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
         return {"status": "rejected", "revision_count": wf.revision_count, "revision_file_path": wf.revision_file_path}
@@ -1894,7 +1915,7 @@ async def workflow_client_approved(
 
         stage_group = _resolve_stage_group(stage_name)
         client_entry = None
-        collection_entry = None
+        is_last_round = False
         if stage_group and contract_id:
             # Записываем дату в клиентскую строку "Отправка клиенту / Согласование"
             client_entry = db.query(ProjectTimelineEntry).filter(
@@ -1907,21 +1928,8 @@ async def workflow_client_approved(
                 client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                 client_entry.updated_at = datetime.utcnow()
 
-                # Записываем дату в строку "Сбор правок" (следующая после клиентской с ролью reviewer)
-                reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
-                collection_entry = db.query(ProjectTimelineEntry).filter(
-                    ProjectTimelineEntry.contract_id == contract_id,
-                    ProjectTimelineEntry.stage_group == stage_group,
-                    ProjectTimelineEntry.executor_role.in_(reviewer_roles),
-                    ProjectTimelineEntry.sort_order > client_entry.sort_order,
-                    or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == '')
-                ).order_by(ProjectTimelineEntry.sort_order).first()
-                if collection_entry and 'сбор правок' in (collection_entry.stage_name or '').lower():
-                    collection_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-                    collection_entry.updated_at = datetime.utcnow()
-                    logger.info(f"client-ok: дата записана в {collection_entry.stage_code} ({collection_entry.stage_name})")
-                else:
-                    collection_entry = None  # не подходит — сбрасываем для last_recorded
+                # Дата "Сбор правок" НЕ записывается при client-ok
+                # Она записывается позже — при advance-round или close-stage
 
             _server_recalculate_actual_days(db, contract_id)
 
@@ -1973,24 +1981,34 @@ async def workflow_client_approved(
                 if not has_next_round:
                     logger.warning(f"client-ok: ROUND_PAIRS указывает на '{next_round_name}', но в таймлайне его нет (contract_id={contract_id}, stage_group={stage_group})")
 
-            if has_next_round:
-                wf.status = 'pending_decision'  # ждём решения reviewer
-            else:
-                wf.status = 'in_progress'
-                # Продвигаем current_substep_code на первый вход следующего подэтапа
-                last_recorded = collection_entry or (client_entry if stage_group else None)
+            # client-ok ВСЕГДА ставит pending_decision — UI решает что показать
+            wf.status = 'pending_decision'
+
+            if not has_next_round:
+                # Нет следующего круга — продвигаем current_substep_code
+                last_recorded = client_entry if stage_group else None
                 if last_recorded and stage_group and contract_id:
                     next_substep = db.query(ProjectTimelineEntry).filter(
                         ProjectTimelineEntry.contract_id == contract_id,
                         ProjectTimelineEntry.stage_group == stage_group,
                         ProjectTimelineEntry.executor_role.notin_(['header']),
                         ProjectTimelineEntry.sort_order > last_recorded.sort_order,
-                        or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == '')
+                        or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ''),
+                        or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != 'skipped'),
                     ).order_by(ProjectTimelineEntry.sort_order).first()
                     if next_substep:
                         wf.current_substep_code = next_substep.stage_code
                         wf.current_substage_group = next_substep.substage_group
                         logger.info(f"client-ok: переход к {next_substep.stage_code} ({next_substep.stage_name}), подэтап: {next_substep.substage_group}")
+
+            # Определяем is_last_round
+            # Последний круг: нет следующего ROUND_PAIRS для текущего подэтапа
+            LAST_ROUNDS = {'Подэтап 1.3', 'Подэтап 2.4', 'Подэтап 2.7'}
+            is_last_round = current_subgroup in LAST_ROUNDS
+            # Для плоских стадий (stage3 инд., stage2/3 шабл.) — считать как последний круг
+            if not current_subgroup or not current_subgroup.strip():
+                is_last_round = True
+
             wf.client_approval_deadline_paused = False
             wf.revision_count = 0  # сбрасываем счётчик правок для нового подэтапа
             wf.updated_at = datetime.utcnow()
@@ -2018,7 +2036,13 @@ async def workflow_client_approved(
 
         has_next = has_next_round if wf else False
         next_name = next_round_name if wf else None
-        return {"status": "client_approved", "has_next_round": has_next, "next_round_name": next_name}
+        is_last = is_last_round if wf else False
+        return {
+            "status": "client_approved",
+            "has_next_round": has_next,
+            "next_round_name": next_name,
+            "is_last_round": is_last,
+        }
 
     except HTTPException:
         raise
@@ -2067,6 +2091,23 @@ async def workflow_advance_round(
         next_subgroup = _ROUND_PAIRS.get(current_subgroup)
         if not next_subgroup:
             raise HTTPException(status_code=400, detail=f"Нет следующего круга для {current_subgroup}")
+
+        # Записываем дату в строку "Сбор правок" текущего подэтапа
+        if contract_id and stage_group and current_subgroup:
+            reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
+            collection_entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.substage_group == current_subgroup,
+                ProjectTimelineEntry.executor_role.in_(reviewer_roles),
+                or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ''),
+            ).order_by(ProjectTimelineEntry.sort_order).all()
+            for entry in collection_entries:
+                if 'сбор правок' in (entry.stage_name or '').lower():
+                    entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                    entry.updated_at = datetime.utcnow()
+                    logger.info(f"advance-round: дата 'Сбор правок' записана в {entry.stage_code} ({entry.stage_name})")
+                    break
 
         # Находим первый подэтап следующего круга (исполнитель)
         executor_roles = ['Чертежник', 'Дизайнер']
@@ -2127,6 +2168,23 @@ async def workflow_close_stage(
         ).first()
 
         if stage_group and contract_id:
+            # Записываем дату в строку "Сбор правок" текущего подэтапа (если есть)
+            if wf and wf.current_substage_group:
+                reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
+                collection_entries = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.substage_group == wf.current_substage_group,
+                    ProjectTimelineEntry.executor_role.in_(reviewer_roles),
+                    or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ''),
+                ).order_by(ProjectTimelineEntry.sort_order).all()
+                for entry in collection_entries:
+                    if 'сбор правок' in (entry.stage_name or '').lower():
+                        entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                        entry.updated_at = datetime.utcnow()
+                        logger.info(f"close-stage: дата 'Сбор правок' записана в {entry.stage_code} ({entry.stage_name})")
+                        break
+
             # Помечаем все незаполненные подэтапы текущего stage_group как skipped
             unfilled = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract_id,
@@ -2141,7 +2199,7 @@ async def workflow_close_stage(
             _server_recalculate_actual_days(db, contract_id)
 
         if wf:
-            wf.status = 'completed'
+            wf.status = 'act_signing'
             wf.updated_at = datetime.utcnow()
 
         # K11: Запись в историю
@@ -2162,6 +2220,87 @@ async def workflow_close_stage(
     except Exception as e:
         db.rollback()
         logger.exception(f"Ошибка в close-stage: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+
+@router.post("/cards/{card_id}/workflow/sign-act")
+async def workflow_sign_act(
+    card_id: int,
+    current_user: Employee = Depends(require_permission("crm_cards.complete_approval")),
+    db: Session = Depends(get_db)
+):
+    """Подписание акта — финальный шаг стадии.
+    Записывает дату в строку 'Акт' в таймлайне.
+    Статус → stage_completed."""
+    try:
+        card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+        if not card:
+            raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+        stage_name = card.column_name
+        contract_id = card.contract_id
+        stage_group = _resolve_stage_group(stage_name)
+
+        # Проверяем статус workflow
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if wf and wf.status != 'act_signing':
+            raise HTTPException(status_code=400, detail="Акт можно подписать только в статусе act_signing")
+
+        # Записываем дату в строку "Акт" / "Акт подписан" / "Закрытие"
+        if contract_id and stage_group:
+            act_entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                or_(
+                    ProjectTimelineEntry.stage_name.ilike('%акт%'),
+                    ProjectTimelineEntry.stage_name.ilike('%закрытие%'),
+                    ProjectTimelineEntry.stage_name.ilike('%принятие%'),
+                ),
+                or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ''),
+            ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+
+            if act_entry:
+                act_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                act_entry.updated_at = datetime.utcnow()
+                logger.info(f"sign-act: дата акта записана в {act_entry.stage_code} ({act_entry.stage_name})")
+
+            _server_recalculate_actual_days(db, contract_id)
+
+        # Обновляем workflow state
+        if wf:
+            wf.status = 'stage_completed'
+            wf.updated_at = datetime.utcnow()
+
+        # K11: Запись в историю
+        db.add(ActionHistory(
+            user_id=current_user.id, action_type='sign_act',
+            entity_type='crm_card', entity_id=card_id,
+            description=f'Акт подписан: {stage_name}'
+        ))
+
+        # Обновляем дедлайн для следующего этапа
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+
+        db.commit()
+
+        # Хук: уведомление в чат о подписании акта
+        try:
+            asyncio.create_task(trigger_messenger_notification(
+                db, card_id, 'stage_complete', stage_name=f"{stage_name} (акт подписан)"
+            ))
+        except Exception:
+            logger.warning(f"Не удалось отправить уведомление sign-act для карточки {card_id}")
+
+        return {"status": "act_signed", "stage_completed": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Ошибка в workflow/sign-act: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 
