@@ -1551,8 +1551,8 @@ async def workflow_reject_work(
     db: Session = Depends(get_db)
 ):
     """Отправить на исправление — обновляет workflow state и сбрасывает completed.
-    НЕ записывает дату в таймлайн — правки это внутренний цикл.
-    Таймлайн продвигается только при client-send (отправка клиенту).
+    Записывает дату проверки reviewer в таймлайн (отклонение — тоже факт проверки).
+    Продвигает current_substep_code на строку "Правка" (исполнитель).
     Опционально принимает revision_file_path (путь к папке правок на ЯД)."""
     try:
         body = {}
@@ -1567,9 +1567,6 @@ async def workflow_reject_work(
         stage_name = card.column_name
         contract_id = card.contract_id
         revision_file_path = body.get('revision_file_path', '')
-
-        # НЕ записываем дату в таймлайн — правки это внутренний цикл
-        # Таймлайн продвигается только при отправке клиенту (client-send)
 
         # Сбрасываем completed у исполнителя текущей стадии
         # чтобы он увидел кнопку "Сдать работу" снова
@@ -1594,7 +1591,6 @@ async def workflow_reject_work(
                 status='revision',
                 revision_count=1,
                 revision_file_path=revision_file_path or None,
-                # НЕ меняем current_substep_code — исполнитель дорабатывает тот же подэтап
             )
             db.add(wf)
         else:
@@ -1602,8 +1598,45 @@ async def workflow_reject_work(
             wf.revision_count = (wf.revision_count or 0) + 1
             if revision_file_path:
                 wf.revision_file_path = revision_file_path
-            # НЕ меняем current_substep_code — исполнитель дорабатывает тот же подэтап
             wf.updated_at = datetime.utcnow()
+
+        # Записываем дату проверки reviewer (отклонение тоже фиксируется в таймлайне)
+        # и продвигаем current_substep_code на строку "Правка" (исполнитель)
+        stage_group = _resolve_stage_group(stage_name)
+        if contract_id and wf.current_substep_code and stage_group:
+            current_entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_code == wf.current_substep_code
+            ).first()
+            if current_entry:
+                # Дата проверки reviewer (СДП/ГАП/Менеджер) — первая пустая после текущего исполнителя
+                reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
+                reviewer_entry = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.executor_role.in_(reviewer_roles),
+                    ProjectTimelineEntry.sort_order > current_entry.sort_order,
+                    (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
+                ).order_by(ProjectTimelineEntry.sort_order).first()
+                if reviewer_entry:
+                    reviewer_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                    reviewer_entry.updated_at = datetime.utcnow()
+                    logger.info(f"reject: дата проверки записана в {reviewer_entry.stage_code} ({reviewer_entry.stage_name})")
+
+                # Продвигаем current_substep_code на строку "Правка" (исполнитель)
+                correction_entry = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.substage_group == current_entry.substage_group,
+                    ProjectTimelineEntry.executor_role.notin_(['header', 'Клиент', 'СДП', 'Менеджер', 'ГАП']),
+                    ProjectTimelineEntry.sort_order > current_entry.sort_order,
+                    (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
+                ).order_by(ProjectTimelineEntry.sort_order).first()
+                if correction_entry:
+                    wf.current_substep_code = correction_entry.stage_code
+                    logger.info(f"reject: substep продвинут на {correction_entry.stage_code} ({correction_entry.stage_name})")
+
+                _server_recalculate_actual_days(db, contract_id)
 
         # K11: Запись в историю
         db.add(ActionHistory(
@@ -1648,25 +1681,31 @@ async def workflow_client_send(
 
     deadline_str = ''
     if stage_group and contract_id:
-        # === 1. Записываем дату проверки reviewer в таймлайн ===
-        reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
-        reviewer_entry = db.query(ProjectTimelineEntry).filter(
-            ProjectTimelineEntry.contract_id == contract_id,
-            ProjectTimelineEntry.stage_group == stage_group,
-            ProjectTimelineEntry.executor_role.in_(reviewer_roles),
-            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).first()
-        if reviewer_entry:
-            reviewer_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
-            reviewer_entry.updated_at = datetime.utcnow()
-
-        # === 2. Находим первую незаполненную клиентскую строку ===
+        # === 1. Находим первую незаполненную клиентскую строку ===
         client_entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
             ProjectTimelineEntry.executor_role == 'Клиент',
             ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
         ).order_by(ProjectTimelineEntry.sort_order).first()
+
+        # === 2. Записываем дату проверки reviewer (только ДО клиентской строки) ===
+        reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
+        reviewer_query = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role.in_(reviewer_roles),
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        )
+        if client_entry:
+            # Не записывать в строки ПОСЛЕ клиентской (например "Сбор правок")
+            reviewer_query = reviewer_query.filter(
+                ProjectTimelineEntry.sort_order < client_entry.sort_order
+            )
+        reviewer_entry = reviewer_query.order_by(ProjectTimelineEntry.sort_order).first()
+        if reviewer_entry:
+            reviewer_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+            reviewer_entry.updated_at = datetime.utcnow()
 
         if client_entry:
             # Помечаем незаполненные строки как пропущенные:
@@ -1838,6 +1877,8 @@ async def workflow_client_approved(
         contract_id = card.contract_id
 
         stage_group = _resolve_stage_group(stage_name)
+        client_entry = None
+        collection_entry = None
         if stage_group and contract_id:
             # Записываем дату в клиентскую строку "Отправка клиенту / Согласование"
             client_entry = db.query(ProjectTimelineEntry).filter(
@@ -1849,6 +1890,23 @@ async def workflow_client_approved(
             if client_entry:
                 client_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
                 client_entry.updated_at = datetime.utcnow()
+
+                # Записываем дату в строку "Сбор правок" (следующая после клиентской с ролью reviewer)
+                reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
+                collection_entry = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.executor_role.in_(reviewer_roles),
+                    ProjectTimelineEntry.sort_order > client_entry.sort_order,
+                    or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == '')
+                ).order_by(ProjectTimelineEntry.sort_order).first()
+                if collection_entry and 'сбор правок' in (collection_entry.stage_name or '').lower():
+                    collection_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')
+                    collection_entry.updated_at = datetime.utcnow()
+                    logger.info(f"client-ok: дата записана в {collection_entry.stage_code} ({collection_entry.stage_name})")
+                else:
+                    collection_entry = None  # не подходит — сбрасываем для last_recorded
+
             _server_recalculate_actual_days(db, contract_id)
 
         wf = db.query(StageWorkflowState).filter(
@@ -1893,7 +1951,22 @@ async def workflow_client_approved(
                 wf.status = 'pending_decision'  # ждём решения reviewer
             else:
                 wf.status = 'in_progress'
+                # Продвигаем current_substep_code на первый вход следующего подэтапа
+                last_recorded = collection_entry or (client_entry if stage_group else None)
+                if last_recorded and stage_group and contract_id:
+                    next_substep = db.query(ProjectTimelineEntry).filter(
+                        ProjectTimelineEntry.contract_id == contract_id,
+                        ProjectTimelineEntry.stage_group == stage_group,
+                        ProjectTimelineEntry.executor_role.notin_(['header']),
+                        ProjectTimelineEntry.sort_order > last_recorded.sort_order,
+                        or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == '')
+                    ).order_by(ProjectTimelineEntry.sort_order).first()
+                    if next_substep:
+                        wf.current_substep_code = next_substep.stage_code
+                        wf.current_substage_group = next_substep.substage_group
+                        logger.info(f"client-ok: переход к {next_substep.stage_code} ({next_substep.stage_name}), подэтап: {next_substep.substage_group}")
             wf.client_approval_deadline_paused = False
+            wf.revision_count = 0  # сбрасываем счётчик правок для нового подэтапа
             wf.updated_at = datetime.utcnow()
 
         # K11: Запись в историю
