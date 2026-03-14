@@ -1352,12 +1352,16 @@ def _resolve_stage_group(column_name: str) -> str:
     m = re.search(r'стадия\s*(\d+)', col)
     if m:
         return f'STAGE{m.group(1)}'
-    # Альтернативные маппинги для других названий колонок
+    # Альтернативные маппинги для нестандартных названий колонок
     if 'планировочн' in col:
         return 'STAGE1'
     elif 'концепция' in col or 'дизайн' in col:
         return 'STAGE2'
-    elif 'чертеж' in col or 'чертёж' in col:
+    elif 'рабоч' in col or 'чертеж' in col or 'чертёж' in col or 'документац' in col:
+        # Для шаблонных "Стадия 2: рабочие чертежи" regex уже выдаёт STAGE2
+        # Этот fallback — для случаев без "Стадия N:" в названии
+        return 'STAGE3'
+    elif 'визуализац' in col or '3д' in col or '3d' in col:
         return 'STAGE3'
     return ''
 
@@ -1399,7 +1403,7 @@ async def workflow_submit_work(
             return {"status": "no_stage_group"}
 
         # Роли исполнителей (те, кто нажимает "Сдать работу")
-        executor_roles = ['Чертежник', 'Дизайнер', 'ГАП']
+        executor_roles = ['Чертежник', 'Дизайнер']
 
         # Проверяем workflow state — если revision, обновляем тот же подэтап (не следующий)
         wf = db.query(StageWorkflowState).filter(
@@ -1488,7 +1492,7 @@ async def workflow_accept_work(
         stage_group = _resolve_stage_group(stage_name)
 
         # Роли проверяющих (те, кто нажимает "Принять работу")
-        reviewer_roles = ['СДП', 'Менеджер']
+        reviewer_roles = ['СДП', 'Менеджер', 'ГАП']
 
         if stage_group:
             entry = db.query(ProjectTimelineEntry).filter(
@@ -1624,14 +1628,26 @@ async def workflow_reject_work(
                     logger.info(f"reject: дата проверки записана в {reviewer_entry.stage_code} ({reviewer_entry.stage_name})")
 
                 # Продвигаем current_substep_code на строку "Правка" (исполнитель)
-                correction_entry = db.query(ProjectTimelineEntry).filter(
+                # Для плоских стадий (STAGE3 инд., STAGE2/3 шабл.) substage_group может быть None или ''
+                current_substage = current_entry.substage_group
+                correction_query = db.query(ProjectTimelineEntry).filter(
                     ProjectTimelineEntry.contract_id == contract_id,
                     ProjectTimelineEntry.stage_group == stage_group,
-                    ProjectTimelineEntry.substage_group == current_entry.substage_group,
                     ProjectTimelineEntry.executor_role.notin_(['header', 'Клиент', 'СДП', 'Менеджер', 'ГАП']),
                     ProjectTimelineEntry.sort_order > current_entry.sort_order,
                     (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
-                ).order_by(ProjectTimelineEntry.sort_order).first()
+                )
+                if current_substage and current_substage.strip():
+                    # Иерархическая стадия — ищем в рамках подэтапа
+                    correction_query = correction_query.filter(
+                        ProjectTimelineEntry.substage_group == current_substage
+                    )
+                else:
+                    # Плоская стадия — ищем в рамках всего stage_group (substage_group пуст/None)
+                    correction_query = correction_query.filter(
+                        or_(ProjectTimelineEntry.substage_group.is_(None), ProjectTimelineEntry.substage_group == '')
+                    )
+                correction_entry = correction_query.order_by(ProjectTimelineEntry.sort_order).first()
                 if correction_entry:
                     wf.current_substep_code = correction_entry.stage_code
                     logger.info(f"reject: substep продвинут на {correction_entry.stage_code} ({correction_entry.stage_name})")
@@ -1944,8 +1960,18 @@ async def workflow_client_approved(
                 'Подэтап 2.6': 'Подэтап 2.7',
             }
             current_subgroup = wf.current_substage_group if wf else None
-            has_next_round = current_subgroup in ROUND_PAIRS
             next_round_name = ROUND_PAIRS.get(current_subgroup)
+            has_next_round = False
+            if next_round_name and contract_id and stage_group:
+                # Проверяем что следующий круг реально существует в таймлайне
+                next_round_exists = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.substage_group == next_round_name,
+                ).first()
+                has_next_round = next_round_exists is not None
+                if not has_next_round:
+                    logger.warning(f"client-ok: ROUND_PAIRS указывает на '{next_round_name}', но в таймлайне его нет (contract_id={contract_id}, stage_group={stage_group})")
 
             if has_next_round:
                 wf.status = 'pending_decision'  # ждём решения reviewer
@@ -2043,7 +2069,7 @@ async def workflow_advance_round(
             raise HTTPException(status_code=400, detail=f"Нет следующего круга для {current_subgroup}")
 
         # Находим первый подэтап следующего круга (исполнитель)
-        executor_roles = ['Чертежник', 'Дизайнер', 'ГАП']
+        executor_roles = ['Чертежник', 'Дизайнер']
         next_entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
