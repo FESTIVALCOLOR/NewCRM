@@ -406,8 +406,12 @@ class ContractDialog(QDialog):
 
         self.city_combo = CustomComboBox()
         cities = self.data.get_all_cities() or []
-        for city in cities:
-            self.city_combo.addItem(city.get('name', ''))
+        # Сортировка: СПБ первым, Москва вторым, остальные по алфавиту
+        priority = {'СПБ': 0, 'Санкт-Петербург': 0, 'МСК': 1, 'Москва': 1}
+        city_names = [c.get('name', '') for c in cities if c.get('name') and not c.get('name', '').startswith('__')]
+        city_names.sort(key=lambda n: (priority.get(n, 2), n))
+        for name in city_names:
+            self.city_combo.addItem(name)
         main_layout_form.addRow('Город:', self.city_combo)
 
         self.contract_number = QLineEdit()
@@ -1168,6 +1172,31 @@ class ContractDialog(QDialog):
             buttons_layout = QHBoxLayout()
             buttons_layout.addStretch()
 
+            # Кнопка "Создать" (зелёная) — только для нового договора
+            # После создания превращается в "Сохранить" (жёлтую)
+            if not self.contract_data:
+                self.create_btn = QPushButton('Создать')
+                self.create_btn.setFixedHeight(36)
+                self.create_btn.clicked.connect(self._create_and_stay)
+                self.create_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #1E8449;
+                        color: white;
+                        padding: 0px 30px;
+                        font-weight: bold;
+                        border-radius: 4px;
+                        border: none;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #17703C; }
+                    QPushButton:pressed { background-color: #145F2E; }
+                    QPushButton:disabled {
+                        background-color: #d9d9d9;
+                        color: #666666;
+                    }
+                """)
+
             self.save_btn = QPushButton('Сохранить')
             self.save_btn.setFixedHeight(36)
             self.save_btn.clicked.connect(self.save_contract)
@@ -1189,6 +1218,9 @@ class ContractDialog(QDialog):
                     color: #666666;
                 }
             """)
+            # В режиме создания прячем "Сохранить" до первого создания
+            if not self.contract_data:
+                self.save_btn.setVisible(False)
 
             self.cancel_btn = QPushButton('Отмена')
             self.cancel_btn.setFixedHeight(36)
@@ -1212,6 +1244,8 @@ class ContractDialog(QDialog):
                 }
             """)
 
+            if hasattr(self, 'create_btn'):
+                buttons_layout.addWidget(self.create_btn)
             buttons_layout.addWidget(self.save_btn)
             buttons_layout.addWidget(self.cancel_btn)
 
@@ -3638,6 +3672,11 @@ class ContractDialog(QDialog):
         else:
             event.accept()
 
+    def _create_and_stay(self):
+        """Создать договор без закрытия диалога — для продолжения заполнения."""
+        self._create_and_stay_mode = True
+        self.save_contract()
+
     @debounce_click(delay_ms=2000)
     def save_contract(self):
         """Сохранение договора"""
@@ -3759,6 +3798,7 @@ class ContractDialog(QDialog):
         }
 
         try:
+            new_contract_id = None
             if self.contract_data:
                 # Обновление существующего договора
                 old_contract = self.contract_data
@@ -3787,11 +3827,11 @@ class ContractDialog(QDialog):
                 # Обновляем договор через DataAccess (API + локальная БД)
                 self.data.update_contract(self.contract_data['id'], contract_data)
 
-                # Переименование папки на Яндекс.Диске при изменении данных
-                old_folder_path = old_contract.get('yandex_folder_path', '')
-                if folder_changed and old_folder_path and self.yandex_disk:
+                # Обновление yandex_folder_path на сервере при изменении данных папки
+                # Переименование папки на Яндекс.Диске выполняет db_manager.update_contract() через async thread.
+                # Здесь только синхронизируем путь на сервере (PostgreSQL).
+                if folder_changed and self.yandex_disk:
                     try:
-                        # Строим новый путь к папке
                         new_folder_path = self.yandex_disk.build_contract_folder_path(
                             agent_type=new_agent_type,
                             project_type=new_project_type,
@@ -3799,48 +3839,11 @@ class ContractDialog(QDialog):
                             address=new_address,
                             area=new_area
                         )
-
-                        # Перемещаем папку (переименовываем)
-                        if self.yandex_disk.move_folder(old_folder_path, new_folder_path):
-                            # Обновляем путь в БД через DataAccess
-                            self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
-                            print(f"[OK] Папка переименована: {old_folder_path} -> {new_folder_path}")
-                        else:
-                            # Яндекс.Диск недоступен - добавляем в offline очередь
-                            print(f"[WARNING] Не удалось переименовать папку на Яндекс.Диске, добавляем в очередь")
-                            if self.offline_manager:
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.UPDATE,
-                                    'yandex_folder',
-                                    self.contract_data['id'],
-                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
-                                )
-                                # Сохраняем новый путь через DataAccess (будет актуален после синхронизации)
-                                self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                        # Обновляем путь на сервере (локальную БД уже обновил db_manager)
+                        self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                        print(f"[OK] yandex_folder_path обновлён на сервере: {new_folder_path}")
                     except Exception as e:
-                        print(f"[WARNING] Ошибка переименования папки: {e}")
-                        # При ошибке тоже добавляем в очередь
-                        if self.offline_manager and old_folder_path:
-                            try:
-                                new_folder_path = self.yandex_disk.build_contract_folder_path(
-                                    agent_type=new_agent_type,
-                                    project_type=new_project_type,
-                                    city=new_city,
-                                    address=new_address,
-                                    area=new_area
-                                )
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.UPDATE,
-                                    'yandex_folder',
-                                    self.contract_data['id'],
-                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
-                                )
-                                self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
-                                print(f"[QUEUE] Переименование папки добавлено в очередь: {old_folder_path} -> {new_folder_path}")
-                            except Exception as queue_error:
-                                print(f"[ERROR] Не удалось добавить в очередь: {queue_error}")
+                        print(f"[WARNING] Ошибка обновления yandex_folder_path: {e}")
             else:
                 # Создание нового договора через DataAccess
                 new_contract_id = None
@@ -3889,7 +3892,35 @@ class ContractDialog(QDialog):
                     except Exception as e:
                         print(f"[WARNING] Не удалось создать папку на Яндекс.Диске: {e}")
 
-            # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
+            # Если создание без закрытия (кнопка "Создать") — переключить в режим редактирования
+            if getattr(self, '_create_and_stay_mode', False):
+                self._create_and_stay_mode = False
+                if new_contract_id:
+                    # Переключаем диалог в режим редактирования
+                    self.contract_data = contract_data.copy()
+                    self.contract_data['id'] = new_contract_id
+                    # Обновляем заголовок
+                    self.setWindowTitle('Редактирование договора')
+                    for child in self.findChildren(QLabel):
+                        if child.text() == 'Добавление договора':
+                            child.setText('Редактирование договора')
+                            break
+                    # Скрываем "Создать", показываем "Сохранить"
+                    if hasattr(self, 'create_btn'):
+                        self.create_btn.setVisible(False)
+                    self.save_btn.setVisible(True)
+                    CustomMessageBox(
+                        self, 'Создано',
+                        f'Договор №{contract_number} создан.\n'
+                        f'Теперь можно добавить аванс и другие данные.',
+                        'success'
+                    ).exec_()
+                    return  # НЕ закрываем диалог
+                else:
+                    CustomMessageBox(self, 'Ошибка', 'Не удалось создать договор', 'error').exec_()
+                    return
+
+            # Закрываем диалог
             self.accept()
 
         except Exception as e:

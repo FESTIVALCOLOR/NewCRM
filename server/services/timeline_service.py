@@ -87,9 +87,9 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     # Подэтап 1.2 — не входит
     add_header('S1_2_HDR', 'Подэтап 1.2 — Фин. план 1 круг', 'STAGE1', 'Подэтап 1.2')
     add('S1_2_01', 'Фин. план. решение (1 круг)', 'STAGE1', 'Подэтап 1.2', 1 + K*1, 'Чертежник', True)
-    add('S1_2_02', 'Проверка СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', False)
-    add('S1_2_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'Чертежник', False)
-    add('S1_2_04', 'Проверка повторная СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', False)
+    add('S1_2_02', 'Проверка СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', True)
+    add('S1_2_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'Чертежник', True)
+    add('S1_2_04', 'Проверка повторная СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', True)
     add('S1_2_05', 'Отправка клиенту', 'STAGE1', 'Подэтап 1.2', 3, 'Клиент', False)
     add('S1_2_06', 'Сбор правок от клиента СДП', 'STAGE1', 'Подэтап 1.2', 1 + K*0.5, 'СДП', False)
 
@@ -99,7 +99,9 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     add('S1_3_02', 'Проверка СДП', 'STAGE1', 'Подэтап 1.3', 1 + K*0.5, 'СДП', False)
     add('S1_3_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.3', 1 + K*0.5, 'Чертежник', False)
     add('S1_3_04', 'Проверка СДП', 'STAGE1', 'Подэтап 1.3', 1 + K*0.5, 'СДП', False)
-    add('S1_3_05', 'Согласование планировки. Акт', 'STAGE1', 'Подэтап 1.3', 0, 'Клиент', False)
+    add('S1_3_05', 'Согласование планировки. Акт', 'STAGE1', 'Подэтап 1.3', 3, 'Клиент', False)
+    # Финальная строка этапа 1
+    add('S1_ACT', 'Акт / Планировка подписаны', 'STAGE1', '', 0, 'Менеджер', False)
 
     # --- ЭТАП 2: КОНЦЕПЦИЯ ДИЗАЙНА ---
     add_header('S2_HDR', 'ЭТАП 2: КОНЦЕПЦИЯ ДИЗАЙНА', 'STAGE2')
@@ -114,7 +116,7 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     add('S2_1_06', 'Сбор правок СДП', 'STAGE2', 'Подэтап 2.1', 1 + K*0.5, 'СДП', False)
     add('S2_1_07', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.1', 1 + K*1, 'Дизайнер', False)
     add('S2_1_08', 'Проверка СДП', 'STAGE2', 'Подэтап 2.1', 1, 'СДП', False)
-    add('S2_1_09', 'Согласование мудборда', 'STAGE2', 'Подэтап 2.1', 0, 'Клиент', False)
+    add('S2_1_09', 'Согласование мудборда', 'STAGE2', 'Подэтап 2.1', 3, 'Клиент', False)
 
     # 2.2 Виз 1 пом.
     add_header('S2_2_HDR', 'Подэтап 2.2 — Виз 1 пом.', 'STAGE2', 'Подэтап 2.2')
@@ -140,7 +142,7 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     add('S2_4_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.4', 1, 'СДП', False)
     add('S2_4_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.4', 1, 'Дизайнер', False)
     add('S2_4_04', 'Проверка СДП', 'STAGE2', 'Подэтап 2.4', 1, 'СДП', False)
-    add('S2_4_05', 'Согласование 1 пом.', 'STAGE2', 'Подэтап 2.4', 0, 'Клиент', False)
+    add('S2_4_05', 'Согласование 1 пом.', 'STAGE2', 'Подэтап 2.4', 3, 'Клиент', False)
 
     # 2.5 Виз остальных — входит
     add_header('S2_5_HDR', 'Подэтап 2.5 — Виз остальных', 'STAGE2', 'Подэтап 2.5')
@@ -157,7 +159,7 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     add('S2_6_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.6', 2 + K*1.5, 'СДП', False)
     add('S2_6_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.6', 2 + K*1.5, 'Дизайнер', False)
     add('S2_6_04', 'Проверка повторная СДП', 'STAGE2', 'Подэтап 2.6', 2 + K*1.5, 'СДП', False)
-    add('S2_6_05', 'Согласование визуализаций', 'STAGE2', 'Подэтап 2.6', 0, 'Клиент', False)
+    add('S2_6_05', 'Согласование визуализаций', 'STAGE2', 'Подэтап 2.6', 3, 'Клиент', False)
 
     # 2.7 Виз все 2 круг — не входит
     add_header('S2_7_HDR', 'Подэтап 2.7 — Виз все 2 круг', 'STAGE2', 'Подэтап 2.7')
@@ -165,12 +167,14 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     add('S2_7_02', 'Проверка СДП', 'STAGE2', 'Подэтап 2.7', 1 + K*1, 'СДП', False)
     add('S2_7_03', 'Правка дизайнером', 'STAGE2', 'Подэтап 2.7', 1 + K*1, 'Дизайнер', False)
     add('S2_7_04', 'Проверка СДП', 'STAGE2', 'Подэтап 2.7', 1 + K*1, 'СДП', False)
-    add('S2_7_05', 'Согласование дизайна. Акт', 'STAGE2', 'Подэтап 2.7', 0, 'Клиент', False)
+    add('S2_7_05', 'Согласование дизайна. Акт', 'STAGE2', 'Подэтап 2.7', 3, 'Клиент', False)
+    # Финальная строка этапа 2
+    add('S2_ACT', 'Акт подписан', 'STAGE2', '', 0, 'Менеджер', False)
 
     # --- ЭТАП 3: РАБОЧАЯ ДОКУМЕНТАЦИЯ ---
     add_header('S3_HDR', 'ЭТАП 3: РАБОЧАЯ ДОКУМЕНТАЦИЯ', 'STAGE3')
 
-    add('S3_01', 'Подготовка файлов, выдача', 'STAGE3', '', 1, 'СДП', True)
+    # S3_01 удалён (Подготовка файлов — убрана из шаблона)
     add('S3_02', 'Разработка комплекта РД', 'STAGE3', '', 10 + K*2, 'Чертежник', True)
     add('S3_03', 'Проверка ГАП (1 круг)', 'STAGE3', '', 3 + K*0.5, 'ГАП', True)
     add('S3_04', 'Правка чертежником', 'STAGE3', '', 2 + K*1, 'Чертежник', True)
@@ -181,7 +185,9 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
     add('S3_09', 'Сбор правок от клиента', 'STAGE3', '', 1 + K*0.5, 'Менеджер', False)
     add('S3_10', 'Внесение правок чертежником', 'STAGE3', '', 1 + K*1, 'Чертежник', False)
     add('S3_11', 'Проверка ГАП (4 круг)', 'STAGE3', '', 1 + K*0.5, 'ГАП', False)
-    add('S3_12', 'Принятие проекта. Акт финальный', 'STAGE3', '', 0, 'Клиент', False)
+    add('S3_12', 'Принятие проекта. Акт финальный', 'STAGE3', '', 3, 'Клиент', False)
+    # Финальная строка этапа 3
+    add('S3_ACT', 'Акт подписан', 'STAGE3', '', 0, 'Менеджер', False)
 
     # --- Фильтрация по подтипу проекта ---
     if project_subtype and 'Планировочный' in project_subtype:
@@ -244,10 +250,20 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
 
         # Корректировка: сумма in-scope = contract_term
         total_assigned = sum(e['norm_days'] for e in in_scope)
-        if total_assigned != contract_term and in_scope:
-            in_scope[-1]['norm_days'] += (contract_term - total_assigned)
-            if in_scope[-1]['norm_days'] < 1:
-                in_scope[-1]['norm_days'] = 1
+        diff = total_assigned - contract_term
+        if diff != 0 and in_scope:
+            # Распределяем дефицит/избыток по записям с наибольшим norm_days
+            sorted_by_days = sorted(in_scope, key=lambda x: x['norm_days'], reverse=True)
+            for entry in sorted_by_days:
+                if diff == 0:
+                    break
+                if diff > 0 and entry['norm_days'] > 1:
+                    take = min(diff, entry['norm_days'] - 1)
+                    entry['norm_days'] -= take
+                    diff -= take
+                elif diff < 0:
+                    entry['norm_days'] += 1
+                    diff += 1
 
     # Инициализация norm_days для ВСЕХ записей
     for e in entries:
@@ -267,31 +283,34 @@ def build_project_timeline_template(project_type: str, area: float, project_subt
 
 
 def calc_template_contract_term(template_subtype: str, area: float, floors: int = 1) -> int:
-    """Расчёт срока для шаблонных проектов (рабочие дни)"""
-    sub = template_subtype.lower()
-    if 'ванной' in sub:
-        if 'визуализац' in sub:
-            return 20
-        return 10
+    """Расчёт срока для шаблонных проектов (рабочие дни).
 
-    # Стандарт / Стандарт с визуализацией
+    Этажность (только Стандарт и Стандарт+Визуал):
+      +10 раб. дней за каждый доп. этаж (Стандарт)
+      +20 раб. дней за каждый доп. этаж (Стандарт+Визуал)
+    """
+    sub = template_subtype.lower()
+    has_viz = 'визуализац' in sub
+
+    # Ванная — фиксированный срок, этажность не применяется
+    if 'ванн' in sub:
+        return 20 if has_viz else 10
+
+    # Стандарт / Стандарт с визуализацией — базовый срок по площади
     if area <= 90:
         base_days = 20
     else:
         extra = int((area - 90 - 1) // 50) + 1
         base_days = 20 + extra * 10
 
-    # Доп. этажи
+    # Этажность: +10 (Стандарт) или +20 (Стандарт+Визуал) за каждый доп. этаж
     if floors > 1:
-        for _ in range(1, floors):
-            if area <= 90:
-                base_days += 10
-            else:
-                extra = int((area - 90 - 1) // 50) + 1
-                base_days += 10 + extra * 10
+        extra_floors = floors - 1
+        floor_bonus = 20 if has_viz else 10
+        base_days += extra_floors * floor_bonus
 
     # Визуализация
-    if 'визуализац' in sub:
+    if has_viz:
         if area <= 90:
             base_days += 25
         else:
@@ -346,15 +365,17 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
     # Подэтап 1.2
     add_header('T1_2_HDR', 'Подэтап 1.2 — Финальное план. решение', 'STAGE1', 'Подэтап 1.2')
     add('T1_2_01', 'Финальное план. решение (1 круг)', 'STAGE1', 'Подэтап 1.2', 1, 'Чертежник', True)
-    add('T1_2_02', 'Проверка менеджером', 'STAGE1', 'Подэтап 1.2', 1, 'Менеджер', False)
-    add('T1_2_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.2', 1, 'Чертежник', False)
-    add('T1_2_04', 'Проверка повторная менеджером', 'STAGE1', 'Подэтап 1.2', 0.5, 'Менеджер', False)
+    add('T1_2_02', 'Проверка менеджером', 'STAGE1', 'Подэтап 1.2', 1, 'Менеджер', True)
+    add('T1_2_03', 'Правка чертежником', 'STAGE1', 'Подэтап 1.2', 1, 'Чертежник', True)
+    add('T1_2_04', 'Проверка повторная менеджером', 'STAGE1', 'Подэтап 1.2', 0.5, 'Менеджер', True)
     add('T1_2_05', 'Отправка клиенту / Согласование', 'STAGE1', 'Подэтап 1.2', 3, 'Клиент', False)
+    # Финальная строка стадии 1
+    add('T1_ACT', 'Акт / Планировка подписаны', 'STAGE1', '', 0, 'Менеджер', False)
 
     # --- СТАДИЯ 2: РАБОЧИЕ ЧЕРТЕЖИ ---
     add_header('T2_HDR', 'СТАДИЯ 2: РАБОЧИЕ ЧЕРТЕЖИ', 'STAGE2')
 
-    add('T2_01', 'Подготовка файлов, выдача чертежнику', 'STAGE2', '', 1, 'Менеджер', True)
+    # T2_01 удалён (Подготовка файлов — убрана из шаблона)
     add('T2_02', 'Разработка комплекта РД', 'STAGE2', '', 5, 'Чертежник', True)
     add('T2_03', 'Проверка ГАП (1 круг)', 'STAGE2', '', 2, 'ГАП', True)
     add('T2_04', 'Правка чертежником', 'STAGE2', '', 1, 'Чертежник', True)
@@ -365,7 +386,9 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
     add('T2_09', 'Сбор правок от клиента', 'STAGE2', '', 1, 'Менеджер', False)
     add('T2_10', 'Внесение правок чертежником', 'STAGE2', '', 1, 'Чертежник', False)
     add('T2_11', 'Проверка ГАП (4 круг)', 'STAGE2', '', 1, 'ГАП', False)
-    add('T2_12', 'Принятие проекта. Закрытие.', 'STAGE2', '', 0, 'Клиент', False)
+    add('T2_12', 'Принятие проекта. Закрытие.', 'STAGE2', '', 3, 'Клиент', False)
+    # Финальная строка стадии 2
+    add('T2_ACT', 'Акт подписан', 'STAGE2', '', 0, 'Менеджер', False)
 
     # --- СТАДИЯ 3: 3Д ВИЗУАЛИЗАЦИЯ (только для подтипов с визуализацией) ---
     has_viz = 'визуализац' in template_subtype.lower()
@@ -377,7 +400,9 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
         add('T3_03', 'Правка дизайнером', 'STAGE3', '', 3, 'Дизайнер', True)
         add('T3_04', 'Проверка повторная менеджером', 'STAGE3', '', 1, 'Менеджер', True)
         add('T3_05', 'Отправка клиенту / Согласование', 'STAGE3', '', 3, 'Клиент', False)
-        add('T3_06', 'Принятие проекта. Закрытие.', 'STAGE3', '', 0, 'Клиент', False)
+        add('T3_06', 'Принятие проекта. Закрытие.', 'STAGE3', '', 3, 'Клиент', False)
+        # Финальная строка стадии 3
+        add('T3_ACT', 'Акт подписан', 'STAGE3', '', 0, 'Менеджер', False)
 
     # Перенумерация sort_order
     for i, e in enumerate(entries, 1):
@@ -429,10 +454,19 @@ def build_template_project_timeline(template_subtype: str, area: float, floors: 
 
         # Корректировка: сумма in-scope = contract_term
         total_assigned = sum(e['norm_days'] for e in in_scope)
-        if total_assigned != contract_term and in_scope:
-            in_scope[-1]['norm_days'] += (contract_term - total_assigned)
-            if in_scope[-1]['norm_days'] < 1:
-                in_scope[-1]['norm_days'] = 1
+        diff = total_assigned - contract_term
+        if diff != 0 and in_scope:
+            sorted_by_days = sorted(in_scope, key=lambda x: x['norm_days'], reverse=True)
+            for entry in sorted_by_days:
+                if diff == 0:
+                    break
+                if diff > 0 and entry['norm_days'] > 1:
+                    take = min(diff, entry['norm_days'] - 1)
+                    entry['norm_days'] -= take
+                    diff -= take
+                elif diff < 0:
+                    entry['norm_days'] += 1
+                    diff += 1
 
     # Не в сроке: norm = max(1, round(raw))
     for e in entries:

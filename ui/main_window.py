@@ -352,7 +352,10 @@ class MainWindow(QMainWindow):
                 padding-left: 10px;
             }
         """)
-        self.online_indicator.setToolTip("Пользователи онлайн")
+        self.online_indicator.setCursor(Qt.PointingHandCursor)
+        self.online_indicator.mousePressEvent = self._show_online_popup
+        self._online_popup = None
+        self._online_users_list = []
         self._update_online_indicator(0)
         status_bar_layout.addWidget(self.online_indicator)
 
@@ -1653,6 +1656,7 @@ class MainWindow(QMainWindow):
 
     def _update_online_indicator(self, count: int, users: list = None):
         """Обновить индикатор онлайн пользователей"""
+        self._online_users_list = users or []
         if count == 0:
             self.online_indicator.setText("")
         elif count == 1:
@@ -1660,11 +1664,54 @@ class MainWindow(QMainWindow):
         else:
             self.online_indicator.setText(f"{count} онлайн")
 
-        # Формируем tooltip со списком пользователей
-        if users:
-            user_names = [u.get('full_name', 'Неизвестный') for u in users]
-            tooltip = "Пользователи онлайн:\n" + "\n".join(f"- {name}" for name in user_names)
-            self.online_indicator.setToolTip(tooltip)
+    def _show_online_popup(self, event=None):
+        """Показать popup со списком онлайн пользователей"""
+        from PyQt5.QtWidgets import QFrame
+        users = self._online_users_list
+        if not users:
+            return
+
+        # Исполнители видят только количество
+        position = self.employee.get('position', '')
+        hidden_roles = {'Дизайнер', 'Чертёжник', 'Замерщик', 'ДАН'}
+        if position in hidden_roles:
+            return
+
+        # Закрываем предыдущий popup
+        if self._online_popup:
+            self._online_popup.close()
+
+        popup = QFrame(self, Qt.Popup | Qt.FramelessWindowHint)
+        popup.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QLabel { border: none; }
+        """)
+        layout = QVBoxLayout(popup)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(2)
+
+        title = QLabel("Пользователи онлайн:")
+        title.setStyleSheet("font-weight: bold; font-size: 11px; color: #333; padding-bottom: 4px;")
+        layout.addWidget(title)
+
+        for u in users:
+            name = u.get('full_name', 'Неизвестный')
+            lbl = QLabel(f"  - {name}")
+            lbl.setStyleSheet("font-size: 11px; color: #555;")
+            layout.addWidget(lbl)
+
+        popup.adjustSize()
+
+        # Позиционируем popup над индикатором
+        pos = self.online_indicator.mapToGlobal(self.online_indicator.rect().topLeft())
+        popup.move(pos.x(), pos.y() - popup.height() - 4)
+        popup.show()
+        self._online_popup = popup
 
     def _on_online_users_updated(self, users: list):
         """Обработчик обновления списка онлайн пользователей"""
@@ -1755,6 +1802,12 @@ class MainWindow(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             # Удаляем eventFilter перед выходом
             QApplication.instance().removeEventFilter(self)
+            # Отправляем logout на сервер (снимает is_online)
+            try:
+                if hasattr(self, 'api_client') and self.api_client:
+                    self.api_client.logout()
+            except Exception as e:
+                print(f"[WARNING] Ошибка logout при закрытии: {e}")
             # Останавливаем sync_manager перед выходом
             if self.sync_manager:
                 self.sync_manager.stop()

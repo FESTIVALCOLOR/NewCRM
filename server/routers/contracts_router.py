@@ -14,7 +14,8 @@ from database import (
     get_db, Contract, CRMCard, SupervisionCard, ProjectFile,
     ActivityLog, Employee, StageExecutor,
     Client, Payment, ProjectTimelineEntry,
-    SupervisionTimelineEntry, SupervisionProjectHistory
+    SupervisionTimelineEntry, SupervisionProjectHistory,
+    StageWorkflowState, ApprovalStageDeadline, MessengerChat
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -264,6 +265,12 @@ async def delete_contract(
         # Удаляем связанные CRM карточки
         crm_cards = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).all()
         for card in crm_cards:
+            # Удаляем чаты мессенджера
+            db.query(MessengerChat).filter(MessengerChat.crm_card_id == card.id).delete()
+            # Удаляем workflow state
+            db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == card.id).delete()
+            # Удаляем дедлайны согласования
+            db.query(ApprovalStageDeadline).filter(ApprovalStageDeadline.crm_card_id == card.id).delete()
             # Удаляем связанные stage_executors
             db.query(StageExecutor).filter(StageExecutor.crm_card_id == card.id).delete()
             # Удаляем платежи привязанные к карточке
@@ -281,6 +288,9 @@ async def delete_contract(
             # Удаляем платежи привязанные к карточке надзора
             db.query(Payment).filter(Payment.supervision_card_id == card.id).delete()
             db.delete(card)
+
+        # Удаляем оставшиеся чаты по договору
+        db.query(MessengerChat).filter(MessengerChat.contract_id == contract_id).delete()
 
         # Удаляем оставшиеся платежи по договору
         db.query(Payment).filter(Payment.contract_id == contract_id).delete()

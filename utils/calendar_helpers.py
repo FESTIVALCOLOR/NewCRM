@@ -195,11 +195,12 @@ def working_days_between(start_date_str, end_date_str):
         return 0
     if end <= start:
         return 0
+    from utils.date_utils import is_working_day
     count = 0
     current = start
     while current < end:
         current += timedelta(days=1)
-        if current.weekday() < 5:
+        if is_working_day(current):
             count += 1
     return count
 

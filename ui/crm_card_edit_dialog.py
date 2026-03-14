@@ -965,8 +965,11 @@ class CardEditDialog(QDialog):
         self.timeline_widget = None
         self._is_executor = is_executor
 
-        self._timeline_placeholder = QWidget()
-        self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
+        # Таблица сроков — только для руководителей, менеджеров, СДП, ГАП
+        self._timeline_tab_index = -1
+        if not is_executor:
+            self._timeline_placeholder = QWidget()
+            self._timeline_tab_index = self.tabs.addTab(self._timeline_placeholder, 'Таблица сроков')
 
         self._project_data_placeholder = QWidget()
         self.project_data_tab_index = self.tabs.addTab(self._project_data_placeholder, 'Данные по проекту')
@@ -1025,146 +1028,151 @@ class CardEditDialog(QDialog):
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
 
-            # --- Кнопки чата ---
-            self.create_chat_btn = IconLoader.create_icon_button(
-                'message-circle', 'Создать чат', 'Создать чат в мессенджере', icon_size=14
-            )
-            self.create_chat_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffd93c;
-                    color: #ffffff;
-                    padding: 0px 16px;
-                    border-radius: 4px;
-                    border: 1px solid #e6c236;
-                    font-weight: bold;
-                    max-height: 36px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background-color: #ffdb4d; border-color: #d9b530; }
-                QPushButton:pressed { background-color: #e6c236; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.create_chat_btn.setFixedHeight(36)
-            self.create_chat_btn.clicked.connect(self._on_create_chat)
+            # --- Кнопки чата (только для руководителей, менеджеров, СДП, ГАП) ---
+            if not is_executor:
+                self._has_chat_buttons = True
+                self.create_chat_btn = IconLoader.create_icon_button(
+                    'message-circle', 'Создать чат', 'Создать чат в мессенджере', icon_size=14
+                )
+                self.create_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffd93c;
+                        color: #ffffff;
+                        padding: 0px 16px;
+                        border-radius: 4px;
+                        border: 1px solid #e6c236;
+                        font-weight: bold;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #ffdb4d; border-color: #d9b530; }
+                    QPushButton:pressed { background-color: #e6c236; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.create_chat_btn.setFixedHeight(36)
+                self.create_chat_btn.clicked.connect(self._on_create_chat)
 
-            self.open_chat_btn = IconLoader.create_icon_button(
-                'external-link', 'Открыть чат', 'Открыть чат в мессенджере', icon_size=14
-            )
-            self.open_chat_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #333333;
-                    padding: 0px 16px;
-                    border-radius: 4px;
-                    border: 1px solid #d9d9d9;
-                    font-weight: bold;
-                    max-height: 36px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
-                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.open_chat_btn.setFixedHeight(36)
-            self.open_chat_btn.clicked.connect(self._on_open_chat)
+                self.open_chat_btn = IconLoader.create_icon_button(
+                    'external-link', 'Открыть чат', 'Открыть чат в мессенджере', icon_size=14
+                )
+                self.open_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #333333;
+                        padding: 0px 16px;
+                        border-radius: 4px;
+                        border: 1px solid #d9d9d9;
+                        font-weight: bold;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                    QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.open_chat_btn.setFixedHeight(36)
+                self.open_chat_btn.clicked.connect(self._on_open_chat)
 
-            self.delete_chat_btn = IconLoader.create_icon_button(
-                'trash', 'Удалить чат', 'Удалить чат из мессенджера', icon_size=14
-            )
-            self.delete_chat_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #F44336;
-                    padding: 0px 16px;
-                    border-radius: 4px;
-                    border: 1px solid #F44336;
-                    font-weight: bold;
-                    max-height: 36px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background-color: #FFF5F5; border-color: #E74C3C; }
-                QPushButton:pressed { background-color: #FFEBEE; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.delete_chat_btn.setFixedHeight(36)
-            self.delete_chat_btn.clicked.connect(self._on_delete_chat)
+                self.delete_chat_btn = IconLoader.create_icon_button(
+                    'trash', 'Удалить чат', 'Удалить чат из мессенджера', icon_size=14
+                )
+                self.delete_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #F44336;
+                        padding: 0px 16px;
+                        border-radius: 4px;
+                        border: 1px solid #F44336;
+                        font-weight: bold;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #FFF5F5; border-color: #E74C3C; }
+                    QPushButton:pressed { background-color: #FFEBEE; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.delete_chat_btn.setFixedHeight(36)
+                self.delete_chat_btn.clicked.connect(self._on_delete_chat)
 
-            buttons_layout.addWidget(self.create_chat_btn)
-            buttons_layout.addWidget(self.open_chat_btn)
-            buttons_layout.addWidget(self.delete_chat_btn)
+                buttons_layout.addWidget(self.create_chat_btn)
+                buttons_layout.addWidget(self.open_chat_btn)
+                buttons_layout.addWidget(self.delete_chat_btn)
 
-            self.invite_client_btn = IconLoader.create_icon_button(
-                'telegram', '', 'Пригласить клиента — отправить email со ссылкой на чат', icon_size=16
-            )
-            self.invite_client_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #E3F2FD;
-                    border-radius: 4px;
-                    border: 1px solid #90CAF9;
-                    max-height: 36px;
-                    min-height: 36px;
-                    max-width: 36px;
-                    min-width: 36px;
-                }
-                QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
-                QPushButton:pressed { background-color: #90CAF9; }
-                QPushButton:disabled { background-color: #fafafa; border-color: #e6e6e6; }
-            """)
-            self.invite_client_btn.setFixedSize(36, 36)
-            self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
-            self.invite_client_btn.clicked.connect(self._on_invite_client)
-            buttons_layout.addWidget(self.invite_client_btn)
+                self.invite_client_btn = IconLoader.create_icon_button(
+                    'telegram', '', 'Пригласить клиента — отправить email со ссылкой на чат', icon_size=16
+                )
+                self.invite_client_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E3F2FD;
+                        border-radius: 4px;
+                        border: 1px solid #90CAF9;
+                        max-height: 36px;
+                        min-height: 36px;
+                        max-width: 36px;
+                        min-width: 36px;
+                    }
+                    QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
+                    QPushButton:pressed { background-color: #90CAF9; }
+                    QPushButton:disabled { background-color: #fafafa; border-color: #e6e6e6; }
+                """)
+                self.invite_client_btn.setFixedSize(36, 36)
+                self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
+                self.invite_client_btn.clicked.connect(self._on_invite_client)
+                buttons_layout.addWidget(self.invite_client_btn)
 
-            # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
-            self.start_script_btn = IconLoader.create_icon_button(
-                'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
-            )
-            self.start_script_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #333333;
-                    padding: 0px;
-                    border-radius: 2px;
-                    border: 1px solid #d9d9d9;
-                    min-width: 36px; max-width: 36px;
-                    min-height: 36px; max-height: 36px;
-                }
-                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
-                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.start_script_btn.setFixedSize(36, 36)
-            self.start_script_btn.clicked.connect(self._on_send_start_script)
+                # --- Кнопки скриптов мессенджера (иконки без текста, текст в tooltip) ---
+                self.start_script_btn = IconLoader.create_icon_button(
+                    'play', '', 'Начальный скрипт — отправить в чат', icon_size=16
+                )
+                self.start_script_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #333333;
+                        padding: 0px;
+                        border-radius: 2px;
+                        border: 1px solid #d9d9d9;
+                        min-width: 36px; max-width: 36px;
+                        min-height: 36px; max-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                    QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.start_script_btn.setFixedSize(36, 36)
+                self.start_script_btn.clicked.connect(self._on_send_start_script)
 
-            self.end_script_btn = IconLoader.create_icon_button(
-                'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
-            )
-            self.end_script_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #333333;
-                    padding: 0px;
-                    border-radius: 2px;
-                    border: 1px solid #d9d9d9;
-                    min-width: 36px; max-width: 36px;
-                    min-height: 36px; max-height: 36px;
-                }
-                QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
-                QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
-                QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
-            """)
-            self.end_script_btn.setFixedSize(36, 36)
-            self.end_script_btn.clicked.connect(self._on_send_end_script)
+                self.end_script_btn = IconLoader.create_icon_button(
+                    'check-circle', '', 'Завершающий скрипт — отправить в чат', icon_size=16
+                )
+                self.end_script_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #333333;
+                        padding: 0px;
+                        border-radius: 2px;
+                        border: 1px solid #d9d9d9;
+                        min-width: 36px; max-width: 36px;
+                        min-height: 36px; max-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #fafafa; border-color: #c0c0c0; }
+                    QPushButton:pressed { background-color: #f0f0f0; border-color: #b0b0b0; }
+                    QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
+                """)
+                self.end_script_btn.setFixedSize(36, 36)
+                self.end_script_btn.clicked.connect(self._on_send_end_script)
 
-            buttons_layout.addWidget(self.start_script_btn)
-            buttons_layout.addWidget(self.end_script_btn)
+                buttons_layout.addWidget(self.start_script_btn)
+                buttons_layout.addWidget(self.end_script_btn)
 
-            # Кнопка "Настройки чатов" перенесена в Администрирование (ui/admin_dialog.py)
+                # Кнопка "Настройки чатов" перенесена в Администрирование (ui/admin_dialog.py)
+
+                # Флаг для отложенной инициализации чата (после setLayout)
+                self._need_chat_init = True
+            else:
+                self._has_chat_buttons = False
+                self._need_chat_init = False
 
             buttons_layout.addStretch()
-
-            # Флаг для отложенной инициализации чата (после setLayout)
-            self._need_chat_init = True
 
             save_btn = QPushButton('Сохранить')
             save_btn.clicked.connect(self.save_changes)
@@ -5585,10 +5593,14 @@ class CardEditDialog(QDialog):
                 from database.db_manager import DatabaseManager
 
                 # Шаг 1: Сканируем ЯД на наличие новых файлов (не в БД)
+                # ОПТИМИЗАЦИЯ: пропускаем скан ЯД если файлы стадий уже загружены из API/БД
+                # Скан нужен ТОЛЬКО если файлов ещё нет — для первичного обнаружения на ЯД
                 new_files_found = False
                 contract_updated = False
-                if is_online:
+                skip_scan = getattr(self, '_stage_files_from_api', False)
+                if is_online and not skip_scan:
                     try:
+                        print(f"[YD-SYNC] Запуск сканирования ЯД для contract_id={contract_id}")
                         scan_result = self.data.scan_contract_files(contract_id)
                         new_count = scan_result.get('new_files_added', 0)
                         contract_updated = scan_result.get('contract_updated', False)
@@ -5599,7 +5611,6 @@ class CardEditDialog(QDialog):
                             print(f"[YD-SYNC] Новых файлов не найдено")
                         if contract_updated:
                             print(f"[YD-SYNC] Контракт обновлён (references/photo_documentation)")
-                            # Синхронизируем локальную БД с обновлённым контрактом
                             try:
                                 from utils.db_sync import sync_all_data
                                 sync_all_data(self.data.api_client, self.data.db)
@@ -5607,6 +5618,8 @@ class CardEditDialog(QDialog):
                                 print(f"[YD-SYNC] Ошибка синхронизации БД: {sync_e}")
                     except Exception as scan_err:
                         print(f"[YD-SYNC] Ошибка сканирования ЯД: {scan_err}")
+                elif skip_scan:
+                    print(f"[YD-SYNC] Скан ЯД пропущен — файлы стадий уже загружены из БД")
 
                 # Шаг 2: Загружаем актуальный список файлов
                 all_files = []
@@ -5660,8 +5673,6 @@ class CardEditDialog(QDialog):
                                 removed_ids.append(fid)
                                 print(f"[VALIDATE] Файл не найден: {yp}")
 
-                ui_needs_update = new_files_found or contract_updated
-
                 if removed_ids:
                     if not server_validated:
                         local_db2 = DatabaseManager()
@@ -5672,17 +5683,18 @@ class CardEditDialog(QDialog):
                                 print(f"[VALIDATE] Ошибка удаления файла {fid}: {del_err}")
                         local_db2.close()
                     print(f"[VALIDATE] Удалено {len(removed_ids)} мёртвых файлов из локальной БД")
-                    ui_needs_update = True
                 else:
                     print(f"[VALIDATE] Все файлы стадий на месте")
 
-                if ui_needs_update:
-                    try:
-                        self._reload_stage_files_signal.emit()
-                        if contract_updated:
-                            self.files_verification_completed.emit()
-                    except RuntimeError:
-                        pass  # Диалог уже закрыт
+                # ВСЕГДА перезагружаем UI файлов стадий после валидации:
+                # _load_all_stage_files_batch мог не получить файлы (если локальная БД пуста),
+                # а validate загрузил актуальный список из API — нужно показать в UI
+                try:
+                    self._reload_stage_files_signal.emit()
+                    if contract_updated:
+                        self.files_verification_completed.emit()
+                except RuntimeError:
+                    pass  # Диалог уже закрыт
 
             except Exception as e:
                 import traceback
@@ -7508,13 +7520,11 @@ class CardEditDialog(QDialog):
             # После создания виджета — обновляем labels файлов из кэшированного контракта
             # (load_data() выполнился ДО создания виджетов, hasattr возвращал False)
             self._update_project_data_file_labels()
+            # Перезагружаем файлы стадий в НОВЫЕ виджеты (старые уничтожены при removeTab).
+            # Файлы уже в локальной БД (sync_project_files_to_local в load_data),
+            # prefer_local=True → загрузка из SQLite без API-вызова.
+            self._load_all_stage_files_batch()
             app.processEvents()
-
-            # История по проекту
-            if self.project_info_tab_index >= 0:
-                info_widget = self.create_project_info_widget()
-                self.tabs.removeTab(self.project_info_tab_index)
-                self.tabs.insertTab(self.project_info_tab_index, info_widget, 'История по проекту')
 
             # Оплаты
             if self.payments_tab_index >= 0:
@@ -7524,26 +7534,34 @@ class CardEditDialog(QDialog):
         finally:
             self.data.prefer_local = False
 
+        # История по проекту — грузим через API (записи payment_created создаются сервером)
+        if self.project_info_tab_index >= 0:
+            info_widget = self.create_project_info_widget()
+            self.tabs.removeTab(self.project_info_tab_index)
+            self.tabs.insertTab(self.project_info_tab_index, info_widget, 'История по проекту')
+
         app.processEvents()
 
         # Таблица сроков — данные только на сервере, грузим через API
-        try:
-            from ui.timeline_widget import ProjectTimelineWidget
-            # Определяем readonly режим для архивных карточек
-            _archive_statuses = ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР')
-            _contract_status = self.card_data.get('contract_status', '') or ''
-            _is_archive = _contract_status in _archive_statuses
-            self.timeline_widget = ProjectTimelineWidget(
-                card_data=self.card_data, data=self.data, db=self.db,
-                api_client=self.api_client, employee=self.employee, parent=self,
-                readonly=_is_archive
-            )
-            # Подписываемся на обновление дедлайна из таймлайна
-            self.timeline_widget.deadline_updated.connect(self._on_timeline_deadline_updated)
-            self.tabs.removeTab(self._timeline_tab_index)
-            self.tabs.insertTab(self._timeline_tab_index, self.timeline_widget, 'Таблица сроков')
-        except Exception as e:
-            print(f"[CardEditDialog] Ошибка создания таблицы сроков: {e}")
+        # Только для не-исполнителей (руководители, менеджеры, СДП, ГАП)
+        if self._timeline_tab_index >= 0:
+            try:
+                from ui.timeline_widget import ProjectTimelineWidget
+                # Определяем readonly режим для архивных карточек
+                _archive_statuses = ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР')
+                _contract_status = self.card_data.get('contract_status', '') or ''
+                _is_archive = _contract_status in _archive_statuses
+                self.timeline_widget = ProjectTimelineWidget(
+                    card_data=self.card_data, data=self.data, db=self.db,
+                    api_client=self.api_client, employee=self.employee, parent=self,
+                    readonly=_is_archive
+                )
+                # Подписываемся на обновление дедлайна из таймлайна
+                self.timeline_widget.deadline_updated.connect(self._on_timeline_deadline_updated)
+                self.tabs.removeTab(self._timeline_tab_index)
+                self.tabs.insertTab(self._timeline_tab_index, self.timeline_widget, 'Таблица сроков')
+            except Exception as e:
+                print(f"[CardEditDialog] Ошибка создания таблицы сроков: {e}")
 
         self.tabs.setCurrentIndex(current_tab)
 
@@ -7903,8 +7921,6 @@ class CardEditDialog(QDialog):
                 from ui.custom_message_box import CustomMessageBox
                 CustomMessageBox(self, 'Ошибка', f'Не удалось удалить файл с сервера: {api_err}', 'error').exec_()
                 return
-            # Удаляем из локальной БД после успешного удаления на сервере
-            self.data.delete_project_file(file_id)
         else:
             # Offline режим: удаляем локально и с ЯД напрямую
             file_info = self.data.delete_project_file(file_id)
@@ -8236,20 +8252,25 @@ class CardEditDialog(QDialog):
             self.stage2_3d_gallery.remove_variation_tab(variation)
 
     def _load_all_stage_files_batch(self):
-        """Загрузка файлов ВСЕХ стадий из локальной БД (мгновенно)"""
-        from database.db_manager import DatabaseManager
-
+        """Загрузка файлов ВСЕХ стадий через DataAccess (API → fallback на локальную БД)"""
         contract_id = self.card_data.get('contract_id')
         if not contract_id:
+            self._stage_files_from_api = False
             return
 
-        # Читаем из локальной БД — мгновенно, без сетевых задержек
-        # Фоновый validate_stage_files_on_yandex обновит при необходимости
-        db = DatabaseManager()
-        all_files = db.get_project_files(contract_id)
+        # Через DataAccess: API (серверная БД) с fallback на локальную SQLite
+        # Необходимо для видимости файлов, загруженных другими пользователями
+        all_files = self.data.get_project_files(contract_id)
 
         if not all_files:
             all_files = []
+
+        # Флаг: файлы получены из API/локальной БД — скан ЯД не нужен
+        stage_files = [f for f in all_files if f.get('stage') in
+                       ('stage1', 'stage2_concept', 'stage2_3d', 'stage3')]
+        self._stage_files_from_api = len(stage_files) > 0
+        print(f"[BATCH] Загружено {len(all_files)} файлов ({len(stage_files)} стадийных), "
+              f"скан ЯД {'пропустим' if self._stage_files_from_api else 'нужен'}")
 
         # Фильтруем правки
         all_files = [f for f in all_files if '/правки/' not in (f.get('yandex_path') or '').lower()]
@@ -8281,7 +8302,7 @@ class CardEditDialog(QDialog):
                 variations[variation] = []
             variations[variation].append(file_data)
         for variation, variation_files in variations.items():
-            gallery.load_files(variation_files, variation)
+            gallery.load_files_for_variation(variation, variation_files, self.load_preview_for_file)
 
     def reload_stage_files(self, stage):
         """Перезагрузка файлов стадии (API → fallback на локальную БД)"""

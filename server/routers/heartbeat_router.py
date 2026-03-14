@@ -31,8 +31,8 @@ async def send_heartbeat(
         current_user.is_online = True
         db.commit()
 
-        # Определяем порог активности (5 минут)
-        activity_threshold = datetime.utcnow() - timedelta(minutes=5)
+        # Определяем порог активности (2 минуты — heartbeat каждые 60с, 2 пропуска = offline)
+        activity_threshold = datetime.utcnow() - timedelta(minutes=2)
 
         # Получаем список онлайн пользователей
         online_employees = db.query(Employee).filter(
