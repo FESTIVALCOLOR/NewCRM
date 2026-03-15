@@ -3723,12 +3723,25 @@ class PreviewLoaderThread(threading.Thread):
         from utils.preview_generator import PreviewGenerator
         from utils.yandex_disk import YandexDiskManager
         import tempfile
-        import urllib.request
-        import urllib.parse
+        import time
+        import logging
+        logger = logging.getLogger('crm')
 
-        for item in self.files_to_load:
+        yd = None
+        if self.yandex_token:
+            try:
+                yd = YandexDiskManager(self.yandex_token)
+            except Exception:
+                pass
+
+        for idx, item in enumerate(self.files_to_load):
             if self._stop_event.is_set():
                 break
+
+            # Пауза между запросами для защиты от rate-limit Яндекс API
+            if idx > 0:
+                time.sleep(0.5)
+
             # Поддержка обоих форматов: с yandex_path и без
             if len(item) >= 6:
                 file_id, public_link, contract_id, stage, file_name, yandex_path = item
@@ -3742,52 +3755,71 @@ class PreviewLoaderThread(threading.Thread):
                 if os.path.exists(cache_path):
                     pixmap = PreviewGenerator.load_preview_from_cache(cache_path)
                     if pixmap:
-                        # ИСПРАВЛЕНИЕ R-04: безопасный callback через main thread
                         self._safe_callback(file_id, pixmap)
                         continue
-
-                # Если нет public_link, пробуем скачать через Яндекс API по yandex_path
-                if not public_link and yandex_path and self.yandex_token:
-                    try:
-                        yd = YandexDiskManager(self.yandex_token)
-                        public_link = yd.get_public_link(yandex_path)
-                    except Exception:
-                        pass
-
-                if not public_link:
-                    continue
-
-                # Формируем прямую ссылку для скачивания
-                # Яндекс.Диск: добавляем ?dl=1 для прямого скачивания
-                download_url = public_link
-                if '?' in download_url:
-                    download_url += '&dl=1'
-                else:
-                    download_url += '?dl=1'
 
                 # Скачиваем во временный файл
                 with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
                     tmp_path = tmp_file.name
 
+                downloaded = False
                 try:
-                    # Используем urllib для скачивания
-                    req = urllib.request.Request(download_url, headers={
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    })
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        with open(tmp_path, 'wb') as f:
-                            f.write(response.read())
+                    # Способ 1 (приоритетный): через Яндекс API по yandex_path
+                    if yd and yandex_path:
+                        try:
+                            yd.download_file(yandex_path, tmp_path)
+                            downloaded = True
+                            logger.info(f"[PreviewLoader] Скачано через API: {file_name}")
+                        except Exception as e:
+                            logger.warning(f"[PreviewLoader] API download failed for {file_name}: {e}")
+
+                    # Способ 2: через public_link → Яндекс API download
+                    if not downloaded and public_link:
+                        try:
+                            import urllib.request
+                            import urllib.parse
+                            import json
+                            # Получаем прямую ссылку через Яндекс API
+                            api_url = f"https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key={urllib.parse.quote(public_link, safe='')}"
+                            req = urllib.request.Request(api_url, headers={
+                                'User-Agent': 'Mozilla/5.0'
+                            })
+                            with urllib.request.urlopen(req, timeout=15) as resp:
+                                data = json.loads(resp.read())
+                                direct_url = data.get('href')
+
+                            if direct_url:
+                                req2 = urllib.request.Request(direct_url, headers={
+                                    'User-Agent': 'Mozilla/5.0'
+                                })
+                                with urllib.request.urlopen(req2, timeout=30) as resp2:
+                                    with open(tmp_path, 'wb') as f:
+                                        f.write(resp2.read())
+                                downloaded = True
+                                logger.info(f"[PreviewLoader] Скачано через public link: {file_name}")
+                        except Exception as e:
+                            logger.warning(f"[PreviewLoader] Public link download failed for {file_name}: {e}")
+
+                    if not downloaded:
+                        logger.warning(f"[PreviewLoader] Не удалось скачать {file_name} (yandex_path={bool(yandex_path)}, public_link={bool(public_link)}, token={bool(self.yandex_token)})")
+                        continue
+
+                    # Проверяем что скачанный файл — изображение, а не HTML
+                    file_size = os.path.getsize(tmp_path)
+                    if file_size < 100:
+                        logger.warning(f"[PreviewLoader] Файл слишком мал ({file_size} байт), пропуск: {file_name}")
+                        continue
 
                     # Генерируем превью
                     pixmap = PreviewGenerator.generate_image_preview(tmp_path)
                     if pixmap:
-                        # Сохраняем в кэш
                         PreviewGenerator.save_preview_to_cache(pixmap, cache_path)
-                        # ИСПРАВЛЕНИЕ R-04: безопасный callback через main thread
                         self._safe_callback(file_id, pixmap)
+                        logger.info(f"[PreviewLoader] Превью создано: {file_name}")
+                    else:
+                        logger.warning(f"[PreviewLoader] QPixmap null для {file_name} ({file_size} байт)")
 
                 finally:
-                    # Удаляем временный файл
                     try:
                         os.unlink(tmp_path)
                     except Exception:
