@@ -228,6 +228,9 @@ PERMISSION_DESCRIPTIONS = {
     "messenger.delete_chat": "Удаление чатов",
     "messenger.view_chat": "Просмотр/открытие чатов",
     "messenger.manage_scripts": "Управление скриптами мессенджера",
+    # Уведомления
+    "notifications.settings_projects": "Настройка каналов по типам проектов",
+    "notifications.settings_duplication": "Настройка дублирования уведомлений",
 }
 
 
@@ -298,6 +301,9 @@ PERMISSION_TOOLTIPS = {
     "messenger.delete_chat": "Может удалять чаты из мессенджера",
     "messenger.view_chat": "Может просматривать и открывать чаты",
     "messenger.manage_scripts": "Может управлять скриптами автоматических сообщений",
+    # Уведомления
+    "notifications.settings_projects": "Сотрудник видит настройку каналов по типам проектов (индивидуальные / шаблонные)",
+    "notifications.settings_duplication": "Сотрудник видит настройку дублирования уведомлений подчинённых",
 }
 
 
