@@ -83,7 +83,7 @@ async def check_deadlines_once():
         _sent_today = set()
         _sent_date = today
 
-    from database import SessionLocal, StageExecutor, CRMCard, Contract, SupervisionCard
+    from database import SessionLocal, StageExecutor, CRMCard, Contract, SupervisionCard, SupervisionTimelineEntry
     from services.notification_dispatcher import dispatch_notification
 
     db = SessionLocal()
@@ -229,6 +229,65 @@ async def check_deadlines_once():
                             )
             except Exception as e:
                 logger.warning(f"deadline_checker supervision {sv.id}: {e}")
+
+        # === Надзор дедлайны по стадиям (plan_date из SupervisionTimelineEntry) ===
+        # Руководство §4: "Дедлайн по стадии "{stage_name}" надзора {address}"
+        sv_stages = db.query(SupervisionTimelineEntry).filter(
+            SupervisionTimelineEntry.plan_date.isnot(None),
+            SupervisionTimelineEntry.plan_date != '',
+            SupervisionTimelineEntry.status != 'Выполнено',
+        ).all()
+
+        for ste in sv_stages:
+            try:
+                sv = db.query(SupervisionCard).filter(
+                    SupervisionCard.id == ste.supervision_card_id
+                ).first()
+                if not sv or sv.column_name == 'Выполненный проект' or sv.is_paused:
+                    continue
+
+                dl = ste.plan_date
+                if isinstance(dl, str):
+                    dl = datetime.strptime(dl, '%Y-%m-%d').date()
+                elif isinstance(dl, datetime):
+                    dl = dl.date()
+
+                biz_days = _count_business_days_between(today, dl)
+                contract = db.query(Contract).filter(Contract.id == sv.contract_id).first()
+                address = contract.address if contract else ''
+                dl_str = dl.strftime('%d.%m.%Y')
+                recipients = [r for r in [sv.dan_id, sv.senior_manager_id] if r]
+
+                if biz_days == 2:
+                    key = (sv.id, ste.stage_code, str(today), 'stage_warning')
+                    if key not in _sent_today:
+                        _sent_today.add(key)
+                        for emp_id in recipients:
+                            await dispatch_notification(
+                                db=db, employee_id=emp_id,
+                                event_type='deadline',
+                                title=f'Дедлайн стадии надзора: {address}',
+                                message=f'Дедлайн по стадии "{ste.stage_name}" надзора {address} через 2 рабочих дня ({dl_str}).',
+                                related_entity_type='supervision_card',
+                                related_entity_id=sv.id,
+                                project_type='supervision',
+                            )
+                elif today > dl:
+                    key = (sv.id, ste.stage_code, str(today), 'stage_overdue')
+                    if key not in _sent_today:
+                        _sent_today.add(key)
+                        for emp_id in recipients:
+                            await dispatch_notification(
+                                db=db, employee_id=emp_id,
+                                event_type='deadline',
+                                title=f'Просрочка стадии надзора: {address}',
+                                message=f'Дедлайн по стадии "{ste.stage_name}" надзора {address} просрочен! Было: {dl_str}.',
+                                related_entity_type='supervision_card',
+                                related_entity_id=sv.id,
+                                project_type='supervision',
+                            )
+            except Exception as e:
+                logger.warning(f"deadline_checker supervision stage {ste.id}: {e}")
 
     except Exception as e:
         logger.error(f"deadline_checker: {e}")
