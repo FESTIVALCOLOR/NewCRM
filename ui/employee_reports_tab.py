@@ -12,7 +12,7 @@ KPI-дашборд согласно руководству:
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QPushButton,
     QComboBox, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
-    QSpinBox, QFrame, QGridLayout, QScrollArea, QSizePolicy,
+    QSpinBox, QFrame, QGridLayout, QScrollArea, QSizePolicy, QFileDialog,
 )
 from PyQt5.QtCore import Qt, QDate, QTimer
 from PyQt5.QtGui import QColor, QFont
@@ -171,6 +171,16 @@ class EmployeeReportsTab(QWidget):
         self._kpi_cards = {}
         # Ссылки на Топ-5 виджеты
         self._top5_widgets = {}
+        # Определяем уровень доступа по должности (раздел 5 руководства)
+        position = (employee or {}).get('position', '')
+        if position == 'Руководитель студии':
+            self.access_level = 'full'
+        elif position == 'Старший менеджер проектов':
+            self.access_level = 'team'
+        elif position in ('СДП', 'ГАП', 'Менеджер'):
+            self.access_level = 'executors'
+        else:
+            self.access_level = 'self'
         self.init_ui()
 
     def init_ui(self):
@@ -178,10 +188,60 @@ class EmployeeReportsTab(QWidget):
         layout.setSpacing(5)
         layout.setContentsMargins(5, 5, 5, 5)
 
+        header_row = QHBoxLayout()
         header = QLabel(' Отчеты по сотрудникам')
         header.setStyleSheet('font-size: 14px; font-weight: bold; color: #333; padding: 5px;')
-        layout.addWidget(header)
+        header_row.addWidget(header)
+        header_row.addStretch()
 
+        export_btn = IconLoader.create_icon_button('download', 'Экспорт PDF', icon_size=12)
+        export_btn.setStyleSheet("""
+            QPushButton {
+                background: #F0F4FF; border: 1px solid #C5CAE9; border-radius: 4px;
+                padding: 4px 12px; color: #333; font-size: 11px;
+            }
+            QPushButton:hover { background: #E8EAF6; }
+        """)
+        export_btn.clicked.connect(self._export_to_pdf)
+        header_row.addWidget(export_btn)
+        layout.addLayout(header_row)
+
+        if self.access_level == 'self':
+            # Исполнители/Замерщики/ДАН — только свой профиль
+            self._build_self_only_view(layout)
+        else:
+            # Руководитель/СМ/СДП/ГАП/Менеджер — полная/частичная страница
+            self._build_full_view(layout)
+
+        self.setLayout(layout)
+
+    def _build_self_only_view(self, layout):
+        """Режим «только свой профиль» — без дашборда и таблиц сравнения."""
+        info = QLabel('Моя статистика')
+        info.setStyleSheet('font-size: 13px; font-weight: bold; color: #555; padding: 4px;')
+        layout.addWidget(info)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        container = QWidget()
+        container.setObjectName('self_detail_container')
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(4, 4, 4, 4)
+
+        detail_content = QWidget()
+        detail_content.setObjectName('detail_content_self')
+        detail_content_layout = QVBoxLayout(detail_content)
+        detail_content_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(detail_content)
+        container_layout.addStretch()
+
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        self._self_detail_content = detail_content
+
+    def _build_full_view(self, layout):
+        """Полная страница с дашбордом, вкладками ролей и карточками."""
         # Вкладки по типам проектов
         self.report_tabs = QTabWidget()
         self.report_tabs.currentChanged.connect(self._on_project_tab_changed)
@@ -196,7 +256,6 @@ class EmployeeReportsTab(QWidget):
         self.report_tabs.addTab(self.supervision_tab, 'Авторский надзор')
 
         layout.addWidget(self.report_tabs)
-        self.setLayout(layout)
 
     # ══════════════════════════════════════════════════════════════════
     # СОЗДАНИЕ ВКЛАДКИ ПРОЕКТА
@@ -429,9 +488,35 @@ class EmployeeReportsTab(QWidget):
 
     def ensure_data_loaded(self):
         """Ленивая загрузка при первом показе."""
-        QTimer.singleShot(200, lambda: self._refresh_all('Индивидуальный'))
+        if self.access_level == 'self':
+            QTimer.singleShot(200, self._load_self_profile)
+        else:
+            QTimer.singleShot(200, lambda: self._refresh_all('Индивидуальный'))
+
+    def _load_self_profile(self):
+        """Загружает собственную карточку для исполнителей."""
+        emp_id = (self.employee or {}).get('id')
+        if not emp_id:
+            return
+        # Загружаем по всем типам проектов, берём первый с данными
+        for pt_code in ('individual', 'template', 'supervision'):
+            try:
+                detail = self.data_access.get_analytics_employee_detail(
+                    emp_id, pt_code)
+            except Exception:
+                detail = {}
+            if detail and detail.get('employee'):
+                self._update_detail_card_in_widget(
+                    self._self_detail_content, pt_code, detail)
+                return
+        # Если нет данных ни по одному типу
+        lbl = QLabel('Нет данных по вашим проектам')
+        lbl.setStyleSheet('color: #999; padding: 16px; font-size: 13px;')
+        self._self_detail_content.layout().addWidget(lbl)
 
     def _on_project_tab_changed(self, index):
+        if self.access_level == 'self':
+            return
         types = ['Индивидуальный', 'Шаблонный', 'Авторский надзор']
         if 0 <= index < len(types):
             self._refresh_all(types[index])
@@ -759,6 +844,19 @@ class EmployeeReportsTab(QWidget):
             series = [{'x': months, 'y': avg_vals, 'label': 'Средний KPI роли', 'color': '#4A90D9'}]
             dynamics_chart.set_data(series)
 
+    def _update_detail_card_in_widget(self, widget, pt_code, detail):
+        """Рисует детальную карточку в произвольном виджете (для self-профиля)."""
+        layout = widget.layout()
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        # pt_code → project_type name для поиска
+        rev_map = {'individual': 'Индивидуальный', 'template': 'Шаблонный',
+                   'supervision': 'Авторский надзор'}
+        project_type = rev_map.get(pt_code, 'Индивидуальный')
+        self._fill_detail_layout(layout, project_type, detail)
+
     def _update_detail_card(self, project_type, detail):
         """Обновляет детальную карточку сотрудника."""
         container = self._get_container(project_type)
@@ -785,7 +883,10 @@ class EmployeeReportsTab(QWidget):
             child = layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+        self._fill_detail_layout(layout, project_type, detail)
 
+    def _fill_detail_layout(self, layout, project_type, detail):
+        """Заполняет layout детальной карточки — общая логика для full и self режимов."""
         emp = detail['employee']
         kpi = detail.get('kpi', {})
         metrics = detail.get('metrics', {})
@@ -1122,3 +1223,126 @@ class EmployeeReportsTab(QWidget):
         val.setAlignment(Qt.AlignCenter)
         layout.addWidget(val)
         return card
+
+    # ══════════════════════════════════════════════════════════════════
+    # ЭКСПОРТ PDF
+    # ══════════════════════════════════════════════════════════════════
+
+    def _export_to_pdf(self):
+        """Экспорт текущего вида в PDF (pixel-perfect скриншоты секций)."""
+        try:
+            from datetime import datetime
+            from utils.pdf_utils import (
+                register_fonts, make_page_footer,
+                grab_widget_png, fit_image, open_file,
+            )
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib import colors
+            from reportlab.lib.units import mm
+            from utils.resource_path import resource_path
+            import os
+
+            date_str = datetime.now().strftime('%d.%m.%Y')
+            default_name = f'Отчеты по сотрудникам от {date_str}'
+
+            filename, _ = QFileDialog.getSaveFileName(
+                self, 'Сохранить отчёт', default_name, 'PDF файлы (*.pdf)')
+            if not filename:
+                return
+
+            font_name, font_bold = register_fonts()
+            page_size = landscape(A4)
+            MARGIN_LR = 10 * mm
+            MARGIN_TOP = 8 * mm
+            MARGIN_BOT = 12 * mm
+            PAGE_W_MM = (page_size[0] - 2 * MARGIN_LR) / mm
+            RENDER_SCALE = 3.0
+
+            doc = SimpleDocTemplate(
+                filename, pagesize=page_size,
+                leftMargin=MARGIN_LR, rightMargin=MARGIN_LR,
+                topMargin=MARGIN_TOP, bottomMargin=MARGIN_BOT,
+            )
+
+            style_title = ParagraphStyle(
+                'EmpTitle', fontName=font_bold, fontSize=16,
+                textColor=colors.HexColor('#333333'),
+                alignment=1, spaceAfter=2 * mm,
+            )
+            style_sub = ParagraphStyle(
+                'EmpSub', fontName=font_name, fontSize=8,
+                textColor=colors.HexColor('#666666'),
+                alignment=1, spaceAfter=3 * mm,
+                backColor=colors.HexColor('#F8F9FA'),
+            )
+
+            footer_cb = make_page_footer(page_size, font_name)
+            elements = []
+
+            # Логотип
+            logo_path = resource_path('resources/logo_pdf.png')
+            if not os.path.exists(logo_path):
+                logo_path = resource_path('resources/logo.png')
+            if os.path.exists(logo_path):
+                try:
+                    from reportlab.platypus import Image as RLImage
+                    logo = RLImage(logo_path, width=35 * mm, height=20 * mm,
+                                   kind='proportional')
+                    logo.hAlign = 'CENTER'
+                    elements.append(logo)
+                    elements.append(Spacer(1, 4 * mm))
+                except Exception:
+                    pass
+
+            elements.append(Paragraph('ОТЧЁТЫ ПО СОТРУДНИКАМ', style_title))
+            elements.append(Spacer(1, 2 * mm))
+
+            # Определяем текущий контекст
+            if self.access_level == 'self':
+                elements.append(Paragraph(
+                    f'<b>Режим:</b> Моя статистика | '
+                    f'<b>Дата:</b> {datetime.now().strftime("%d.%m.%Y %H:%M")}',
+                    style_sub))
+                elements.append(Spacer(1, 4 * mm))
+
+                # Захват карточки «свой профиль»
+                result = grab_widget_png(self._self_detail_content, RENDER_SCALE)
+                if result:
+                    buf, w_px, h_px = result
+                    img = fit_image(buf, w_px, h_px, PAGE_W_MM, 180)
+                    img.hAlign = 'CENTER'
+                    elements.append(img)
+            else:
+                # Полный вид — захват текущей вкладки проекта
+                idx = self.report_tabs.currentIndex()
+                tab_name = self.report_tabs.tabText(idx)
+                elements.append(Paragraph(
+                    f'<b>Тип проекта:</b> {tab_name} | '
+                    f'<b>Дата:</b> {datetime.now().strftime("%d.%m.%Y %H:%M")}',
+                    style_sub))
+                elements.append(Spacer(1, 4 * mm))
+
+                current_tab = self.report_tabs.currentWidget()
+                if current_tab:
+                    # Внутри QScrollArea — контейнер
+                    inner = current_tab.widget() if hasattr(current_tab, 'widget') else current_tab
+                    if inner:
+                        result = grab_widget_png(inner, RENDER_SCALE)
+                        if result:
+                            buf, w_px, h_px = result
+                            max_h = max(300, PAGE_W_MM * (h_px / w_px) if w_px > 0 else 300)
+                            img = fit_image(buf, w_px, h_px, PAGE_W_MM, max_h)
+                            img.hAlign = 'CENTER'
+                            elements.append(img)
+
+            doc.build(elements,
+                      onFirstPage=footer_cb,
+                      onLaterPages=footer_cb)
+
+            open_file(filename)
+            logger.info(f'PDF экспорт: {filename}')
+
+        except Exception as e:
+            logger.error(f'Ошибка экспорта PDF: {e}', exc_info=True)
