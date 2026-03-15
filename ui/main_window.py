@@ -19,6 +19,7 @@ from ui.reports_tab import ReportsTab
 from ui.employees_tab import EmployeesTab
 from ui.salaries_tab import SalariesTab
 from ui.employee_reports_tab import EmployeeReportsTab
+from ui.employee_analytics_tab import EmployeeAnalyticsTab
 from ui.global_search_widget import GlobalSearchWidget
 from ui.custom_message_box import CustomMessageBox
 from utils.tab_helpers import disable_wheel_on_tabwidget
@@ -1236,6 +1237,11 @@ class MainWindow(QMainWindow):
         if 'Отчеты по сотрудникам' in allowed_tabs:
             tab_configs.append(('  Отчеты по сотрудникам  ', None,
                 lambda: EmployeeReportsTab(self.employee, api_client=self.api_client),
+                None))
+
+        if 'Аналитика сотрудников' in allowed_tabs:
+            tab_configs.append(('  Аналитика сотрудников  ', None,
+                lambda: EmployeeAnalyticsTab(self.employee, api_client=self.api_client),
                 None))
 
         # Первую вкладку создаём сразу, остальные — lazy placeholder

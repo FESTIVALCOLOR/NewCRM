@@ -2888,6 +2888,52 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_employee_report_data: {e}")
         return {}
 
+    # ── Аналитика сотрудников ────────────────────────────────────────
+
+    def get_analytics_dashboard(self, project_type: str, year: int = None,
+                                quarter: int = None, month: int = None) -> Dict:
+        """Дашборд аналитики по сотрудникам."""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_analytics_dashboard(
+                    project_type, year=year, quarter=quarter, month=month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_analytics_dashboard: {e}")
+        return {}
+
+    def get_analytics_by_role(self, role_code: str, project_type: str,
+                              year: int = None, quarter: int = None,
+                              month: int = None) -> Dict:
+        """Сравнительная аналитика по роли."""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_analytics_by_role(
+                    role_code, project_type, year=year, quarter=quarter, month=month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_analytics_by_role: {e}")
+        return {}
+
+    def get_analytics_employee_detail(self, employee_id: int, project_type: str,
+                                      year: int = None, quarter: int = None,
+                                      month: int = None) -> Dict:
+        """Детальная карточка сотрудника."""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_analytics_employee_detail(
+                    employee_id, project_type, year=year, quarter=quarter, month=month)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_analytics_employee_detail: {e}")
+        return {}
+
+    def get_survey_stats(self, project_type: str = None) -> Dict:
+        """Статистика опросов."""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_survey_stats(project_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_survey_stats: {e}")
+        return {}
+
     def get_project_statistics(self, **kwargs) -> Dict:
         """Получить статистику по проектам"""
         if self.api_client:

@@ -26,6 +26,7 @@ from utils.api_client.messenger_mixin import MessengerMixin
 from utils.api_client.permissions_mixin import PermissionsMixin
 from utils.api_client.misc_mixin import MiscMixin
 from utils.api_client.compat_mixin import CompatMixin
+from utils.api_client.analytics_mixin import AnalyticsMixin
 
 
 class APIClient(
@@ -45,6 +46,7 @@ class APIClient(
     PermissionsMixin,
     MiscMixin,
     CompatMixin,
+    AnalyticsMixin,
     APIClientBase,
 ):
     """

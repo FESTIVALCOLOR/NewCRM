@@ -30,6 +30,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     "access.employees": "Доступ к странице Сотрудники",
     "access.salaries": "Доступ к странице Зарплаты",
     "access.employee_reports": "Доступ к странице Отчеты по сотрудникам",
+    "access.employee_analytics": "Доступ к странице Аналитика сотрудников",
     "access.admin": "Доступ к администрированию",
     "access.dashboards": "Показ дашбордов внизу страницы",
     # === Сотрудники ===
@@ -114,11 +115,12 @@ PERMISSION_NAMES: Dict[str, str] = {
 _ACCESS_ALL = {
     "access.clients", "access.contracts", "access.crm", "access.supervision",
     "access.reports", "access.employees", "access.salaries", "access.employee_reports",
-    "access.admin",
+    "access.employee_analytics", "access.admin",
 }
 _ACCESS_MANAGER = {
     "access.clients", "access.contracts", "access.crm", "access.supervision",
     "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.employee_analytics",
 }
 
 # Базовый набор: Руководитель + Старший менеджер

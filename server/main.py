@@ -228,6 +228,14 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Deadline checker: {e}")
 
+    # N4: Запуск фонового расчёта KPI (ежедневные снимки)
+    try:
+        from services.kpi_snapshot import kpi_snapshot_loop
+        asyncio.create_task(kpi_snapshot_loop())
+        logger.info("KPI snapshot: задача запущена")
+    except Exception as e:
+        logger.warning(f"KPI snapshot: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)
@@ -479,6 +487,11 @@ app.include_router(sync_messenger_router, prefix="/api/v1/sync")
 
 from routers.notifications_router import router as notifications_router
 app.include_router(notifications_router, prefix="/api/v1")
+
+from routers.employee_analytics_router import router as employee_analytics_router
+from routers.survey_router import router as survey_router
+app.include_router(employee_analytics_router, prefix="/api/v1/employee-analytics")
+app.include_router(survey_router, prefix="/api/surveys")
 
 
 # =========================
