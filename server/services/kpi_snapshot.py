@@ -25,7 +25,22 @@ SNAPSHOT_HOUR_UTC = 2  # Час запуска в UTC (05:00 МСК)
 
 
 async def kpi_snapshot_loop():
-    """Бесконечный цикл для ежедневного снимка KPI."""
+    """Бесконечный цикл для ежедневного снимка KPI.
+
+    Использует file-lock для предотвращения двойного запуска
+    при --workers > 1 (аналогично Telegram polling).
+    """
+    lock_path = "/tmp/kpi_snapshot.lock"
+    try:
+        import fcntl
+        lock_fd = open(lock_path, 'w')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, IOError):
+        logger.info("KPI snapshot: другой воркер уже запустил задачу, пропускаем")
+        return
+    except ImportError:
+        pass  # Windows — fcntl недоступен, запускаем без блокировки
+
     logger.info("KPI snapshot loop запущен (расчёт в 02:00 UTC)")
     last_run_date = None
 

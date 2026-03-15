@@ -491,7 +491,7 @@ app.include_router(notifications_router, prefix="/api/v1")
 from routers.employee_analytics_router import router as employee_analytics_router
 from routers.survey_router import router as survey_router
 app.include_router(employee_analytics_router, prefix="/api/v1/employee-analytics")
-app.include_router(survey_router, prefix="/api/surveys")
+app.include_router(survey_router, prefix="/api/v1/surveys")
 
 
 # =========================
