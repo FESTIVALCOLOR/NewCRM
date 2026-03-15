@@ -55,6 +55,9 @@ PERMISSION_GROUPS = {
         'messenger.create_chat', 'messenger.delete_chat',
         'messenger.view_chat', 'messenger.manage_scripts',
     ],
+    'Уведомления': [
+        'notifications.settings_projects', 'notifications.settings_duplication',
+    ],
 }
 
 # Роли — столбцы таблицы (9 ролей)

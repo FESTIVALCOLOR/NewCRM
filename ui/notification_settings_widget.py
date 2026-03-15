@@ -27,11 +27,17 @@ class NotificationSettingsWidget(QWidget):
         self._employees = []
         self._settings = {}
 
-        # Проверяем права текущего пользователя на оплаты
+        # Проверяем права текущего пользователя
         from utils.permissions import _has_perm
         self._viewer_has_payment_perm = (
             _has_perm(self.employee, self.api_client, 'payments.create') or
             _has_perm(self.employee, self.api_client, 'payments.update')
+        )
+        self._viewer_has_projects_perm = _has_perm(
+            self.employee, self.api_client, 'notifications.settings_projects'
+        )
+        self._viewer_has_duplication_perm = _has_perm(
+            self.employee, self.api_client, 'notifications.settings_duplication'
         )
 
         self._setup_ui()
@@ -125,9 +131,9 @@ class NotificationSettingsWidget(QWidget):
         layout.addWidget(events_group)
 
         # Секция фильтра по типам проектов
-        projects_group = QGroupBox("Типы проектов (каналы)")
-        projects_group.setStyleSheet(tg_group.styleSheet())
-        projects_layout = QVBoxLayout(projects_group)
+        self._projects_group = QGroupBox("Типы проектов (каналы)")
+        self._projects_group.setStyleSheet(tg_group.styleSheet())
+        projects_layout = QVBoxLayout(self._projects_group)
 
         self._chk_individual = QCheckBox("Индивидуальные проекты")
         self._chk_template = QCheckBox("Шаблонные проекты")
@@ -136,9 +142,9 @@ class NotificationSettingsWidget(QWidget):
             chk.setStyleSheet("font-size: 13px; padding: 2px 0;")
             projects_layout.addWidget(chk)
 
-        layout.addWidget(projects_group)
+        layout.addWidget(self._projects_group)
 
-        # Секция дублирования уведомлений (видна старшим менеджерам и руководству)
+        # Секция дублирования уведомлений
         self._duplication_group = QGroupBox("Дублирование уведомлений")
         self._duplication_group.setStyleSheet(tg_group.styleSheet())
         dup_layout = QVBoxLayout(self._duplication_group)
@@ -234,12 +240,31 @@ class NotificationSettingsWidget(QWidget):
             return
         self._current_employee_id = emp_id
 
+        # Определяем права для видимости секций:
+        # Директор видит все секции (настраивает для любого сотрудника).
+        # Обычный сотрудник — только секции, разрешённые ему через матрицу прав.
+        self._update_section_visibility()
+
         if self.data_access:
             try:
                 settings = self.data_access.get_notification_settings(emp_id) or {}
                 self._apply_settings(settings)
             except Exception as e:
                 print(f"[NotificationSettings] Ошибка загрузки: {e}")
+
+    def _update_section_visibility(self):
+        """Показать/скрыть секции настроек в зависимости от прав."""
+        role = self.employee.get('role', '')
+        is_director = role in SUPERUSER_ROLES
+
+        if is_director:
+            # Директор видит все секции для всех сотрудников
+            self._projects_group.setVisible(True)
+            self._duplication_group.setVisible(True)
+        else:
+            # Обычный сотрудник — видимость по его правам
+            self._projects_group.setVisible(self._viewer_has_projects_perm)
+            self._duplication_group.setVisible(self._viewer_has_duplication_perm)
 
     def _apply_settings(self, settings: dict):
         """Применить настройки к чекбоксам"""
