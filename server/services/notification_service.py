@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import (
     Employee, Client, Contract,
-    CRMCard, SupervisionCard,
+    CRMCard, SupervisionCard, Payment,
     MessengerChat, MessengerChatMember, MessengerScript, MessengerMessageLog,
     MessengerSetting, ProjectFile, StageWorkflowState,
     SessionLocal,
@@ -190,11 +190,19 @@ def build_script_context(db: Session, card, contract) -> dict:
     column_name = getattr(card, 'column_name', None)
     if card_id and column_name:
         wf = db.query(StageWorkflowState).filter(
-            StageWorkflowState.card_id == card_id,
+            StageWorkflowState.crm_card_id == card_id,
             StageWorkflowState.stage_name == column_name,
         ).first()
         if wf and wf.revision_count:
             ctx['revision_count'] = str(wf.revision_count)
+
+    # Сумма последнего платежа по договору
+    if contract.id:
+        last_payment = db.query(Payment).filter(
+            Payment.contract_id == contract.id,
+        ).order_by(Payment.id.desc()).first()
+        if last_payment and last_payment.final_amount:
+            ctx['amount'] = f"{last_payment.final_amount:,.0f}".replace(',', ' ')
 
     return ctx
 
@@ -401,26 +409,39 @@ async def trigger_supervision_notification(
         if not contract:
             return
 
-        # Контекст для надзора
+        # N6: Расширенный контекст для надзора (все переменные из руководства)
         ctx = {
             'stage_name': stage_name or sv_card.column_name or '',
             'client_name': '',
             'client_first_name': '',
+            'client_name_dat': '',
             'address': contract.address or '',
             'city': contract.city or '',
+            'area': str(contract.area) if getattr(contract, 'area', None) else '',
             'contract_number': contract.contract_number or '',
             'senior_manager': '',
             'senior_manager_username': '',
+            'senior_manager_dat': '',
+            'manager_name': '',
+            'manager_username': '',
+            'manager_name_dat': '',
+            'sdp': '',
+            'sdp_username': '',
+            'sdp_dat': '',
             'dan': '',
             'dan_username': '',
+            'dan_dat': '',
             'director': '',
             'director_username': '',
-            'deadline': '',
-            'deadline_date': '',
+            'director_dat': '',
+            'deadline': str(sv_card.deadline) if sv_card.deadline else '',
+            'deadline_date': str(sv_card.deadline) if sv_card.deadline else '',
             'review_link': _get_review_link(own_db),
             'visit_date': '',
-            'pause_reason': '',
+            'pause_reason': sv_card.pause_reason or '',
+            'amount': '',
             'stage_files': '',
+            'revision_count': '',
         }
 
         # Клиент
@@ -429,6 +450,7 @@ async def trigger_supervision_notification(
             if client:
                 ctx['client_name'] = client.full_name or ''
                 ctx['client_first_name'] = _get_first_name(client.full_name or '')
+                ctx['client_name_dat'] = decline_name_dative(client.full_name or '')
 
         # Ст. менеджер
         if sv_card.senior_manager_id:
@@ -436,6 +458,7 @@ async def trigger_supervision_notification(
             if sm:
                 ctx['senior_manager'] = _tg_mention(sm)
                 ctx['senior_manager_username'] = _get_username(sm)
+                ctx['senior_manager_dat'] = decline_name_dative(sm.full_name or '')
 
         # ДАН
         if sv_card.dan_id:
@@ -443,12 +466,22 @@ async def trigger_supervision_notification(
             if dan:
                 ctx['dan'] = _tg_mention(dan)
                 ctx['dan_username'] = _get_username(dan)
+                ctx['dan_dat'] = decline_name_dative(dan.full_name or '')
 
         # Руководитель студии
         director = own_db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
         if director:
             ctx['director'] = _tg_mention(director)
             ctx['director_username'] = _get_username(director)
+            ctx['director_dat'] = decline_name_dative(director.full_name or '')
+
+        # Сумма последнего платежа по договору
+        if contract.id:
+            last_payment = own_db.query(Payment).filter(
+                Payment.contract_id == contract.id,
+            ).order_by(Payment.id.desc()).first()
+            if last_payment and last_payment.final_amount:
+                ctx['amount'] = f"{last_payment.final_amount:,.0f}".replace(',', ' ')
 
         # Extra context
         if extra_context:

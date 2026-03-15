@@ -1351,7 +1351,7 @@ async def get_messenger_scripts(
 @router.post("/scripts", response_model=MessengerScriptResponse)
 async def create_messenger_script(
     data: MessengerScriptCreate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Создать скрипт"""
@@ -1366,7 +1366,7 @@ async def create_messenger_script(
 async def update_messenger_script(
     script_id: int,
     data: MessengerScriptUpdate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Обновить скрипт"""
@@ -1386,7 +1386,7 @@ async def update_messenger_script(
 @router.delete("/scripts/{script_id}")
 async def delete_messenger_script(
     script_id: int,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Удалить скрипт"""
@@ -1401,7 +1401,7 @@ async def delete_messenger_script(
 @router.patch("/scripts/{script_id}/toggle")
 async def toggle_messenger_script(
     script_id: int,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Включить/выключить скрипт"""

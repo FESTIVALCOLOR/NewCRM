@@ -45,6 +45,7 @@ async def dispatch_notification(
     project_type: Optional[str] = None,
     card_id: Optional[int] = None,
     is_duplicate: bool = False,
+    is_revision_info: bool = False,
 ) -> None:
     """
     Создать уведомление в БД и отправить через активные каналы.
@@ -139,6 +140,12 @@ async def dispatch_notification(
         # 3.2 Для дублированных уведомлений — проверить дубль-флаги
         if is_duplicate:
             if not settings.notify_duplicate_info:
+                db.commit()
+                return
+
+        # N5: Для уведомлений о возврате на исправление — проверить notify_revision_info
+        if is_revision_info:
+            if not getattr(settings, 'notify_revision_info', True):
                 db.commit()
                 return
 

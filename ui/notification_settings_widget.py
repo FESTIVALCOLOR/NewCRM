@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 from ui.custom_message_box import CustomMessageBox
 
-SUPERUSER_ROLES = {'Руководитель студии', 'Директор', 'Администратор'}
+SUPERUSER_ROLES = {'Руководитель студии', 'Директор', 'Администратор', 'admin', 'director'}
 
 
 class NotificationSettingsWidget(QWidget):

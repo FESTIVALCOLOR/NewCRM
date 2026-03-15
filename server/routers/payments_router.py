@@ -12,6 +12,7 @@ from database import (
 from auth import get_current_user
 from permissions import require_permission
 from schemas import PaymentCreate, PaymentUpdate, PaymentResponse, PaymentManualUpdateRequest
+from services.notification_dispatcher import dispatch_notification
 
 logger = logging.getLogger(__name__)
 
@@ -878,6 +879,42 @@ async def create_payment(
             ))
 
         db.commit()
+
+        # N2: Уведомление о создании оплаты старшему менеджеру
+        try:
+            import asyncio
+            contract = db.query(Contract).filter(Contract.id == payment.contract_id).first()
+            address = contract.address if contract else ''
+            contract_number = contract.contract_number if contract else ''
+            amount_val = payment.final_amount or payment.calculated_amount or 0
+            sm_id = None
+            pt_key = 'individual'
+            if payment.crm_card_id:
+                card = db.query(CRMCard).filter(CRMCard.id == payment.crm_card_id).first()
+                if card:
+                    sm_id = card.senior_manager_id
+                    if contract:
+                        pt = (contract.project_type or '').lower()
+                        pt_key = 'template' if 'шабл' in pt else 'individual'
+            elif payment.supervision_card_id:
+                sv = db.query(SupervisionCard).filter(SupervisionCard.id == payment.supervision_card_id).first()
+                if sv:
+                    sm_id = sv.senior_manager_id
+                pt_key = 'supervision'
+            if sm_id:
+                asyncio.create_task(dispatch_notification(
+                    db=db,
+                    employee_id=sm_id,
+                    event_type='payment',
+                    title=f'Оплата: {address}',
+                    message=f'Создана оплата {amount_val} руб. по договору {contract_number} ({address}).',
+                    related_entity_type='payment',
+                    related_entity_id=payment.id,
+                    project_type=pt_key,
+                    card_id=payment.crm_card_id,
+                ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления payment: {e}")
 
         return payment
 

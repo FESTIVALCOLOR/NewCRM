@@ -716,6 +716,28 @@ class CRMTab(QWidget):
                 # Остальные с правом перемещения: проверяют сдачу и принятие
                 elif _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     if from_column not in ['Новый заказ', 'В ожидании', 'Выполненный проект']:
+                        # W3: Проверяем workflow status — должен быть stage_completed
+                        try:
+                            wf_states = self.data.get_workflow_states(card_id) or []
+                            wf_status = None
+                            for s in wf_states:
+                                if s.get('stage_name') == from_column:
+                                    wf_status = s.get('status')
+                                    break
+                            if wf_status and wf_status != 'stage_completed':
+                                CustomMessageBox(
+                                    self,
+                                    'Перемещение запрещено',
+                                    f'<b>Невозможно переместить карточку!</b><br><br>'
+                                    f'Текущая стадия: <b>"{from_column}"</b><br><br>'
+                                    f'Необходимо подписать акт перед перемещением.<br>'
+                                    f'Текущий статус: {wf_status}',
+                                    'warning'
+                                ).exec_()
+                                return
+                        except Exception:
+                            pass
+
                         # S-05: Используем DataAccess вместо прямого SQL
                         info = self.data.get_stage_completion_info(card_id, from_column)
                         if not info:
@@ -2525,8 +2547,8 @@ class CRMCard(QFrame):
                     current_wf_status = None
 
                 # Кнопка "Отправить клиенту" (объединяет accept + client-send)
-                # Показывается когда исполнитель сдал работу (pending_review)
-                if current_wf_status in ('pending_review', None):
+                # W1: Показывается ТОЛЬКО когда исполнитель сдал работу (pending_review)
+                if current_wf_status == 'pending_review':
                     send_client_btn = QPushButton('Отправить клиенту')
                     send_client_btn.setStyleSheet("""
                         QPushButton {
@@ -2545,7 +2567,8 @@ class CRMCard(QFrame):
                     layout.addWidget(send_client_btn, 0)
 
                 # Кнопка "На исправление"
-                if current_wf_status in ('pending_review', None):
+                # W1: Показывается ТОЛЬКО когда исполнитель сдал работу (pending_review)
+                if current_wf_status == 'pending_review':
                     reject_btn = QPushButton('На исправление')
                     reject_btn.setStyleSheet("""
                         QPushButton {
@@ -3064,14 +3087,25 @@ class CRMCard(QFrame):
             return
 
         current_column = self.card_data.get('column_name', '')
-        
-        # ========== ЗАМЕНИЛИ стандартный QDialog ==========
+        project_type = self.card_data.get('project_type', '')
+
+        # Определяем роль проверяющего для корректного текста
+        reviewer = 'менеджеру'
+        if project_type == 'Индивидуальный':
+            if 'Стадия 1' in current_column or 'Стадия 2' in current_column:
+                reviewer = 'СДП'
+            elif 'Стадия 3' in current_column:
+                reviewer = 'ГАП'
+        else:
+            if 'Стадия 2' in current_column:
+                reviewer = 'ГАП'
+
         reply = CustomQuestionBox(
             self,
             'Подтверждение',
             f'Подтвердить сдачу работы?\n\n'
             f'Стадия "{current_column}" будет отмечена как выполненная\n'
-            f'и передана на проверку менеджеру.'
+            f'и передана на проверку {reviewer}.'
         ).exec_()
         
         if reply == QDialog.Accepted:
@@ -3106,7 +3140,7 @@ class CRMCard(QFrame):
                 CustomMessageBox(
                     self,
                     'Успех',
-                    'Работа сдана!\n\nОжидайте проверки менеджера для\nперемещения на следующую стадию.',
+                    f'Работа сдана!\n\nОжидайте проверки {reviewer}.',
                     'success'
                 ).exec_()
                 
@@ -3392,8 +3426,33 @@ class CRMCard(QFrame):
                 has_next = result.get('has_next_round', False)
                 next_name = result.get('next_round_name', '')
                 is_last = result.get('is_last_round', False)
+                has_remaining = result.get('has_remaining_client', False)
+                project_type = result.get('project_type', '')
+                is_individual = 'Индивидуальный' in project_type
 
-                if has_next:
+                if has_remaining and not has_next:
+                    # Подэтап с внутренними клиентскими кругами (2.1 Мудборды):
+                    # первое согласование — продолжить правки или перейти дальше
+                    dlg = _WorkflowChoiceDialog(
+                        self,
+                        'Клиент согласовал',
+                        f'Клиент согласовал работу по стадии\n"{current_column}".\n\n'
+                        f'Продолжить правки по замечаниям клиента или\nперейти к следующему подэтапу?',
+                        buttons=[
+                            ('Продолжить правки', '#85C1E9', '#6CB2D9', 'continue'),
+                            ('Перейти к следующему подэтапу', '#58D68D', '#48C77D', 'close'),
+                        ]
+                    )
+                    choice = dlg.exec_choice()
+                    if choice == 'close':
+                        self.data.workflow_close_stage(self.card_data['id'])
+                        CustomMessageBox(
+                            self, 'Этап закрыт',
+                            f'Оставшиеся строки пропущены. Переход к следующему подэтапу.',
+                            'success'
+                        ).exec_()
+                    # При 'continue' — ничего не делаем, сервер уже продвинул substep
+                elif has_next:
                     # Есть следующий круг — диалог с цветными кнопками
                     dlg = _WorkflowChoiceDialog(
                         self,
@@ -3420,29 +3479,38 @@ class CRMCard(QFrame):
                             'success'
                         ).exec_()
                 elif is_last:
-                    # Последний круг — закрыть или платный круг
-                    dlg = _WorkflowChoiceDialog(
-                        self,
-                        'Клиент согласовал',
-                        f'Клиент согласовал работу по стадии\n"{current_column}".',
-                        buttons=[
-                            ('Закрыть этап', '#58D68D', '#48C77D', 'close'),
-                            ('Платный круг правок', '#F0B27A', '#E5A06A', 'paid'),
-                        ]
-                    )
-                    choice = dlg.exec_choice()
-                    if choice == 'close':
+                    if is_individual:
+                        # Последний круг (индивидуальный) — закрыть или платный круг
+                        dlg = _WorkflowChoiceDialog(
+                            self,
+                            'Клиент согласовал',
+                            f'Клиент согласовал работу по стадии\n"{current_column}".',
+                            buttons=[
+                                ('Закрыть этап', '#58D68D', '#48C77D', 'close'),
+                                ('Платный круг правок', '#F0B27A', '#E5A06A', 'paid'),
+                            ]
+                        )
+                        choice = dlg.exec_choice()
+                        if choice == 'close':
+                            self.data.workflow_close_stage(self.card_data['id'])
+                            CustomMessageBox(
+                                self, 'Этап закрыт',
+                                f'Этап закрыт. Дедлайн возобновлен.',
+                                'success'
+                            ).exec_()
+                        else:
+                            self.data.workflow_add_extra_round(self.card_data['id'], current_column)
+                            CustomMessageBox(
+                                self, 'Платный круг',
+                                'Добавлен платный круг правок.',
+                                'success'
+                            ).exec_()
+                    else:
+                        # Последний круг (шаблонный) — просто закрыть этап, нет платных кругов
                         self.data.workflow_close_stage(self.card_data['id'])
                         CustomMessageBox(
                             self, 'Этап закрыт',
-                            f'Этап закрыт. Дедлайн возобновлен.',
-                            'success'
-                        ).exec_()
-                    else:
-                        self.data.workflow_add_extra_round(self.card_data['id'], current_column)
-                        CustomMessageBox(
-                            self, 'Платный круг',
-                            'Добавлен платный круг правок.',
+                            f'Клиент согласовал. Этап закрыт.',
                             'success'
                         ).exec_()
                 else:

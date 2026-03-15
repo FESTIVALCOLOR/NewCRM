@@ -218,6 +218,14 @@ async def startup_event():
     finally:
         db.close()
 
+    # N3: Запуск фонового планировщика дедлайнов
+    try:
+        from services.deadline_checker import deadline_checker_loop
+        asyncio.create_task(deadline_checker_loop())
+        logger.info("Deadline checker: задача запущена")
+    except Exception as e:
+        logger.warning(f"Deadline checker: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)

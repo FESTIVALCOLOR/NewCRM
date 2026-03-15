@@ -947,6 +947,27 @@ async def assign_stage_executor(
         db.commit()
         db.refresh(stage_executor)
 
+        # N1: Уведомление о назначении исполнителя
+        try:
+            address = contract.address if contract else ''
+            pt_key = _get_project_type_key(contract.project_type if contract else '')
+            notif_recipients = [(
+                executor.id,
+                f'Вы назначены {executor_data.stage_name.lower().replace(":", " —")} по проекту {address}.'
+            )]
+            # Уведомление старшему менеджеру (информационный дубль)
+            if card.senior_manager_id and card.senior_manager_id != executor.id:
+                notif_recipients.append((
+                    card.senior_manager_id,
+                    f'Проект {address}: назначен исполнитель {executor.full_name} на стадию «{executor_data.stage_name}».'
+                ))
+            asyncio.create_task(_dispatch_crm_notifications(
+                db, card, contract, 'assigned',
+                notif_recipients, f'Назначение: {address}', pt_key,
+            ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления assign: {e}")
+
         return {
             'id': stage_executor.id,
             'crm_card_id': stage_executor.crm_card_id,
@@ -2536,7 +2557,9 @@ async def workflow_sign_act(
             StageWorkflowState.crm_card_id == card_id,
             StageWorkflowState.stage_name == stage_name
         ).first()
-        if wf and wf.status != 'act_signing':
+        if not wf:
+            raise HTTPException(status_code=400, detail="Workflow-состояние стадии не найдено")
+        if wf.status != 'act_signing':
             raise HTTPException(status_code=400, detail="Акт можно подписать только в статусе act_signing")
 
         # Записываем дату в строку "Акт" / "Акт подписан" / "Закрытие"
@@ -2676,12 +2699,12 @@ async def workflow_add_extra_round(
             ProjectTimelineEntry.sort_order > base_sort
         ).all()
         for ea in entries_after:
-            ea.sort_order += 4
+            ea.sort_order += 6  # W2: 6 строк вместо 4
 
         # Prefix для stage_code (S для индивидуальных, T для шаблонных)
         prefix = last_entry.stage_code[0] if last_entry.stage_code else 'S'
 
-        # Вставляем 4 новые записи
+        # W2: Вставляем 6 новых записей (header + работа + проверка + правка + повторная проверка + согласование)
         new_entries = [
             ProjectTimelineEntry(
                 contract_id=contract_id,
@@ -2719,13 +2742,35 @@ async def workflow_add_extra_round(
             ProjectTimelineEntry(
                 contract_id=contract_id,
                 stage_code=f'{prefix}{stage_num}_EXT{ext_num}_03',
+                stage_name=f'Правка ({executor_role.lower()})',
+                stage_group=stage_group,
+                substage_group=f'Доп. круг {ext_num}',
+                norm_days=norm_days_work,
+                executor_role=executor_role,
+                is_in_contract_scope=False,
+                sort_order=base_sort + 4,
+            ),
+            ProjectTimelineEntry(
+                contract_id=contract_id,
+                stage_code=f'{prefix}{stage_num}_EXT{ext_num}_04',
+                stage_name=f'Проверка повторная ({reviewer_role})',
+                stage_group=stage_group,
+                substage_group=f'Доп. круг {ext_num}',
+                norm_days=norm_days_review,
+                executor_role=reviewer_role,
+                is_in_contract_scope=False,
+                sort_order=base_sort + 5,
+            ),
+            ProjectTimelineEntry(
+                contract_id=contract_id,
+                stage_code=f'{prefix}{stage_num}_EXT{ext_num}_05',
                 stage_name='Отправка клиенту / Согласование',
                 stage_group=stage_group,
                 substage_group=f'Доп. круг {ext_num}',
                 norm_days=3,
                 executor_role='Клиент',
                 is_in_contract_scope=False,
-                sort_order=base_sort + 4,
+                sort_order=base_sort + 6,
             ),
         ]
         for ne in new_entries:
@@ -3120,7 +3165,7 @@ async def get_accepted_stages(
 @router.post("/cards/{card_id}/invite-client")
 async def invite_client_to_chat(
     card_id: int,
-    current_user: Employee = Depends(get_current_user),
+    current_user: Employee = Depends(require_permission("messenger.create_chat")),
     db: Session = Depends(get_db)
 ):
     """Отправить клиенту email-приглашение в проектный Telegram-чат"""

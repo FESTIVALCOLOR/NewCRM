@@ -12,7 +12,7 @@ from typing import List, Optional
 from sqlalchemy import or_
 
 from database import (
-    get_db, Employee, Contract, ActivityLog, ActionHistory, ProjectFile, Rate,
+    get_db, Employee, Client, Contract, ActivityLog, ActionHistory, ProjectFile, Rate,
     SupervisionCard, SupervisionProjectHistory, StageExecutor,
     Payment, SupervisionTimelineEntry, MessengerChat,
 )
@@ -323,6 +323,37 @@ async def create_supervision_card(
         db.add(log)
         db.commit()
 
+        # N4: Автотриггер supervision_start при создании карточки
+        try:
+            asyncio.create_task(trigger_supervision_notification(
+                db, card.id, 'supervision_start', stage_name=card.column_name or ''
+            ))
+        except Exception as e:
+            logger.warning(f"supervision_start trigger: {e}")
+
+        # N4: Уведомление о создании карточки надзора
+        try:
+            from services.notification_dispatcher import dispatch_notification
+            contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+            address = contract.address if contract else ''
+            client_name = ''
+            if contract and contract.client_id:
+                client = db.query(Client).filter(Client.id == contract.client_id).first()
+                client_name = client.full_name if client else ''
+            sm_id = card.senior_manager_id
+            if sm_id and sm_id != current_user.id:
+                asyncio.create_task(dispatch_notification(
+                    db=db, employee_id=sm_id,
+                    event_type='supervision',
+                    title=f'Новый надзор: {address}',
+                    message=f'Новая карточка авторского надзора: {address} ({client_name}). Назначьте сотрудников.',
+                    related_entity_type='supervision_card',
+                    related_entity_id=card.id,
+                    project_type='supervision',
+                ))
+        except Exception as e:
+            logger.warning(f"supervision create notify: {e}")
+
         return {
             "id": card.id,
             "contract_id": card.contract_id,
@@ -569,9 +600,15 @@ async def move_supervision_card_to_column(
 
         # Хук: уведомление в чат надзора при перемещении
         if old_column != new_column:
-            asyncio.create_task(trigger_supervision_notification(
-                db, card_id, 'supervision_move', stage_name=new_column
-            ))
+            # N4: supervision_end при перемещении в "Выполненный проект"
+            if new_column == 'Выполненный проект':
+                asyncio.create_task(trigger_supervision_notification(
+                    db, card_id, 'supervision_end', stage_name=new_column
+                ))
+            else:
+                asyncio.create_task(trigger_supervision_notification(
+                    db, card_id, 'supervision_move', stage_name=new_column
+                ))
 
         return {
             'id': card.id,
