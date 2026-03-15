@@ -6511,12 +6511,20 @@ class CardEditDialog(QDialog):
             self.open_chat_btn.setEnabled(has_chat)
             self.delete_chat_btn.setEnabled(has_chat and is_online)
             if hasattr(self, 'invite_client_btn'):
-                # Активна если есть чат, есть invite_link и онлайн
+                # Активна если есть чат + invite_link + договор + клиент с email
                 has_invite_link = bool(
                     self._messenger_chat_data and
                     self._messenger_chat_data.get('chat', {}).get('invite_link')
                 )
-                self.invite_client_btn.setEnabled(has_chat and has_invite_link and is_online)
+                # Проверка договора и email клиента (руководство notifications-guide.md)
+                has_client_email = False
+                if self.card_data:
+                    contract_data = self.card_data.get('contract') or {}
+                    client_data = contract_data.get('client') or {}
+                    has_client_email = bool(client_data.get('email'))
+                self.invite_client_btn.setEnabled(
+                    has_chat and has_invite_link and is_online and has_client_email
+                )
 
             # Кнопки скриптов доступны только при наличии чата и подключении к серверу
             if hasattr(self, 'start_script_btn'):

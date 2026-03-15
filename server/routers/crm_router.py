@@ -832,10 +832,28 @@ async def move_crm_card_to_column(
                         ))
 
                 elif new_column == 'Выполненный проект':
-                    # Уведомление о завершении проекта: менеджер, ст.менеджер, СДП, ГАП
-                    for eid in [card.manager_id, card.senior_manager_id, card.sdp_id, card.gap_id]:
-                        if eid:
-                            notif_recipients.append((eid, f'Проект {address} завершён.'))
+                    # Руководство §2/§3: получатели зависят от типа проекта
+                    sent_ids = set()
+                    if pt_key == 'template':
+                        # Шаблонные: Менеджер + Ст.менеджер + Исполнитель (с "Спасибо за работу!")
+                        for eid in [card.manager_id, card.senior_manager_id]:
+                            if eid and eid not in sent_ids:
+                                notif_recipients.append((eid, f'Проект {address} завершён.'))
+                                sent_ids.add(eid)
+                        # Найти исполнителей (чертёжник/дизайнер) последней стадии
+                        _exec_ids = db.query(StageExecutor.executor_id).filter(
+                            StageExecutor.crm_card_id == card.id,
+                        ).distinct().all()
+                        for (eid,) in _exec_ids:
+                            if eid and eid not in sent_ids:
+                                notif_recipients.append((eid, f'Проект {address} завершён. Спасибо за работу!'))
+                                sent_ids.add(eid)
+                    else:
+                        # Индивидуальные: Менеджер + Ст.менеджер + СДП + ГАП
+                        for eid in [card.manager_id, card.senior_manager_id, card.sdp_id, card.gap_id]:
+                            if eid and eid not in sent_ids:
+                                notif_recipients.append((eid, f'Проект {address} завершён.'))
+                                sent_ids.add(eid)
 
                 if notif_recipients:
                     asyncio.create_task(_dispatch_crm_notifications(
@@ -948,12 +966,35 @@ async def assign_stage_executor(
         db.refresh(stage_executor)
 
         # N1: Уведомление о назначении исполнителя
+        # Согласно руководству §2: текст зависит от роли (позиции) исполнителя
         try:
             address = contract.address if contract else ''
             pt_key = _get_project_type_key(contract.project_type if contract else '')
+            # Получить имя клиента для текста уведомления
+            client_name = ''
+            if contract and contract.client_id:
+                _client = db.query(Client).filter(Client.id == contract.client_id).first()
+                if _client:
+                    client_name = _client.full_name or ''
+            # Маппинг позиции → текст роли (из руководства по уведомлениям §2)
+            _role_text_map = {
+                'Чертёжник': 'чертёжником по проекту',
+                'Чертежник': 'чертёжником по проекту',
+                'Дизайнер': 'дизайнером по проекту',
+                'СДП': 'старшим дизайнером-проектировщиком по проекту',
+                'ГАП': 'главным архитектором проекта',
+                'Менеджер': 'менеджером по проекту',
+                'Замерщик': 'замерщиком по проекту',
+                'ДАН': 'дизайнером авторского надзора по объекту',
+            }
+            role_text = _role_text_map.get(
+                executor.position,
+                f'{(executor.position or "исполнителем").lower()} по проекту'
+            )
+            client_suffix = f' ({client_name})' if client_name else ''
             notif_recipients = [(
                 executor.id,
-                f'Вы назначены {executor_data.stage_name.lower().replace(":", " —")} по проекту {address}.'
+                f'Вы назначены {role_text} {address}{client_suffix}.'
             )]
             # Уведомление старшему менеджеру (информационный дубль)
             if card.senior_manager_id and card.senior_manager_id != executor.id:
@@ -1895,11 +1936,14 @@ async def workflow_reject_work(
                     exec_id,
                     f'Работа по проекту {address} возвращена на исправление (правка #{rev_count}).'
                 ))
-            # Правило 3: дубль ст.менеджеру
+            # Правило 3: дубль ст.менеджеру (с указанием роли исполнителя)
             if card.senior_manager_id:
+                # Руководство §2: "работа возвращена чертёжнику/дизайнеру"
+                _sl = stage_name.lower()
+                executor_role_dat = 'дизайнеру' if ('концепция' in _sl or 'визуализац' in _sl or '3д' in _sl) else 'чертёжнику'
                 notif_recipients.append((
                     card.senior_manager_id,
-                    f'Проект {address}: работа возвращена на исправление (правка #{rev_count}).'
+                    f'Проект {address}: работа возвращена {executor_role_dat} на исправление (правка #{rev_count}).'
                 ))
             if notif_recipients:
                 asyncio.create_task(_dispatch_crm_notifications(
@@ -2118,7 +2162,7 @@ async def workflow_client_send(
         extra_context={'deadline': deadline_str} if deadline_str else None
     ))
 
-    # Личные уведомления: "Отправлено клиенту" → ст.менеджер
+    # Личные уведомления: "Отправлено клиенту" → ст.менеджер + исполнитель (для Стадии 2 инд.)
     try:
         contract = db.query(Contract).filter(Contract.id == contract_id).first()
         address = contract.address if contract else ''
@@ -2129,6 +2173,15 @@ async def workflow_client_send(
                 card.senior_manager_id,
                 f'Проект {address} отправлен клиенту на согласование ({stage_name}).'
             ))
+        # Руководство §2: Стадия 2 (концепция дизайна) — также уведомить исполнителя (дизайнера)
+        _sl_cs = stage_name.lower()
+        if 'концепция' in _sl_cs or ('визуализац' in _sl_cs and pt_key == 'individual'):
+            exec_id = _find_executor_id(db, card.id, stage_name)
+            if exec_id:
+                notif_recipients.append((
+                    exec_id,
+                    f'Проект {address} отправлен клиенту на согласование ({stage_name}).'
+                ))
         if notif_recipients:
             asyncio.create_task(_dispatch_crm_notifications(
                 db, card, contract, 'crm_stage_change',
@@ -2607,7 +2660,8 @@ async def workflow_sign_act(
         except Exception:
             logger.warning(f"Не удалось отправить уведомление sign-act для карточки {card_id}")
 
-        # Личные уведомления: "Акт подписан" → reviewer (СДП/ГАП/Менеджер)
+        # Личные уведомления: "Акт подписан" → reviewer + SM (для шаблонных)
+        # Руководство §2/§3: тексты зависят от типа проекта и стадии
         try:
             contract = db.query(Contract).filter(Contract.id == contract_id).first()
             address = contract.address if contract else ''
@@ -2620,11 +2674,23 @@ async def workflow_sign_act(
             else:
                 reviewer_id = card.sdp_id
             notif_recipients = []
+            sent_ids = set()
+            # Определить текст по руководству
+            if pt_key == 'template' and ('3д' in sl or 'визуализац' in sl):
+                # Шаблонные Стадия 3: "Стадия 3 проекта {address} завершена."
+                act_text = f'Стадия 3 проекта {address} завершена.'
+            elif '3' in sl and 'рабочая документация' in sl:
+                # Инд. Стадия 3: "Акт по Стадии 3 подписан. Проект завершён."
+                act_text = f'Акт по {stage_name} проекта {address} подписан. Проект завершён.'
+            else:
+                act_text = f'Акт по {stage_name} проекта {address} подписан.'
             if reviewer_id:
-                notif_recipients.append((
-                    reviewer_id,
-                    f'Акт по {stage_name} проекта {address} подписан.'
-                ))
+                notif_recipients.append((reviewer_id, act_text))
+                sent_ids.add(reviewer_id)
+            # Шаблонные: SM тоже получает уведомление (руководство §3)
+            if pt_key == 'template' and card.senior_manager_id and card.senior_manager_id not in sent_ids:
+                notif_recipients.append((card.senior_manager_id, act_text))
+                sent_ids.add(card.senior_manager_id)
             if notif_recipients:
                 asyncio.create_task(_dispatch_crm_notifications(
                     db, card, contract, 'crm_stage_change',
@@ -2775,6 +2841,27 @@ async def workflow_add_extra_round(
         ]
         for ne in new_entries:
             db.add(ne)
+
+        # Обновить wf.status и current_substep_code (руководство §8)
+        # После создания платного круга исполнитель должен начать работу
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if wf:
+            wf.status = 'in_progress'
+            wf.current_substep_code = f'{prefix}{stage_num}_EXT{ext_num}_01'
+            wf.current_substage_group = f'Доп. круг {ext_num}'
+            wf.updated_at = datetime.utcnow()
+        else:
+            wf = StageWorkflowState(
+                crm_card_id=card_id,
+                stage_name=stage_name,
+                status='in_progress',
+                current_substep_code=f'{prefix}{stage_num}_EXT{ext_num}_01',
+                current_substage_group=f'Доп. круг {ext_num}',
+            )
+            db.add(wf)
 
         # K11: Запись в историю
         db.add(ActionHistory(

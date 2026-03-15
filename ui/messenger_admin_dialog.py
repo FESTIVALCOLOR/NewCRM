@@ -99,25 +99,49 @@ _TAB_STYLE = """
 """
 
 # Плейсхолдеры для скриптов
+# Переменные шаблонов (согласно руководству §11 notifications-scripts-guide.md)
 SCRIPT_PLACEHOLDERS = {
-    "{client_name}": "Имя клиента",
-    "{project_name}": "Название проекта (номер договора)",
-    "{stage_name}": "Название стадии",
-    "{substage_name}": "Название подэтапа",
-    "{deadline}": "Дата дедлайна (ДД.ММ.ГГГГ)",
-    "{manager_name}": "Имя менеджера",
-    "{senior_manager}": "Старший менеджер (СДП)",
-    "{director}": "Директор",
+    # Основные
+    "{client_first_name}": "Имя клиента (только имя)",
+    "{client_name}": "Полное ФИО клиента",
     "{address}": "Адрес объекта",
     "{city}": "Город",
+    "{contract_number}": "Номер договора",
+    "{area}": "Площадь (м²)",
+    "{stage_name}": "Название стадии",
+    "{deadline}": "Дедлайн / срок на рассмотрение",
+    "{deadline_date}": "Дата дедлайна",
+    "{stage_files}": "Ссылки на файлы стадии",
+    "{revision_count}": "Номер правки",
+    "{review_link}": "Ссылка на отзывы",
+    "{amount}": "Сумма оплаты",
+    "{visit_date}": "Дата выезда надзора",
+    "{pause_reason}": "Причина приостановки",
+    # Команда проекта
+    "{senior_manager}": "ФИО старшего менеджера",
+    "{senior_manager_username}": "Telegram username ст. менеджера",
+    "{manager_name}": "ФИО менеджера",
+    "{manager_username}": "Telegram username менеджера",
+    "{sdp}": "ФИО СДП",
+    "{sdp_username}": "Telegram username СДП",
+    "{director}": "ФИО руководителя студии",
+    "{director_username}": "Telegram username руководителя",
+    "{dan}": "ФИО ДАН",
+    "{dan_username}": "Telegram username ДАН",
+    # Дательный падеж
+    "{client_name_dat}": "Клиент (дат. падеж)",
+    "{manager_name_dat}": "Менеджер (дат. падеж)",
+    "{senior_manager_dat}": "Ст. менеджер (дат. падеж)",
 }
 
 SCRIPT_TYPES = {
     "project_start": "Начало проекта",
     "stage_complete": "Завершение стадии",
     "project_end": "Завершение проекта",
-    "project_paused": "Приостановка проекта",
-    "custom": "Пользовательский",
+    "supervision_start": "Начало надзора",
+    "supervision_stage_complete": "Завершение стадии надзора",
+    "supervision_visit": "Выезд надзора",
+    "supervision_end": "Завершение надзора",
 }
 
 # Стадии CRM для уведомлений, сгруппированные по типу проекта
