@@ -104,8 +104,7 @@ SCRIPT_PLACEHOLDERS = {
     # Основные
     "{client_first_name}": "Имя клиента (только имя)",
     "{client_name}": "Полное ФИО клиента",
-    "{address}": "Адрес объекта",
-    "{city}": "Город",
+    "{address}": "Адрес объекта (включая город)",
     "{contract_number}": "Номер договора",
     "{area}": "Площадь (м²)",
     "{stage_name}": "Название стадии",
@@ -1320,7 +1319,7 @@ class MessengerAdminDialog(QDialog):
 
         # Шаблоны по умолчанию для разных типов
         default_templates = {
-            "project_start": "Здравствуйте, {client_name}!\n\nДобро пожаловать в проект. Ваш менеджер — {manager_name}.\nАдрес объекта: {address}, {city}.",
+            "project_start": "Здравствуйте, {client_name}!\n\nДобро пожаловать в проект. Ваш менеджер — {manager_name}.\nАдрес объекта: {address}.",
             "stage_complete": "Здравствуйте, {client_name}!\n\nЭтап «{stage_name}» готов к согласованию.\nПросим ознакомиться с материалами.",
             "project_end": "Здравствуйте, {client_name}!\n\nПроект завершён. Благодарим за сотрудничество!",
             "project_paused": "Здравствуйте, {client_name}!\n\nПроект временно приостановлен.\nМенеджер {manager_name} свяжется с вами для уточнения деталей.",

@@ -52,6 +52,37 @@ def _find_executor_id(db: Session, card_id: int, stage_name: str) -> Optional[in
     return executor.employee_id if executor else None
 
 
+def _extract_stage_number(stage_name: str) -> str:
+    """Извлечь номер стадии из названия колонки.
+    'Стадия 2: концепция дизайна' → '2'
+    """
+    import re
+    m = re.search(r'[Сс]тадия\s*(\d+)', stage_name)
+    return m.group(1) if m else ''
+
+
+def _get_substage_concept(current_subgroup: str) -> str:
+    """Определить концепцию подэтапа Стадии 2 инд.
+    Подэтап 2.2/2.3/2.4 → 'мудборд'
+    Подэтап 2.5/2.6/2.7 → 'визуализация'
+    """
+    if current_subgroup in ('Подэтап 2.2', 'Подэтап 2.3', 'Подэтап 2.4'):
+        return 'мудборд'
+    elif current_subgroup in ('Подэтап 2.5', 'Подэтап 2.6', 'Подэтап 2.7'):
+        return 'визуализация'
+    return ''
+
+
+# Маппинг номеров стадий к коротким названиям (для уведомлений исполнителям)
+_STAGE_TITLE_MAP = {
+    '1': 'Планировочное решение',
+    '3': 'Рабочая документация',
+}
+
+# Последние круги (бесплатные правки исчерпаны)
+_LAST_VIZ_SUBGROUPS = {'Подэтап 2.7'}
+
+
 async def _dispatch_crm_notifications(
     db: Session,
     card,
@@ -460,11 +491,15 @@ async def create_crm_card(
 
             # Определяем получателя: ст.менеджер (если не он создал)
             sm_id = card.senior_manager_id
+            # Текст по руководству: инд. — со списком специалистов, шабл. — без
+            if pt_key == 'template':
+                _new_order_text = f'Новый заказ (шаблонный): {address}, {client_name}. Назначьте сотрудников.'
+            else:
+                _new_order_text = f'Новый заказ: {address}, {client_name}. Назначьте сотрудников (СДП, дизайнера, чертёжника, замерщика).'
             if sm_id and sm_id != current_user.id:
-                prefix = '(шаблонный) ' if pt_key == 'template' else ''
                 asyncio.create_task(_dispatch_crm_notifications(
                     db, card, contract, 'assigned',
-                    [(sm_id, f'Новый заказ {prefix}{address}, {client_name}. Назначьте сотрудников.')],
+                    [(sm_id, _new_order_text)],
                     f'Новый заказ: {address}', pt_key,
                 ))
             elif not sm_id:
@@ -474,10 +509,9 @@ async def create_crm_card(
                     Employee.status == 'активный',
                 ).first()
                 if sm and sm.id != current_user.id:
-                    prefix = '(шаблонный) ' if pt_key == 'template' else ''
                     asyncio.create_task(_dispatch_crm_notifications(
                         db, card, contract, 'assigned',
-                        [(sm.id, f'Новый заказ {prefix}{address}, {client_name}. Назначьте сотрудников (СДП, дизайнера, чертёжника, замерщика).')],
+                        [(sm.id, _new_order_text)],
                         f'Новый заказ: {address}', pt_key,
                     ))
         except Exception as e:
@@ -2163,25 +2197,51 @@ async def workflow_client_send(
     ))
 
     # Личные уведомления: "Отправлено клиенту" → ст.менеджер + исполнитель (для Стадии 2 инд.)
+    # Руководство §2/§3: тексты зависят от подэтапа и типа проекта
     try:
         contract = db.query(Contract).filter(Contract.id == contract_id).first()
         address = contract.address if contract else ''
         pt_key = _get_project_type_key(contract.project_type if contract else '')
+        stage_num = _extract_stage_number(stage_name)
         notif_recipients = []
+
+        # Определяем концепцию подэтапа для Стадии 2 инд.
+        _cur_sub_cs = wf.current_substage_group if wf else ''
+        concept_cs = ''
+        if stage_num == '2' and pt_key == 'individual':
+            concept_cs = _get_substage_concept(_cur_sub_cs or '')
+        _is_last_viz_cs = _cur_sub_cs in _LAST_VIZ_SUBGROUPS
+
+        # Текст для СМ
         if card.senior_manager_id:
-            notif_recipients.append((
-                card.senior_manager_id,
-                f'Проект {address} отправлен клиенту на согласование ({stage_name}).'
-            ))
+            if concept_cs == 'мудборд':
+                _sm_cs_txt = f'Проект {address}: мудборды отправлены клиенту на согласование.'
+            elif concept_cs == 'визуализация':
+                if _is_last_viz_cs:
+                    _sm_cs_txt = f'Проект {address}: визуализации всех помещений отправлены клиенту.'
+                else:
+                    _sm_cs_txt = f'Проект {address}: визуализация 1 помещения отправлена клиенту.'
+            else:
+                _sm_cs_txt = f'Проект {address} отправлен клиенту на согласование (Стадия {stage_num}).'
+            notif_recipients.append((card.senior_manager_id, _sm_cs_txt))
+
         # Руководство §2: Стадия 2 (концепция дизайна) — также уведомить исполнителя (дизайнера)
         _sl_cs = stage_name.lower()
         if 'концепция' in _sl_cs or ('визуализац' in _sl_cs and pt_key == 'individual'):
             exec_id = _find_executor_id(db, card.id, stage_name)
             if exec_id:
-                notif_recipients.append((
-                    exec_id,
-                    f'Проект {address} отправлен клиенту на согласование ({stage_name}).'
-                ))
+                # Исполнитель получает тот же текст что и СМ для Стадии 2
+                if concept_cs == 'мудборд':
+                    _ex_cs_txt = f'Проект {address}: мудборды отправлены клиенту на согласование.'
+                elif concept_cs == 'визуализация':
+                    if _is_last_viz_cs:
+                        _ex_cs_txt = f'Проект {address}: визуализации всех помещений отправлены клиенту.'
+                    else:
+                        _ex_cs_txt = f'Проект {address}: визуализация 1 помещения отправлена клиенту.'
+                else:
+                    _ex_cs_txt = f'Проект {address} отправлен клиенту на согласование (Стадия {stage_num}).'
+                notif_recipients.append((exec_id, _ex_cs_txt))
+
         if notif_recipients:
             asyncio.create_task(_dispatch_crm_notifications(
                 db, card, contract, 'crm_stage_change',
@@ -2363,27 +2423,50 @@ async def workflow_client_approved(
             logger.warning(f"Не удалось отправить уведомление для карточки {card_id}")
 
         # Личные уведомления: "Клиент согласовал" → ст.менеджер + исполнитель
+        # Руководство §2/§3: тексты зависят от подэтапа и типа проекта
         try:
             contract_obj = db.query(Contract).filter(Contract.id == contract_id).first()
             address = contract_obj.address if contract_obj else ''
             pt_key = _get_project_type_key(contract_obj.project_type if contract_obj else '')
-            sl = stage_name.lower()
+            stage_num = _extract_stage_number(stage_name)
             notif_recipients = []
+
+            # Определяем концепцию подэтапа для Стадии 2 инд.
+            _cur_sub = wf.current_substage_group if wf else ''
+            concept = ''
+            if stage_num == '2' and pt_key == 'individual':
+                concept = _get_substage_concept(_cur_sub or '')
+            _is_last_viz = _cur_sub in _LAST_VIZ_SUBGROUPS
+
+            # Текст для СМ
             if card.senior_manager_id:
-                notif_recipients.append((
-                    card.senior_manager_id,
-                    f'Клиент согласовал {stage_name} по проекту {address}.'
-                ))
-            # Исполнитель
-            if 'концепция' in sl or 'визуализац' in sl or '3д' in sl:
-                exec_id = _find_executor_id(db, card.id, stage_name)
-            else:
-                exec_id = _find_executor_id(db, card.id, stage_name)
+                if concept == 'мудборд':
+                    _sm_txt = f'Клиент согласовал мудборды по проекту {address}.'
+                elif concept == 'визуализация':
+                    if _is_last_viz:
+                        _sm_txt = f'Клиент согласовал Стадию 2 по проекту {address}.'
+                    else:
+                        _sm_txt = f'Клиент согласовал визуализацию 1 помещения по проекту {address}.'
+                else:
+                    _sm_txt = f'Клиент согласовал Стадию {stage_num} по проекту {address}.'
+                notif_recipients.append((card.senior_manager_id, _sm_txt))
+
+            # Текст для исполнителя
+            exec_id = _find_executor_id(db, card.id, stage_name)
             if exec_id:
-                notif_recipients.append((
-                    exec_id,
-                    f'Клиент согласовал работу по проекту {address}, стадия "{stage_name}".'
-                ))
+                if concept == 'мудборд':
+                    _ex_txt = f'Клиент согласовал мудборды по проекту {address}.'
+                elif concept == 'визуализация':
+                    if _is_last_viz:
+                        _ex_txt = f'Клиент согласовал визуализации всех помещений по проекту {address}.'
+                    else:
+                        _ex_txt = f'Клиент согласовал визуализацию 1 помещения по проекту {address}.'
+                elif stage_num in _STAGE_TITLE_MAP and pt_key == 'individual':
+                    _ex_txt = f'Клиент согласовал работу по проекту {address}, стадия "{_STAGE_TITLE_MAP[stage_num]}".'
+                else:
+                    _ex_txt = f'Клиент согласовал Стадию {stage_num} по проекту {address}.'
+                notif_recipients.append((exec_id, _ex_txt))
+
             if notif_recipients:
                 asyncio.create_task(_dispatch_crm_notifications(
                     db, card, contract_obj, 'crm_stage_change',
@@ -2675,15 +2758,16 @@ async def workflow_sign_act(
                 reviewer_id = card.sdp_id
             notif_recipients = []
             sent_ids = set()
+            _act_stage_num = _extract_stage_number(stage_name)
             # Определить текст по руководству
             if pt_key == 'template' and ('3д' in sl or 'визуализац' in sl):
                 # Шаблонные Стадия 3: "Стадия 3 проекта {address} завершена."
                 act_text = f'Стадия 3 проекта {address} завершена.'
-            elif '3' in sl and 'рабочая документация' in sl:
+            elif _act_stage_num == '3':
                 # Инд. Стадия 3: "Акт по Стадии 3 подписан. Проект завершён."
-                act_text = f'Акт по {stage_name} проекта {address} подписан. Проект завершён.'
+                act_text = f'Акт по Стадии {_act_stage_num} проекта {address} подписан. Проект завершён.'
             else:
-                act_text = f'Акт по {stage_name} проекта {address} подписан.'
+                act_text = f'Акт по Стадии {_act_stage_num} проекта {address} подписан.'
             if reviewer_id:
                 notif_recipients.append((reviewer_id, act_text))
                 sent_ids.add(reviewer_id)
