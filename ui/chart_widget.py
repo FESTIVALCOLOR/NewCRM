@@ -453,8 +453,8 @@ class SectionWidget(QFrame):
 class LineChartWidget(ChartBase):
     """Линейный график с градиентной заливкой и полыми маркерами"""
 
-    _AXIS_LEFT = 0.08
-    _AXIS_RIGHT = 0.96
+    _AXIS_LEFT = 0.06
+    _AXIS_RIGHT = 0.94
 
     def __init__(self, title="", parent=None):
         super().__init__(title, parent)
@@ -704,4 +704,4 @@ class HorizontalBarWidget(ChartBase):
         if self.chart_title:
             ax.set_title(self.chart_title, fontsize=_Theme.TITLE_SIZE,
                          fontweight='bold', color='#333', pad=12)
-        self._finalize()
+        self._finalize(bottom=0.15)

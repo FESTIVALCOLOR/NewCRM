@@ -396,7 +396,14 @@ class EmployeeReportsTab(QWidget):
         filters_row.addWidget(month_combo)
 
         refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', icon_size=12)
-        refresh_btn.setFixedHeight(28)
+        refresh_btn.setFixedHeight(26)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: #F0F4FF; border: 1px solid #C5CAE9; border-radius: 4px;
+                padding: 3px 12px; color: #333; font-size: 11px;
+            }
+            QPushButton:hover { background: #E8EAF6; }
+        """)
         refresh_btn.clicked.connect(lambda: self._refresh_all(project_type))
         filters_row.addWidget(refresh_btn)
         filters_row.addStretch()
@@ -522,17 +529,17 @@ class EmployeeReportsTab(QWidget):
 
             kpi_bar_chart = HorizontalBarWidget('Сравнение KPI')
             kpi_bar_chart.setObjectName(f'role_kpi_chart_{project_type}_{role_code}')
-            kpi_bar_chart.setFixedHeight(260)
+            kpi_bar_chart.setFixedHeight(320)
             charts_row.addWidget(kpi_bar_chart)
 
             ontime_chart = StackedBarChartWidget('В срок / Просрочки')
             ontime_chart.setObjectName(f'role_ontime_chart_{project_type}_{role_code}')
-            ontime_chart.setFixedHeight(260)
+            ontime_chart.setFixedHeight(320)
             charts_row.addWidget(ontime_chart)
 
             dynamics_chart = LineChartWidget('Динамика по месяцам')
             dynamics_chart.setObjectName(f'role_dynamics_chart_{project_type}_{role_code}')
-            dynamics_chart.setFixedHeight(260)
+            dynamics_chart.setFixedHeight(320)
             charts_row.addWidget(dynamics_chart)
 
             tab_layout.addLayout(charts_row)
@@ -1127,7 +1134,7 @@ class EmployeeReportsTab(QWidget):
 
             # 1. Динамика KPI (линейный)
             kpi_dynamics = LineChartWidget('Динамика KPI')
-            kpi_dynamics.setFixedHeight(280)
+            kpi_dynamics.setFixedHeight(290)
             if trend:
                 months = [t.get('month', '') for t in trend[-12:]]
                 kpi_vals = [t.get('kpi_total', 0) or 0 for t in trend[-12:]]
@@ -1140,7 +1147,7 @@ class EmployeeReportsTab(QWidget):
             # 2. Нагрузка по месяцам (линейный)
             load_monthly = detail.get('load_monthly', [])
             load_chart = LineChartWidget('Нагрузка по месяцам')
-            load_chart.setFixedHeight(280)
+            load_chart.setFixedHeight(290)
             if load_monthly:
                 l_months = [m.get('month', '') for m in load_monthly]
                 l_vals = [m.get('concurrent_projects', 0) for m in load_monthly]
@@ -1152,7 +1159,7 @@ class EmployeeReportsTab(QWidget):
 
             # 3. Компоненты KPI (bar) — на всю высоту справа
             kpi_components_chart = StackedBarChartWidget('Компоненты KPI')
-            kpi_components_chart.setFixedHeight(560)
+            kpi_components_chart.setFixedHeight(580)
             if kpi:
                 if is_supervision:
                     comp_names = ['Закупки', 'Дефекты', 'Визиты', 'NPS']
@@ -1484,37 +1491,129 @@ class EmployeeReportsTab(QWidget):
                     img.hAlign = 'CENTER'
                     elements.append(img)
             else:
-                from reportlab.platypus import PageBreak
-                # Полный вид — посекционный экспорт с разбивкой по страницам
+                from reportlab.platypus import PageBreak, Table, TableStyle
+                # Полный вид — посекционный экспорт
                 idx = self.report_tabs.currentIndex()
                 tab_name = self.report_tabs.tabText(idx)
+                types_map = ['Индивидуальный', 'Шаблонный', 'Авторский надзор']
+                project_type = types_map[idx] if 0 <= idx < len(types_map) else 'Индивидуальный'
+
+                # Период из фильтров
+                period = self._get_period_params(project_type)
+                period_parts = [f"Год: {period.get('year', '')}"]
+                if period.get('quarter'):
+                    period_parts.append(f"Квартал: Q{period['quarter']}")
+                if period.get('month'):
+                    months_names = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+                    period_parts.append(f"Месяц: {months_names[period['month']]}")
+                period_str = ' | '.join(period_parts)
+
                 elements.append(Paragraph(
-                    f'<b>Тип проекта:</b> {tab_name} | '
+                    f'<b>Тип проекта:</b> {tab_name} | {period_str} | '
                     f'<b>Дата:</b> {datetime.now().strftime("%d.%m.%Y %H:%M")}',
                     style_sub))
                 elements.append(Spacer(1, 4 * mm))
 
                 page_h_mm = (page_size[1] - MARGIN_TOP - MARGIN_BOT) / mm - 30
 
+                # KPI сводка (из кеша)
+                dashboard = self._dashboard_cache.get(project_type, {})
+                summary = dashboard.get('summary', {})
+                if summary:
+                    style_body = ParagraphStyle(
+                        'EmpBody', fontName=font_name, fontSize=9,
+                        textColor=colors.HexColor('#333333'),
+                        spaceAfter=1 * mm,
+                    )
+                    avg_kpi = summary.get('avg_kpi', 0) or 0
+                    on_time = summary.get('avg_on_time_rate', 0) or 0
+                    avg_nps = summary.get('avg_nps')
+                    kpi_line = (
+                        f"<b>Сотрудников:</b> {summary.get('total_employees', 0)} | "
+                        f"<b>Средний KPI:</b> {avg_kpi:.0f}% | "
+                        f"<b>Выполнение в срок:</b> {on_time:.0f}% | "
+                        f"<b>Средняя нагрузка:</b> {summary.get('avg_concurrent_load', 0):.1f} | "
+                        f"<b>NPS:</b> {f'{avg_nps:.1f}' if avg_nps else '—'} | "
+                        f"<b>Активных проектов:</b> {summary.get('active_projects', 0)}"
+                    )
+                    elements.append(Paragraph(kpi_line, style_body))
+                    elements.append(Spacer(1, 3 * mm))
+
+                # Топ-5
+                top = dashboard.get('top_performers', [])
+                under = dashboard.get('underperformers', [])
+                if top or under:
+                    style_small = ParagraphStyle(
+                        'EmpSmall', fontName=font_name, fontSize=8,
+                        textColor=colors.HexColor('#555555'),
+                        leading=11,
+                    )
+                    top_lines = ['<b>Топ-5 лучших:</b>']
+                    for i, emp in enumerate(top[:5], 1):
+                        kpi_val = emp.get('kpi_total', 0) or 0
+                        top_lines.append(f"{i}. {emp.get('full_name', '')} — {kpi_val:.0f}%")
+                    under_lines = ['<b>Топ-5 проблемных:</b>']
+                    if under:
+                        for i, emp in enumerate(under[:5], 1):
+                            kpi_val = emp.get('kpi_total', 0) or 0
+                            under_lines.append(f"{i}. {emp.get('full_name', '')} — {kpi_val:.0f}%")
+                    else:
+                        under_lines.append('Нет проблемных сотрудников')
+
+                    elements.append(Paragraph('<br/>'.join(top_lines), style_small))
+                    elements.append(Spacer(1, 2 * mm))
+                    elements.append(Paragraph('<br/>'.join(under_lines), style_small))
+                    elements.append(Spacer(1, 4 * mm))
+
+                # Тренд KPI график
                 current_tab = self.report_tabs.currentWidget()
                 if current_tab:
                     inner = current_tab.widget() if hasattr(current_tab, 'widget') else current_tab
                     if inner:
-                        # Собираем виджеты-секции для отдельных страниц
-                        sections = self._collect_pdf_sections(inner)
-                        for i, widget in enumerate(sections):
-                            result = grab_widget_png(widget, RENDER_SCALE)
-                            if not result:
-                                continue
-                            buf, w_px, h_px = result
-                            aspect = h_px / w_px if w_px > 0 else 1
-                            img_h = min(PAGE_W_MM * aspect, page_h_mm)
-                            img = fit_image(buf, w_px, h_px, PAGE_W_MM, img_h)
-                            img.hAlign = 'CENTER'
-                            elements.append(img)
-                            # PageBreak после каждой секции, кроме последней
-                            if i < len(sections) - 1:
-                                elements.append(PageBreak())
+                        # Тренд — отдельный виджет
+                        trend_chart = inner.findChild(
+                            LineChartWidget, f'dashboard_trend_{project_type}')
+                        if trend_chart:
+                            result = grab_widget_png(trend_chart, RENDER_SCALE)
+                            if result:
+                                buf, w_px, h_px = result
+                                aspect = h_px / w_px if w_px > 0 else 1
+                                img_h = min(PAGE_W_MM * aspect, page_h_mm)
+                                img = fit_image(buf, w_px, h_px, PAGE_W_MM, img_h)
+                                img.hAlign = 'CENTER'
+                                elements.append(img)
+
+                        elements.append(PageBreak())
+
+                        # Таблица роли + графики
+                        role_tabs_w = inner.findChild(
+                            QTabWidget, f'role_tabs_{project_type}')
+                        if role_tabs_w and isinstance(role_tabs_w, QTabWidget):
+                            current_role = role_tabs_w.currentWidget()
+                            if current_role:
+                                result = grab_widget_png(current_role, RENDER_SCALE)
+                                if result:
+                                    buf, w_px, h_px = result
+                                    aspect = h_px / w_px if w_px > 0 else 1
+                                    img_h = min(PAGE_W_MM * aspect, page_h_mm)
+                                    img = fit_image(buf, w_px, h_px, PAGE_W_MM, img_h)
+                                    img.hAlign = 'CENTER'
+                                    elements.append(img)
+
+                        # Детальная карточка
+                        detail_content = inner.findChild(
+                            QWidget, f'detail_content_{project_type}')
+                        if detail_content and detail_content.isVisible():
+                            elements.append(PageBreak())
+                            result = grab_widget_png(detail_content, RENDER_SCALE)
+                            if result:
+                                buf, w_px, h_px = result
+                                aspect = h_px / w_px if w_px > 0 else 1
+                                img_h = min(PAGE_W_MM * aspect, page_h_mm)
+                                img = fit_image(buf, w_px, h_px, PAGE_W_MM, img_h)
+                                img.hAlign = 'CENTER'
+                                elements.append(img)
 
             if len(elements) <= 3:  # Только заголовок + spacers — нет контента
                 try:
@@ -1539,79 +1638,3 @@ class EmployeeReportsTab(QWidget):
             except Exception:
                 pass
 
-    def _collect_pdf_sections(self, container):
-        """Собирает видимые виджеты-секции из контейнера для PDF экспорта.
-
-        Группирует элементы в логические блоки:
-        - Страница 1: Фильтры + KPI-карточки + Топ-5 + Тренд
-        - Страница 2: Таблица роли + 3 графика сравнения
-        - Страница 3+: Детальная карточка (мини-KPI + графики + проекты + отзывы)
-        """
-        sections = []
-        layout = container.layout()
-        if not layout:
-            return [container]
-
-        # Соберём все top-level виджеты/лейауты
-        widgets = []
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item.widget() and item.widget().isVisible():
-                widgets.append(item.widget())
-
-        if not widgets:
-            return [container]
-
-        # Страница 1: всё до role_tabs (KPI карточки, Top-5, тренд)
-        # Страница 2: role_tabs (таблица + графики)
-        # Страница 3: detail card
-        page1_widgets = []
-        page2_widget = None
-        page3_widget = None
-
-        for w in widgets:
-            obj_name = w.objectName() or ''
-            if 'role_tabs' in obj_name:
-                page2_widget = w
-            elif 'detail_' in obj_name:
-                page3_widget = w
-            elif page2_widget is None:
-                page1_widgets.append(w)
-
-        # Создаём временные контейнеры для каждой страницы
-        if page1_widgets:
-            # Захватываем верхнюю часть до role_tabs
-            # Используем все виджеты до role_tabs как одну группу
-            first_w = page1_widgets[0]
-            last_w = page1_widgets[-1]
-            # Вычисляем общую область от первого до последнего виджета
-            y_top = first_w.mapTo(container, first_w.rect().topLeft()).y()
-            y_bot = last_w.mapTo(container, last_w.rect().bottomLeft()).y()
-            if y_bot > y_top:
-                sections.append(container)  # fallback — весь верх
-                # Лучше: захватим каждый виджет отдельно не будем
-                sections = page1_widgets[:1]  # Первый виджет (фильтры) — пропускаем
-                sections = []
-                # Собираем верхнюю часть как единый блок
-                for w in page1_widgets:
-                    if w.height() > 10:
-                        sections.append(w)
-
-        if page2_widget and page2_widget.isVisible():
-            # Текущая вкладка роли — таблица + графики
-            role_tabs_w = page2_widget
-            if isinstance(role_tabs_w, QTabWidget):
-                current = role_tabs_w.currentWidget()
-                if current:
-                    sections.append(current)
-
-        if page3_widget and page3_widget.isVisible():
-            # Детальная карточка
-            detail_content = page3_widget.findChild(
-                QWidget, page3_widget.objectName().replace('detail_', 'detail_content_'))
-            if detail_content and detail_content.isVisible():
-                sections.append(detail_content)
-            elif page3_widget.isVisible():
-                sections.append(page3_widget)
-
-        return sections if sections else [container]
