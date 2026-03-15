@@ -34,6 +34,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
+from constants import (
+    POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+    POSITION_SDP, POSITION_GAP, POSITION_DAN, POSITION_MANAGER, POSITION_MEASURER,
+    ADMIN_POSITIONS, EXEC_POSITIONS,
+    STATUS_COMPLETED, STATUS_TERMINATED, STATUS_SUPERVISION,
+    ARCHIVE_STATUSES,
+)
 from database import (
     get_db,
     Client, Contract, Employee,
@@ -180,7 +187,7 @@ async def get_crm_dashboard(
         # Определяем таблицу CRM
         if project_type == 'Авторский надзор':
             crm_table = SupervisionCard
-            contract_condition = Contract.status == 'АВТОРСКИЙ НАДЗОР'
+            contract_condition = Contract.status == STATUS_SUPERVISION
         elif project_type == 'Индивидуальный':
             crm_table = CRMCard
             contract_condition = Contract.project_type == 'Индивидуальный'
@@ -196,7 +203,7 @@ async def get_crm_dashboard(
         total_orders, total_area = total_query.first()
 
         # 3-4. Активные и архивные заказы в СРМ
-        archive_statuses = ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
+        archive_statuses = ARCHIVE_STATUSES
         if project_type == 'Авторский надзор':
             # Для надзора: активные = контракт в статусе АВТОРСКИЙ НАДЗОР
             active_orders = db.query(crm_table).join(
@@ -206,7 +213,7 @@ async def get_crm_dashboard(
             archive_orders = db.query(crm_table).join(
                 Contract, crm_table.contract_id == Contract.id
             ).filter(
-                Contract.status.in_(['СДАН', 'РАСТОРГНУТ'])
+                Contract.status.in_([STATUS_COMPLETED, STATUS_TERMINATED])
             ).count()
         else:
             active_orders = db.query(crm_table).join(
@@ -245,7 +252,7 @@ async def get_crm_dashboard(
                 agent_archive_orders = db.query(crm_table).join(
                     Contract, crm_table.contract_id == Contract.id
                 ).filter(
-                    Contract.status.in_(['СДАН', 'РАСТОРГНУТ']),
+                    Contract.status.in_([STATUS_COMPLETED, STATUS_TERMINATED]),
                     Contract.agent_type == agent_type
                 ).count()
             else:
@@ -293,7 +300,7 @@ async def get_employees_dashboard(
         ).count()
 
         # 3. Руководящий состав (по должностям, как во вкладках UI)
-        admin_positions = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
+        admin_positions = ADMIN_POSITIONS
         active_management = db.query(Employee).filter(
             func.lower(Employee.status) == 'активный',
             Employee.position.in_(admin_positions)
@@ -307,7 +314,7 @@ async def get_employees_dashboard(
         ).count()
 
         # 5. Исполнительный отдел (по должностям)
-        exec_positions = ['Менеджер', 'ДАН', 'Замерщик']
+        exec_positions = EXEC_POSITIONS
         active_execution_dept = db.query(Employee).filter(
             func.lower(Employee.status) == 'активный',
             Employee.position.in_(exec_positions)
@@ -433,7 +440,7 @@ async def get_salaries_dashboard(
             ).join(Contract).filter(
                 Payment.payment_status == 'paid',
                 Payment.report_month.like(f'{year}-%'),
-                Contract.status == 'АВТОРСКИЙ НАДЗОР'
+                Contract.status == STATUS_SUPERVISION
             ).scalar()
 
         return {
@@ -517,7 +524,7 @@ async def get_salaries_by_type_dashboard(
             elif payment_type == 'template':
                 query_filter.append(Contract.project_type == 'Шаблонный')
             elif payment_type == 'supervision':
-                query_filter.append(Contract.status == 'АВТОРСКИЙ НАДЗОР')
+                query_filter.append(Contract.status == STATUS_SUPERVISION)
             # 'all' - без дополнительного фильтра
 
             # Всего выплачено
@@ -1822,7 +1829,7 @@ async def get_crm_analytics(
 
         # --- Счётчики статусов ---
         paused_count = sum(1 for c in crm_cards if c.column_name == 'В ожидании')
-        archived_statuses = {'Выполненный проект', 'СДАН', 'РАСТОРГНУТ'}
+        archived_statuses = {'Выполненный проект', STATUS_COMPLETED, STATUS_TERMINATED}
         active_count = sum(
             1 for c in crm_cards
             if c.column_name not in archived_statuses and c.column_name != 'В ожидании'
@@ -1889,7 +1896,7 @@ async def get_supervision_analytics(
         # --- Итоговые счётчики ---
         total = len(filtered_sc)
         # Активные: не в архивных стадиях
-        archived_stages = {'Выполненный проект', 'СДАН', 'РАСТОРГНУТ'}
+        archived_stages = {'Выполненный проект', STATUS_COMPLETED, STATUS_TERMINATED}
         active = sum(1 for sc in filtered_sc if sc.column_name not in archived_stages)
 
         # --- По типу проекта (через договор) ---

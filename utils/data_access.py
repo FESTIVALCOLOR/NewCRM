@@ -3,6 +3,8 @@
 Автоматически выбирает источник данных в зависимости от наличия api_client
 Поддерживает offline-режим с очередью отложенных операций
 """
+import json as _json
+import os as _os
 import time as _time
 from typing import Optional, List, Dict, Any
 from database.db_manager import DatabaseManager
@@ -51,6 +53,39 @@ class _DataCache:
 
 # Глобальный кеш — общий для всех экземпляров DataAccess
 _global_cache = _DataCache()
+
+
+# ==================== OFFLINE-КЭШ АНАЛИТИКИ ====================
+
+def _analytics_cache_dir() -> str:
+    """Папка для offline-кэша аналитики."""
+    base = _os.path.join(_os.path.expanduser('~'), '.interior_studio', 'analytics_cache')
+    _os.makedirs(base, exist_ok=True)
+    return base
+
+
+def _analytics_cache_save(key: str, data):
+    """Сохраняет аналитические данные в файл для offline-доступа."""
+    try:
+        safe_key = key.replace('/', '_').replace('\\', '_').replace(':', '_')
+        path = _os.path.join(_analytics_cache_dir(), f"{safe_key}.json")
+        with open(path, 'w', encoding='utf-8') as f:
+            _json.dump(data, f, ensure_ascii=False, default=str)
+    except Exception:
+        pass
+
+
+def _analytics_cache_load(key: str):
+    """Загружает аналитические данные из offline-кэша."""
+    try:
+        safe_key = key.replace('/', '_').replace('\\', '_').replace(':', '_')
+        path = _os.path.join(_analytics_cache_dir(), f"{safe_key}.json")
+        if _os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                return _json.load(f)
+    except Exception:
+        pass
+    return None
 
 
 def _safe_log(msg):
@@ -516,6 +551,8 @@ class DataAccess(QObject):
 
     def delete_contract(self, contract_id: int) -> bool:
         """Удалить договор"""
+        _global_cache.invalidate("contracts")
+        _global_cache.invalidate("crm_cards")
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.delete_contract(contract_id)
@@ -962,6 +999,63 @@ class DataAccess(QObject):
             return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_client_ok: {e}")
+            return None
+
+    def workflow_advance_round(self, card_id: int) -> Optional[Dict]:
+        """Перейти к следующему кругу правок (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_advance_round: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_advance_round(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_advance_round: {e}")
+            return None
+
+    def workflow_close_stage(self, card_id: int) -> Optional[Dict]:
+        """Закрыть этап — пропустить оставшиеся круги (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_close_stage: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_close_stage(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_close_stage: {e}")
+            return None
+
+    def workflow_sign_act(self, card_id: int) -> Optional[Dict]:
+        """Подписание акта — финальный шаг стадии (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_sign_act: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_sign_act(card_id)
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_sign_act: {e}")
+            return None
+
+    def workflow_add_extra_round(self, card_id: int, stage_name: str,
+                                  executor_role: str = 'Чертежник', reviewer_role: str = 'СДП',
+                                  norm_days_work: int = 3, norm_days_review: int = 1) -> Optional[Dict]:
+        """Добавить дополнительный платный круг правок (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_add_extra_round: API недоступен")
+            return None
+        try:
+            result = self.api_client.workflow_add_extra_round(
+                card_id, stage_name, executor_role, reviewer_role,
+                norm_days_work, norm_days_review
+            )
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_add_extra_round: {e}")
             return None
 
     def get_contract_id_by_crm_card(self, card_id: int) -> Optional[int]:
@@ -2441,10 +2535,78 @@ class DataAccess(QObject):
         """Получить файлы проекта"""
         if self._should_use_api():
             try:
-                return self.api_client.get_project_files(contract_id, stage)
+                api_files = self.api_client.get_project_files(contract_id, stage)
+                # Сохраняем в локальную БД для офлайн-доступа и предотвращения
+                # повторного сканирования ЯД при следующем открытии карточки
+                if api_files and not stage:
+                    self._sync_project_files_to_local(contract_id, api_files)
+                return api_files
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_project_files, fallback: {e}")
         return self.db.get_project_files(contract_id, stage)
+
+    def _sync_project_files_to_local(self, contract_id: int, api_files: List[Dict]):
+        """Синхронизировать файлы проекта из API в локальную SQLite"""
+        try:
+            from database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            conn = db.connect()
+            cursor = conn.cursor()
+
+            # Получаем существующие локальные файлы по contract_id
+            cursor.execute("SELECT id FROM project_files WHERE contract_id = ?", (contract_id,))
+            local_ids = set(row[0] for row in cursor.fetchall())
+            server_ids = set(f['id'] for f in api_files if f.get('id'))
+
+            # Удаляем локальные записи, которых нет на сервере
+            ids_to_delete = local_ids - server_ids
+            if ids_to_delete:
+                cursor.execute(
+                    f"DELETE FROM project_files WHERE id IN ({','.join('?' * len(ids_to_delete))})",
+                    tuple(ids_to_delete)
+                )
+
+            # Upsert серверных файлов
+            for f in api_files:
+                fid = f.get('id')
+                if not fid:
+                    continue
+                if fid in local_ids:
+                    cursor.execute("""
+                        UPDATE project_files SET
+                            contract_id=?, stage=?, file_type=?, public_link=?,
+                            yandex_path=?, file_name=?, file_order=?, variation=?
+                        WHERE id=?
+                    """, (
+                        f.get('contract_id', contract_id), f.get('stage', ''),
+                        f.get('file_type', ''), f.get('public_link', ''),
+                        f.get('yandex_path', ''), f.get('file_name', ''),
+                        f.get('file_order', 0), f.get('variation', 1), fid
+                    ))
+                else:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO project_files
+                            (id, contract_id, stage, file_type, public_link,
+                             yandex_path, file_name, file_order, variation)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        fid, f.get('contract_id', contract_id), f.get('stage', ''),
+                        f.get('file_type', ''), f.get('public_link', ''),
+                        f.get('yandex_path', ''), f.get('file_name', ''),
+                        f.get('file_order', 0), f.get('variation', 1)
+                    ))
+
+            conn.commit()
+            db.close()
+            inserted = len(server_ids - local_ids)
+            updated = len(server_ids & local_ids)
+            deleted = len(ids_to_delete) if ids_to_delete else 0
+            _safe_log(f"[DataAccess] sync_project_files_to_local: contract={contract_id}, "
+                       f"вставлено={inserted}, обновлено={updated}, удалено={deleted}")
+        except Exception as e:
+            _safe_log(f"[DataAccess] _sync_project_files_to_local ОШИБКА: {e}")
+            import traceback
+            traceback.print_exc()
 
     def add_project_file(self, data: Dict = None, **kwargs) -> Optional[Dict]:
         """Добавить файл проекта (принимает Dict или именованные аргументы)"""
@@ -2760,6 +2922,104 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] DB get_employee_report_data: {e}")
         return {}
+
+    # ── Аналитика сотрудников ────────────────────────────────────────
+
+    def get_analytics_dashboard(self, project_type: str, year: int = None,
+                                quarter: int = None, month: int = None) -> Dict:
+        """Дашборд аналитики по сотрудникам."""
+        cache_key = f"analytics_dashboard_{project_type}_{year}_{quarter}_{month}"
+        if self._should_use_api():
+            try:
+                result = self.api_client.get_analytics_dashboard(
+                    project_type, year=year, quarter=quarter, month=month)
+                _analytics_cache_save(cache_key, result)
+                return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_analytics_dashboard: {e}")
+        # Offline fallback
+        cached = _analytics_cache_load(cache_key)
+        if cached:
+            _safe_log(f"[DataAccess] Offline fallback: analytics_dashboard")
+            return cached
+        return {}
+
+    def get_analytics_by_role(self, role_code: str, project_type: str,
+                              year: int = None, quarter: int = None,
+                              month: int = None) -> Dict:
+        """Сравнительная аналитика по роли."""
+        cache_key = f"analytics_role_{role_code}_{project_type}_{year}_{quarter}_{month}"
+        if self._should_use_api():
+            try:
+                result = self.api_client.get_analytics_by_role(
+                    role_code, project_type, year=year, quarter=quarter, month=month)
+                _analytics_cache_save(cache_key, result)
+                return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_analytics_by_role: {e}")
+        # Offline fallback
+        cached = _analytics_cache_load(cache_key)
+        if cached:
+            _safe_log(f"[DataAccess] Offline fallback: analytics_by_role {role_code}")
+            return cached
+        return {}
+
+    def get_analytics_employee_detail(self, employee_id: int, project_type: str,
+                                      year: int = None, quarter: int = None,
+                                      month: int = None) -> Dict:
+        """Детальная карточка сотрудника."""
+        cache_key = f"analytics_detail_{employee_id}_{project_type}_{year}_{quarter}_{month}"
+        if self._should_use_api():
+            try:
+                result = self.api_client.get_analytics_employee_detail(
+                    employee_id, project_type, year=year, quarter=quarter, month=month)
+                _analytics_cache_save(cache_key, result)
+                return result
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_analytics_employee_detail: {e}")
+        # Offline fallback
+        cached = _analytics_cache_load(cache_key)
+        if cached:
+            _safe_log(f"[DataAccess] Offline fallback: analytics_employee_detail {employee_id}")
+            return cached
+        return {}
+
+    def get_survey_stats(self, project_type: str = None) -> Dict:
+        """Статистика опросов."""
+        if self._should_use_api():
+            try:
+                return self.api_client.get_survey_stats(project_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_survey_stats: {e}")
+        return {}
+
+    def create_survey(self, contract_id: int, project_type: str) -> Optional[Dict]:
+        """Создаёт опрос для договора."""
+        if self._should_use_api():
+            try:
+                return self.api_client.create_survey(contract_id, project_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API create_survey: {e}")
+        return None
+
+    def get_surveys_by_contract(self, contract_id: int, project_type: str = None) -> List:
+        """Получает опросы по договору."""
+        if self._should_use_api():
+            try:
+                result = self.api_client.get_surveys_by_contract(contract_id, project_type)
+                return result if isinstance(result, list) else []
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_surveys_by_contract: {e}")
+        return []
+
+    def resend_survey(self, survey_id: int) -> Optional[Dict]:
+        """Переотправляет ссылку на опрос."""
+        if self._should_use_api():
+            try:
+                return self.api_client.resend_survey(survey_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API resend_survey: {e}")
+        return None
 
     def get_project_statistics(self, **kwargs) -> Dict:
         """Получить статистику по проектам"""

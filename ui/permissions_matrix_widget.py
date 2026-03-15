@@ -55,6 +55,10 @@ PERMISSION_GROUPS = {
         'messenger.create_chat', 'messenger.delete_chat',
         'messenger.view_chat', 'messenger.manage_scripts',
     ],
+    'Уведомления': [
+        'notifications.settings_projects', 'notifications.settings_duplication',
+        'notifications.settings_supervision', 'notifications.settings_payment',
+    ],
 }
 
 # Роли — столбцы таблицы (9 ролей)
@@ -117,31 +121,40 @@ DEFAULT_ROLE_PERMISSIONS = {
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "salaries.delete",
         "messenger.manage_scripts",
+        "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
     "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
         "employees.update",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
     "СДП": {
         "access.crm", "access.reports", "access.employees", "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
+        "notifications.settings_projects",
     },
     "ГАП": {
         "access.crm", "access.reports", "access.employees", "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
+        "notifications.settings_projects",
     },
     "Менеджер": {
         "access.crm", "access.supervision", "access.reports", "access.employees",
         "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "notifications.settings_projects",
+        "notifications.settings_supervision",
     },
     "ДАН": {
         "access.supervision",
         "supervision.complete_stage",
         "supervision.files_upload",
         "messenger.view_chat",
+        "notifications.settings_supervision",
     },
     "Дизайнер": {
         "access.crm",
@@ -225,6 +238,11 @@ PERMISSION_DESCRIPTIONS = {
     "messenger.delete_chat": "Удаление чатов",
     "messenger.view_chat": "Просмотр/открытие чатов",
     "messenger.manage_scripts": "Управление скриптами мессенджера",
+    # Уведомления
+    "notifications.settings_projects": "Настройка каналов по типам проектов",
+    "notifications.settings_duplication": "Настройка дублирования уведомлений",
+    "notifications.settings_supervision": "Уведомления авторского надзора",
+    "notifications.settings_payment": "Уведомления об оплатах",
 }
 
 
@@ -295,6 +313,11 @@ PERMISSION_TOOLTIPS = {
     "messenger.delete_chat": "Может удалять чаты из мессенджера",
     "messenger.view_chat": "Может просматривать и открывать чаты",
     "messenger.manage_scripts": "Может управлять скриптами автоматических сообщений",
+    # Уведомления
+    "notifications.settings_projects": "Сотрудник видит настройку каналов по типам проектов (индивидуальные / шаблонные)",
+    "notifications.settings_duplication": "Сотрудник видит настройку дублирования уведомлений подчинённых",
+    "notifications.settings_supervision": "Сотрудник видит чекбокс уведомлений авторского надзора",
+    "notifications.settings_payment": "Сотрудник видит чекбокс уведомлений об оплатах",
 }
 
 
@@ -314,6 +337,8 @@ class PermissionsMatrixWidget(QWidget):
         self._checkboxes = {}
         # Маппинг строк таблицы: row -> perm_name (None для строк-заголовков категорий)
         self._row_perm_map = {}
+        # Отслеживание несохранённых изменений
+        self._is_dirty = False
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
@@ -510,6 +535,7 @@ class PermissionsMatrixWidget(QWidget):
                     table.setCellWidget(row, col_idx, container)
 
                     self._checkboxes[(perm_name, role)] = cb
+                    cb.stateChanged.connect(self._mark_dirty)
 
                     # Подтверждение при включении access.admin
                     if perm_name == 'access.admin':
@@ -542,6 +568,14 @@ class PermissionsMatrixWidget(QWidget):
                 checkbox.setChecked(False)
                 checkbox.blockSignals(False)
 
+    def _mark_dirty(self):
+        """Пометить что есть несохранённые изменения"""
+        self._is_dirty = True
+
+    def is_dirty(self):
+        """Есть ли несохранённые изменения"""
+        return self._is_dirty
+
     # =========================
     # Загрузка данных
     # =========================
@@ -559,11 +593,13 @@ class PermissionsMatrixWidget(QWidget):
                 matrix = result.get("roles", result)
                 if matrix:
                     self._apply_matrix(matrix)
+                    self._is_dirty = False
                     return
         except Exception:
             pass
         # Fallback — из дефолтных
         self._apply_matrix(DEFAULT_ROLE_PERMISSIONS)
+        self._is_dirty = False
 
     def _load_definitions(self):
         """Загрузить русские описания прав из API"""
@@ -649,6 +685,7 @@ class PermissionsMatrixWidget(QWidget):
                 # Сбрасываем клиентский кеш прав — изменения должны подхватиться
                 from utils.permissions import invalidate_cache
                 invalidate_cache()
+                self._is_dirty = False
                 CustomMessageBox(
                     self,
                     'Успешно',

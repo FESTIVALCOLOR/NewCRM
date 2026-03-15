@@ -302,7 +302,7 @@ class ContractBase(BaseModel):
 
 
 class ContractCreate(ContractBase):
-    pass
+    area: float  # Площадь обязательна при создании договора
 
 
 class ContractUpdate(BaseModel):
@@ -1309,6 +1309,10 @@ class NotificationSettingsResponse(BaseModel):
     notify_deadline: bool
     notify_payment: bool
     notify_supervision: bool
+    notify_individual: bool
+    notify_template: bool
+    notify_duplicate_info: bool
+    notify_revision_info: bool
     telegram_connected: bool  # вычисляемое: telegram_user_id is not None
 
     class Config:
@@ -1323,3 +1327,7 @@ class NotificationSettingsUpdate(BaseModel):
     notify_deadline: bool = True
     notify_payment: bool = False
     notify_supervision: bool = False
+    notify_individual: bool = True
+    notify_template: bool = True
+    notify_duplicate_info: bool = False
+    notify_revision_info: bool = False

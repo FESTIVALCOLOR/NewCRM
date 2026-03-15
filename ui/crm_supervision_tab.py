@@ -124,6 +124,9 @@ class CRMSupervisionTab(QWidget):
         # Вкладки: Активные / Архив
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+            }
             QTabBar::tab {
                 padding: 6px 16px;
                 font-size: 12px;
@@ -132,14 +135,17 @@ class CRMSupervisionTab(QWidget):
                 border-bottom: none;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
-                background-color: #E8E8E8;                
+                background-color: #E8E8E8;
                 min-width: 180px;
+            }
+            QTabBar::tab:first {
+                border-bottom-left-radius: 4px;
             }
             QTabBar::tab:selected {
                 background-color: white;
-                border-bottom: 1px solid #d9d9d9;
+                border-bottom: 2px solid #F57C00;
             }
-            QTabBar::tab:hover {
+            QTabBar::tab:hover:!selected {
                 background-color: #F0F0F0;
             }
         """)
@@ -1289,12 +1295,19 @@ class SupervisionColumn(BaseKanbanColumn):
                 padding: 2px;
             }
         """)
-        self.cards_list.setFocusPolicy(Qt.NoFocus)
+        self.cards_list.setFocusPolicy(Qt.ClickFocus)
         self.cards_list.setSpacing(5)
-        
+        self.cards_list.itemDoubleClicked.connect(self._on_card_double_clicked)
+
         layout.addWidget(self.cards_list, 1)
         self.setLayout(layout)
-    
+
+    def _on_card_double_clicked(self, item):
+        """Двойной клик по карточке надзора → редактирование."""
+        card_widget = self.cards_list.itemWidget(item)
+        if card_widget and hasattr(card_widget, 'edit_card'):
+            card_widget.edit_card()
+
     # _apply_initial_collapse_state, _collapse_column, _expand_column,
     # toggle_collapse, update_header_count, add_card, clear_cards
     # наследуются из BaseKanbanColumn
@@ -1621,9 +1634,10 @@ class SupervisionCard(QFrame):
                 QPushButton:hover { background-color: #357ABD; }
             """)
             edit_btn.setFixedHeight(28)
+            edit_btn.setAccessibleName("Редактирование карточки надзора")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
-            
+
             buttons_added = True
         
         # ДЛЯ ДАН
@@ -2052,6 +2066,10 @@ class SupervisionCard(QFrame):
                 print(f" Ошибка сдачи работы: {e}")
                 CustomMessageBox(self, 'Ошибка', f'Не удалось сдать работу: {e}', 'error').exec_()
                 
+    def mouseDoubleClickEvent(self, event):
+        """Двойной клик по карточке → редактирование."""
+        self.edit_card()
+
     def edit_card(self):
         """Редактирование карточки"""
         dialog = SupervisionCardEditDialog(self, self.card_data, self.employee, api_client=self.api_client)

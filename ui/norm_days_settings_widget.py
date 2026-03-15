@@ -79,10 +79,11 @@ def _calc_contract_term(project_type: str, project_subtype: str, area: int) -> i
         for max_a, days in t:
             if area <= max_a:
                 return days
-        return 0
+        # Площадь > 500 м² — возвращаем максимальный срок из таблицы
+        return t[-1][1]
     else:  # Шаблонный
         sub = project_subtype.lower()
-        if 'ванной' in sub:
+        if 'ванн' in sub:
             return 20 if 'визуализац' in sub else 10
         if area <= 90:
             base = 20
@@ -610,10 +611,14 @@ class NormDaysSettingsWidget(QWidget):
         areas = _get_areas_for_subtype(project_type, project_subtype)
         if not areas:
             # Фиксированный срок (ванная) — показываем одну запись
-            self._combo_area.addItem('--')
+            self._combo_area.addItem('--', 0)
         else:
-            for a in areas:
-                self._combo_area.addItem(str(a))
+            for i, a in enumerate(areas):
+                if i == 0:
+                    label = f'до {a}'
+                else:
+                    label = f'от {areas[i-1]} до {a}'
+                self._combo_area.addItem(label, a)
             # Попытка восстановить предыдущий выбор
             idx = self._combo_area.findText(old_val)
             if idx >= 0:
@@ -669,11 +674,18 @@ class NormDaysSettingsWidget(QWidget):
             self._fill_areas()
             area_text = self._combo_area.currentText()
 
-        if not area_text or area_text == '--':
+        area_data = self._combo_area.currentData()
+        if area_data is not None and area_data > 0:
+            area = int(area_data)
+        elif not area_text or area_text == '--':
             # Фиксированный срок (ванная) — площадь не влияет на срок
             area = 1  # минимальная площадь для корректной работы формул
         else:
-            area = int(area_text)
+            # Fallback для старого формата (чистое число)
+            try:
+                area = int(area_text)
+            except ValueError:
+                area = 1
 
         # Обновляем срок по договору
         self._contract_term = _calc_contract_term(project_type, project_subtype, area)
@@ -986,7 +998,16 @@ class NormDaysSettingsWidget(QWidget):
         if not project_subtype or not area_text:
             return
 
-        area = 1 if area_text == '--' else int(area_text)
+        area_data = self._combo_area.currentData()
+        if area_data is not None and area_data > 0:
+            area = int(area_data)
+        elif area_text == '--':
+            area = 1
+        else:
+            try:
+                area = int(area_text)
+            except ValueError:
+                area = 1
 
         # Сбрасываем кастомный шаблон через DataAccess
         if self.data_access.is_multi_user and self._is_custom:

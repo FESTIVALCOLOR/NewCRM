@@ -8,6 +8,11 @@ from typing import Optional, List, Dict, Set
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db, Employee, UserPermission, RoleDefaultPermission
+from constants import (
+    POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+    POSITION_SDP, POSITION_GAP, POSITION_DAN, POSITION_MANAGER, POSITION_MEASURER,
+    ROLE_ADMIN, ROLE_DIRECTOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +30,7 @@ PERMISSION_NAMES: Dict[str, str] = {
     "access.employees": "Доступ к странице Сотрудники",
     "access.salaries": "Доступ к странице Зарплаты",
     "access.employee_reports": "Доступ к странице Отчеты по сотрудникам",
+    "access.employee_analytics": "Доступ к странице Аналитика сотрудников",
     "access.admin": "Доступ к администрированию",
     "access.dashboards": "Показ дашбордов внизу страницы",
     # === Сотрудники ===
@@ -93,6 +99,11 @@ PERMISSION_NAMES: Dict[str, str] = {
     "messenger.delete_chat": "Удаление чатов",
     "messenger.view_chat": "Просмотр/открытие чатов",
     "messenger.manage_scripts": "Управление скриптами мессенджера",
+    # === Уведомления (видимость блоков настроек) ===
+    "notifications.settings_projects": "Настройка каналов по типам проектов",
+    "notifications.settings_duplication": "Настройка дублирования уведомлений",
+    "notifications.settings_supervision": "Уведомления авторского надзора",
+    "notifications.settings_payment": "Уведомления об оплатах",
 }
 
 # =========================
@@ -104,11 +115,12 @@ PERMISSION_NAMES: Dict[str, str] = {
 _ACCESS_ALL = {
     "access.clients", "access.contracts", "access.crm", "access.supervision",
     "access.reports", "access.employees", "access.salaries", "access.employee_reports",
-    "access.admin",
+    "access.employee_analytics", "access.admin",
 }
 _ACCESS_MANAGER = {
     "access.clients", "access.contracts", "access.crm", "access.supervision",
     "access.reports", "access.employees", "access.salaries", "access.employee_reports",
+    "access.employee_analytics",
 }
 
 # Базовый набор: Руководитель + Старший менеджер
@@ -143,36 +155,45 @@ _BASE_MANAGER = {
 }
 
 DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
-    "Руководитель студии": _ACCESS_ALL | _BASE_MANAGER | {
+    POSITION_STUDIO_DIRECTOR: _ACCESS_ALL | _BASE_MANAGER | {
         "employees.create", "employees.update", "employees.delete",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "salaries.delete",
         "messenger.manage_scripts",
+        "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
-    "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
+    POSITION_SENIOR_MANAGER: _ACCESS_MANAGER | _BASE_MANAGER | {
         "employees.update",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
-    "СДП": {
+    POSITION_SDP: {
         "access.crm", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
+        "notifications.settings_projects",
     },
-    "ГАП": {
+    POSITION_GAP: {
         "access.crm", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
+        "notifications.settings_projects",
     },
-    "Менеджер": {
+    POSITION_MANAGER: {
         "access.crm", "access.supervision", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "crm_cards.assign_executor",
+        "notifications.settings_projects",
+        "notifications.settings_supervision",
     },
-    "ДАН": {
+    POSITION_DAN: {
         "access.supervision",
         "supervision.complete_stage",
         "supervision.files_upload",
         "messenger.view_chat",
+        "notifications.settings_supervision",
     },
     "Дизайнер": {
         "access.crm",
@@ -182,13 +203,13 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "access.crm",
         "crm_cards.files_upload",
     },
-    "Замерщик": {
+    POSITION_MEASURER: {
         "access.crm",
     },
 }
 
 # Системные роли/логины с полным доступом (не настраиваются)
-SUPERUSER_ROLES = {"admin", "director", "Руководитель студии"}
+SUPERUSER_ROLES = {ROLE_ADMIN, ROLE_DIRECTOR, POSITION_STUDIO_DIRECTOR}
 
 # Права, которые НЕ управляются через UI-матрицу (только суперпользователь/автоматика).
 # При apply_to_employees эти права сохраняются у сотрудников.
@@ -373,6 +394,10 @@ def seed_permissions(db: Session):
         db.commit()
         if total_added > 0:
             logger.info(f"Seeded {total_added} permissions for new employees")
+
+        # Миграция новых прав для существующих сотрудников
+        _migrate_new_permissions(db)
+
     except Exception as e:
         db.rollback()
         logger.warning(f"seed_permissions error (non-fatal): {e}")
@@ -382,6 +407,94 @@ def seed_permissions(db: Session):
             db.commit()
         except Exception:
             pass
+
+
+def _migrate_new_permissions(db: Session):
+    """
+    Добавить новые permissions в role_default_permissions и user_permissions
+    для существующих сотрудников. Вызывается из seed_permissions.
+
+    Безопасно вызывать повторно — ON CONFLICT DO NOTHING.
+    """
+    from sqlalchemy import text
+    from datetime import datetime
+
+    # Новые права, которые нужно добавить в существующую матрицу
+    NEW_ROLE_PERMS = {
+        "notifications.settings_projects": [
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+            POSITION_SDP, POSITION_GAP, POSITION_MANAGER,
+        ],
+        "notifications.settings_duplication": [
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+        ],
+        "notifications.settings_supervision": [
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+            POSITION_DAN, POSITION_MANAGER,
+        ],
+        "notifications.settings_payment": [
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+        ],
+    }
+
+    # Проверяем, есть ли уже записи в role_default_permissions
+    existing_count = db.execute(
+        text("SELECT COUNT(*) FROM role_default_permissions")
+    ).scalar()
+    if not existing_count:
+        # Таблица пуста — seed_permissions заполнит всё из DEFAULT_ROLE_PERMISSIONS
+        return
+
+    now = datetime.utcnow()
+    added_matrix = 0
+    added_users = 0
+
+    for perm_name, roles in NEW_ROLE_PERMS.items():
+        for role in roles:
+            # 1. Добавить в role_default_permissions (если нет)
+            exists = db.execute(
+                text("""
+                    SELECT 1 FROM role_default_permissions
+                    WHERE role = :role AND permission_name = :perm
+                """),
+                {"role": role, "perm": perm_name}
+            ).first()
+            if not exists:
+                db.execute(
+                    text("""
+                        INSERT INTO role_default_permissions (role, permission_name, updated_at)
+                        VALUES (:role, :perm, :now)
+                    """),
+                    {"role": role, "perm": perm_name, "now": now}
+                )
+                added_matrix += 1
+
+            # 2. Добавить в user_permissions для существующих сотрудников этой роли
+            employees_of_role = db.execute(
+                text("""
+                    SELECT id FROM employees
+                    WHERE (role = :role OR position = :role) AND status = 'активный'
+                """),
+                {"role": role}
+            ).fetchall()
+
+            for (emp_id,) in employees_of_role:
+                db.execute(
+                    text("""
+                        INSERT INTO user_permissions (employee_id, permission_name)
+                        VALUES (:emp_id, :perm)
+                        ON CONFLICT (employee_id, permission_name) DO NOTHING
+                    """),
+                    {"emp_id": emp_id, "perm": perm_name}
+                )
+                added_users += 1
+
+    db.commit()
+    if added_matrix or added_users:
+        logger.info(
+            f"Миграция новых прав: {added_matrix} в матрицу, "
+            f"{added_users} сотрудникам"
+        )
 
 
 # =========================

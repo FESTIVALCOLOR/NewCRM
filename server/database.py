@@ -76,6 +76,9 @@ class Employee(Base):
     telegram_link_token = Column(String(32), nullable=True, index=True)
     telegram_link_token_expires = Column(DateTime, nullable=True)
 
+    # Telegram username (для @упоминаний в групповых чатах)
+    telegram_username = Column(String(100), nullable=True)
+
     # Временный пароль для invite-письма (plaintext, очищается после первого входа)
     invite_temp_password = Column(String, nullable=True)
 
@@ -266,6 +269,14 @@ class NotificationSettings(Base):
     notify_deadline = Column(Boolean, default=True)
     notify_payment = Column(Boolean, default=False)
     notify_supervision = Column(Boolean, default=False)
+
+    # Фильтры по типу проекта
+    notify_individual = Column(Boolean, default=True)
+    notify_template = Column(Boolean, default=True)
+
+    # Дублирование уведомлений (для ст. менеджера)
+    notify_duplicate_info = Column(Boolean, default=False)
+    notify_revision_info = Column(Boolean, default=False)
 
     # Временные метки
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -664,7 +675,8 @@ class StageWorkflowState(Base):
     crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=False, index=True)
     stage_name = Column(String(255), nullable=False)
     current_substep_code = Column(String(30))
-    status = Column(String(30), default='in_progress')  # in_progress, revision, client_approval, completed
+    current_substage_group = Column(String(100), nullable=True)  # текущая substage_group (Подэтап 1.2 и т.д.)
+    status = Column(String(30), default='in_progress')  # in_progress, pending_review, revision, client_approval, pending_decision, act_signing, stage_completed
     revision_count = Column(Integer, default=0)
     revision_file_path = Column(Text)
     client_approval_started_at = Column(DateTime)
@@ -887,6 +899,7 @@ class MessengerScript(Base):
     message_template = Column(Text, nullable=False)
     memo_file_path = Column(String, nullable=True)  # Путь к PDF-памятке на Яндекс.Диске
     use_auto_deadline = Column(Boolean, default=True)
+    attach_stage_files = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
 
@@ -920,6 +933,82 @@ class MessengerMessageLog(Base):
     sent_at = Column(DateTime, default=datetime.utcnow)
     telegram_message_id = Column(BigInteger, nullable=True)
     delivery_status = Column(String, default="sent")  # sent/failed/pending
+
+
+# =========================
+# АНАЛИТИКА ПО СОТРУДНИКАМ
+# =========================
+
+class ClientSurvey(Base):
+    """Результаты опросов клиентов (из Яндекс Форм)"""
+    __tablename__ = "client_surveys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_type = Column(String(30), nullable=False)  # individual / template / supervision
+
+    access_token = Column(String(64), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default='pending')  # pending / sent / completed / expired
+    yandex_answer_id = Column(String(50))
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    sent_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    expires_at = Column(DateTime)
+
+    # Результаты (денормализованные для быстрого доступа)
+    nps_score = Column(Integer)            # 0-10
+    csat_score = Column(Integer)           # 1-5
+    design_score = Column(Integer)         # 1-5
+    deadline_score = Column(Integer)       # 1-5
+    communication_score = Column(Integer)  # 1-5
+    expectations_score = Column(Integer)   # 1-5
+    supervision_score = Column(Integer)    # 1-5 (nullable, только для надзора)
+    comment = Column(Text)
+
+    contract = relationship("Contract")
+
+
+class EmployeeKpiSnapshot(Base):
+    """Снимки KPI для трендов (ежедневный расчёт)"""
+    __tablename__ = "employee_kpi_snapshots"
+    __table_args__ = (
+        UniqueConstraint('employee_id', 'report_month', 'project_type',
+                         name='uq_kpi_snapshot_emp_month_type'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    report_month = Column(String(7), nullable=False, index=True)   # YYYY-MM
+    project_type = Column(String(30), nullable=False, index=True)  # individual / template / supervision
+
+    # Компоненты KPI
+    k_deadline = Column(Float)
+    k_quality = Column(Float)
+    k_speed = Column(Float)
+    k_nps = Column(Float)
+    kpi_total = Column(Float)
+
+    # Дополнительные метрики
+    stages_completed = Column(Integer, default=0)
+    stages_on_time = Column(Integer, default=0)
+    stages_overdue = Column(Integer, default=0)
+    avg_overdue_days = Column(Float, default=0)
+    concurrent_projects = Column(Integer, default=0)
+    total_area = Column(Float, default=0)
+    total_salary = Column(Float, default=0)
+    revision_count = Column(Integer, default=0)
+
+    # Метрики надзора
+    defects_found = Column(Integer, default=0)
+    defects_resolved = Column(Integer, default=0)
+    site_visits = Column(Integer, default=0)
+    budget_savings = Column(Float, default=0)
+
+    calculated_at = Column(DateTime, default=datetime.utcnow)
+
+    employee = relationship("Employee")
 
 
 def _auto_migrate_columns():

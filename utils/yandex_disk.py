@@ -639,11 +639,12 @@ class YandexDiskManager:
         return stage_folders
 
     def create_corrections_folder(self, contract_folder_path, stage_name):
-        """Создание папки правок внутри папки стадии
+        """Создание папки правок внутри папки стадии.
+        Использует get_stage_folder_path() — тот же механизм что и upload_stage_files.
 
         Args:
             contract_folder_path: путь к папке договора
-            stage_name: имя стадии (напр. 'Стадия 1: планировочные решения')
+            stage_name: имя колонки CRM (напр. 'Стадия 1: планировочные решения')
 
         Returns:
             str: путь к папке правок или пустая строка
@@ -651,62 +652,53 @@ class YandexDiskManager:
         if not self.token:
             return ''
 
-        if contract_folder_path.startswith('disk:'):
-            contract_folder_path = contract_folder_path[5:]
+        print(f"[YD] create_corrections_folder: contract={contract_folder_path}, stage={stage_name}")
 
-        # Определяем ключевое слово для поиска реальной папки на ЯД
+        # Маппинг колонки CRM → идентификатор стадии (как в upload_stage_files)
         sl = stage_name.lower()
         if 'стадия 1' in sl or 'планировочн' in sl:
-            search_pattern = '1 стадия'
-            fallback = '1 стадия - Планировочное решение'
+            stage_id = 'stage1'
         elif 'стадия 2' in sl and ('концепция' in sl or 'дизайн' in sl):
-            search_pattern = '2 стадия'
-            fallback = '2 стадия - Концепция дизайна'
-        elif 'стадия 3' in sl or 'чертеж' in sl:
-            search_pattern = '3 стадия'
-            fallback = '3 стадия - Чертежный проект'
+            stage_id = 'stage2_concept'  # Индивидуальный: Стадия 2
+        elif 'стадия 2' in sl and ('чертеж' in sl or 'рабоч' in sl):
+            stage_id = 'stage3'  # Шаблонный: Стадия 2: рабочие чертежи
+        elif 'стадия 3' in sl and ('3д' in sl or 'визуализ' in sl):
+            stage_id = 'stage2_3d'  # Шаблонный: Стадия 3: 3д визуализация
+        elif 'стадия 3' in sl:
+            stage_id = 'stage3'  # Индивидуальный: Стадия 3
         elif 'стадия 2' in sl:
-            search_pattern = '2 стадия'
-            fallback = '2 стадия - Концепция дизайна'
+            stage_id = 'stage2_concept'
         else:
-            search_pattern = None
-            fallback = None
+            stage_id = 'stage1'  # fallback
 
-        # Ищем реальное имя папки стадии на Яндекс.Диске (для обхода мисматча тире - / –)
-        stage_folder = ''
-        if search_pattern:
-            stage_folder = self._find_stage_folder_on_disk(contract_folder_path, search_pattern)
-        if not stage_folder and fallback:
-            stage_folder = f"{contract_folder_path}/{fallback}"
+        # Используем тот же метод что и upload_stage_files для получения пути
+        stage_folder = self.get_stage_folder_path(contract_folder_path, stage_id)
         if not stage_folder:
-            stage_folder = contract_folder_path
+            print(f"[ERROR] Не удалось определить путь стадии для stage_id={stage_id}")
+            return ''
 
+        print(f"[YD] Папка стадии: {stage_folder} (stage_id={stage_id})")
+
+        # Создаём родительские папки (как в upload_stage_files)
+        if stage_id in ['stage2_concept', 'stage2_3d']:
+            clean = contract_folder_path
+            if clean.startswith('disk:'):
+                clean = clean[5:]
+            parent_folder = f"{clean}/2 стадия - Концепция дизайна"
+            self.create_folder(parent_folder)
+            time.sleep(0.2)
+
+        # Создаём папку стадии (если не существует — создаст, если существует — вернёт True)
+        self.create_folder(stage_folder)
+        time.sleep(0.2)
+
+        # Создаём папку правок
         corrections_path = f"{stage_folder}/правки"
+        print(f"[YD] Создаю папку правок: {corrections_path}")
         if self.create_folder(corrections_path):
             return corrections_path
-        return ''
 
-    def _find_stage_folder_on_disk(self, contract_folder_path, search_pattern):
-        """Поиск реальной папки стадии на Яндекс.Диске по ключевому паттерну"""
-        try:
-            headers = {'Authorization': f'OAuth {self.token}'}
-            url = f'{self.base_url}/resources'
-            params = {
-                'path': contract_folder_path,
-                'fields': '_embedded.items.name,_embedded.items.type',
-                'limit': 50
-            }
-            response = self.session.get(url, params=params, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                items = data.get('_embedded', {}).get('items', [])
-                for item in items:
-                    if item.get('type') == 'dir' and search_pattern in item.get('name', ''):
-                        found = f"{contract_folder_path}/{item['name']}"
-                        print(f"[YD] Найдена папка стадии: {found}")
-                        return found
-        except Exception as e:
-            print(f"[WARN] Ошибка поиска папки стадии: {e}")
+        print(f"[ERROR] Не удалось создать папку правок: {corrections_path}")
         return ''
 
     def upload_stage_files(self, local_files, contract_folder_path, stage, variation=None, progress_callback=None, skip_per_file_publish=False):

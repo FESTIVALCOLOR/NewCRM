@@ -31,7 +31,7 @@ class _SearchWorker(QThread):
 class GlobalSearchWidget(QWidget):
     """Виджет поиска с debounce и выпадающим списком результатов"""
 
-    result_selected = pyqtSignal(str, int)  # entity_type, entity_id
+    result_selected = pyqtSignal(str, int, object)  # entity_type, entity_id, metadata_dict
 
     def __init__(self, data_access, parent=None):
         super().__init__(parent)
@@ -47,7 +47,7 @@ class GlobalSearchWidget(QWidget):
         layout.setSpacing(4)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Поиск по клиентам, договорам, проектам...")
+        self.search_input.setPlaceholderText("Поиск по клиентам, договорам, проектам, надзору...")
         self.search_input.setFixedWidth(320)
         self.search_input.setFixedHeight(28)
         self.search_input.setStyleSheet("""
@@ -215,9 +215,12 @@ class GlobalSearchWidget(QWidget):
             item.setFlags(Qt.NoItemFlags)
             self.results_list.addItem(item)
         else:
-            type_labels = {"client": "Клиент", "contract": "Договор", "crm_card": "Проект"}
+            type_labels = {"client": "Клиент", "contract": "Договор", "crm_card": "Проект", "supervision_card": "Надзор"}
             for r in items:
                 label = type_labels.get(r["type"], r["type"])
+                # Для CRM карточек показываем маркер архива
+                if r["type"] == "crm_card" and r.get("is_archive"):
+                    label = "Проект (архив)"
                 text = f"[{label}] {r['title']}"
                 if r.get("subtitle"):
                     text += f" - {r['subtitle']}"
@@ -232,6 +235,6 @@ class GlobalSearchWidget(QWidget):
     def _on_result_clicked(self, item):
         data = item.data(Qt.UserRole)
         if data:
-            self.result_selected.emit(data["type"], data["id"])
+            self.result_selected.emit(data["type"], data["id"], data)
         self.results_list.hide()
         self.search_input.clear()

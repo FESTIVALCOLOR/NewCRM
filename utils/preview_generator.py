@@ -17,6 +17,26 @@ except ImportError:
     print("[WARN] Установите: pip install PyMuPDF")
 
 
+def _get_cache_dir():
+    """Персистентная директория для кэша превью.
+
+    В dev-режиме: preview_cache/ рядом с проектом.
+    В PyInstaller exe: %LOCALAPPDATA%/InteriorStudio/preview_cache/
+    (временная папка _MEI удаляется при закрытии — нельзя использовать).
+    """
+    import sys
+    if getattr(sys, 'frozen', False):
+        # PyInstaller — используем AppData (персистентный)
+        local_appdata = os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))
+        base = os.path.join(local_appdata, 'InteriorStudio')
+    else:
+        # Dev — рядом с корнем проекта
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cache_dir = os.path.join(base, 'preview_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
 class PreviewGenerator:
     """Генератор превью файлов"""
 
@@ -155,11 +175,7 @@ class PreviewGenerator:
             Путь к файлу кэша
         """
         import hashlib
-        # Используем постоянную директорию рядом с приложением
-        # Получаем путь к директории скрипта (корень приложения)
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cache_dir = os.path.join(app_dir, 'preview_cache')
-        os.makedirs(cache_dir, exist_ok=True)
+        cache_dir = _get_cache_dir()
 
         # Use hash to handle any filename characters (including Cyrillic)
         name_hash = hashlib.md5(file_name.encode('utf-8')).hexdigest()[:12]
@@ -173,8 +189,7 @@ class PreviewGenerator:
     def cleanup_cache(max_size_mb=500, max_age_days=30):
         """Clean up preview cache: remove old files and limit total size"""
         import time
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cache_dir = os.path.join(app_dir, 'preview_cache')
+        cache_dir = _get_cache_dir()
         if not os.path.exists(cache_dir):
             return
 

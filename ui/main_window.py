@@ -19,6 +19,7 @@ from ui.reports_tab import ReportsTab
 from ui.employees_tab import EmployeesTab
 from ui.salaries_tab import SalariesTab
 from ui.employee_reports_tab import EmployeeReportsTab
+# EmployeeAnalyticsTab интегрирована в EmployeeReportsTab
 from ui.global_search_widget import GlobalSearchWidget
 from ui.custom_message_box import CustomMessageBox
 from utils.tab_helpers import disable_wheel_on_tabwidget
@@ -352,7 +353,10 @@ class MainWindow(QMainWindow):
                 padding-left: 10px;
             }
         """)
-        self.online_indicator.setToolTip("Пользователи онлайн")
+        self.online_indicator.setCursor(Qt.PointingHandCursor)
+        self.online_indicator.mousePressEvent = self._show_online_popup
+        self._online_popup = None
+        self._online_users_list = []
         self._update_online_indicator(0)
         status_bar_layout.addWidget(self.online_indicator)
 
@@ -1235,6 +1239,8 @@ class MainWindow(QMainWindow):
                 lambda: EmployeeReportsTab(self.employee, api_client=self.api_client),
                 None))
 
+        # Аналитика сотрудников интегрирована в «Отчеты по сотрудникам»
+
         # Первую вкладку создаём сразу, остальные — lazy placeholder
         for i, (tab_label, attr_name, factory, sync_info) in enumerate(tab_configs):
             if i == 0:
@@ -1357,12 +1363,16 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
 
-    def _on_search_result_selected(self, entity_type, entity_id):
+    def _on_search_result_selected(self, entity_type, entity_id, metadata=None):
         """Навигация к результату глобального поиска с выбором конкретной строки"""
+        if metadata is None:
+            metadata = {}
+
         tab_map = {
             "client": "Клиенты",
             "contract": "Договора",
             "crm_card": "СРМ",
+            "supervision_card": "СРМ надзора",
         }
         target = tab_map.get(entity_type)
         if not target:
@@ -1373,19 +1383,21 @@ class MainWindow(QMainWindow):
                 tab_widget = self.tabs.widget(i)
 
                 # Отложенный выбор строки — даём вкладке время на загрузку данных
-                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id):
+                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id, meta=metadata):
                     try:
                         table = None
                         id_column = 0  # колонка с идентификатором
 
                         if etype == "client" and hasattr(tw, 'clients_table'):
                             table = tw.clients_table
-                            # В клиентах ID хранится как текст в колонке 0
                         elif etype == "contract" and hasattr(tw, 'contracts_table'):
                             table = tw.contracts_table
-                            # В договорах колонка 0 — номер договора, ищем по ID через все колонки
                         elif etype == "crm_card":
-                            # CRM — Kanban-доска, навигация к карточке не через таблицу
+                            # CRM Kanban — переключаем на нужный sub-tab (активные/архив, индивидуальные/шаблонные)
+                            self._navigate_to_crm_card(tw, eid, meta)
+                            return
+                        elif etype == "supervision_card":
+                            # СРМ надзора — вкладка уже переключена, ничего больше не нужно
                             return
 
                         if not table:
@@ -1419,6 +1431,31 @@ class MainWindow(QMainWindow):
 
                 QTimer.singleShot(200, _select_row)
                 break
+
+    def _navigate_to_crm_card(self, crm_tab, card_id, metadata):
+        """Навигация к CRM карточке с переключением на нужный sub-tab (активные/архив)"""
+        try:
+            is_archive = metadata.get('is_archive', False)
+            project_type = metadata.get('project_type', 'Индивидуальный')
+
+            # Определяем какой project_tab (0=Индивидуальные, 1=Шаблонные)
+            if hasattr(crm_tab, 'project_tabs'):
+                if project_type == 'Шаблонный' and crm_tab.project_tabs.count() > 1:
+                    crm_tab.project_tabs.setCurrentIndex(1)
+                    # Переключаем sub-tab (активные/архив)
+                    if is_archive and hasattr(crm_tab, 'template_subtabs'):
+                        crm_tab.template_subtabs.setCurrentIndex(1)
+                    elif hasattr(crm_tab, 'template_subtabs'):
+                        crm_tab.template_subtabs.setCurrentIndex(0)
+                else:
+                    crm_tab.project_tabs.setCurrentIndex(0)
+                    # Переключаем sub-tab (активные/архив)
+                    if is_archive and hasattr(crm_tab, 'individual_subtabs'):
+                        crm_tab.individual_subtabs.setCurrentIndex(1)
+                    elif hasattr(crm_tab, 'individual_subtabs'):
+                        crm_tab.individual_subtabs.setCurrentIndex(0)
+        except Exception as e:
+            print(f"[SEARCH] Ошибка навигации к CRM карточке: {e}")
 
     def switch_dashboard(self, dashboard_key):
         """Переключение дашборда через QStackedWidget (lazy creation)"""
@@ -1653,6 +1690,7 @@ class MainWindow(QMainWindow):
 
     def _update_online_indicator(self, count: int, users: list = None):
         """Обновить индикатор онлайн пользователей"""
+        self._online_users_list = users or []
         if count == 0:
             self.online_indicator.setText("")
         elif count == 1:
@@ -1660,11 +1698,54 @@ class MainWindow(QMainWindow):
         else:
             self.online_indicator.setText(f"{count} онлайн")
 
-        # Формируем tooltip со списком пользователей
-        if users:
-            user_names = [u.get('full_name', 'Неизвестный') for u in users]
-            tooltip = "Пользователи онлайн:\n" + "\n".join(f"- {name}" for name in user_names)
-            self.online_indicator.setToolTip(tooltip)
+    def _show_online_popup(self, event=None):
+        """Показать popup со списком онлайн пользователей"""
+        from PyQt5.QtWidgets import QFrame
+        users = self._online_users_list
+        if not users:
+            return
+
+        # Исполнители видят только количество
+        position = self.employee.get('position', '')
+        hidden_roles = {'Дизайнер', 'Чертёжник', 'Замерщик', 'ДАН'}
+        if position in hidden_roles:
+            return
+
+        # Закрываем предыдущий popup
+        if self._online_popup:
+            self._online_popup.close()
+
+        popup = QFrame(self, Qt.Popup | Qt.FramelessWindowHint)
+        popup.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QLabel { border: none; }
+        """)
+        layout = QVBoxLayout(popup)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(2)
+
+        title = QLabel("Пользователи онлайн:")
+        title.setStyleSheet("font-weight: bold; font-size: 11px; color: #333; padding-bottom: 4px;")
+        layout.addWidget(title)
+
+        for u in users:
+            name = u.get('full_name', 'Неизвестный')
+            lbl = QLabel(f"  - {name}")
+            lbl.setStyleSheet("font-size: 11px; color: #555;")
+            layout.addWidget(lbl)
+
+        popup.adjustSize()
+
+        # Позиционируем popup над индикатором
+        pos = self.online_indicator.mapToGlobal(self.online_indicator.rect().topLeft())
+        popup.move(pos.x(), pos.y() - popup.height() - 4)
+        popup.show()
+        self._online_popup = popup
 
     def _on_online_users_updated(self, users: list):
         """Обработчик обновления списка онлайн пользователей"""
@@ -1755,6 +1836,12 @@ class MainWindow(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             # Удаляем eventFilter перед выходом
             QApplication.instance().removeEventFilter(self)
+            # Отправляем logout на сервер (снимает is_online)
+            try:
+                if hasattr(self, 'api_client') and self.api_client:
+                    self.api_client.logout()
+            except Exception as e:
+                print(f"[WARNING] Ошибка logout при закрытии: {e}")
             # Останавливаем sync_manager перед выходом
             if self.sync_manager:
                 self.sync_manager.stop()

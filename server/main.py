@@ -2,6 +2,7 @@
 FastAPI приложение - главный файл
 REST API для многопользовательской CRM
 """
+import asyncio
 import logging
 import os
 from fastapi import FastAPI, Depends, HTTPException, Request
@@ -28,6 +29,7 @@ from schemas import NotificationResponse, SyncRequest, SyncResponse
 from telegram_service import get_telegram_service
 from email_service import get_email_service
 from auth import get_current_user
+from constants import POSITION_STUDIO_DIRECTOR
 from permissions import seed_permissions
 
 settings = get_settings()
@@ -162,8 +164,8 @@ async def startup_event():
                 phone="+70000000000",
                 login="admin",
                 password_hash=get_password_hash("admin123"),
-                role="Руководитель студии",
-                position="Руководитель студии",
+                role=POSITION_STUDIO_DIRECTOR,
+                position=POSITION_STUDIO_DIRECTOR,
                 department="Административный",
                 status="активный",
             )
@@ -218,18 +220,46 @@ async def startup_event():
     finally:
         db.close()
 
+    # N3: Запуск фонового планировщика дедлайнов
+    try:
+        from services.deadline_checker import deadline_checker_loop
+        asyncio.create_task(deadline_checker_loop())
+        logger.info("Deadline checker: задача запущена")
+    except Exception as e:
+        logger.warning(f"Deadline checker: {e}")
+
+    # N4: Запуск фонового расчёта KPI (ежедневные снимки)
+    try:
+        from services.kpi_snapshot import kpi_snapshot_loop
+        asyncio.create_task(kpi_snapshot_loop())
+        logger.info("KPI snapshot: задача запущена")
+    except Exception as e:
+        logger.warning(f"KPI snapshot: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
+    # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
+    # (иначе TelegramConflictError при --workers > 1)
     try:
         from telegram_bot_handlers import router as bot_router, AIOGRAM_AVAILABLE as BOT_AVAILABLE
         if BOT_AVAILABLE and bot_router is not None:
-            from aiogram import Dispatcher as BotDispatcher
-            import asyncio
-            tg = get_telegram_service()
-            if tg.bot_available:
-                dp = BotDispatcher()
-                dp.include_router(bot_router)
-                asyncio.create_task(dp.start_polling(tg._bot, handle_signals=False))
-                logger.info("Telegram Bot polling запущен")
+            import fcntl
+            lock_path = "/tmp/telegram_polling.lock"
+            try:
+                _polling_lock_fd = open(lock_path, "w")
+                fcntl.flock(_polling_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # Блокировка получена — этот воркер запускает polling
+                # Сохраняем fd в app.state чтобы не собрал GC
+                app.state._polling_lock_fd = _polling_lock_fd
+                from aiogram import Dispatcher as BotDispatcher
+                tg = get_telegram_service()
+                if tg.bot_available:
+                    dp = BotDispatcher()
+                    dp.include_router(bot_router)
+                    asyncio.create_task(dp.start_polling(tg._bot, handle_signals=False))
+                    logger.info("Telegram Bot polling запущен (этот воркер — primary)")
+            except (IOError, OSError):
+                # Другой воркер уже держит блокировку — пропускаем
+                logger.info("Telegram Bot polling: пропущен (другой воркер уже обрабатывает)")
     except Exception as e:
         logger.warning(f"Telegram Bot polling: {e}")
 
@@ -274,8 +304,8 @@ async def global_search(
     db: Session = Depends(get_db)
 ):
     """
-    Полнотекстовый поиск по клиентам, договорам и CRM карточкам.
-    entity_types — через запятую: clients,contracts,crm_cards
+    Полнотекстовый поиск по клиентам, договорам, CRM карточкам и карточкам надзора.
+    entity_types — через запятую: clients,contracts,crm_cards,supervision_cards
     """
     if not q or len(q.strip()) < 2:
         return {"results": [], "total": 0, "query": q}
@@ -283,7 +313,9 @@ async def global_search(
     query_text = q.strip()
     search_pattern = f"%{query_text}%"
     results = []
-    types_filter = entity_types.split(",") if entity_types else ["clients", "contracts", "crm_cards"]
+    types_filter = entity_types.split(",") if entity_types else [
+        "clients", "contracts", "crm_cards", "supervision_cards"
+    ]
 
     # Фильтрация типов по access.* правам пользователя
     from permissions import check_permission
@@ -291,8 +323,11 @@ async def global_search(
         "clients": "access.clients",
         "contracts": "access.contracts",
         "crm_cards": "access.crm",
+        "supervision_cards": "access.supervision",
     }
     types_filter = [t for t in types_filter if check_permission(current_user, access_map.get(t, ""), db)]
+
+    from constants import ARCHIVE_STATUSES
 
     # Поиск по клиентам
     if "clients" in types_filter:
@@ -343,11 +378,35 @@ async def global_search(
         ).limit(limit).all()
         for card in cards:
             contract = db.query(ContractModel2).filter(ContractModel2.id == card.contract_id).first()
+            is_archive = (contract.status in ARCHIVE_STATUSES) if contract and contract.status else False
+            project_type = contract.project_type if contract else None
             results.append({
                 "type": "crm_card",
                 "id": card.id,
                 "title": f"Проект #{card.id}",
                 "subtitle": f"{contract.address if contract else ''} ({card.column_name})",
+                "is_archive": is_archive,
+                "project_type": project_type,
+            })
+
+    # Поиск по карточкам авторского надзора (через join с договором)
+    if "supervision_cards" in types_filter:
+        from database import SupervisionCard as SupervisionCardModel, Contract as ContractModel3
+        sup_cards = db.query(SupervisionCardModel).join(
+            ContractModel3, SupervisionCardModel.contract_id == ContractModel3.id
+        ).filter(
+            or_(
+                ContractModel3.address.ilike(search_pattern),
+                ContractModel3.contract_number.ilike(search_pattern),
+            )
+        ).limit(limit).all()
+        for sc in sup_cards:
+            contract = db.query(ContractModel3).filter(ContractModel3.id == sc.contract_id).first()
+            results.append({
+                "type": "supervision_card",
+                "id": sc.id,
+                "title": f"Надзор #{sc.id}",
+                "subtitle": f"{contract.address if contract else ''} ({sc.column_name})",
             })
 
     return {
@@ -428,6 +487,11 @@ app.include_router(sync_messenger_router, prefix="/api/v1/sync")
 
 from routers.notifications_router import router as notifications_router
 app.include_router(notifications_router, prefix="/api/v1")
+
+from routers.employee_analytics_router import router as employee_analytics_router
+from routers.survey_router import router as survey_router
+app.include_router(employee_analytics_router, prefix="/api/v1/employee-analytics")
+app.include_router(survey_router, prefix="/api/v1/surveys")
 
 
 # =========================

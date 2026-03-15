@@ -20,6 +20,7 @@ from database import (
     MessengerChat, MessengerChatMember, MessengerScript, MessengerSetting, MessengerMessageLog,
 )
 from auth import get_current_user
+from constants import SUPERUSER_ROLES
 from permissions import require_permission
 from pydantic import BaseModel
 from messenger_schemas import (
@@ -69,55 +70,631 @@ def seed_default_messenger_scripts(db: Session):
         return
 
     defaults = [
+        # =============================================
+        # CRM ИНДИВИДУАЛЬНЫЕ — project_start (§6.1)
+        # =============================================
         MessengerScript(
             script_type="project_start",
-            project_type=None,
+            project_type="Индивидуальный",
             stage_name=None,
             message_template=(
-                "Всем доброго дня!\n"
-                "Приветствую в рабочем чате!\n"
-                "Прикрепляем памятку, это кратко описанные основные пункты договора простым языком, "
-                "которые важны в первую очередь. Пишите сюда любые вопросы, мы будем сами распределять "
-                "кто на какие вопросы отвечает ввиду своих внутренних распорядков и компетенций.\n"
-                "{senior_manager} отвечает за организационную часть проекта. "
-                "{sdp} у нас старший дизайнер - она будет вести с вами весь проект. "
-                "{director} руководитель студии, с ним вы заключали договор."
+                "Здравствуйте, {client_first_name}!\n\n"
+                "Рады приветствовать Вас в проектном чате студии Festival Color!\n\n"
+                "Это Ваш персональный чат по проекту по адресу: {address}.\n"
+                "Номер договора: {contract_number}.\n"
+                "Площадь объекта: {area} м².\n\n"
+                "Ваша команда:\n"
+                " — Старший менеджер: {senior_manager} (@{senior_manager_username})\n"
+                " — Менеджер: {manager_name} (@{manager_username})\n"
+                " — Старший дизайнер-проектировщик: {sdp} (@{sdp_username})\n"
+                " — Руководитель студии: {director} (@{director_username})\n\n"
+                "Через этот чат Вы будете получать уведомления о ходе работы\n"
+                "над Вашим проектом, а также сможете задать любые вопросы.\n\n"
+                "В этом чате мы будем:\n"
+                " — Отправлять Вам результаты работы на каждом этапе\n"
+                " — Уведомлять о сроках рассмотрения\n"
+                " — Принимать Ваши замечания и пожелания\n\n"
+                "Прикрепляем памятку клиента — в ней описаны основные этапы\n"
+                "работы и что от Вас потребуется на каждом из них.\n\n"
+                "С уважением, команда Festival Color"
             ),
             use_auto_deadline=False,
-            is_enabled=True,
-            sort_order=0,
-        ),
-        MessengerScript(
-            script_type="stage_complete",
-            project_type=None,
-            stage_name=None,
-            message_template=(
-                "Добрый день!\n"
-                "Прошу рассмотреть {stage_name}, собрать для нас вопросы/правки/замечания "
-                "и при необходимости назначить время-день для обсуждения (видео-созвон), когда Вам удобно.\n"
-                "Рассмотреть необходимо до {deadline} или напишите, пожалуйста, "
-                "срок необходимый Вам для согласования этапа."
-            ),
-            use_auto_deadline=True,
+            attach_stage_files=False,
             is_enabled=True,
             sort_order=1,
         ),
+        # =============================================
+        # CRM ИНДИВИДУАЛЬНЫЕ — stage_complete (§6.2)
+        # =============================================
         MessengerScript(
-            script_type="project_end",
-            project_type=None,
-            stage_name=None,
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 1, подэтап 1.1",
             message_template=(
-                "Добрый день!\n"
-                "Благодарим за сотрудничество, надеемся вы остались довольны нашей работой.\n"
-                "Желаем успехов в ремонте!\n"
-                "Прикрепляем памятку о дальнейших этапах реализации проекта. "
-                "Обращайтесь если будет необходима помощь.\n"
-                "Очень просим Вас оставить отзыв о нашей работе: "
-                "https://yandex.ru/maps/org/festival_color/21058411145/"
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) завершена разработка\n"
+                "планировочных решений.\n\n"
+                "Результаты работы направлены Вам на рассмотрение.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение и предоставление замечаний: {deadline}\n"
+                "(3 рабочих дня с момента отправки).\n\n"
+                "Пожалуйста, ознакомьтесь с материалами и сообщите:\n"
+                " — Всё устраивает — и мы продолжим работу\n"
+                " — Есть замечания — опишите их в этом чате, и мы внесём\n"
+                "   необходимые корректировки\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
             ),
-            use_auto_deadline=False,
+            use_auto_deadline=True,
+            attach_stage_files=True,
             is_enabled=True,
             sort_order=2,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 1, подэтап 1.2",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлено финальное\n"
+                "планировочное решение с учётом Ваших пожеланий.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "Пожалуйста, ознакомьтесь с обновлёнными материалами.\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=3,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 1, подэтап 1.3",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "планировочного решения (2 круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=4,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 1, платный круг",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "планировочного решения (дополнительный круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=5,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.1",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) разработаны мудборды —\n"
+                "визуальные концепции будущего интерьера.\n\n"
+                "Мудборды определяют стилистическое направление, цветовую палитру\n"
+                "и ключевые элементы дизайна Вашего пространства.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "Пожалуйста, сообщите, какое направление Вам ближе, или\n"
+                "опишите пожелания по корректировке.\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=6,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.2",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлена визуализация\n"
+                "первого помещения.\n\n"
+                "Это позволит оценить, как будет выглядеть пространство\n"
+                "по утверждённой концепции, и при необходимости скорректировать\n"
+                "детали до начала работы над остальными помещениями.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=7,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.3",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "визуализации первого помещения с учётом Ваших замечаний\n"
+                "(1 круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=8,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.4",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "визуализации первого помещения (2 круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=9,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.5",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлены визуализации\n"
+                "всех помещений.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "Пожалуйста, ознакомьтесь с визуализациями и сообщите\n"
+                "Ваши замечания или одобрение.\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=10,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.6",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "визуализаций всех помещений с учётом Ваших замечаний\n"
+                "(1 круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=11,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, подэтап 2.7",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "визуализаций всех помещений (2 круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=12,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 2, платный круг",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "визуализаций (дополнительный круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=13,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 3",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлен комплект рабочей\n"
+                "документации (рабочие чертежи).\n\n"
+                "Этот комплект содержит все необходимые чертежи и спецификации\n"
+                "для начала строительно-отделочных работ.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=14,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Индивидуальный",
+            stage_name="Стадия 3, платный круг",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) выполнена доработка\n"
+                "рабочей документации (дополнительный круг правок).\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=15,
+        ),
+        # =============================================
+        # CRM ИНДИВИДУАЛЬНЫЕ — project_end (§6.4)
+        # =============================================
+        MessengerScript(
+            script_type="project_end",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "{client_first_name}, здравствуйте!\n\n"
+                "Рады сообщить, что работа над Вашим проектом ({address})\n"
+                "полностью завершена!\n\n"
+                "Все этапы пройдены:\n"
+                " — Планировочные решения — согласованы\n"
+                " — Концепция дизайна — утверждена\n"
+                " — Рабочая документация — передана\n\n"
+                "Всё готово!\n\n"
+                "Благодарим Вас за доверие и сотрудничество!\n\n"
+                "Мы будем очень признательны, если Вы оставите отзыв о нашей\n"
+                "работе — это поможет нам стать лучше:\n"
+                "{review_link}\n\n"
+                "В приложении — памятка с полезной информацией на этапе\n"
+                "реализации проекта.\n\n"
+                "Если в будущем потребуется авторский надзор за ремонтом\n"
+                "или другие услуги — обращайтесь, мы всегда на связи!\n\n"
+                "С благодарностью,\n"
+                "команда Festival Color"
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=16,
+        ),
+        # =============================================
+        # CRM ШАБЛОННЫЕ — project_start (§6.1)
+        # =============================================
+        MessengerScript(
+            script_type="project_start",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "Здравствуйте, {client_first_name}!\n\n"
+                "Рады приветствовать Вас в проектном чате студии Festival Color!\n\n"
+                "Это Ваш персональный чат по проекту по адресу: {address}.\n"
+                "Номер договора: {contract_number}.\n\n"
+                "Ваша команда:\n"
+                " — Старший менеджер: {senior_manager} (@{senior_manager_username})\n"
+                " — Менеджер: {manager_name} (@{manager_username})\n\n"
+                "Здесь Вы будете получать уведомления о ходе работы,\n"
+                "результаты на каждом этапе и сможете задавать вопросы.\n\n"
+                "Прикрепляем памятку клиента с описанием этапов и сроков.\n\n"
+                "С уважением, команда Festival Color"
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=17,
+        ),
+        # =============================================
+        # CRM ШАБЛОННЫЕ — stage_complete (§6.3)
+        # =============================================
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Шаблонный",
+            stage_name="Стадия 1",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлены варианты\n"
+                "планировочных решений.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "Ознакомьтесь и выберите наиболее подходящий вариант,\n"
+                "или сообщите пожелания в этом чате.\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {manager_name}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=18,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Шаблонный",
+            stage_name="Стадия 1, подэтап 1.2",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлен финальный вариант\n"
+                "планировочных решений с учётом Ваших пожеланий.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {manager_name}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=19,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Шаблонный",
+            stage_name="Стадия 2",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлен комплект\n"
+                "рабочих чертежей.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {manager_name}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=20,
+        ),
+        MessengerScript(
+            script_type="stage_complete",
+            project_type="Шаблонный",
+            stage_name="Стадия 3",
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему проекту ({address}) подготовлены 3Д визуализации\n"
+                "интерьера.\n"
+                "{stage_files}\n\n"
+                "Срок на рассмотрение: {deadline} (3 рабочих дня).\n\n"
+                "При необходимости видеосозвона напишите удобную дату.\n"
+                "Если необходимо больше времени на рассмотрение, просим\n"
+                "Вас сообщить об этом.\n\n"
+                "С уважением, {manager_name}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=21,
+        ),
+        # =============================================
+        # CRM ШАБЛОННЫЕ — project_end (§6.4)
+        # =============================================
+        MessengerScript(
+            script_type="project_end",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "{client_first_name}, здравствуйте!\n\n"
+                "Работа над Вашим проектом ({address}) завершена!\n\n"
+                "Всё готово!\n\n"
+                "Благодарим за доверие!\n\n"
+                "Будем признательны за Ваш отзыв:\n"
+                "{review_link}\n\n"
+                "В приложении — полезная памятка.\n"
+                "Если потребуются дополнительные услуги — обращайтесь!\n\n"
+                "С благодарностью,\n"
+                "команда Festival Color"
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=22,
+        ),
+        # =============================================
+        # АВТОРСКИЙ НАДЗОР — supervision_start (§7.1)
+        # =============================================
+        MessengerScript(
+            script_type="supervision_start",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "{client_first_name}, здравствуйте!\n\n"
+                "Рады сообщить, что по Вашему объекту ({address})\n"
+                "начинается этап авторского надзора!\n\n"
+                "Это означает, что наша команда будет сопровождать Вас\n"
+                "на всех этапах закупок и помогать выбрать именно те материалы,\n"
+                "которые предусмотрены дизайн-проектом. Также мы будем помогать\n"
+                "в ремонте и общении со строительной бригадой.\n\n"
+                "Ваша команда:\n"
+                " — Старший менеджер: {senior_manager} (@{senior_manager_username})\n"
+                " — Дизайнер авторского надзора: {dan} (@{dan_username})\n"
+                " — Руководитель студии: {director} (@{director_username})\n\n"
+                "В этом чате мы будем:\n"
+                " — Отправлять отчёты по каждой стадии закупок\n"
+                " — Согласовывать выбранные позиции\n"
+                " — Помогать с вопросами по материалам и поставщикам\n"
+                " — Координировать работу со строительной бригадой\n\n"
+                "Прикрепляем памятку — в ней описаны все 12 стадий закупок\n"
+                "и что от Вас потребуется на каждой из них.\n\n"
+                "С уважением, команда Festival Color"
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=23,
+        ),
+        # =============================================
+        # АВТОРСКИЙ НАДЗОР — supervision_stage_complete (§7.2)
+        # =============================================
+        MessengerScript(
+            script_type="supervision_stage_complete",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему объекту ({address}) завершена стадия:\n"
+                "\"{stage_name}\".\n\n"
+                "В приложении — отчёт по данной стадии с перечнем\n"
+                "выбранных позиций, поставщиков и стоимости.\n\n"
+                "Если у Вас есть вопросы по выбранным позициям — пишите\n"
+                "в этот чат, мы оперативно ответим.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=True,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=24,
+        ),
+        # =============================================
+        # АВТОРСКИЙ НАДЗОР — supervision_visit (§7.3)
+        # =============================================
+        MessengerScript(
+            script_type="supervision_visit",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "{client_first_name}, добрый день!\n\n"
+                "По Вашему объекту ({address}) состоялся выезд авторского\n"
+                "надзора ({visit_date}).\n\n"
+                "В приложении — отчёт по результатам выезда.\n\n"
+                "Если у Вас есть вопросы — пишите в этот чат.\n\n"
+                "С уважением, {senior_manager}\n"
+                "Festival Color"
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=True,
+            is_enabled=True,
+            sort_order=25,
+        ),
+        # =============================================
+        # АВТОРСКИЙ НАДЗОР — supervision_end (§7.4)
+        # =============================================
+        MessengerScript(
+            script_type="supervision_end",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "{client_first_name}, здравствуйте!\n\n"
+                "Авторский надзор по Вашему объекту ({address})\n"
+                "полностью завершён!\n\n"
+                "Все 12 стадий закупок пройдены, необходимые материалы\n"
+                "и оборудование подобраны и согласованы.\n\n"
+                "Ремонт завершён — поздравляем! Желаем Вам получать\n"
+                "настоящее удовольствие от жизни в Вашем новом доме!\n\n"
+                "Благодарим Вас за доверие на протяжении всего проекта!\n\n"
+                "Мы будем очень признательны за Ваш отзыв о нашей работе:\n"
+                "{review_link}\n\n"
+                "В приложении — памятка с рекомендациями по приёмке\n"
+                "материалов и контролю ремонтных работ.\n\n"
+                "Если возникнут вопросы — обращайтесь, мы всегда на связи!\n\n"
+                "С благодарностью,\n"
+                "команда Festival Color"
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=26,
         ),
     ]
 
@@ -207,9 +784,9 @@ async def trigger_script_endpoint(
 ):
     """Ручная отправка скрипта мессенджера"""
     if request.entity_type == 'supervision':
-        await trigger_supervision_notification(db, request.card_id, request.script_type)
+        await trigger_supervision_notification(request.card_id, request.script_type)
     else:
-        await trigger_messenger_notification(db, request.card_id, request.script_type)
+        await trigger_messenger_notification(request.card_id, request.script_type)
 
     return {"status": "success"}
 
@@ -311,7 +888,7 @@ async def create_messenger_chat(
     try:
         if data.crm_card_id:
             asyncio.create_task(
-                trigger_messenger_notification(db, data.crm_card_id, 'project_start')
+                trigger_messenger_notification(data.crm_card_id, 'project_start')
             )
     except Exception as e:
         logger.warning(f"Не удалось отправить project_start: {e}")
@@ -763,7 +1340,7 @@ async def get_messenger_scripts(
     query = db.query(MessengerScript)
     if project_type:
         query = query.filter(
-            (MessengerScript.project_type == project_type) | (MessengerScript.project_type == None)
+            (MessengerScript.project_type == project_type) | (MessengerScript.project_type.is_(None))
         )
     if script_type:
         query = query.filter(MessengerScript.script_type == script_type)
@@ -775,7 +1352,7 @@ async def get_messenger_scripts(
 @router.post("/scripts", response_model=MessengerScriptResponse)
 async def create_messenger_script(
     data: MessengerScriptCreate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Создать скрипт"""
@@ -790,7 +1367,7 @@ async def create_messenger_script(
 async def update_messenger_script(
     script_id: int,
     data: MessengerScriptUpdate,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Обновить скрипт"""
@@ -810,7 +1387,7 @@ async def update_messenger_script(
 @router.delete("/scripts/{script_id}")
 async def delete_messenger_script(
     script_id: int,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Удалить скрипт"""
@@ -825,7 +1402,7 @@ async def delete_messenger_script(
 @router.patch("/scripts/{script_id}/toggle")
 async def toggle_messenger_script(
     script_id: int,
-    current_user: Employee = Depends(require_permission("messenger.create_chat")),
+    current_user: Employee = Depends(require_permission("messenger.manage_scripts")),
     db: Session = Depends(get_db)
 ):
     """Включить/выключить скрипт"""
@@ -923,7 +1500,7 @@ async def mtproto_send_code(
     db: Session = Depends(get_db),
 ):
     """Шаг 1: Отправить код подтверждения на телефон для MTProto авторизации"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     # Перечитываем настройки из БД
@@ -963,7 +1540,7 @@ async def mtproto_resend_sms(
     db: Session = Depends(get_db),
 ):
     """Отправить код сразу по SMS (send_code + resend_code за один вызов)"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     messenger_settings = {}
@@ -995,7 +1572,7 @@ async def mtproto_verify_code(
     db: Session = Depends(get_db),
 ):
     """Шаг 2: Подтвердить код и активировать MTProto сессию"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     code = str(data.get("code", "")).strip()
@@ -1035,7 +1612,7 @@ async def mtproto_session_status(
     db: Session = Depends(get_db),
 ):
     """Проверить статус Pyrogram-сессии"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     messenger_settings = {}

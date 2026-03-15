@@ -20,6 +20,11 @@ from database import get_db, Employee, Notification, NotificationSettings
 from auth import get_current_user
 from permissions import require_permission, SUPERUSER_ROLES
 from schemas import NotificationResponse, NotificationSettingsResponse, NotificationSettingsUpdate
+from constants import (
+    POSITION_DAN, POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR,
+    POSITION_SDP, POSITION_MEASURER,
+    ROLE_ADMIN, ROLE_DIRECTOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +50,44 @@ async def get_notification_settings(
 
     settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
     if not settings:
-        # Вернуть дефолтные настройки (без записи в БД)
+        # Рекомендуемые дефолты по ролям (см. docs/notifications-scripts-guide.md §10)
+        role = employee.role or ''
+        pos = employee.position or ''
+
+        # supervision: ДАН, Ст.менеджер, Руководитель
+        supervision_roles = {
+            POSITION_DAN, POSITION_SENIOR_MANAGER,
+            POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR,
+        }
+        # payment: Руководитель, Ст.менеджер
+        payment_roles = {
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+            ROLE_ADMIN, ROLE_DIRECTOR,
+        }
+        # crm_stage: Выкл для ДАН и Замерщик
+        crm_stage_off = {POSITION_DAN, POSITION_MEASURER}
+        # deadline: Выкл для Замерщик
+        deadline_off = {POSITION_MEASURER}
+        # individual: Выкл для ДАН
+        individual_off = {POSITION_DAN}
+        # template: Выкл для ДАН и СДП
+        template_off = {POSITION_DAN, POSITION_SDP}
+
+        is_senior_manager = pos == POSITION_SENIOR_MANAGER
+
         return NotificationSettingsResponse(
             employee_id=employee_id,
             telegram_enabled=True,
             email_enabled=False,
-            notify_crm_stage=True,
+            notify_crm_stage=role not in crm_stage_off,
             notify_assigned=True,
-            notify_deadline=True,
-            notify_payment=False,
-            notify_supervision=False,
+            notify_deadline=role not in deadline_off,
+            notify_payment=role in payment_roles,
+            notify_supervision=role in supervision_roles,
+            notify_individual=role not in individual_off,
+            notify_template=role not in template_off,
+            notify_duplicate_info=is_senior_manager,
+            notify_revision_info=is_senior_manager,
             telegram_connected=bool(employee.telegram_user_id),
         )
 
@@ -67,6 +100,10 @@ async def get_notification_settings(
         notify_deadline=settings.notify_deadline,
         notify_payment=settings.notify_payment,
         notify_supervision=settings.notify_supervision,
+        notify_individual=getattr(settings, 'notify_individual', True),
+        notify_template=getattr(settings, 'notify_template', True),
+        notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
+        notify_revision_info=getattr(settings, 'notify_revision_info', False),
         telegram_connected=bool(employee.telegram_user_id),
     )
 
@@ -101,6 +138,10 @@ async def update_notification_settings(
     settings.notify_deadline = data.notify_deadline
     settings.notify_payment = data.notify_payment
     settings.notify_supervision = data.notify_supervision
+    settings.notify_individual = data.notify_individual
+    settings.notify_template = data.notify_template
+    settings.notify_duplicate_info = data.notify_duplicate_info
+    settings.notify_revision_info = data.notify_revision_info
     settings.updated_at = datetime.utcnow()
 
     db.commit()
@@ -114,6 +155,10 @@ async def update_notification_settings(
         notify_deadline=settings.notify_deadline,
         notify_payment=settings.notify_payment,
         notify_supervision=settings.notify_supervision,
+        notify_individual=getattr(settings, 'notify_individual', True),
+        notify_template=getattr(settings, 'notify_template', True),
+        notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
+        notify_revision_info=getattr(settings, 'notify_revision_info', False),
         telegram_connected=bool(employee.telegram_user_id),
     )
 

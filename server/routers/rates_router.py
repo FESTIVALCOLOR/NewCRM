@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from database import get_db, Employee, Rate, Payment, Contract
 from auth import get_current_user
+from constants import POSITION_DAN, POSITION_SENIOR_MANAGER, POSITION_MEASURER
 from permissions import require_permission
 from schemas import (
     RateCreate, RateUpdate, RateResponse,
@@ -204,7 +205,7 @@ async def save_supervision_rate(
         if data.executor_rate is not None:
             existing_dan = db.query(Rate).filter(
                 Rate.project_type == 'Авторский надзор',
-                Rate.role == 'ДАН',
+                Rate.role == POSITION_DAN,
                 Rate.stage_name == data.stage_name
             ).first()
 
@@ -214,18 +215,18 @@ async def save_supervision_rate(
             else:
                 rate_dan = Rate(
                     project_type='Авторский надзор',
-                    role='ДАН',
+                    role=POSITION_DAN,
                     stage_name=data.stage_name,
                     rate_per_m2=data.executor_rate
                 )
                 db.add(rate_dan)
-            results.append({'role': 'ДАН', 'rate': data.executor_rate})
+            results.append({'role': POSITION_DAN, 'rate': data.executor_rate})
 
         # Тариф для Старшего менеджера
         if data.manager_rate is not None:
             existing_manager = db.query(Rate).filter(
                 Rate.project_type == 'Авторский надзор',
-                Rate.role == 'Старший менеджер проектов',
+                Rate.role == POSITION_SENIOR_MANAGER,
                 Rate.stage_name == data.stage_name
             ).first()
 
@@ -235,12 +236,12 @@ async def save_supervision_rate(
             else:
                 rate_manager = Rate(
                     project_type='Авторский надзор',
-                    role='Старший менеджер проектов',
+                    role=POSITION_SENIOR_MANAGER,
                     stage_name=data.stage_name,
                     rate_per_m2=data.manager_rate
                 )
                 db.add(rate_manager)
-            results.append({'role': 'Старший менеджер проектов', 'rate': data.manager_rate})
+            results.append({'role': POSITION_SENIOR_MANAGER, 'rate': data.manager_rate})
 
         db.commit()
 
@@ -248,10 +249,10 @@ async def save_supervision_rate(
         recalc_count = 0
         if data.executor_rate is not None:
             recalc_count += _recalc_zero_supervision_payments(
-                db, 'ДАН', data.stage_name, data.executor_rate)
+                db, POSITION_DAN, data.stage_name, data.executor_rate)
         if data.manager_rate is not None:
             recalc_count += _recalc_zero_supervision_payments(
-                db, 'Старший менеджер проектов', data.stage_name, data.manager_rate)
+                db, POSITION_SENIOR_MANAGER, data.stage_name, data.manager_rate)
         if recalc_count > 0:
             db.commit()
             logger.info(f"Пересчитано {recalc_count} нулевых платежей после обновления тарифа")
@@ -273,7 +274,7 @@ async def save_surveyor_rate(
     """Сохранить тариф замерщика"""
     try:
         existing = db.query(Rate).filter(
-            Rate.role == 'Замерщик',
+            Rate.role == POSITION_MEASURER,
             Rate.city == data.city
         ).first()
 
@@ -285,7 +286,7 @@ async def save_surveyor_rate(
             return existing
         else:
             rate = Rate(
-                role='Замерщик',
+                role=POSITION_MEASURER,
                 city=data.city,
                 surveyor_price=data.price
             )

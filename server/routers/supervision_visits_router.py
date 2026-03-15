@@ -17,6 +17,7 @@ from database import get_db, Employee, Contract, SupervisionCard, SupervisionVis
 from auth import get_current_user
 from permissions import require_permission
 from schemas import SupervisionVisitCreate, SupervisionVisitUpdate, SupervisionVisitResponse
+from services.notification_service import trigger_supervision_notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["supervision-visits"])
@@ -326,6 +327,33 @@ async def create_visit(
     db.add(visit)
     db.commit()
     db.refresh(visit)
+
+    # N4: Автотриггер supervision_visit + уведомление ДАН
+    try:
+        import asyncio
+        visit_date_str = str(data.visit_date) if data.visit_date else ''
+        asyncio.create_task(trigger_supervision_notification(
+            card_id, 'supervision_visit',
+            stage_name=data.stage_name or '',
+            extra_context={'visit_date': visit_date_str},
+        ))
+        # Уведомление ДАН о создании выезда
+        if card.dan_id:
+            from services.notification_dispatcher import dispatch_notification
+            contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+            address = contract.address if contract else ''
+            asyncio.create_task(dispatch_notification(
+                db=db, employee_id=card.dan_id,
+                event_type='supervision',
+                title=f'Выезд: {address}',
+                message=f'Запланирован выезд по надзору {address} на {visit_date_str}.',
+                related_entity_type='supervision_card',
+                related_entity_id=card_id,
+                project_type='supervision',
+            ))
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"supervision_visit trigger: {e}")
+
     return visit
 
 

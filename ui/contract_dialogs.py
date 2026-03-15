@@ -217,6 +217,8 @@ class ContractDialog(QDialog):
         self.api_client = self.data.api_client
         self._uploading_files = 0  # Счётчик загружаемых файлов
         self.offline_manager = getattr(parent, 'offline_manager', None)
+        self._current_surveys = []
+        self._current_survey_link = None
 
         # Инициализация YandexDiskManager
         try:
@@ -406,8 +408,12 @@ class ContractDialog(QDialog):
 
         self.city_combo = CustomComboBox()
         cities = self.data.get_all_cities() or []
-        for city in cities:
-            self.city_combo.addItem(city.get('name', ''))
+        # Сортировка: СПБ первым, Москва вторым, остальные по алфавиту
+        priority = {'СПБ': 0, 'Санкт-Петербург': 0, 'МСК': 1, 'Москва': 1}
+        city_names = [c.get('name', '') for c in cities if c.get('name') and not c.get('name', '').startswith('__')]
+        city_names.sort(key=lambda n: (priority.get(n, 2), n))
+        for name in city_names:
+            self.city_combo.addItem(name)
         main_layout_form.addRow('Город:', self.city_combo)
 
         self.contract_number = QLineEdit()
@@ -1154,7 +1160,132 @@ class ContractDialog(QDialog):
 
         common_group.setLayout(common_layout)
         layout.addWidget(common_group)
-        
+
+        # ========== ОТЗЫВЫ КЛИЕНТОВ ==========
+        self.survey_group = QGroupBox('Отзывы клиентов')
+        self.survey_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #E0E0E0;
+                margin-top: 12px;
+                padding-top: 14px;
+                border-radius: 6px;
+                background-color: #FAFBFC;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 3px 10px;
+                color: #333333;
+                font-weight: bold;
+            }
+        """)
+        survey_layout = QVBoxLayout()
+        survey_layout.setSpacing(6)
+
+        # Статус / кнопки создания
+        survey_top_row = QHBoxLayout()
+        self.survey_status_label = QLabel('Загрузка...')
+        self.survey_status_label.setStyleSheet('color: #666; font-size: 12px;')
+        survey_top_row.addWidget(self.survey_status_label)
+        survey_top_row.addStretch()
+
+        self.survey_create_btn = QPushButton('Создать опрос')
+        self.survey_create_btn.setFixedHeight(28)
+        self.survey_create_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4A90D9; color: white;
+                padding: 0 14px; border-radius: 4px; border: none;
+                font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3A7CC2; }
+        """)
+        self.survey_create_btn.clicked.connect(self._create_survey)
+        self.survey_create_btn.hide()
+        survey_top_row.addWidget(self.survey_create_btn)
+
+        self.survey_resend_btn = QPushButton('Переотправить ссылку')
+        self.survey_resend_btn.setFixedHeight(28)
+        self.survey_resend_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E67E22; color: white;
+                padding: 0 14px; border-radius: 4px; border: none;
+                font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #D35400; }
+        """)
+        self.survey_resend_btn.clicked.connect(self._resend_survey)
+        self.survey_resend_btn.hide()
+        survey_top_row.addWidget(self.survey_resend_btn)
+
+        self.survey_copy_link_btn = QPushButton('Копировать ссылку')
+        self.survey_copy_link_btn.setFixedHeight(28)
+        self.survey_copy_link_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27AE60; color: white;
+                padding: 0 14px; border-radius: 4px; border: none;
+                font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #1E8449; }
+        """)
+        self.survey_copy_link_btn.clicked.connect(self._copy_survey_link)
+        self.survey_copy_link_btn.hide()
+        survey_top_row.addWidget(self.survey_copy_link_btn)
+        survey_layout.addLayout(survey_top_row)
+
+        # Контейнер с результатами опроса (скрыт, пока нет данных)
+        self.survey_results_widget = QWidget()
+        results_layout = QVBoxLayout(self.survey_results_widget)
+        results_layout.setContentsMargins(0, 4, 0, 0)
+        results_layout.setSpacing(4)
+
+        # Оценки (2 строки по 4)
+        scores_grid = QHBoxLayout()
+        scores_grid.setSpacing(8)
+        self.survey_score_labels = {}
+        score_defs = [
+            ('nps_score', 'NPS'),
+            ('csat_score', 'CSAT'),
+            ('design_score', 'Дизайн'),
+            ('deadline_score', 'Сроки'),
+        ]
+        for key, label in score_defs:
+            card = self._create_survey_score_card(label)
+            self.survey_score_labels[key] = card
+            scores_grid.addWidget(card)
+        results_layout.addLayout(scores_grid)
+
+        scores_grid2 = QHBoxLayout()
+        scores_grid2.setSpacing(8)
+        score_defs2 = [
+            ('communication_score', 'Коммуникация'),
+            ('expectations_score', 'Ожидания'),
+            ('supervision_score', 'Надзор'),
+        ]
+        for key, label in score_defs2:
+            card = self._create_survey_score_card(label)
+            self.survey_score_labels[key] = card
+            scores_grid2.addWidget(card)
+        scores_grid2.addStretch()
+        results_layout.addLayout(scores_grid2)
+
+        # Комментарий
+        self.survey_comment_label = QLabel('')
+        self.survey_comment_label.setWordWrap(True)
+        self.survey_comment_label.setStyleSheet(
+            'color: #555; font-size: 11px; padding: 4px 8px; '
+            'background: #F5F5F5; border-radius: 4px;')
+        self.survey_comment_label.hide()
+        results_layout.addWidget(self.survey_comment_label)
+
+        self.survey_results_widget.hide()
+        survey_layout.addWidget(self.survey_results_widget)
+
+        self.survey_group.setLayout(survey_layout)
+        # Показываем только при редактировании (есть contract_data)
+        if not self.contract_data:
+            self.survey_group.hide()
+        layout.addWidget(self.survey_group)
+
         # Надпись синхронизации — отдельная строка над кнопками, по центру
         self.sync_label = QLabel('Синхронизация...')
         self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
@@ -1167,6 +1298,31 @@ class ContractDialog(QDialog):
         if not self.view_only:
             buttons_layout = QHBoxLayout()
             buttons_layout.addStretch()
+
+            # Кнопка "Создать" (зелёная) — только для нового договора
+            # После создания превращается в "Сохранить" (жёлтую)
+            if not self.contract_data:
+                self.create_btn = QPushButton('Создать')
+                self.create_btn.setFixedHeight(36)
+                self.create_btn.clicked.connect(self._create_and_stay)
+                self.create_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #1E8449;
+                        color: white;
+                        padding: 0px 30px;
+                        font-weight: bold;
+                        border-radius: 4px;
+                        border: none;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #17703C; }
+                    QPushButton:pressed { background-color: #145F2E; }
+                    QPushButton:disabled {
+                        background-color: #d9d9d9;
+                        color: #666666;
+                    }
+                """)
 
             self.save_btn = QPushButton('Сохранить')
             self.save_btn.setFixedHeight(36)
@@ -1189,6 +1345,9 @@ class ContractDialog(QDialog):
                     color: #666666;
                 }
             """)
+            # В режиме создания прячем "Сохранить" до первого создания
+            if not self.contract_data:
+                self.save_btn.setVisible(False)
 
             self.cancel_btn = QPushButton('Отмена')
             self.cancel_btn.setFixedHeight(36)
@@ -1212,6 +1371,8 @@ class ContractDialog(QDialog):
                 }
             """)
 
+            if hasattr(self, 'create_btn'):
+                buttons_layout.addWidget(self.create_btn)
             buttons_layout.addWidget(self.save_btn)
             buttons_layout.addWidget(self.cancel_btn)
 
@@ -1782,6 +1943,184 @@ class ContractDialog(QDialog):
             if index >= 0:
                 self.agent_combo.setCurrentIndex(index)
 
+    # ══════════════════════════════════════════════════════════════════
+    # ОТЗЫВЫ КЛИЕНТОВ (survey)
+    # ══════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _create_survey_score_card(label):
+        """Мини-карточка оценки опроса."""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background: #FFFFFF; border: 1px solid #E0E0E0;
+                border-radius: 6px; padding: 4px;
+            }
+        """)
+        card.setFixedHeight(50)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(6, 2, 6, 2)
+        card_layout.setSpacing(0)
+        lbl = QLabel(label)
+        lbl.setStyleSheet('font-size: 9px; color: #888; border: none;')
+        lbl.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(lbl)
+        val = QLabel('—')
+        val.setObjectName('score_value')
+        val.setStyleSheet('font-size: 14px; font-weight: bold; color: #333; border: none;')
+        val.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(val)
+        return card
+
+    def _load_surveys(self):
+        """Загружает данные опросов для текущего договора."""
+        if not self.contract_data or not self.contract_data.get('id'):
+            self.survey_status_label.setText('Сохраните договор для работы с опросами')
+            return
+
+        contract_id = self.contract_data['id']
+        self._current_surveys = []
+        self._current_survey_link = None
+
+        try:
+            surveys = self.data.get_surveys_by_contract(contract_id)
+            if isinstance(surveys, list):
+                self._current_surveys = surveys
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Ошибка загрузки опросов: {e}")
+
+        if not self._current_surveys:
+            self.survey_status_label.setText('Опросов нет')
+            self.survey_create_btn.show()
+            self.survey_resend_btn.hide()
+            self.survey_copy_link_btn.hide()
+            self.survey_results_widget.hide()
+            return
+
+        # Берём последний опрос
+        survey = self._current_surveys[-1]
+        status = survey.get('status', 'pending')
+
+        if status == 'completed':
+            completed_at = survey.get('completed_at', '')
+            if completed_at:
+                try:
+                    from datetime import datetime as _dt
+                    dt = _dt.fromisoformat(completed_at)
+                    completed_at = dt.strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    pass
+
+            # Проверяем, есть ли хотя бы одна валидная оценка
+            score_fields = [
+                'nps_score', 'csat_score', 'design_score', 'deadline_score',
+                'communication_score', 'expectations_score', 'supervision_score',
+            ]
+            has_any_score = any(survey.get(k) is not None for k in score_fields)
+
+            if not has_any_score:
+                # Опрос completed, но данные не получены (тестовый/битый)
+                self.survey_status_label.setText(
+                    f'Опрос заполнен ({completed_at}) — данные не получены (тестовый опрос)')
+                self.survey_status_label.setStyleSheet('color: #95A5A6; font-size: 12px;')
+                self.survey_create_btn.show()
+                self.survey_resend_btn.hide()
+                self.survey_copy_link_btn.hide()
+                self.survey_results_widget.hide()
+            else:
+                self.survey_status_label.setText(f'Опрос заполнен ({completed_at})')
+                self.survey_status_label.setStyleSheet('color: #27AE60; font-size: 12px; font-weight: bold;')
+                self.survey_create_btn.hide()
+                self.survey_resend_btn.hide()
+                self.survey_copy_link_btn.hide()
+
+                # Заполняем оценки
+                self.survey_results_widget.show()
+                for key in score_fields:
+                    card = self.survey_score_labels.get(key)
+                    if not card:
+                        continue
+                    val = survey.get(key)
+                    val_label = card.findChild(QLabel, 'score_value')
+                    if val_label:
+                        if val is not None:
+                            val_label.setText(str(val))
+                            # Цвет по 10-балльной шкале
+                            if val >= 8:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #27AE60; border: none;')
+                            elif val >= 6:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #F1C40F; border: none;')
+                            elif val >= 4:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #E67E22; border: none;')
+                            else:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #E74C3C; border: none;')
+                        else:
+                            val_label.setText('—')
+
+            comment = survey.get('comment', '')
+            if comment:
+                self.survey_comment_label.setText(f'Комментарий: {comment}')
+                self.survey_comment_label.show()
+            else:
+                self.survey_comment_label.hide()
+
+        else:
+            # pending
+            self.survey_status_label.setText('Опрос отправлен, ожидает заполнения')
+            self.survey_status_label.setStyleSheet('color: #E67E22; font-size: 12px;')
+            self.survey_create_btn.hide()
+            self.survey_resend_btn.show()
+            self._current_survey_link = survey.get('survey_link', '')
+            if self._current_survey_link:
+                self.survey_copy_link_btn.show()
+            else:
+                self.survey_copy_link_btn.hide()
+            self.survey_results_widget.hide()
+
+    def _create_survey(self):
+        """Создаёт новый опрос для договора."""
+        if not self.contract_data or not self.api_client:
+            return
+        contract_id = self.contract_data['id']
+        project_type = self.contract_data.get('project_type', 'Индивидуальный')
+
+        pt_map = {'Индивидуальный': 'individual', 'Шаблонный': 'template'}
+        pt_code = pt_map.get(project_type, 'individual')
+
+        try:
+            result = self.data.create_survey(contract_id, pt_code)
+            if result and result.get('id'):
+                CustomMessageBox(self, 'Успешно',
+                    'Опрос создан. Ссылка скопирована в буфер обмена.', 'info').exec_()
+                link = result.get('survey_link', '')
+                if link:
+                    QApplication.clipboard().setText(link)
+                self._load_surveys()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Не удалось создать опрос:\n{e}', 'error').exec_()
+
+    def _resend_survey(self):
+        """Переотправляет ссылку на опрос."""
+        if not self._current_surveys:
+            return
+        survey = self._current_surveys[-1]
+        try:
+            result = self.data.resend_survey(survey['id'])
+            if result:
+                CustomMessageBox(self, 'Успешно', 'Ссылка на опрос переотправлена.', 'info').exec_()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось переотправить опрос.', 'error').exec_()
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Ошибка переотправки:\n{e}', 'error').exec_()
+
+    def _copy_survey_link(self):
+        """Копирует ссылку на опрос в буфер обмена."""
+        if self._current_survey_link:
+            QApplication.clipboard().setText(self._current_survey_link)
+            CustomMessageBox(self, 'Скопировано',
+                'Ссылка на опрос скопирована в буфер обмена.', 'info').exec_()
+
     def fill_data(self):
         """Заполнение формы данными"""
         # Загружаем свежие данные через DataAccess (API с fallback на локальную БД)
@@ -2063,6 +2402,9 @@ class ContractDialog(QDialog):
 
         # Восстанавливаем недостающие публичные ссылки в фоне
         self.repair_missing_public_links()
+
+        # Загружаем отзывы клиентов
+        self._load_surveys()
 
     def repair_missing_public_links(self):
         """Восстановление недостающих публичных ссылок для файлов с yandex_path"""
@@ -3638,12 +3980,22 @@ class ContractDialog(QDialog):
         else:
             event.accept()
 
+    def _create_and_stay(self):
+        """Создать договор без закрытия диалога — для продолжения заполнения."""
+        self._create_and_stay_mode = True
+        self.save_contract()
+
     @debounce_click(delay_ms=2000)
     def save_contract(self):
         """Сохранение договора"""
         if not self.contract_number.text().strip():
             # ========== ЗАМЕНИЛИ QMessageBox ==========
             CustomMessageBox(self, 'Ошибка', 'Укажите номер договора', 'warning').exec_()
+            return
+
+        # Валидация площади — обязательное поле
+        if not self.area.value() or self.area.value() <= 0:
+            CustomMessageBox(self, 'Ошибка', 'Укажите площадь объекта (м²)', 'warning').exec_()
             return
 
         # Валидация client_id — обязательное поле для API
@@ -3759,6 +4111,7 @@ class ContractDialog(QDialog):
         }
 
         try:
+            new_contract_id = None
             if self.contract_data:
                 # Обновление существующего договора
                 old_contract = self.contract_data
@@ -3787,11 +4140,11 @@ class ContractDialog(QDialog):
                 # Обновляем договор через DataAccess (API + локальная БД)
                 self.data.update_contract(self.contract_data['id'], contract_data)
 
-                # Переименование папки на Яндекс.Диске при изменении данных
-                old_folder_path = old_contract.get('yandex_folder_path', '')
-                if folder_changed and old_folder_path and self.yandex_disk:
+                # Обновление yandex_folder_path на сервере при изменении данных папки
+                # Переименование папки на Яндекс.Диске выполняет db_manager.update_contract() через async thread.
+                # Здесь только синхронизируем путь на сервере (PostgreSQL).
+                if folder_changed and self.yandex_disk:
                     try:
-                        # Строим новый путь к папке
                         new_folder_path = self.yandex_disk.build_contract_folder_path(
                             agent_type=new_agent_type,
                             project_type=new_project_type,
@@ -3799,48 +4152,11 @@ class ContractDialog(QDialog):
                             address=new_address,
                             area=new_area
                         )
-
-                        # Перемещаем папку (переименовываем)
-                        if self.yandex_disk.move_folder(old_folder_path, new_folder_path):
-                            # Обновляем путь в БД через DataAccess
-                            self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
-                            print(f"[OK] Папка переименована: {old_folder_path} -> {new_folder_path}")
-                        else:
-                            # Яндекс.Диск недоступен - добавляем в offline очередь
-                            print(f"[WARNING] Не удалось переименовать папку на Яндекс.Диске, добавляем в очередь")
-                            if self.offline_manager:
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.UPDATE,
-                                    'yandex_folder',
-                                    self.contract_data['id'],
-                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
-                                )
-                                # Сохраняем новый путь через DataAccess (будет актуален после синхронизации)
-                                self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                        # Обновляем путь на сервере (локальную БД уже обновил db_manager)
+                        self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
+                        print(f"[OK] yandex_folder_path обновлён на сервере: {new_folder_path}")
                     except Exception as e:
-                        print(f"[WARNING] Ошибка переименования папки: {e}")
-                        # При ошибке тоже добавляем в очередь
-                        if self.offline_manager and old_folder_path:
-                            try:
-                                new_folder_path = self.yandex_disk.build_contract_folder_path(
-                                    agent_type=new_agent_type,
-                                    project_type=new_project_type,
-                                    city=new_city,
-                                    address=new_address,
-                                    area=new_area
-                                )
-                                from utils.offline_manager import OperationType
-                                self.offline_manager.queue_operation(
-                                    OperationType.UPDATE,
-                                    'yandex_folder',
-                                    self.contract_data['id'],
-                                    {'old_path': old_folder_path, 'new_path': new_folder_path}
-                                )
-                                self.data.update_contract(self.contract_data['id'], {'yandex_folder_path': new_folder_path})
-                                print(f"[QUEUE] Переименование папки добавлено в очередь: {old_folder_path} -> {new_folder_path}")
-                            except Exception as queue_error:
-                                print(f"[ERROR] Не удалось добавить в очередь: {queue_error}")
+                        print(f"[WARNING] Ошибка обновления yandex_folder_path: {e}")
             else:
                 # Создание нового договора через DataAccess
                 new_contract_id = None
@@ -3889,7 +4205,35 @@ class ContractDialog(QDialog):
                     except Exception as e:
                         print(f"[WARNING] Не удалось создать папку на Яндекс.Диске: {e}")
 
-            # ИСПРАВЛЕНИЕ: Закрываем диалог без показа сообщения
+            # Если создание без закрытия (кнопка "Создать") — переключить в режим редактирования
+            if getattr(self, '_create_and_stay_mode', False):
+                self._create_and_stay_mode = False
+                if new_contract_id:
+                    # Переключаем диалог в режим редактирования
+                    self.contract_data = contract_data.copy()
+                    self.contract_data['id'] = new_contract_id
+                    # Обновляем заголовок
+                    self.setWindowTitle('Редактирование договора')
+                    for child in self.findChildren(QLabel):
+                        if child.text() == 'Добавление договора':
+                            child.setText('Редактирование договора')
+                            break
+                    # Скрываем "Создать", показываем "Сохранить"
+                    if hasattr(self, 'create_btn'):
+                        self.create_btn.setVisible(False)
+                    self.save_btn.setVisible(True)
+                    CustomMessageBox(
+                        self, 'Создано',
+                        f'Договор №{contract_number} создан.\n'
+                        f'Теперь можно добавить аванс и другие данные.',
+                        'success'
+                    ).exec_()
+                    return  # НЕ закрываем диалог
+                else:
+                    CustomMessageBox(self, 'Ошибка', 'Не удалось создать договор', 'error').exec_()
+                    return
+
+            # Закрываем диалог
             self.accept()
 
         except Exception as e:

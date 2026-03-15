@@ -12,6 +12,7 @@ from database import (
 from auth import get_current_user
 from permissions import require_permission
 from schemas import PaymentCreate, PaymentUpdate, PaymentResponse, PaymentManualUpdateRequest
+from services.notification_dispatcher import dispatch_notification
 
 logger = logging.getLogger(__name__)
 
@@ -808,7 +809,7 @@ async def create_payment(
             duplicate_query = duplicate_query.filter(Payment.supervision_card_id == payment_data.supervision_card_id)
         # Исключаем переназначенные платежи из проверки
         duplicate_query = duplicate_query.filter(
-            (Payment.reassigned == False) | (Payment.reassigned == None)
+            (Payment.reassigned == False) | (Payment.reassigned.is_(None))
         )
         existing = duplicate_query.first()
         if existing:
@@ -878,6 +879,42 @@ async def create_payment(
             ))
 
         db.commit()
+
+        # N2: Уведомление о создании оплаты старшему менеджеру
+        try:
+            import asyncio
+            contract = db.query(Contract).filter(Contract.id == payment.contract_id).first()
+            address = contract.address if contract else ''
+            contract_number = contract.contract_number if contract else ''
+            amount_val = payment.final_amount or payment.calculated_amount or 0
+            sm_id = None
+            pt_key = 'individual'
+            if payment.crm_card_id:
+                card = db.query(CRMCard).filter(CRMCard.id == payment.crm_card_id).first()
+                if card:
+                    sm_id = card.senior_manager_id
+                    if contract:
+                        pt = (contract.project_type or '').lower()
+                        pt_key = 'template' if 'шабл' in pt else 'individual'
+            elif payment.supervision_card_id:
+                sv = db.query(SupervisionCard).filter(SupervisionCard.id == payment.supervision_card_id).first()
+                if sv:
+                    sm_id = sv.senior_manager_id
+                pt_key = 'supervision'
+            if sm_id:
+                asyncio.create_task(dispatch_notification(
+                    db=db,
+                    employee_id=sm_id,
+                    event_type='payment',
+                    title=f'Оплата: {address}',
+                    message=f'Создана оплата {amount_val} руб. по договору {contract_number} ({address}).',
+                    related_entity_type='payment',
+                    related_entity_id=payment.id,
+                    project_type=pt_key,
+                    card_id=payment.crm_card_id,
+                ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления payment: {e}")
 
         return payment
 
@@ -959,7 +996,7 @@ async def set_payments_report_month(
     # Обновляем все платежи без отчетного месяца
     result = db.query(Payment).filter(
         Payment.contract_id == contract_id,
-        or_(Payment.report_month == None, Payment.report_month == '')
+        or_(Payment.report_month.is_(None), Payment.report_month == '')
     ).update(
         {'report_month': report_month},
         synchronize_session='fetch'
@@ -1057,7 +1094,7 @@ async def get_payments_for_crm(
     """Получить выплаты для CRM (не надзор)"""
     payments = db.query(Payment).filter(
         Payment.contract_id == contract_id,
-        Payment.supervision_card_id == None
+        Payment.supervision_card_id.is_(None)
     ).all()
 
     result = []
@@ -1275,7 +1312,7 @@ async def mark_payment_as_paid(
         return {
             'id': payment.id,
             'is_paid': payment.is_paid,
-            'paid_date': payment.paid_date.isoformat(),
+            'paid_date': payment.paid_date.isoformat() if payment.paid_date else None,
             'paid_by': payment.paid_by
         }
 

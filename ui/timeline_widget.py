@@ -46,7 +46,8 @@ def calc_area_coefficient(area: float) -> int:
 
 
 def networkdays(start_date, end_date):
-    """Расчёт рабочих дней между двумя датами (с учётом праздников РФ)"""
+    """Расчёт рабочих дней между двумя датами (НЕ включая start_date).
+    Одинаковые даты = 0 дней (сделано в тот же день)."""
     if not start_date or not end_date:
         return 0
     if isinstance(start_date, str):
@@ -107,7 +108,7 @@ class ProjectTimelineWidget(QWidget):
     # Сигнал об обновлении дедлайна проекта (строка 'yyyy-MM-dd')
     deadline_updated = pyqtSignal(str)
 
-    def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None):
+    def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None, readonly=False):
         super().__init__(parent)
         self.card_data = card_data
         self.data = data
@@ -116,6 +117,7 @@ class ProjectTimelineWidget(QWidget):
         self.employee = employee
         self.entries = []
         self._loading = False
+        self._readonly = readonly
 
         # Получаем данные контракта из локальной БД (мгновенно, без API)
         contract_id = card_data.get('contract_id')
@@ -768,18 +770,19 @@ class ProjectTimelineWidget(QWidget):
                 row_bg = '#FFFFFF'
 
                 entry_status = entry.get('status', '')
-                if not is_in_scope:
-                    row_bg = '#E0E0E0'
-                elif entry_status == 'skipped':
+                has_date = bool(entry.get('actual_date'))
+                if entry_status == 'skipped':
                     row_bg = '#F5F5F5'
                     status_text = 'Пропущен'
-                elif actual_days > 0 and norm_days_val > 0:
+                elif has_date and norm_days_val > 0:
                     if actual_days <= norm_days_val:
                         status_text = 'В срок'
                         row_bg = '#E8F5E9'
                     else:
                         status_text = 'Просрочен'
                         row_bg = '#FFEBEE'
+                elif not is_in_scope:
+                    row_bg = '#E0E0E0'
 
                 # Кол 0: Название
                 self.table.setCellWidget(row, 0,
@@ -885,8 +888,8 @@ class ProjectTimelineWidget(QWidget):
                     date_layout.addWidget(pencil_btn, 0)
                     self.table.setCellWidget(row, 1, date_container)
 
-                # Кол 2: Кол-во дней
-                days_text = str(actual_days) if actual_days > 0 else ''
+                # Кол 2: Кол-во дней (показываем "0" если дата заполнена)
+                days_text = str(actual_days) if has_date else ''
                 self.table.setCellWidget(row, 2,
                     self._make_cell_label(days_text, row_bg))
 
