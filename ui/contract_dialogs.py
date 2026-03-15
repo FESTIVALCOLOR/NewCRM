@@ -1983,10 +1983,9 @@ class ContractDialog(QDialog):
         self._current_survey_link = None
 
         try:
-            if self.api_client:
-                surveys = self.api_client.get_surveys_by_contract(contract_id)
-                if isinstance(surveys, list):
-                    self._current_surveys = surveys
+            surveys = self.data.get_surveys_by_contract(contract_id)
+            if isinstance(surveys, list):
+                self._current_surveys = surveys
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f"Ошибка загрузки опросов: {e}")
@@ -2012,38 +2011,52 @@ class ContractDialog(QDialog):
                     completed_at = dt.strftime('%d.%m.%Y %H:%M')
                 except Exception:
                     pass
-            self.survey_status_label.setText(f'Опрос заполнен ({completed_at})')
-            self.survey_status_label.setStyleSheet('color: #27AE60; font-size: 12px; font-weight: bold;')
-            self.survey_create_btn.hide()
-            self.survey_resend_btn.hide()
-            self.survey_copy_link_btn.hide()
 
-            # Заполняем оценки
-            self.survey_results_widget.show()
+            # Проверяем, есть ли хотя бы одна валидная оценка
             score_fields = [
                 'nps_score', 'csat_score', 'design_score', 'deadline_score',
                 'communication_score', 'expectations_score', 'supervision_score',
             ]
-            for key in score_fields:
-                card = self.survey_score_labels.get(key)
-                if not card:
-                    continue
-                val = survey.get(key)
-                val_label = card.findChild(QLabel, 'score_value')
-                if val_label:
-                    if val is not None:
-                        val_label.setText(str(val))
-                        # Цвет по 10-балльной шкале
-                        if val >= 8:
-                            val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #27AE60; border: none;')
-                        elif val >= 6:
-                            val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #F1C40F; border: none;')
-                        elif val >= 4:
-                            val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #E67E22; border: none;')
+            has_any_score = any(survey.get(k) is not None for k in score_fields)
+
+            if not has_any_score:
+                # Опрос completed, но данные не получены (тестовый/битый)
+                self.survey_status_label.setText(
+                    f'Опрос заполнен ({completed_at}) — данные не получены (тестовый опрос)')
+                self.survey_status_label.setStyleSheet('color: #95A5A6; font-size: 12px;')
+                self.survey_create_btn.show()
+                self.survey_resend_btn.hide()
+                self.survey_copy_link_btn.hide()
+                self.survey_results_widget.hide()
+            else:
+                self.survey_status_label.setText(f'Опрос заполнен ({completed_at})')
+                self.survey_status_label.setStyleSheet('color: #27AE60; font-size: 12px; font-weight: bold;')
+                self.survey_create_btn.hide()
+                self.survey_resend_btn.hide()
+                self.survey_copy_link_btn.hide()
+
+                # Заполняем оценки
+                self.survey_results_widget.show()
+                for key in score_fields:
+                    card = self.survey_score_labels.get(key)
+                    if not card:
+                        continue
+                    val = survey.get(key)
+                    val_label = card.findChild(QLabel, 'score_value')
+                    if val_label:
+                        if val is not None:
+                            val_label.setText(str(val))
+                            # Цвет по 10-балльной шкале
+                            if val >= 8:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #27AE60; border: none;')
+                            elif val >= 6:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #F1C40F; border: none;')
+                            elif val >= 4:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #E67E22; border: none;')
+                            else:
+                                val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #E74C3C; border: none;')
                         else:
-                            val_label.setStyleSheet('font-size: 14px; font-weight: bold; color: #E74C3C; border: none;')
-                    else:
-                        val_label.setText('—')
+                            val_label.setText('—')
 
             comment = survey.get('comment', '')
             if comment:
@@ -2076,7 +2089,7 @@ class ContractDialog(QDialog):
         pt_code = pt_map.get(project_type, 'individual')
 
         try:
-            result = self.api_client.create_survey(contract_id, pt_code)
+            result = self.data.create_survey(contract_id, pt_code)
             if result and result.get('id'):
                 CustomMessageBox(self, 'Успешно',
                     'Опрос создан. Ссылка скопирована в буфер обмена.', 'info').exec_()
@@ -2089,11 +2102,11 @@ class ContractDialog(QDialog):
 
     def _resend_survey(self):
         """Переотправляет ссылку на опрос."""
-        if not self._current_surveys or not self.api_client:
+        if not self._current_surveys:
             return
         survey = self._current_surveys[-1]
         try:
-            self.api_client.resend_survey(survey['id'])
+            self.data.resend_survey(survey['id'])
             CustomMessageBox(self, 'Успешно', 'Ссылка на опрос переотправлена.', 'info').exec_()
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Ошибка переотправки:\n{e}', 'error').exec_()

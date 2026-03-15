@@ -1,30 +1,32 @@
 # -*- coding: utf-8 -*-
 """
-Вкладка «Отчеты по сотрудникам» — KPI-аналитика + отчёты по заказам и зарплатам.
+Вкладка «Отчеты по сотрудникам» — KPI-аналитика.
 
-Интегрирует:
-  - KPI-дашборд (6 карточек)
-  - Вкладки по ролям (динамические) с таблицей сравнения
-  - Детальная карточка сотрудника
-  - Существующие таблицы (выполненные заказы, зарплаты) + PDF экспорт
+Заменяет старую страницу (отчёты по заказам/зарплатам) на полноценный
+KPI-дашборд согласно руководству:
+  - 6 KPI-карточек сводного дашборда
+  - Топ-5 лучших / проблемных
+  - Вкладки по ролям с таблицей сравнения
+  - Детальная карточка сотрудника (мини-KPI, проекты, отзывы, тренд)
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QPushButton,
     QComboBox, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFileDialog, QSpinBox, QFrame, QSplitter, QGridLayout, QScrollArea,
-    QSizePolicy,
+    QSpinBox, QFrame, QGridLayout, QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QDate, QTimer
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QFont
 
 from ui.custom_combobox import CustomComboBox
+from ui.chart_widget import (
+    LineChartWidget, StackedBarChartWidget, HorizontalBarWidget,
+    MATPLOTLIB_AVAILABLE,
+)
 from database.db_manager import DatabaseManager
-from utils.pdf_utils import build_table_pdf
 from utils.icon_loader import IconLoader
 from utils.calendar_helpers import ICONS_PATH
 from utils.table_settings import apply_no_focus_delegate
 from utils.data_access import DataAccess
-from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,16 @@ ROLE_TABS = {
         ('dan', 'ДАН'),
     ],
 }
+
+# Заголовки таблицы по типу проекта
+CRM_TABLE_HEADERS = [
+    'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Ср.просрочка (дн.)',
+    'Правки', 'Нагрузка', 'NPS', 'Тренд',
+]
+SUPERVISION_TABLE_HEADERS = [
+    'Сотрудник', 'KPI', 'Закупки', 'Дефекты', 'Визиты',
+    'Экономия', 'Нагрузка', 'NPS', 'Тренд',
+]
 
 # ── Стили ─────────────────────────────────────────────────────────────
 
@@ -97,10 +109,10 @@ TABLE_STYLE = """
 
 # 4 уровня цветовой кодировки по руководству
 KPI_COLORS = {
-    'excellent': '#27AE60',   # ≥80%
-    'normal': '#F1C40F',      # 60-79%
-    'attention': '#E67E22',   # 40-59%
-    'critical': '#E74C3C',    # <40%
+    'excellent': '#2E7D32',   # ≥80%
+    'normal': '#F57F17',      # 60-79%
+    'attention': '#E65100',   # 40-59%
+    'critical': '#C62828',    # <40%
 }
 
 KPI_BG = {
@@ -108,6 +120,12 @@ KPI_BG = {
     'normal': '#FFF8E1',
     'attention': '#FFF3E0',
     'critical': '#FFEBEE',
+}
+
+TREND_ICONS = {
+    'up': '▲',
+    'down': '▼',
+    'stable': '—',
 }
 
 
@@ -138,7 +156,7 @@ def _kpi_bg(value):
 
 
 class EmployeeReportsTab(QWidget):
-    """Вкладка отчётов и аналитики сотрудников."""
+    """Вкладка KPI-аналитики по сотрудникам."""
 
     def __init__(self, employee, api_client=None):
         super().__init__()
@@ -149,6 +167,10 @@ class EmployeeReportsTab(QWidget):
         self._loading = False
         self._dashboard_cache = {}
         self._role_cache = {}
+        # Хранение ссылок на KPI-карточки (setProperty не работает с Python list!)
+        self._kpi_cards = {}
+        # Ссылки на Топ-5 виджеты
+        self._top5_widgets = {}
         self.init_ui()
 
     def init_ui(self):
@@ -177,11 +199,11 @@ class EmployeeReportsTab(QWidget):
         self.setLayout(layout)
 
     # ══════════════════════════════════════════════════════════════════
-    # СОЗДАНИЕ ВКЛАДКИ ПРОЕКТА (KPI + отчёты)
+    # СОЗДАНИЕ ВКЛАДКИ ПРОЕКТА
     # ══════════════════════════════════════════════════════════════════
 
     def _create_project_tab(self, project_type):
-        """Создаёт вкладку для типа проекта: аналитика + отчёты."""
+        """Создаёт вкладку для типа проекта — единый скролл."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -233,7 +255,7 @@ class EmployeeReportsTab(QWidget):
         filters_row.addStretch()
         layout.addLayout(filters_row)
 
-        # ── 6 KPI-карточек (по руководству) ──────────────────────
+        # ── 6 KPI-карточек ─────────────────────────────────────────
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(6)
         kpi_cards = []
@@ -250,8 +272,58 @@ class EmployeeReportsTab(QWidget):
             kpi_row.addWidget(card)
             kpi_cards.append(card)
         layout.addLayout(kpi_row)
-        # Сохраняем ссылки
-        container.setProperty('kpi_cards', kpi_cards)
+        # Сохраняем ссылки в dict (НЕ setProperty — Python list через QVariant ненадёжен)
+        self._kpi_cards[project_type] = kpi_cards
+
+        # ── Топ-5 лучших и проблемных ───────────────────────────────
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+
+        top_best = QGroupBox('Топ-5 лучших')
+        top_best.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #C8E6C9; border-radius: 6px;
+                margin-top: 10px; padding-top: 12px; background: #F1F8E9;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin; padding: 2px 8px;
+                color: #2E7D32; font-weight: bold;
+            }
+        """)
+        top_best_layout = QVBoxLayout()
+        top_best_label = QLabel('Загрузка...')
+        top_best_label.setObjectName(f'top_best_{project_type}')
+        top_best_label.setStyleSheet('color: #555; font-size: 11px;')
+        top_best_layout.addWidget(top_best_label)
+        top_best.setLayout(top_best_layout)
+        top_row.addWidget(top_best)
+
+        top_worst = QGroupBox('Топ-5 проблемных')
+        top_worst.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #FFCDD2; border-radius: 6px;
+                margin-top: 10px; padding-top: 12px; background: #FFF8F8;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin; padding: 2px 8px;
+                color: #C62828; font-weight: bold;
+            }
+        """)
+        top_worst_layout = QVBoxLayout()
+        top_worst_label = QLabel('Загрузка...')
+        top_worst_label.setObjectName(f'top_worst_{project_type}')
+        top_worst_label.setStyleSheet('color: #555; font-size: 11px;')
+        top_worst_layout.addWidget(top_worst_label)
+        top_worst.setLayout(top_worst_layout)
+        top_row.addWidget(top_worst)
+
+        layout.addLayout(top_row)
+
+        # ── График тренда KPI (6 месяцев) ────────────────────────
+        trend_chart = LineChartWidget('Тренд KPI (6 месяцев)')
+        trend_chart.setObjectName(f'dashboard_trend_{project_type}')
+        trend_chart.setFixedHeight(280)
+        layout.addWidget(trend_chart)
 
         # ── Вкладки ролей ─────────────────────────────────────────
         role_tabs = QTabWidget()
@@ -266,6 +338,9 @@ class EmployeeReportsTab(QWidget):
             QTabBar::tab:selected { background: #FFFFFF; font-weight: bold; }
         """)
 
+        is_supervision = (pt_code == 'supervision')
+        headers = SUPERVISION_TABLE_HEADERS if is_supervision else CRM_TABLE_HEADERS
+
         roles = ROLE_TABS.get(pt_code, [])
         for role_code, role_label in roles:
             tab = QWidget()
@@ -277,22 +352,42 @@ class EmployeeReportsTab(QWidget):
             table.setObjectName(f'role_table_{project_type}_{role_code}')
             table.setStyleSheet(TABLE_STYLE)
             apply_no_focus_delegate(table)
-            table.setColumnCount(8)
-            table.setHorizontalHeaderLabels([
-                'Сотрудник', 'KPI', 'Kсрок', 'Kкачество',
-                'Kскорость', 'NPS', 'Проектов', 'Зарплата'
-            ])
+            table.setColumnCount(len(headers))
+            table.setHorizontalHeaderLabels(headers)
             table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-            for col in range(1, 8):
+            for col in range(1, len(headers)):
                 table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
             table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
             table.verticalHeader().setDefaultSectionSize(32)
             table.setSelectionBehavior(QTableWidget.SelectRows)
             table.setSelectionMode(QTableWidget.SingleSelection)
+            # Убираем внутренний вертикальный скролл — пусть таблица растёт
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             table.cellClicked.connect(
                 lambda r, c, pt=project_type: self._on_employee_clicked(r, c, pt))
 
             tab_layout.addWidget(table)
+
+            # 3 графика сравнения по роли (согласно руководству)
+            charts_row = QHBoxLayout()
+            charts_row.setSpacing(6)
+
+            kpi_bar_chart = HorizontalBarWidget('Сравнение KPI')
+            kpi_bar_chart.setObjectName(f'role_kpi_chart_{project_type}_{role_code}')
+            kpi_bar_chart.setFixedHeight(260)
+            charts_row.addWidget(kpi_bar_chart)
+
+            ontime_chart = StackedBarChartWidget('В срок / Просрочки')
+            ontime_chart.setObjectName(f'role_ontime_chart_{project_type}_{role_code}')
+            ontime_chart.setFixedHeight(260)
+            charts_row.addWidget(ontime_chart)
+
+            dynamics_chart = LineChartWidget('Динамика по месяцам')
+            dynamics_chart.setObjectName(f'role_dynamics_chart_{project_type}_{role_code}')
+            dynamics_chart.setFixedHeight(260)
+            charts_row.addWidget(dynamics_chart)
+
+            tab_layout.addLayout(charts_row)
             role_tabs.addTab(tab, role_label)
 
         role_tabs.currentChanged.connect(
@@ -306,7 +401,8 @@ class EmployeeReportsTab(QWidget):
         detail_layout.setContentsMargins(0, 4, 0, 0)
 
         detail_header = QLabel('Детальная карточка сотрудника')
-        detail_header.setStyleSheet('font-size: 13px; font-weight: bold; color: #555; padding: 4px;')
+        detail_header.setStyleSheet(
+            'font-size: 13px; font-weight: bold; color: #555; padding: 4px;')
         detail_layout.addWidget(detail_header)
 
         detail_info = QLabel('Выберите сотрудника из таблицы выше')
@@ -322,66 +418,6 @@ class EmployeeReportsTab(QWidget):
         detail_layout.addWidget(detail_content)
 
         layout.addWidget(detail_widget)
-
-        # ── Существующие отчёты (заказы + зарплаты) ───────────────
-        reports_group = QGroupBox('Отчёты по заказам и зарплатам')
-        reports_layout = QVBoxLayout()
-
-        tables_row = QHBoxLayout()
-
-        # Таблица выполненных заказов
-        completed_group = QGroupBox('Выполненные заказы')
-        completed_layout = QVBoxLayout()
-        completed_table = QTableWidget()
-        apply_no_focus_delegate(completed_table)
-        completed_table.setStyleSheet(TABLE_STYLE)
-        completed_table.setObjectName(f'completed_table_{project_type}')
-        completed_table.setColumnCount(3)
-        completed_table.setHorizontalHeaderLabels(['Исполнитель', 'Должность', 'Количество'])
-        completed_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        completed_table.setMaximumHeight(250)
-        completed_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        completed_table.verticalHeader().setDefaultSectionSize(32)
-        completed_layout.addWidget(completed_table)
-        completed_group.setLayout(completed_layout)
-        tables_row.addWidget(completed_group)
-
-        # Таблица зарплат
-        salary_group = QGroupBox('Сумма зарплаты')
-        salary_layout = QVBoxLayout()
-        salary_table = QTableWidget()
-        apply_no_focus_delegate(salary_table)
-        salary_table.setStyleSheet(TABLE_STYLE)
-        salary_table.setObjectName(f'salary_table_{project_type}')
-        salary_table.setColumnCount(3)
-        salary_table.setHorizontalHeaderLabels(['Исполнитель', 'Должность', 'Сумма'])
-        salary_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        salary_table.setMaximumHeight(250)
-        salary_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        salary_table.verticalHeader().setDefaultSectionSize(32)
-        salary_layout.addWidget(salary_table)
-        salary_group.setLayout(salary_layout)
-        tables_row.addWidget(salary_group)
-
-        reports_layout.addLayout(tables_row)
-
-        # Экспорт
-        export_row = QHBoxLayout()
-        export_row.addStretch()
-        export_completed_btn = IconLoader.create_icon_button(
-            'export', 'Экспорт: Выполненные заказы', icon_size=12)
-        export_completed_btn.clicked.connect(
-            lambda: self._export_report(project_type, 'completed'))
-        export_row.addWidget(export_completed_btn)
-        export_salary_btn = IconLoader.create_icon_button(
-            'export', 'Экспорт: Зарплаты', icon_size=12)
-        export_salary_btn.clicked.connect(
-            lambda: self._export_report(project_type, 'salary'))
-        export_row.addWidget(export_salary_btn)
-        reports_layout.addLayout(export_row)
-
-        reports_group.setLayout(reports_layout)
-        layout.addWidget(reports_group)
 
         layout.addStretch()
         scroll.setWidget(container)
@@ -437,7 +473,7 @@ class EmployeeReportsTab(QWidget):
         return params
 
     def _refresh_all(self, project_type):
-        """Обновляет аналитику + отчёты для типа проекта."""
+        """Обновляет аналитику для типа проекта."""
         if self._loading:
             return
         self._loading = True
@@ -453,6 +489,8 @@ class EmployeeReportsTab(QWidget):
                 dashboard = {}
             self._dashboard_cache[project_type] = dashboard
             self._update_kpi_cards(project_type, dashboard)
+            self._update_top5(project_type, dashboard)
+            self._update_dashboard_trend(project_type, dashboard)
 
             # 2. Данные текущей роли
             container = self._get_container(project_type)
@@ -463,9 +501,6 @@ class EmployeeReportsTab(QWidget):
                     role_code = current.property('role_code')
                     if role_code:
                         self._load_role_data(project_type, role_code)
-
-            # 3. Отчёты по заказам/зарплатам (существующая логика)
-            self._load_report_tables(project_type, period)
 
         except Exception as e:
             logger.error(f"Ошибка загрузки аналитики: {e}", exc_info=True)
@@ -494,28 +529,9 @@ class EmployeeReportsTab(QWidget):
             detail = self.data_access.get_analytics_employee_detail(
                 employee_id, pt_code, **period)
         except Exception as e:
-            logger.warning(f"Ошибка загрузки деталей сотрудника {employee_id}: {e}")
+            logger.warning(f"Ошибка загрузки деталей: {e}")
             detail = {}
         self._update_detail_card(project_type, detail)
-
-    def _load_report_tables(self, project_type, period):
-        """Загрузка таблиц выполненных заказов и зарплат."""
-        try:
-            report_data = self.data_access.get_employee_report_data(
-                self.employee.get('id', 0),
-                project_type=project_type,
-                period='За год',
-                year=period.get('year', QDate.currentDate().year()),
-                quarter=period.get('quarter'),
-                month=period.get('month'),
-            )
-        except Exception as e:
-            logger.warning(f"DataAccess get_employee_report_data: {e}")
-            report_data = {'completed': [], 'salaries': []}
-
-        container = self._get_container(project_type)
-        self._fill_completed_table(container, project_type, report_data.get('completed', []))
-        self._fill_salary_table(container, project_type, report_data.get('salaries', []))
 
     # ══════════════════════════════════════════════════════════════════
     # ОБНОВЛЕНИЕ UI
@@ -523,8 +539,7 @@ class EmployeeReportsTab(QWidget):
 
     def _update_kpi_cards(self, project_type, dashboard):
         """Обновляет 6 KPI-карточек."""
-        container = self._get_container(project_type)
-        kpi_cards = container.property('kpi_cards')
+        kpi_cards = self._kpi_cards.get(project_type, [])
         if not kpi_cards or not dashboard:
             return
 
@@ -547,6 +562,64 @@ class EmployeeReportsTab(QWidget):
             if i < len(kpi_cards):
                 self._update_card_widget(kpi_cards[i], label, value, bg)
 
+    def _update_top5(self, project_type, dashboard):
+        """Обновляет Топ-5 лучших и проблемных."""
+        container = self._get_container(project_type)
+
+        # Лучшие
+        best_label = container.findChild(QLabel, f'top_best_{project_type}')
+        top = dashboard.get('top_performers', [])
+        if best_label:
+            if top:
+                lines = []
+                for i, emp in enumerate(top[:5], 1):
+                    kpi = emp.get('kpi_total', 0) or 0
+                    trend = TREND_ICONS.get(emp.get('trend', 'stable'), '—')
+                    lines.append(
+                        f"<b>{i}.</b> {emp.get('full_name', '')} — "
+                        f"<span style='color:{_kpi_color(kpi)}'><b>{kpi:.0f}%</b></span> "
+                        f"{trend}")
+                best_label.setText('<br>'.join(lines))
+            else:
+                best_label.setText('Нет данных')
+
+        # Проблемные
+        worst_label = container.findChild(QLabel, f'top_worst_{project_type}')
+        under = dashboard.get('underperformers', [])
+        if worst_label:
+            if under:
+                lines = []
+                for i, emp in enumerate(under[:5], 1):
+                    kpi = emp.get('kpi_total', 0) or 0
+                    overdue = emp.get('overdue_count', emp.get('stages_overdue', 0))
+                    lines.append(
+                        f"<b>{i}.</b> {emp.get('full_name', '')} — "
+                        f"<span style='color:{_kpi_color(kpi)}'><b>{kpi:.0f}%</b></span> "
+                        f"({overdue} просроч.)")
+                worst_label.setText('<br>'.join(lines))
+            else:
+                worst_label.setText('Нет проблемных сотрудников')
+
+    def _update_dashboard_trend(self, project_type, dashboard):
+        """Обновляет линейный график тренда KPI на дашборде (6 месяцев)."""
+        container = self._get_container(project_type)
+        chart = container.findChild(LineChartWidget, f'dashboard_trend_{project_type}')
+        if not chart or not MATPLOTLIB_AVAILABLE:
+            return
+        trend_data = dashboard.get('kpi_trend', [])
+        if not trend_data:
+            return
+        months = [t.get('month', '') for t in trend_data]
+        avg_values = [t.get('avg_kpi', 0) or 0 for t in trend_data]
+        series = [{'x': months, 'y': avg_values, 'label': 'Средний KPI', 'color': '#4A90D9'}]
+        # Если есть min/max — добавим
+        if any(t.get('min_kpi') is not None for t in trend_data):
+            min_values = [t.get('min_kpi', 0) or 0 for t in trend_data]
+            max_values = [t.get('max_kpi', 0) or 0 for t in trend_data]
+            series.append({'x': months, 'y': max_values, 'label': 'Макс', 'color': '#7ED321'})
+            series.append({'x': months, 'y': min_values, 'label': 'Мин', 'color': '#F5A623'})
+        chart.set_data(series)
+
     def _update_role_table(self, project_type, role_code, data):
         """Обновляет таблицу сравнения по роли."""
         container = self._get_container(project_type)
@@ -555,48 +628,136 @@ class EmployeeReportsTab(QWidget):
         if not table:
             return
 
+        pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
+        is_supervision = (pt_code == 'supervision')
         employees = data.get('employees', [])
         table.setRowCount(len(employees))
 
         for row, emp in enumerate(employees):
             kpi_total = emp.get('kpi_total', 0) or 0
 
-            # Имя
+            # Сотрудник
             name_item = QTableWidgetItem(emp.get('full_name', ''))
             name_item.setData(Qt.UserRole, emp.get('employee_id'))
             table.setItem(row, 0, name_item)
 
-            # KPI (цветной)
+            # KPI (цветной, жирный)
             kpi_item = QTableWidgetItem(f"{kpi_total:.0f}%")
             kpi_item.setTextAlignment(Qt.AlignCenter)
             kpi_item.setForeground(QColor(_kpi_color(kpi_total)))
-            font = kpi_item.font()
-            font.setBold(True)
-            kpi_item.setFont(font)
+            f = kpi_item.font()
+            f.setBold(True)
+            kpi_item.setFont(f)
             table.setItem(row, 1, kpi_item)
 
-            # Компоненты KPI
-            for col, key in enumerate(
-                    ['k_deadline', 'k_quality', 'k_speed', 'k_nps'], start=2):
-                val = emp.get(key)
-                text = f"{val:.0f}%" if val is not None else '—'
-                item = QTableWidgetItem(text)
-                item.setTextAlignment(Qt.AlignCenter)
-                if val is not None:
-                    item.setForeground(QColor(_kpi_color(val)))
-                table.setItem(row, col, item)
+            if is_supervision:
+                # Закупки (k_deadline = k_procurement alias)
+                self._set_pct_cell(table, row, 2, emp.get('k_deadline'))
+                # Дефекты (k_quality = k_defects alias)
+                self._set_pct_cell(table, row, 3, emp.get('k_quality'))
+                # Визиты (k_speed = k_visits alias)
+                self._set_pct_cell(table, row, 4, emp.get('k_speed'))
+                # Экономия
+                savings = emp.get('budget_savings', 0) or 0
+                sav_item = QTableWidgetItem(
+                    f"{savings:,.0f}" if savings else '—')
+                sav_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                table.setItem(row, 5, sav_item)
+            else:
+                # В срок (k_deadline)
+                self._set_pct_cell(table, row, 2, emp.get('k_deadline'))
+                # Просрочки
+                overdue = emp.get('stages_overdue', 0)
+                ov_item = QTableWidgetItem(str(overdue))
+                ov_item.setTextAlignment(Qt.AlignCenter)
+                if overdue > 0:
+                    ov_item.setForeground(QColor(KPI_COLORS['critical']))
+                table.setItem(row, 3, ov_item)
+                # Ср. просрочка (дн.)
+                avg_ov = emp.get('avg_overdue_days', 0) or 0
+                aov_item = QTableWidgetItem(
+                    f"{avg_ov:.1f}" if avg_ov else '0')
+                aov_item.setTextAlignment(Qt.AlignCenter)
+                table.setItem(row, 4, aov_item)
+                # Правки
+                rev_item = QTableWidgetItem(str(emp.get('revision_count', 0)))
+                rev_item.setTextAlignment(Qt.AlignCenter)
+                table.setItem(row, 5, rev_item)
 
-            # Проектов
-            projects_item = QTableWidgetItem(str(emp.get('concurrent_projects', 0)))
-            projects_item.setTextAlignment(Qt.AlignCenter)
-            table.setItem(row, 6, projects_item)
+            # Нагрузка
+            concurrent = emp.get('concurrent_projects', 0)
+            max_load = emp.get('recommended_max', '?')
+            load_item = QTableWidgetItem(f"{concurrent}/{max_load}")
+            load_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, 6, load_item)
 
-            # Зарплата
-            salary = emp.get('total_salary', 0)
-            salary_item = QTableWidgetItem(
-                f"{salary:,.0f}" if salary else '—')
-            salary_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            table.setItem(row, 7, salary_item)
+            # NPS
+            nps = emp.get('k_nps')
+            nps_item = QTableWidgetItem(
+                f"{nps:.0f}" if nps is not None else '—')
+            nps_item.setTextAlignment(Qt.AlignCenter)
+            if nps is not None:
+                nps_item.setForeground(QColor(_kpi_color(nps)))
+            table.setItem(row, 7, nps_item)
+
+            # Тренд
+            trend_code = emp.get('trend', 'stable')
+            trend_text = TREND_ICONS.get(trend_code, '—')
+            trend_item = QTableWidgetItem(trend_text)
+            trend_item.setTextAlignment(Qt.AlignCenter)
+            if trend_code == 'up':
+                trend_item.setForeground(QColor(KPI_COLORS['excellent']))
+            elif trend_code == 'down':
+                trend_item.setForeground(QColor(KPI_COLORS['critical']))
+            table.setItem(row, 8, trend_item)
+
+        # Автовысота таблицы (убираем внутренний скролл)
+        row_h = table.verticalHeader().defaultSectionSize()
+        header_h = table.horizontalHeader().height()
+        total_h = header_h + row_h * max(len(employees), 1) + 4
+        table.setFixedHeight(min(total_h, 500))
+
+        # ── 3 графика сравнения по роли ──────────────────────────
+        self._update_role_charts(project_type, role_code, data)
+
+    def _update_role_charts(self, project_type, role_code, data):
+        """Обновляет 3 графика сравнения по роли."""
+        if not MATPLOTLIB_AVAILABLE:
+            return
+        container = self._get_container(project_type)
+        employees = data.get('employees', [])
+        kpi_monthly = data.get('kpi_monthly', [])
+
+        # 1. Сравнение KPI (горизонтальные бары)
+        kpi_chart = container.findChild(
+            HorizontalBarWidget, f'role_kpi_chart_{project_type}_{role_code}')
+        if kpi_chart and employees:
+            names = [e.get('full_name', '')[:20] for e in employees]
+            kpis = [e.get('kpi_total', 0) or 0 for e in employees]
+            colors = [_kpi_color(k) for k in kpis]
+            kpi_chart.set_data(names, kpis, colors)
+
+        # 2. В срок / Просрочки (stacked bar)
+        ontime_chart = container.findChild(
+            StackedBarChartWidget, f'role_ontime_chart_{project_type}_{role_code}')
+        if ontime_chart and employees:
+            names = [e.get('full_name', '')[:15] for e in employees]
+            on_time_vals = [e.get('stages_on_time', 0) for e in employees]
+            overdue_vals = [e.get('stages_overdue', 0) for e in employees]
+            series = [
+                {'label': 'В срок', 'values': on_time_vals, 'color': '#7ED321'},
+                {'label': 'Просрочки', 'values': overdue_vals, 'color': '#E74C3C'},
+            ]
+            ontime_chart.set_data(names, series, stacked=True)
+
+        # 3. Динамика по месяцам (линейный)
+        dynamics_chart = container.findChild(
+            LineChartWidget, f'role_dynamics_chart_{project_type}_{role_code}')
+        if dynamics_chart and kpi_monthly:
+            months = [m.get('month', '') for m in kpi_monthly]
+            avg_vals = [m.get('avg_kpi', 0) or 0 for m in kpi_monthly]
+            series = [{'x': months, 'y': avg_vals, 'label': 'Средний KPI роли', 'color': '#4A90D9'}]
+            dynamics_chart.set_data(series)
 
     def _update_detail_card(self, project_type, detail):
         """Обновляет детальную карточку сотрудника."""
@@ -632,6 +793,9 @@ class EmployeeReportsTab(QWidget):
         reviews = detail.get('client_reviews', [])
         trend = detail.get('kpi_monthly', [])
 
+        pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
+        is_supervision = (pt_code == 'supervision')
+
         # Имя + KPI
         info_row = QHBoxLayout()
         name_label = QLabel(
@@ -652,14 +816,24 @@ class EmployeeReportsTab(QWidget):
 
         # KPI-компоненты (6 мини-карточек)
         kpi_grid = QGridLayout()
-        components = [
-            ('Kсрок', kpi.get('k_deadline')),
-            ('Kкачество', kpi.get('k_quality')),
-            ('Kскорость', kpi.get('k_speed')),
-            ('K NPS', kpi.get('k_nps')),
-            ('Проектов', f"{metrics.get('concurrent_projects', 0)}/{metrics.get('recommended_max_load', '?')}"),
-            ('Зарплата', f"{metrics.get('total_salary', 0):,.0f}"),
-        ]
+        if is_supervision:
+            components = [
+                ('KPI надзора', kpi.get('total')),
+                ('Закупки в срок', kpi.get('k_deadline')),
+                ('Дефекты', kpi.get('k_quality')),
+                ('Визиты', kpi.get('k_speed')),
+                ('Экономия', f"{metrics.get('budget_savings', 0):,.0f}"),
+                ('NPS', kpi.get('k_nps')),
+            ]
+        else:
+            components = [
+                ('Выполнение в срок', kpi.get('k_deadline')),
+                ('Качество', kpi.get('k_quality')),
+                ('Скорость', kpi.get('k_speed')),
+                ('NPS', kpi.get('k_nps')),
+                ('Нагрузка', f"{metrics.get('concurrent_projects', 0)}/{metrics.get('recommended_max_load', '?')}"),
+                ('Зарплата', f"{metrics.get('total_salary', 0):,.0f}"),
+            ]
         for col, (label, val) in enumerate(components):
             if isinstance(val, str):
                 text = val
@@ -667,48 +841,159 @@ class EmployeeReportsTab(QWidget):
                 text = f"{val:.0f}%"
             else:
                 text = '—'
-            w = self._create_mini_card(label, text)
+            color = _kpi_color(val) if isinstance(val, (int, float)) else '#333'
+            w = self._create_mini_card(label, text, color)
             kpi_grid.addWidget(w, 0, col)
 
         kpi_w = QWidget()
         kpi_w.setLayout(kpi_grid)
         layout.addWidget(kpi_w)
 
-        # Проекты
+        # 4 графика детальной карточки (согласно руководству)
+        if MATPLOTLIB_AVAILABLE:
+            charts_row1 = QHBoxLayout()
+            charts_row2 = QHBoxLayout()
+
+            # 1. Динамика KPI (линейный)
+            kpi_dynamics = LineChartWidget('Динамика KPI')
+            kpi_dynamics.setFixedHeight(240)
+            if trend:
+                months = [t.get('month', '') for t in trend[-12:]]
+                kpi_vals = [t.get('kpi_total', 0) or 0 for t in trend[-12:]]
+                kpi_dynamics.set_data([{
+                    'x': months, 'y': kpi_vals,
+                    'label': 'KPI', 'color': '#4A90D9',
+                }])
+            charts_row1.addWidget(kpi_dynamics)
+
+            # 2. Просрочки по стадиям (stacked bar)
+            stages_breakdown = detail.get('stages_breakdown', [])
+            stages_chart = StackedBarChartWidget('Стадии: в срок / просрочки')
+            stages_chart.setFixedHeight(240)
+            if stages_breakdown:
+                stage_names = [s.get('stage', '')[:15] for s in stages_breakdown]
+                on_time_vals = [s.get('on_time', 0) for s in stages_breakdown]
+                overdue_vals = [s.get('overdue', 0) for s in stages_breakdown]
+                stages_chart.set_data(stage_names, [
+                    {'label': 'В срок', 'values': on_time_vals, 'color': '#7ED321'},
+                    {'label': 'Просрочки', 'values': overdue_vals, 'color': '#E74C3C'},
+                ], stacked=True)
+            charts_row1.addWidget(stages_chart)
+
+            # 3. Нагрузка по месяцам (линейный)
+            load_monthly = detail.get('load_monthly', [])
+            load_chart = LineChartWidget('Нагрузка по месяцам')
+            load_chart.setFixedHeight(240)
+            if load_monthly:
+                l_months = [m.get('month', '') for m in load_monthly]
+                l_vals = [m.get('concurrent_projects', 0) for m in load_monthly]
+                load_chart.set_data([{
+                    'x': l_months, 'y': l_vals,
+                    'label': 'Проектов', 'color': '#F5A623',
+                }])
+            charts_row2.addWidget(load_chart)
+
+            # 4. Распределение KPI-компонентов (bar)
+            kpi_components_chart = StackedBarChartWidget('Компоненты KPI')
+            kpi_components_chart.setFixedHeight(240)
+            if kpi:
+                if is_supervision:
+                    comp_names = ['Закупки', 'Дефекты', 'Визиты', 'NPS']
+                    comp_vals = [
+                        kpi.get('k_deadline', 0) or 0, kpi.get('k_quality', 0) or 0,
+                        kpi.get('k_speed', 0) or 0, kpi.get('k_nps', 0) or 0,
+                    ]
+                else:
+                    comp_names = ['Сроки', 'Качество', 'Скорость', 'NPS']
+                    comp_vals = [
+                        kpi.get('k_deadline', 0) or 0, kpi.get('k_quality', 0) or 0,
+                        kpi.get('k_speed', 0) or 0, kpi.get('k_nps', 0) or 0,
+                    ]
+                colors = [_kpi_color(v) for v in comp_vals]
+                kpi_components_chart.set_data(comp_names, [
+                    {'label': 'Значение', 'values': comp_vals, 'color': '#4A90D9'},
+                ], stacked=False)
+            charts_row2.addWidget(kpi_components_chart)
+
+            charts_w1 = QWidget()
+            charts_w1.setLayout(charts_row1)
+            layout.addWidget(charts_w1)
+            charts_w2 = QWidget()
+            charts_w2.setLayout(charts_row2)
+            layout.addWidget(charts_w2)
+
+        # Таблица проектов (расширенная по руководству)
         if projects:
             proj_group = QGroupBox(f'Проекты ({len(projects)})')
             proj_layout = QVBoxLayout()
             proj_table = QTableWidget()
             apply_no_focus_delegate(proj_table)
             proj_table.setStyleSheet(TABLE_STYLE)
-            proj_table.setColumnCount(5)
-            proj_table.setHorizontalHeaderLabels([
-                'Договор', 'Адрес', 'Стадия', 'Статус', 'Отклонение (дн.)'])
+
+            if is_supervision:
+                cols = ['Договор', 'Адрес', 'Статус', 'Стадий',
+                        'Дефектов', 'Визитов', 'Экономия', 'NPS']
+            else:
+                cols = ['Договор', 'Адрес', 'Стадия', 'Назначен', 'Дедлайн',
+                        'Завершён', 'Отклонение', 'Правки', 'Статус', 'NPS']
+
+            proj_table.setColumnCount(len(cols))
+            proj_table.setHorizontalHeaderLabels(cols)
             proj_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
             proj_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-            for c in range(2, 5):
-                proj_table.horizontalHeader().setSectionResizeMode(c, QHeaderView.ResizeToContents)
+            for c in range(2, len(cols)):
+                proj_table.horizontalHeader().setSectionResizeMode(
+                    c, QHeaderView.ResizeToContents)
             proj_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
             proj_table.verticalHeader().setDefaultSectionSize(28)
             proj_table.setRowCount(len(projects))
-            proj_table.setMaximumHeight(min(200, 32 + len(projects) * 28))
+            proj_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            proj_table.setFixedHeight(
+                min(300, proj_table.horizontalHeader().height() + len(projects) * 28 + 4))
 
             for row, p in enumerate(projects):
                 proj_table.setItem(row, 0, QTableWidgetItem(
                     str(p.get('contract_number', ''))))
                 proj_table.setItem(row, 1, QTableWidgetItem(
                     p.get('address', '')))
-                proj_table.setItem(row, 2, QTableWidgetItem(
-                    p.get('current_stage', '')))
-                proj_table.setItem(row, 3, QTableWidgetItem(
-                    p.get('status', '')))
-                deviation = p.get('deviation_days')
-                dev_item = QTableWidgetItem(
-                    str(deviation) if deviation else '—')
-                dev_item.setTextAlignment(Qt.AlignCenter)
-                if deviation and deviation > 0:
-                    dev_item.setForeground(QColor(KPI_COLORS['critical']))
-                proj_table.setItem(row, 4, dev_item)
+
+                if is_supervision:
+                    proj_table.setItem(row, 2, QTableWidgetItem(
+                        p.get('status', '')))
+                    proj_table.setItem(row, 3, QTableWidgetItem(
+                        str(p.get('stages_completed', 0))))
+                    proj_table.setItem(row, 4, QTableWidgetItem(
+                        str(p.get('defects_found', 0))))
+                    proj_table.setItem(row, 5, QTableWidgetItem(
+                        str(p.get('visits', 0))))
+                    proj_table.setItem(row, 6, QTableWidgetItem(
+                        f"{p.get('budget_savings', 0):,.0f}"))
+                    nps = p.get('nps_score')
+                    proj_table.setItem(row, 7, QTableWidgetItem(
+                        str(nps) if nps is not None else '—'))
+                else:
+                    proj_table.setItem(row, 2, QTableWidgetItem(
+                        p.get('current_stage', p.get('stage_name', ''))))
+                    proj_table.setItem(row, 3, QTableWidgetItem(
+                        p.get('assigned_date', '') or ''))
+                    proj_table.setItem(row, 4, QTableWidgetItem(
+                        p.get('deadline', '') or ''))
+                    proj_table.setItem(row, 5, QTableWidgetItem(
+                        p.get('completed_date', '') or ''))
+                    deviation = p.get('deviation_days')
+                    dev_item = QTableWidgetItem(
+                        str(deviation) if deviation else '—')
+                    dev_item.setTextAlignment(Qt.AlignCenter)
+                    if deviation and deviation > 0:
+                        dev_item.setForeground(QColor(KPI_COLORS['critical']))
+                    proj_table.setItem(row, 6, dev_item)
+                    proj_table.setItem(row, 7, QTableWidgetItem(
+                        str(p.get('revision_count', 0))))
+                    proj_table.setItem(row, 8, QTableWidgetItem(
+                        p.get('status', '')))
+                    nps = p.get('nps_score')
+                    proj_table.setItem(row, 9, QTableWidgetItem(
+                        str(nps) if nps is not None else '—'))
 
             proj_layout.addWidget(proj_table)
             proj_group.setLayout(proj_layout)
@@ -732,7 +1017,7 @@ class EmployeeReportsTab(QWidget):
             rev_group.setLayout(rev_layout)
             layout.addWidget(rev_group)
 
-        # Тренд KPI
+        # Тренд KPI (последние 6 месяцев)
         if trend:
             trend_group = QGroupBox('Тренд KPI (последние месяцы)')
             trend_layout = QHBoxLayout()
@@ -774,95 +1059,18 @@ class EmployeeReportsTab(QWidget):
                 self._load_employee_detail(project_type, int(employee_id))
 
     # ══════════════════════════════════════════════════════════════════
-    # СУЩЕСТВУЮЩИЕ ОТЧЁТЫ (выполненные + зарплаты)
-    # ══════════════════════════════════════════════════════════════════
-
-    def _fill_completed_table(self, container, project_type, data):
-        table = container.findChild(QTableWidget, f'completed_table_{project_type}')
-        if not table:
-            return
-        table.setRowCount(len(data))
-        for row, item in enumerate(data):
-            table.setItem(row, 0, QTableWidgetItem(item.get('employee_name', '')))
-            table.setItem(row, 1, QTableWidgetItem(item.get('position', '')))
-            table.setItem(row, 2, QTableWidgetItem(str(item.get('count', 0))))
-
-    def _fill_salary_table(self, container, project_type, data):
-        table = container.findChild(QTableWidget, f'salary_table_{project_type}')
-        if not table:
-            return
-        table.setRowCount(len(data))
-        total = 0
-        for row, item in enumerate(data):
-            table.setItem(row, 0, QTableWidgetItem(item.get('employee_name', '')))
-            table.setItem(row, 1, QTableWidgetItem(item.get('position', '')))
-            salary = item.get('total_salary', 0)
-            amount_item = QTableWidgetItem(f"{salary:,.2f} ₽")
-            amount_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            table.setItem(row, 2, amount_item)
-            total += salary
-        if data:
-            table.setRowCount(len(data) + 1)
-            total_label = QTableWidgetItem('ИТОГО:')
-            font = total_label.font()
-            font.setBold(True)
-            total_label.setFont(font)
-            table.setItem(len(data), 1, total_label)
-            total_item = QTableWidgetItem(f"{total:,.2f} ₽")
-            total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            total_item.setBackground(Qt.lightGray)
-            font = total_item.font()
-            font.setBold(True)
-            total_item.setFont(font)
-            table.setItem(len(data), 2, total_item)
-
-    def _export_report(self, project_type, report_type):
-        """Экспорт отчёта в PDF."""
-        try:
-            period = self._get_period_params(project_type)
-            filename, _ = QFileDialog.getSaveFileName(
-                self, 'Сохранить отчет',
-                f'Отчет Сотрудники {report_type} от {datetime.now().strftime("%d.%m.%Y")}.pdf',
-                'PDF Files (*.pdf)')
-            if not filename:
-                return
-
-            try:
-                report_data = self.data_access.get_employee_report_data(
-                    self.employee.get('id', 0),
-                    project_type=project_type, period='За год',
-                    year=period.get('year'), quarter=period.get('quarter'),
-                    month=period.get('month'))
-            except Exception as e:
-                logger.warning("get_employee_report_data: %s", e)
-                report_data = {'completed': [], 'salaries': []}
-
-            if report_type == 'completed':
-                data = report_data.get('completed', [])
-                headers = ['Исполнитель', 'Должность', 'Количество проектов']
-                title = f'Выполненные заказы - {project_type}'
-                pdf_data = [[i.get('employee_name', ''), i.get('position', ''),
-                             str(i.get('count', 0))] for i in data]
-            else:
-                data = report_data.get('salaries', [])
-                headers = ['Исполнитель', 'Должность', 'Сумма (руб.)']
-                title = f'Зарплаты - {project_type}'
-                pdf_data = [[i.get('employee_name', ''), i.get('position', ''),
-                             f"{i.get('total_salary', 0):,.2f}"] for i in data]
-
-            build_table_pdf(
-                output_path=filename, title=title,
-                headers=headers, rows=pdf_data,
-                summary_items=[('Всего записей', str(len(pdf_data)))])
-
-        except Exception as e:
-            logger.error("Ошибка экспорта: %s", e, exc_info=True)
-            from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Ошибка', f'Ошибка экспорта:\n{e}', 'error').exec_()
-
-    # ══════════════════════════════════════════════════════════════════
     # ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
     # ══════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _set_pct_cell(table, row, col, value):
+        """Ячейка с процентом и цветовой кодировкой."""
+        text = f"{value:.0f}%" if value is not None else '—'
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(Qt.AlignCenter)
+        if value is not None:
+            item.setForeground(QColor(_kpi_color(value)))
+        table.setItem(row, col, item)
 
     @staticmethod
     def _create_kpi_card(label, value, bg):
@@ -878,7 +1086,8 @@ class EmployeeReportsTab(QWidget):
         lbl.setAlignment(Qt.AlignLeft)
         layout.addWidget(lbl)
         val = QLabel(value)
-        val.setStyleSheet('font-size: 16px; font-weight: bold; color: #333; border: none;')
+        val.setStyleSheet(
+            'font-size: 16px; font-weight: bold; color: #333; border: none;')
         val.setAlignment(Qt.AlignLeft)
         layout.addWidget(val)
         return card
@@ -892,7 +1101,7 @@ class EmployeeReportsTab(QWidget):
             labels[1].setText(value)
 
     @staticmethod
-    def _create_mini_card(label, value):
+    def _create_mini_card(label, value, color='#333'):
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
@@ -908,7 +1117,8 @@ class EmployeeReportsTab(QWidget):
         lbl.setAlignment(Qt.AlignCenter)
         layout.addWidget(lbl)
         val = QLabel(value)
-        val.setStyleSheet('font-size: 13px; font-weight: bold; color: #333; border: none;')
+        val.setStyleSheet(
+            f'font-size: 13px; font-weight: bold; color: {color}; border: none;')
         val.setAlignment(Qt.AlignCenter)
         layout.addWidget(val)
         return card

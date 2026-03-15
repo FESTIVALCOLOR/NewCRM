@@ -2934,6 +2934,34 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API get_survey_stats: {e}")
         return {}
 
+    def create_survey(self, contract_id: int, project_type: str) -> Optional[Dict]:
+        """Создаёт опрос для договора."""
+        if self._should_use_api():
+            try:
+                return self.api_client.create_survey(contract_id, project_type)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API create_survey: {e}")
+        return None
+
+    def get_surveys_by_contract(self, contract_id: int, project_type: str = None) -> List:
+        """Получает опросы по договору."""
+        if self._should_use_api():
+            try:
+                result = self.api_client.get_surveys_by_contract(contract_id, project_type)
+                return result if isinstance(result, list) else []
+            except Exception as e:
+                _safe_log(f"[DataAccess] API get_surveys_by_contract: {e}")
+        return []
+
+    def resend_survey(self, survey_id: int) -> Optional[Dict]:
+        """Переотправляет ссылку на опрос."""
+        if self._should_use_api():
+            try:
+                return self.api_client.resend_survey(survey_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] API resend_survey: {e}")
+        return None
+
     def get_project_statistics(self, **kwargs) -> Dict:
         """Получить статистику по проектам"""
         if self.api_client:
