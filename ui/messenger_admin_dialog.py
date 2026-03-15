@@ -1322,8 +1322,10 @@ class MessengerAdminDialog(QDialog):
             "project_start": "Здравствуйте, {client_name}!\n\nДобро пожаловать в проект. Ваш менеджер — {manager_name}.\nАдрес объекта: {address}.",
             "stage_complete": "Здравствуйте, {client_name}!\n\nЭтап «{stage_name}» готов к согласованию.\nПросим ознакомиться с материалами.",
             "project_end": "Здравствуйте, {client_name}!\n\nПроект завершён. Благодарим за сотрудничество!",
-            "project_paused": "Здравствуйте, {client_name}!\n\nПроект временно приостановлен.\nМенеджер {manager_name} свяжется с вами для уточнения деталей.",
-            "custom": "Здравствуйте, {client_name}!\n\n",
+            "supervision_start": "Здравствуйте, {client_name}!\n\nАвторский надзор по объекту {address} начат.\nВаш ДАН — {dan_name}.",
+            "supervision_stage_complete": "Здравствуйте, {client_name}!\n\nСтадия «{stage_name}» надзора по {address} завершена.",
+            "supervision_visit": "Здравствуйте, {client_name}!\n\nЗапланирован выезд по надзору {address} на {visit_date}.",
+            "supervision_end": "Здравствуйте, {client_name}!\n\nАвторский надзор по объекту {address} завершён. Благодарим за сотрудничество!",
         }
 
         try:

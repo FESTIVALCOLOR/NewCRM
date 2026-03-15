@@ -489,14 +489,27 @@ async def create_crm_card(
                 client_name = cl.full_name if cl else ''
             pt_key = _get_project_type_key(contract.project_type if contract else '')
 
-            # Определяем получателя: ст.менеджер (если не он создал)
+            # Определяем получателя уведомления о создании карточки
+            # Руководство §2/§3:
+            # - Инд.: всегда уведомить СМ (если не он создал)
+            # - Шабл.: если создал СМ → уведомить Менеджера; если создал другой → уведомить СМ
             sm_id = card.senior_manager_id
             # Текст по руководству: инд. — со списком специалистов, шабл. — без
             if pt_key == 'template':
                 _new_order_text = f'Новый заказ (шаблонный): {address}, {client_name}. Назначьте сотрудников.'
             else:
                 _new_order_text = f'Новый заказ: {address}, {client_name}. Назначьте сотрудников (СДП, дизайнера, чертёжника, замерщика).'
-            if sm_id and sm_id != current_user.id:
+
+            if pt_key == 'template' and sm_id and sm_id == current_user.id:
+                # Шаблонные: СМ создал → уведомить Менеджера
+                _mgr_id = card.manager_id
+                if _mgr_id and _mgr_id != current_user.id:
+                    asyncio.create_task(_dispatch_crm_notifications(
+                        db, card, contract, 'assigned',
+                        [(_mgr_id, _new_order_text)],
+                        f'Новый заказ: {address}', pt_key,
+                    ))
+            elif sm_id and sm_id != current_user.id:
                 asyncio.create_task(_dispatch_crm_notifications(
                     db, card, contract, 'assigned',
                     [(sm_id, _new_order_text)],
