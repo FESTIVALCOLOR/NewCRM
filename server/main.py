@@ -219,17 +219,29 @@ async def startup_event():
         db.close()
 
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
+    # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
+    # (иначе TelegramConflictError при --workers > 1)
     try:
         from telegram_bot_handlers import router as bot_router, AIOGRAM_AVAILABLE as BOT_AVAILABLE
         if BOT_AVAILABLE and bot_router is not None:
-            from aiogram import Dispatcher as BotDispatcher
-            import asyncio
-            tg = get_telegram_service()
-            if tg.bot_available:
-                dp = BotDispatcher()
-                dp.include_router(bot_router)
-                asyncio.create_task(dp.start_polling(tg._bot, handle_signals=False))
-                logger.info("Telegram Bot polling запущен")
+            import fcntl, asyncio
+            lock_path = "/tmp/telegram_polling.lock"
+            try:
+                _polling_lock_fd = open(lock_path, "w")
+                fcntl.flock(_polling_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # Блокировка получена — этот воркер запускает polling
+                # Сохраняем fd в app.state чтобы не собрал GC
+                app.state._polling_lock_fd = _polling_lock_fd
+                from aiogram import Dispatcher as BotDispatcher
+                tg = get_telegram_service()
+                if tg.bot_available:
+                    dp = BotDispatcher()
+                    dp.include_router(bot_router)
+                    asyncio.create_task(dp.start_polling(tg._bot, handle_signals=False))
+                    logger.info("Telegram Bot polling запущен (этот воркер — primary)")
+            except (IOError, OSError):
+                # Другой воркер уже держит блокировку — пропускаем
+                logger.info("Telegram Bot polling: пропущен (другой воркер уже обрабатывает)")
     except Exception as e:
         logger.warning(f"Telegram Bot polling: {e}")
 
