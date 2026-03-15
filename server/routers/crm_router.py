@@ -28,6 +28,62 @@ from schemas import (
     CompleteStageExecutorRequest, ManagerAcceptanceRequest,
 )
 from services.notification_service import trigger_messenger_notification
+from services.notification_dispatcher import dispatch_notification
+
+
+def _get_project_type_key(project_type: str) -> str:
+    """Преобразовать тип проекта БД в ключ для dispatch_notification."""
+    if not project_type:
+        return 'individual'
+    pt = project_type.lower()
+    if 'шабл' in pt:
+        return 'template'
+    if 'надзор' in pt:
+        return 'supervision'
+    return 'individual'
+
+
+def _find_executor_id(db: Session, card_id: int, stage_name: str) -> Optional[int]:
+    """Найти ID исполнителя стадии через StageExecutor."""
+    executor = db.query(StageExecutor).filter(
+        StageExecutor.crm_card_id == card_id,
+        StageExecutor.stage_name == stage_name,
+    ).first()
+    return executor.employee_id if executor else None
+
+
+async def _dispatch_crm_notifications(
+    db: Session,
+    card,
+    contract,
+    event_type: str,
+    recipients: list,
+    title: str,
+    project_type_key: str = None,
+):
+    """Отправить личные уведомления нескольким получателям.
+
+    Args:
+        recipients: список кортежей (employee_id, message_text)
+    """
+    if not project_type_key and contract:
+        project_type_key = _get_project_type_key(contract.project_type or '')
+    for emp_id, message in recipients:
+        if emp_id:
+            try:
+                await dispatch_notification(
+                    db=db,
+                    employee_id=emp_id,
+                    event_type=event_type,
+                    title=title,
+                    message=message,
+                    related_entity_type='crm_card',
+                    related_entity_id=card.id,
+                    project_type=project_type_key,
+                    card_id=card.id,
+                )
+            except Exception as e:
+                logger.warning(f"Ошибка dispatch_notification для employee {emp_id}: {e}")
 
 
 def _add_business_days(start_date, days: int):
@@ -392,6 +448,41 @@ async def create_crm_card(
         db.add(log)
         db.commit()
 
+        # Личное уведомление: создание карточки
+        try:
+            contract = db.query(Contract).filter(Contract.id == card.contract_id).first() if card.contract_id else None
+            address = contract.address if contract else ''
+            client_name = ''
+            if contract and contract.client_id:
+                cl = db.query(Client).filter(Client.id == contract.client_id).first()
+                client_name = cl.full_name if cl else ''
+            pt_key = _get_project_type_key(contract.project_type if contract else '')
+
+            # Определяем получателя: ст.менеджер (если не он создал)
+            sm_id = card.senior_manager_id
+            if sm_id and sm_id != current_user.id:
+                prefix = '(шаблонный) ' if pt_key == 'template' else ''
+                asyncio.create_task(_dispatch_crm_notifications(
+                    db, card, contract, 'assigned',
+                    [(sm_id, f'Новый заказ {prefix}{address}, {client_name}. Назначьте сотрудников.')],
+                    f'Новый заказ: {address}', pt_key,
+                ))
+            elif not sm_id:
+                # Если ст.менеджер не назначен — ищем по роли
+                sm = db.query(Employee).filter(
+                    Employee.position == 'Старший менеджер проектов',
+                    Employee.status == 'активный',
+                ).first()
+                if sm and sm.id != current_user.id:
+                    prefix = '(шаблонный) ' if pt_key == 'template' else ''
+                    asyncio.create_task(_dispatch_crm_notifications(
+                        db, card, contract, 'assigned',
+                        [(sm.id, f'Новый заказ {prefix}{address}, {client_name}. Назначьте сотрудников (СДП, дизайнера, чертёжника, замерщика).')],
+                        f'Новый заказ: {address}', pt_key,
+                    ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления при создании карточки: {e}")
+
         # Явная сериализация для корректного ответа
         return {
             "id": card.id,
@@ -701,6 +792,58 @@ async def move_crm_card_to_column(
                 asyncio.create_task(trigger_messenger_notification(
                     db, card.id, 'stage_complete', stage_name=old_column
                 ))
+
+        # Личные уведомления при перемещении в новую стадию / выполненный проект
+        if old_column != new_column and new_column != 'В ожидании' and old_column != 'В ожидании':
+            try:
+                address = contract.address if contract else ''
+                pt_key = _get_project_type_key(contract.project_type if contract else '')
+                notif_recipients = []
+
+                if 'Стадия' in new_column:
+                    # Определяем исполнителя и reviewer для стадии
+                    sl = new_column.lower()
+                    if 'концепция' in sl or 'визуализац' in sl or '3д' in sl:
+                        exec_id = _find_executor_id(db, card.id, new_column)
+                        exec_role = 'Дизайнер'
+                    else:
+                        exec_id = _find_executor_id(db, card.id, new_column)
+                        exec_role = 'Чертёжник'
+                    # Reviewer зависит от стадии и типа проекта
+                    if 'рабочие чертежи' in sl or ('рабочая документация' in sl):
+                        reviewer_id = card.gap_id
+                        reviewer_role = 'ГАП'
+                    elif pt_key == 'template' and ('планировочн' in sl or '3д' in sl or 'визуализац' in sl):
+                        reviewer_id = card.manager_id
+                        reviewer_role = 'Менеджер'
+                    else:
+                        reviewer_id = card.sdp_id
+                        reviewer_role = 'СДП'
+
+                    if exec_id:
+                        notif_recipients.append((
+                            exec_id,
+                            f'Проект {address} перешёл в "{new_column}". Приступайте к работе.'
+                        ))
+                    if reviewer_id:
+                        notif_recipients.append((
+                            reviewer_id,
+                            f'Проект {address} перешёл в "{new_column}". Вы — проверяющий.'
+                        ))
+
+                elif new_column == 'Выполненный проект':
+                    # Уведомление о завершении проекта: менеджер, ст.менеджер, СДП, ГАП
+                    for eid in [card.manager_id, card.senior_manager_id, card.sdp_id, card.gap_id]:
+                        if eid:
+                            notif_recipients.append((eid, f'Проект {address} завершён.'))
+
+                if notif_recipients:
+                    asyncio.create_task(_dispatch_crm_notifications(
+                        db, card, contract, 'crm_stage_change',
+                        notif_recipients, f'Смена стадии: {address}', pt_key,
+                    ))
+            except Exception as e:
+                logger.warning(f"Ошибка уведомления при перемещении карточки: {e}")
 
         return {
             'id': card.id,
@@ -1464,6 +1607,33 @@ async def workflow_submit_work(
             db, card_id, 'stage_complete', stage_name=stage_name
         ))
 
+        # Личное уведомление: "Исполнитель сдал работу" → reviewer
+        try:
+            contract = db.query(Contract).filter(Contract.id == contract_id).first()
+            address = contract.address if contract else ''
+            pt_key = _get_project_type_key(contract.project_type if contract else '')
+            sl = stage_name.lower()
+            # Определяем роль исполнителя
+            if 'концепция' in sl or 'визуализац' in sl or '3д' in sl:
+                executor_name = 'Дизайнер'
+            else:
+                executor_name = 'Чертёжник'
+            # Определяем reviewer
+            if 'рабочие чертежи' in sl or 'рабочая документация' in sl:
+                reviewer_id = card.gap_id
+            elif pt_key == 'template' and ('планировочн' in sl or '3д' in sl or 'визуализац' in sl):
+                reviewer_id = card.manager_id
+            else:
+                reviewer_id = card.sdp_id
+            if reviewer_id:
+                asyncio.create_task(_dispatch_crm_notifications(
+                    db, card, contract, 'crm_stage_change',
+                    [(reviewer_id, f'{executor_name} сдал работу по проекту {address}, стадия "{stage_name}". Проверьте.')],
+                    f'Сдача работы: {address}', pt_key,
+                ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления submit: {e}")
+
         return {"status": "submitted", "substep": entry.stage_code if entry else None}
 
     except HTTPException:
@@ -1685,6 +1855,39 @@ async def workflow_reject_work(
         _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
+
+        # Личные уведомления: "На исправление" → исполнитель + ст.менеджер (правило 3)
+        try:
+            contract = db.query(Contract).filter(Contract.id == contract_id).first()
+            address = contract.address if contract else ''
+            pt_key = _get_project_type_key(contract.project_type if contract else '')
+            rev_count = wf.revision_count or 1
+            # Определяем исполнителя
+            sl = stage_name.lower()
+            if 'концепция' in sl or 'визуализац' in sl or '3д' in sl:
+                exec_id = _find_executor_id(db, card.id, stage_name)
+            else:
+                exec_id = _find_executor_id(db, card.id, stage_name)
+            notif_recipients = []
+            if exec_id:
+                notif_recipients.append((
+                    exec_id,
+                    f'Работа по проекту {address} возвращена на исправление (правка #{rev_count}).'
+                ))
+            # Правило 3: дубль ст.менеджеру
+            if card.senior_manager_id:
+                notif_recipients.append((
+                    card.senior_manager_id,
+                    f'Проект {address}: работа возвращена на исправление (правка #{rev_count}).'
+                ))
+            if notif_recipients:
+                asyncio.create_task(_dispatch_crm_notifications(
+                    db, card, contract, 'crm_stage_change',
+                    notif_recipients, f'На исправление: {address}', pt_key,
+                ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления reject: {e}")
+
         return {"status": "rejected", "revision_count": wf.revision_count, "revision_file_path": wf.revision_file_path}
 
     except HTTPException:
@@ -1894,6 +2097,25 @@ async def workflow_client_send(
         extra_context={'deadline': deadline_str} if deadline_str else None
     ))
 
+    # Личные уведомления: "Отправлено клиенту" → ст.менеджер
+    try:
+        contract = db.query(Contract).filter(Contract.id == contract_id).first()
+        address = contract.address if contract else ''
+        pt_key = _get_project_type_key(contract.project_type if contract else '')
+        notif_recipients = []
+        if card.senior_manager_id:
+            notif_recipients.append((
+                card.senior_manager_id,
+                f'Проект {address} отправлен клиенту на согласование ({stage_name}).'
+            ))
+        if notif_recipients:
+            asyncio.create_task(_dispatch_crm_notifications(
+                db, card, contract, 'crm_stage_change',
+                notif_recipients, f'Отправлено клиенту: {address}', pt_key,
+            ))
+    except Exception as e:
+        logger.warning(f"Ошибка уведомления client-send: {e}")
+
     return {"status": "sent_to_client"}
 
 
@@ -1962,9 +2184,13 @@ async def workflow_client_approved(
                                 pass
 
             # Определяем, есть ли следующий "круг" (substage_group)
+            # Полная таблица переходов из docs/workflow-guide.md
             ROUND_PAIRS = {
+                'Подэтап 1.1': 'Подэтап 1.2',
                 'Подэтап 1.2': 'Подэтап 1.3',
+                'Подэтап 2.2': 'Подэтап 2.3',
                 'Подэтап 2.3': 'Подэтап 2.4',
+                'Подэтап 2.5': 'Подэтап 2.6',
                 'Подэтап 2.6': 'Подэтап 2.7',
             }
             current_subgroup = wf.current_substage_group if wf else None
@@ -1981,8 +2207,29 @@ async def workflow_client_approved(
                 if not has_next_round:
                     logger.warning(f"client-ok: ROUND_PAIRS указывает на '{next_round_name}', но в таймлайне его нет (contract_id={contract_id}, stage_group={stage_group})")
 
-            # client-ok ВСЕГДА ставит pending_decision — UI решает что показать
-            wf.status = 'pending_decision'
+            # Подэтап 2.1 (Мудборды): проверяем есть ли ещё незаполненные клиентские строки
+            # Если есть — это первое согласование, нужно предложить "Продолжить правки / Закрыть"
+            has_remaining_client = False
+            if client_entry and contract_id and stage_group and current_subgroup:
+                remaining_client = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group,
+                    ProjectTimelineEntry.substage_group == current_subgroup,
+                    ProjectTimelineEntry.executor_role == 'Клиент',
+                    ProjectTimelineEntry.sort_order > client_entry.sort_order,
+                    or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ''),
+                    or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != 'skipped'),
+                ).first()
+                has_remaining_client = remaining_client is not None
+
+            # Статус зависит от наличия оставшихся клиентских строк в том же подэтапе
+            if has_remaining_client:
+                # Внутри подэтапа с несколькими клиентскими кругами (2.1 Мудборды)
+                # Исполнитель продолжает работу — не нужен pending_decision
+                wf.status = 'in_progress'
+            else:
+                # UI покажет диалог выбора: круг 2 / закрыть / платный круг
+                wf.status = 'pending_decision'
 
             if not has_next_round:
                 # Нет следующего круга — продвигаем current_substep_code
@@ -2013,6 +2260,13 @@ async def workflow_client_approved(
             wf.revision_count = 0  # сбрасываем счётчик правок для нового подэтапа
             wf.updated_at = datetime.utcnow()
 
+        # Определяем тип проекта (для решения о платных кругах)
+        project_type = ''
+        if contract_id:
+            contract = db.query(Contract).filter(Contract.id == contract_id).first()
+            if contract:
+                project_type = contract.project_type or ''
+
         # K11: Запись в историю
         db.add(ActionHistory(
             user_id=current_user.id, action_type='client_approved',
@@ -2034,14 +2288,47 @@ async def workflow_client_approved(
         except Exception:
             logger.warning(f"Не удалось отправить уведомление для карточки {card_id}")
 
+        # Личные уведомления: "Клиент согласовал" → ст.менеджер + исполнитель
+        try:
+            contract_obj = db.query(Contract).filter(Contract.id == contract_id).first()
+            address = contract_obj.address if contract_obj else ''
+            pt_key = _get_project_type_key(contract_obj.project_type if contract_obj else '')
+            sl = stage_name.lower()
+            notif_recipients = []
+            if card.senior_manager_id:
+                notif_recipients.append((
+                    card.senior_manager_id,
+                    f'Клиент согласовал {stage_name} по проекту {address}.'
+                ))
+            # Исполнитель
+            if 'концепция' in sl or 'визуализац' in sl or '3д' in sl:
+                exec_id = _find_executor_id(db, card.id, stage_name)
+            else:
+                exec_id = _find_executor_id(db, card.id, stage_name)
+            if exec_id:
+                notif_recipients.append((
+                    exec_id,
+                    f'Клиент согласовал работу по проекту {address}, стадия "{stage_name}".'
+                ))
+            if notif_recipients:
+                asyncio.create_task(_dispatch_crm_notifications(
+                    db, card, contract_obj, 'crm_stage_change',
+                    notif_recipients, f'Клиент согласовал: {address}', pt_key,
+                ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления client-ok: {e}")
+
         has_next = has_next_round if wf else False
         next_name = next_round_name if wf else None
         is_last = is_last_round if wf else False
+        remaining_client = has_remaining_client if wf else False
         return {
             "status": "client_approved",
             "has_next_round": has_next,
             "next_round_name": next_name,
             "is_last_round": is_last,
+            "has_remaining_client": remaining_client,
+            "project_type": project_type,
         }
 
     except HTTPException:
@@ -2056,10 +2343,13 @@ async def workflow_client_approved(
 # WORKFLOW: ADVANCE ROUND / CLOSE STAGE / ADD EXTRA ROUND
 # =========================
 
-# Пары кругов: круг 1 → круг 2
+# Пары кругов: подэтап → следующий (полная таблица из docs/workflow-guide.md)
 _ROUND_PAIRS = {
+    'Подэтап 1.1': 'Подэтап 1.2',
     'Подэтап 1.2': 'Подэтап 1.3',
+    'Подэтап 2.2': 'Подэтап 2.3',
     'Подэтап 2.3': 'Подэтап 2.4',
+    'Подэтап 2.5': 'Подэтап 2.6',
     'Подэтап 2.6': 'Подэтап 2.7',
 }
 
@@ -2293,6 +2583,32 @@ async def workflow_sign_act(
             ))
         except Exception:
             logger.warning(f"Не удалось отправить уведомление sign-act для карточки {card_id}")
+
+        # Личные уведомления: "Акт подписан" → reviewer (СДП/ГАП/Менеджер)
+        try:
+            contract = db.query(Contract).filter(Contract.id == contract_id).first()
+            address = contract.address if contract else ''
+            pt_key = _get_project_type_key(contract.project_type if contract else '')
+            sl = stage_name.lower()
+            if 'рабочие чертежи' in sl or 'рабочая документация' in sl:
+                reviewer_id = card.gap_id
+            elif pt_key == 'template' and ('планировочн' in sl or '3д' in sl or 'визуализац' in sl):
+                reviewer_id = card.manager_id
+            else:
+                reviewer_id = card.sdp_id
+            notif_recipients = []
+            if reviewer_id:
+                notif_recipients.append((
+                    reviewer_id,
+                    f'Акт по {stage_name} проекта {address} подписан.'
+                ))
+            if notif_recipients:
+                asyncio.create_task(_dispatch_crm_notifications(
+                    db, card, contract, 'crm_stage_change',
+                    notif_recipients, f'Акт подписан: {address}', pt_key,
+                ))
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления sign-act: {e}")
 
         return {"status": "act_signed", "stage_completed": True}
 

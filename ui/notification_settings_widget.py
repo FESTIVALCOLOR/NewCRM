@@ -111,7 +111,7 @@ class NotificationSettingsWidget(QWidget):
         self._chk_assigned = QCheckBox("Назначение исполнителем")
         self._chk_deadline = QCheckBox("Предупреждение о дедлайне")
         self._chk_payment = QCheckBox("Создание оплаты")
-        self._chk_supervision = QCheckBox("Новый надзор")
+        self._chk_supervision = QCheckBox("Авторский надзор")
 
         # Чекбокс оплаты виден только если у просматривающего есть права на оплаты
         if not self._viewer_has_payment_perm:
@@ -123,6 +123,34 @@ class NotificationSettingsWidget(QWidget):
             events_layout.addWidget(chk)
 
         layout.addWidget(events_group)
+
+        # Секция фильтра по типам проектов
+        projects_group = QGroupBox("Типы проектов (каналы)")
+        projects_group.setStyleSheet(tg_group.styleSheet())
+        projects_layout = QVBoxLayout(projects_group)
+
+        self._chk_individual = QCheckBox("Индивидуальные проекты")
+        self._chk_template = QCheckBox("Шаблонные проекты")
+
+        for chk in [self._chk_individual, self._chk_template]:
+            chk.setStyleSheet("font-size: 13px; padding: 2px 0;")
+            projects_layout.addWidget(chk)
+
+        layout.addWidget(projects_group)
+
+        # Секция дублирования уведомлений (видна старшим менеджерам и руководству)
+        self._duplication_group = QGroupBox("Дублирование уведомлений")
+        self._duplication_group.setStyleSheet(tg_group.styleSheet())
+        dup_layout = QVBoxLayout(self._duplication_group)
+
+        self._chk_duplicate_info = QCheckBox("Получать информационные дубли (уведомления подчинённых)")
+        self._chk_revision_info = QCheckBox("Получать уведомления об исправлениях подчинённых")
+
+        for chk in [self._chk_duplicate_info, self._chk_revision_info]:
+            chk.setStyleSheet("font-size: 13px; padding: 2px 0;")
+            dup_layout.addWidget(chk)
+
+        layout.addWidget(self._duplication_group)
 
         # Кнопки
         btn_layout = QHBoxLayout()
@@ -221,6 +249,10 @@ class NotificationSettingsWidget(QWidget):
         self._chk_deadline.setChecked(settings.get('notify_deadline', True))
         self._chk_payment.setChecked(settings.get('notify_payment', False))
         self._chk_supervision.setChecked(settings.get('notify_supervision', False))
+        self._chk_individual.setChecked(settings.get('notify_individual', True))
+        self._chk_template.setChecked(settings.get('notify_template', True))
+        self._chk_duplicate_info.setChecked(settings.get('notify_duplicate_info', False))
+        self._chk_revision_info.setChecked(settings.get('notify_revision_info', False))
 
         connected = settings.get('telegram_connected', False)
         if connected:
@@ -243,6 +275,10 @@ class NotificationSettingsWidget(QWidget):
             'notify_deadline': self._chk_deadline.isChecked(),
             'notify_payment': self._chk_payment.isChecked(),
             'notify_supervision': self._chk_supervision.isChecked(),
+            'notify_individual': self._chk_individual.isChecked(),
+            'notify_template': self._chk_template.isChecked(),
+            'notify_duplicate_info': self._chk_duplicate_info.isChecked(),
+            'notify_revision_info': self._chk_revision_info.isChecked(),
         }
 
         if self.data_access:

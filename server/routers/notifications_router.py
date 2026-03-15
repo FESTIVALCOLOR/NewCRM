@@ -45,7 +45,13 @@ async def get_notification_settings(
 
     settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
     if not settings:
-        # Вернуть дефолтные настройки (без записи в БД)
+        # Роли, работающие с надзором, получают notify_supervision=True по умолчанию
+        supervision_roles = {
+            'ДАН', 'Старший менеджер проектов',
+            'Руководитель студии', 'admin', 'director',
+        }
+        default_supervision = employee.role in supervision_roles
+        is_senior_manager = employee.position == 'Старший менеджер проектов'
         return NotificationSettingsResponse(
             employee_id=employee_id,
             telegram_enabled=True,
@@ -54,7 +60,11 @@ async def get_notification_settings(
             notify_assigned=True,
             notify_deadline=True,
             notify_payment=False,
-            notify_supervision=False,
+            notify_supervision=default_supervision,
+            notify_individual=True,
+            notify_template=True,
+            notify_duplicate_info=is_senior_manager,
+            notify_revision_info=is_senior_manager,
             telegram_connected=bool(employee.telegram_user_id),
         )
 
@@ -67,6 +77,10 @@ async def get_notification_settings(
         notify_deadline=settings.notify_deadline,
         notify_payment=settings.notify_payment,
         notify_supervision=settings.notify_supervision,
+        notify_individual=getattr(settings, 'notify_individual', True),
+        notify_template=getattr(settings, 'notify_template', True),
+        notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
+        notify_revision_info=getattr(settings, 'notify_revision_info', False),
         telegram_connected=bool(employee.telegram_user_id),
     )
 
@@ -101,6 +115,10 @@ async def update_notification_settings(
     settings.notify_deadline = data.notify_deadline
     settings.notify_payment = data.notify_payment
     settings.notify_supervision = data.notify_supervision
+    settings.notify_individual = data.notify_individual
+    settings.notify_template = data.notify_template
+    settings.notify_duplicate_info = data.notify_duplicate_info
+    settings.notify_revision_info = data.notify_revision_info
     settings.updated_at = datetime.utcnow()
 
     db.commit()
@@ -114,6 +132,10 @@ async def update_notification_settings(
         notify_deadline=settings.notify_deadline,
         notify_payment=settings.notify_payment,
         notify_supervision=settings.notify_supervision,
+        notify_individual=getattr(settings, 'notify_individual', True),
+        notify_template=getattr(settings, 'notify_template', True),
+        notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
+        notify_revision_info=getattr(settings, 'notify_revision_info', False),
         telegram_connected=bool(employee.telegram_user_id),
     )
 

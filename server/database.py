@@ -76,6 +76,9 @@ class Employee(Base):
     telegram_link_token = Column(String(32), nullable=True, index=True)
     telegram_link_token_expires = Column(DateTime, nullable=True)
 
+    # Telegram username (для @упоминаний в групповых чатах)
+    telegram_username = Column(String(100), nullable=True)
+
     # Временный пароль для invite-письма (plaintext, очищается после первого входа)
     invite_temp_password = Column(String, nullable=True)
 
@@ -266,6 +269,14 @@ class NotificationSettings(Base):
     notify_deadline = Column(Boolean, default=True)
     notify_payment = Column(Boolean, default=False)
     notify_supervision = Column(Boolean, default=False)
+
+    # Фильтры по типу проекта
+    notify_individual = Column(Boolean, default=True)
+    notify_template = Column(Boolean, default=True)
+
+    # Дублирование уведомлений (для ст. менеджера)
+    notify_duplicate_info = Column(Boolean, default=False)
+    notify_revision_info = Column(Boolean, default=False)
 
     # Временные метки
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -888,6 +899,7 @@ class MessengerScript(Base):
     message_template = Column(Text, nullable=False)
     memo_file_path = Column(String, nullable=True)  # Путь к PDF-памятке на Яндекс.Диске
     use_auto_deadline = Column(Boolean, default=True)
+    attach_stage_files = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
 

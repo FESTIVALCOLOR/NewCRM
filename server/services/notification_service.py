@@ -10,6 +10,7 @@ from database import (
     Employee, Client, Contract,
     CRMCard, SupervisionCard,
     MessengerChat, MessengerChatMember, MessengerScript, MessengerMessageLog,
+    MessengerSetting, ProjectFile, StageWorkflowState,
     SessionLocal,
 )
 from telegram_service import get_telegram_service
@@ -42,6 +43,16 @@ def decline_name_dative(full_name: str) -> str:
         return full_name
 
 
+def _get_first_name(full_name: str) -> str:
+    """Извлечь имя клиента из ФИО (Фамилия Имя Отчество → Имя)."""
+    if not full_name:
+        return ''
+    parts = full_name.strip().split()
+    if len(parts) >= 2:
+        return parts[1]  # Фамилия Имя → Имя
+    return parts[0]
+
+
 def _tg_mention(employee) -> str:
     """Форматировать имя сотрудника как Telegram-упоминание (кликабельная ссылка).
     Если telegram_user_id задан — HTML-ссылка tg://user?id=XXX, иначе просто имя."""
@@ -52,27 +63,79 @@ def _tg_mention(employee) -> str:
     return name
 
 
+def _get_username(employee) -> str:
+    """Получить telegram_username сотрудника (без @)."""
+    return getattr(employee, 'telegram_username', '') or ''
+
+
+def _get_stage_files(db: Session, contract_id: int, stage: str) -> str:
+    """Получить ссылки на файлы стадии для подстановки в {stage_files}."""
+    if not contract_id or not stage:
+        return ''
+    files = db.query(ProjectFile).filter(
+        ProjectFile.contract_id == contract_id,
+        ProjectFile.stage == stage,
+    ).order_by(ProjectFile.file_order).all()
+
+    if not files:
+        return ''
+
+    links = []
+    for f in files:
+        if f.public_link:
+            links.append(f'📎 {f.file_name}: {f.public_link}')
+        elif f.yandex_path:
+            links.append(f'📎 {f.file_name} (Яндекс.Диск: {f.yandex_path})')
+    if not links:
+        return ''
+    return '\n'.join(links)
+
+
+def _get_review_link(db: Session) -> str:
+    """Получить ссылку на отзывы из MessengerSetting."""
+    setting = db.query(MessengerSetting).filter(
+        MessengerSetting.setting_key == 'review_link'
+    ).first()
+    return setting.setting_value if setting and setting.setting_value else ''
+
+
 def build_script_context(db: Session, card, contract) -> dict:
     """Собрать контекст переменных для скриптов"""
     ctx = {
         'client_name': '',
+        'client_first_name': '',
         'stage_name': '',
         'deadline': '',
+        'deadline_date': '',
         'manager_name': '',
         'senior_manager': '',
         'sdp': '',
         'director': '',
+        'dan': '',
         'address': contract.address or '',
         'city': contract.city or '',
         'project_type': contract.project_type or '',
         'contract_number': contract.contract_number or '',
         'area': str(contract.area or ''),
-        # Дательный падеж (будут заполнены ниже)
+        # Usernames
+        'senior_manager_username': '',
+        'manager_username': '',
+        'sdp_username': '',
+        'director_username': '',
+        'dan_username': '',
+        # Дательный падеж
         'client_name_dat': '',
         'manager_name_dat': '',
         'senior_manager_dat': '',
         'sdp_dat': '',
         'director_dat': '',
+        # Файлы и ссылки
+        'stage_files': '',
+        'review_link': _get_review_link(db),
+        'revision_count': '',
+        'visit_date': '',
+        'pause_reason': '',
+        'amount': '',
     }
 
     # Клиент
@@ -80,6 +143,7 @@ def build_script_context(db: Session, card, contract) -> dict:
         client = db.query(Client).filter(Client.id == contract.client_id).first()
         if client:
             ctx['client_name'] = client.full_name or ''
+            ctx['client_first_name'] = _get_first_name(client.full_name or '')
             ctx['client_name_dat'] = decline_name_dative(client.full_name or '')
 
     # Менеджер
@@ -87,6 +151,7 @@ def build_script_context(db: Session, card, contract) -> dict:
         mgr = db.query(Employee).filter(Employee.id == card.manager_id).first()
         if mgr:
             ctx['manager_name'] = _tg_mention(mgr)
+            ctx['manager_username'] = _get_username(mgr)
             ctx['manager_name_dat'] = decline_name_dative(mgr.full_name or '')
 
     # Старший менеджер
@@ -94,6 +159,7 @@ def build_script_context(db: Session, card, contract) -> dict:
         sm = db.query(Employee).filter(Employee.id == card.senior_manager_id).first()
         if sm:
             ctx['senior_manager'] = _tg_mention(sm)
+            ctx['senior_manager_username'] = _get_username(sm)
             ctx['senior_manager_dat'] = decline_name_dative(sm.full_name or '')
 
     # СДП
@@ -101,13 +167,34 @@ def build_script_context(db: Session, card, contract) -> dict:
         sdp = db.query(Employee).filter(Employee.id == card.sdp_id).first()
         if sdp:
             ctx['sdp'] = _tg_mention(sdp)
+            ctx['sdp_username'] = _get_username(sdp)
             ctx['sdp_dat'] = decline_name_dative(sdp.full_name or '')
 
     # Руководитель студии
     director = db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
     if director:
         ctx['director'] = _tg_mention(director)
+        ctx['director_username'] = _get_username(director)
         ctx['director_dat'] = decline_name_dative(director.full_name or '')
+
+    # ДАН (для надзора — у CRMCard может не быть dan_id)
+    dan_id = getattr(card, 'dan_id', None)
+    if dan_id:
+        dan = db.query(Employee).filter(Employee.id == dan_id).first()
+        if dan:
+            ctx['dan'] = _tg_mention(dan)
+            ctx['dan_username'] = _get_username(dan)
+
+    # revision_count из StageWorkflowState
+    card_id = getattr(card, 'id', None)
+    column_name = getattr(card, 'column_name', None)
+    if card_id and column_name:
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.card_id == card_id,
+            StageWorkflowState.stage_name == column_name,
+        ).first()
+        if wf and wf.revision_count:
+            ctx['revision_count'] = str(wf.revision_count)
 
     return ctx
 
@@ -191,29 +278,7 @@ async def trigger_messenger_notification(
         if not chat or not chat.telegram_chat_id:
             return  # Чат не создан или не привязан к Telegram
 
-        # Найти подходящий скрипт
-        scripts_query = own_db.query(MessengerScript).filter(
-            MessengerScript.script_type == script_type,
-            MessengerScript.is_enabled == True
-        )
-        # Для stage_complete — ищем скрипт конкретной стадии или общий
-        if script_type == 'stage_complete' and stage_name:
-            specific = scripts_query.filter(
-                MessengerScript.stage_name == stage_name
-            ).first()
-            if specific:
-                script = specific
-            else:
-                script = scripts_query.filter(
-                    (MessengerScript.stage_name == None) | (MessengerScript.stage_name == '')
-                ).first()
-        else:
-            script = scripts_query.first()
-
-        if not script:
-            return  # Нет включённого скрипта для этого события
-
-        # Собрать контекст
+        # Получить card и contract для определения project_type
         card = own_db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
         if not card:
             return
@@ -221,10 +286,29 @@ async def trigger_messenger_notification(
         if not contract:
             return
 
+        # Определить тип проекта для фильтрации скриптов
+        card_project_type = contract.project_type or ''
+
+        # Найти подходящий скрипт с фильтром по project_type
+        script = _find_matching_script(
+            own_db, script_type, stage_name, card_project_type
+        )
+
+        if not script:
+            return  # Нет включённого скрипта для этого события
+
+        # Собрать контекст
         ctx = build_script_context(own_db, card, contract)
         ctx['stage_name'] = stage_name or card.column_name or ''
         if extra_context:
             ctx.update(extra_context)
+
+        # Добавить stage_files если скрипт требует
+        if script.attach_stage_files and contract.id:
+            stage_for_files = stage_name or card.column_name or ''
+            files_text = _get_stage_files(own_db, contract.id, stage_for_files)
+            if files_text:
+                ctx['stage_files'] = files_text
 
         # Отправить через Telegram
         tg = get_telegram_service()
@@ -284,10 +368,11 @@ async def trigger_supervision_notification(
     supervision_card_id: int,
     script_type: str,
     stage_name: str = "",
+    extra_context: dict = None,
 ):
     """
     Хук автоуведомлений для надзора: найти чат -> скрипт -> отправить.
-    script_type: 'supervision_stage_complete' | 'supervision_move'
+    script_type: 'supervision_start' | 'supervision_stage_complete' | 'supervision_visit' | 'supervision_end'
     """
     # С7: Создаём собственную сессию — переданная db может быть закрыта
     own_db = SessionLocal()
@@ -301,22 +386,9 @@ async def trigger_supervision_notification(
             return
 
         # Найти подходящий скрипт
-        scripts_query = own_db.query(MessengerScript).filter(
-            MessengerScript.script_type == script_type,
-            MessengerScript.is_enabled == True
+        script = _find_matching_script(
+            own_db, script_type, stage_name, 'Авторский надзор'
         )
-        if stage_name:
-            specific = scripts_query.filter(
-                MessengerScript.stage_name == stage_name
-            ).first()
-            if specific:
-                script = specific
-            else:
-                script = scripts_query.filter(
-                    (MessengerScript.stage_name == None) | (MessengerScript.stage_name == '')
-                ).first()
-        else:
-            script = scripts_query.first()
 
         if not script:
             return
@@ -333,12 +405,22 @@ async def trigger_supervision_notification(
         ctx = {
             'stage_name': stage_name or sv_card.column_name or '',
             'client_name': '',
+            'client_first_name': '',
             'address': contract.address or '',
             'city': contract.city or '',
             'contract_number': contract.contract_number or '',
             'senior_manager': '',
+            'senior_manager_username': '',
             'dan': '',
+            'dan_username': '',
+            'director': '',
+            'director_username': '',
             'deadline': '',
+            'deadline_date': '',
+            'review_link': _get_review_link(own_db),
+            'visit_date': '',
+            'pause_reason': '',
+            'stage_files': '',
         }
 
         # Клиент
@@ -346,18 +428,38 @@ async def trigger_supervision_notification(
             client = own_db.query(Client).filter(Client.id == contract.client_id).first()
             if client:
                 ctx['client_name'] = client.full_name or ''
+                ctx['client_first_name'] = _get_first_name(client.full_name or '')
 
         # Ст. менеджер
         if sv_card.senior_manager_id:
             sm = own_db.query(Employee).filter(Employee.id == sv_card.senior_manager_id).first()
             if sm:
                 ctx['senior_manager'] = _tg_mention(sm)
+                ctx['senior_manager_username'] = _get_username(sm)
 
         # ДАН
         if sv_card.dan_id:
             dan = own_db.query(Employee).filter(Employee.id == sv_card.dan_id).first()
             if dan:
                 ctx['dan'] = _tg_mention(dan)
+                ctx['dan_username'] = _get_username(dan)
+
+        # Руководитель студии
+        director = own_db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
+        if director:
+            ctx['director'] = _tg_mention(director)
+            ctx['director_username'] = _get_username(director)
+
+        # Extra context
+        if extra_context:
+            ctx.update(extra_context)
+
+        # Stage files для промежуточных скриптов
+        if script.attach_stage_files and contract.id:
+            stage_for_files = stage_name or sv_card.column_name or ''
+            files_text = _get_stage_files(own_db, contract.id, stage_for_files)
+            if files_text:
+                ctx['stage_files'] = files_text
 
         # Отправить через Telegram
         tg = get_telegram_service()
@@ -407,3 +509,57 @@ async def trigger_supervision_notification(
         logger.error(f"Ошибка автоуведомления надзора (sv_card={supervision_card_id}): {e}")
     finally:
         own_db.close()
+
+
+def _find_matching_script(
+    db: Session,
+    script_type: str,
+    stage_name: str,
+    project_type: str,
+) -> MessengerScript | None:
+    """
+    Найти подходящий скрипт с фильтрацией по project_type.
+
+    Приоритет:
+    1. Точное совпадение script_type + project_type + stage_name
+    2. script_type + project_type + stage_name=NULL (общий для project_type)
+    3. script_type + project_type=NULL + stage_name (общий для всех типов)
+    4. script_type + project_type=NULL + stage_name=NULL (универсальный fallback)
+    """
+    base = db.query(MessengerScript).filter(
+        MessengerScript.script_type == script_type,
+        MessengerScript.is_enabled == True,
+    )
+
+    # 1. Точное совпадение: project_type + stage_name
+    if stage_name and project_type:
+        script = base.filter(
+            MessengerScript.project_type == project_type,
+            MessengerScript.stage_name == stage_name,
+        ).first()
+        if script:
+            return script
+
+    # 2. project_type + без stage_name
+    if project_type:
+        script = base.filter(
+            MessengerScript.project_type == project_type,
+            (MessengerScript.stage_name == None) | (MessengerScript.stage_name == ''),
+        ).first()
+        if script:
+            return script
+
+    # 3. Без project_type + stage_name
+    if stage_name:
+        script = base.filter(
+            (MessengerScript.project_type == None) | (MessengerScript.project_type == ''),
+            MessengerScript.stage_name == stage_name,
+        ).first()
+        if script:
+            return script
+
+    # 4. Универсальный fallback
+    return base.filter(
+        (MessengerScript.project_type == None) | (MessengerScript.project_type == ''),
+        (MessengerScript.stage_name == None) | (MessengerScript.stage_name == ''),
+    ).first()
