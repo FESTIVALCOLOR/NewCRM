@@ -302,7 +302,7 @@ class ContractBase(BaseModel):
 
 
 class ContractCreate(ContractBase):
-    pass
+    area: float  # Площадь обязательна при создании договора
 
 
 class ContractUpdate(BaseModel):

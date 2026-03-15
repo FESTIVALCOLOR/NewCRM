@@ -632,16 +632,21 @@ def get_total_salary(db: Session, employee_id: int, project_type: str,
 
 def get_total_area(db: Session, employee_id: int, project_type_db: str,
                    period_start: date, period_end: date) -> float:
-    """Суммарная площадь обработанных проектов."""
-    result = db.query(func.coalesce(func.sum(Contract.area), 0)).join(
+    """Суммарная площадь проектов, на которые назначен сотрудник.
+
+    Считает площадь уникальных контрактов (по contract_id), где
+    сотрудник — исполнитель хотя бы одной стадии.
+    """
+    contract_ids = db.query(Contract.id).join(
         CRMCard, CRMCard.contract_id == Contract.id
     ).join(
         StageExecutor, StageExecutor.crm_card_id == CRMCard.id
     ).filter(
         Contract.project_type == project_type_db,
         StageExecutor.executor_id == employee_id,
-        StageExecutor.completed == True,
-        StageExecutor.completed_date >= datetime.combine(period_start, datetime.min.time()),
-        StageExecutor.completed_date <= datetime.combine(period_end, datetime.max.time()),
-    ).scalar()
+    ).distinct().subquery()
+
+    result = db.query(
+        func.coalesce(func.sum(Contract.area), 0)
+    ).filter(Contract.id.in_(contract_ids)).scalar()
     return result or 0.0

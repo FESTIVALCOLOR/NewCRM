@@ -3993,6 +3993,11 @@ class ContractDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', 'Укажите номер договора', 'warning').exec_()
             return
 
+        # Валидация площади — обязательное поле
+        if not self.area.value() or self.area.value() <= 0:
+            CustomMessageBox(self, 'Ошибка', 'Укажите площадь объекта (м²)', 'warning').exec_()
+            return
+
         # Валидация client_id — обязательное поле для API
         if self.client_combo.currentData() is None:
             CustomMessageBox(
