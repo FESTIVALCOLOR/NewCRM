@@ -346,6 +346,8 @@ def calc_k_procurement(db: Session, employee_id: int,
         SupervisionTimelineEntry.supervision_card_id.in_(card_ids),
         SupervisionTimelineEntry.actual_date.isnot(None),
         SupervisionTimelineEntry.plan_date.isnot(None),
+        SupervisionTimelineEntry.actual_date >= period_start,
+        SupervisionTimelineEntry.actual_date <= period_end,
     ).all()
 
     if not entries:
@@ -380,6 +382,8 @@ def calc_k_defects(db: Session, employee_id: int,
         func.coalesce(func.sum(SupervisionTimelineEntry.defects_resolved), 0).label('resolved'),
     ).filter(
         SupervisionTimelineEntry.supervision_card_id.in_(card_ids),
+        SupervisionTimelineEntry.actual_date >= period_start,
+        SupervisionTimelineEntry.actual_date <= period_end,
     ).first()
 
     found = result.found or 0
@@ -418,6 +422,25 @@ def calc_k_nps_supervision(db: Session, employee_id: int,
 def calc_supervision_kpi(db: Session, employee_id: int, position: str,
                          period_start: date, period_end: date) -> Dict:
     """Рассчитывает KPI для авторского надзора."""
+    try:
+        return _calc_supervision_kpi_inner(db, employee_id, position, period_start, period_end)
+    except Exception:
+        logger.exception(
+            "Ошибка расчёта KPI надзора: employee_id=%s, period=%s..%s",
+            employee_id, period_start, period_end,
+        )
+        return {
+            'kpi_total': 0, 'k_deadline': 0, 'k_quality': 0, 'k_speed': 0, 'k_nps': None,
+            'stages_completed': 0, 'stages_on_time': 0, 'stages_overdue': 0,
+            'avg_overdue_days': 0, 'revision_count': 0,
+            'defects_found': 0, 'defects_resolved': 0, 'site_visits': 0,
+            'budget_savings': 0, 'active_supervisions': 0,
+        }
+
+
+def _calc_supervision_kpi_inner(db: Session, employee_id: int, position: str,
+                                 period_start: date, period_end: date) -> Dict:
+    """Внутренняя реализация расчёта KPI надзора."""
     k_procurement = calc_k_procurement(db, employee_id, period_start, period_end)
     k_defects = calc_k_defects(db, employee_id, period_start, period_end)
     k_nps = calc_k_nps_supervision(db, employee_id, period_start, period_end)
@@ -524,14 +547,26 @@ def calculate_employee_kpi(db: Session, employee_id: int, position: str,
     Args:
         project_type: 'individual' / 'template' / 'supervision'
     """
-    period_start, period_end = _get_period_range(year, quarter, month)
+    try:
+        period_start, period_end = _get_period_range(year, quarter, month)
 
-    if project_type == 'supervision':
-        return calc_supervision_kpi(db, employee_id, position, period_start, period_end)
-    else:
-        project_type_db = PROJECT_TYPE_MAP.get(project_type, 'Индивидуальный')
-        return calc_crm_kpi(db, employee_id, position, project_type_db,
-                            period_start, period_end)
+        if project_type == 'supervision':
+            return calc_supervision_kpi(db, employee_id, position, period_start, period_end)
+        else:
+            project_type_db = PROJECT_TYPE_MAP.get(project_type, 'Индивидуальный')
+            return calc_crm_kpi(db, employee_id, position, project_type_db,
+                                period_start, period_end)
+    except Exception:
+        logger.exception(
+            "Ошибка расчёта KPI: employee_id=%s, project_type=%s, year=%s, quarter=%s, month=%s",
+            employee_id, project_type, year, quarter, month,
+        )
+        # Возвращаем нулевой результат, чтобы не ломать весь дашборд
+        return {
+            'kpi_total': 0, 'k_deadline': 0, 'k_quality': 0, 'k_speed': 0, 'k_nps': None,
+            'stages_completed': 0, 'stages_on_time': 0, 'stages_overdue': 0,
+            'avg_overdue_days': 0, 'revision_count': 0,
+        }
 
 
 def get_concurrent_projects(db: Session, employee_id: int,

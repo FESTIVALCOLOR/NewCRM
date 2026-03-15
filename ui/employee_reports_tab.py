@@ -61,15 +61,89 @@ ROLE_TABS = {
     ],
 }
 
-# Заголовки таблицы по типу проекта
-CRM_TABLE_HEADERS = [
-    'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Ср.просрочка (дн.)',
-    'Правки', 'Нагрузка', 'NPS', 'Тренд',
+# Заголовки таблицы по роли (раздел 8 руководства — специфичные столбцы)
+ROLE_TABLE_HEADERS = {
+    # CRM: Ст. менеджеры (инд/шабл)
+    ('senior_manager', 'individual'): [
+        'Сотрудник', 'KPI', 'Проектов', 'Сдано', 'Расторг.',
+        'NPS', 'Нагрузка', 'Тренд',
+    ],
+    ('senior_manager', 'template'): [
+        'Сотрудник', 'KPI', 'Проектов', 'Сдано', 'Расторг.',
+        'NPS', 'Нагрузка', 'Тренд',
+    ],
+    # Надзор: Ст. менеджеры
+    ('senior_manager', 'supervision'): [
+        'Сотрудник', 'KPI', 'Ведёт', 'Сдано', 'Экономия',
+        'Визиты', 'NPS', 'Тренд',
+    ],
+    # СДП
+    ('sdp', 'individual'): [
+        'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Правки',
+        'Нагрузка', 'NPS', 'Тренд',
+    ],
+    # ГАП
+    ('gap', 'individual'): [
+        'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Правки',
+        'Нагрузка', 'NPS', 'Тренд',
+    ],
+    ('gap', 'template'): [
+        'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Правки',
+        'Нагрузка', 'NPS', 'Тренд',
+    ],
+    # Менеджеры (шаблонные)
+    ('manager', 'template'): [
+        'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Правки',
+        'Нагрузка', 'NPS', 'Тренд',
+    ],
+    # Чертёжники / Дизайнеры
+    ('draftsman', 'individual'): [
+        'Сотрудник', 'KPI', 'Стадий', 'В срок', 'Правки',
+        'Площадь (м²)', 'Нагрузка', 'Тренд',
+    ],
+    ('draftsman', 'template'): [
+        'Сотрудник', 'KPI', 'Стадий', 'В срок', 'Правки',
+        'Площадь (м²)', 'Нагрузка', 'Тренд',
+    ],
+    ('designer', 'individual'): [
+        'Сотрудник', 'KPI', 'Стадий', 'В срок', 'Правки',
+        'Площадь (м²)', 'Нагрузка', 'Тренд',
+    ],
+    ('designer', 'template'): [
+        'Сотрудник', 'KPI', 'Стадий', 'В срок', 'Правки',
+        'Площадь (м²)', 'Нагрузка', 'Тренд',
+    ],
+    # Замерщики
+    ('measurer', 'individual'): [
+        'Сотрудник', 'KPI', 'Замеров', 'В срок', 'Ср. дней',
+        'Нагрузка', 'NPS', 'Тренд',
+    ],
+    # ДАН (надзор)
+    ('dan', 'supervision'): [
+        'Сотрудник', 'KPI', 'Ведёт', 'Визиты', 'Дефекты',
+        '% устр.', 'Экономия', 'Просрочки', 'Тренд',
+    ],
+}
+
+# Fallback заголовки
+CRM_TABLE_HEADERS_DEFAULT = [
+    'Сотрудник', 'KPI', 'В срок', 'Просрочки', 'Правки',
+    'Нагрузка', 'NPS', 'Тренд',
 ]
-SUPERVISION_TABLE_HEADERS = [
+SUPERVISION_TABLE_HEADERS_DEFAULT = [
     'Сотрудник', 'KPI', 'Закупки', 'Дефекты', 'Визиты',
     'Экономия', 'Нагрузка', 'NPS', 'Тренд',
 ]
+
+
+def _get_role_headers(role_code, pt_code):
+    """Получить заголовки таблицы для конкретной роли и типа проекта."""
+    headers = ROLE_TABLE_HEADERS.get((role_code, pt_code))
+    if headers:
+        return headers
+    if pt_code == 'supervision':
+        return SUPERVISION_TABLE_HEADERS_DEFAULT
+    return CRM_TABLE_HEADERS_DEFAULT
 
 # ── Стили ─────────────────────────────────────────────────────────────
 
@@ -397,11 +471,10 @@ class EmployeeReportsTab(QWidget):
             QTabBar::tab:selected { background: #FFFFFF; font-weight: bold; }
         """)
 
-        is_supervision = (pt_code == 'supervision')
-        headers = SUPERVISION_TABLE_HEADERS if is_supervision else CRM_TABLE_HEADERS
-
         roles = ROLE_TABS.get(pt_code, [])
         for role_code, role_label in roles:
+            headers = _get_role_headers(role_code, pt_code)
+
             tab = QWidget()
             tab.setProperty('role_code', role_code)
             tab_layout = QVBoxLayout(tab)
@@ -706,7 +779,7 @@ class EmployeeReportsTab(QWidget):
         chart.set_data(series)
 
     def _update_role_table(self, project_type, role_code, data):
-        """Обновляет таблицу сравнения по роли."""
+        """Обновляет таблицу сравнения по роли (столбцы зависят от роли)."""
         container = self._get_container(project_type)
         table = container.findChild(
             QTableWidget, f'role_table_{project_type}_{role_code}')
@@ -714,19 +787,26 @@ class EmployeeReportsTab(QWidget):
             return
 
         pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
-        is_supervision = (pt_code == 'supervision')
+        headers = _get_role_headers(role_code, pt_code)
         employees = data.get('employees', [])
+
+        # Обновляем заголовки (количество столбцов может отличаться)
+        table.setColumnCount(len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, len(headers)):
+            table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
         table.setRowCount(len(employees))
 
         for row, emp in enumerate(employees):
             kpi_total = emp.get('kpi_total', 0) or 0
 
-            # Сотрудник
+            # Столбец 0: Сотрудник (всегда)
             name_item = QTableWidgetItem(emp.get('full_name', ''))
             name_item.setData(Qt.UserRole, emp.get('employee_id'))
             table.setItem(row, 0, name_item)
 
-            # KPI (цветной, жирный)
+            # Столбец 1: KPI (всегда, цветной, жирный)
             kpi_item = QTableWidgetItem(f"{kpi_total:.0f}%")
             kpi_item.setTextAlignment(Qt.AlignCenter)
             kpi_item.setForeground(QColor(_kpi_color(kpi_total)))
@@ -735,57 +815,15 @@ class EmployeeReportsTab(QWidget):
             kpi_item.setFont(f)
             table.setItem(row, 1, kpi_item)
 
-            if is_supervision:
-                # Закупки (k_deadline = k_procurement alias)
-                self._set_pct_cell(table, row, 2, emp.get('k_deadline'))
-                # Дефекты (k_quality = k_defects alias)
-                self._set_pct_cell(table, row, 3, emp.get('k_quality'))
-                # Визиты (k_speed = k_visits alias)
-                self._set_pct_cell(table, row, 4, emp.get('k_speed'))
-                # Экономия
-                savings = emp.get('budget_savings', 0) or 0
-                sav_item = QTableWidgetItem(
-                    f"{savings:,.0f}" if savings else '—')
-                sav_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                table.setItem(row, 5, sav_item)
-            else:
-                # В срок (k_deadline)
-                self._set_pct_cell(table, row, 2, emp.get('k_deadline'))
-                # Просрочки
-                overdue = emp.get('stages_overdue', 0)
-                ov_item = QTableWidgetItem(str(overdue))
-                ov_item.setTextAlignment(Qt.AlignCenter)
-                if overdue > 0:
-                    ov_item.setForeground(QColor(KPI_COLORS['critical']))
-                table.setItem(row, 3, ov_item)
-                # Ср. просрочка (дн.)
-                avg_ov = emp.get('avg_overdue_days', 0) or 0
-                aov_item = QTableWidgetItem(
-                    f"{avg_ov:.1f}" if avg_ov else '0')
-                aov_item.setTextAlignment(Qt.AlignCenter)
-                table.setItem(row, 4, aov_item)
-                # Правки
-                rev_item = QTableWidgetItem(str(emp.get('revision_count', 0)))
-                rev_item.setTextAlignment(Qt.AlignCenter)
-                table.setItem(row, 5, rev_item)
+            # Столбцы 2..N-2: специфичные данные по роли
+            # Тренд всегда последний
+            col = 2
+            for h in headers[2:-1]:  # пропускаем Сотрудник, KPI и Тренд
+                col = headers.index(h)
+                self._fill_role_cell(table, row, col, h, emp, role_code, pt_code)
 
-            # Нагрузка
-            concurrent = emp.get('concurrent_projects', 0)
-            max_load = emp.get('recommended_max', '?')
-            load_item = QTableWidgetItem(f"{concurrent}/{max_load}")
-            load_item.setTextAlignment(Qt.AlignCenter)
-            table.setItem(row, 6, load_item)
-
-            # NPS
-            nps = emp.get('k_nps')
-            nps_item = QTableWidgetItem(
-                f"{nps:.0f}" if nps is not None else '—')
-            nps_item.setTextAlignment(Qt.AlignCenter)
-            if nps is not None:
-                nps_item.setForeground(QColor(_kpi_color(nps)))
-            table.setItem(row, 7, nps_item)
-
-            # Тренд
+            # Последний столбец: Тренд (всегда)
+            trend_col = len(headers) - 1
             trend_code = emp.get('trend', 'stable')
             trend_text = TREND_ICONS.get(trend_code, '—')
             trend_item = QTableWidgetItem(trend_text)
@@ -794,7 +832,7 @@ class EmployeeReportsTab(QWidget):
                 trend_item.setForeground(QColor(KPI_COLORS['excellent']))
             elif trend_code == 'down':
                 trend_item.setForeground(QColor(KPI_COLORS['critical']))
-            table.setItem(row, 8, trend_item)
+            table.setItem(row, trend_col, trend_item)
 
         # Автовысота таблицы (убираем внутренний скролл)
         row_h = table.verticalHeader().defaultSectionSize()
@@ -804,6 +842,92 @@ class EmployeeReportsTab(QWidget):
 
         # ── 3 графика сравнения по роли ──────────────────────────
         self._update_role_charts(project_type, role_code, data)
+
+    def _fill_role_cell(self, table, row, col, header, emp, role_code, pt_code):
+        """Заполняет ячейку таблицы в зависимости от заголовка столбца."""
+        # Карта заголовок → (ключ_данных, формат)
+        if header == 'В срок':
+            self._set_pct_cell(table, row, col, emp.get('k_deadline'))
+        elif header == 'Просрочки':
+            val = emp.get('stages_overdue', 0) or 0
+            item = QTableWidgetItem(str(val))
+            item.setTextAlignment(Qt.AlignCenter)
+            if val > 0:
+                item.setForeground(QColor(KPI_COLORS['critical']))
+            table.setItem(row, col, item)
+        elif header == 'Ср.просрочка (дн.)':
+            val = emp.get('avg_overdue_days', 0) or 0
+            item = QTableWidgetItem(f"{val:.1f}" if val else '0')
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Правки':
+            item = QTableWidgetItem(str(emp.get('revision_count', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Нагрузка':
+            concurrent = emp.get('concurrent_projects', 0) or 0
+            max_load = emp.get('recommended_max', '?')
+            item = QTableWidgetItem(f"{concurrent}/{max_load}")
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'NPS':
+            nps = emp.get('k_nps')
+            item = QTableWidgetItem(f"{nps:.0f}" if nps is not None else '—')
+            item.setTextAlignment(Qt.AlignCenter)
+            if nps is not None:
+                item.setForeground(QColor(_kpi_color(nps)))
+            table.setItem(row, col, item)
+        elif header == 'Проектов':
+            item = QTableWidgetItem(str(emp.get('concurrent_projects', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Сдано':
+            item = QTableWidgetItem(str(emp.get('stages_completed', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Расторг.':
+            item = QTableWidgetItem(str(emp.get('terminated_count', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Стадий':
+            item = QTableWidgetItem(str(emp.get('stages_completed', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Площадь (м²)':
+            area = emp.get('total_area', 0) or 0
+            item = QTableWidgetItem(f"{area:.0f}" if area else '—')
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Замеров':
+            item = QTableWidgetItem(str(emp.get('stages_completed', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Ср. дней':
+            val = emp.get('avg_overdue_days', 0) or 0
+            item = QTableWidgetItem(f"{val:.1f}" if val else '—')
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == 'Закупки':
+            self._set_pct_cell(table, row, col, emp.get('k_deadline'))
+        elif header == 'Дефекты':
+            self._set_pct_cell(table, row, col, emp.get('k_quality'))
+        elif header in ('Визиты', ):
+            self._set_pct_cell(table, row, col, emp.get('k_speed'))
+        elif header == 'Экономия':
+            val = emp.get('budget_savings', 0) or 0
+            item = QTableWidgetItem(f"{val:,.0f}" if val else '—')
+            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            table.setItem(row, col, item)
+        elif header == 'Ведёт':
+            item = QTableWidgetItem(str(emp.get('concurrent_projects', 0) or 0))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        elif header == '% устр.':
+            self._set_pct_cell(table, row, col, emp.get('k_quality'))
+        else:
+            item = QTableWidgetItem('—')
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
 
     def _update_role_charts(self, project_type, role_code, data):
         """Обновляет 3 графика сравнения по роли."""
@@ -1337,6 +1461,14 @@ class EmployeeReportsTab(QWidget):
                             img.hAlign = 'CENTER'
                             elements.append(img)
 
+            if len(elements) <= 3:  # Только заголовок + spacers — нет контента
+                try:
+                    from ui.custom_message_box import CustomMessageBox
+                    CustomMessageBox(self, 'Внимание', 'Нет данных для экспорта. Загрузите отчёт.', 'warning').exec_()
+                except Exception:
+                    pass
+                return
+
             doc.build(elements,
                       onFirstPage=footer_cb,
                       onLaterPages=footer_cb)
@@ -1346,3 +1478,8 @@ class EmployeeReportsTab(QWidget):
 
         except Exception as e:
             logger.error(f'Ошибка экспорта PDF: {e}', exc_info=True)
+            try:
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF: {e}', 'error').exec_()
+            except Exception:
+                pass

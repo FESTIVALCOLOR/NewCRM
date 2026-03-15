@@ -254,6 +254,11 @@ async def get_surveys_by_contract(
     db: Session = Depends(get_db),
 ):
     """Получить опросы по договору."""
+    # Проверка: контракт существует
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
     query = db.query(ClientSurvey).filter(
         ClientSurvey.contract_id == contract_id,
     )

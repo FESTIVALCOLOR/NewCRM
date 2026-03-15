@@ -2106,8 +2106,11 @@ class ContractDialog(QDialog):
             return
         survey = self._current_surveys[-1]
         try:
-            self.data.resend_survey(survey['id'])
-            CustomMessageBox(self, 'Успешно', 'Ссылка на опрос переотправлена.', 'info').exec_()
+            result = self.data.resend_survey(survey['id'])
+            if result:
+                CustomMessageBox(self, 'Успешно', 'Ссылка на опрос переотправлена.', 'info').exec_()
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось переотправить опрос.', 'error').exec_()
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Ошибка переотправки:\n{e}', 'error').exec_()
 

@@ -37,9 +37,9 @@ router = APIRouter(tags=["employee-analytics"])
 @router.get("/dashboard")
 async def get_analytics_dashboard(
     project_type: str = Query(..., regex="^(individual|template|supervision)$"),
-    year: Optional[int] = None,
-    quarter: Optional[int] = None,
-    month: Optional[int] = None,
+    year: Optional[int] = Query(None, ge=2020, le=2035),
+    quarter: Optional[int] = Query(None, ge=1, le=4),
+    month: Optional[int] = Query(None, ge=1, le=12),
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -132,9 +132,9 @@ async def get_analytics_dashboard(
 async def get_role_analytics(
     role_code: str,
     project_type: str = Query(..., regex="^(individual|template|supervision)$"),
-    year: Optional[int] = None,
-    quarter: Optional[int] = None,
-    month: Optional[int] = None,
+    year: Optional[int] = Query(None, ge=2020, le=2035),
+    quarter: Optional[int] = Query(None, ge=1, le=4),
+    month: Optional[int] = Query(None, ge=1, le=12),
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -215,9 +215,9 @@ async def get_role_analytics(
 async def get_employee_detail(
     employee_id: int,
     project_type: str = Query(..., regex="^(individual|template|supervision)$"),
-    year: Optional[int] = None,
-    quarter: Optional[int] = None,
-    month: Optional[int] = None,
+    year: Optional[int] = Query(None, ge=2020, le=2035),
+    quarter: Optional[int] = Query(None, ge=1, le=4),
+    month: Optional[int] = Query(None, ge=1, le=12),
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -351,6 +351,23 @@ def _get_avg_nps(db, project_type, period_start, period_end, visible_ids):
         ClientSurvey.status == 'completed',
         ClientSurvey.nps_score.isnot(None),
     )
+    if visible_ids is not None:
+        # Фильтрация NPS — только по контрактам видимых сотрудников
+        if pt_code == 'supervision':
+            visible_contract_ids = [c.contract_id for c in
+                db.query(SupervisionCard.contract_id).filter(
+                    or_(SupervisionCard.dan_id.in_(visible_ids),
+                        SupervisionCard.senior_manager_id.in_(visible_ids))
+                ).all()]
+        else:
+            visible_contract_ids = [s.contract_id for s in
+                db.query(CRMCard.contract_id).join(
+                    StageExecutor, StageExecutor.crm_card_id == CRMCard.id
+                ).filter(StageExecutor.executor_id.in_(visible_ids)).all()]
+        if visible_contract_ids:
+            query = query.filter(ClientSurvey.contract_id.in_(visible_contract_ids))
+        else:
+            return None
     result = query.scalar()
     return round(result, 1) if result else None
 
@@ -454,6 +471,8 @@ def _get_employee_projects(db, employee_id, project_type, period_start, period_e
     ).filter(
         Contract.project_type == project_type_db,
         StageExecutor.executor_id == employee_id,
+        StageExecutor.assigned_date <= period_end,
+        or_(StageExecutor.completed_date >= period_start, StageExecutor.completed_date.is_(None)),
     ).order_by(StageExecutor.assigned_date.desc()).limit(50).all()
 
     projects = []
