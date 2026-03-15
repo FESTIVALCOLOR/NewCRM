@@ -57,6 +57,7 @@ PERMISSION_GROUPS = {
     ],
     'Уведомления': [
         'notifications.settings_projects', 'notifications.settings_duplication',
+        'notifications.settings_supervision', 'notifications.settings_payment',
     ],
 }
 
@@ -120,31 +121,40 @@ DEFAULT_ROLE_PERMISSIONS = {
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "salaries.delete",
         "messenger.manage_scripts",
+        "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
     "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
         "employees.update",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
     "СДП": {
         "access.crm", "access.reports", "access.employees", "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
+        "notifications.settings_projects",
     },
     "ГАП": {
         "access.crm", "access.reports", "access.employees", "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
+        "notifications.settings_projects",
     },
     "Менеджер": {
         "access.crm", "access.supervision", "access.reports", "access.employees",
         "access.dashboards",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
+        "notifications.settings_projects",
+        "notifications.settings_supervision",
     },
     "ДАН": {
         "access.supervision",
         "supervision.complete_stage",
         "supervision.files_upload",
         "messenger.view_chat",
+        "notifications.settings_supervision",
     },
     "Дизайнер": {
         "access.crm",
@@ -231,6 +241,8 @@ PERMISSION_DESCRIPTIONS = {
     # Уведомления
     "notifications.settings_projects": "Настройка каналов по типам проектов",
     "notifications.settings_duplication": "Настройка дублирования уведомлений",
+    "notifications.settings_supervision": "Уведомления авторского надзора",
+    "notifications.settings_payment": "Уведомления об оплатах",
 }
 
 
@@ -304,6 +316,8 @@ PERMISSION_TOOLTIPS = {
     # Уведомления
     "notifications.settings_projects": "Сотрудник видит настройку каналов по типам проектов (индивидуальные / шаблонные)",
     "notifications.settings_duplication": "Сотрудник видит настройку дублирования уведомлений подчинённых",
+    "notifications.settings_supervision": "Сотрудник видит чекбокс уведомлений авторского надзора",
+    "notifications.settings_payment": "Сотрудник видит чекбокс уведомлений об оплатах",
 }
 
 

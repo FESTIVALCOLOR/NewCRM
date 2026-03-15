@@ -96,6 +96,8 @@ PERMISSION_NAMES: Dict[str, str] = {
     # === Уведомления (видимость блоков настроек) ===
     "notifications.settings_projects": "Настройка каналов по типам проектов",
     "notifications.settings_duplication": "Настройка дублирования уведомлений",
+    "notifications.settings_supervision": "Уведомления авторского надзора",
+    "notifications.settings_payment": "Уведомления об оплатах",
 }
 
 # =========================
@@ -152,11 +154,13 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "salaries.delete",
         "messenger.manage_scripts",
         "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
     "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
         "employees.update",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "notifications.settings_projects", "notifications.settings_duplication",
+        "notifications.settings_supervision", "notifications.settings_payment",
     },
     "СДП": {
         "access.crm", "access.reports", "access.employees",
@@ -175,12 +179,14 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "crm_cards.assign_executor",
         "notifications.settings_projects",
+        "notifications.settings_supervision",
     },
     "ДАН": {
         "access.supervision",
         "supervision.complete_stage",
         "supervision.files_upload",
         "messenger.view_chat",
+        "notifications.settings_supervision",
     },
     "Дизайнер": {
         "access.crm",
@@ -413,6 +419,13 @@ def _migrate_new_permissions(db: Session):
             "СДП", "ГАП", "Менеджер",
         ],
         "notifications.settings_duplication": [
+            "Руководитель студии", "Старший менеджер проектов",
+        ],
+        "notifications.settings_supervision": [
+            "Руководитель студии", "Старший менеджер проектов",
+            "ДАН", "Менеджер",
+        ],
+        "notifications.settings_payment": [
             "Руководитель студии", "Старший менеджер проектов",
         ],
     }

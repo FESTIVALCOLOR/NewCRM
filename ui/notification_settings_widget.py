@@ -24,21 +24,9 @@ class NotificationSettingsWidget(QWidget):
         self.data_access = data_access
         self.employee = employee or {}
         self._current_employee_id = None
+        self._target_employee = None
         self._employees = []
         self._settings = {}
-
-        # Проверяем права текущего пользователя
-        from utils.permissions import _has_perm
-        self._viewer_has_payment_perm = (
-            _has_perm(self.employee, self.api_client, 'payments.create') or
-            _has_perm(self.employee, self.api_client, 'payments.update')
-        )
-        self._viewer_has_projects_perm = _has_perm(
-            self.employee, self.api_client, 'notifications.settings_projects'
-        )
-        self._viewer_has_duplication_perm = _has_perm(
-            self.employee, self.api_client, 'notifications.settings_duplication'
-        )
 
         self._setup_ui()
         QTimer.singleShot(100, self._load_employees)
@@ -118,10 +106,6 @@ class NotificationSettingsWidget(QWidget):
         self._chk_deadline = QCheckBox("Предупреждение о дедлайне")
         self._chk_payment = QCheckBox("Создание оплаты")
         self._chk_supervision = QCheckBox("Авторский надзор")
-
-        # Чекбокс оплаты виден только если у просматривающего есть права на оплаты
-        if not self._viewer_has_payment_perm:
-            self._chk_payment.setVisible(False)
 
         for chk in [self._chk_crm_stage, self._chk_assigned, self._chk_deadline,
                     self._chk_payment, self._chk_supervision]:
@@ -240,9 +224,14 @@ class NotificationSettingsWidget(QWidget):
             return
         self._current_employee_id = emp_id
 
-        # Определяем права для видимости секций:
-        # Директор видит все секции (настраивает для любого сотрудника).
-        # Обычный сотрудник — только секции, разрешённые ему через матрицу прав.
+        # Найти целевого сотрудника для проверки его прав
+        self._target_employee = self.employee  # по умолчанию — текущий пользователь
+        for emp in self._employees:
+            if emp.get('id') == emp_id:
+                self._target_employee = emp
+                break
+
+        # Видимость секций — по правам ЦЕЛЕВОГО сотрудника
         self._update_section_visibility()
 
         if self.data_access:
@@ -253,18 +242,23 @@ class NotificationSettingsWidget(QWidget):
                 print(f"[NotificationSettings] Ошибка загрузки: {e}")
 
     def _update_section_visibility(self):
-        """Показать/скрыть секции настроек в зависимости от прав."""
-        role = self.employee.get('role', '')
-        is_director = role in SUPERUSER_ROLES
+        """Показать/скрыть секции настроек по правам ЦЕЛЕВОГО сотрудника.
 
-        if is_director:
-            # Директор видит все секции для всех сотрудников
-            self._projects_group.setVisible(True)
-            self._duplication_group.setVisible(True)
-        else:
-            # Обычный сотрудник — видимость по его правам
-            self._projects_group.setVisible(self._viewer_has_projects_perm)
-            self._duplication_group.setVisible(self._viewer_has_duplication_perm)
+        Директор, просматривая Чертёжника, видит только те секции,
+        которые доступны Чертёжнику. Это совпадает с тем, что видит
+        сам Чертёжник в своих настройках.
+        """
+        from utils.permissions import _has_perm
+        target = self._target_employee or self.employee
+
+        self._projects_group.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_projects'))
+        self._duplication_group.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_duplication'))
+        self._chk_supervision.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_supervision'))
+        self._chk_payment.setVisible(
+            _has_perm(target, self.api_client, 'notifications.settings_payment'))
 
     def _apply_settings(self, settings: dict):
         """Применить настройки к чекбоксам"""
