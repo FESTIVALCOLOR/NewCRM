@@ -118,6 +118,9 @@ class ChartBase(QWidget):
                 kwargs['right'] = self._AXIS_RIGHT
             if legend_above:
                 kwargs['top'] = 0.82
+            elif any(a.get_title() for a in self.figure.axes):
+                # Заголовок графика — оставить место сверху
+                kwargs['top'] = 0.88
             if bottom is not None:
                 kwargs['bottom'] = bottom
             if kwargs and self.figure.axes:
@@ -641,7 +644,10 @@ class StackedBarChartWidget(ChartBase):
             self._finalize(legend_above=has_legend,
                            bottom=0.25, left=0.04, right=0.99)
         else:
-            self._finalize(legend_above=has_legend)
+            # Дополнительный bottom padding для повёрнутых меток
+            needs_bottom = (rotation == 90 and n_categories > 0)
+            self._finalize(legend_above=has_legend,
+                           bottom=0.25 if needs_bottom else None)
 
 
 class HorizontalBarWidget(ChartBase):

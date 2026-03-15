@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QSpinBox, QFrame, QGridLayout, QScrollArea, QSizePolicy, QFileDialog,
 )
-from PyQt5.QtCore import Qt, QDate, QTimer
+from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 
 from ui.custom_combobox import CustomComboBox
@@ -153,7 +153,6 @@ CARD_STYLE = """
         background-color: {bg};
         border: 1px solid #E0E0E0;
         border-radius: 8px;
-        padding: 8px;
     }}
 """
 
@@ -233,6 +232,12 @@ def _kpi_bg(value):
 class EmployeeReportsTab(QWidget):
     """Вкладка KPI-аналитики по сотрудникам."""
 
+    # Сигналы для безопасной передачи данных из фоновых потоков в UI
+    _sig_dashboard = pyqtSignal(str, object)       # project_type, dashboard
+    _sig_role = pyqtSignal(str, str, object)        # project_type, role_code, data
+    _sig_detail = pyqtSignal(str, object)           # project_type, detail
+    _sig_self_profile = pyqtSignal(object, object)  # detail, pt_code
+
     def __init__(self, employee, api_client=None):
         super().__init__()
         self.employee = employee
@@ -256,6 +261,13 @@ class EmployeeReportsTab(QWidget):
             self.access_level = 'executors'
         else:
             self.access_level = 'self'
+
+        # Подключаем сигналы к слотам обновления UI
+        self._sig_dashboard.connect(self._on_dashboard_ready)
+        self._sig_role.connect(self._on_role_ready)
+        self._sig_detail.connect(self._on_detail_ready)
+        self._sig_self_profile.connect(self._on_self_profile_ready)
+
         self.init_ui()
 
     def init_ui(self):
@@ -322,13 +334,13 @@ class EmployeeReportsTab(QWidget):
         self.report_tabs.currentChanged.connect(self._on_project_tab_changed)
 
         self.individual_tab = self._create_project_tab('Индивидуальный')
-        self.report_tabs.addTab(self.individual_tab, 'Индивидуальные проекты')
+        self.report_tabs.addTab(self.individual_tab, 'Индивидуальные')
 
         self.template_tab = self._create_project_tab('Шаблонный')
-        self.report_tabs.addTab(self.template_tab, 'Шаблонные проекты')
+        self.report_tabs.addTab(self.template_tab, 'Шаблонные')
 
         self.supervision_tab = self._create_project_tab('Авторский надзор')
-        self.report_tabs.addTab(self.supervision_tab, 'Авторский надзор')
+        self.report_tabs.addTab(self.supervision_tab, 'Авт. надзор')
 
         layout.addWidget(self.report_tabs)
 
@@ -574,7 +586,6 @@ class EmployeeReportsTab(QWidget):
             return
 
         def _fetch():
-            result = {'detail': None, 'pt_code': None}
             for pt_code in ('individual', 'template', 'supervision'):
                 try:
                     detail = self.data_access.get_analytics_employee_detail(
@@ -582,21 +593,21 @@ class EmployeeReportsTab(QWidget):
                 except Exception:
                     detail = {}
                 if detail and detail.get('employee'):
-                    result['detail'] = detail
-                    result['pt_code'] = pt_code
-                    break
-            QTimer.singleShot(0, lambda: _on_done(result))
-
-        def _on_done(result):
-            if result['detail']:
-                self._update_detail_card_in_widget(
-                    self._self_detail_content, result['pt_code'], result['detail'])
-            else:
-                lbl = QLabel('Нет данных по вашим проектам')
-                lbl.setStyleSheet('color: #999; padding: 16px; font-size: 13px;')
-                self._self_detail_content.layout().addWidget(lbl)
+                    self._sig_self_profile.emit(detail, pt_code)
+                    return
+            self._sig_self_profile.emit(None, None)
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_self_profile_ready(self, detail, pt_code):
+        """Слот: обновляет UI после загрузки профиля."""
+        if detail:
+            self._update_detail_card_in_widget(
+                self._self_detail_content, pt_code, detail)
+        else:
+            lbl = QLabel('Нет данных по вашим проектам')
+            lbl.setStyleSheet('color: #999; padding: 16px; font-size: 13px;')
+            self._self_detail_content.layout().addWidget(lbl)
 
     def _on_project_tab_changed(self, index):
         if self.access_level == 'self':
@@ -656,30 +667,31 @@ class EmployeeReportsTab(QWidget):
             except Exception as e:
                 logger.warning(f"Ошибка дашборда аналитики: {e}")
                 dashboard = {}
-            QTimer.singleShot(0, lambda: _on_done(dashboard))
-
-        def _on_done(dashboard):
-            try:
-                self._dashboard_cache[project_type] = dashboard
-                self._update_kpi_cards(project_type, dashboard)
-                self._update_top5(project_type, dashboard)
-                self._update_dashboard_trend(project_type, dashboard)
-
-                # Загрузка данных текущей роли
-                container = self._get_container(project_type)
-                role_tabs = container.findChild(QTabWidget, f'role_tabs_{project_type}')
-                if role_tabs and role_tabs.count() > 0:
-                    current = role_tabs.currentWidget()
-                    if current:
-                        role_code = current.property('role_code')
-                        if role_code:
-                            self._load_role_data(project_type, role_code)
-            except Exception as e:
-                logger.error(f"Ошибка загрузки аналитики: {e}", exc_info=True)
-            finally:
-                self._loading = False
+            self._sig_dashboard.emit(project_type, dashboard)
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_dashboard_ready(self, project_type, dashboard):
+        """Слот: обновляет UI после загрузки дашборда."""
+        try:
+            self._dashboard_cache[project_type] = dashboard
+            self._update_kpi_cards(project_type, dashboard)
+            self._update_top5(project_type, dashboard)
+            self._update_dashboard_trend(project_type, dashboard)
+
+            # Загрузка данных текущей роли
+            container = self._get_container(project_type)
+            role_tabs = container.findChild(QTabWidget, f'role_tabs_{project_type}')
+            if role_tabs and role_tabs.count() > 0:
+                current = role_tabs.currentWidget()
+                if current:
+                    role_code = current.property('role_code')
+                    if role_code:
+                        self._load_role_data(project_type, role_code)
+        except Exception as e:
+            logger.error(f"Ошибка загрузки аналитики: {e}", exc_info=True)
+        finally:
+            self._loading = False
 
     def _load_role_data(self, project_type, role_code):
         """Загрузка таблицы сравнения по роли (async)."""
@@ -692,13 +704,14 @@ class EmployeeReportsTab(QWidget):
             except Exception as e:
                 logger.warning(f"Ошибка загрузки роли {role_code}: {e}")
                 data = {}
-            QTimer.singleShot(0, lambda: _on_done(data))
-
-        def _on_done(data):
-            self._role_cache[f'{project_type}_{role_code}'] = data
-            self._update_role_table(project_type, role_code, data)
+            self._sig_role.emit(project_type, role_code, data)
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_role_ready(self, project_type, role_code, data):
+        """Слот: обновляет таблицу роли."""
+        self._role_cache[f'{project_type}_{role_code}'] = data
+        self._update_role_table(project_type, role_code, data)
 
     def _load_employee_detail(self, project_type, employee_id):
         """Загрузка детальной карточки сотрудника (async)."""
@@ -712,12 +725,13 @@ class EmployeeReportsTab(QWidget):
             except Exception as e:
                 logger.warning(f"Ошибка загрузки деталей: {e}")
                 detail = {}
-            QTimer.singleShot(0, lambda: _on_done(detail))
-
-        def _on_done(detail):
-            self._update_detail_card(project_type, detail)
+            self._sig_detail.emit(project_type, detail)
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_detail_ready(self, project_type, detail):
+        """Слот: обновляет детальную карточку."""
+        self._update_detail_card(project_type, detail)
 
     # ══════════════════════════════════════════════════════════════════
     # ОБНОВЛЕНИЕ UI
@@ -1103,13 +1117,14 @@ class EmployeeReportsTab(QWidget):
         layout.addWidget(kpi_w)
 
         # 4 графика детальной карточки (согласно руководству)
+        # Слева 2 графика друг над другом, справа — Компоненты KPI на всю высоту
         if MATPLOTLIB_AVAILABLE:
-            charts_row1 = QHBoxLayout()
-            charts_row2 = QHBoxLayout()
+            charts_main = QHBoxLayout()
+            charts_left = QVBoxLayout()
 
             # 1. Динамика KPI (линейный)
             kpi_dynamics = LineChartWidget('Динамика KPI')
-            kpi_dynamics.setFixedHeight(240)
+            kpi_dynamics.setFixedHeight(280)
             if trend:
                 months = [t.get('month', '') for t in trend[-12:]]
                 kpi_vals = [t.get('kpi_total', 0) or 0 for t in trend[-12:]]
@@ -1117,26 +1132,12 @@ class EmployeeReportsTab(QWidget):
                     'x': months, 'y': kpi_vals,
                     'label': 'KPI', 'color': '#4A90D9',
                 }])
-            charts_row1.addWidget(kpi_dynamics)
+            charts_left.addWidget(kpi_dynamics)
 
-            # 2. Просрочки по стадиям (stacked bar)
-            stages_breakdown = detail.get('stages_breakdown', [])
-            stages_chart = StackedBarChartWidget('Стадии: в срок / просрочки')
-            stages_chart.setFixedHeight(240)
-            if stages_breakdown:
-                stage_names = [s.get('stage', '')[:15] for s in stages_breakdown]
-                on_time_vals = [s.get('on_time', 0) for s in stages_breakdown]
-                overdue_vals = [s.get('overdue', 0) for s in stages_breakdown]
-                stages_chart.set_data(stage_names, [
-                    {'label': 'В срок', 'values': on_time_vals, 'color': '#7ED321'},
-                    {'label': 'Просрочки', 'values': overdue_vals, 'color': '#E74C3C'},
-                ], stacked=True)
-            charts_row1.addWidget(stages_chart)
-
-            # 3. Нагрузка по месяцам (линейный)
+            # 2. Нагрузка по месяцам (линейный)
             load_monthly = detail.get('load_monthly', [])
             load_chart = LineChartWidget('Нагрузка по месяцам')
-            load_chart.setFixedHeight(240)
+            load_chart.setFixedHeight(280)
             if load_monthly:
                 l_months = [m.get('month', '') for m in load_monthly]
                 l_vals = [m.get('concurrent_projects', 0) for m in load_monthly]
@@ -1144,11 +1145,11 @@ class EmployeeReportsTab(QWidget):
                     'x': l_months, 'y': l_vals,
                     'label': 'Проектов', 'color': '#F5A623',
                 }])
-            charts_row2.addWidget(load_chart)
+            charts_left.addWidget(load_chart)
 
-            # 4. Распределение KPI-компонентов (bar)
+            # 3. Компоненты KPI (bar) — на всю высоту справа
             kpi_components_chart = StackedBarChartWidget('Компоненты KPI')
-            kpi_components_chart.setFixedHeight(240)
+            kpi_components_chart.setMinimumHeight(560)
             if kpi:
                 if is_supervision:
                     comp_names = ['Закупки', 'Дефекты', 'Визиты', 'NPS']
@@ -1162,18 +1163,30 @@ class EmployeeReportsTab(QWidget):
                         kpi.get('k_deadline', 0) or 0, kpi.get('k_quality', 0) or 0,
                         kpi.get('k_speed', 0) or 0, kpi.get('k_nps', 0) or 0,
                     ]
-                colors = [_kpi_color(v) for v in comp_vals]
                 kpi_components_chart.set_data(comp_names, [
                     {'label': 'Значение', 'values': comp_vals, 'color': '#4A90D9'},
                 ], stacked=False)
-            charts_row2.addWidget(kpi_components_chart)
 
-            charts_w1 = QWidget()
-            charts_w1.setLayout(charts_row1)
-            layout.addWidget(charts_w1)
-            charts_w2 = QWidget()
-            charts_w2.setLayout(charts_row2)
-            layout.addWidget(charts_w2)
+            charts_main.addLayout(charts_left, 1)
+            charts_main.addWidget(kpi_components_chart, 1)
+
+            # 4. Просрочки по стадиям (stacked bar) — отдельной строкой
+            stages_breakdown = detail.get('stages_breakdown', [])
+            stages_chart = StackedBarChartWidget('Стадии: в срок / просрочки')
+            stages_chart.setFixedHeight(300)
+            if stages_breakdown:
+                stage_names = [s.get('stage', '')[:15] for s in stages_breakdown]
+                on_time_vals = [s.get('on_time', 0) for s in stages_breakdown]
+                overdue_vals = [s.get('overdue', 0) for s in stages_breakdown]
+                stages_chart.set_data(stage_names, [
+                    {'label': 'В срок', 'values': on_time_vals, 'color': '#7ED321'},
+                    {'label': 'Просрочки', 'values': overdue_vals, 'color': '#E74C3C'},
+                ], stacked=True)
+
+            charts_w = QWidget()
+            charts_w.setLayout(charts_main)
+            layout.addWidget(charts_w)
+            layout.addWidget(stages_chart)
 
         # Таблица проектов (расширенная по руководству)
         if projects:
@@ -1484,8 +1497,11 @@ class EmployeeReportsTab(QWidget):
                         result = grab_widget_png(inner, RENDER_SCALE)
                         if result:
                             buf, w_px, h_px = result
-                            max_h = max(300, PAGE_W_MM * (h_px / w_px) if w_px > 0 else 300)
-                            img = fit_image(buf, w_px, h_px, PAGE_W_MM, max_h)
+                            # Ограничиваем высоту страницей (за вычетом заголовков)
+                            page_h_mm = (page_size[1] - MARGIN_TOP - MARGIN_BOT) / mm - 30
+                            aspect = h_px / w_px if w_px > 0 else 1
+                            img_h = min(PAGE_W_MM * aspect, page_h_mm)
+                            img = fit_image(buf, w_px, h_px, PAGE_W_MM, img_h)
                             img.hAlign = 'CENTER'
                             elements.append(img)
 
