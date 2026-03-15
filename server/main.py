@@ -233,7 +233,7 @@ async def startup_event():
     try:
         from telegram_bot_handlers import router as bot_router, AIOGRAM_AVAILABLE as BOT_AVAILABLE
         if BOT_AVAILABLE and bot_router is not None:
-            import fcntl, asyncio
+            import fcntl
             lock_path = "/tmp/telegram_polling.lock"
             try:
                 _polling_lock_fd = open(lock_path, "w")
