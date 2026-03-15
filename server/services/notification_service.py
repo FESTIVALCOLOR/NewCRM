@@ -15,6 +15,7 @@ from database import (
 )
 from telegram_service import get_telegram_service
 from email_service import get_email_service
+from constants import POSITION_STUDIO_DIRECTOR
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ def build_script_context(db: Session, card, contract) -> dict:
             ctx['sdp_dat'] = decline_name_dative(sdp.full_name or '')
 
     # Руководитель студии
-    director = db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
+    director = db.query(Employee).filter(Employee.position == POSITION_STUDIO_DIRECTOR).first()
     if director:
         ctx['director'] = _tg_mention(director)
         ctx['director_username'] = _get_username(director)
@@ -264,7 +265,6 @@ async def send_invites_to_members(chat_id: int, db: Session):
 
 
 async def trigger_messenger_notification(
-    db: Session,
     crm_card_id: int,
     script_type: str,
     stage_name: str = "",
@@ -372,7 +372,6 @@ async def trigger_messenger_notification(
 
 
 async def trigger_supervision_notification(
-    db: Session,
     supervision_card_id: int,
     script_type: str,
     stage_name: str = "",
@@ -469,7 +468,7 @@ async def trigger_supervision_notification(
                 ctx['dan_dat'] = decline_name_dative(dan.full_name or '')
 
         # Руководитель студии
-        director = own_db.query(Employee).filter(Employee.position == 'Руководитель студии').first()
+        director = own_db.query(Employee).filter(Employee.position == POSITION_STUDIO_DIRECTOR).first()
         if director:
             ctx['director'] = _tg_mention(director)
             ctx['director_username'] = _get_username(director)
@@ -577,7 +576,7 @@ def _find_matching_script(
     if project_type:
         script = base.filter(
             MessengerScript.project_type == project_type,
-            (MessengerScript.stage_name == None) | (MessengerScript.stage_name == ''),
+            (MessengerScript.stage_name.is_(None)) | (MessengerScript.stage_name == ''),
         ).first()
         if script:
             return script
@@ -585,7 +584,7 @@ def _find_matching_script(
     # 3. Без project_type + stage_name
     if stage_name:
         script = base.filter(
-            (MessengerScript.project_type == None) | (MessengerScript.project_type == ''),
+            (MessengerScript.project_type.is_(None)) | (MessengerScript.project_type == ''),
             MessengerScript.stage_name == stage_name,
         ).first()
         if script:
@@ -593,6 +592,6 @@ def _find_matching_script(
 
     # 4. Универсальный fallback
     return base.filter(
-        (MessengerScript.project_type == None) | (MessengerScript.project_type == ''),
-        (MessengerScript.stage_name == None) | (MessengerScript.stage_name == ''),
+        (MessengerScript.project_type.is_(None)) | (MessengerScript.project_type == ''),
+        (MessengerScript.stage_name.is_(None)) | (MessengerScript.stage_name == ''),
     ).first()

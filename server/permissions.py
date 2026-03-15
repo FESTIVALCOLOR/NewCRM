@@ -8,6 +8,11 @@ from typing import Optional, List, Dict, Set
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db, Employee, UserPermission, RoleDefaultPermission
+from constants import (
+    POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+    POSITION_SDP, POSITION_GAP, POSITION_DAN, POSITION_MANAGER, POSITION_MEASURER,
+    ROLE_ADMIN, ROLE_DIRECTOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +153,7 @@ _BASE_MANAGER = {
 }
 
 DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
-    "Руководитель студии": _ACCESS_ALL | _BASE_MANAGER | {
+    POSITION_STUDIO_DIRECTOR: _ACCESS_ALL | _BASE_MANAGER | {
         "employees.create", "employees.update", "employees.delete",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "salaries.delete",
@@ -156,32 +161,32 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "notifications.settings_projects", "notifications.settings_duplication",
         "notifications.settings_supervision", "notifications.settings_payment",
     },
-    "Старший менеджер проектов": _ACCESS_MANAGER | _BASE_MANAGER | {
+    POSITION_SENIOR_MANAGER: _ACCESS_MANAGER | _BASE_MANAGER | {
         "employees.update",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "notifications.settings_projects", "notifications.settings_duplication",
         "notifications.settings_supervision", "notifications.settings_payment",
     },
-    "СДП": {
+    POSITION_SDP: {
         "access.crm", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
         "notifications.settings_projects",
     },
-    "ГАП": {
+    POSITION_GAP: {
         "access.crm", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
         "notifications.settings_projects",
     },
-    "Менеджер": {
+    POSITION_MANAGER: {
         "access.crm", "access.supervision", "access.reports", "access.employees",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "crm_cards.assign_executor",
         "notifications.settings_projects",
         "notifications.settings_supervision",
     },
-    "ДАН": {
+    POSITION_DAN: {
         "access.supervision",
         "supervision.complete_stage",
         "supervision.files_upload",
@@ -196,13 +201,13 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "access.crm",
         "crm_cards.files_upload",
     },
-    "Замерщик": {
+    POSITION_MEASURER: {
         "access.crm",
     },
 }
 
 # Системные роли/логины с полным доступом (не настраиваются)
-SUPERUSER_ROLES = {"admin", "director", "Руководитель студии"}
+SUPERUSER_ROLES = {ROLE_ADMIN, ROLE_DIRECTOR, POSITION_STUDIO_DIRECTOR}
 
 # Права, которые НЕ управляются через UI-матрицу (только суперпользователь/автоматика).
 # При apply_to_employees эти права сохраняются у сотрудников.
@@ -415,18 +420,18 @@ def _migrate_new_permissions(db: Session):
     # Новые права, которые нужно добавить в существующую матрицу
     NEW_ROLE_PERMS = {
         "notifications.settings_projects": [
-            "Руководитель студии", "Старший менеджер проектов",
-            "СДП", "ГАП", "Менеджер",
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+            POSITION_SDP, POSITION_GAP, POSITION_MANAGER,
         ],
         "notifications.settings_duplication": [
-            "Руководитель студии", "Старший менеджер проектов",
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
         ],
         "notifications.settings_supervision": [
-            "Руководитель студии", "Старший менеджер проектов",
-            "ДАН", "Менеджер",
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+            POSITION_DAN, POSITION_MANAGER,
         ],
         "notifications.settings_payment": [
-            "Руководитель студии", "Старший менеджер проектов",
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
         ],
     }
 

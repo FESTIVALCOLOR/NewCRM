@@ -17,6 +17,10 @@ from database import (
     Payment, Salary
 )
 from auth import get_current_user
+from constants import (
+    STATUS_COMPLETED, STATUS_TERMINATED, STATUS_SUPERVISION,
+    ARCHIVE_STATUSES, INACTIVE_STATUSES,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["statistics"])
@@ -98,12 +102,12 @@ async def get_dashboard_statistics(
 
         # Активные CRM карточки
         active_cards = db.query(CRMCard).join(Contract).filter(
-            ~Contract.status.in_(['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
+            ~Contract.status.in_(ARCHIVE_STATUSES)
         ).count()
 
         # Карточки надзора
         supervision_cards = db.query(SupervisionCard).join(Contract).filter(
-            Contract.status == 'АВТОРСКИЙ НАДЗОР'
+            Contract.status == STATUS_SUPERVISION
         ).count()
 
         return {
@@ -251,7 +255,7 @@ async def get_agent_types(
     """Получить список типов агентов"""
     try:
         result = db.query(Contract.agent_type).distinct().filter(
-            Contract.agent_type != None,
+            Contract.agent_type.isnot(None),
             Contract.agent_type != ''
         ).all()
         return ['Все'] + [r[0] for r in result if r[0]]
@@ -268,7 +272,7 @@ async def get_cities(
     """Получить список городов"""
     try:
         result = db.query(Contract.city).distinct().filter(
-            Contract.city != None,
+            Contract.city.isnot(None),
             Contract.city != ''
         ).all()
         return ['Все'] + [r[0] for r in result if r[0]]
@@ -325,14 +329,14 @@ async def get_project_statistics(
         total_area = sum(c.area or 0 for c in contracts)
 
         # Активные (не сданы и не расторгнуты; None и '' считаются активными)
-        _inactive_statuses = {'СДАН', 'АВТОРСКИЙ НАДЗОР', 'РАСТОРГНУТ'}
+        _inactive_statuses = INACTIVE_STATUSES
         active = len([c for c in contracts if c.status is None or c.status == '' or c.status not in _inactive_statuses])
 
         # Выполненные (СДАН или АВТОРСКИЙ НАДЗОР)
-        completed = len([c for c in contracts if c.status in ['СДАН', 'АВТОРСКИЙ НАДЗОР']])
+        completed = len([c for c in contracts if c.status in [STATUS_COMPLETED, STATUS_SUPERVISION]])
 
         # Расторгнуты
-        cancelled = len([c for c in contracts if c.status == 'РАСТОРГНУТ'])
+        cancelled = len([c for c in contracts if c.status == STATUS_TERMINATED])
 
         # Просрочки - считаем договоры с незавершёнными просроченными этапами
         overdue = 0
@@ -532,18 +536,18 @@ async def get_supervision_statistics(
         total_area = sum(c.contract.area or 0 for c in cards)
 
         # Активные (статус АВТОРСКИЙ НАДЗОР)
-        active = len([c for c in cards if c.contract.status == 'АВТОРСКИЙ НАДЗОР'])
+        active = len([c for c in cards if c.contract.status == STATUS_SUPERVISION])
 
         # Выполненные (статус СДАН)
-        completed = len([c for c in cards if c.contract.status == 'СДАН'])
+        completed = len([c for c in cards if c.contract.status == STATUS_COMPLETED])
 
         # Расторгнуты
-        cancelled = len([c for c in cards if c.contract.status == 'РАСТОРГНУТ'])
+        cancelled = len([c for c in cards if c.contract.status == STATUS_TERMINATED])
 
         # Просрочки (дедлайн прошел, статус АВТОРСКИЙ НАДЗОР)
         today = date_type.today()
         def _is_overdue(card):
-            if not card.deadline or card.contract.status != 'АВТОРСКИЙ НАДЗОР':
+            if not card.deadline or card.contract.status != STATUS_SUPERVISION:
                 return False
             try:
                 dl = date_type.fromisoformat(card.deadline) if isinstance(card.deadline, str) else card.deadline
@@ -653,9 +657,9 @@ async def get_crm_statistics_filtered(
                 'id': card.id,
                 'contract_id': card.contract_id,
                 'column_name': card.column_name,
-                'contract_number': card.contract.contract_number,
-                'address': card.contract.address,
-                'area': float(card.contract.area) if card.contract.area else 0,
+                'contract_number': card.contract.contract_number if card.contract else None,
+                'address': card.contract.address if card.contract else None,
+                'area': float(card.contract.area) if card.contract and card.contract.area else 0,
                 'is_approved': card.is_approved
             })
 
@@ -700,9 +704,9 @@ async def get_crm_statistics(
                 'id': card.id,
                 'contract_id': card.contract_id,
                 'column_name': card.column_name,
-                'contract_number': card.contract.contract_number,
-                'address': card.contract.address,
-                'area': float(card.contract.area) if card.contract.area else 0
+                'contract_number': card.contract.contract_number if card.contract else None,
+                'address': card.contract.address if card.contract else None,
+                'area': float(card.contract.area) if card.contract and card.contract.area else 0
             })
 
         return result
@@ -750,8 +754,8 @@ async def get_approval_statistics(
             result.append({
                 'id': card.id,
                 'contract_id': card.contract_id,
-                'contract_number': card.contract.contract_number,
-                'address': card.contract.address,
+                'contract_number': card.contract.contract_number if card.contract else None,
+                'address': card.contract.address if card.contract else None,
                 'is_approved': card.is_approved,
                 'approval_deadline': str(card.approval_deadline) if card.approval_deadline else None,
                 'approval_stages': json.loads(card.approval_stages) if card.approval_stages else None
@@ -791,9 +795,9 @@ async def get_general_statistics(
         individual_count = len([c for c in contracts if c.project_type == 'Индивидуальный'])
         template_count = len([c for c in contracts if c.project_type == 'Шаблонный'])
 
-        active_count = len([c for c in contracts if c.status not in ['СДАН', 'РАСТОРГНУТ']])
-        completed_count = len([c for c in contracts if c.status == 'СДАН'])
-        cancelled_count = len([c for c in contracts if c.status == 'РАСТОРГНУТ'])
+        active_count = len([c for c in contracts if c.status not in [STATUS_COMPLETED, STATUS_TERMINATED]])
+        completed_count = len([c for c in contracts if c.status == STATUS_COMPLETED])
+        cancelled_count = len([c for c in contracts if c.status == STATUS_TERMINATED])
 
         # Сотрудники
         active_employees = db.query(Employee).filter(Employee.status == 'активный').count()
@@ -875,7 +879,7 @@ async def get_executor_load(
         ).join(
             CRMCard, CRMCard.id == StageExecutor.crm_card_id
         ).filter(
-            CRMCard.column_name.notin_(['СДАН', 'РАСТОРГНУТ'])
+            CRMCard.column_name.notin_([STATUS_COMPLETED, STATUS_TERMINATED])
         )
 
         if year or month:

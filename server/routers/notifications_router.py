@@ -20,6 +20,11 @@ from database import get_db, Employee, Notification, NotificationSettings
 from auth import get_current_user
 from permissions import require_permission, SUPERUSER_ROLES
 from schemas import NotificationResponse, NotificationSettingsResponse, NotificationSettingsUpdate
+from constants import (
+    POSITION_DAN, POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR,
+    POSITION_SDP, POSITION_MEASURER,
+    ROLE_ADMIN, ROLE_DIRECTOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,24 +56,24 @@ async def get_notification_settings(
 
         # supervision: ДАН, Ст.менеджер, Руководитель
         supervision_roles = {
-            'ДАН', 'Старший менеджер проектов',
-            'Руководитель студии', 'admin', 'director',
+            POSITION_DAN, POSITION_SENIOR_MANAGER,
+            POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR,
         }
         # payment: Руководитель, Ст.менеджер
         payment_roles = {
-            'Руководитель студии', 'Старший менеджер проектов',
-            'admin', 'director',
+            POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
+            ROLE_ADMIN, ROLE_DIRECTOR,
         }
         # crm_stage: Выкл для ДАН и Замерщик
-        crm_stage_off = {'ДАН', 'Замерщик'}
+        crm_stage_off = {POSITION_DAN, POSITION_MEASURER}
         # deadline: Выкл для Замерщик
-        deadline_off = {'Замерщик'}
+        deadline_off = {POSITION_MEASURER}
         # individual: Выкл для ДАН
-        individual_off = {'ДАН'}
+        individual_off = {POSITION_DAN}
         # template: Выкл для ДАН и СДП
-        template_off = {'ДАН', 'СДП'}
+        template_off = {POSITION_DAN, POSITION_SDP}
 
-        is_senior_manager = pos == 'Старший менеджер проектов'
+        is_senior_manager = pos == POSITION_SENIOR_MANAGER
 
         return NotificationSettingsResponse(
             employee_id=employee_id,

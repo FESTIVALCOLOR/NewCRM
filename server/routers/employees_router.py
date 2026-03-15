@@ -19,6 +19,7 @@ from database import (
     UserPermission, RoleDefaultPermission
 )
 from auth import get_current_user, get_password_hash
+from constants import POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER, ROLE_ADMIN, ROLE_DIRECTOR
 from permissions import (
     require_permission, check_permission as perm_check,
     get_employee_permissions, set_employee_permissions, reset_to_defaults,
@@ -117,8 +118,8 @@ async def update_employee(
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
     # IDOR защита: Старший менеджер не может менять руководителей и других старших менеджеров
-    protected_roles = ['Руководитель студии', 'admin', 'director']
-    if current_user.role == 'Старший менеджер проектов':
+    protected_roles = [POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR]
+    if current_user.role == POSITION_SENIOR_MANAGER:
         if employee.role in protected_roles:
             raise HTTPException(status_code=403, detail="Недостаточно прав для изменения этого сотрудника")
         # Запрет повышения роли до руководителя

@@ -23,6 +23,10 @@ from schemas import (
     SupervisionColumnMoveRequest, SupervisionPauseRequest,
     SupervisionHistoryCreate, SupervisionHistoryResponse,
 )
+from constants import (
+    DAN_ROLES, POSITION_DAN, POSITION_SENIOR_MANAGER,
+    STATUS_COMPLETED, STATUS_TERMINATED, STATUS_SUPERVISION,
+)
 from services.notification_service import trigger_supervision_notification
 
 # Маппинг column_name → stage_code для таблицы сроков надзора
@@ -74,7 +78,7 @@ def _auto_create_supervision_payments(db: "Session", card: "SupervisionCard", st
 
     current_month = datetime.utcnow().strftime('%Y-%m')
 
-    for emp_id, role in [(card.dan_id, 'ДАН'), (card.senior_manager_id, 'Старший менеджер проектов')]:
+    for emp_id, role in [(card.dan_id, POSITION_DAN), (card.senior_manager_id, POSITION_SENIOR_MANAGER)]:
         if not emp_id:
             continue
         amount = _calc_supervision_payment_amount(db, card.contract_id, role, stage_name)
@@ -175,9 +179,9 @@ async def get_supervision_cards(
         )
 
         if status == "active":
-            base_query = base_query.filter(Contract.status == 'АВТОРСКИЙ НАДЗОР')
+            base_query = base_query.filter(Contract.status == STATUS_SUPERVISION)
         else:
-            base_query = base_query.filter(Contract.status.in_(['СДАН', 'РАСТОРГНУТ']))
+            base_query = base_query.filter(Contract.status.in_([STATUS_COMPLETED, STATUS_TERMINATED]))
 
         # Серверная фильтрация
         if address:
@@ -248,7 +252,7 @@ async def get_supervision_addresses(
         result = db.query(Contract.address).join(
             SupervisionCard, SupervisionCard.contract_id == Contract.id
         ).distinct().filter(
-            Contract.address != None,
+            Contract.address.isnot(None),
             Contract.address != ''
         ).all()
         return [r[0] for r in result if r[0]]
@@ -326,7 +330,7 @@ async def create_supervision_card(
         # N4: Автотриггер supervision_start при создании карточки
         try:
             asyncio.create_task(trigger_supervision_notification(
-                db, card.id, 'supervision_start', stage_name=card.column_name or ''
+                card.id, 'supervision_start', stage_name=card.column_name or ''
             ))
         except Exception as e:
             logger.warning(f"supervision_start trigger: {e}")
@@ -393,7 +397,6 @@ async def update_supervision_card(
         update_data = updates.model_dump(exclude_unset=True)
 
         # Валидация роли при назначении ДАН
-        DAN_ROLES = ['ДАН', 'Дизайнер авторского надзора']
         if 'dan_id' in update_data and update_data['dan_id']:
             dan_employee = db.query(Employee).filter(Employee.id == update_data['dan_id']).first()
             if not dan_employee:
@@ -603,11 +606,11 @@ async def move_supervision_card_to_column(
             # N4: supervision_end при перемещении в "Выполненный проект"
             if new_column == 'Выполненный проект':
                 asyncio.create_task(trigger_supervision_notification(
-                    db, card_id, 'supervision_end', stage_name=new_column
+                    card_id, 'supervision_end', stage_name=new_column
                 ))
             else:
                 asyncio.create_task(trigger_supervision_notification(
-                    db, card_id, 'supervision_move', stage_name=new_column
+                    card_id, 'supervision_move', stage_name=new_column
                 ))
 
         return {
@@ -663,7 +666,7 @@ async def pause_supervision_card(
             'id': card.id,
             'is_paused': card.is_paused,
             'pause_reason': card.pause_reason,
-            'paused_at': card.paused_at.isoformat(),
+            'paused_at': card.paused_at.isoformat() if card.paused_at else None,
         }
 
     except HTTPException:

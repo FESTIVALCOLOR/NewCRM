@@ -14,6 +14,12 @@ from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
+from constants import (
+    POSITION_DAN, POSITION_SENIOR_MANAGER, POSITION_STUDIO_DIRECTOR,
+    POSITION_SDP, POSITION_GAP, POSITION_MANAGER,
+    ROLE_ADMIN, ROLE_DIRECTOR,
+)
+
 logger = logging.getLogger(__name__)
 
 # Фразы-призывы к действию, убираемые из дублей
@@ -88,11 +94,11 @@ async def dispatch_notification(
             # Роли, работающие с надзором, получают notify_supervision=True по умолчанию
             employee_obj = db.query(Employee).filter_by(id=employee_id).first()
             supervision_roles = {
-                'ДАН', 'Старший менеджер проектов',
-                'Руководитель студии', 'admin', 'director',
+                POSITION_DAN, POSITION_SENIOR_MANAGER,
+                POSITION_STUDIO_DIRECTOR, ROLE_ADMIN, ROLE_DIRECTOR,
             }
             is_senior_manager = bool(
-                employee_obj and employee_obj.position == 'Старший менеджер проектов'
+                employee_obj and employee_obj.position == POSITION_SENIOR_MANAGER
             )
             default_supervision = bool(
                 employee_obj and employee_obj.role in supervision_roles
@@ -243,10 +249,10 @@ async def _apply_duplication_rules(
         already_sent: set = {original_recipient_id}
 
         # Правило 1: Уведомления ст.менеджеру → дублируются руководителю студии + менеджеру
-        if recipient.position == 'Старший менеджер проектов':
+        if recipient.position == POSITION_SENIOR_MANAGER:
             # → Руководитель студии
             director = db.query(Employee).filter(
-                Employee.position == 'Руководитель студии',
+                Employee.position == POSITION_STUDIO_DIRECTOR,
                 Employee.status == 'активный',
             ).first()
             if director and director.id not in already_sent:
@@ -267,7 +273,7 @@ async def _apply_duplication_rules(
                 already_sent.add(card.manager_id)
 
         # Правило 2: Уведомления СДП/ГАП → дублируются ст.менеджеру (без призывов)
-        if recipient.position in ('СДП', 'ГАП'):
+        if recipient.position in (POSITION_SDP, POSITION_GAP):
             if card.senior_manager_id and card.senior_manager_id not in already_sent:
                 info_message = _strip_action_phrases(message)
                 await dispatch_notification(
@@ -278,7 +284,7 @@ async def _apply_duplication_rules(
                 already_sent.add(card.senior_manager_id)
 
         # Правило 4: Шаблонные — Менеджер/ГАП → дублируются ст.менеджеру (без призывов)
-        if project_type == 'template' and recipient.position in ('Менеджер', 'ГАП'):
+        if project_type == 'template' and recipient.position in (POSITION_MANAGER, POSITION_GAP):
             if card.senior_manager_id and card.senior_manager_id not in already_sent:
                 info_message = _strip_action_phrases(message)
                 await dispatch_notification(

@@ -200,10 +200,10 @@ async def check_deadlines_once():
                 recipients = [r for r in [sv.dan_id, sv.senior_manager_id] if r]
 
                 if biz_days == 2:
-                    for emp_id in recipients:
-                        key = (sv.id, 'supervision', str(today), 'warning')
-                        if key not in _sent_today:
-                            _sent_today.add(key)
+                    key = (sv.id, 'supervision', str(today), 'warning')
+                    if key not in _sent_today:
+                        _sent_today.add(key)
+                        for emp_id in recipients:
                             await dispatch_notification(
                                 db=db, employee_id=emp_id,
                                 event_type='deadline',
@@ -214,10 +214,10 @@ async def check_deadlines_once():
                                 project_type='supervision',
                             )
                 elif today > dl:
-                    for emp_id in recipients:
-                        key = (sv.id, 'supervision', str(today), 'overdue')
-                        if key not in _sent_today:
-                            _sent_today.add(key)
+                    key = (sv.id, 'supervision', str(today), 'overdue')
+                    if key not in _sent_today:
+                        _sent_today.add(key)
+                        for emp_id in recipients:
                             await dispatch_notification(
                                 db=db, employee_id=emp_id,
                                 event_type='deadline',

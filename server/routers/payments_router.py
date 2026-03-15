@@ -809,7 +809,7 @@ async def create_payment(
             duplicate_query = duplicate_query.filter(Payment.supervision_card_id == payment_data.supervision_card_id)
         # Исключаем переназначенные платежи из проверки
         duplicate_query = duplicate_query.filter(
-            (Payment.reassigned == False) | (Payment.reassigned == None)
+            (Payment.reassigned == False) | (Payment.reassigned.is_(None))
         )
         existing = duplicate_query.first()
         if existing:
@@ -996,7 +996,7 @@ async def set_payments_report_month(
     # Обновляем все платежи без отчетного месяца
     result = db.query(Payment).filter(
         Payment.contract_id == contract_id,
-        or_(Payment.report_month == None, Payment.report_month == '')
+        or_(Payment.report_month.is_(None), Payment.report_month == '')
     ).update(
         {'report_month': report_month},
         synchronize_session='fetch'
@@ -1094,7 +1094,7 @@ async def get_payments_for_crm(
     """Получить выплаты для CRM (не надзор)"""
     payments = db.query(Payment).filter(
         Payment.contract_id == contract_id,
-        Payment.supervision_card_id == None
+        Payment.supervision_card_id.is_(None)
     ).all()
 
     result = []
@@ -1312,7 +1312,7 @@ async def mark_payment_as_paid(
         return {
             'id': payment.id,
             'is_paid': payment.is_paid,
-            'paid_date': payment.paid_date.isoformat(),
+            'paid_date': payment.paid_date.isoformat() if payment.paid_date else None,
             'paid_by': payment.paid_by
         }
 

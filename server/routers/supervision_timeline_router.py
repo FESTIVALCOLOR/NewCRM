@@ -163,7 +163,7 @@ async def update_supervision_timeline_entry(
     new_status = entry.status
     if new_status and new_status != old_status and new_status.lower() in ('выполнено', 'завершено'):
         asyncio.create_task(trigger_supervision_notification(
-            db, card_id, 'supervision_stage_complete', stage_name=entry.stage_name
+            card_id, 'supervision_stage_complete', stage_name=entry.stage_name
         ))
 
     return {c.name: getattr(entry, c.name) for c in entry.__table__.columns}

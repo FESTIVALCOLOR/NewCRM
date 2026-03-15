@@ -20,6 +20,7 @@ from database import (
     MessengerChat, MessengerChatMember, MessengerScript, MessengerSetting, MessengerMessageLog,
 )
 from auth import get_current_user
+from constants import SUPERUSER_ROLES
 from permissions import require_permission
 from pydantic import BaseModel
 from messenger_schemas import (
@@ -783,9 +784,9 @@ async def trigger_script_endpoint(
 ):
     """Ручная отправка скрипта мессенджера"""
     if request.entity_type == 'supervision':
-        await trigger_supervision_notification(db, request.card_id, request.script_type)
+        await trigger_supervision_notification(request.card_id, request.script_type)
     else:
-        await trigger_messenger_notification(db, request.card_id, request.script_type)
+        await trigger_messenger_notification(request.card_id, request.script_type)
 
     return {"status": "success"}
 
@@ -887,7 +888,7 @@ async def create_messenger_chat(
     try:
         if data.crm_card_id:
             asyncio.create_task(
-                trigger_messenger_notification(db, data.crm_card_id, 'project_start')
+                trigger_messenger_notification(data.crm_card_id, 'project_start')
             )
     except Exception as e:
         logger.warning(f"Не удалось отправить project_start: {e}")
@@ -1339,7 +1340,7 @@ async def get_messenger_scripts(
     query = db.query(MessengerScript)
     if project_type:
         query = query.filter(
-            (MessengerScript.project_type == project_type) | (MessengerScript.project_type == None)
+            (MessengerScript.project_type == project_type) | (MessengerScript.project_type.is_(None))
         )
     if script_type:
         query = query.filter(MessengerScript.script_type == script_type)
@@ -1499,7 +1500,7 @@ async def mtproto_send_code(
     db: Session = Depends(get_db),
 ):
     """Шаг 1: Отправить код подтверждения на телефон для MTProto авторизации"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     # Перечитываем настройки из БД
@@ -1539,7 +1540,7 @@ async def mtproto_resend_sms(
     db: Session = Depends(get_db),
 ):
     """Отправить код сразу по SMS (send_code + resend_code за один вызов)"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     messenger_settings = {}
@@ -1571,7 +1572,7 @@ async def mtproto_verify_code(
     db: Session = Depends(get_db),
 ):
     """Шаг 2: Подтвердить код и активировать MTProto сессию"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     code = str(data.get("code", "")).strip()
@@ -1611,7 +1612,7 @@ async def mtproto_session_status(
     db: Session = Depends(get_db),
 ):
     """Проверить статус Pyrogram-сессии"""
-    if current_user.role not in ("admin", "director", "Руководитель студии"):
+    if current_user.role not in SUPERUSER_ROLES:
         raise HTTPException(status_code=403, detail="Только администратор или директор")
 
     messenger_settings = {}

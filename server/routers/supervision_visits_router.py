@@ -333,7 +333,7 @@ async def create_visit(
         import asyncio
         visit_date_str = str(data.visit_date) if data.visit_date else ''
         asyncio.create_task(trigger_supervision_notification(
-            db, card_id, 'supervision_visit',
+            card_id, 'supervision_visit',
             stage_name=data.stage_name or '',
             extra_context={'visit_date': visit_date_str},
         ))
