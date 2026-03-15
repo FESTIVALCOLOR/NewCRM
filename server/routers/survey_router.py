@@ -170,13 +170,31 @@ def _find_answer(answers: dict, *keys):
 
 
 def _safe_int(value) -> Optional[int]:
-    """Безопасное преобразование в int."""
+    """Безопасное преобразование в int.
+
+    Яндекс Формы передают ответы шкалы в формате:
+      '"0 - Точно не буду рекомендовать, 10 - Обязательно порекомендую": 10'
+    Извлекаем число после последнего двоеточия.
+    """
     if value is None:
         return None
     try:
         return int(value)
     except (ValueError, TypeError):
-        return None
+        pass
+    # Пробуем извлечь число после последнего ":"
+    if isinstance(value, str) and ':' in value:
+        try:
+            return int(value.rsplit(':', 1)[1].strip())
+        except (ValueError, IndexError):
+            pass
+    # Пробуем найти последнее число в строке
+    if isinstance(value, str):
+        import re
+        nums = re.findall(r'\d+', value)
+        if nums:
+            return int(nums[-1])
+    return None
 
 
 # ── Эндпоинты (с авторизацией) ──────────────────────────────────────
