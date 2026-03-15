@@ -97,22 +97,45 @@ async def dispatch_notification(
             default_supervision = bool(
                 employee_obj and employee_obj.role in supervision_roles
             )
-            settings = NotificationSettings(
-                employee_id=employee_id,
-                telegram_enabled=True,
-                email_enabled=False,
-                notify_crm_stage=True,
-                notify_assigned=True,
-                notify_deadline=True,
-                notify_payment=False,
-                notify_supervision=default_supervision,
-                notify_individual=True,
-                notify_template=True,
-                notify_duplicate_info=is_senior_manager,
-                notify_revision_info=is_senior_manager,
-            )
-            db.add(settings)
-            db.flush()
+            try:
+                settings = NotificationSettings(
+                    employee_id=employee_id,
+                    telegram_enabled=True,
+                    email_enabled=False,
+                    notify_crm_stage=True,
+                    notify_assigned=True,
+                    notify_deadline=True,
+                    notify_payment=False,
+                    notify_supervision=default_supervision,
+                    notify_individual=True,
+                    notify_template=True,
+                    notify_duplicate_info=is_senior_manager,
+                    notify_revision_info=is_senior_manager,
+                )
+                db.add(settings)
+                db.flush()
+            except Exception:
+                # Race condition: другой воркер уже создал запись
+                db.rollback()
+                # Перечитать notification + settings
+                notification = Notification(
+                    employee_id=employee_id,
+                    notification_type=event_type,
+                    title=title,
+                    message=message,
+                    related_entity_type=related_entity_type,
+                    related_entity_id=related_entity_id,
+                    is_read=False,
+                    created_at=datetime.utcnow(),
+                )
+                db.add(notification)
+                db.flush()
+                settings = db.query(NotificationSettings).filter_by(
+                    employee_id=employee_id
+                ).first()
+                if not settings:
+                    db.commit()
+                    return
 
         # 3. Проверить флаг типа события
         event_flag_map = {
