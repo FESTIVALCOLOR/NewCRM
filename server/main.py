@@ -2,6 +2,7 @@
 FastAPI приложение - главный файл
 REST API для многопользовательской CRM
 """
+import asyncio
 import logging
 import os
 from fastapi import FastAPI, Depends, HTTPException, Request
