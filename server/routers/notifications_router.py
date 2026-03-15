@@ -45,24 +45,42 @@ async def get_notification_settings(
 
     settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
     if not settings:
-        # Роли, работающие с надзором, получают notify_supervision=True по умолчанию
+        # Рекомендуемые дефолты по ролям (см. docs/notifications-scripts-guide.md §10)
+        role = employee.role or ''
+        pos = employee.position or ''
+
+        # supervision: ДАН, Ст.менеджер, Руководитель
         supervision_roles = {
             'ДАН', 'Старший менеджер проектов',
             'Руководитель студии', 'admin', 'director',
         }
-        default_supervision = employee.role in supervision_roles
-        is_senior_manager = employee.position == 'Старший менеджер проектов'
+        # payment: Руководитель, Ст.менеджер
+        payment_roles = {
+            'Руководитель студии', 'Старший менеджер проектов',
+            'admin', 'director',
+        }
+        # crm_stage: Выкл для ДАН и Замерщик
+        crm_stage_off = {'ДАН', 'Замерщик'}
+        # deadline: Выкл для Замерщик
+        deadline_off = {'Замерщик'}
+        # individual: Выкл для ДАН
+        individual_off = {'ДАН'}
+        # template: Выкл для ДАН и СДП
+        template_off = {'ДАН', 'СДП'}
+
+        is_senior_manager = pos == 'Старший менеджер проектов'
+
         return NotificationSettingsResponse(
             employee_id=employee_id,
             telegram_enabled=True,
             email_enabled=False,
-            notify_crm_stage=True,
+            notify_crm_stage=role not in crm_stage_off,
             notify_assigned=True,
-            notify_deadline=True,
-            notify_payment=False,
-            notify_supervision=default_supervision,
-            notify_individual=True,
-            notify_template=True,
+            notify_deadline=role not in deadline_off,
+            notify_payment=role in payment_roles,
+            notify_supervision=role in supervision_roles,
+            notify_individual=role not in individual_off,
+            notify_template=role not in template_off,
             notify_duplicate_info=is_senior_manager,
             notify_revision_info=is_senior_manager,
             telegram_connected=bool(employee.telegram_user_id),
