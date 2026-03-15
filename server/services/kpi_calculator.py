@@ -21,7 +21,7 @@ from database import (
 from constants import (
     POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
     POSITION_SDP, POSITION_GAP, POSITION_DAN, POSITION_DAN_FULL,
-    POSITION_MANAGER, POSITION_MEASURER,
+    POSITION_MANAGER, POSITION_MEASURER, POSITION_DESIGNER, POSITION_DRAFTSMAN,
     STATUS_COMPLETED, STATUS_TERMINATED,
 )
 from services.date_helpers import networkdays
@@ -42,8 +42,10 @@ CRM_KPI_WEIGHTS = {
     POSITION_SDP:            {'deadline': 0.25, 'quality': 0.35, 'speed': 0.25, 'nps': 0.15},
     POSITION_GAP:            {'deadline': 0.25, 'quality': 0.35, 'speed': 0.25, 'nps': 0.15},
     POSITION_MEASURER:       {'deadline': 0.35, 'quality': 0.15, 'speed': 0.35, 'nps': 0.15},
+    POSITION_DESIGNER:       {'deadline': 0.25, 'quality': 0.35, 'speed': 0.25, 'nps': 0.15},
+    POSITION_DRAFTSMAN:      {'deadline': 0.30, 'quality': 0.35, 'speed': 0.25, 'nps': 0.10},
 }
-# Чертёжник / Дизайнер — позиции не в constants, добавляем fallback
+# Fallback для неизвестных позиций
 CRM_KPI_WEIGHTS_DEFAULT = {'deadline': 0.30, 'quality': 0.35, 'speed': 0.25, 'nps': 0.10}
 
 # ── Веса компонентов KPI (авторский надзор) ──────────────────────────
@@ -63,8 +65,9 @@ RECOMMENDED_MAX_LOAD = {
     POSITION_MEASURER: 3,
     POSITION_DAN: 6,
     POSITION_DAN_FULL: 6,
+    POSITION_DESIGNER: 4,
 }
-RECOMMENDED_MAX_LOAD_DEFAULT = 5  # Чертёжники, Дизайнеры
+RECOMMENDED_MAX_LOAD_DEFAULT = 5  # Чертёжники и прочие
 
 
 def _parse_date(val) -> Optional[date]:
@@ -449,7 +452,8 @@ def calc_supervision_kpi(db: Session, employee_id: int, position: str,
         defects_resolved_total = agg[1] or 0
         budget_savings_total = agg[2] or 0.0
 
-    k_visits = 100.0  # Упрощённый: визиты сложно нормировать без базы
+    # Ожидаем 2 визита на каждый активный надзор за период
+    k_visits = min((visits_count / max(len(card_ids) * 2, 1)) * 100, 100.0)
 
     weights = SUPERVISION_KPI_WEIGHTS.get(position, SUPERVISION_KPI_WEIGHTS_DEFAULT)
 

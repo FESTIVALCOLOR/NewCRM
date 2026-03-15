@@ -19,7 +19,7 @@ from ui.reports_tab import ReportsTab
 from ui.employees_tab import EmployeesTab
 from ui.salaries_tab import SalariesTab
 from ui.employee_reports_tab import EmployeeReportsTab
-from ui.employee_analytics_tab import EmployeeAnalyticsTab
+# EmployeeAnalyticsTab интегрирована в EmployeeReportsTab
 from ui.global_search_widget import GlobalSearchWidget
 from ui.custom_message_box import CustomMessageBox
 from utils.tab_helpers import disable_wheel_on_tabwidget
@@ -1239,10 +1239,7 @@ class MainWindow(QMainWindow):
                 lambda: EmployeeReportsTab(self.employee, api_client=self.api_client),
                 None))
 
-        if 'Аналитика сотрудников' in allowed_tabs:
-            tab_configs.append(('  Аналитика сотрудников  ', None,
-                lambda: EmployeeAnalyticsTab(self.employee, api_client=self.api_client),
-                None))
+        # Аналитика сотрудников интегрирована в «Отчеты по сотрудникам»
 
         # Первую вкладку создаём сразу, остальные — lazy placeholder
         for i, (tab_label, attr_name, factory, sync_info) in enumerate(tab_configs):

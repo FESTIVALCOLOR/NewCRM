@@ -12,6 +12,8 @@ POSITION_GAP = 'ГАП'
 POSITION_DAN = 'ДАН'
 POSITION_MANAGER = 'Менеджер'
 POSITION_MEASURER = 'Замерщик'
+POSITION_DESIGNER = 'Дизайнер'
+POSITION_DRAFTSMAN = 'Чертёжник'
 
 # Альтернативные наименования (legacy/полные)
 POSITION_DAN_FULL = 'Дизайнер авторского надзора'
