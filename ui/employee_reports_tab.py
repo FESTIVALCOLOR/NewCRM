@@ -396,9 +396,11 @@ class EmployeeReportsTab(QWidget):
         filters_row.addWidget(month_combo)
 
         refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', icon_size=12)
+        refresh_btn.setFixedHeight(28)
         refresh_btn.clicked.connect(lambda: self._refresh_all(project_type))
         filters_row.addWidget(refresh_btn)
         filters_row.addStretch()
+        filters_row.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(filters_row)
 
         # ── 6 KPI-карточек ─────────────────────────────────────────
@@ -477,9 +479,10 @@ class EmployeeReportsTab(QWidget):
         role_tabs.setStyleSheet("""
             QTabWidget::pane { border: 1px solid #E0E0E0; border-radius: 4px; }
             QTabBar::tab {
-                padding: 5px 14px; margin-right: 2px;
+                padding: 6px 18px; margin-right: 2px;
                 border: 1px solid #E0E0E0; border-bottom: none;
                 border-radius: 4px 4px 0 0; background: #FAFAFA;
+                min-width: 60px;
             }
             QTabBar::tab:selected { background: #FFFFFF; font-weight: bold; }
         """)
@@ -1149,7 +1152,7 @@ class EmployeeReportsTab(QWidget):
 
             # 3. Компоненты KPI (bar) — на всю высоту справа
             kpi_components_chart = StackedBarChartWidget('Компоненты KPI')
-            kpi_components_chart.setMinimumHeight(560)
+            kpi_components_chart.setFixedHeight(560)
             if kpi:
                 if is_supervision:
                     comp_names = ['Закупки', 'Дефекты', 'Визиты', 'NPS']
@@ -1172,9 +1175,14 @@ class EmployeeReportsTab(QWidget):
 
             # 4. Просрочки по стадиям (stacked bar) — отдельной строкой
             stages_breakdown = detail.get('stages_breakdown', [])
-            stages_chart = StackedBarChartWidget('Стадии: в срок / просрочки')
-            stages_chart.setFixedHeight(300)
+
+            charts_w = QWidget()
+            charts_w.setLayout(charts_main)
+            layout.addWidget(charts_w)
+
             if stages_breakdown:
+                stages_chart = StackedBarChartWidget('Стадии: в срок / просрочки')
+                stages_chart.setFixedHeight(300)
                 stage_names = [s.get('stage', '')[:15] for s in stages_breakdown]
                 on_time_vals = [s.get('on_time', 0) for s in stages_breakdown]
                 overdue_vals = [s.get('overdue', 0) for s in stages_breakdown]
@@ -1182,11 +1190,7 @@ class EmployeeReportsTab(QWidget):
                     {'label': 'В срок', 'values': on_time_vals, 'color': '#7ED321'},
                     {'label': 'Просрочки', 'values': overdue_vals, 'color': '#E74C3C'},
                 ], stacked=True)
-
-            charts_w = QWidget()
-            charts_w.setLayout(charts_main)
-            layout.addWidget(charts_w)
-            layout.addWidget(stages_chart)
+                layout.addWidget(stages_chart)
 
         # Таблица проектов (расширенная по руководству)
         if projects:
@@ -1480,7 +1484,8 @@ class EmployeeReportsTab(QWidget):
                     img.hAlign = 'CENTER'
                     elements.append(img)
             else:
-                # Полный вид — захват текущей вкладки проекта
+                from reportlab.platypus import PageBreak
+                # Полный вид — посекционный экспорт с разбивкой по страницам
                 idx = self.report_tabs.currentIndex()
                 tab_name = self.report_tabs.tabText(idx)
                 elements.append(Paragraph(
@@ -1489,21 +1494,27 @@ class EmployeeReportsTab(QWidget):
                     style_sub))
                 elements.append(Spacer(1, 4 * mm))
 
+                page_h_mm = (page_size[1] - MARGIN_TOP - MARGIN_BOT) / mm - 30
+
                 current_tab = self.report_tabs.currentWidget()
                 if current_tab:
-                    # Внутри QScrollArea — контейнер
                     inner = current_tab.widget() if hasattr(current_tab, 'widget') else current_tab
                     if inner:
-                        result = grab_widget_png(inner, RENDER_SCALE)
-                        if result:
+                        # Собираем виджеты-секции для отдельных страниц
+                        sections = self._collect_pdf_sections(inner)
+                        for i, widget in enumerate(sections):
+                            result = grab_widget_png(widget, RENDER_SCALE)
+                            if not result:
+                                continue
                             buf, w_px, h_px = result
-                            # Ограничиваем высоту страницей (за вычетом заголовков)
-                            page_h_mm = (page_size[1] - MARGIN_TOP - MARGIN_BOT) / mm - 30
                             aspect = h_px / w_px if w_px > 0 else 1
                             img_h = min(PAGE_W_MM * aspect, page_h_mm)
                             img = fit_image(buf, w_px, h_px, PAGE_W_MM, img_h)
                             img.hAlign = 'CENTER'
                             elements.append(img)
+                            # PageBreak после каждой секции, кроме последней
+                            if i < len(sections) - 1:
+                                elements.append(PageBreak())
 
             if len(elements) <= 3:  # Только заголовок + spacers — нет контента
                 try:
@@ -1527,3 +1538,80 @@ class EmployeeReportsTab(QWidget):
                 CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF: {e}', 'error').exec_()
             except Exception:
                 pass
+
+    def _collect_pdf_sections(self, container):
+        """Собирает видимые виджеты-секции из контейнера для PDF экспорта.
+
+        Группирует элементы в логические блоки:
+        - Страница 1: Фильтры + KPI-карточки + Топ-5 + Тренд
+        - Страница 2: Таблица роли + 3 графика сравнения
+        - Страница 3+: Детальная карточка (мини-KPI + графики + проекты + отзывы)
+        """
+        sections = []
+        layout = container.layout()
+        if not layout:
+            return [container]
+
+        # Соберём все top-level виджеты/лейауты
+        widgets = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget() and item.widget().isVisible():
+                widgets.append(item.widget())
+
+        if not widgets:
+            return [container]
+
+        # Страница 1: всё до role_tabs (KPI карточки, Top-5, тренд)
+        # Страница 2: role_tabs (таблица + графики)
+        # Страница 3: detail card
+        page1_widgets = []
+        page2_widget = None
+        page3_widget = None
+
+        for w in widgets:
+            obj_name = w.objectName() or ''
+            if 'role_tabs' in obj_name:
+                page2_widget = w
+            elif 'detail_' in obj_name:
+                page3_widget = w
+            elif page2_widget is None:
+                page1_widgets.append(w)
+
+        # Создаём временные контейнеры для каждой страницы
+        if page1_widgets:
+            # Захватываем верхнюю часть до role_tabs
+            # Используем все виджеты до role_tabs как одну группу
+            first_w = page1_widgets[0]
+            last_w = page1_widgets[-1]
+            # Вычисляем общую область от первого до последнего виджета
+            y_top = first_w.mapTo(container, first_w.rect().topLeft()).y()
+            y_bot = last_w.mapTo(container, last_w.rect().bottomLeft()).y()
+            if y_bot > y_top:
+                sections.append(container)  # fallback — весь верх
+                # Лучше: захватим каждый виджет отдельно не будем
+                sections = page1_widgets[:1]  # Первый виджет (фильтры) — пропускаем
+                sections = []
+                # Собираем верхнюю часть как единый блок
+                for w in page1_widgets:
+                    if w.height() > 10:
+                        sections.append(w)
+
+        if page2_widget and page2_widget.isVisible():
+            # Текущая вкладка роли — таблица + графики
+            role_tabs_w = page2_widget
+            if isinstance(role_tabs_w, QTabWidget):
+                current = role_tabs_w.currentWidget()
+                if current:
+                    sections.append(current)
+
+        if page3_widget and page3_widget.isVisible():
+            # Детальная карточка
+            detail_content = page3_widget.findChild(
+                QWidget, page3_widget.objectName().replace('detail_', 'detail_content_'))
+            if detail_content and detail_content.isVisible():
+                sections.append(detail_content)
+            elif page3_widget.isVisible():
+                sections.append(page3_widget)
+
+        return sections if sections else [container]

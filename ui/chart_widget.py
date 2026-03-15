@@ -453,6 +453,9 @@ class SectionWidget(QFrame):
 class LineChartWidget(ChartBase):
     """Линейный график с градиентной заливкой и полыми маркерами"""
 
+    _AXIS_LEFT = 0.08
+    _AXIS_RIGHT = 0.96
+
     def __init__(self, title="", parent=None):
         super().__init__(title, parent)
 
@@ -647,13 +650,14 @@ class StackedBarChartWidget(ChartBase):
             # Дополнительный bottom padding для повёрнутых меток
             needs_bottom = (rotation == 90 and n_categories > 0)
             self._finalize(legend_above=has_legend,
-                           bottom=0.25 if needs_bottom else None)
+                           bottom=0.30 if needs_bottom else None,
+                           left=0.10 if needs_bottom else None)
 
 
 class HorizontalBarWidget(ChartBase):
     """Горизонтальный bar chart для ТОП-N или распределений"""
 
-    _AXIS_LEFT = 0.22
+    _AXIS_LEFT = 0.28
     _AXIS_RIGHT = 0.92
 
     def __init__(self, title="", parent=None):

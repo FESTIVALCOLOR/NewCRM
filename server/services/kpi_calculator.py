@@ -11,7 +11,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Dict, List, Any
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, extract, cast, DateTime
+from sqlalchemy import func, and_, or_, extract, cast, DateTime, Date
 
 from database import (
     Employee, CRMCard, Contract, StageExecutor, StageWorkflowState,
@@ -346,8 +346,8 @@ def calc_k_procurement(db: Session, employee_id: int,
         SupervisionTimelineEntry.supervision_card_id.in_(card_ids),
         SupervisionTimelineEntry.actual_date.isnot(None),
         SupervisionTimelineEntry.plan_date.isnot(None),
-        SupervisionTimelineEntry.actual_date >= period_start,
-        SupervisionTimelineEntry.actual_date <= period_end,
+        cast(SupervisionTimelineEntry.actual_date, Date) >= period_start,
+        cast(SupervisionTimelineEntry.actual_date, Date) <= period_end,
     ).all()
 
     if not entries:
@@ -382,8 +382,8 @@ def calc_k_defects(db: Session, employee_id: int,
         func.coalesce(func.sum(SupervisionTimelineEntry.defects_resolved), 0).label('resolved'),
     ).filter(
         SupervisionTimelineEntry.supervision_card_id.in_(card_ids),
-        SupervisionTimelineEntry.actual_date >= period_start,
-        SupervisionTimelineEntry.actual_date <= period_end,
+        cast(SupervisionTimelineEntry.actual_date, Date) >= period_start,
+        cast(SupervisionTimelineEntry.actual_date, Date) <= period_end,
     ).first()
 
     found = result.found or 0
