@@ -28,6 +28,7 @@ from utils.calendar_helpers import ICONS_PATH
 from utils.table_settings import apply_no_focus_delegate
 from utils.data_access import DataAccess
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -567,25 +568,35 @@ class EmployeeReportsTab(QWidget):
             QTimer.singleShot(200, lambda: self._refresh_all('Индивидуальный'))
 
     def _load_self_profile(self):
-        """Загружает собственную карточку для исполнителей."""
+        """Загружает собственную карточку для исполнителей (async)."""
         emp_id = (self.employee or {}).get('id')
         if not emp_id:
             return
-        # Загружаем по всем типам проектов, берём первый с данными
-        for pt_code in ('individual', 'template', 'supervision'):
-            try:
-                detail = self.data_access.get_analytics_employee_detail(
-                    emp_id, pt_code)
-            except Exception:
-                detail = {}
-            if detail and detail.get('employee'):
+
+        def _fetch():
+            result = {'detail': None, 'pt_code': None}
+            for pt_code in ('individual', 'template', 'supervision'):
+                try:
+                    detail = self.data_access.get_analytics_employee_detail(
+                        emp_id, pt_code)
+                except Exception:
+                    detail = {}
+                if detail and detail.get('employee'):
+                    result['detail'] = detail
+                    result['pt_code'] = pt_code
+                    break
+            QTimer.singleShot(0, lambda: _on_done(result))
+
+        def _on_done(result):
+            if result['detail']:
                 self._update_detail_card_in_widget(
-                    self._self_detail_content, pt_code, detail)
-                return
-        # Если нет данных ни по одному типу
-        lbl = QLabel('Нет данных по вашим проектам')
-        lbl.setStyleSheet('color: #999; padding: 16px; font-size: 13px;')
-        self._self_detail_content.layout().addWidget(lbl)
+                    self._self_detail_content, result['pt_code'], result['detail'])
+            else:
+                lbl = QLabel('Нет данных по вашим проектам')
+                lbl.setStyleSheet('color: #999; padding: 16px; font-size: 13px;')
+                self._self_detail_content.layout().addWidget(lbl)
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _on_project_tab_changed(self, index):
         if self.access_level == 'self':
@@ -631,65 +642,82 @@ class EmployeeReportsTab(QWidget):
         return params
 
     def _refresh_all(self, project_type):
-        """Обновляет аналитику для типа проекта."""
+        """Обновляет аналитику для типа проекта (async)."""
         if self._loading:
             return
         self._loading = True
-        try:
-            pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
-            period = self._get_period_params(project_type)
 
-            # 1. Дашборд KPI
+        pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
+        period = self._get_period_params(project_type)
+
+        def _fetch():
             try:
                 dashboard = self.data_access.get_analytics_dashboard(pt_code, **period)
             except Exception as e:
                 logger.warning(f"Ошибка дашборда аналитики: {e}")
                 dashboard = {}
-            self._dashboard_cache[project_type] = dashboard
-            self._update_kpi_cards(project_type, dashboard)
-            self._update_top5(project_type, dashboard)
-            self._update_dashboard_trend(project_type, dashboard)
+            QTimer.singleShot(0, lambda: _on_done(dashboard))
 
-            # 2. Данные текущей роли
-            container = self._get_container(project_type)
-            role_tabs = container.findChild(QTabWidget, f'role_tabs_{project_type}')
-            if role_tabs and role_tabs.count() > 0:
-                current = role_tabs.currentWidget()
-                if current:
-                    role_code = current.property('role_code')
-                    if role_code:
-                        self._load_role_data(project_type, role_code)
+        def _on_done(dashboard):
+            try:
+                self._dashboard_cache[project_type] = dashboard
+                self._update_kpi_cards(project_type, dashboard)
+                self._update_top5(project_type, dashboard)
+                self._update_dashboard_trend(project_type, dashboard)
 
-        except Exception as e:
-            logger.error(f"Ошибка загрузки аналитики: {e}", exc_info=True)
-        finally:
-            self._loading = False
+                # Загрузка данных текущей роли
+                container = self._get_container(project_type)
+                role_tabs = container.findChild(QTabWidget, f'role_tabs_{project_type}')
+                if role_tabs and role_tabs.count() > 0:
+                    current = role_tabs.currentWidget()
+                    if current:
+                        role_code = current.property('role_code')
+                        if role_code:
+                            self._load_role_data(project_type, role_code)
+            except Exception as e:
+                logger.error(f"Ошибка загрузки аналитики: {e}", exc_info=True)
+            finally:
+                self._loading = False
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _load_role_data(self, project_type, role_code):
-        """Загрузка таблицы сравнения по роли."""
+        """Загрузка таблицы сравнения по роли (async)."""
         pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
         period = self._get_period_params(project_type)
 
-        try:
-            data = self.data_access.get_analytics_by_role(role_code, pt_code, **period)
-        except Exception as e:
-            logger.warning(f"Ошибка загрузки роли {role_code}: {e}")
-            data = {}
-        self._role_cache[f'{project_type}_{role_code}'] = data
-        self._update_role_table(project_type, role_code, data)
+        def _fetch():
+            try:
+                data = self.data_access.get_analytics_by_role(role_code, pt_code, **period)
+            except Exception as e:
+                logger.warning(f"Ошибка загрузки роли {role_code}: {e}")
+                data = {}
+            QTimer.singleShot(0, lambda: _on_done(data))
+
+        def _on_done(data):
+            self._role_cache[f'{project_type}_{role_code}'] = data
+            self._update_role_table(project_type, role_code, data)
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _load_employee_detail(self, project_type, employee_id):
-        """Загрузка детальной карточки сотрудника."""
+        """Загрузка детальной карточки сотрудника (async)."""
         pt_code = PROJECT_TYPE_MAP.get(project_type, 'individual')
         period = self._get_period_params(project_type)
 
-        try:
-            detail = self.data_access.get_analytics_employee_detail(
-                employee_id, pt_code, **period)
-        except Exception as e:
-            logger.warning(f"Ошибка загрузки деталей: {e}")
-            detail = {}
-        self._update_detail_card(project_type, detail)
+        def _fetch():
+            try:
+                detail = self.data_access.get_analytics_employee_detail(
+                    employee_id, pt_code, **period)
+            except Exception as e:
+                logger.warning(f"Ошибка загрузки деталей: {e}")
+                detail = {}
+            QTimer.singleShot(0, lambda: _on_done(detail))
+
+        def _on_done(detail):
+            self._update_detail_card(project_type, detail)
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     # ══════════════════════════════════════════════════════════════════
     # ОБНОВЛЕНИЕ UI

@@ -3,6 +3,8 @@
 Автоматически выбирает источник данных в зависимости от наличия api_client
 Поддерживает offline-режим с очередью отложенных операций
 """
+import json as _json
+import os as _os
 import time as _time
 from typing import Optional, List, Dict, Any
 from database.db_manager import DatabaseManager
@@ -51,6 +53,39 @@ class _DataCache:
 
 # Глобальный кеш — общий для всех экземпляров DataAccess
 _global_cache = _DataCache()
+
+
+# ==================== OFFLINE-КЭШ АНАЛИТИКИ ====================
+
+def _analytics_cache_dir() -> str:
+    """Папка для offline-кэша аналитики."""
+    base = _os.path.join(_os.path.expanduser('~'), '.interior_studio', 'analytics_cache')
+    _os.makedirs(base, exist_ok=True)
+    return base
+
+
+def _analytics_cache_save(key: str, data):
+    """Сохраняет аналитические данные в файл для offline-доступа."""
+    try:
+        safe_key = key.replace('/', '_').replace('\\', '_').replace(':', '_')
+        path = _os.path.join(_analytics_cache_dir(), f"{safe_key}.json")
+        with open(path, 'w', encoding='utf-8') as f:
+            _json.dump(data, f, ensure_ascii=False, default=str)
+    except Exception:
+        pass
+
+
+def _analytics_cache_load(key: str):
+    """Загружает аналитические данные из offline-кэша."""
+    try:
+        safe_key = key.replace('/', '_').replace('\\', '_').replace(':', '_')
+        path = _os.path.join(_analytics_cache_dir(), f"{safe_key}.json")
+        if _os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                return _json.load(f)
+    except Exception:
+        pass
+    return None
 
 
 def _safe_log(msg):
@@ -2893,36 +2928,60 @@ class DataAccess(QObject):
     def get_analytics_dashboard(self, project_type: str, year: int = None,
                                 quarter: int = None, month: int = None) -> Dict:
         """Дашборд аналитики по сотрудникам."""
+        cache_key = f"analytics_dashboard_{project_type}_{year}_{quarter}_{month}"
         if self._should_use_api():
             try:
-                return self.api_client.get_analytics_dashboard(
+                result = self.api_client.get_analytics_dashboard(
                     project_type, year=year, quarter=quarter, month=month)
+                _analytics_cache_save(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API get_analytics_dashboard: {e}")
+        # Offline fallback
+        cached = _analytics_cache_load(cache_key)
+        if cached:
+            _safe_log(f"[DataAccess] Offline fallback: analytics_dashboard")
+            return cached
         return {}
 
     def get_analytics_by_role(self, role_code: str, project_type: str,
                               year: int = None, quarter: int = None,
                               month: int = None) -> Dict:
         """Сравнительная аналитика по роли."""
+        cache_key = f"analytics_role_{role_code}_{project_type}_{year}_{quarter}_{month}"
         if self._should_use_api():
             try:
-                return self.api_client.get_analytics_by_role(
+                result = self.api_client.get_analytics_by_role(
                     role_code, project_type, year=year, quarter=quarter, month=month)
+                _analytics_cache_save(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API get_analytics_by_role: {e}")
+        # Offline fallback
+        cached = _analytics_cache_load(cache_key)
+        if cached:
+            _safe_log(f"[DataAccess] Offline fallback: analytics_by_role {role_code}")
+            return cached
         return {}
 
     def get_analytics_employee_detail(self, employee_id: int, project_type: str,
                                       year: int = None, quarter: int = None,
                                       month: int = None) -> Dict:
         """Детальная карточка сотрудника."""
+        cache_key = f"analytics_detail_{employee_id}_{project_type}_{year}_{quarter}_{month}"
         if self._should_use_api():
             try:
-                return self.api_client.get_analytics_employee_detail(
+                result = self.api_client.get_analytics_employee_detail(
                     employee_id, project_type, year=year, quarter=quarter, month=month)
+                _analytics_cache_save(cache_key, result)
+                return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API get_analytics_employee_detail: {e}")
+        # Offline fallback
+        cached = _analytics_cache_load(cache_key)
+        if cached:
+            _safe_log(f"[DataAccess] Offline fallback: analytics_employee_detail {employee_id}")
+            return cached
         return {}
 
     def get_survey_stats(self, project_type: str = None) -> Dict:

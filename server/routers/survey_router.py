@@ -13,6 +13,8 @@
 """
 import logging
 import secrets
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional, List
 
@@ -31,6 +33,43 @@ from constants import ROLE_ADMIN, ROLE_DIRECTOR, POSITION_STUDIO_DIRECTOR
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["surveys"])
+
+# ── Rate limiter для webhook ─────────────────────────────────────────
+
+WEBHOOK_RATE_LIMIT = 30       # макс. запросов в окно
+WEBHOOK_RATE_WINDOW = 60      # секунд (1 минута)
+WEBHOOK_BLOCK_DURATION = 300  # секунд блокировки при превышении
+
+_webhook_hits: dict[str, list[float]] = defaultdict(list)
+_webhook_blocked: dict[str, float] = {}
+
+
+def _check_webhook_rate_limit(client_ip: str) -> bool:
+    """Проверяет rate limit для IP. Возвращает True если запрос разрешён."""
+    now = time.monotonic()
+
+    # Проверяем блокировку
+    blocked_until = _webhook_blocked.get(client_ip, 0)
+    if now < blocked_until:
+        return False
+
+    # Очищаем старые записи
+    hits = _webhook_hits[client_ip]
+    cutoff = now - WEBHOOK_RATE_WINDOW
+    _webhook_hits[client_ip] = [t for t in hits if t > cutoff]
+    hits = _webhook_hits[client_ip]
+
+    if len(hits) >= WEBHOOK_RATE_LIMIT:
+        _webhook_blocked[client_ip] = now + WEBHOOK_BLOCK_DURATION
+        logger.warning(
+            f"Webhook rate limit: IP {client_ip} заблокирован на "
+            f"{WEBHOOK_BLOCK_DURATION}с ({len(hits)} запросов за {WEBHOOK_RATE_WINDOW}с)"
+        )
+        return False
+
+    hits.append(now)
+    return True
+
 
 # ── Константы ────────────────────────────────────────────────────────
 
@@ -357,6 +396,12 @@ async def handle_yandex_form_webhook(
       nps, csat, design, deadline, communication, expectations,
       supervision (опционально), comment
     """
+    # Rate limiting по IP
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_webhook_rate_limit(client_ip):
+        logger.warning(f"Webhook: rate limit для IP {client_ip}")
+        raise HTTPException(status_code=429, detail="Слишком много запросов")
+
     try:
         data = await request.json()
     except Exception:
