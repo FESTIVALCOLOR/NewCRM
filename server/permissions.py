@@ -381,6 +381,10 @@ def seed_permissions(db: Session):
         db.commit()
         if total_added > 0:
             logger.info(f"Seeded {total_added} permissions for new employees")
+
+        # Миграция новых прав для существующих сотрудников
+        _migrate_new_permissions(db)
+
     except Exception as e:
         db.rollback()
         logger.warning(f"seed_permissions error (non-fatal): {e}")
@@ -390,6 +394,87 @@ def seed_permissions(db: Session):
             db.commit()
         except Exception:
             pass
+
+
+def _migrate_new_permissions(db: Session):
+    """
+    Добавить новые permissions в role_default_permissions и user_permissions
+    для существующих сотрудников. Вызывается из seed_permissions.
+
+    Безопасно вызывать повторно — ON CONFLICT DO NOTHING.
+    """
+    from sqlalchemy import text
+    from datetime import datetime
+
+    # Новые права, которые нужно добавить в существующую матрицу
+    NEW_ROLE_PERMS = {
+        "notifications.settings_projects": [
+            "Руководитель студии", "Старший менеджер проектов",
+            "СДП", "ГАП", "Менеджер",
+        ],
+        "notifications.settings_duplication": [
+            "Руководитель студии", "Старший менеджер проектов",
+        ],
+    }
+
+    # Проверяем, есть ли уже записи в role_default_permissions
+    existing_count = db.execute(
+        text("SELECT COUNT(*) FROM role_default_permissions")
+    ).scalar()
+    if not existing_count:
+        # Таблица пуста — seed_permissions заполнит всё из DEFAULT_ROLE_PERMISSIONS
+        return
+
+    now = datetime.utcnow()
+    added_matrix = 0
+    added_users = 0
+
+    for perm_name, roles in NEW_ROLE_PERMS.items():
+        for role in roles:
+            # 1. Добавить в role_default_permissions (если нет)
+            exists = db.execute(
+                text("""
+                    SELECT 1 FROM role_default_permissions
+                    WHERE role = :role AND permission_name = :perm
+                """),
+                {"role": role, "perm": perm_name}
+            ).first()
+            if not exists:
+                db.execute(
+                    text("""
+                        INSERT INTO role_default_permissions (role, permission_name, updated_at)
+                        VALUES (:role, :perm, :now)
+                    """),
+                    {"role": role, "perm": perm_name, "now": now}
+                )
+                added_matrix += 1
+
+            # 2. Добавить в user_permissions для существующих сотрудников этой роли
+            employees_of_role = db.execute(
+                text("""
+                    SELECT id FROM employees
+                    WHERE (role = :role OR position = :role) AND status = 'активный'
+                """),
+                {"role": role}
+            ).fetchall()
+
+            for (emp_id,) in employees_of_role:
+                db.execute(
+                    text("""
+                        INSERT INTO user_permissions (employee_id, permission_name)
+                        VALUES (:emp_id, :perm)
+                        ON CONFLICT (employee_id, permission_name) DO NOTHING
+                    """),
+                    {"emp_id": emp_id, "perm": perm_name}
+                )
+                added_users += 1
+
+    db.commit()
+    if added_matrix or added_users:
+        logger.info(
+            f"Миграция новых прав: {added_matrix} в матрицу, "
+            f"{added_users} сотрудникам"
+        )
 
 
 # =========================
