@@ -29,6 +29,7 @@ from schemas import NotificationResponse, SyncRequest, SyncResponse
 from telegram_service import get_telegram_service
 from email_service import get_email_service
 from auth import get_current_user
+from constants import POSITION_STUDIO_DIRECTOR
 from permissions import seed_permissions
 
 settings = get_settings()
@@ -163,8 +164,8 @@ async def startup_event():
                 phone="+70000000000",
                 login="admin",
                 password_hash=get_password_hash("admin123"),
-                role="Руководитель студии",
-                position="Руководитель студии",
+                role=POSITION_STUDIO_DIRECTOR,
+                position=POSITION_STUDIO_DIRECTOR,
                 department="Административный",
                 status="активный",
             )
@@ -295,8 +296,8 @@ async def global_search(
     db: Session = Depends(get_db)
 ):
     """
-    Полнотекстовый поиск по клиентам, договорам и CRM карточкам.
-    entity_types — через запятую: clients,contracts,crm_cards
+    Полнотекстовый поиск по клиентам, договорам, CRM карточкам и карточкам надзора.
+    entity_types — через запятую: clients,contracts,crm_cards,supervision_cards
     """
     if not q or len(q.strip()) < 2:
         return {"results": [], "total": 0, "query": q}
@@ -304,7 +305,9 @@ async def global_search(
     query_text = q.strip()
     search_pattern = f"%{query_text}%"
     results = []
-    types_filter = entity_types.split(",") if entity_types else ["clients", "contracts", "crm_cards"]
+    types_filter = entity_types.split(",") if entity_types else [
+        "clients", "contracts", "crm_cards", "supervision_cards"
+    ]
 
     # Фильтрация типов по access.* правам пользователя
     from permissions import check_permission
@@ -312,8 +315,11 @@ async def global_search(
         "clients": "access.clients",
         "contracts": "access.contracts",
         "crm_cards": "access.crm",
+        "supervision_cards": "access.supervision",
     }
     types_filter = [t for t in types_filter if check_permission(current_user, access_map.get(t, ""), db)]
+
+    from constants import ARCHIVE_STATUSES
 
     # Поиск по клиентам
     if "clients" in types_filter:
@@ -364,11 +370,35 @@ async def global_search(
         ).limit(limit).all()
         for card in cards:
             contract = db.query(ContractModel2).filter(ContractModel2.id == card.contract_id).first()
+            is_archive = (contract.status in ARCHIVE_STATUSES) if contract and contract.status else False
+            project_type = contract.project_type if contract else None
             results.append({
                 "type": "crm_card",
                 "id": card.id,
                 "title": f"Проект #{card.id}",
                 "subtitle": f"{contract.address if contract else ''} ({card.column_name})",
+                "is_archive": is_archive,
+                "project_type": project_type,
+            })
+
+    # Поиск по карточкам авторского надзора (через join с договором)
+    if "supervision_cards" in types_filter:
+        from database import SupervisionCard as SupervisionCardModel, Contract as ContractModel3
+        sup_cards = db.query(SupervisionCardModel).join(
+            ContractModel3, SupervisionCardModel.contract_id == ContractModel3.id
+        ).filter(
+            or_(
+                ContractModel3.address.ilike(search_pattern),
+                ContractModel3.contract_number.ilike(search_pattern),
+            )
+        ).limit(limit).all()
+        for sc in sup_cards:
+            contract = db.query(ContractModel3).filter(ContractModel3.id == sc.contract_id).first()
+            results.append({
+                "type": "supervision_card",
+                "id": sc.id,
+                "title": f"Надзор #{sc.id}",
+                "subtitle": f"{contract.address if contract else ''} ({sc.column_name})",
             })
 
     return {

@@ -1360,12 +1360,16 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
 
-    def _on_search_result_selected(self, entity_type, entity_id):
+    def _on_search_result_selected(self, entity_type, entity_id, metadata=None):
         """Навигация к результату глобального поиска с выбором конкретной строки"""
+        if metadata is None:
+            metadata = {}
+
         tab_map = {
             "client": "Клиенты",
             "contract": "Договора",
             "crm_card": "СРМ",
+            "supervision_card": "СРМ надзора",
         }
         target = tab_map.get(entity_type)
         if not target:
@@ -1376,19 +1380,21 @@ class MainWindow(QMainWindow):
                 tab_widget = self.tabs.widget(i)
 
                 # Отложенный выбор строки — даём вкладке время на загрузку данных
-                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id):
+                def _select_row(tw=tab_widget, etype=entity_type, eid=entity_id, meta=metadata):
                     try:
                         table = None
                         id_column = 0  # колонка с идентификатором
 
                         if etype == "client" and hasattr(tw, 'clients_table'):
                             table = tw.clients_table
-                            # В клиентах ID хранится как текст в колонке 0
                         elif etype == "contract" and hasattr(tw, 'contracts_table'):
                             table = tw.contracts_table
-                            # В договорах колонка 0 — номер договора, ищем по ID через все колонки
                         elif etype == "crm_card":
-                            # CRM — Kanban-доска, навигация к карточке не через таблицу
+                            # CRM Kanban — переключаем на нужный sub-tab (активные/архив, индивидуальные/шаблонные)
+                            self._navigate_to_crm_card(tw, eid, meta)
+                            return
+                        elif etype == "supervision_card":
+                            # СРМ надзора — вкладка уже переключена, ничего больше не нужно
                             return
 
                         if not table:
@@ -1422,6 +1428,31 @@ class MainWindow(QMainWindow):
 
                 QTimer.singleShot(200, _select_row)
                 break
+
+    def _navigate_to_crm_card(self, crm_tab, card_id, metadata):
+        """Навигация к CRM карточке с переключением на нужный sub-tab (активные/архив)"""
+        try:
+            is_archive = metadata.get('is_archive', False)
+            project_type = metadata.get('project_type', 'Индивидуальный')
+
+            # Определяем какой project_tab (0=Индивидуальные, 1=Шаблонные)
+            if hasattr(crm_tab, 'project_tabs'):
+                if project_type == 'Шаблонный' and crm_tab.project_tabs.count() > 1:
+                    crm_tab.project_tabs.setCurrentIndex(1)
+                    # Переключаем sub-tab (активные/архив)
+                    if is_archive and hasattr(crm_tab, 'template_subtabs'):
+                        crm_tab.template_subtabs.setCurrentIndex(1)
+                    elif hasattr(crm_tab, 'template_subtabs'):
+                        crm_tab.template_subtabs.setCurrentIndex(0)
+                else:
+                    crm_tab.project_tabs.setCurrentIndex(0)
+                    # Переключаем sub-tab (активные/архив)
+                    if is_archive and hasattr(crm_tab, 'individual_subtabs'):
+                        crm_tab.individual_subtabs.setCurrentIndex(1)
+                    elif hasattr(crm_tab, 'individual_subtabs'):
+                        crm_tab.individual_subtabs.setCurrentIndex(0)
+        except Exception as e:
+            print(f"[SEARCH] Ошибка навигации к CRM карточке: {e}")
 
     def switch_dashboard(self, dashboard_key):
         """Переключение дашборда через QStackedWidget (lazy creation)"""

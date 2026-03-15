@@ -6123,16 +6123,34 @@ class DatabaseManager(DatabaseMigrations):
                 })
             # CRM карточки (через join с договорами)
             cursor.execute(
-                """SELECT cc.id, c.contract_number, c.address, cc.column_name
+                """SELECT cc.id, c.contract_number, c.address, cc.column_name,
+                          c.status, c.project_type
                    FROM crm_cards cc JOIN contracts c ON cc.contract_id = c.id
                    WHERE c.address LIKE ? OR c.contract_number LIKE ? LIMIT ?""",
                 (pattern, pattern, limit)
             )
+            archive_statuses = ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
             for row in cursor.fetchall():
                 results.append({
                     "type": "crm_card",
                     "id": row[0],
                     "title": f"Проект #{row[0]}",
+                    "subtitle": f"{row[2] or ''} ({row[3]})",
+                    "is_archive": (row[4] in archive_statuses) if row[4] else False,
+                    "project_type": row[5],
+                })
+            # Карточки авторского надзора (через join с договорами)
+            cursor.execute(
+                """SELECT sc.id, c.contract_number, c.address, sc.column_name
+                   FROM supervision_cards sc JOIN contracts c ON sc.contract_id = c.id
+                   WHERE c.address LIKE ? OR c.contract_number LIKE ? LIMIT ?""",
+                (pattern, pattern, limit)
+            )
+            for row in cursor.fetchall():
+                results.append({
+                    "type": "supervision_card",
+                    "id": row[0],
+                    "title": f"Надзор #{row[0]}",
                     "subtitle": f"{row[2] or ''} ({row[3]})",
                 })
             self.close()
