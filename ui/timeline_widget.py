@@ -815,12 +815,10 @@ class ProjectTimelineWidget(QWidget):
                     td = self.card_data.get('tech_task_date', '')
                     apd = self.contract_data.get('advance_payment_paid_date', '')
                     start_label.setToolTip(
-                        f"<div style='white-space: nowrap; padding: 4px;'>"
-                        f"Дата договора: {_fmt(cd)}<br>"
-                        f"Дата замера: {_fmt(sd)}<br>"
-                        f"Дата тех. задания: {_fmt(td)}<br>"
+                        f"Дата договора: {_fmt(cd)}\n"
+                        f"Дата замера: {_fmt(sd)}\n"
+                        f"Дата тех. задания: {_fmt(td)}\n"
                         f"Дата аванса: {_fmt(apd)}"
-                        f"</div>"
                     )
                     self.table.setCellWidget(row, 1, start_label)
                 else:
