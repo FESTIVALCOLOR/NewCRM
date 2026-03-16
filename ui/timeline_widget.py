@@ -156,7 +156,7 @@ class ProjectTimelineWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setContentsMargins(0, 15, 0, 20)
         layout.setSpacing(6)
 
         # === ШАПКА ===
