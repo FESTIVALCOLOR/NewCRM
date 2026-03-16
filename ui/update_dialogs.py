@@ -343,7 +343,7 @@ class VersionDialog(QDialog):
 
         if not re.match(r'^\d+\.\d+\.\d+$', version):
             self._upload_lock.release()
-            CustomMessageBox.warning(self, "Ошибка", "Укажите корректную версию формата X.Y.Z")
+            CustomMessageBox(self, "Ошибка", "Укажите корректную версию формата X.Y.Z", "warning").exec_()
             return
 
         changelog = self.changelog_input.toPlainText().strip()
@@ -387,11 +387,12 @@ class VersionDialog(QDialog):
         self.upload_status_label.setStyleSheet("color: green; font-size: 10px; border: none;")
         self.upload_btn.setEnabled(True)
 
-        CustomMessageBox.information(
+        CustomMessageBox(
             self, "Успех",
             f"Обновление {version} загружено на Яндекс.Диск.\n\n"
-            f"Файл version.json обновлён."
-        )
+            f"Файл version.json обновлён.",
+            "info"
+        ).exec_()
 
     def _upload_error(self, error):
         """Ошибка загрузки"""
@@ -407,17 +408,18 @@ class VersionDialog(QDialog):
         self.upload_status_label.setStyleSheet("color: red; font-size: 10px; border: none;")
         self.upload_btn.setEnabled(True)
 
-        CustomMessageBox.critical(self, "Ошибка", f"Не удалось загрузить обновление:\n{error}")
+        CustomMessageBox(self, "Ошибка", f"Не удалось загрузить обновление:\n{error}", "error").exec_()
 
     def save_version(self):
         """Сохранение новой версии в config.py, server/config.py и docker-compose.yml"""
         new_version = self.version_input.text().strip()
 
         if not re.match(r'^\d+\.\d+\.\d+$', new_version):
-            CustomMessageBox.warning(
+            CustomMessageBox(
                 self, "Ошибка",
-                "Неверный формат версии.\nИспользуйте формат X.Y.Z (например, 1.2.0)"
-            )
+                "Неверный формат версии.\nИспользуйте формат X.Y.Z (например, 1.2.0)",
+                "warning"
+            ).exec_()
             return
 
         try:
@@ -459,17 +461,19 @@ class VersionDialog(QDialog):
                 with open(dc_path, 'w', encoding='utf-8') as f:
                     f.write(dc)
 
-            CustomMessageBox.information(
+            CustomMessageBox(
                 self, "Успех",
                 f"Версия изменена на {new_version} (клиент + сервер).\n\n"
-                f"Перезапустите приложение для применения изменений."
-            )
+                f"Перезапустите приложение для применения изменений.",
+                "info"
+            ).exec_()
 
         except Exception as e:
-            CustomMessageBox.critical(
+            CustomMessageBox(
                 self, "Ошибка",
-                f"Не удалось изменить версию:\n{e}"
-            )
+                f"Не удалось изменить версию:\n{e}",
+                "error"
+            ).exec_()
 
 
 class UpdateDialog(QDialog):
@@ -664,10 +668,11 @@ class UpdateDialog(QDialog):
 
             except Exception as e:
                 error_msg = str(e)
-                QTimer.singleShot(0, lambda: CustomMessageBox.critical(
+                QTimer.singleShot(0, lambda: CustomMessageBox(
                     self, "Ошибка",
-                    f"Не удалось загрузить обновление:\n{error_msg}"
-                ))
+                    f"Не удалось загрузить обновление:\n{error_msg}",
+                    "error"
+                ).exec_())
                 QTimer.singleShot(0, lambda: self.download_btn.setEnabled(True))
                 QTimer.singleShot(0, lambda: self.later_btn.setEnabled(True))
                 QTimer.singleShot(0, lambda: self.progress_bar.setVisible(False))
