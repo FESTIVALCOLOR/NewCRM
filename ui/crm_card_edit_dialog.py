@@ -266,6 +266,9 @@ class CardEditDialog(QDialog):
             QTabWidget::tab-bar {
                 left: 20px;
             }
+            QTabWidget::pane {
+                border-top: 1px solid #E0E0E0;
+            }
         """)
 
         # === ПРОВЕРКА ПРАВ ДОСТУПА (через permissions) ===
@@ -991,18 +994,7 @@ class CardEditDialog(QDialog):
 
         self._deferred_tabs_ready = False
 
-        # Контейнер: вкладки + линия-разделитель под ними (вплотную)
-        tabs_container = QWidget()
-        tabs_vbox = QVBoxLayout(tabs_container)
-        tabs_vbox.setSpacing(0)
-        tabs_vbox.setContentsMargins(0, 0, 0, 0)
-        tabs_vbox.addWidget(self.tabs, 1)
-        tab_separator = QFrame()
-        tab_separator.setFrameShape(QFrame.HLine)
-        tab_separator.setStyleSheet("background-color: #E0E0E0;")
-        tab_separator.setFixedHeight(1)
-        tabs_vbox.addWidget(tab_separator)
-        layout.addWidget(tabs_container, 1)
+        layout.addWidget(self.tabs, 1)
 
         # Надпись синхронизации — отдельная строка над кнопками, по центру
         self.sync_label = QLabel('Синхронизация...')
