@@ -71,6 +71,14 @@ class Employee(Base):
     # Цвет агента (для сотрудников с position='Агент')
     agent_color = Column(String)
 
+    # Платёжные реквизиты
+    payment_type = Column(String, nullable=True)  # наличными / переводом на карту / переводом по реквизитам
+    payment_phone = Column(String, nullable=True)  # Номер телефона (для перевода на карту)
+    payment_account = Column(String, nullable=True)  # Номер счёта
+    payment_bank_name = Column(String, nullable=True)  # Наименование банка
+    payment_bik = Column(String, nullable=True)  # БИК
+    payment_corr_account = Column(String, nullable=True)  # Корреспондентский счёт
+
     # Telegram личное подключение (для уведомлений)
     telegram_user_id = Column(BigInteger, nullable=True)
     telegram_link_token = Column(String(32), nullable=True, index=True)

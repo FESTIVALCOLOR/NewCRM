@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QLabel, QMessageBox, QHeaderView,
                              QDateEdit, QCheckBox, QGroupBox, QTextEdit, QFrame,
-                             QTabWidget)
+                             QTabWidget, QApplication)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QTimer, QSize
 from database.db_manager import DatabaseManager
@@ -17,6 +17,53 @@ from ui.custom_combobox import CustomComboBox
 from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
 from utils.table_settings import ProportionalResizeTable
 from utils.data_access import DataAccess
+
+class PaymentDetailsPopup(QWidget):
+    """Всплывающая подсказка с выделяемым текстом для копирования реквизитов"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setStyleSheet("""
+            PaymentDetailsPopup {
+                background-color: #FFFDE7;
+                border: 1px solid #C0C0C0;
+                border-radius: 4px;
+            }
+            QLabel {
+                color: #333333;
+                font-size: 12px;
+                background: transparent;
+            }
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        self._label = QLabel()
+        self._label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self._label.setCursor(Qt.IBeamCursor)
+        layout.addWidget(self._label)
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.setInterval(400)
+        self._hide_timer.timeout.connect(self.hide)
+
+    def show_at(self, text, global_pos):
+        """Показать popup с текстом около указанной позиции"""
+        self._label.setText(text)
+        self.adjustSize()
+        # Смещаем чуть ниже и правее курсора
+        self.move(global_pos.x() + 12, global_pos.y() + 12)
+        self.show()
+        self._hide_timer.stop()
+
+    def enterEvent(self, event):
+        self._hide_timer.stop()
+
+    def leaveEvent(self, event):
+        self._hide_timer.start()
+
 
 class EmployeesTab(QWidget):
     def __init__(self, employee, api_client=None, parent=None):
@@ -139,10 +186,10 @@ class EmployeesTab(QWidget):
                 background-color: #FFFFFF;
             }
         """)
-        self.employees_table.setColumnCount(8)
+        self.employees_table.setColumnCount(9)
         self.employees_table.setHorizontalHeaderLabels([
             ' ID ', ' ФИО ', ' Должность ', ' Телефон ', ' Email ',
-            ' Дата рождения ', ' Статус ', ' Действия '
+            ' Тип оплаты ', ' Дата рождения ', ' Статус ', ' Действия '
         ])
 
         # ========== СКРЫВАЕМ КОЛОНКУ ID ==========
@@ -150,11 +197,11 @@ class EmployeesTab(QWidget):
         # =========================================
 
         # Настройка пропорционального изменения размера:
-        # - Колонки 0-6 растягиваются пропорционально И можно менять вручную
-        # - Колонка 7 (Действия) фиксирована 110px
+        # - Колонки 0-7 растягиваются пропорционально
+        # - Колонка 8 (Действия) фиксирована 140px
         self.employees_table.setup_proportional_resize(
-            column_ratios=[0.05, 0.22, 0.18, 0.14, 0.18, 0.13, 0.10],  # Пропорции для колонок 0-6
-            fixed_columns={7: 140},  # Действия = 140px фиксированно (4 кнопки)
+            column_ratios=[0.05, 0.20, 0.15, 0.13, 0.15, 0.12, 0.10, 0.10],  # Пропорции для колонок 0-7
+            fixed_columns={8: 140},  # Действия = 140px фиксированно (4 кнопки)
             min_width=50
         )
 
@@ -166,6 +213,10 @@ class EmployeesTab(QWidget):
         self.employees_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.employees_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.employees_table.setAlternatingRowColors(True)
+        # Popup для реквизитов оплаты (выделяемый текст)
+        self._payment_popup = PaymentDetailsPopup(self)
+        self.employees_table.viewport().setMouseTracking(True)
+        self.employees_table.cellEntered.connect(self._on_cell_entered)
 
         layout.addWidget(self.employees_table)
 
@@ -234,8 +285,26 @@ class EmployeesTab(QWidget):
             
             self.employees_table.setItem(row, 3, QTableWidgetItem(emp.get('phone', '')))
             self.employees_table.setItem(row, 4, QTableWidgetItem(emp.get('email', '')))
-            
-            # ========== НОВОЕ: ДАТА РОЖДЕНИЯ ==========
+
+            # Тип оплаты (колонка 5)
+            payment_type = emp.get('payment_type', '') or ''
+            payment_item = QTableWidgetItem(payment_type)
+            tooltip_lines = []
+            if payment_type:
+                tooltip_lines.append(f"Тип: {payment_type}")
+            if payment_type == 'Переводом на карту':
+                for k, label in [('payment_phone', 'Телефон'), ('payment_account', 'Счёт'), ('payment_bank_name', 'Банк')]:
+                    if emp.get(k):
+                        tooltip_lines.append(f"{label}: {emp[k]}")
+            elif payment_type == 'Переводом по реквизитам':
+                for k, label in [('payment_account', 'Счёт'), ('payment_bik', 'БИК'), ('payment_corr_account', 'Кор. счёт'), ('payment_bank_name', 'Банк')]:
+                    if emp.get(k):
+                        tooltip_lines.append(f"{label}: {emp[k]}")
+            if tooltip_lines:
+                payment_item.setToolTip('\n'.join(tooltip_lines))
+            self.employees_table.setItem(row, 5, payment_item)
+
+            # Дата рождения (колонка 6)
             birth_date_str = emp.get('birth_date', '')
             if birth_date_str:
                 try:
@@ -245,17 +314,15 @@ class EmployeesTab(QWidget):
                     formatted_date = ''
             else:
                 formatted_date = ''
-            self.employees_table.setItem(row, 5, QTableWidgetItem(formatted_date))
-            # ==========================================
-            
-            # ========== СТАТУС (QLabel для гарантированного CSS-цвета) ==========
+            self.employees_table.setItem(row, 6, QTableWidgetItem(formatted_date))
+
+            # Статус (колонка 7)
             status = emp.get('status', 'активный')
             status_item = QTableWidgetItem(status)
-            self.employees_table.setItem(row, 6, status_item)
-            self.employees_table.setCellWidget(row, 6, self._create_status_widget(status))
-            # ===================================================================
+            self.employees_table.setItem(row, 7, status_item)
+            self.employees_table.setCellWidget(row, 7, self._create_status_widget(status))
 
-            # Кнопки действий (в колонке 7)
+            # Кнопки действий (колонка 8)
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -359,13 +426,13 @@ class EmployeesTab(QWidget):
             actions_layout.addWidget(invite_btn)
 
             actions_widget.setLayout(actions_layout)
-            self.employees_table.setCellWidget(row, 7, actions_widget)
+            self.employees_table.setCellWidget(row, 8, actions_widget)
 
 
         self.employees_table.setSortingEnabled(True)
 
         CustomMessageBox(
-            self, 
+            self,
             'Результаты поиска', 
             f'Найдено сотрудников: {len(filtered_employees)}', 
             'info'
@@ -447,8 +514,36 @@ class EmployeesTab(QWidget):
             
             self.employees_table.setItem(row, 3, QTableWidgetItem(emp.get('phone', '')))
             self.employees_table.setItem(row, 4, QTableWidgetItem(emp.get('email', '')))
-            
-            # ========== НОВОЕ: ДАТА РОЖДЕНИЯ ==========
+
+            # ========== СТОЛБЕЦ ТИП ОПЛАТЫ ==========
+            payment_type = emp.get('payment_type', '') or ''
+            payment_item = QTableWidgetItem(payment_type)
+            # Формируем подсказку с деталями оплаты
+            tooltip_lines = []
+            if payment_type:
+                tooltip_lines.append(f"Тип: {payment_type}")
+            if payment_type == 'Переводом на карту':
+                if emp.get('payment_phone'):
+                    tooltip_lines.append(f"Телефон: {emp['payment_phone']}")
+                if emp.get('payment_account'):
+                    tooltip_lines.append(f"Счёт: {emp['payment_account']}")
+                if emp.get('payment_bank_name'):
+                    tooltip_lines.append(f"Банк: {emp['payment_bank_name']}")
+            elif payment_type == 'Переводом по реквизитам':
+                if emp.get('payment_account'):
+                    tooltip_lines.append(f"Счёт: {emp['payment_account']}")
+                if emp.get('payment_bik'):
+                    tooltip_lines.append(f"БИК: {emp['payment_bik']}")
+                if emp.get('payment_corr_account'):
+                    tooltip_lines.append(f"Кор. счёт: {emp['payment_corr_account']}")
+                if emp.get('payment_bank_name'):
+                    tooltip_lines.append(f"Банк: {emp['payment_bank_name']}")
+            if tooltip_lines:
+                payment_item.setToolTip('\n'.join(tooltip_lines))
+            self.employees_table.setItem(row, 5, payment_item)
+            # =========================================
+
+            # ========== ДАТА РОЖДЕНИЯ ==========
             birth_date_str = emp.get('birth_date', '')
             if birth_date_str:
                 try:
@@ -458,17 +553,17 @@ class EmployeesTab(QWidget):
                     formatted_date = ''
             else:
                 formatted_date = ''
-            self.employees_table.setItem(row, 5, QTableWidgetItem(formatted_date))
-            # ==========================================
-            
-            # ========== СТАТУС (QLabel для гарантированного CSS-цвета) ==========
+            self.employees_table.setItem(row, 6, QTableWidgetItem(formatted_date))
+            # ====================================
+
+            # ========== СТАТУС ==========
             status = emp.get('status', 'активный')
             status_item = QTableWidgetItem(status)
-            self.employees_table.setItem(row, 6, status_item)
-            self.employees_table.setCellWidget(row, 6, self._create_status_widget(status))
-            # ===================================================================
+            self.employees_table.setItem(row, 7, status_item)
+            self.employees_table.setCellWidget(row, 7, self._create_status_widget(status))
+            # ============================
 
-            # Кнопки действий (теперь в колонке 7)
+            # Кнопки действий (колонка 8)
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -573,7 +668,7 @@ class EmployeesTab(QWidget):
             actions_layout.addWidget(invite_btn)
 
             actions_widget.setLayout(actions_layout)
-            self.employees_table.setCellWidget(row, 7, actions_widget)
+            self.employees_table.setCellWidget(row, 8, actions_widget)
 
         self.employees_table.setSortingEnabled(True)
 
@@ -622,6 +717,19 @@ class EmployeesTab(QWidget):
             self._reload_employees(prefer_local=False)
             self._refresh_dashboard()
             
+    def _on_cell_entered(self, row, column):
+        """При наведении на ячейку 'Тип оплаты' — показать popup с реквизитами"""
+        if column == 5:
+            item = self.employees_table.item(row, column)
+            if item and item.toolTip():
+                cell_rect = self.employees_table.visualItemRect(item)
+                global_pos = self.employees_table.viewport().mapToGlobal(cell_rect.bottomLeft())
+                self._payment_popup.show_at(item.toolTip(), global_pos)
+                return
+        # При наведении на другие столбцы — скрываем popup
+        if self._payment_popup.isVisible():
+            self._payment_popup._hide_timer.start()
+
     def view_employee(self, employee_data):
         """Просмотр информации о сотруднике"""
         dialog = EmployeeDialog(self, employee_data, view_only=True)
@@ -929,10 +1037,43 @@ class EmployeeDialog(QDialog):
         self.address.setPlaceholderText('Адрес проживания')
         self.address.setMaximumHeight(80)
         contact_layout.addRow('Адрес:', self.address)
-        
+
         contact_group.setLayout(contact_layout)
         layout.addWidget(contact_group)
-        
+
+        # Способ оплаты
+        payment_group = QGroupBox('Способ оплаты')
+        self._payment_form_layout = QFormLayout()
+
+        self.payment_type = CustomComboBox()
+        self.payment_type.addItems(['', 'Наличными', 'Переводом на карту', 'Переводом по реквизитам'])
+        self.payment_type.currentTextChanged.connect(self._on_payment_type_changed)
+        self._payment_form_layout.addRow('Тип оплаты:', self.payment_type)
+
+        self.payment_phone = QLineEdit()
+        self.payment_phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self._payment_form_layout.addRow('Телефон:', self.payment_phone)
+
+        self.payment_account = QLineEdit()
+        self.payment_account.setPlaceholderText('Номер счёта')
+        self._payment_form_layout.addRow('Номер счёта:', self.payment_account)
+
+        self.payment_bank_name = QLineEdit()
+        self.payment_bank_name.setPlaceholderText('Наименование банка')
+        self._payment_form_layout.addRow('Банк:', self.payment_bank_name)
+
+        self.payment_bik = QLineEdit()
+        self.payment_bik.setPlaceholderText('БИК (9 цифр)')
+        self._payment_form_layout.addRow('БИК:', self.payment_bik)
+
+        self.payment_corr_account = QLineEdit()
+        self.payment_corr_account.setPlaceholderText('Корреспондентский счёт')
+        self._payment_form_layout.addRow('Кор. счёт:', self.payment_corr_account)
+
+        payment_group.setLayout(self._payment_form_layout)
+        layout.addWidget(payment_group)
+        self._update_payment_fields_visibility()
+
         # Данные для входа
         login_group = QGroupBox('Данные для входа в систему')
         login_layout = QFormLayout()
@@ -1150,6 +1291,41 @@ class EmployeeDialog(QDialog):
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
 
+    def _on_payment_type_changed(self, text):
+        """Показать/скрыть поля в зависимости от типа оплаты"""
+        self._update_payment_fields_visibility()
+
+    def _update_payment_fields_visibility(self):
+        """Управление видимостью полей платёжных реквизитов"""
+        pt = self.payment_type.currentText()
+        # Наличными — ничего не нужно
+        # Переводом на карту — телефон, счёт, банк
+        # Переводом по реквизитам — счёт, банк, БИК, кор. счёт
+        show_card = (pt == 'Переводом на карту')
+        show_details = (pt == 'Переводом по реквизитам')
+        show_any = show_card or show_details
+
+        self.payment_phone.setVisible(show_card)
+        # Лейбл для payment_phone
+        self._set_form_row_visible(self._payment_form_layout, self.payment_phone, show_card)
+
+        self._set_form_row_visible(self._payment_form_layout, self.payment_account, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bank_name, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bik, show_details)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_corr_account, show_details)
+
+    @staticmethod
+    def _set_form_row_visible(form_layout, widget, visible):
+        """Показать/скрыть строку QFormLayout по виджету"""
+        for row in range(form_layout.rowCount()):
+            item = form_layout.itemAt(row, QFormLayout.FieldRole)
+            label_item = form_layout.itemAt(row, QFormLayout.LabelRole)
+            if item and item.widget() == widget:
+                widget.setVisible(visible)
+                if label_item and label_item.widget():
+                    label_item.widget().setVisible(visible)
+                break
+
     def _open_permissions_dialog(self):
         """Открыть диалог управления правами доступа"""
         if not self.employee_data or not self.data:
@@ -1202,6 +1378,17 @@ class EmployeeDialog(QDialog):
             if temp_pw:
                 self.password.setText(temp_pw)
                 self.password_confirm.setText(temp_pw)
+
+            # Платёжные реквизиты
+            pt = self.employee_data.get('payment_type', '') or ''
+            if pt:
+                self.payment_type.setCurrentText(pt)
+            self.payment_phone.setText(self.employee_data.get('payment_phone', '') or '')
+            self.payment_account.setText(self.employee_data.get('payment_account', '') or '')
+            self.payment_bank_name.setText(self.employee_data.get('payment_bank_name', '') or '')
+            self.payment_bik.setText(self.employee_data.get('payment_bik', '') or '')
+            self.payment_corr_account.setText(self.employee_data.get('payment_corr_account', '') or '')
+            self._update_payment_fields_visibility()
 
     def save_employee(self):
         """Сохранение сотрудника"""
@@ -1276,9 +1463,15 @@ class EmployeeDialog(QDialog):
             'phone': self.phone.text().strip(),
             'email': self.email.text().strip(),
             'address': self.address.toPlainText().strip(),
-            'login': self.login.text().strip()
+            'login': self.login.text().strip(),
+            'payment_type': self.payment_type.currentText() or '',
+            'payment_phone': self.payment_phone.text().strip(),
+            'payment_account': self.payment_account.text().strip(),
+            'payment_bank_name': self.payment_bank_name.text().strip(),
+            'payment_bik': self.payment_bik.text().strip(),
+            'payment_corr_account': self.payment_corr_account.text().strip(),
         }
-        
+
         if self.password.text().strip():
             employee_data['password'] = self.password.text().strip()
         
@@ -1972,10 +2165,43 @@ class EmployeeDialog(QDialog):
         self.address.setPlaceholderText('Адрес проживания')
         self.address.setMaximumHeight(80)
         contact_layout.addRow('Адрес:', self.address)
-        
+
         contact_group.setLayout(contact_layout)
         layout.addWidget(contact_group)
-        
+
+        # Способ оплаты
+        payment_group = QGroupBox('Способ оплаты')
+        self._payment_form_layout = QFormLayout()
+
+        self.payment_type = CustomComboBox()
+        self.payment_type.addItems(['', 'Наличными', 'Переводом на карту', 'Переводом по реквизитам'])
+        self.payment_type.currentTextChanged.connect(self._on_payment_type_changed)
+        self._payment_form_layout.addRow('Тип оплаты:', self.payment_type)
+
+        self.payment_phone = QLineEdit()
+        self.payment_phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self._payment_form_layout.addRow('Телефон:', self.payment_phone)
+
+        self.payment_account = QLineEdit()
+        self.payment_account.setPlaceholderText('Номер счёта')
+        self._payment_form_layout.addRow('Номер счёта:', self.payment_account)
+
+        self.payment_bank_name = QLineEdit()
+        self.payment_bank_name.setPlaceholderText('Наименование банка')
+        self._payment_form_layout.addRow('Банк:', self.payment_bank_name)
+
+        self.payment_bik = QLineEdit()
+        self.payment_bik.setPlaceholderText('БИК (9 цифр)')
+        self._payment_form_layout.addRow('БИК:', self.payment_bik)
+
+        self.payment_corr_account = QLineEdit()
+        self.payment_corr_account.setPlaceholderText('Корреспондентский счёт')
+        self._payment_form_layout.addRow('Кор. счёт:', self.payment_corr_account)
+
+        payment_group.setLayout(self._payment_form_layout)
+        layout.addWidget(payment_group)
+        self._update_payment_fields_visibility()
+
         # Данные для входа
         login_group = QGroupBox('Данные для входа в систему')
         login_layout = QFormLayout()
@@ -2193,6 +2419,41 @@ class EmployeeDialog(QDialog):
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
 
+    def _on_payment_type_changed(self, text):
+        """Показать/скрыть поля в зависимости от типа оплаты"""
+        self._update_payment_fields_visibility()
+
+    def _update_payment_fields_visibility(self):
+        """Управление видимостью полей платёжных реквизитов"""
+        pt = self.payment_type.currentText()
+        # Наличными — ничего не нужно
+        # Переводом на карту — телефон, счёт, банк
+        # Переводом по реквизитам — счёт, банк, БИК, кор. счёт
+        show_card = (pt == 'Переводом на карту')
+        show_details = (pt == 'Переводом по реквизитам')
+        show_any = show_card or show_details
+
+        self.payment_phone.setVisible(show_card)
+        # Лейбл для payment_phone
+        self._set_form_row_visible(self._payment_form_layout, self.payment_phone, show_card)
+
+        self._set_form_row_visible(self._payment_form_layout, self.payment_account, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bank_name, show_any)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_bik, show_details)
+        self._set_form_row_visible(self._payment_form_layout, self.payment_corr_account, show_details)
+
+    @staticmethod
+    def _set_form_row_visible(form_layout, widget, visible):
+        """Показать/скрыть строку QFormLayout по виджету"""
+        for row in range(form_layout.rowCount()):
+            item = form_layout.itemAt(row, QFormLayout.FieldRole)
+            label_item = form_layout.itemAt(row, QFormLayout.LabelRole)
+            if item and item.widget() == widget:
+                widget.setVisible(visible)
+                if label_item and label_item.widget():
+                    label_item.widget().setVisible(visible)
+                break
+
     def _open_permissions_dialog(self):
         """Открыть диалог управления правами доступа"""
         if not self.employee_data or not self.data:
@@ -2245,6 +2506,17 @@ class EmployeeDialog(QDialog):
             if temp_pw:
                 self.password.setText(temp_pw)
                 self.password_confirm.setText(temp_pw)
+
+            # Платёжные реквизиты
+            pt = self.employee_data.get('payment_type', '') or ''
+            if pt:
+                self.payment_type.setCurrentText(pt)
+            self.payment_phone.setText(self.employee_data.get('payment_phone', '') or '')
+            self.payment_account.setText(self.employee_data.get('payment_account', '') or '')
+            self.payment_bank_name.setText(self.employee_data.get('payment_bank_name', '') or '')
+            self.payment_bik.setText(self.employee_data.get('payment_bik', '') or '')
+            self.payment_corr_account.setText(self.employee_data.get('payment_corr_account', '') or '')
+            self._update_payment_fields_visibility()
 
     def save_employee(self):
         """Сохранение сотрудника"""
@@ -2319,9 +2591,15 @@ class EmployeeDialog(QDialog):
             'phone': self.phone.text().strip(),
             'email': self.email.text().strip(),
             'address': self.address.toPlainText().strip(),
-            'login': self.login.text().strip()
+            'login': self.login.text().strip(),
+            'payment_type': self.payment_type.currentText() or '',
+            'payment_phone': self.payment_phone.text().strip(),
+            'payment_account': self.payment_account.text().strip(),
+            'payment_bank_name': self.payment_bank_name.text().strip(),
+            'payment_bik': self.payment_bik.text().strip(),
+            'payment_corr_account': self.payment_corr_account.text().strip(),
         }
-        
+
         if self.password.text().strip():
             employee_data['password'] = self.password.text().strip()
         

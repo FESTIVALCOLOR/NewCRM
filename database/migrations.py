@@ -129,6 +129,10 @@ class DatabaseMigrations:
             self.add_agents_status_field()
             # ======================================================
 
+            # ========== МИГРАЦИЯ: платёжные реквизиты сотрудников ==========
+            self.add_employee_payment_fields()
+            # ============================================================
+
             # ========== МИГРАЦИЯ: таблица городов ==========
             self.migrate_add_cities_table()
             # ===============================================
@@ -403,6 +407,40 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции employee_multiuser: {e}")
 
+    def add_employee_payment_fields(self):
+        """Миграция: добавление платёжных реквизитов в таблицу employees"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(employees)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            new_cols = {
+                'payment_type': 'TEXT',
+                'payment_phone': 'TEXT',
+                'payment_account': 'TEXT',
+                'payment_bank_name': 'TEXT',
+                'payment_bik': 'TEXT',
+                'payment_corr_account': 'TEXT',
+            }
+
+            added = []
+            for col_name, col_def in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE employees ADD COLUMN {col_name} {col_def}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция employee_payment: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля employee_payment уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции employee_payment: {e}")
+
     def add_agents_status_field(self):
         """Миграция: добавление поля status в таблицу agents"""
         try:
@@ -500,6 +538,12 @@ class DatabaseMigrations:
             last_activity TIMESTAMP,
             current_session_token TEXT,
             agent_color TEXT,
+            payment_type TEXT,
+            payment_phone TEXT,
+            payment_account TEXT,
+            payment_bank_name TEXT,
+            payment_bik TEXT,
+            payment_corr_account TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )

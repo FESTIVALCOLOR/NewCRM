@@ -260,8 +260,9 @@ class DatabaseManager(DatabaseMigrations):
         cursor.execute('''
         INSERT INTO employees
         (full_name, phone, email, address, birth_date, status, position, secondary_position,
-         department, login, password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         department, login, password,
+         payment_type, payment_phone, payment_account, payment_bank_name, payment_bik, payment_corr_account)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             employee_data['full_name'],
             employee_data.get('phone', ''),
@@ -273,7 +274,13 @@ class DatabaseManager(DatabaseMigrations):
             employee_data.get('secondary_position', ''),
             department,
             employee_data.get('login', ''),
-            password_hash
+            password_hash,
+            employee_data.get('payment_type', ''),
+            employee_data.get('payment_phone', ''),
+            employee_data.get('payment_account', ''),
+            employee_data.get('payment_bank_name', ''),
+            employee_data.get('payment_bik', ''),
+            employee_data.get('payment_corr_account', ''),
         ))
         
         conn.commit()

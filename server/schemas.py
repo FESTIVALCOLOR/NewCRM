@@ -81,6 +81,12 @@ class EmployeeBase(BaseModel):
     department: Optional[str] = ""
     role: Optional[str] = None
     status: str = "активный"
+    payment_type: Optional[str] = None
+    payment_phone: Optional[str] = None
+    payment_account: Optional[str] = None
+    payment_bank_name: Optional[str] = None
+    payment_bik: Optional[str] = None
+    payment_corr_account: Optional[str] = None
 
 
 def _validate_password(v: str) -> str:
@@ -135,6 +141,12 @@ class EmployeeUpdate(BaseModel):
     status: Optional[str] = None
     login: Optional[str] = None
     password: Optional[str] = None
+    payment_type: Optional[str] = None
+    payment_phone: Optional[str] = None
+    payment_account: Optional[str] = None
+    payment_bank_name: Optional[str] = None
+    payment_bik: Optional[str] = None
+    payment_corr_account: Optional[str] = None
 
     @field_validator('password')
     @classmethod
