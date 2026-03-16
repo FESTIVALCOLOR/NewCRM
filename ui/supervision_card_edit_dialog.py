@@ -362,6 +362,12 @@ class SupervisionCardEditDialog(QDialog):
 
         layout.addWidget(self.tabs, 1)
 
+        # Линия-разделитель под верхними вкладками
+        tab_separator = QFrame()
+        tab_separator.setFrameShape(QFrame.HLine)
+        tab_separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
+        layout.addWidget(tab_separator)
+
         # Надпись синхронизации над кнопками
         layout.addWidget(self.sync_label)
 
@@ -490,14 +496,8 @@ class SupervisionCardEditDialog(QDialog):
         close_btn.clicked.connect(self.accept)
         buttons_layout.addWidget(close_btn)
 
-        # Линия-разделитель над кнопками
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
-        layout.addWidget(separator)
-
         layout.addLayout(buttons_layout)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
         

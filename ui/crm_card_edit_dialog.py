@@ -993,6 +993,12 @@ class CardEditDialog(QDialog):
 
         layout.addWidget(self.tabs, 1)
 
+        # Линия-разделитель под верхними вкладками
+        tab_separator = QFrame()
+        tab_separator.setFrameShape(QFrame.HLine)
+        tab_separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
+        layout.addWidget(tab_separator)
+
         # Надпись синхронизации — отдельная строка над кнопками, по центру
         self.sync_label = QLabel('Синхронизация...')
         self.sync_label.setStyleSheet('color: #999999; font-size: 11px;')
@@ -1213,11 +1219,7 @@ class CardEditDialog(QDialog):
             buttons_layout.addWidget(save_btn)
             buttons_layout.addWidget(cancel_btn)
 
-            # Линия-разделитель над кнопками
-            separator = QFrame()
-            separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
-            layout.addWidget(separator)
+
 
             layout.addLayout(buttons_layout)
         else:
@@ -6659,8 +6661,8 @@ class CardEditDialog(QDialog):
                 font-weight: bold;
                 border: 1px solid #E0E0E0;
                 border-radius: 8px;
-                margin-top: 4px;
-                padding-top: 2px;
+                margin-top: 12px;
+                padding-top: 14px;
                 background-color: #FAFAFA;
             }
             QGroupBox::title {
