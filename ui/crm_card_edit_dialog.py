@@ -991,17 +991,17 @@ class CardEditDialog(QDialog):
 
         self._deferred_tabs_ready = False
 
-        # Контейнер: линия-разделитель + вкладки (вплотную)
+        # Контейнер: вкладки + линия-разделитель под ними (вплотную)
         tabs_container = QWidget()
         tabs_vbox = QVBoxLayout(tabs_container)
         tabs_vbox.setSpacing(0)
         tabs_vbox.setContentsMargins(0, 0, 0, 0)
+        tabs_vbox.addWidget(self.tabs, 1)
         tab_separator = QFrame()
         tab_separator.setFrameShape(QFrame.HLine)
         tab_separator.setStyleSheet("background-color: #E0E0E0;")
         tab_separator.setFixedHeight(1)
         tabs_vbox.addWidget(tab_separator)
-        tabs_vbox.addWidget(self.tabs, 1)
         layout.addWidget(tabs_container, 1)
 
         # Надпись синхронизации — отдельная строка над кнопками, по центру
@@ -1224,7 +1224,12 @@ class CardEditDialog(QDialog):
             buttons_layout.addWidget(save_btn)
             buttons_layout.addWidget(cancel_btn)
 
-
+            # Линия-разделитель над кнопками
+            bottom_separator = QFrame()
+            bottom_separator.setFrameShape(QFrame.HLine)
+            bottom_separator.setStyleSheet("background-color: #E0E0E0;")
+            bottom_separator.setFixedHeight(1)
+            layout.addWidget(bottom_separator)
 
             layout.addLayout(buttons_layout)
         else:
