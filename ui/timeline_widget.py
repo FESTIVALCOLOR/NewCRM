@@ -119,19 +119,15 @@ class ProjectTimelineWidget(QWidget):
         self._loading = False
         self._readonly = readonly
 
-        # Получаем данные контракта из локальной БД (мгновенно, без API)
+        # Получаем данные контракта (из API, чтобы advance_payment_paid_date был актуальным)
         contract_id = card_data.get('contract_id')
         self.contract_id = contract_id
         self.contract_data = {}
         if contract_id:
             try:
-                self.data.prefer_local = True
-                try:
-                    contract = self.data.get_contract(contract_id)
-                    if contract:
-                        self.contract_data = contract
-                finally:
-                    self.data.prefer_local = False
+                contract = self.data.get_contract(contract_id)
+                if contract:
+                    self.contract_data = contract
             except Exception:
                 pass
 
