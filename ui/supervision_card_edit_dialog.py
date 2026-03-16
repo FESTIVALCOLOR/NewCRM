@@ -167,6 +167,8 @@ class SupervisionCardEditDialog(QDialog):
             }
             QTabWidget::pane {
                 border-top: 1px solid #E0E0E0;
+                margin-left: 20px;
+                margin-right: 20px;
             }
         """)
 
