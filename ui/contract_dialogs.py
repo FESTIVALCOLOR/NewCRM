@@ -1957,9 +1957,9 @@ class ContractDialog(QDialog):
                 border-radius: 6px; padding: 4px;
             }
         """)
-        card.setFixedHeight(50)
+        card.setFixedHeight(56)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(6, 2, 6, 2)
+        card_layout.setContentsMargins(6, 4, 6, 4)
         card_layout.setSpacing(0)
         lbl = QLabel(label)
         lbl.setStyleSheet('font-size: 9px; color: #888; border: none;')
