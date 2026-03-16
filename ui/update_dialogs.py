@@ -410,7 +410,7 @@ class VersionDialog(QDialog):
         CustomMessageBox.critical(self, "Ошибка", f"Не удалось загрузить обновление:\n{error}")
 
     def save_version(self):
-        """Сохранение новой версии в config.py"""
+        """Сохранение новой версии в config.py, server/config.py и docker-compose.yml"""
         new_version = self.version_input.text().strip()
 
         if not re.match(r'^\d+\.\d+\.\d+$', new_version):
@@ -421,23 +421,48 @@ class VersionDialog(QDialog):
             return
 
         try:
+            # 1. Клиентский config.py
             config_path = 'config.py'
-
             with open(config_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-
             new_content = re.sub(
                 r'APP_VERSION = "[^"]*"',
                 f'APP_VERSION = "{new_version}"',
                 content
             )
-
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
 
+            # 2. Серверный config.py (автосинхронизация)
+            server_config = 'server/config.py'
+            if os.path.exists(server_config):
+                with open(server_config, 'r', encoding='utf-8') as f:
+                    sc = f.read()
+                sc = re.sub(
+                    r'app_version:\s*str\s*=\s*"[^"]*"',
+                    f'app_version: str = "{new_version}"',
+                    sc
+                )
+                with open(server_config, 'w', encoding='utf-8') as f:
+                    f.write(sc)
+
+            # 3. docker-compose.yml
+            dc_path = 'docker-compose.yml'
+            if os.path.exists(dc_path):
+                with open(dc_path, 'r', encoding='utf-8') as f:
+                    dc = f.read()
+                dc = re.sub(
+                    r'APP_VERSION:\s*\S+',
+                    f'APP_VERSION: {new_version}',
+                    dc
+                )
+                with open(dc_path, 'w', encoding='utf-8') as f:
+                    f.write(dc)
+
             CustomMessageBox.information(
                 self, "Успех",
-                f"Версия изменена на {new_version}.\n\nПерезапустите приложение для применения изменений."
+                f"Версия изменена на {new_version} (клиент + сервер).\n\n"
+                f"Перезапустите приложение для применения изменений."
             )
 
         except Exception as e:
