@@ -461,12 +461,33 @@ class VersionDialog(QDialog):
                 with open(dc_path, 'w', encoding='utf-8') as f:
                     f.write(dc)
 
-            CustomMessageBox(
-                self, "Успех",
-                f"Версия изменена на {new_version} (клиент + сервер).\n\n"
-                f"Перезапустите приложение для применения изменений.",
-                "info"
-            ).exec_()
+            # 4. Обновить версию на работающем сервере через API
+            server_updated = False
+            try:
+                from config import API_BASE_URL
+                import requests as _req
+                # Получаем токен из parent (MainWindow)
+                api_client = getattr(self.parent(), 'api_client', None)
+                token = getattr(api_client, 'token', None) if api_client else None
+                if token:
+                    resp = _req.put(
+                        f"{API_BASE_URL}/api/version",
+                        json={"version": new_version},
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=5
+                    )
+                    server_updated = resp.status_code == 200
+            except Exception:
+                pass
+
+            msg = f"Версия изменена на {new_version}."
+            if server_updated:
+                msg += "\nСервер обновлён."
+            else:
+                msg += "\nСервер будет обновлён после Docker rebuild."
+            msg += "\n\nПерезапустите приложение для применения изменений."
+
+            CustomMessageBox(self, "Успех", msg, "info").exec_()
 
         except Exception as e:
             CustomMessageBox(

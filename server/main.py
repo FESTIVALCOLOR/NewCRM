@@ -291,6 +291,18 @@ async def get_app_version():
     }
 
 
+@app.put("/api/v1/version")
+async def set_app_version(data: dict, current_user=Depends(get_current_user)):
+    """Обновить версию сервера (только для администратора)"""
+    if current_user.position not in ('Руководитель студии', 'СДП'):
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    new_version = data.get("version", "").strip()
+    if not new_version:
+        raise HTTPException(status_code=400, detail="Версия не указана")
+    settings.app_version = new_version
+    return {"version": settings.app_version, "status": "updated"}
+
+
 # =========================
 # ГЛОБАЛЬНЫЙ ПОИСК
 # =========================
