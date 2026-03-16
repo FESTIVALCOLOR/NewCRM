@@ -4,7 +4,7 @@ import os
 from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
                              QHBoxLayout, QMenuBar, QAction, QMessageBox, QDialog,
                              QLabel, QStatusBar, QGridLayout, QGroupBox, QSizePolicy, QApplication)
-from PyQt5.QtCore import Qt, QTimer, QRect, QSize, QEvent
+from PyQt5.QtCore import Qt, QTimer, QRect, QSize, QEvent, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QColor, QPalette
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtWidgets import QTabWidget
@@ -57,12 +57,24 @@ if sys.platform == 'win32':
 
 
 class MainWindow(QMainWindow):
+    # Сигналы для межпоточного обновления UI
+    _sig_update_available = pyqtSignal(dict)
+    _sig_update_disabled = pyqtSignal()
+    _sig_update_error = pyqtSignal(str)
+    _sig_no_updates = pyqtSignal()
+
     def __init__(self, employee_data, api_client=None):
         super().__init__()
         self.employee = employee_data
         self.api_client = api_client  # API
         from database.db_manager import DatabaseManager
         self.db = DatabaseManager()
+
+        # Сигналы обновлений
+        self._sig_update_available.connect(self._show_update_dialog)
+        self._sig_update_disabled.connect(self._show_updates_disabled)
+        self._sig_update_error.connect(self._show_update_error)
+        self._sig_no_updates.connect(self._show_no_updates)
 
         # Проверяем offline режим
         self.is_offline_mode = self.employee.get('offline_mode', False)
@@ -1641,14 +1653,13 @@ class MainWindow(QMainWindow):
             update_info = manager.check_for_updates()
 
             if update_info.get("available"):
-                # Есть обновление
-                QTimer.singleShot(0, lambda: self._show_update_dialog(update_info))
+                self._sig_update_available.emit(update_info)
             elif update_info.get("disabled"):
-                QTimer.singleShot(0, lambda: self._show_updates_disabled())
+                self._sig_update_disabled.emit()
             elif update_info.get("error"):
-                QTimer.singleShot(0, lambda: self._show_update_error(update_info.get("error")))
+                self._sig_update_error.emit(update_info.get("error"))
             else:
-                QTimer.singleShot(0, lambda: self._show_no_updates())
+                self._sig_no_updates.emit()
 
         thread = threading.Thread(target=check_thread, daemon=True)
         thread.start()
