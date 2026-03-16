@@ -82,44 +82,46 @@ class YandexDiskManager:
         if file_size_mb > self.MAX_FILE_SIZE_MB:
             raise Exception(f"File too large: {file_size_mb:.1f} MB (max {self.MAX_FILE_SIZE_MB} MB)")
 
-        # Dynamic timeout: at least 60s, add 2 seconds per MB
-        dynamic_timeout = max(60, int(file_size / (1024 * 1024)) * 2 + 60)
+        # Dynamic timeout: at least 60s, add 3 seconds per MB (для больших файлов)
+        dynamic_timeout = max(120, int(file_size_mb) * 3 + 120)
 
-        # Получаем ссылку для загрузки
         url = f'{self.base_url}/resources/upload'
         params = {'path': yandex_path, 'overwrite': 'true'}
         headers = {'Authorization': f'OAuth {self.token}'}
 
-        response = self.session.get(url, params=params, headers=headers, timeout=10)
-        self._check_response(response, "get_upload_link")
+        for attempt in range(3):
+            # Свежий upload URL на каждую попытку (URL одноразовый)
+            response = self.session.get(url, params=params, headers=headers, timeout=15)
+            self._check_response(response, "get_upload_link")
 
-        if response.status_code != 200:
-            raise Exception(f"Ошибка получения ссылки для загрузки: {response.status_code} - {response.text}")
+            if response.status_code != 200:
+                raise Exception(f"Ошибка получения ссылки для загрузки: {response.status_code} - {response.text}")
 
-        response_data = response.json()
-        if 'href' not in response_data:
-            raise Exception(f"В ответе API нет поля 'href': {response_data}")
+            response_data = response.json()
+            if 'href' not in response_data:
+                raise Exception(f"В ответе API нет поля 'href': {response_data}")
 
-        upload_url = response_data['href']
+            upload_url = response_data['href']
 
-        # Используем data= вместо files= для streaming upload (меньше памяти)
-        with open(local_path, 'rb') as f:
-            for attempt in range(3):
-                try:
-                    upload_response = self.session.put(upload_url, data=f, timeout=dynamic_timeout)
-                    break
-                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-                    if attempt < 2:
-                        print(f"[WARN] Сетевая ошибка при загрузке (попытка {attempt+1}): {e}")
-                        time.sleep(2 ** attempt)
-                        f.seek(0)  # Перемотка файла
-                    else:
-                        raise YandexDiskNetworkError(f"Сетевая ошибка после 3 попыток: {e}")
+            try:
+                # requests.put БЕЗ session — чтобы избежать auto-retry
+                # на 5xx с пустым телом (file handle уже прочитан)
+                with open(local_path, 'rb') as f:
+                    upload_response = requests.put(
+                        upload_url, data=f, timeout=dynamic_timeout
+                    )
+                if upload_response.status_code in [200, 201, 202]:
+                    return True
+                print(f"[WARN] Upload attempt {attempt+1}: status {upload_response.status_code}")
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                print(f"[WARN] Сетевая ошибка при загрузке (попытка {attempt+1}): {e}")
 
-        if upload_response.status_code not in [200, 201, 202]:
-            raise Exception(f"Ошибка загрузки файла: {upload_response.status_code}")
-
-        return True
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                raise YandexDiskNetworkError(
+                    f"Ошибка загрузки файла после 3 попыток: {yandex_path}"
+                )
 
     def download_file(self, yandex_path, local_path):
         """Скачивание файла с Яндекс.Диска"""

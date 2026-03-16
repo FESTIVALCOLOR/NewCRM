@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTabWidget, QApplication)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QTimer, QSize
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QPainter, QPen, QPainterPath
 from database.db_manager import DatabaseManager
 from config import POSITIONS
 from utils.icon_loader import IconLoader
@@ -20,34 +20,31 @@ from utils.table_settings import ProportionalResizeTable
 from utils.data_access import DataAccess
 
 class PaymentDetailsPopup(QWidget):
-    """Всплывающая подсказка с выделяемым текстом для копирования реквизитов.
-    Стилизована под BubbleToolTip (белый фон, серая рамка, тень)."""
+    """Всплывающая подсказка с выделяемым текстом — стилизована как BubbleToolTip.
+    Белый фон, серая рамка, скруглённые углы, тень, хвостик-стрелка."""
+
+    SHADOW = 6
+    ARROW = 6
+    RADIUS = 6
+    PAD_H = 10
+    PAD_V = 6
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        super().__init__(None, Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setStyleSheet("""
-            PaymentDetailsPopup {
-                background-color: #ffffff;
-                border: 1px solid #d9d9d9;
-                border-radius: 6px;
-            }
-            QLabel {
-                color: #333333;
-                font-size: 12px;
-                background: transparent;
-            }
-        """)
-        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(12)
-        shadow.setOffset(0, 3)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        self.setGraphicsEffect(shadow)
+        self.setFocusPolicy(Qt.NoFocus)
 
+        self._arrow_x = 0
+        self._arrow_top = True
+
+        s = self.SHADOW
+        a = self.ARROW
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setContentsMargins(s + self.PAD_H, s + a + self.PAD_V,
+                                  s + self.PAD_H, s + self.PAD_V)
         self._label = QLabel()
+        self._label.setStyleSheet('color: #333333; font-size: 12px; background: transparent;')
         self._label.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
@@ -55,6 +52,7 @@ class PaymentDetailsPopup(QWidget):
         self._label.setContextMenuPolicy(Qt.CustomContextMenu)
         self._label.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self._label)
+
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.setInterval(400)
@@ -81,10 +79,102 @@ class PaymentDetailsPopup(QWidget):
         """Показать popup с текстом около указанной позиции"""
         self._label.setText(text)
         self.adjustSize()
-        # Смещаем чуть ниже и правее курсора
-        self.move(global_pos.x() + 12, global_pos.y() + 12)
+
+        s = self.SHADOW
+        w = self.width()
+        h = self.height()
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = global_pos.x() - w // 2
+        y = global_pos.y() + 2
+
+        if x < screen.left():
+            x = screen.left()
+        if x + w > screen.right():
+            x = screen.right() - w
+
+        self._arrow_x = max(self.RADIUS + self.ARROW,
+                            min(global_pos.x() - x - s,
+                                w - 2 * s - self.RADIUS - self.ARROW))
+
+        if y + h > screen.bottom():
+            y = global_pos.y() - h - 2
+            self._arrow_top = False
+            # Пересчитать margins для стрелки снизу
+            a = self.ARROW
+            self.layout().setContentsMargins(s + self.PAD_H, s + self.PAD_V,
+                                             s + self.PAD_H, s + a + self.PAD_V)
+        else:
+            self._arrow_top = True
+            a = self.ARROW
+            self.layout().setContentsMargins(s + self.PAD_H, s + a + self.PAD_V,
+                                             s + self.PAD_H, s + self.PAD_V)
+
+        self.move(x, y)
         self.show()
+        self.update()
         self._hide_timer.stop()
+
+    def _build_path(self):
+        """Построить path облачка с хвостиком (как BubbleToolTip)"""
+        s = self.SHADOW
+        bw = self.width() - 2 * s
+        bh = self.height() - 2 * s
+        a = self.ARROW
+        r = self.RADIUS
+        ax = self._arrow_x
+
+        path = QPainterPath()
+        if self._arrow_top:
+            bt = float(a)
+            path.moveTo(r, bt)
+            path.lineTo(ax - a, bt)
+            path.lineTo(ax, 0)
+            path.lineTo(ax + a, bt)
+            path.lineTo(bw - r, bt)
+            path.arcTo(bw - 2 * r, bt, 2 * r, 2 * r, 90, -90)
+            path.lineTo(bw, bh - r)
+            path.arcTo(bw - 2 * r, bh - 2 * r, 2 * r, 2 * r, 0, -90)
+            path.lineTo(r, bh)
+            path.arcTo(0, bh - 2 * r, 2 * r, 2 * r, -90, -90)
+            path.lineTo(0, bt + r)
+            path.arcTo(0, bt, 2 * r, 2 * r, 180, -90)
+        else:
+            bb = float(bh - a)
+            path.moveTo(r, 0)
+            path.lineTo(bw - r, 0)
+            path.arcTo(bw - 2 * r, 0, 2 * r, 2 * r, 90, -90)
+            path.lineTo(bw, bb - r)
+            path.arcTo(bw - 2 * r, bb - 2 * r, 2 * r, 2 * r, 0, -90)
+            path.lineTo(ax + a, bb)
+            path.lineTo(ax, bh)
+            path.lineTo(ax - a, bb)
+            path.lineTo(r, bb)
+            path.arcTo(0, bb - 2 * r, 2 * r, 2 * r, -90, -90)
+            path.lineTo(0, r)
+            path.arcTo(0, 0, 2 * r, 2 * r, 180, -90)
+        path.closeSubpath()
+        return path
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        s = self.SHADOW
+        path = self._build_path()
+        painter.translate(s, s)
+        # Тень
+        for dy, alpha in [(4, 8), (3, 12), (2, 16), (1, 20)]:
+            painter.save()
+            painter.translate(0, dy)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(0, 0, 0, alpha))
+            painter.drawPath(path)
+            painter.restore()
+        # Облачко
+        painter.setPen(QPen(QColor('#d9d9d9'), 1))
+        painter.setBrush(QColor('#ffffff'))
+        painter.drawPath(path)
+        painter.end()
 
     def enterEvent(self, event):
         self._hide_timer.stop()
