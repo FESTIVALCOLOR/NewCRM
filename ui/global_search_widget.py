@@ -50,6 +50,9 @@ class GlobalSearchWidget(QWidget):
         self.search_input.setPlaceholderText("Поиск по клиентам, договорам, проектам, надзору...")
         self.search_input.setFixedWidth(320)
         self.search_input.setFixedHeight(28)
+        # Адаптивная ширина: 320px при >=1400, уменьшается до 200px при 1280
+        self._base_width = 320
+        self._min_width = 200
         self.search_input.setStyleSheet("""
             QLineEdit {
                 border: 1px solid #d9d9d9;
@@ -139,6 +142,18 @@ class GlobalSearchWidget(QWidget):
                         self.search_input.mapFromGlobal(click_pos)):
                     self.results_list.hide()
         return super().eventFilter(obj, event)
+
+    def adapt_width(self, window_width):
+        """Адаптировать ширину поиска под ширину окна"""
+        if window_width >= 1400:
+            w = self._base_width
+        elif window_width <= 1280:
+            w = self._min_width
+        else:
+            # Линейная интерполяция: 1280→200, 1400→320
+            ratio = (window_width - 1280) / (1400 - 1280)
+            w = int(self._min_width + ratio * (self._base_width - self._min_width))
+        self.search_input.setFixedWidth(w)
 
     def _setup_debounce(self):
         self.debounce_timer = QTimer()

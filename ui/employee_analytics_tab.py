@@ -17,7 +17,6 @@ from PyQt5.QtCore import Qt, QDate, QTimer
 from PyQt5.QtGui import QFont, QColor
 
 from ui.custom_combobox import CustomComboBox
-from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
 from utils.icon_loader import IconLoader
 from utils.calendar_helpers import ICONS_PATH
@@ -104,8 +103,7 @@ class EmployeeAnalyticsTab(QWidget):
         super().__init__()
         self.employee = employee
         self.api_client = api_client
-        self.db = DatabaseManager()
-        self.data_access = DataAccess(api_client=self.api_client, db=self.db)
+        self.data_access = DataAccess(api_client=self.api_client)
         self._loading = False
         self._current_dashboard = {}
         self._current_role_data = {}

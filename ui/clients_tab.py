@@ -996,18 +996,6 @@ class ClientDialog(QDialog):
                 'error'
             ).exec_()
 
-    def showEvent(self, event):
-        """Центрирование при первом показе"""
-        super().showEvent(event)
-        if not hasattr(self, '_centered'):
-            self._centered = True
-            self.center_on_screen()
-
-    def center_on_screen(self):
-        """Центрирование относительно родительского окна"""
-        from utils.dialog_helpers import center_dialog_on_parent
-        center_dialog_on_parent(self)
-        
 class ClientSearchDialog(QDialog):
     """Диалог поиска клиентов"""
     def __init__(self, parent):

@@ -32,6 +32,8 @@
 | 23 | [Дорожная карта дедлайнов](23-deadline-roadmap.md) | Аудит, история реализации Фазы 8, архитектура | `docs/23-deadline-roadmap.md` |
 | 24 | [Фаза Research](24-research.md) | Исследование контекста задачи, 3 направления, шаблон | `docs/24-research.md` |
 | 25 | [Фаза Design](25-design.md) | C4, DFD, ADR, стратегия тестирования, API контракты | `docs/25-design.md` |
+| 28 | [Система обновления](28-update-system.md) | Обновление программы через Яндекс.Диск, version.json, VersionDialog | `docs/28-update-system.md` |
+| 29 | [Руководство пользователя](29-user-manual.md) | Инструкция для всех ролей: функционал, вкладки, ежедневные задачи | `docs/29-user-manual.md` |
 
 ## Быстрые ссылки
 

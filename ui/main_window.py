@@ -134,8 +134,8 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle(f'FESTIVAL COLOR - {self.employee["full_name"]}')
-        # Минимальный размер окна — 1400x800
-        self.setMinimumSize(1400, 800)
+        # Минимальный размер окна — 1280x720, рекомендуемый — 1400x800
+        self.setMinimumSize(1280, 720)
         self.resize(1400, 800)
 
         #   TITLE BAR
@@ -487,7 +487,7 @@ class MainWindow(QMainWindow):
                     # При maximized: восстанавливаем сохраненную геометрию
                     if self.restore_geometry:
                         # Восстанавливаем минимальный размер
-                        self.setMinimumSize(1400, 800)
+                        self.setMinimumSize(1280, 720)
 
                         # Центрируем окно относительно курсора в области title bar
                         new_x = pos.x() - self.restore_geometry.width() // 2
@@ -513,7 +513,7 @@ class MainWindow(QMainWindow):
             if should_restore and self.restore_geometry and self.snap_position in ['left', 'right']:
                 self.setGeometry(self.restore_geometry)
                 # Восстанавливаем минимальный размер
-                self.setMinimumSize(1400, 800)
+                self.setMinimumSize(1280, 720)
                 self.is_snapped = False
                 self.snap_position = None
                 self.restore_geometry = None
@@ -550,7 +550,7 @@ class MainWindow(QMainWindow):
         """Применение snap позиции"""
         if not self.is_snapped or not self.snap_position:
             # Не в режиме snap - восстанавливаем минимальный размер
-            self.setMinimumSize(1400, 800)
+            self.setMinimumSize(1280, 720)
             self.setCursor(Qt.ArrowCursor)
             return
 
@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
                     self.snap_position = None
                     self.restore_geometry = None
                 # Восстанавливаем минимальный размер перед resize
-                self.setMinimumSize(1400, 800)
+                self.setMinimumSize(1280, 720)
 
                 self.resizing = True
                 self.resize_edge = edge
@@ -842,16 +842,14 @@ class MainWindow(QMainWindow):
 
                     # Title bar zone (верхние 45px)
                     if ly < 45:
-                        # Кнопка maximize: ~56-96px от правого края (между minimize и close)
-                        # Layout: ... [minimize 40px] [10px gap] [maximize 40px] [10px gap] [close 40px] [6px margin]
-                        # Close: w-6-40 = w-46 to w-6
-                        # Maximize: w-46-10-40 = w-96 to w-56
-                        if w - 96 <= lx <= w - 56:
-                            return True, HTMAXBUTTON
+                        # Зона кнопок (minimize, maximize, close) — HTCLIENT,
+                        # чтобы клики шли в Qt-кнопки CustomTitleBar,
+                        # а не вызывали Windows Snap Layout popup (HTMAXBUTTON)
+                        if lx >= w - 146:
+                            return True, HTCLIENT
 
-                        # Остальная часть title bar (кроме кнопок) = HTCAPTION
-                        if lx < w - 146:
-                            return True, HTCAPTION
+                        # Остальная часть title bar = HTCAPTION (перетаскивание окна)
+                        return True, HTCAPTION
 
                     return True, HTCLIENT
 
@@ -888,8 +886,8 @@ class MainWindow(QMainWindow):
                     # Корректные размеры при maximize (учитываем taskbar)
                     info = ctypes.cast(msg.lParam, ctypes.POINTER(MINMAXINFO)).contents
                     # Минимальный размер окна — Windows будет его принудительно соблюдать
-                    info.ptMinTrackSize.x = 1400
-                    info.ptMinTrackSize.y = 800
+                    info.ptMinTrackSize.x = 1280
+                    info.ptMinTrackSize.y = 720
                     # Получаем монитор для текущего окна
                     monitor = ctypes.windll.user32.MonitorFromWindow(
                         int(self.winId()),
@@ -917,6 +915,12 @@ class MainWindow(QMainWindow):
             self.setCursor(Qt.ArrowCursor)
         super().leaveEvent(event)
 
+    def resizeEvent(self, event):
+        """Адаптация UI элементов при изменении размера окна"""
+        super().resizeEvent(event)
+        if hasattr(self, 'search_widget'):
+            self.search_widget.adapt_width(event.size().width())
+
     def changeEvent(self, event):
         """Обработка изменения состояния окна (maximize/restore)"""
         if event.type() == QEvent.WindowStateChange:
@@ -929,7 +933,7 @@ class MainWindow(QMainWindow):
                 self.is_snapped = False
                 self.snap_position = None
                 # Восстанавливаем минимальный размер (абсолютный минимум)
-                self.setMinimumSize(1400, 800)
+                self.setMinimumSize(1280, 720)
                 # Сбрасываем флаги resize на всякий случай
                 self.resizing = False
                 self.resize_edge = None
@@ -947,7 +951,7 @@ class MainWindow(QMainWindow):
             h = old_geometry.height()
             
             edge = self.resize_edge
-            min_w, min_h = 1400, 800
+            min_w, min_h = 1280, 720
             
             if 'left' in edge:
                 new_x = x + delta.x()
@@ -997,15 +1001,12 @@ class MainWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
-        """  -      (1400x800)"""
+        """Восстановление окна до рекомендуемого размера (1400x800)"""
         if event.button() == Qt.LeftButton:
-            #      ,   
-            #   snap
             self.is_snapped = False
             self.snap_position = None
             self.restore_geometry = None
 
-            #      
             self.showNormal()
             self.resize(1400, 800)
 

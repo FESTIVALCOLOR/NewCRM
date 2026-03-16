@@ -709,12 +709,11 @@ class PermissionsMatrixWidget(QWidget):
         """Сбросить матрицу к дефолтным значениям"""
         from PyQt5.QtWidgets import QDialog
 
-        reply = CustomMessageBox(
+        reply = CustomQuestionBox(
             self,
             'Подтверждение',
             'Сбросить все права до значений по умолчанию?\n\n'
-            'Текущие настройки будут потеряны.',
-            'warning'
+            'Текущие настройки будут потеряны.'
         )
         if reply.exec_() == QDialog.Accepted:
             self._apply_matrix(DEFAULT_ROLE_PERMISSIONS)

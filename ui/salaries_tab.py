@@ -1276,10 +1276,6 @@ class SalariesTab(QWidget):
                     'error'
                 ).exec_()
 
-    def delete_payment(self, payment_id, role, employee_name):
-        """Удаление записи об оплате (старый метод для обратной совместимости)"""
-        self.delete_payment_universal(payment_id, 'CRM', role, employee_name)
-
     def _delete_payment_locally(self, payment_id: int, source: str):
         """Удаление платежа из локальной SQLite базы данных"""
         try:

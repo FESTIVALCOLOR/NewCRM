@@ -281,13 +281,14 @@ class EmployeeReportsTab(QWidget):
         header_row.addWidget(header)
         header_row.addStretch()
 
-        export_btn = IconLoader.create_icon_button('download', 'Экспорт PDF', icon_size=12)
+        export_btn = QPushButton('Экспорт в PDF')
+        export_btn.setFixedHeight(32)
         export_btn.setStyleSheet("""
             QPushButton {
-                background: #F0F4FF; border: 1px solid #C5CAE9; border-radius: 4px;
-                padding: 4px 12px; color: #333; font-size: 11px;
+                background-color: #C62828; color: white; border: none;
+                border-radius: 4px; padding: 0 16px; font-size: 12px;
             }
-            QPushButton:hover { background: #E8EAF6; }
+            QPushButton:hover { background-color: #a52222; }
         """)
         export_btn.clicked.connect(self._export_to_pdf)
         header_row.addWidget(export_btn)
@@ -368,11 +369,13 @@ class EmployeeReportsTab(QWidget):
         year_spin.setRange(2020, 2030)
         year_spin.setValue(QDate.currentDate().year())
         year_spin.setObjectName(f'year_{project_type}')
+        year_spin.setFixedHeight(28)
         year_spin.setStyleSheet(f"""
             QSpinBox {{
-                background: #fff; border: none; border-radius: 4px;
-                padding: 4px 8px; color: #333; font-size: 12px;
+                background: #fff; border: 1px solid #d9d9d9; border-radius: 4px;
+                padding: 2px 8px; color: #333; font-size: 12px;
             }}
+            QSpinBox:hover {{ border-color: #c0c0c0; }}
             QSpinBox::up-button, QSpinBox::down-button {{
                 background: #F8F9FA; border: none; width: 20px; border-radius: 4px;
             }}
@@ -383,26 +386,29 @@ class EmployeeReportsTab(QWidget):
 
         filters_row.addWidget(QLabel('Квартал:'))
         quarter_combo = CustomComboBox()
+        quarter_combo.setFixedHeight(28)
         quarter_combo.addItems(['Все', 'Q1', 'Q2', 'Q3', 'Q4'])
         quarter_combo.setObjectName(f'quarter_{project_type}')
         filters_row.addWidget(quarter_combo)
 
         filters_row.addWidget(QLabel('Месяц:'))
         month_combo = CustomComboBox()
+        month_combo.setFixedHeight(28)
         months = ['Все', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
         month_combo.addItems(months)
         month_combo.setObjectName(f'month_{project_type}')
         filters_row.addWidget(month_combo)
 
-        refresh_btn = IconLoader.create_icon_button('refresh', 'Обновить', icon_size=12)
-        refresh_btn.setFixedHeight(26)
+        refresh_btn = QPushButton('Обновить')
+        refresh_btn.setFixedHeight(28)
         refresh_btn.setStyleSheet("""
             QPushButton {
-                background: #F0F4FF; border: 1px solid #C5CAE9; border-radius: 4px;
-                padding: 3px 12px; color: #333; font-size: 11px;
+                background: #ffffff; border: 1px solid #d9d9d9; border-radius: 4px;
+                padding: 0px 14px; color: #333333; font-size: 12px;
+                min-height: 0px; max-height: 26px;
             }
-            QPushButton:hover { background: #E8EAF6; }
+            QPushButton:hover { background: #F5F5F5; border-color: #c0c0c0; }
         """)
         refresh_btn.clicked.connect(lambda: self._refresh_all(project_type))
         filters_row.addWidget(refresh_btn)
@@ -486,12 +492,15 @@ class EmployeeReportsTab(QWidget):
         role_tabs.setStyleSheet("""
             QTabWidget::pane { border: 1px solid #E0E0E0; border-radius: 4px; }
             QTabBar::tab {
-                padding: 6px 18px; margin-right: 2px;
+                padding: 6px 22px; margin-right: 2px;
                 border: 1px solid #E0E0E0; border-bottom: none;
                 border-radius: 4px 4px 0 0; background: #FAFAFA;
-                min-width: 60px;
+                min-width: 80px;
             }
-            QTabBar::tab:selected { background: #FFFFFF; font-weight: bold; }
+            QTabBar::tab:selected {
+                background: #FFFFFF; font-weight: bold;
+                padding: 6px 22px;
+            }
         """)
 
         roles = ROLE_TABS.get(pt_code, [])
@@ -534,7 +543,7 @@ class EmployeeReportsTab(QWidget):
 
             ontime_chart = StackedBarChartWidget('В срок / Просрочки')
             ontime_chart.setObjectName(f'role_ontime_chart_{project_type}_{role_code}')
-            ontime_chart.setFixedHeight(320)
+            ontime_chart.setFixedHeight(350)
             charts_row.addWidget(ontime_chart)
 
             dynamics_chart = LineChartWidget('Динамика по месяцам')
@@ -1129,12 +1138,18 @@ class EmployeeReportsTab(QWidget):
         # 4 графика детальной карточки (согласно руководству)
         # Слева 2 графика друг над другом, справа — Компоненты KPI на всю высоту
         if MATPLOTLIB_AVAILABLE:
-            charts_main = QHBoxLayout()
-            charts_left = QVBoxLayout()
+            LEFT_CHART_H = 320
 
-            # 1. Динамика KPI (линейный)
+            # QGridLayout: правый график rowSpan=2 → автовыравнивание высоты
+            charts_grid = QGridLayout()
+            charts_grid.setContentsMargins(0, 0, 0, 0)
+            charts_grid.setSpacing(6)
+            charts_grid.setColumnStretch(0, 1)
+            charts_grid.setColumnStretch(1, 1)
+
+            # 1. Динамика KPI (row=0, col=0)
             kpi_dynamics = LineChartWidget('Динамика KPI')
-            kpi_dynamics.setFixedHeight(290)
+            kpi_dynamics.setFixedHeight(LEFT_CHART_H)
             if trend:
                 months = [t.get('month', '') for t in trend[-12:]]
                 kpi_vals = [t.get('kpi_total', 0) or 0 for t in trend[-12:]]
@@ -1142,12 +1157,12 @@ class EmployeeReportsTab(QWidget):
                     'x': months, 'y': kpi_vals,
                     'label': 'KPI', 'color': '#4A90D9',
                 }])
-            charts_left.addWidget(kpi_dynamics)
+            charts_grid.addWidget(kpi_dynamics, 0, 0)
 
-            # 2. Нагрузка по месяцам (линейный)
+            # 2. Нагрузка по месяцам (row=1, col=0)
             load_monthly = detail.get('load_monthly', [])
             load_chart = LineChartWidget('Нагрузка по месяцам')
-            load_chart.setFixedHeight(290)
+            load_chart.setFixedHeight(LEFT_CHART_H)
             if load_monthly:
                 l_months = [m.get('month', '') for m in load_monthly]
                 l_vals = [m.get('concurrent_projects', 0) for m in load_monthly]
@@ -1155,11 +1170,11 @@ class EmployeeReportsTab(QWidget):
                     'x': l_months, 'y': l_vals,
                     'label': 'Проектов', 'color': '#F5A623',
                 }])
-            charts_left.addWidget(load_chart)
+            charts_grid.addWidget(load_chart, 1, 0)
 
-            # 3. Компоненты KPI (bar) — на всю высоту справа
+            # 3. Компоненты KPI (row=0, col=1, rowSpan=2) — обе строки
             kpi_components_chart = StackedBarChartWidget('Компоненты KPI')
-            kpi_components_chart.setFixedHeight(580)
+            kpi_components_chart.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             if kpi:
                 if is_supervision:
                     comp_names = ['Закупки', 'Дефекты', 'Визиты', 'NPS']
@@ -1176,16 +1191,18 @@ class EmployeeReportsTab(QWidget):
                 kpi_components_chart.set_data(comp_names, [
                     {'label': 'Значение', 'values': comp_vals, 'color': '#4A90D9'},
                 ], stacked=False)
+                # Пересчитать margins: set_data ставит top=0.82, bottom=0.35
+                # На 646px это даёт 116px сверху и 226px снизу — слишком много.
+                # Выровнять top с левыми 320px-графиками: 58px от верха → top=0.91
+                if kpi_components_chart.canvas:
+                    kpi_components_chart.figure.subplots_adjust(top=0.91, bottom=0.12)
+                    kpi_components_chart.canvas.draw()
+            charts_grid.addWidget(kpi_components_chart, 0, 1, 2, 1)
 
-            charts_main.addLayout(charts_left, 1)
-            charts_main.addWidget(kpi_components_chart, 1)
+            layout.addLayout(charts_grid)
 
             # 4. Просрочки по стадиям (stacked bar) — отдельной строкой
             stages_breakdown = detail.get('stages_breakdown', [])
-
-            charts_w = QWidget()
-            charts_w.setLayout(charts_main)
-            layout.addWidget(charts_w)
 
             if stages_breakdown:
                 stages_chart = StackedBarChartWidget('Стадии: в срок / просрочки')
@@ -1517,54 +1534,136 @@ class EmployeeReportsTab(QWidget):
 
                 page_h_mm = (page_size[1] - MARGIN_TOP - MARGIN_BOT) / mm - 30
 
-                # KPI сводка (из кеша)
+                # KPI сводка (из кеша) — стилизованный блок с рамкой
                 dashboard = self._dashboard_cache.get(project_type, {})
                 summary = dashboard.get('summary', {})
                 if summary:
+                    from reportlab.platypus import Table, TableStyle
                     style_body = ParagraphStyle(
                         'EmpBody', fontName=font_name, fontSize=9,
                         textColor=colors.HexColor('#333333'),
-                        spaceAfter=1 * mm,
+                        leading=14,
+                    )
+                    style_block_title = ParagraphStyle(
+                        'BlockTitle', fontName=font_bold, fontSize=11,
+                        textColor=colors.HexColor('#222222'),
+                        spaceAfter=2 * mm,
                     )
                     avg_kpi = summary.get('avg_kpi', 0) or 0
                     on_time = summary.get('avg_on_time_rate', 0) or 0
                     avg_nps = summary.get('avg_nps')
-                    kpi_line = (
-                        f"<b>Сотрудников:</b> {summary.get('total_employees', 0)} | "
-                        f"<b>Средний KPI:</b> {avg_kpi:.0f}% | "
-                        f"<b>Выполнение в срок:</b> {on_time:.0f}% | "
-                        f"<b>Средняя нагрузка:</b> {summary.get('avg_concurrent_load', 0):.1f} | "
-                        f"<b>NPS:</b> {f'{avg_nps:.1f}' if avg_nps else '—'} | "
-                        f"<b>Активных проектов:</b> {summary.get('active_projects', 0)}"
-                    )
-                    elements.append(Paragraph(kpi_line, style_body))
-                    elements.append(Spacer(1, 3 * mm))
 
-                # Топ-5
+                    kpi_items = [
+                        ('Сотрудников', str(summary.get('total_employees', 0))),
+                        ('Средний KPI', f'{avg_kpi:.0f}%'),
+                        ('Выполнение в срок', f'{on_time:.0f}%'),
+                        ('Средняя нагрузка', f"{summary.get('avg_concurrent_load', 0):.1f}"),
+                        ('NPS', f'{avg_nps:.1f}' if avg_nps else '—'),
+                        ('Активных проектов', str(summary.get('active_projects', 0))),
+                    ]
+
+                    # Таблица 3x2 с KPI показателями
+                    kpi_table_data = []
+                    row_data = []
+                    for label, val in kpi_items:
+                        cell = Paragraph(f'<b>{label}</b><br/>{val}', style_body)
+                        row_data.append(cell)
+                        if len(row_data) == 3:
+                            kpi_table_data.append(row_data)
+                            row_data = []
+                    if row_data:
+                        while len(row_data) < 3:
+                            row_data.append('')
+                        kpi_table_data.append(row_data)
+
+                    col_w = (page_size[0] - 2 * MARGIN_LR - 12 * mm) / 3
+                    kpi_block_title = Paragraph('Ключевые показатели', style_block_title)
+                    kpi_table = Table(
+                        [[kpi_block_title, '', '']] + kpi_table_data,
+                        colWidths=[col_w] * 3,
+                    )
+                    kpi_table.setStyle(TableStyle([
+                        ('SPAN', (0, 0), (2, 0)),
+                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFE')),
+                        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#D0D8E8')),
+                        ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+                        ('TOPPADDING', (0, 0), (-1, -1), 4 * mm),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 4 * mm),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
+                        ('TOPPADDING', (0, 0), (2, 0), 3 * mm),
+                        ('BOTTOMPADDING', (0, 0), (2, 0), 1 * mm),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('LINEBELOW', (0, 0), (2, 0), 0.5, colors.HexColor('#D0D8E8')),
+                    ]))
+                    elements.append(kpi_table)
+                    elements.append(Spacer(1, 5 * mm))
+
+                # Топ-5 — два стилизованных блока рядом
                 top = dashboard.get('top_performers', [])
                 under = dashboard.get('underperformers', [])
                 if top or under:
-                    style_small = ParagraphStyle(
-                        'EmpSmall', fontName=font_name, fontSize=8,
-                        textColor=colors.HexColor('#555555'),
-                        leading=11,
+                    from reportlab.platypus import Table, TableStyle
+                    style_top_title = ParagraphStyle(
+                        'TopTitle', fontName=font_bold, fontSize=10,
+                        textColor=colors.HexColor('#2E7D32'),
+                        spaceAfter=2 * mm,
                     )
-                    top_lines = ['<b>Топ-5 лучших:</b>']
+                    style_worst_title = ParagraphStyle(
+                        'WorstTitle', fontName=font_bold, fontSize=10,
+                        textColor=colors.HexColor('#C62828'),
+                        spaceAfter=2 * mm,
+                    )
+                    style_item = ParagraphStyle(
+                        'TopItem', fontName=font_name, fontSize=9,
+                        textColor=colors.HexColor('#444444'),
+                        leading=13,
+                    )
+
+                    # Лучшие
+                    best_parts = [Paragraph('Топ-5 лучших', style_top_title)]
                     for i, emp in enumerate(top[:5], 1):
                         kpi_val = emp.get('kpi_total', 0) or 0
-                        top_lines.append(f"{i}. {emp.get('full_name', '')} — {kpi_val:.0f}%")
-                    under_lines = ['<b>Топ-5 проблемных:</b>']
+                        best_parts.append(Paragraph(
+                            f'{i}. {emp.get("full_name", "")} — <b>{kpi_val:.0f}%</b>',
+                            style_item))
+                    if not top:
+                        best_parts.append(Paragraph('Нет данных', style_item))
+                    best_cell = best_parts
+
+                    # Проблемные
+                    worst_parts = [Paragraph('Топ-5 проблемных', style_worst_title)]
                     if under:
                         for i, emp in enumerate(under[:5], 1):
                             kpi_val = emp.get('kpi_total', 0) or 0
-                            under_lines.append(f"{i}. {emp.get('full_name', '')} — {kpi_val:.0f}%")
+                            worst_parts.append(Paragraph(
+                                f'{i}. {emp.get("full_name", "")} — <b>{kpi_val:.0f}%</b>',
+                                style_item))
                     else:
-                        under_lines.append('Нет проблемных сотрудников')
+                        worst_parts.append(Paragraph('Нет проблемных', style_item))
+                    worst_cell = worst_parts
 
-                    elements.append(Paragraph('<br/>'.join(top_lines), style_small))
-                    elements.append(Spacer(1, 2 * mm))
-                    elements.append(Paragraph('<br/>'.join(under_lines), style_small))
-                    elements.append(Spacer(1, 4 * mm))
+                    half_w = (page_size[0] - 2 * MARGIN_LR - 6 * mm) / 2
+                    top5_table = Table(
+                        [[best_cell, worst_cell]],
+                        colWidths=[half_w, half_w],
+                    )
+                    top5_table.setStyle(TableStyle([
+                        # Левый блок — зелёный
+                        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#F1F8E9')),
+                        ('BOX', (0, 0), (0, 0), 1, colors.HexColor('#C8E6C9')),
+                        ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+                        # Правый блок — красный
+                        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#FFF8F8')),
+                        ('BOX', (1, 0), (1, 0), 1, colors.HexColor('#FFCDD2')),
+                        ('TOPPADDING', (0, 0), (-1, -1), 4 * mm),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 4 * mm),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ]))
+                    elements.append(top5_table)
+                    elements.append(Spacer(1, 5 * mm))
 
                 # Тренд KPI график
                 current_tab = self.report_tabs.currentWidget()
