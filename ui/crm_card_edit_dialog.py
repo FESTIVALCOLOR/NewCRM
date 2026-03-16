@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLineEdit, QComboBox, QMessageBox, QDateEdit,
                              QListWidget, QListWidgetItem, QTabWidget, QTextEdit,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
-                             QTableWidgetItem, QDoubleSpinBox)
+                             QTableWidgetItem, QDoubleSpinBox, QSizePolicy)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QMimeData, QDate, pyqtSignal, QSize, QUrl, QTimer, QEvent
 from PyQt5.QtGui import QDrag, QPixmap, QColor, QCursor
@@ -7004,6 +7004,7 @@ class CardEditDialog(QDialog):
 
             group_layout.addWidget(table)
             group_box.setLayout(group_layout)
+            group_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
             layout.addWidget(group_box)
 
         # Предупреждение о переназначении
@@ -7026,7 +7027,7 @@ class CardEditDialog(QDialog):
         total_label.setStyleSheet('font-size: 14px; padding: 10px; background-color: #ffffff; margin-top: 10px;')
         layout.addWidget(total_label)
 
-        layout.addStretch()
+        layout.addStretch(1)
         scroll_content.setLayout(layout)
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
