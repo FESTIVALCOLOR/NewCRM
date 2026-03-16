@@ -30,7 +30,7 @@ class YandexDiskNetworkError(YandexDiskError):
 class YandexDiskManager:
     _instances = {}
 
-    MAX_FILE_SIZE_MB = 200  # Maximum allowed file size
+    MAX_FILE_SIZE_MB = 500  # Maximum allowed file size
 
     @classmethod
     def get_instance(cls, token=None):
