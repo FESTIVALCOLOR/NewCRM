@@ -2184,17 +2184,23 @@ async def workflow_client_send(
     except Exception as e:
         logger.warning(f"[client-send] Ошибка обновления report_month: {e}")
 
-    # === 5. Сбрасываем completed у исполнителя ===
-    executors = db.query(StageExecutor).filter(
-        StageExecutor.crm_card_id == card_id,
-        StageExecutor.stage_name == stage_name,
-        StageExecutor.completed == True
-    ).all()
-    for ex in executors:
-        ex.completed = False
-        ex.completed_date = None
+    # === 5. НЕ сбрасываем completed — работа исполнителя принята ===
+    # (ранее здесь был сброс completed=False, что приводило к повторному
+    # появлению кнопки "Сдать работу" у исполнителя)
 
     # === 6. Обновляем workflow state ===
+    # Определяем stage_code клиентской строки для current_substep_code
+    client_substep_code = None
+    if stage_group and contract_id:
+        _client_entry = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role == 'Клиент',
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).first()
+        if _client_entry:
+            client_substep_code = _client_entry.stage_code
+
     wf = db.query(StageWorkflowState).filter(
         StageWorkflowState.crm_card_id == card_id,
         StageWorkflowState.stage_name == stage_name
@@ -2207,12 +2213,20 @@ async def workflow_client_send(
             client_approval_started_at=datetime.utcnow(),
             client_approval_deadline_paused=True
         )
+        if client_substep_code:
+            wf.current_substep_code = client_substep_code
         db.add(wf)
     else:
         wf.status = 'client_approval'
         wf.client_approval_started_at = datetime.utcnow()
         wf.client_approval_deadline_paused = True
         wf.updated_at = datetime.utcnow()
+        if client_substep_code:
+            wf.current_substep_code = client_substep_code
+
+    # === 7. Обновляем дедлайн исполнителя ===
+    if stage_group and contract_id:
+        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
     # K11: Запись в историю
     db.add(ActionHistory(

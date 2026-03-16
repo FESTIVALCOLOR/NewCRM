@@ -259,21 +259,22 @@ class YandexDiskManager:
             if progress_callback:
                 progress_callback(2, file_name, 'finalizing')
 
-            # Получаем публичную ссылку
-            public_link = self.get_public_link(yandex_file_path)
+            # Получаем публичную ссылку на ПАПКУ (а не на файл)
+            # чтобы можно было загружать несколько файлов в одну папку
+            folder_link = self.get_public_link(subfolder_path)
 
-            if public_link:
-                print(f"[OK] Файл загружен: {yandex_file_path}")
+            if folder_link:
+                print(f"[OK] Файл загружен: {yandex_file_path}, ссылка на папку: {subfolder_path}")
                 return {
-                    'public_link': public_link,
-                    'yandex_path': yandex_file_path,
+                    'public_link': folder_link,
+                    'yandex_path': subfolder_path,
                     'file_name': file_name
                 }
             else:
-                print(f"[WARN] Файл загружен, но не удалось получить публичную ссылку")
+                print(f"[WARN] Файл загружен, но не удалось получить публичную ссылку на папку")
                 return {
-                    'public_link': yandex_file_path,
-                    'yandex_path': yandex_file_path,
+                    'public_link': subfolder_path,
+                    'yandex_path': subfolder_path,
                     'file_name': file_name
                 }
 

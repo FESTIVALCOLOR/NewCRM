@@ -192,7 +192,7 @@ class CardEditDialog(QDialog):
         return name[:start_len] + "..." + name[-end_len:] + ext
 
     def init_ui(self):
-        title = 'Просмотр карточки' if self.view_only else 'Редактирование карточки проекта'
+        title = 'Просмотр карточки' if self.view_only else 'Данные карточки проекта'
 
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
@@ -1212,7 +1212,13 @@ class CardEditDialog(QDialog):
             
             buttons_layout.addWidget(save_btn)
             buttons_layout.addWidget(cancel_btn)
-            
+
+            # Линия-разделитель над кнопками
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
+            layout.addWidget(separator)
+
             layout.addLayout(buttons_layout)
         else:
             # Блокируем переключение вкладок колесом мыши
@@ -2302,9 +2308,7 @@ class CardEditDialog(QDialog):
             if hasattr(self, 'tech_task_file_label'):
                 self.tech_task_file_label.setText(f'<a href="{public_link}" title="{file_name}">{truncated_name}</a>')
 
-            # Деактивируем кнопку загрузки после успешной загрузки
-            if hasattr(self, 'upload_tz_btn'):
-                self.upload_tz_btn.setEnabled(False)
+            # Кнопка загрузки остаётся активной — можно подгружать ещё файлы в папку
 
             # Добавляем запись в историю проекта
             if self.employee:
@@ -2611,9 +2615,7 @@ class CardEditDialog(QDialog):
             # Обновляем изображение замера
             measurement_link = contract_data.get('measurement_image_link', '')
             if measurement_link:
-                file_name = contract_data.get('measurement_file_name') or 'Замер'
-                truncated_name = self.truncate_filename(file_name)
-                html_link = f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>'
+                html_link = f'<a href="{measurement_link}" title="Открыть папку с замером">Открыть папку с замером</a>'
                 if hasattr(self, 'project_data_survey_file_label'):
                     self.project_data_survey_file_label.setText(html_link)
             else:
@@ -5335,24 +5337,19 @@ class CardEditDialog(QDialog):
 
         # Обновляем лейблы на обеих вкладках
         if tech_task_file:
-            # Используем сохраненное имя файла, если оно есть
-            file_name = tech_task_file_name_from_contract if tech_task_file_name_from_contract else 'ТехЗадание.pdf'
-            truncated_name = self.truncate_filename(file_name)
-            html_link = f'<a href="{tech_task_file}" title="{file_name}">{truncated_name}</a>'
+            # Ссылка на папку (может содержать несколько файлов)
+            html_link = f'<a href="{tech_task_file}" title="Открыть папку с тех. заданием">Открыть папку с ТЗ</a>'
 
             if hasattr(self, 'tech_task_file_label'):
                 self.tech_task_file_label.setText(html_link)
             if hasattr(self, 'project_data_tz_file_label'):
                 self.project_data_tz_file_label.setText(html_link)
-            if hasattr(self, 'upload_tz_btn'):
-                self.upload_tz_btn.setEnabled(False)  # Деактивируем кнопку если файл загружен
+            # Кнопка загрузки всегда активна — можно подгружать ещё файлы в папку
         else:
             if hasattr(self, 'tech_task_file_label'):
                 self.tech_task_file_label.setText('Не загружен')
             if hasattr(self, 'project_data_tz_file_label'):
                 self.project_data_tz_file_label.setText('Не загружен')
-            if hasattr(self, 'upload_tz_btn'):
-                self.upload_tz_btn.setEnabled(True)  # Активируем кнопку если файл не загружен
 
         if self.card_data.get('tech_task_date'):
             from datetime import datetime
@@ -5382,23 +5379,17 @@ class CardEditDialog(QDialog):
             measurement_file_name = self._cached_contract.get('measurement_file_name')
 
             if measurement_link:
-                file_name = measurement_file_name if measurement_file_name else 'Замер'
-                truncated_name = self.truncate_filename(file_name)
-                html_link = f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>'
+                # Ссылка на папку (может содержать несколько файлов)
+                html_link = f'<a href="{measurement_link}" title="Открыть папку с замером">Открыть папку с замером</a>'
                 if hasattr(self, 'project_data_survey_file_label'):
                     self.project_data_survey_file_label.setText(html_link)
-                if hasattr(self, 'upload_survey_btn'):
-                    self.upload_survey_btn.setEnabled(False)
+                # Кнопка загрузки всегда активна — можно подгружать ещё файлы в папку
             else:
                 if hasattr(self, 'project_data_survey_file_label'):
                     self.project_data_survey_file_label.setText('Не загружен')
-                if hasattr(self, 'upload_survey_btn'):
-                    self.upload_survey_btn.setEnabled(True)
         else:
             if hasattr(self, 'project_data_survey_file_label'):
                 self.project_data_survey_file_label.setText('Не загружен')
-            if hasattr(self, 'upload_survey_btn'):
-                self.upload_survey_btn.setEnabled(True)
 
         # Дата замера — из card_data (единый источник, синхронизирован с вкладкой "Исполнители")
         survey_date_val = self.card_data.get('survey_date', '')
@@ -5741,47 +5732,33 @@ class CardEditDialog(QDialog):
             tz_link = result.get('tech_task_link') or ''
             tz_yp = result.get('tech_task_yandex_path') or ''
             if tz_link or tz_yp:
-                file_name = result.get('tech_task_file_name') or 'ТехЗадание.pdf'
-                truncated_name = self.truncate_filename(file_name)
-                if tz_link:
-                    html_link = f'<a href="{tz_link}" title="{file_name}">{truncated_name}</a>'
-                else:
-                    html_link = truncated_name
+                link_url = tz_link or tz_yp
+                html_link = f'<a href="{link_url}" title="Открыть папку с тех. заданием">Открыть папку с ТЗ</a>'
 
                 if hasattr(self, 'tech_task_file_label'):
                     self.tech_task_file_label.setText(html_link)
                 if hasattr(self, 'project_data_tz_file_label'):
                     self.project_data_tz_file_label.setText(html_link)
-                if hasattr(self, 'upload_tz_btn'):
-                    self.upload_tz_btn.setEnabled(False)
+                # Кнопка загрузки всегда активна — можно подгружать ещё файлы в папку
             else:
                 if hasattr(self, 'tech_task_file_label'):
                     self.tech_task_file_label.setText('Не загружен')
                 if hasattr(self, 'project_data_tz_file_label'):
                     self.project_data_tz_file_label.setText('Не загружен')
-                if hasattr(self, 'upload_tz_btn'):
-                    self.upload_tz_btn.setEnabled(True)
 
             # Обновляем метку замера
             meas_link = result.get('measurement_image_link') or ''
             meas_yp = result.get('measurement_yandex_path') or ''
             if meas_link or meas_yp:
-                file_name = result.get('measurement_file_name') or 'Замер'
-                truncated_name = self.truncate_filename(file_name)
-                if meas_link:
-                    html_link = f'<a href="{meas_link}" title="{file_name}">{truncated_name}</a>'
-                else:
-                    html_link = truncated_name
+                link_url = meas_link or meas_yp
+                html_link = f'<a href="{link_url}" title="Открыть папку с замером">Открыть папку с замером</a>'
 
                 if hasattr(self, 'project_data_survey_file_label'):
                     self.project_data_survey_file_label.setText(html_link)
-                if hasattr(self, 'upload_survey_btn'):
-                    self.upload_survey_btn.setEnabled(False)
+                # Кнопка загрузки всегда активна — можно подгружать ещё файлы в папку
             else:
                 if hasattr(self, 'project_data_survey_file_label'):
                     self.project_data_survey_file_label.setText('Не загружен')
-                if hasattr(self, 'upload_survey_btn'):
-                    self.upload_survey_btn.setEnabled(True)
 
             # Обновляем метку референсов
             ref_path = result.get('references_yandex_path') or ''
@@ -7591,16 +7568,12 @@ class CardEditDialog(QDialog):
         if not contract:
             return
 
-        # ТЗ файл
+        # ТЗ файл (ссылка на папку)
         tech_task_link = contract.get('tech_task_link')
-        tech_task_file_name = contract.get('tech_task_file_name')
         if tech_task_link and hasattr(self, 'project_data_tz_file_label'):
-            file_name = tech_task_file_name or 'ТехЗадание.pdf'
-            truncated_name = self.truncate_filename(file_name)
             self.project_data_tz_file_label.setText(
-                f'<a href="{tech_task_link}" title="{file_name}">{truncated_name}</a>')
-            if hasattr(self, 'upload_tz_btn'):
-                self.upload_tz_btn.setEnabled(False)
+                f'<a href="{tech_task_link}" title="Открыть папку с тех. заданием">Открыть папку с ТЗ</a>')
+            # Кнопка загрузки всегда активна — можно подгружать ещё файлы
 
         # Дата ТЗ
         if self.card_data.get('tech_task_date') and hasattr(self, 'project_data_tz_date_label'):
@@ -7611,16 +7584,12 @@ class CardEditDialog(QDialog):
             except Exception:
                 pass
 
-        # Замер файл
+        # Замер файл (ссылка на папку)
         measurement_link = contract.get('measurement_image_link')
-        measurement_file_name = contract.get('measurement_file_name')
         if measurement_link and hasattr(self, 'project_data_survey_file_label'):
-            file_name = measurement_file_name or 'Замер'
-            truncated_name = self.truncate_filename(file_name)
             self.project_data_survey_file_label.setText(
-                f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>')
-            if hasattr(self, 'upload_survey_btn'):
-                self.upload_survey_btn.setEnabled(False)
+                f'<a href="{measurement_link}" title="Открыть папку с замером">Открыть папку с замером</a>')
+            # Кнопка загрузки всегда активна — можно подгружать ещё файлы
 
         # Дата замера
         survey_date_val = self.card_data.get('survey_date', '')

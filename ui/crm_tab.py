@@ -2656,13 +2656,44 @@ class CRMCard(QFrame):
                     work_already_submitted = True
 
             if work_already_submitted:
-                # Работа уже сдана — показываем статус "Ожидайте проверку"
+                # Работа уже сдана — показываем статус
                 wf_status = self.card_data.get('workflow_status')
                 if wf_status == 'pending_review':
-                    # Яркая метка при активном ожидании проверки
+                    # Метка в стиле кнопки (визуально как кнопка, но не кликабельная)
                     wait_label = QLabel('Ожидайте проверку')
-                    wait_label.setStyleSheet('color: #E67E22; font-size: 10px; font-weight: bold;')
-                    layout.addWidget(wait_label, 0)
+                    wait_label.setAlignment(Qt.AlignCenter)
+                    wait_label.setStyleSheet("""
+                        QLabel {
+                            background-color: #ffffff;
+                            color: #E67E22;
+                            border: 1px solid #E67E22;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 22px;
+                            max-height: 22px;
+                        }
+                    """)
+                    layout.addWidget(wait_label, 0, Qt.AlignCenter)
+                elif wf_status == 'client_approval':
+                    # Клиент согласовывает — работа исполнителя принята
+                    client_label = QLabel('Клиент согласовывает')
+                    client_label.setAlignment(Qt.AlignCenter)
+                    client_label.setStyleSheet("""
+                        QLabel {
+                            background-color: #ffffff;
+                            color: #1976D2;
+                            border: 1px solid #1976D2;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: bold;
+                            min-height: 22px;
+                            max-height: 22px;
+                        }
+                    """)
+                    layout.addWidget(client_label, 0, Qt.AlignCenter)
                 else:
                     waiting_btn = QPushButton('Работа сдана')
                     waiting_btn.setEnabled(False)
@@ -2708,7 +2739,7 @@ class CRMCard(QFrame):
             # S2.2: Проверка права crm.update для кнопки редактирования
             has_update_perm = _has_perm(self.employee, self.api_client, 'crm_cards.update')
             # ========== КНОПКА РЕДАКТИРОВАНИЯ (SVG) ==========
-            edit_btn = IconLoader.create_icon_button('edit', 'Редактирование карточки', 'Редактировать данные карточки', icon_size=12)
+            edit_btn = IconLoader.create_icon_button('edit', 'Данные карточки', 'Открыть данные карточки', icon_size=12)
             edit_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #E0E0E0;
@@ -2727,7 +2758,7 @@ class CRMCard(QFrame):
             edit_btn.setEnabled(has_update_perm)
             if not has_update_perm:
                 edit_btn.setStyleSheet(edit_btn.styleSheet() + "QPushButton:disabled { opacity: 0.5; background-color: #e0e0e0; }")
-            edit_btn.setAccessibleName("Редактирование карточки")
+            edit_btn.setAccessibleName("Данные карточки")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
             buttons_added = True

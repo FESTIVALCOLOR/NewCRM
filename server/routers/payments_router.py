@@ -739,10 +739,18 @@ async def recalculate_payments(
 
                 # Авторский надзор
                 elif project_type == 'Авторский надзор' or payment.supervision_card_id:
-                    rate = db.query(Rate).filter(
+                    query_rate = db.query(Rate).filter(
                         Rate.project_type == 'Авторский надзор',
                         Rate.role == payment.role
-                    ).first()
+                    )
+                    if payment.stage_name:
+                        rate = query_rate.filter(Rate.stage_name == payment.stage_name).first()
+                        if not rate:
+                            rate = query_rate.filter(Rate.stage_name.is_(None)).first()
+                    else:
+                        rate = query_rate.filter(Rate.stage_name.is_(None)).first()
+                    if not rate:
+                        rate = query_rate.first()
 
                     if rate and rate.rate_per_m2:
                         new_amount = area * float(rate.rate_per_m2)

@@ -1619,7 +1619,7 @@ class SupervisionCard(QFrame):
             layout.addWidget(pause_btn, 0)
 
             # ========== 3. РЕДАКТИРОВАНИЕ (SVG) ==========
-            edit_btn = IconLoader.create_icon_button('edit', 'Редактирование', 'Редактировать карточку', icon_size=12)
+            edit_btn = IconLoader.create_icon_button('edit', 'Данные карточки', 'Открыть данные карточки', icon_size=12)
             edit_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #4A90E2;
@@ -1634,7 +1634,7 @@ class SupervisionCard(QFrame):
                 QPushButton:hover { background-color: #357ABD; }
             """)
             edit_btn.setFixedHeight(28)
-            edit_btn.setAccessibleName("Редактирование карточки надзора")
+            edit_btn.setAccessibleName("Данные карточки надзора")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)
 

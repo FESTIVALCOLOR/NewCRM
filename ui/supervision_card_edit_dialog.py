@@ -112,7 +112,7 @@ class SupervisionCardEditDialog(QDialog):
             return None
 
     def init_ui(self):
-        title = 'История проекта' if self.is_dan_role else 'Редактирование карточки надзора'
+        title = 'История проекта' if self.is_dan_role else 'Данные карточки надзора'
 
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
@@ -489,7 +489,13 @@ class SupervisionCardEditDialog(QDialog):
         close_btn.setStyleSheet('padding: 10px 20px;')
         close_btn.clicked.connect(self.accept)
         buttons_layout.addWidget(close_btn)
-        
+
+        # Линия-разделитель над кнопками
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
+        layout.addWidget(separator)
+
         layout.addLayout(buttons_layout)
         
         content_widget.setLayout(layout)
@@ -1440,6 +1446,12 @@ class SupervisionCardEditDialog(QDialog):
 
         buttons_layout.addWidget(save_btn)
         buttons_layout.addWidget(cancel_btn)
+
+        # Линия-разделитель над кнопками
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0; max-height: 1px;")
+        layout.addWidget(separator)
 
         layout.addLayout(buttons_layout)
 

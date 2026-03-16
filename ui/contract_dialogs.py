@@ -2235,26 +2235,21 @@ class ContractDialog(QDialog):
             self.template_contract_file_delete_btn.setVisible(False)
             self.template_contract_upload_btn.setEnabled(True)
 
-        # Загружаем данные о файле тех.задания
+        # Загружаем данные о файле тех.задания (ссылка на папку)
         tech_task_link = self.contract_data.get('tech_task_link', '')
         tech_task_yp = self.contract_data.get('tech_task_yandex_path', '')
         if tech_task_link or tech_task_yp:
             self.tech_task_file_path = tech_task_link or tech_task_yp
             self.tech_task_yandex_path = tech_task_yp
             self.tech_task_file_name = self.contract_data.get('tech_task_file_name', '')
-            file_name = self.tech_task_file_name if self.tech_task_file_name else 'ТехЗадание.pdf'
-            truncated_name = self.truncate_filename(file_name)
-            if tech_task_link:
-                html_link = f'<a href="{tech_task_link}" title="{file_name}">{truncated_name}</a>'
-            else:
-                html_link = truncated_name
+            link_url = tech_task_link or tech_task_yp
+            html_link = f'<a href="{link_url}" title="Открыть папку с тех. заданием">Открыть папку с ТЗ</a>'
             self.tech_task_file_label.setText(html_link)
             self.tech_task_file_delete_btn.setVisible(not self.view_only)
-            self.tech_task_upload_btn.setEnabled(False)
+            # Кнопка загрузки всегда активна — можно подгружать ещё файлы в папку
         else:
             self.tech_task_file_label.setText('Не загружен')
             self.tech_task_file_delete_btn.setVisible(False)
-            self.tech_task_upload_btn.setEnabled(True)
 
         # Загружаем данные об актах (без подписи + с подписью)
         _doc_defaults = {
@@ -2968,15 +2963,11 @@ class ContractDialog(QDialog):
             tt_link = contract_data.get('tech_task_link', '')
             tt_yp = contract_data.get('tech_task_yandex_path', '')
             if tt_link or tt_yp:
-                file_name = contract_data.get('tech_task_file_name', '') or 'ТехЗадание.pdf'
-                truncated_name = self.truncate_filename(file_name)
-                if tt_link:
-                    html_link = f'<a href="{tt_link}" title="{file_name}">{truncated_name}</a>'
-                else:
-                    html_link = truncated_name
+                link_url = tt_link or tt_yp
+                html_link = f'<a href="{link_url}" title="Открыть папку с тех. заданием">Открыть папку с ТЗ</a>'
                 self.tech_task_file_label.setText(html_link)
                 self.tech_task_file_delete_btn.setVisible(not self.view_only)
-                self.tech_task_upload_btn.setEnabled(False)
+                # Кнопка загрузки всегда активна — можно подгружать ещё файлы
             else:
                 self.tech_task_file_label.setText('Не загружен')
                 self.tech_task_file_delete_btn.setVisible(False)
