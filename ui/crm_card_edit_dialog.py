@@ -300,7 +300,7 @@ class CardEditDialog(QDialog):
             scroll_content = QWidget()
             edit_layout = QVBoxLayout(scroll_content)
             edit_layout.setSpacing(15)
-            edit_layout.setContentsMargins(20, 15, 20, 20)
+            edit_layout.setContentsMargins(0, 15, 0, 20)
 
             # Стиль для QGroupBox (как в "Данные по проекту")
             GROUP_BOX_STYLE = """
@@ -3833,7 +3833,7 @@ class CardEditDialog(QDialog):
         content_widget = QWidget()
         form_layout = QFormLayout()
         form_layout.setSpacing(8)
-        form_layout.setContentsMargins(20, 15, 20, 20)
+        form_layout.setContentsMargins(0, 15, 0, 20)
         form_layout.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         # Импорты для секций
@@ -4671,7 +4671,7 @@ class CardEditDialog(QDialog):
         """Создание виджета информации о проекте"""
         widget = QWidget()
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setContentsMargins(0, 15, 0, 20)
 
         header = QLabel('Информация о проекте')
         header.setStyleSheet('font-size: 13px; font-weight: bold; margin-bottom: 10px;')
@@ -6715,7 +6715,7 @@ class CardEditDialog(QDialog):
         scroll_content = QWidget()
         layout = QVBoxLayout()
         layout.setSpacing(15)
-        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setContentsMargins(0, 15, 0, 20)
 
         # Загружаем выплаты из API или БД
         payments = self.data.get_payments_for_contract(self.card_data['contract_id'])

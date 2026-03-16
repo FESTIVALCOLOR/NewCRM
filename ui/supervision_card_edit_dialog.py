@@ -176,7 +176,7 @@ class SupervisionCardEditDialog(QDialog):
         if not self.is_dan_role:
             edit_widget = QWidget()
             edit_layout = QVBoxLayout()
-            edit_layout.setContentsMargins(20, 15, 20, 20)
+            edit_layout.setContentsMargins(0, 15, 0, 20)
 
             form_layout = QFormLayout()
 
@@ -891,7 +891,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
         layout.setSpacing(15)
-        layout.setContentsMargins(20, 15, 20, 20)
+        layout.setContentsMargins(0, 15, 0, 20)
 
         contract_id = self.card_data.get('contract_id')
 
@@ -1578,7 +1578,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 15, 20, 20)
+        main_layout.setContentsMargins(0, 15, 0, 20)
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
         info_group = QGroupBox("Информация о проекте")
@@ -2054,7 +2054,7 @@ class SupervisionCardEditDialog(QDialog):
         widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 15, 20, 20)
+        main_layout.setContentsMargins(0, 15, 0, 20)
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Используем GroupBox как в основном CRM
         files_group = QGroupBox("Файлы авторского надзора")
