@@ -8,7 +8,7 @@ import threading
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QProgressBar,
                              QFileDialog, QTextEdit, QGroupBox, QFrame, QWidget)
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from config import APP_VERSION
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
@@ -20,6 +20,10 @@ ICONS_PATH = resource_path('resources/icons').replace('\\', '/')
 class VersionDialog(QDialog):
     """Диалог управления версией и загрузки обновлений (только для руководителя студии)"""
 
+    # Сигналы для межпоточного общения (надёжнее QTimer.singleShot)
+    _sig_upload_ok = pyqtSignal(str)
+    _sig_upload_err = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -28,6 +32,8 @@ class VersionDialog(QDialog):
         self.selected_exe_path = None
         self._is_uploading = False
         self._upload_lock = threading.Lock()
+        self._sig_upload_ok.connect(self._upload_success)
+        self._sig_upload_err.connect(self._upload_error)
         self.init_ui()
 
     def init_ui(self):
@@ -360,11 +366,10 @@ class VersionDialog(QDialog):
                     version,
                     changelog
                 )
-                QTimer.singleShot(0, lambda: self._upload_success(version))
+                self._sig_upload_ok.emit(version)
 
             except Exception as e:
-                error_msg = str(e)
-                QTimer.singleShot(0, lambda: self._upload_error(error_msg))
+                self._sig_upload_err.emit(str(e))
 
         thread = threading.Thread(target=upload_thread, daemon=True)
         thread.start()
