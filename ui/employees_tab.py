@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTabWidget, QApplication)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QTimer, QSize
+from PyQt5.QtGui import QColor
 from database.db_manager import DatabaseManager
 from config import POSITIONS
 from utils.icon_loader import IconLoader
@@ -19,16 +20,17 @@ from utils.table_settings import ProportionalResizeTable
 from utils.data_access import DataAccess
 
 class PaymentDetailsPopup(QWidget):
-    """Всплывающая подсказка с выделяемым текстом для копирования реквизитов"""
+    """Всплывающая подсказка с выделяемым текстом для копирования реквизитов.
+    Стилизована под BubbleToolTip (белый фон, серая рамка, тень)."""
 
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setStyleSheet("""
             PaymentDetailsPopup {
-                background-color: #FFFDE7;
-                border: 1px solid #C0C0C0;
-                border-radius: 4px;
+                background-color: #ffffff;
+                border: 1px solid #d9d9d9;
+                border-radius: 6px;
             }
             QLabel {
                 color: #333333;
@@ -36,6 +38,13 @@ class PaymentDetailsPopup(QWidget):
                 background: transparent;
             }
         """)
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(12)
+        shadow.setOffset(0, 3)
+        shadow.setColor(QColor(0, 0, 0, 40))
+        self.setGraphicsEffect(shadow)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
         self._label = QLabel()
@@ -43,11 +52,30 @@ class PaymentDetailsPopup(QWidget):
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
         self._label.setCursor(Qt.IBeamCursor)
+        self._label.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._label.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self._label)
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.setInterval(400)
         self._hide_timer.timeout.connect(self.hide)
+
+    def _show_context_menu(self, pos):
+        """Контекстное меню на русском"""
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(self)
+        copy_action = menu.addAction('Копировать')
+        copy_action.setShortcut('Ctrl+C')
+        select_all_action = menu.addAction('Выделить всё')
+        select_all_action.setShortcut('Ctrl+A')
+        action = menu.exec_(self._label.mapToGlobal(pos))
+        if action == copy_action:
+            if self._label.hasSelectedText():
+                QApplication.clipboard().setText(self._label.selectedText())
+            else:
+                QApplication.clipboard().setText(self._label.text())
+        elif action == select_all_action:
+            self._label.selectAll()
 
     def show_at(self, text, global_pos):
         """Показать popup с текстом около указанной позиции"""
@@ -1052,6 +1080,9 @@ class EmployeeDialog(QDialog):
 
         self.payment_phone = QLineEdit()
         self.payment_phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self.payment_phone.textChanged.connect(
+            lambda text: self._format_phone_field(self.payment_phone, text))
+        self.payment_phone.focusInEvent = lambda e: self.on_phone_focus_in(self.payment_phone, e)
         self._payment_form_layout.addRow('Телефон:', self.payment_phone)
 
         self.payment_account = QLineEdit()
@@ -1290,6 +1321,53 @@ class EmployeeDialog(QDialog):
         if not line_edit.text().strip():
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
+
+    def _format_phone_field(self, field, text):
+        """Универсальное форматирование телефона +7 (XXX) XXX-XX-XX для любого QLineEdit"""
+        field.blockSignals(True)
+        if not text:
+            field.blockSignals(False)
+            return
+        cursor_pos = field.cursorPosition()
+        digits = ''.join(filter(str.isdigit, text))
+        if not digits:
+            field.setText('')
+            field.blockSignals(False)
+            return
+        digits_before_cursor = len(''.join(filter(str.isdigit, text[:cursor_pos])))
+        if digits.startswith('7') or digits.startswith('8'):
+            digits = digits[1:]
+        digits = digits[:10]
+        if len(digits) == 0:
+            formatted = '+7 ('
+            new_cursor_pos = 4
+        elif len(digits) <= 3:
+            formatted = f'+7 ({digits}'
+            new_cursor_pos = 4 + len(digits)
+        elif len(digits) <= 6:
+            formatted = f'+7 ({digits[:3]}) {digits[3:]}'
+            new_cursor_pos = (4 + digits_before_cursor) if digits_before_cursor <= 3 else (9 + digits_before_cursor - 3)
+        elif len(digits) <= 8:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            else:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+        else:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            elif digits_before_cursor <= 8:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+            else:
+                new_cursor_pos = 16 + (digits_before_cursor - 8)
+        field.setText(formatted)
+        field.setCursorPosition(min(new_cursor_pos, len(formatted)))
+        field.blockSignals(False)
 
     def _on_payment_type_changed(self, text):
         """Показать/скрыть поля в зависимости от типа оплаты"""
@@ -2180,6 +2258,9 @@ class EmployeeDialog(QDialog):
 
         self.payment_phone = QLineEdit()
         self.payment_phone.setPlaceholderText('+7 (XXX) XXX-XX-XX')
+        self.payment_phone.textChanged.connect(
+            lambda text: self._format_phone_field(self.payment_phone, text))
+        self.payment_phone.focusInEvent = lambda e: self.on_phone_focus_in(self.payment_phone, e)
         self._payment_form_layout.addRow('Телефон:', self.payment_phone)
 
         self.payment_account = QLineEdit()
@@ -2418,6 +2499,53 @@ class EmployeeDialog(QDialog):
         if not line_edit.text().strip():
             line_edit.setText('+7 (')
             line_edit.setCursorPosition(4)
+
+    def _format_phone_field(self, field, text):
+        """Универсальное форматирование телефона +7 (XXX) XXX-XX-XX для любого QLineEdit"""
+        field.blockSignals(True)
+        if not text:
+            field.blockSignals(False)
+            return
+        cursor_pos = field.cursorPosition()
+        digits = ''.join(filter(str.isdigit, text))
+        if not digits:
+            field.setText('')
+            field.blockSignals(False)
+            return
+        digits_before_cursor = len(''.join(filter(str.isdigit, text[:cursor_pos])))
+        if digits.startswith('7') or digits.startswith('8'):
+            digits = digits[1:]
+        digits = digits[:10]
+        if len(digits) == 0:
+            formatted = '+7 ('
+            new_cursor_pos = 4
+        elif len(digits) <= 3:
+            formatted = f'+7 ({digits}'
+            new_cursor_pos = 4 + len(digits)
+        elif len(digits) <= 6:
+            formatted = f'+7 ({digits[:3]}) {digits[3:]}'
+            new_cursor_pos = (4 + digits_before_cursor) if digits_before_cursor <= 3 else (9 + digits_before_cursor - 3)
+        elif len(digits) <= 8:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            else:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+        else:
+            formatted = f'+7 ({digits[:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:]}'
+            if digits_before_cursor <= 3:
+                new_cursor_pos = 4 + digits_before_cursor
+            elif digits_before_cursor <= 6:
+                new_cursor_pos = 9 + (digits_before_cursor - 3)
+            elif digits_before_cursor <= 8:
+                new_cursor_pos = 13 + (digits_before_cursor - 6)
+            else:
+                new_cursor_pos = 16 + (digits_before_cursor - 8)
+        field.setText(formatted)
+        field.setCursorPosition(min(new_cursor_pos, len(formatted)))
+        field.blockSignals(False)
 
     def _on_payment_type_changed(self, text):
         """Показать/скрыть поля в зависимости от типа оплаты"""
