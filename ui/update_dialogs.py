@@ -6,10 +6,15 @@ import os
 import re
 import threading
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                             QLineEdit, QPushButton, QMessageBox, QProgressBar,
-                             QFileDialog, QTextEdit, QGroupBox)
-from PyQt5.QtCore import QTimer
+                             QLineEdit, QPushButton, QProgressBar,
+                             QFileDialog, QTextEdit, QGroupBox, QFrame, QWidget)
+from PyQt5.QtCore import Qt, QTimer
 from config import APP_VERSION
+from ui.custom_title_bar import CustomTitleBar
+from ui.custom_message_box import CustomMessageBox
+from utils.resource_path import resource_path
+
+ICONS_PATH = resource_path('resources/icons').replace('\\', '/')
 
 
 class VersionDialog(QDialog):
@@ -17,22 +22,76 @@ class VersionDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Управление версией и обновлениями")
-        self.setFixedSize(550, 520)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMinimumSize(560, 600)
         self.selected_exe_path = None
+        self._is_uploading = False
+        self._upload_lock = threading.Lock()
         self.init_ui()
 
     def init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Контейнер с рамкой
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        # Title Bar
+        title_bar = CustomTitleBar(self, 'Управление версией и обновлениями', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        # Контент
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: #FFFFFF;")
+
         layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 16, 20, 20)
 
         # === Блок сверки версии с сервером ===
         server_group = QGroupBox("Сверка версии с сервером")
-        server_group.setStyleSheet("QGroupBox { font-weight: bold; font-size: 12px; }")
+        server_group.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                font-size: 12px;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 14px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+            }}
+        """)
         server_layout = QVBoxLayout()
+        server_layout.setContentsMargins(12, 8, 12, 12)
 
         self.server_info_label = QLabel(f"Клиент: <b>{APP_VERSION}</b> | Сервер: <i>не проверено</i>")
-        self.server_info_label.setStyleSheet("font-size: 12px; padding: 5px;")
+        self.server_info_label.setStyleSheet("font-size: 12px; padding: 5px; border: none;")
         server_layout.addWidget(self.server_info_label)
 
         check_server_btn = QPushButton("Проверить версию сервера")
@@ -55,14 +114,31 @@ class VersionDialog(QDialog):
 
         # === Блок изменения локальной версии ===
         version_group = QGroupBox("Изменение версии")
-        version_group.setStyleSheet("QGroupBox { font-weight: bold; font-size: 12px; }")
+        version_group.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                font-size: 12px;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 14px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+            }}
+        """)
         version_layout_inner = QVBoxLayout()
+        version_layout_inner.setContentsMargins(12, 8, 12, 12)
 
         version_row = QHBoxLayout()
-        version_row.addWidget(QLabel("Новая версия:"))
+        lbl = QLabel("Новая версия:")
+        lbl.setStyleSheet("border: none;")
+        version_row.addWidget(lbl)
         self.version_input = QLineEdit()
         self.version_input.setPlaceholderText("Например: 1.1.0")
-        self.version_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        self.version_input.setStyleSheet("padding: 5px; font-size: 12px; border: 1px solid #d9d9d9; border-radius: 4px;")
         version_row.addWidget(self.version_input)
 
         save_version_btn = QPushButton("Сохранить")
@@ -83,7 +159,7 @@ class VersionDialog(QDialog):
         version_layout_inner.addLayout(version_row)
 
         hint_label = QLabel("Формат: X.Y.Z (три числа через точку)")
-        hint_label.setStyleSheet("color: #666; font-size: 10px;")
+        hint_label.setStyleSheet("color: #666; font-size: 10px; border: none;")
         version_layout_inner.addWidget(hint_label)
 
         version_group.setLayout(version_layout_inner)
@@ -91,13 +167,28 @@ class VersionDialog(QDialog):
 
         # === Блок загрузки обновления на Яндекс.Диск ===
         upload_group = QGroupBox("Загрузка обновления на Яндекс.Диск")
-        upload_group.setStyleSheet("QGroupBox { font-weight: bold; font-size: 12px; }")
+        upload_group.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                font-size: 12px;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 14px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+            }}
+        """)
         upload_layout = QVBoxLayout()
+        upload_layout.setContentsMargins(12, 8, 12, 12)
 
         # Выбор exe файла
         file_row = QHBoxLayout()
         self.file_label = QLabel("Файл не выбран")
-        self.file_label.setStyleSheet("color: #666; font-size: 11px; padding: 3px;")
+        self.file_label.setStyleSheet("color: #666; font-size: 11px; padding: 3px; border: none;")
         file_row.addWidget(self.file_label, 1)
 
         choose_btn = QPushButton("Выбрать .exe")
@@ -117,11 +208,13 @@ class VersionDialog(QDialog):
         upload_layout.addLayout(file_row)
 
         # Описание изменений
-        upload_layout.addWidget(QLabel("Описание изменений:"))
+        changelog_label = QLabel("Описание изменений:")
+        changelog_label.setStyleSheet("border: none;")
+        upload_layout.addWidget(changelog_label)
         self.changelog_input = QTextEdit()
         self.changelog_input.setPlaceholderText("Что нового в этой версии...")
-        self.changelog_input.setMaximumHeight(70)
-        self.changelog_input.setStyleSheet("font-size: 11px; padding: 3px;")
+        self.changelog_input.setMaximumHeight(60)
+        self.changelog_input.setStyleSheet("font-size: 11px; padding: 3px; border: 1px solid #d9d9d9; border-radius: 4px;")
         upload_layout.addWidget(self.changelog_input)
 
         # Прогресс загрузки
@@ -143,7 +236,7 @@ class VersionDialog(QDialog):
 
         self.upload_status_label = QLabel("")
         self.upload_status_label.setVisible(False)
-        self.upload_status_label.setStyleSheet("color: #666; font-size: 10px;")
+        self.upload_status_label.setStyleSheet("color: #666; font-size: 10px; border: none;")
         upload_layout.addWidget(self.upload_status_label)
 
         # Кнопка загрузки
@@ -168,6 +261,8 @@ class VersionDialog(QDialog):
         upload_group.setLayout(upload_layout)
         layout.addWidget(upload_group)
 
+        layout.addStretch()
+
         # Кнопка закрыть
         close_layout = QHBoxLayout()
         close_layout.addStretch()
@@ -187,7 +282,11 @@ class VersionDialog(QDialog):
         close_layout.addWidget(close_btn)
         layout.addLayout(close_layout)
 
-        self.setLayout(layout)
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
 
     def check_server_version(self):
         """Сверка версии клиента с сервером"""
@@ -221,13 +320,15 @@ class VersionDialog(QDialog):
             self.selected_exe_path = path
             file_size_mb = os.path.getsize(path) / (1024 * 1024)
             self.file_label.setText(f"{os.path.basename(path)} ({file_size_mb:.1f} МБ)")
-            self.file_label.setStyleSheet("color: #333; font-size: 11px; padding: 3px;")
+            self.file_label.setStyleSheet("color: #333; font-size: 11px; padding: 3px; border: none;")
             self.upload_btn.setEnabled(True)
 
     def upload_to_yandex(self):
         """Загрузка обновления на Яндекс.Диск"""
-        if not self.selected_exe_path:
-            QMessageBox.warning(self, "Ошибка", "Сначала выберите файл обновления (.exe)")
+        if not self.selected_exe_path or not self._upload_lock.acquire(blocking=False):
+            return
+        if self._is_uploading:
+            self._upload_lock.release()
             return
 
         version = self.version_input.text().strip()
@@ -235,16 +336,19 @@ class VersionDialog(QDialog):
             version = APP_VERSION
 
         if not re.match(r'^\d+\.\d+\.\d+$', version):
-            QMessageBox.warning(self, "Ошибка", "Укажите корректную версию формата X.Y.Z")
+            self._upload_lock.release()
+            CustomMessageBox.warning(self, "Ошибка", "Укажите корректную версию формата X.Y.Z")
             return
 
         changelog = self.changelog_input.toPlainText().strip()
 
+        self._is_uploading = True
         self.upload_btn.setEnabled(False)
         self.upload_progress.setVisible(True)
         self.upload_progress.setRange(0, 0)  # Indeterminate
         self.upload_status_label.setVisible(True)
         self.upload_status_label.setText("Загрузка на Яндекс.Диск...")
+        self.upload_status_label.setStyleSheet("color: #666; font-size: 10px; border: none;")
 
         def upload_thread():
             from utils.update_manager import UpdateManager
@@ -256,7 +360,6 @@ class VersionDialog(QDialog):
                     version,
                     changelog
                 )
-
                 QTimer.singleShot(0, lambda: self._upload_success(version))
 
             except Exception as e:
@@ -268,47 +371,56 @@ class VersionDialog(QDialog):
 
     def _upload_success(self, version):
         """Обновление загружено успешно"""
-        self.upload_progress.setVisible(False)
+        self._is_uploading = False
+        try:
+            self._upload_lock.release()
+        except RuntimeError:
+            pass
+        self.upload_progress.setRange(0, 100)
+        self.upload_progress.setValue(100)
         self.upload_status_label.setText(f"Версия {version} загружена на Яндекс.Диск")
-        self.upload_status_label.setStyleSheet("color: green; font-size: 10px;")
+        self.upload_status_label.setStyleSheet("color: green; font-size: 10px; border: none;")
         self.upload_btn.setEnabled(True)
 
-        QMessageBox.information(
+        CustomMessageBox.information(
             self, "Успех",
-            f"Обновление {version} загружено на Яндекс.Диск в папку CRM_UPDATES.\n\n"
+            f"Обновление {version} загружено на Яндекс.Диск.\n\n"
             f"Файл version.json обновлён."
         )
 
     def _upload_error(self, error):
         """Ошибка загрузки"""
+        self._is_uploading = False
+        try:
+            self._upload_lock.release()
+        except RuntimeError:
+            pass
+        self.upload_progress.setRange(0, 100)
+        self.upload_progress.setValue(0)
         self.upload_progress.setVisible(False)
         self.upload_status_label.setText(f"Ошибка: {error}")
-        self.upload_status_label.setStyleSheet("color: red; font-size: 10px;")
+        self.upload_status_label.setStyleSheet("color: red; font-size: 10px; border: none;")
         self.upload_btn.setEnabled(True)
 
-        QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить обновление:\n{error}")
+        CustomMessageBox.critical(self, "Ошибка", f"Не удалось загрузить обновление:\n{error}")
 
     def save_version(self):
         """Сохранение новой версии в config.py"""
         new_version = self.version_input.text().strip()
 
-        # Валидация формата версии (X.Y.Z)
         if not re.match(r'^\d+\.\d+\.\d+$', new_version):
-            QMessageBox.warning(
-                self,
-                "Ошибка",
+            CustomMessageBox.warning(
+                self, "Ошибка",
                 "Неверный формат версии.\nИспользуйте формат X.Y.Z (например, 1.2.0)"
             )
             return
 
         try:
-            # Обновление в config.py
             config_path = 'config.py'
 
             with open(config_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # Замена строки версии
             new_content = re.sub(
                 r'APP_VERSION = "[^"]*"',
                 f'APP_VERSION = "{new_version}"',
@@ -318,16 +430,14 @@ class VersionDialog(QDialog):
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
 
-            QMessageBox.information(
-                self,
-                "Успех",
+            CustomMessageBox.information(
+                self, "Успех",
                 f"Версия изменена на {new_version}.\n\nПерезапустите приложение для применения изменений."
             )
 
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Ошибка",
+            CustomMessageBox.critical(
+                self, "Ошибка",
                 f"Не удалось изменить версию:\n{e}"
             )
 
@@ -338,13 +448,50 @@ class UpdateDialog(QDialog):
     def __init__(self, update_info, parent=None):
         super().__init__(parent)
         self.update_info = update_info
-        self.setWindowTitle("Доступно обновление")
-        self.setFixedSize(550, 350)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMinimumSize(560, 380)
         self.init_ui()
 
     def init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Контейнер с рамкой
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        # Title Bar
+        title_bar = CustomTitleBar(self, 'Доступно обновление', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        # Контент
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: #FFFFFF;")
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
+        layout.setContentsMargins(20, 16, 20, 20)
 
         # Информация о новой версии
         version = self.update_info["version"]
@@ -365,7 +512,7 @@ class UpdateDialog(QDialog):
 
         info_label = QLabel(info_html)
         info_label.setWordWrap(True)
-        info_label.setStyleSheet("font-size: 12px;")
+        info_label.setStyleSheet("font-size: 12px; border: none;")
         layout.addWidget(info_label)
 
         # Прогресс-бар для загрузки
@@ -388,7 +535,7 @@ class UpdateDialog(QDialog):
         # Статус загрузки
         self.status_label = QLabel("")
         self.status_label.setVisible(False)
-        self.status_label.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
+        self.status_label.setStyleSheet("color: #666; font-size: 11px; padding: 5px; border: none;")
         layout.addWidget(self.status_label)
 
         layout.addStretch()
@@ -408,12 +555,8 @@ class UpdateDialog(QDialog):
                 font-size: 13px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
+            QPushButton:hover { background-color: #45a049; }
+            QPushButton:disabled { background-color: #cccccc; }
         """)
         self.download_btn.clicked.connect(self.download_and_install)
 
@@ -427,9 +570,7 @@ class UpdateDialog(QDialog):
                 border-radius: 4px;
                 font-size: 13px;
             }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
+            QPushButton:hover { background-color: #e0e0e0; }
         """)
         self.later_btn.clicked.connect(self.reject)
 
@@ -437,7 +578,11 @@ class UpdateDialog(QDialog):
         button_layout.addWidget(self.later_btn)
         layout.addLayout(button_layout)
 
-        self.setLayout(layout)
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
 
     def download_and_install(self):
         """Загрузка и установка обновления"""
@@ -447,13 +592,21 @@ class UpdateDialog(QDialog):
         self.status_label.setVisible(True)
         self.status_label.setText("Подготовка к загрузке...")
 
+        self.progress_bar.setRange(0, 100)
+
         def progress_callback(current, total):
             """Обновление прогресс-бара"""
-            progress = int((current / total) * 100)
-            QTimer.singleShot(0, lambda: self.progress_bar.setValue(progress))
-            QTimer.singleShot(0, lambda: self.status_label.setText(
-                f"Загружено: {current // 1024 // 1024} МБ из {total // 1024 // 1024} МБ"
-            ))
+            if total > 0:
+                progress = min(int((current / total) * 100), 100)
+                QTimer.singleShot(0, lambda p=progress: self.progress_bar.setValue(p))
+                QTimer.singleShot(0, lambda: self.status_label.setText(
+                    f"Загружено: {current // 1024 // 1024} МБ из {total // 1024 // 1024} МБ"
+                ))
+            else:
+                QTimer.singleShot(0, lambda: self.progress_bar.setRange(0, 0))
+                QTimer.singleShot(0, lambda: self.status_label.setText(
+                    f"Загружено: {current // 1024 // 1024} МБ"
+                ))
 
         def download_thread():
             """Поток загрузки обновления"""
@@ -463,7 +616,6 @@ class UpdateDialog(QDialog):
             try:
                 QTimer.singleShot(0, lambda: self.status_label.setText("Загрузка обновления..."))
 
-                # Загрузка
                 update_path = manager.download_update(
                     self.update_info["version"],
                     progress_callback
@@ -475,24 +627,21 @@ class UpdateDialog(QDialog):
                 QTimer.singleShot(0, lambda: self.status_label.setText("Установка обновления..."))
                 QTimer.singleShot(0, lambda: self.progress_bar.setValue(100))
 
-                # Небольшая задержка для отображения 100%
                 import time
                 time.sleep(0.5)
 
-                # Установка (перезапустит приложение)
                 manager.install_update(update_path)
 
             except Exception as e:
-                QTimer.singleShot(0, lambda: QMessageBox.critical(
-                    self,
-                    "Ошибка",
-                    f"Не удалось загрузить обновление:\n{e}"
+                error_msg = str(e)
+                QTimer.singleShot(0, lambda: CustomMessageBox.critical(
+                    self, "Ошибка",
+                    f"Не удалось загрузить обновление:\n{error_msg}"
                 ))
                 QTimer.singleShot(0, lambda: self.download_btn.setEnabled(True))
                 QTimer.singleShot(0, lambda: self.later_btn.setEnabled(True))
                 QTimer.singleShot(0, lambda: self.progress_bar.setVisible(False))
                 QTimer.singleShot(0, lambda: self.status_label.setVisible(False))
 
-        # Запуск в отдельном потоке
         thread = threading.Thread(target=download_thread, daemon=True)
         thread.start()

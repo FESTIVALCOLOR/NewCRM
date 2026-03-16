@@ -84,16 +84,9 @@ class UpdateManager:
 
     def upload_update_to_yandex(self, exe_path, version, changelog="", progress_callback=None):
         """
-        Загрузка обновления на Яндекс.Диск в папку CRM_UPDATES
-
-        Args:
-            exe_path (str): Путь к exe-файлу обновления
-            version (str): Версия обновления (X.Y.Z)
-            changelog (str): Описание изменений
-            progress_callback (callable): Функция прогресса (current, total)
-
-        Returns:
-            bool: True при успехе
+        Загрузка обновления на Яндекс.Диск в папку CRM_UPDATES.
+        Хранится только 1 (последняя) версия — старые EXE удаляются автоматически.
+        Пользователь может обновиться с любой версии на последнюю (пропуск версий).
         """
         from utils.yandex_disk import YandexDiskManager
 
@@ -102,46 +95,61 @@ class UpdateManager:
             if not yd.token:
                 raise Exception("Яндекс.Диск токен не настроен")
 
-            # Папка обновлений на Яндекс.Диске
             from config import YANDEX_DISK_UPDATES
             updates_folder = YANDEX_DISK_UPDATES
             yd.create_folder(updates_folder)
 
-            # Загружаем exe файл
+            # Загружаем существующий version.json чтобы узнать старые файлы
+            version_json_path = f"{updates_folder}/version.json"
+            existing_data = self._download_version_json_from_disk(yd, version_json_path)
+
+            # Удаляем старые EXE-файлы (оставляем только version.json)
+            old_files = []
+            if existing_data:
+                for ver, info in existing_data.get("versions", {}).items():
+                    old_file = info.get("file_name")
+                    if old_file:
+                        old_files.append(old_file)
+
+            for old_file in old_files:
+                old_path = f"{updates_folder}/{old_file}"
+                try:
+                    yd.delete_file(old_path)
+                    print(f"[UPDATE] Удалён старый файл: {old_file}")
+                except Exception:
+                    print(f"[UPDATE] Не удалось удалить {old_file} (возможно уже удалён)")
+
+            # Загружаем новый exe файл
             file_name = f"InteriorStudio_{version}.exe"
             yandex_path = f"{updates_folder}/{file_name}"
 
             print(f"[UPDATE] Загрузка {exe_path} → {yandex_path}")
             yd.upload_file(exe_path, yandex_path)
 
-            # Формируем / обновляем version.json
+            # Формируем version.json — только 1 версия (последняя)
             file_size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             from datetime import date
-            version_json_path = f"{updates_folder}/version.json"
 
-            # Пробуем загрузить существующий version.json
-            existing_data = self._download_version_json_from_disk(yd, version_json_path)
-            if not existing_data:
-                existing_data = {"latest_version": version, "versions": {}}
-
-            # Обновляем данные
-            existing_data["latest_version"] = version
-            existing_data["versions"][version] = {
-                "release_date": date.today().isoformat(),
-                "size_mb": f"{file_size_mb:.1f}",
-                "changelog": changelog or f"Обновление до версии {version}",
-                "file_name": file_name
+            new_data = {
+                "latest_version": version,
+                "versions": {
+                    version: {
+                        "release_date": date.today().isoformat(),
+                        "size_mb": f"{file_size_mb:.1f}",
+                        "changelog": changelog or f"Обновление до версии {version}",
+                        "file_name": file_name
+                    }
+                }
             }
 
-            # Сохраняем version.json во временный файл и загружаем
             temp_json = os.path.join(tempfile.gettempdir(), "version.json")
             with open(temp_json, 'w', encoding='utf-8') as f:
-                json.dump(existing_data, f, ensure_ascii=False, indent=2)
+                json.dump(new_data, f, ensure_ascii=False, indent=2)
 
             yd.upload_file(temp_json, version_json_path)
             os.remove(temp_json)
 
-            print(f"[UPDATE] Обновление {version} загружено на Яндекс.Диск")
+            print(f"[UPDATE] Обновление {version} загружено на Яндекс.Диск (старые версии удалены)")
             return True
 
         except Exception as e:
@@ -244,63 +252,93 @@ class UpdateManager:
 
     def download_update(self, version, progress_callback=None):
         """
-        Загрузка обновления из публичной папки Яндекс Диска
-
-        Args:
-            version (str): Версия для загрузки
-            progress_callback (callable): Функция для отображения прогресса (current, total)
-
-        Returns:
-            str: Путь к загруженному файлу или None при ошибке
+        Загрузка обновления из публичной папки Яндекс Диска.
+        Находит EXE-файл по имени из version.json и скачивает через публичный API.
+        Поддерживает пропуск версий — всегда скачивается latest.
         """
         try:
-            # Получаем информацию о версии
             version_data = self._fetch_version_json()
-
             if not version_data:
                 print("[UPDATE] Не удалось получить данные о версиях")
                 return None
 
             version_info = version_data["versions"].get(version)
-
             if not version_info:
                 print(f"[UPDATE] Информация о версии {version} не найдена")
                 return None
 
-            # Получаем ссылку на загрузку
-            download_url = version_info.get("download_url")
+            file_name = version_info.get("file_name", f"InteriorStudio_{version}.exe")
 
+            # Ищем файл в публичной папке Яндекс Диска
+            download_url = self._get_public_file_url(file_name)
             if not download_url:
-                print(f"[UPDATE] Ссылка на загрузку версии {version} не найдена")
+                print(f"[UPDATE] Файл {file_name} не найден в публичной папке")
                 return None
 
             # Путь для сохранения
-            temp_dir = tempfile.gettempdir()
-            temp_path = os.path.join(temp_dir, f"InteriorStudio_{version}.exe")
+            temp_path = os.path.join(tempfile.gettempdir(), file_name)
 
-            # Загрузка с прогрессом
             print(f"[UPDATE] Загрузка обновления версии {version}...")
 
-            response = requests.get(download_url, stream=True, timeout=30)
+            response = requests.get(download_url, stream=True, timeout=300)
             response.raise_for_status()
 
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
 
+            # Если размер из version.json известен, используем как fallback
+            if total_size == 0:
+                try:
+                    size_mb_str = version_info.get("size_mb", "0")
+                    total_size = int(float(size_mb_str) * 1024 * 1024)
+                except (ValueError, TypeError):
+                    pass
+
             with open(temp_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=65536):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-
                         if progress_callback and total_size > 0:
                             progress_callback(downloaded, total_size)
 
-            print(f"[UPDATE] Обновление загружено: {temp_path}")
+            # Проверка целостности: размер файла
+            actual_size = os.path.getsize(temp_path)
+            if actual_size < 1024 * 1024:  # EXE меньше 1 МБ — явно повреждён
+                os.remove(temp_path)
+                print(f"[UPDATE] Файл слишком маленький ({actual_size} байт), загрузка повреждена")
+                return None
+
+            print(f"[UPDATE] Обновление загружено: {temp_path} ({actual_size / 1024 / 1024:.1f} МБ)")
             return temp_path
 
         except Exception as e:
             print(f"[UPDATE] Ошибка загрузки обновления: {e}")
+            # Очистка частично загруженного файла
+            try:
+                if 'temp_path' in locals() and os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            return None
+
+    def _get_public_file_url(self, file_name):
+        """Получить прямую ссылку на файл из публичной папки Яндекс Диска"""
+        try:
+            response = requests.get(
+                self.update_url,
+                params={"public_key": self.public_key},
+                timeout=10
+            )
+            if response.status_code != 200:
+                return None
+
+            items = response.json().get("_embedded", {}).get("items", [])
+            for item in items:
+                if item.get("name") == file_name:
+                    return item.get("file")
+            return None
+        except Exception:
             return None
 
     def install_update(self, update_path):
