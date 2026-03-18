@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QSpinBox, QFrame, QFileDialog, QMenu, QApplication)  # ← ИСПРАВЛЕНО: QSpinBox + QFrame + QFileDialog + QMenu + QApplication
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QSize, pyqtSignal, QTimer
-from PyQt5.QtGui import QValidator, QDesktopServices, QCursor
+from PyQt5.QtGui import QValidator, QDesktopServices, QCursor, QColor, QBrush
 from PyQt5.QtCore import QUrl
 from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
@@ -288,8 +288,6 @@ class ContractsTab(QWidget):
             agent_type = contract.get('agent_type') or ''
             agent_item = QTableWidgetItem(agent_type)
 
-            from PyQt5.QtGui import QColor, QBrush
-
             if agent_type:
                 agent_color = self.data.get_agent_color(agent_type)
                 if agent_color:
@@ -427,6 +425,9 @@ class ContractsTab(QWidget):
             from PyQt5.QtCore import Qt as QtCore
             sort_order = QtCore.AscendingOrder if order == 0 else QtCore.DescendingOrder
             self.contracts_table.sortItems(column, sort_order)
+
+        # Принудительно обновляем viewport чтобы cellWidget (кнопки действий) отрисовались
+        QTimer.singleShot(0, self.contracts_table.viewport().update)
 
     def _refresh_dashboard(self):
         """Обновить дашборд после изменения данных"""
@@ -682,8 +683,6 @@ class ContractsTab(QWidget):
 
             agent_type = contract.get('agent_type') or ''
             agent_item = QTableWidgetItem(agent_type)
-
-            from PyQt5.QtGui import QColor, QBrush
 
             if agent_type:
                 agent_color = self.data.get_agent_color(agent_type)

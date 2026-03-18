@@ -187,9 +187,15 @@ class RejectWithCorrectionsDialog(QDialog):
                 from utils.yandex_disk import YandexDiskManager
                 from config import YANDEX_DISK_TOKEN
 
-                # Получаем путь к папке договора на ЯД
+                # Получаем путь к папке договора на ЯД (сначала из кэша родителя)
                 contract_folder = None
-                if self.contract_id:
+                parent = self.parent()
+                if parent and hasattr(parent, '_cached_contract'):
+                    cached = parent._cached_contract
+                    if cached and cached.get('yandex_folder_path'):
+                        contract_folder = cached['yandex_folder_path']
+
+                if not contract_folder and self.contract_id:
                     try:
                         if self.data.is_multi_user:
                             contract = self.data.get_contract(self.contract_id)
@@ -3726,9 +3732,36 @@ class TechTaskDialog(QDialog):
         if not contract_id:
             return None
 
+        # Проверяем кэш родительского диалога
+        parent = self.parent()
+        if parent and hasattr(parent, '_cached_contract'):
+            cached = parent._cached_contract
+            if cached and cached.get('yandex_folder_path'):
+                return cached['yandex_folder_path']
+
         try:
             contract = self.data.get_contract(contract_id)
-            return contract.get('yandex_folder_path') if contract else None
+            folder = contract.get('yandex_folder_path') if contract else None
+            if folder:
+                return folder
+
+            # Путь не найден — строим на лету
+            if contract:
+                from config import YANDEX_DISK_TOKEN
+                from utils.yandex_disk import YandexDiskManager
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                folder = yd.build_contract_folder_path(
+                    agent_type=contract.get('agent_type') or '',
+                    project_type=contract.get('project_type') or '',
+                    city=contract.get('city') or '',
+                    address=contract.get('address') or '',
+                    area=contract.get('area') or 0
+                )
+                if folder:
+                    self.data.update_contract(contract_id, {'yandex_folder_path': folder})
+                    return folder
+
+            return None
         except Exception as e:
             print(f"[ERROR TechTaskDialog] Ошибка получения пути к папке договора: {e}")
             return None
@@ -4241,9 +4274,37 @@ class MeasurementDialog(QDialog):
         if not contract_id:
             return None
 
+        # Проверяем кэш родительского диалога (папка могла быть создана при назначении замерщика)
+        parent = self.parent()
+        if parent and hasattr(parent, '_cached_contract'):
+            cached = parent._cached_contract
+            if cached and cached.get('yandex_folder_path'):
+                return cached['yandex_folder_path']
+
         try:
             contract = self.data.get_contract(contract_id)
-            return contract.get('yandex_folder_path') if contract else None
+            folder = contract.get('yandex_folder_path') if contract else None
+            if folder:
+                return folder
+
+            # Путь не найден — строим на лету из данных контракта
+            if contract:
+                from config import YANDEX_DISK_TOKEN
+                from utils.yandex_disk import YandexDiskManager
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                folder = yd.build_contract_folder_path(
+                    agent_type=contract.get('agent_type') or '',
+                    project_type=contract.get('project_type') or '',
+                    city=contract.get('city') or '',
+                    address=contract.get('address') or '',
+                    area=contract.get('area') or 0
+                )
+                if folder:
+                    # Сохраняем для будущих вызовов
+                    self.data.update_contract(contract_id, {'yandex_folder_path': folder})
+                    return folder
+
+            return None
         except Exception as e:
             print(f"[ERROR MeasurementDialog] Ошибка получения пути к папке договора: {e}")
             return None

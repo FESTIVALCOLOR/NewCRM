@@ -140,9 +140,17 @@ class CardEditDialog(QDialog):
         if not contract_id:
             return None
 
+        # Сначала проверяем кэш (папка могла быть создана при назначении замерщика)
+        if self._cached_contract and self._cached_contract.get('yandex_folder_path'):
+            return self._cached_contract['yandex_folder_path']
+
         try:
             contract = self.data.get_contract(contract_id)
-            return contract.get('yandex_folder_path') if contract else None
+            folder = contract.get('yandex_folder_path') if contract else None
+            # Обновляем кэш
+            if folder and self._cached_contract:
+                self._cached_contract['yandex_folder_path'] = folder
+            return folder
         except Exception as e:
             print(f"[ERROR CardEditDialog] Ошибка получения пути к папке договора: {e}")
             return None
@@ -172,14 +180,14 @@ class CardEditDialog(QDialog):
     def _copy_folder_link(self, folder_type):
         """Копирование ссылки на папку замера/фотофиксации в буфер обмена"""
         from PyQt5.QtWidgets import QApplication
-        contract_data = self.card_data.get('contract_data') or {}
+        # Читаем из _cached_contract (обновляется при создании папок), с fallback на card_data
+        contract_data = self._cached_contract or self.card_data.get('contract_data') or {}
         if folder_type == 'measurement':
             link = contract_data.get('measurement_folder_public_link', '')
         else:
             link = contract_data.get('photo_folder_public_link', '')
         if link:
             QApplication.clipboard().setText(link)
-            from ui.custom_widgets import CustomMessageBox
             CustomMessageBox(self, 'Скопировано', 'Ссылка скопирована в буфер обмена', 'info').exec_()
 
     def _sync_measurement_folder(self):
@@ -342,10 +350,17 @@ class CardEditDialog(QDialog):
                     # Обновляем кэш
                     if self._cached_contract:
                         self._cached_contract.update(update_data)
+                    # Обновляем card_data для _copy_folder_link и др.
+                    if 'contract_data' not in self.card_data or not self.card_data.get('contract_data'):
+                        self.card_data['contract_data'] = {}
+                    if isinstance(self.card_data.get('contract_data'), dict):
+                        self.card_data['contract_data'].update(update_data)
+                    # Захватываем данные для лямбды ДО передачи в QTimer
+                    links_data = dict(update_data)
                     # Обновляем UI из главного потока
                     from PyQt5.QtCore import QTimer
                     QTimer.singleShot(0, lambda: self._update_surveyor_folder_links(
-                        self._cached_contract or update_data))
+                        self._cached_contract or links_data))
                     print(f"[OK] Папки замера созданы на ЯД, ссылки сохранены")
 
             except Exception as e:
@@ -845,9 +860,9 @@ class CardEditDialog(QDialog):
                 }
             '''
             _copy_btn_style = '''
-                QPushButton { background-color: #3498DB; color: white; border: none;
+                QPushButton { background-color: #FFFFFF; color: #333333; border: 1px solid #CCCCCC;
                     border-radius: 4px; padding: 2px 8px; font-size: 10px; }
-                QPushButton:hover { background-color: #2980B9; }
+                QPushButton:hover { background-color: #F0F0F0; border-color: #999999; }
             '''
 
             # Папка замера
