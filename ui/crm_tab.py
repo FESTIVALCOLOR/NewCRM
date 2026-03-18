@@ -1728,7 +1728,7 @@ class CRMColumn(BaseKanbanColumn):
             recommended_size = card_widget.sizeHint()
             exact_height = recommended_size.height()
 
-            card_widget.setMinimumHeight(exact_height)
+            card_widget.setFixedHeight(exact_height)
 
             item = QListWidgetItem()
             item.setData(Qt.UserRole, card_id)
@@ -1946,108 +1946,16 @@ class CRMCard(QFrame):
             return None
 
     def sizeHint(self):
-        """Рекомендуемый размер карточки"""
-        current_column = self.card_data.get('column_name', '')
-        project_type = self.card_data.get('project_type', '')
-
-        # Проверяем, является ли пользователь замерщиком
-        is_surveyor = _emp_has_pos(self.employee, 'Замерщик')
-
-        # Для замерщика - компактная карточка
-        if is_surveyor:
-            height = 120  # Базовая высота: номер договора + адрес + площадь/город
-            # Добавляем высоту для кнопки "Добавить замер"
-            has_measurement = self.card_data.get('measurement_image_link') or self.card_data.get('survey_date')
-            if not has_measurement:  # Убрали проверку can_edit, т.к. замерщик может добавлять замер всегда
-                height += 45  # Высота кнопки
-            return QSize(200, height)
-
-        # Для остальных ролей - обычная логика
-        height = 150
-
-        employees_visible = True
-        if hasattr(self, 'employees_container'):
-            employees_visible = self.employees_container.isVisible()
-
-        if employees_visible:
-            employees_count = 0
-            if self.card_data.get('senior_manager_name'):
-                employees_count += 1
-            if self.card_data.get('sdp_name'):
-                employees_count += 1
-            if self.card_data.get('gap_name'):
-                employees_count += 1
-            if self.card_data.get('manager_name'):
-                employees_count += 1
-            if self.card_data.get('surveyor_name'):
-                employees_count += 1
-            if self.card_data.get('designer_name'):
-                employees_count += 1
-            if self.card_data.get('draftsman_name'):
-                employees_count += 1
-            
-            if employees_count > 0:
-                height += 35 + (employees_count * 24)
-        else:
-            height += 35
-        
-        # Лейбл текущего подэтапа (Согласование: ..., Ожидает проверки: ..., и т.д.)
-        if self.card_data.get('current_substep_name'):
-            height += 22  # wordWrap, 1-2 строки
-
-        # Счётчик правок ("Правки: N")
-        if self.card_data.get('revision_count', 0) > 0:
-            height += 18
-
-        if self.card_data.get('tags'):
-            height += 28
-
-        if self.card_data.get('designer_deadline') or self.card_data.get('draftsman_deadline') or self.card_data.get('deadline'):
-            height += 28
-
-        # Индикатор ожидания оплаты в колонке "Выполненный проект"
-        if current_column == 'Выполненный проект':
-            height += 40
-
-        # Кнопки приёмки/исправления — только для тех, кто реально видит их
-        is_template_project = project_type == 'Шаблонный'
-        is_only_manager = _emp_only_pos(self.employee, 'Менеджер')
-        can_review_hint = self.employee and _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval')
-        if is_only_manager and not is_template_project:
-            can_review_hint = False
-        if can_review_hint:
-            if ('концепция дизайна' in current_column and self.card_data.get('designer_completed') == 1) or \
-               (('планировочные' in current_column or 'чертежи' in current_column) and self.card_data.get('draftsman_completed') == 1):
-                height += 100  # work_done_label (wordWrap, до 4 строк)
-                height += 114  # 3 кнопки: Принять(28+6) + На исправление(28+6) + Клиенту(28+6)
-            # Кнопка "Клиент согласовал" при статусе client_approval
-            elif self.card_data.get('workflow_status') == 'client_approval':
-                height += 30  # 19px кнопка + 11px отступ
-
-        buttons_count = 0
-        if self.employee:
-            # Кнопка "Сдать работу" / "Ожидайте проверку" для дизайнеров/чертёжников
-            if _emp_has_pos(self.employee, 'Дизайнер', 'Чертёжник'):
-                buttons_count += 1
-            # Кнопка "Редактирование карточки" для всех с правами редактирования
-            if self.can_edit:
-                buttons_count += 1
-
-        if self.card_data.get('project_data_link'):
-            buttons_count += 1
-
-        # Кнопка "Дата замера" (только если дата НЕ установлена и есть права)
-        if self.can_edit and not self.card_data.get('survey_date'):
-            buttons_count += 1
-
-        # Кнопка ТЗ (только если файл НЕ установлен и есть права)
-        if self.can_edit and not self.card_data.get('tech_task_file'):
-            buttons_count += 1
-
-        if buttons_count > 0:
-            height += 38 * buttons_count
-
-        return QSize(200, min(height, 800))
+        """Рекомендуемый размер карточки — через реальный расчёт layout"""
+        if self.layout():
+            # Даём layout обработать pending events
+            self.layout().activate()
+            h = self.layout().sizeHint().height()
+            # Добавляем margins
+            m = self.contentsMargins()
+            h += m.top() + m.bottom()
+            return QSize(200, min(max(h, 80), 800))
+        return QSize(200, 150)
 
     def get_work_status(self):
         """Определение статуса работы над карточкой.
@@ -3556,7 +3464,7 @@ class CRMCard(QFrame):
                             f'Переход к "{next_name}". Дедлайн возобновлен.',
                             'success'
                         ).exec_()
-                    else:
+                    elif choice == 'close':
                         self.data.workflow_close_stage(self.card_data['id'])
                         CustomMessageBox(
                             self, 'Этап закрыт',
@@ -3583,7 +3491,7 @@ class CRMCard(QFrame):
                                 f'Этап закрыт. Дедлайн возобновлен.',
                                 'success'
                             ).exec_()
-                        else:
+                        elif choice == 'paid':
                             self.data.workflow_add_extra_round(self.card_data['id'], current_column)
                             CustomMessageBox(
                                 self, 'Платный круг',

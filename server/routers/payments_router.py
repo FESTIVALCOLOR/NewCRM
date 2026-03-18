@@ -807,14 +807,20 @@ async def create_payment(
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
     # Защита от дублей: проверяем нет ли уже платежа с теми же параметрами
-    if payment_data.contract_id and payment_data.employee_id and payment_data.stage_name:
+    if payment_data.contract_id and payment_data.employee_id:
         duplicate_query = db.query(Payment).filter(
             Payment.contract_id == payment_data.contract_id,
             Payment.employee_id == payment_data.employee_id,
-            Payment.stage_name == payment_data.stage_name,
             Payment.role == payment_data.role,
             Payment.payment_type == payment_data.payment_type
         )
+        # stage_name может быть None (например, у СДП) — корректно сравниваем
+        if payment_data.stage_name:
+            duplicate_query = duplicate_query.filter(Payment.stage_name == payment_data.stage_name)
+        else:
+            duplicate_query = duplicate_query.filter(
+                (Payment.stage_name.is_(None)) | (Payment.stage_name == '')
+            )
         if payment_data.crm_card_id:
             duplicate_query = duplicate_query.filter(Payment.crm_card_id == payment_data.crm_card_id)
         if payment_data.supervision_card_id:

@@ -1032,7 +1032,7 @@ class CardEditDialog(QDialog):
             # Кнопка сброса карточки (только для руководителя)
             position = (self.employee or {}).get('position', '')
             if position in ('Руководитель студии', 'Старший менеджер проектов'):
-                reset_btn = IconLoader.create_icon_button('refresh', 'Сброс', 'Сбросить карточку до начального состояния', icon_size=12)
+                reset_btn = IconLoader.create_icon_button('refresh-white', 'Сброс', 'Сбросить карточку до начального состояния', icon_size=12)
                 reset_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #F39C12;
@@ -1484,7 +1484,7 @@ class CardEditDialog(QDialog):
             self.refresh_project_info_tab()
 
             # Добавляем запись в историю проекта
-            if self.employee and not had_survey_before:  # Только если это первый раз
+            if self.employee:  # Всегда записываем замер в историю
                 from datetime import datetime
                 # Получаем имя замерщика через DataAccess
                 surveyor_name = 'Неизвестный'
@@ -4454,32 +4454,57 @@ class CardEditDialog(QDialog):
         except Exception:
             pass
 
+        # ========== Проверка: является ли текущий пользователь исполнителем стадии ==========
+        def _is_executor_for_stage(stage_keyword):
+            """Проверяет, является ли текущий пользователь исполнителем данной стадии"""
+            if not self.employee:
+                return False
+            emp_id = self.employee.get('id')
+            if not emp_id:
+                return False
+            executors = self.card_data.get('stage_executors', [])
+            for ex in executors:
+                if stage_keyword.lower() in (ex.get('stage_name', '') or '').lower():
+                    if ex.get('executor_id') == emp_id:
+                        return True
+            return False
+
+        is_management = _has_perm(self.employee, self.api_client, 'crm_cards.assign_executor')
+
+        # ========== Подсветка активной стадии ==========
+        current_column = (self.card_data.get('column_name', '') or '').lower()
+
+        def _stage_group_style(stage_keyword):
+            """Возвращает стиль QGroupBox: зелёный для активной стадии, серый для остальных"""
+            is_active = stage_keyword.lower() in current_column
+            border_color = '#27AE60' if is_active else '#E0E0E0'
+            title_color = '#27AE60' if is_active else '#2C3E50'
+            return f"""
+                QGroupBox {{
+                    font-weight: bold;
+                    font-size: 11px;
+                    color: {title_color};
+                    border: {'2px' if is_active else '1px'} solid {border_color};
+                    border-radius: 5px;
+                    margin-top: 8px;
+                    padding-top: 15px;
+                }}
+                QGroupBox::title {{
+                    left: 10px;
+                    padding: 0 5px;
+                }}
+            """
+
         # ========== СЕКЦИЯ: 1 СТАДИЯ - ПЛАНИРОВОЧНОЕ РЕШЕНИЕ ==========
         stage1_group = QGroupBox("1 стадия - Планировочное решение")
-        stage1_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                font-size: 11px;
-                color: #2C3E50;
-                border: 1px solid #E0E0E0;
-                border-radius: 5px;
-                margin-top: 8px;
-                padding-top: 15px;
-            }
-            QGroupBox::title {
-                left: 10px;
-                padding: 0 5px;
-            }
-        """)
+        stage1_group.setStyleSheet(_stage_group_style('планировочн'))
 
         stage1_layout = QVBoxLayout()
 
-        # Стадия 1 — права на загрузку/удаление файлов через permissions
-        emp_pos = self.employee.get('position', '') if self.employee else ''
-        emp_sec = self.employee.get('secondary_position', '') if self.employee else ''
-        is_only_draftsman = (emp_pos == 'Чертёжник' and emp_sec != 'Дизайнер')
-        can_delete_stage1 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
-        can_upload_stage1 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
+        # Стадия 1 — файлы видны только исполнителю стадии и руководству
+        is_stage1_executor = _is_executor_for_stage('планировочн')
+        can_delete_stage1 = is_management or is_stage1_executor
+        can_upload_stage1 = is_management or is_stage1_executor
 
         self.stage1_list = VariationGalleryWidget(
             title="PDF файлы планировочного решения",
@@ -4506,27 +4531,14 @@ class CardEditDialog(QDialog):
 
             # ========== СЕКЦИЯ: 2 СТАДИЯ - ЧЕРТЕЖНЫЙ ПРОЕКТ ==========
             stage2_group = QGroupBox("2 стадия - Чертежный проект")
-            stage2_group.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    font-size: 11px;
-                    color: #2C3E50;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 5px;
-                    margin-top: 8px;
-                    padding-top: 15px;
-                }
-                QGroupBox::title {
-                    left: 10px;
-                    padding: 0 5px;
-                }
-            """)
+            stage2_group.setStyleSheet(_stage_group_style('рабочие чертежи'))
 
             stage2_layout = QVBoxLayout()
 
             # Стадия 2 (шаблонные) — через permissions
-            can_delete_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
-            can_upload_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
+            is_stage2_executor = _is_executor_for_stage('концепция') or _is_executor_for_stage('рабочие чертежи') or _is_executor_for_stage('чертежн')
+            can_delete_stage2 = is_management or is_stage2_executor
+            can_upload_stage2 = is_management or is_stage2_executor
 
             self.stage3_list = VariationGalleryWidget(  # используем stage3_list для совместимости с БД
                 title="PDF и Excel файлы чертежного проекта",
@@ -4547,27 +4559,14 @@ class CardEditDialog(QDialog):
 
             # ========== СЕКЦИЯ: 3 СТАДИЯ - 3D ВИЗУАЛИЗАЦИЯ (ДОПОЛНИТЕЛЬНАЯ) ==========
             stage3_group = QGroupBox("3 стадия - 3D Визуализация (дополнительная)")
-            stage3_group.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    font-size: 11px;
-                    color: #2C3E50;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 5px;
-                    margin-top: 8px;
-                    padding-top: 15px;
-                }
-                QGroupBox::title {
-                    left: 10px;
-                    padding: 0 5px;
-                }
-            """)
+            stage3_group.setStyleSheet(_stage_group_style('3d визуализация'))
 
             stage3_layout = QVBoxLayout()
 
             # Стадия 3 (шаблонные) — через permissions
-            can_delete_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
-            can_upload_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
+            is_stage3_executor = _is_executor_for_stage('чертеж') or _is_executor_for_stage('рабочие')
+            can_delete_stage3 = is_management or is_stage3_executor
+            can_upload_stage3 = is_management or is_stage3_executor
 
             # Только 3D визуализация (без концепции-коллажей)
             self.stage2_3d_gallery = VariationGalleryWidget(
@@ -4595,27 +4594,14 @@ class CardEditDialog(QDialog):
             # ========== СЕКЦИЯ: 2 СТАДИЯ - КОНЦЕПЦИЯ ДИЗАЙНА ==========
 
             stage2_group = QGroupBox("2 стадия - Концепция дизайна")
-            stage2_group.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    font-size: 11px;
-                    color: #2C3E50;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 5px;
-                    margin-top: 8px;
-                    padding-top: 15px;
-                }
-                QGroupBox::title {
-                    left: 10px;
-                    padding: 0 5px;
-                }
-            """)
+            stage2_group.setStyleSheet(_stage_group_style('концепция'))
 
             stage2_layout = QVBoxLayout()
 
             # Стадия 2 (индивидуальные) — через permissions
-            can_delete_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
-            can_upload_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
+            is_stage2_executor = _is_executor_for_stage('концепция') or _is_executor_for_stage('рабочие чертежи') or _is_executor_for_stage('чертежн')
+            can_delete_stage2 = is_management or is_stage2_executor
+            can_upload_stage2 = is_management or is_stage2_executor
 
             # Подсекция: Концепция-коллажи (с поддержкой вариаций)
             self.stage2_concept_gallery = VariationGalleryWidget(
@@ -4651,27 +4637,14 @@ class CardEditDialog(QDialog):
 
             # ========== СЕКЦИЯ: 3 СТАДИЯ - ЧЕРТЕЖНЫЙ ПРОЕКТ ==========
             stage3_group = QGroupBox("3 стадия - Чертежный проект")
-            stage3_group.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    font-size: 11px;
-                    color: #2C3E50;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 5px;
-                    margin-top: 8px;
-                    padding-top: 15px;
-                }
-                QGroupBox::title {
-                    left: 10px;
-                    padding: 0 5px;
-                }
-            """)
+            stage3_group.setStyleSheet(_stage_group_style('чертежн'))
 
             stage3_layout = QVBoxLayout()
 
             # Стадия 3 (индивидуальные) — через permissions
-            can_delete_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
-            can_upload_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
+            is_stage3_executor = _is_executor_for_stage('чертеж') or _is_executor_for_stage('рабочие')
+            can_delete_stage3 = is_management or is_stage3_executor
+            can_upload_stage3 = is_management or is_stage3_executor
 
             self.stage3_list = VariationGalleryWidget(
                 title="PDF и Excel файлы чертежного проекта",

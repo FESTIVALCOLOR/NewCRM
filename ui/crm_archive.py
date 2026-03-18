@@ -340,9 +340,12 @@ class ArchiveCardDetailsDialog(QDialog):
             
             # ========== КОНТЕНТ ==========
             content_widget = QWidget()
+            content_widget.setObjectName("archiveContent")
             content_widget.setStyleSheet("""
-                QWidget {
+                QWidget#archiveContent {
                     background-color: #FFFFFF;
+                    border-bottom-left-radius: 10px;
+                    border-bottom-right-radius: 10px;
                 }
             """)
             
@@ -393,7 +396,8 @@ class ArchiveCardDetailsDialog(QDialog):
             
             separator = QFrame()
             separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet('background-color: #E0E0E0; max-height: 1px; margin: 5px 0;')
+            separator.setFrameShadow(QFrame.Plain)
+            separator.setStyleSheet('color: #E0E0E0; background-color: #E0E0E0; max-height: 1px; margin: 5px 0;')
             info_layout.addRow(separator)
 
             # Теги и общий дедлайн
@@ -1244,7 +1248,8 @@ class ArchiveCardDetailsDialog(QDialog):
             # Разделитель перед кнопками
             bottom_separator = QFrame()
             bottom_separator.setFrameShape(QFrame.HLine)
-            bottom_separator.setStyleSheet("background-color: #E0E0E0;")
+            bottom_separator.setFrameShadow(QFrame.Plain)
+            bottom_separator.setStyleSheet("color: #E0E0E0; background-color: #E0E0E0;")
             bottom_separator.setFixedHeight(1)
             layout.addWidget(bottom_separator)
 
@@ -1345,8 +1350,8 @@ class ArchiveCardDetailsDialog(QDialog):
             'Перемещение карточки': ['card_moved'],
             'Пауза / возобновление': ['card_paused', 'card_resumed', 'pause', 'resume'],
             'Назначение исполнителей': ['executor_assigned', 'executor_deleted', 'executor_completed', 'assignment_change'],
-            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance', 'accepted'],
-            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset'],
+            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance', 'accepted', 'client_send', 'client_approved'],
+            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset', 'close_stage', 'sign_act', 'advance_round', 'add_extra_round'],
             'Оплаты': ['payment_created', 'payment_updated'],
             'Изменение дедлайна': ['deadline_changed', 'executor_deadline_changed'],
             'Загрузка файлов': ['file_upload'],

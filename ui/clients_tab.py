@@ -968,7 +968,11 @@ class ClientDialog(QDialog):
         """)
         header = self.client_contracts_table.horizontalHeader()
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        # Начальные пропорции столбцов
+        col_widths = [60, 80, 180, 50, 80, 90, 100, 80, 80]
+        for i, w in enumerate(col_widths):
+            self.client_contracts_table.setColumnWidth(i, w)
         self.client_contracts_table.verticalHeader().setVisible(False)
         self.client_contracts_table.verticalHeader().setDefaultSectionSize(34)
         self.client_contracts_table.setEditTriggers(QTableWidget.NoEditTriggers)
