@@ -289,9 +289,10 @@ class ArchiveCardDetailsDialog(QDialog):
         self.resize_margin = 8
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        # Qt.Window вместо Qt.Dialog — на Windows Dialog кратковременно показывает нативную рамку
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setStyleSheet("QDialog { background: transparent; }")
+        self.setMouseTracking(True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
