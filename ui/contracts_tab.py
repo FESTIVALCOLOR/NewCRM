@@ -177,7 +177,8 @@ class ContractsTab(QWidget):
             self.load_contracts()
 
     def _get_payment_status_item(self, contract):
-        """Определение статуса оплаты для столбца 'Оплата'"""
+        """Определение статуса оплаты для столбца 'Оплата'.
+        Логика: выделяем только при статусах СДАН/НАДЗОР/Выполненный — проверяем оплату."""
         status = contract.get('status') or ''
         project_type = contract.get('project_type') or ''
 
@@ -186,6 +187,11 @@ class ContractsTab(QWidget):
             item = QTableWidgetItem('Отменён')
             item.setForeground(QColor('#C0392B'))
             return item
+
+        # Проверяем только для завершённых статусов
+        is_completed = ('СДАН' in status or 'НАДЗОР' in status or 'Выполненный' in status)
+        if not is_completed:
+            return QTableWidgetItem('')
 
         # Проверяем финальную оплату
         if project_type == 'Индивидуальный':
@@ -197,33 +203,45 @@ class ContractsTab(QWidget):
             item = QTableWidgetItem('Оплачен')
             item.setForeground(QColor('#27AE60'))
             return item
-
-        # Выполненный проект без оплаты
-        if 'ВЫПОЛНЕННЫЙ' in status or 'Выполненный' in status:
-            item = QTableWidgetItem('Ожидает оплату')
+        else:
+            item = QTableWidgetItem('К оплате')
             item.setForeground(QColor('#E67E22'))
             return item
 
-        # СДАН/АВТОРСКИЙ НАДЗОР + нет оплаты
-        if 'СДАН' in status or 'НАДЗОР' in status:
-            if not final_paid:
-                item = QTableWidgetItem('Ожидает оплату')
-                item.setForeground(QColor('#E67E22'))
-                return item
-
-        item = QTableWidgetItem('')
-        return item
-
     def _get_row_color(self, contract, payment_text):
-        """Цвет строки: оранжевый для ожидания оплаты, зелёный для оплаченных, красный для расторгнутых"""
+        """Цвет строки (как в зарплатах): оранжевый — к оплате, зелёный — оплачен, красный — расторгнут"""
         status = contract.get('status') or ''
         if 'РАСТОРГНУТ' in status:
             return '#FADBD8'  # светло-красный
-        if payment_text == 'Оплачен' and ('СДАН' in status or 'НАДЗОР' in status):
-            return '#E8F8F5'  # светло-зелёный
-        if payment_text == 'Ожидает оплату':
-            return '#FFF3E0'  # светло-оранжевый
+        if payment_text == 'Оплачен':
+            return '#D4EDDA'  # светло-зелёный (как в зарплатах)
+        if payment_text == 'К оплате':
+            return '#FFE4B5'  # светло-оранжевый (как в зарплатах)
         return None
+
+    def _apply_row_color(self, row, color):
+        """Применение цвета ко всей строке через QLabel (как в зарплатах).
+        setBackground() не работает поверх stylesheet — используем setCellWidget."""
+        style = f"background-color: {color}; padding: 4px 5px;"
+        last_col = self.contracts_table.columnCount() - 1
+        for col in range(self.contracts_table.columnCount()):
+            existing_widget = self.contracts_table.cellWidget(row, col)
+            if existing_widget and col == last_col:
+                # Столбец кнопок действий — красим фон виджета
+                existing_widget.setStyleSheet(f"background-color: {color};")
+            else:
+                item = self.contracts_table.item(row, col)
+                text = item.text() if item else ""
+                alignment = item.textAlignment() if item else int(Qt.AlignLeft | Qt.AlignVCenter)
+                fg = item.foreground().color().name() if item and item.foreground().color().isValid() else '#333'
+                tooltip = item.toolTip() if item else ""
+
+                label = QLabel(text)
+                label.setStyleSheet(f"{style} color: {fg};")
+                label.setAlignment(Qt.Alignment(alignment))
+                if tooltip:
+                    label.setToolTip(tooltip)
+                self.contracts_table.setCellWidget(row, col, label)
 
     def load_contracts(self):
         """Загрузка списка договоров"""
@@ -324,14 +342,6 @@ class ContractsTab(QWidget):
             payment_item = self._get_payment_status_item(contract)
             self.contracts_table.setItem(row, 10, payment_item)
 
-            # Цветовая индикация строки
-            row_color = self._get_row_color(contract, payment_item.text())
-            if row_color:
-                for col_idx in range(self.contracts_table.columnCount() - 1):
-                    item = self.contracts_table.item(row, col_idx)
-                    if item:
-                        item.setBackground(QColor(row_color))
-
             # ========== КНОПКИ ДЕЙСТВИЙ (SVG) ==========
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
@@ -414,6 +424,11 @@ class ContractsTab(QWidget):
 
             actions_widget.setLayout(actions_layout)
             self.contracts_table.setCellWidget(row, 11, actions_widget)
+
+            # Цветовая индикация ВСЕЙ строки (через QLabel, как в зарплатах)
+            row_color = self._get_row_color(contract, payment_item.text())
+            if row_color:
+                self._apply_row_color(row, row_color)
           except Exception as e:
             print(f"[WARNING] Ошибка отрисовки строки {row} договора {contract.get('contract_number', '?')}: {e}")
 
@@ -720,14 +735,6 @@ class ContractsTab(QWidget):
             payment_item = self._get_payment_status_item(contract)
             self.contracts_table.setItem(row, 10, payment_item)
 
-            # Цветовая индикация строки
-            row_color = self._get_row_color(contract, payment_item.text())
-            if row_color:
-                for col_idx in range(self.contracts_table.columnCount() - 1):
-                    item = self.contracts_table.item(row, col_idx)
-                    if item:
-                        item.setBackground(QColor(row_color))
-
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(2, 0, 2, 0)
@@ -809,6 +816,11 @@ class ContractsTab(QWidget):
 
             actions_widget.setLayout(actions_layout)
             self.contracts_table.setCellWidget(row, 11, actions_widget)
+
+            # Цветовая индикация ВСЕЙ строки (через QLabel, как в зарплатах)
+            row_color = self._get_row_color(contract, payment_item.text())
+            if row_color:
+                self._apply_row_color(row, row_color)
           except Exception as e:
             print(f"[WARNING] Ошибка отрисовки строки {row} договора {contract.get('contract_number', '?')}: {e}")
 

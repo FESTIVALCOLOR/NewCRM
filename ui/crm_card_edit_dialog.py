@@ -178,17 +178,19 @@ class CardEditDialog(QDialog):
 
 
     def _copy_folder_link(self, folder_type):
-        """Копирование ссылки на папку замера/фотофиксации в буфер обмена"""
+        """Копирование прямой ссылки на папку замера/фотофиксации в буфер обмена"""
         from PyQt5.QtWidgets import QApplication
-        # Читаем из _cached_contract (обновляется при создании папок), с fallback на card_data
+        from urllib.parse import quote
         contract_data = self._cached_contract or self.card_data.get('contract_data') or {}
-        if folder_type == 'measurement':
-            link = contract_data.get('measurement_folder_public_link', '')
-        else:
-            link = contract_data.get('photo_folder_public_link', '')
-        if link:
-            QApplication.clipboard().setText(link)
-            CustomMessageBox(self, 'Скопировано', 'Ссылка скопирована в буфер обмена', 'info').exec_()
+        folder_path = contract_data.get('yandex_folder_path', '')
+        if not folder_path:
+            CustomMessageBox(self, 'Ошибка', 'Папка на Яндекс.Диске не найдена', 'warning').exec_()
+            return
+        subfolder = 'Замер' if folder_type == 'measurement' else 'Фотофиксация'
+        encoded = quote(f"{folder_path}/{subfolder}", safe='/')
+        link = f"https://disk.yandex.ru/client/disk{encoded}"
+        QApplication.clipboard().setText(link)
+        CustomMessageBox(self, 'Скопировано', 'Ссылка скопирована в буфер обмена', 'info').exec_()
 
     def _sync_measurement_folder(self):
         """Автосинхронизация: проверяем наличие файлов в папке замера на ЯД.
@@ -372,25 +374,33 @@ class CardEditDialog(QDialog):
         thread.start()
 
     def _update_surveyor_folder_links(self, contract_data=None):
-        """Обновление UI ссылок на папки замера и фотофиксации"""
+        """Обновление UI ссылок на папки замера и фотофиксации.
+        Используем прямые ссылки на ЯД (disk.yandex.ru/client/disk/...) для возможности загрузки файлов."""
         if contract_data is None:
             contract_data = self.card_data.get('contract_data') or {}
-        meas_link = contract_data.get('measurement_folder_public_link', '')
-        photo_link = contract_data.get('photo_folder_public_link', '')
-        if meas_link:
+
+        # Формируем прямые ссылки на ЯД из yandex_folder_path (не public — для загрузки файлов)
+        folder_path = contract_data.get('yandex_folder_path', '')
+        if folder_path:
+            from urllib.parse import quote
+            # Прямая ссылка на папку в веб-интерфейсе ЯД (с авторизацией пользователя)
+            encoded_meas = quote(f"{folder_path}/Замер", safe='/')
+            encoded_photo = quote(f"{folder_path}/Фотофиксация", safe='/')
+            meas_url = f"https://disk.yandex.ru/client/disk{encoded_meas}"
+            photo_url = f"https://disk.yandex.ru/client/disk{encoded_photo}"
+
             self.measurement_folder_link_label.setText(
-                f'<a href="{meas_link}" title="Открыть папку замера">Открыть папку замера</a>'
+                f'<a href="{meas_url}" title="Открыть папку замера">Открыть папку замера</a>'
             )
             self.measurement_copy_btn.setVisible(True)
-        else:
-            self.measurement_folder_link_label.setText('Не создана')
-            self.measurement_copy_btn.setVisible(False)
-        if photo_link:
+
             self.photo_folder_link_label.setText(
-                f'<a href="{photo_link}" title="Открыть папку фотофиксации">Открыть папку фотофиксации</a>'
+                f'<a href="{photo_url}" title="Открыть папку фотофиксации">Открыть папку фотофиксации</a>'
             )
             self.photo_copy_btn.setVisible(True)
         else:
+            self.measurement_folder_link_label.setText('Не создана')
+            self.measurement_copy_btn.setVisible(False)
             self.photo_folder_link_label.setText('Не создана')
             self.photo_copy_btn.setVisible(False)
 
@@ -882,7 +892,7 @@ class CardEditDialog(QDialog):
 
             self.measurement_copy_btn = QPushButton('Копировать')
             self.measurement_copy_btn.setStyleSheet(_copy_btn_style)
-            self.measurement_copy_btn.setFixedSize(80, 28)
+            self.measurement_copy_btn.setFixedSize(80, 26)
             self.measurement_copy_btn.setVisible(False)
             self.measurement_copy_btn.clicked.connect(lambda: self._copy_folder_link('measurement'))
             measurement_link_row.addWidget(self.measurement_copy_btn)
@@ -905,7 +915,7 @@ class CardEditDialog(QDialog):
 
             self.photo_copy_btn = QPushButton('Копировать')
             self.photo_copy_btn.setStyleSheet(_copy_btn_style)
-            self.photo_copy_btn.setFixedSize(80, 28)
+            self.photo_copy_btn.setFixedSize(80, 26)
             self.photo_copy_btn.setVisible(False)
             self.photo_copy_btn.clicked.connect(lambda: self._copy_folder_link('photo'))
             photo_link_row.addWidget(self.photo_copy_btn)
@@ -1347,7 +1357,7 @@ class CardEditDialog(QDialog):
                 self.create_chat_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #ffd93c;
-                        color: #ffffff;
+                        color: #333333;
                         padding: 0px 16px;
                         border-radius: 4px;
                         border: 1px solid #e6c236;
