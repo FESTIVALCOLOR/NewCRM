@@ -534,7 +534,7 @@ class ClientDialog(QDialog):
         self.email = QLineEdit()
         self.email.setPlaceholderText('example@mail.com')
 
-        individual_layout.addRow('Email:', self.email)
+        individual_layout.addRow('Email*:', self.email)
         
         passport_layout = QHBoxLayout()
         
@@ -635,7 +635,7 @@ class ClientDialog(QDialog):
         
         self.org_email = QLineEdit()
 
-        legal_layout.addRow('Email:', self.org_email)
+        legal_layout.addRow('Email*:', self.org_email)
         
         self.legal_group.setLayout(legal_layout)
         layout.addWidget(self.legal_group)
@@ -1277,7 +1277,7 @@ class ClientSearchDialog(QDialog):
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText('example@mail.com')
         self.email_input.setStyleSheet(input_style)
-        form_layout.addRow('Email:', self.email_input)
+        form_layout.addRow('Email*:', self.email_input)
 
         self.inn_input = QLineEdit()
         self.inn_input.setPlaceholderText('1234567890')

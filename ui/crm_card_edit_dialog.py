@@ -273,16 +273,11 @@ class CardEditDialog(QDialog):
         if not contract_id:
             return
 
-        # Получаем путь к папке договора на ЯД
+        # Получаем данные контракта
         contract_data = self._cached_contract
         if not contract_data:
             contract_data = self.data.get_contract(contract_id)
         if not contract_data:
-            return
-
-        folder_path = contract_data.get('yandex_folder_path', '')
-        if not folder_path:
-            print("[WARN] yandex_folder_path не установлен для договора, пропускаем создание папок")
             return
 
         # Проверяем, не созданы ли уже ссылки
@@ -299,7 +294,29 @@ class CardEditDialog(QDialog):
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
-                # Создаём папки (если ещё нет)
+                # Определяем путь к папке контракта
+                folder_path = contract_data.get('yandex_folder_path') or ''
+                if not folder_path:
+                    # Строим путь на лету из данных контракта
+                    folder_path = yd.build_contract_folder_path(
+                        agent_type=contract_data.get('agent_type') or '',
+                        project_type=contract_data.get('project_type') or '',
+                        city=contract_data.get('city') or '',
+                        address=contract_data.get('address') or '',
+                        area=contract_data.get('area') or 0
+                    )
+                    if folder_path:
+                        # Сохраняем путь в БД для будущих вызовов
+                        self.data.update_contract(contract_id, {'yandex_folder_path': folder_path})
+                        if self._cached_contract:
+                            self._cached_contract['yandex_folder_path'] = folder_path
+                        print(f"[OK] yandex_folder_path построен и сохранён: {folder_path}")
+                    else:
+                        print("[WARN] Не удалось построить путь папки на ЯД")
+                        return
+
+                # Создаём папки на ЯД (если ещё нет)
+                yd.create_folder(folder_path)
                 meas_path = f"{folder_path}/Замер"
                 photo_path = f"{folder_path}/Фотофиксация"
                 yd.create_folder(meas_path)
@@ -5079,6 +5096,7 @@ class CardEditDialog(QDialog):
             'Удаление файлов',
             'Замер',
             'Дата ТЗ',
+            'Таблица сроков',
             'Прочее',
         ])
         self._history_filter_combo.setStyleSheet('font-size: 10px; padding: 2px 5px;')
@@ -5349,6 +5367,16 @@ class CardEditDialog(QDialog):
             import traceback
             traceback.print_exc()
 
+        # Обновляем данные для фильтрации
+        self._all_history_items = action_history_items
+        self._history_stages = stages
+
+        # Сбрасываем фильтр на "Все действия"
+        if hasattr(self, '_history_filter_combo'):
+            self._history_filter_combo.blockSignals(True)
+            self._history_filter_combo.setCurrentIndex(0)
+            self._history_filter_combo.blockSignals(False)
+
         # Объединяем историю: сначала действия, потом стадии
         has_content = False
 
@@ -5365,7 +5393,6 @@ class CardEditDialog(QDialog):
 
                 action_text = f"{date_str} | {action['user_name']}: {action['description']}"
 
-                # Создаем label с синим оформлением
                 action_label = QLabel(action_text)
                 action_label.setStyleSheet('''
                     color: #2C3E50;
@@ -5465,13 +5492,14 @@ class CardEditDialog(QDialog):
                 action_label.setWordWrap(True)
                 self.info_layout.addWidget(action_label)
 
-        # Стадии показываем всегда (не фильтруются)
-        stages = getattr(self, '_history_stages', [])
-        if stages:
-            has_content = True
-            for stage in stages:
-                stage_widget = self.create_stage_info_widget(stage)
-                self.info_layout.addWidget(stage_widget)
+        # Стадии показываем только в общем виде или при фильтре назначений
+        if filter_text in ('Все действия', 'Назначение исполнителей', 'Стадии и согласование'):
+            stages = getattr(self, '_history_stages', [])
+            if stages:
+                has_content = True
+                for stage in stages:
+                    stage_widget = self.create_stage_info_widget(stage)
+                    self.info_layout.addWidget(stage_widget)
 
         if not has_content:
             empty_label = QLabel('Нет записей по выбранному фильтру')

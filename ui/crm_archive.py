@@ -297,8 +297,8 @@ class ArchiveCardDetailsDialog(QDialog):
         from utils.tooltip_fix import apply_tooltip_palette
         apply_tooltip_palette(self)
 
-        # Скрываем окно до завершения init_ui (антифлэш)
-        self.setWindowOpacity(0)
+        # Антифлэш: позиционируем за экраном до центрирования в showEvent
+        self.move(-10000, -10000)
 
         self.init_ui()
 
@@ -1814,13 +1814,11 @@ class ArchiveCardDetailsDialog(QDialog):
     # ========== SHOW / CENTER ==========
 
     def showEvent(self, event):
-        """Центрирование при первом показе + антифлэш"""
+        """Центрирование при первом показе"""
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
             self.center_on_screen()
-            # Показываем окно после центрирования (антифлэш)
-            QTimer.singleShot(0, lambda: self.setWindowOpacity(1))
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""

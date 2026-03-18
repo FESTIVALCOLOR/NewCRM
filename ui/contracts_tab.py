@@ -178,8 +178,8 @@ class ContractsTab(QWidget):
 
     def _get_payment_status_item(self, contract):
         """Определение статуса оплаты для столбца 'Оплата'"""
-        status = contract.get('status', '')
-        project_type = contract.get('project_type', '')
+        status = contract.get('status') or ''
+        project_type = contract.get('project_type') or ''
 
         # Расторгнут → отменён
         if 'РАСТОРГНУТ' in status:
@@ -216,7 +216,7 @@ class ContractsTab(QWidget):
 
     def _get_row_color(self, contract, payment_text):
         """Цвет строки: оранжевый для ожидания оплаты, зелёный для оплаченных, красный для расторгнутых"""
-        status = contract.get('status', '')
+        status = contract.get('status') or ''
         if 'РАСТОРГНУТ' in status:
             return '#FADBD8'  # светло-красный
         if payment_text == 'Оплачен' and ('СДАН' in status or 'НАДЗОР' in status):
@@ -255,6 +255,7 @@ class ContractsTab(QWidget):
         self.contracts_table.setRowCount(len(contracts))
 
         for row, contract in enumerate(contracts):
+          try:
             self.contracts_table.setRowHeight(row, 34)
 
             # Получаем имя клиента
@@ -266,7 +267,7 @@ class ContractsTab(QWidget):
                 client = self.data.get_client(client_id)
                 client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', 'Неизвестно') if client else 'Неизвестно')
 
-            self.contracts_table.setItem(row, 0, QTableWidgetItem(contract['contract_number']))
+            self.contracts_table.setItem(row, 0, QTableWidgetItem(str(contract.get('contract_number', ''))))
 
             date_str = contract.get('contract_date', '')
             if date_str:
@@ -277,53 +278,48 @@ class ContractsTab(QWidget):
                     formatted_date = date_str
             else:
                 formatted_date = ''
-            
-            self.contracts_table.setItem(row, 1, QTableWidgetItem(formatted_date))
-            self.contracts_table.setItem(row, 2, QTableWidgetItem(contract.get('address', '')))
-            self.contracts_table.setItem(row, 3, QTableWidgetItem(str(contract.get('area', 0))))
-            self.contracts_table.setItem(row, 4, QTableWidgetItem(contract.get('city', '')))
 
-            # ИСПРАВЛЕНИЕ: Применяем цвет агента с автоматическим выбором контрастного текста
-            agent_type = contract.get('agent_type', '')
-            agent_item = QTableWidgetItem(agent_type if agent_type else '')
+            self.contracts_table.setItem(row, 1, QTableWidgetItem(formatted_date))
+            self.contracts_table.setItem(row, 2, QTableWidgetItem(contract.get('address') or ''))
+            self.contracts_table.setItem(row, 3, QTableWidgetItem(str(contract.get('area') or 0)))
+            self.contracts_table.setItem(row, 4, QTableWidgetItem(contract.get('city') or ''))
+
+            # Применяем цвет агента с автоматическим выбором контрастного текста
+            agent_type = contract.get('agent_type') or ''
+            agent_item = QTableWidgetItem(agent_type)
 
             from PyQt5.QtGui import QColor, QBrush
 
             if agent_type:
                 agent_color = self.data.get_agent_color(agent_type)
                 if agent_color:
-                    # Устанавливаем цветной фон
                     bg_color = QColor(agent_color)
                     agent_item.setBackground(QBrush(bg_color))
-
-                    # Определяем контрастный цвет текста на основе яркости фона
-                    # Формула относительной яркости: (0.299*R + 0.587*G + 0.114*B)
                     brightness = (0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue())
                     text_color = '#000000' if brightness > 128 else '#FFFFFF'
                     agent_item.setForeground(QBrush(QColor(text_color)))
                 else:
-                    # Если цвет агента не установлен, используем черный текст на белом фоне
                     agent_item.setBackground(QBrush(QColor('#FFFFFF')))
                     agent_item.setForeground(QBrush(QColor('#000000')))
             else:
-                # Если тип агента пуст, используем черный текст на белом фоне
                 agent_item.setBackground(QBrush(QColor('#FFFFFF')))
                 agent_item.setForeground(QBrush(QColor('#000000')))
 
             self.contracts_table.setItem(row, 5, agent_item)
 
-            self.contracts_table.setItem(row, 6, QTableWidgetItem(contract['project_type']))
-            self.contracts_table.setItem(row, 7, QTableWidgetItem(f"{contract.get('total_amount', 0):,.0f} ₽"))
+            self.contracts_table.setItem(row, 6, QTableWidgetItem(contract.get('project_type') or ''))
+            self.contracts_table.setItem(row, 7, QTableWidgetItem(f"{contract.get('total_amount') or 0:,.0f} ₽"))
             self.contracts_table.setItem(row, 8, QTableWidgetItem(client_name))
 
-            status_item = QTableWidgetItem(contract.get('status', 'Новый заказ'))
-            if contract['status'] == 'СДАН':
+            status = contract.get('status') or ''
+            status_item = QTableWidgetItem(status if status else 'Новый заказ')
+            if status == 'СДАН':
                 status_item.setBackground(Qt.green)
-            elif contract['status'] == 'РАСТОРГНУТ':
+            elif status == 'РАСТОРГНУТ':
                 status_item.setBackground(Qt.red)
                 if contract.get('termination_reason'):
                     status_item.setToolTip(f"Причина: {contract['termination_reason']}")
-            
+
             self.contracts_table.setItem(row, 9, status_item)
 
             # ========== СТОЛБЕЦ ОПЛАТА ==========
@@ -420,6 +416,8 @@ class ContractsTab(QWidget):
 
             actions_widget.setLayout(actions_layout)
             self.contracts_table.setCellWidget(row, 11, actions_widget)
+          except Exception as e:
+            print(f"[WARNING] Ошибка отрисовки строки {row} договора {contract.get('contract_number', '?')}: {e}")
 
         self.contracts_table.setSortingEnabled(True)
 
@@ -659,12 +657,13 @@ class ContractsTab(QWidget):
         self.contracts_table.setRowCount(len(filtered_contracts))
 
         for row, contract in enumerate(filtered_contracts):
+          try:
             self.contracts_table.setRowHeight(row, 32)
 
-            client = get_client(contract['client_id'])
-            client_name = client['full_name'] if client and client['client_type'] == 'Физическое лицо' else (client['organization_name'] if client else '')
+            client = get_client(contract.get('client_id'))
+            client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', '') if client else '')
 
-            self.contracts_table.setItem(row, 0, QTableWidgetItem(contract['contract_number']))
+            self.contracts_table.setItem(row, 0, QTableWidgetItem(str(contract.get('contract_number', ''))))
 
             date_str = contract.get('contract_date', '')
             if date_str:
@@ -677,52 +676,45 @@ class ContractsTab(QWidget):
                 formatted_date = ''
 
             self.contracts_table.setItem(row, 1, QTableWidgetItem(formatted_date))
-            self.contracts_table.setItem(row, 2, QTableWidgetItem(contract.get('address', '')))
-            self.contracts_table.setItem(row, 3, QTableWidgetItem(str(contract.get('area', 0))))
-            self.contracts_table.setItem(row, 4, QTableWidgetItem(contract.get('city', '')))
+            self.contracts_table.setItem(row, 2, QTableWidgetItem(contract.get('address') or ''))
+            self.contracts_table.setItem(row, 3, QTableWidgetItem(str(contract.get('area') or 0)))
+            self.contracts_table.setItem(row, 4, QTableWidgetItem(contract.get('city') or ''))
 
-            # ИСПРАВЛЕНИЕ: Применяем цвет агента с автоматическим выбором контрастного текста
-            agent_type = contract.get('agent_type', '')
-            agent_item = QTableWidgetItem(agent_type if agent_type else '')
+            agent_type = contract.get('agent_type') or ''
+            agent_item = QTableWidgetItem(agent_type)
 
             from PyQt5.QtGui import QColor, QBrush
 
             if agent_type:
-                # Цвета агентов хранятся только локально
                 agent_color = self.data.get_agent_color(agent_type)
                 if agent_color:
-                    # Устанавливаем цветной фон
                     bg_color = QColor(agent_color)
                     agent_item.setBackground(QBrush(bg_color))
-
-                    # Определяем контрастный цвет текста на основе яркости фона
-                    # Формула относительной яркости: (0.299*R + 0.587*G + 0.114*B)
                     brightness = (0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue())
                     text_color = '#000000' if brightness > 128 else '#FFFFFF'
                     agent_item.setForeground(QBrush(QColor(text_color)))
                 else:
-                    # Если цвет агента не установлен, используем черный текст на белом фоне
                     agent_item.setBackground(QBrush(QColor('#FFFFFF')))
                     agent_item.setForeground(QBrush(QColor('#000000')))
             else:
-                # Если тип агента пуст, используем черный текст на белом фоне
                 agent_item.setBackground(QBrush(QColor('#FFFFFF')))
                 agent_item.setForeground(QBrush(QColor('#000000')))
 
             self.contracts_table.setItem(row, 5, agent_item)
 
-            self.contracts_table.setItem(row, 6, QTableWidgetItem(contract['project_type']))
-            self.contracts_table.setItem(row, 7, QTableWidgetItem(f"{contract.get('total_amount', 0):,.0f} ₽"))
+            self.contracts_table.setItem(row, 6, QTableWidgetItem(contract.get('project_type') or ''))
+            self.contracts_table.setItem(row, 7, QTableWidgetItem(f"{contract.get('total_amount') or 0:,.0f} ₽"))
             self.contracts_table.setItem(row, 8, QTableWidgetItem(client_name))
-            
-            status_item = QTableWidgetItem(contract.get('status', 'Новый заказ'))
-            if contract['status'] == 'СДАН':
+
+            status = contract.get('status') or ''
+            status_item = QTableWidgetItem(status if status else 'Новый заказ')
+            if status == 'СДАН':
                 status_item.setBackground(Qt.green)
-            elif contract['status'] == 'РАСТОРГНУТ':
+            elif status == 'РАСТОРГНУТ':
                 status_item.setBackground(Qt.red)
                 if contract.get('termination_reason'):
                     status_item.setToolTip(f"Причина: {contract['termination_reason']}")
-            
+
             self.contracts_table.setItem(row, 9, status_item)
 
             # Столбец Оплата
@@ -818,6 +810,8 @@ class ContractsTab(QWidget):
 
             actions_widget.setLayout(actions_layout)
             self.contracts_table.setCellWidget(row, 11, actions_widget)
+          except Exception as e:
+            print(f"[WARNING] Ошибка отрисовки строки {row} договора {contract.get('contract_number', '?')}: {e}")
 
         self.contracts_table.setSortingEnabled(True)
 

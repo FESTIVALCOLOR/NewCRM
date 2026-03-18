@@ -1149,7 +1149,7 @@ class EmployeeDialog(QDialog):
         
         self.email = QLineEdit()
         self.email.setPlaceholderText('example@mail.com')
-        contact_layout.addRow('Email:', self.email)
+        contact_layout.addRow('Email*:', self.email)
         
         self.address = QTextEdit()
         self.address.setPlaceholderText('Адрес проживания')
@@ -1796,7 +1796,7 @@ class EmployeeSearchDialog(QDialog):
         
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText('example@mail.com')
-        form_layout.addRow('Email:', self.email_input)
+        form_layout.addRow('Email*:', self.email_input)
         
         self.login_input = QLineEdit()
         self.login_input.setPlaceholderText('ivanov')
@@ -2327,7 +2327,7 @@ class EmployeeDialog(QDialog):
         
         self.email = QLineEdit()
         self.email.setPlaceholderText('example@mail.com')
-        contact_layout.addRow('Email:', self.email)
+        contact_layout.addRow('Email*:', self.email)
         
         self.address = QTextEdit()
         self.address.setPlaceholderText('Адрес проживания')
@@ -2974,7 +2974,7 @@ class EmployeeSearchDialog(QDialog):
         
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText('example@mail.com')
-        form_layout.addRow('Email:', self.email_input)
+        form_layout.addRow('Email*:', self.email_input)
         
         self.login_input = QLineEdit()
         self.login_input.setPlaceholderText('ivanov')
