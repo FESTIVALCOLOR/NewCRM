@@ -402,6 +402,8 @@ class Contract(Base):
     measurement_file_name = Column(String)
     measurement_yandex_path = Column(String)
     measurement_date = Column(String)
+    measurement_folder_public_link = Column(String)
+    photo_folder_public_link = Column(String)
 
     status = Column(String, default="Новый заказ")
     status_changed_date = Column(String)
@@ -440,6 +442,14 @@ class Contract(Base):
     act_final_signed_link = Column(String)
     act_final_signed_yandex_path = Column(String)
     act_final_signed_file_name = Column(String)
+
+    # Доп. соглашения
+    additional_agreement_link = Column(String)
+    additional_agreement_yandex_path = Column(String)
+    additional_agreement_file_name = Column(String)
+    additional_agreement_signed_link = Column(String)
+    additional_agreement_signed_yandex_path = Column(String)
+    additional_agreement_signed_file_name = Column(String)
 
     # Отслеживание платежей (даты оплат + чеки)
     advance_payment_paid_date = Column(String)

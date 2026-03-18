@@ -297,6 +297,9 @@ class ArchiveCardDetailsDialog(QDialog):
         from utils.tooltip_fix import apply_tooltip_palette
         apply_tooltip_palette(self)
 
+        # Скрываем окно до завершения init_ui (антифлэш)
+        self.setWindowOpacity(0)
+
         self.init_ui()
 
         # Запускаем синхронизацию файлов после построения UI
@@ -552,7 +555,8 @@ class ArchiveCardDetailsDialog(QDialog):
                 'Назначение исполнителей', 'Сдача / приёмка работы',
                 'Стадии и согласование', 'Оплаты',
                 'Изменение дедлайна', 'Загрузка файлов',
-                'Удаление файлов', 'Замер', 'Прочее',
+                'Удаление файлов', 'Замер', 'Дата ТЗ',
+                'Таблица сроков', 'Прочее',
             ])
             self._archive_history_filter.setStyleSheet('font-size: 10px; padding: 2px 5px;')
             self._archive_history_filter.setFixedWidth(200)
@@ -1357,6 +1361,8 @@ class ArchiveCardDetailsDialog(QDialog):
             'Загрузка файлов': ['file_upload'],
             'Удаление файлов': ['file_delete'],
             'Замер': ['survey_complete', 'survey_date_changed'],
+            'Дата ТЗ': ['tech_task_date_changed'],
+            'Таблица сроков': ['timeline_date_changed'],
         }
 
         show_stages = filter_text in ('Все действия', 'Стадии исполнителей')
@@ -1808,11 +1814,13 @@ class ArchiveCardDetailsDialog(QDialog):
     # ========== SHOW / CENTER ==========
 
     def showEvent(self, event):
-        """Центрирование при первом показе"""
+        """Центрирование при первом показе + антифлэш"""
         super().showEvent(event)
         if not hasattr(self, '_centered'):
             self._centered = True
             self.center_on_screen()
+            # Показываем окно после центрирования (антифлэш)
+            QTimer.singleShot(0, lambda: self.setWindowOpacity(1))
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""

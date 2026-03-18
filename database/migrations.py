@@ -137,6 +137,10 @@ class DatabaseMigrations:
             self.migrate_add_cities_table()
             # ===============================================
 
+            # ========== МИГРАЦИЯ: доп. соглашения ==========
+            self.add_additional_agreement_fields()
+            # ===============================================
+
         except Exception as e:
             print(f"[WARN] Предупреждение при миграции: {e}")
 
@@ -463,6 +467,42 @@ class DatabaseMigrations:
         except Exception as e:
             print(f"[ERROR] Ошибка миграции agents status: {e}")
 
+    def add_additional_agreement_fields(self):
+        """Миграция: добавление полей для доп. соглашений"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+
+            cursor.execute("PRAGMA table_info(contracts)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            new_cols = {
+                'additional_agreement_link': 'TEXT',
+                'additional_agreement_yandex_path': 'TEXT',
+                'additional_agreement_file_name': 'TEXT',
+                'additional_agreement_signed_link': 'TEXT',
+                'additional_agreement_signed_yandex_path': 'TEXT',
+                'additional_agreement_signed_file_name': 'TEXT',
+                'measurement_folder_public_link': 'TEXT',
+                'photo_folder_public_link': 'TEXT',
+            }
+
+            added = []
+            for col_name, col_type in new_cols.items():
+                if col_name not in columns:
+                    cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type}")
+                    added.append(col_name)
+
+            if added:
+                conn.commit()
+                print(f"[OK] Миграция additional_agreement: добавлено {len(added)} колонок: {', '.join(added)}")
+            else:
+                print("[OK] Поля additional_agreement уже существуют")
+
+            self.close()
+        except Exception as e:
+            print(f"[ERROR] Ошибка миграции additional_agreement: {e}")
+
     def migrate_add_cities_table(self):
         """Добавить таблицу городов"""
         try:
@@ -605,6 +645,8 @@ class DatabaseMigrations:
             measurement_file_name TEXT,
             measurement_yandex_path TEXT,
             measurement_date DATE,
+            measurement_folder_public_link TEXT,
+            photo_folder_public_link TEXT,
             contract_file_name TEXT,
             contract_file_yandex_path TEXT,
             template_contract_file_link TEXT,
@@ -1282,6 +1324,8 @@ class DatabaseMigrations:
                 'measurement_file_name': 'TEXT',
                 'measurement_yandex_path': 'TEXT',
                 'measurement_date': 'DATE',
+                'measurement_folder_public_link': 'TEXT',
+                'photo_folder_public_link': 'TEXT',
                 'contract_file_name': 'TEXT',
                 'contract_file_yandex_path': 'TEXT',
                 'template_contract_file_link': 'TEXT',
@@ -1315,6 +1359,13 @@ class DatabaseMigrations:
                 'act_final_signed_link': 'TEXT',
                 'act_final_signed_yandex_path': 'TEXT',
                 'act_final_signed_file_name': 'TEXT',
+                # Доп. соглашения
+                'additional_agreement_link': 'TEXT',
+                'additional_agreement_yandex_path': 'TEXT',
+                'additional_agreement_file_name': 'TEXT',
+                'additional_agreement_signed_link': 'TEXT',
+                'additional_agreement_signed_yandex_path': 'TEXT',
+                'additional_agreement_signed_file_name': 'TEXT',
                 # Отслеживание платежей
                 'advance_payment_paid_date': 'TEXT',
                 'additional_payment_paid_date': 'TEXT',

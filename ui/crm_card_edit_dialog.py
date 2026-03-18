@@ -169,6 +169,199 @@ class CardEditDialog(QDialog):
             traceback.print_exc()
 
 
+    def _copy_folder_link(self, folder_type):
+        """Копирование ссылки на папку замера/фотофиксации в буфер обмена"""
+        from PyQt5.QtWidgets import QApplication
+        contract_data = self.card_data.get('contract_data') or {}
+        if folder_type == 'measurement':
+            link = contract_data.get('measurement_folder_public_link', '')
+        else:
+            link = contract_data.get('photo_folder_public_link', '')
+        if link:
+            QApplication.clipboard().setText(link)
+            from ui.custom_widgets import CustomMessageBox
+            CustomMessageBox(self, 'Скопировано', 'Ссылка скопирована в буфер обмена', 'info').exec_()
+
+    def _sync_measurement_folder(self):
+        """Автосинхронизация: проверяем наличие файлов в папке замера на ЯД.
+        Если файлы есть и дата замера не установлена — записываем текущую дату."""
+        contract_data = self._cached_contract
+        if not contract_data:
+            return
+
+        folder_path = contract_data.get('yandex_folder_path', '')
+        if not folder_path:
+            return
+
+        # Если дата замера уже установлена — синхронизация не нужна
+        if self.card_data.get('survey_date'):
+            return
+
+        # Если замерщик не назначен — нечего синхронизировать
+        if not self.card_data.get('surveyor_id'):
+            return
+
+        import threading
+        from config import YANDEX_DISK_TOKEN
+        from utils.yandex_disk import YandexDiskManager
+
+        def sync_thread():
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                meas_path = f"{folder_path}/Замер"
+                headers = {'Authorization': f'OAuth {yd.token}'}
+
+                # Проверяем наличие файлов в папке замера
+                resp = yd.session.get(
+                    f'{yd.base_url}/resources',
+                    params={'path': meas_path, 'fields': 'type,_embedded.items.name', 'limit': 1},
+                    headers=headers,
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items = data.get('_embedded', {}).get('items', [])
+                    if items:
+                        # Файлы найдены — записываем дату замера
+                        from datetime import date
+                        today_str = date.today().strftime('%Y-%m-%d')
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(0, lambda: self._auto_set_survey_date(today_str))
+                        print(f"[SYNC] Найдены файлы в папке замера, устанавливаем дату: {today_str}")
+                    else:
+                        print("[SYNC] Папка замера пуста, дата не устанавливается")
+                else:
+                    print(f"[SYNC] Папка замера не найдена или ошибка: {resp.status_code}")
+
+            except Exception as e:
+                print(f"[SYNC ERROR] Ошибка синхронизации папки замера: {e}")
+
+        thread = threading.Thread(target=sync_thread, daemon=True)
+        thread.start()
+
+    def _auto_set_survey_date(self, date_str):
+        """Автоматическая установка даты замера (вызывается из sync_thread через QTimer)"""
+        from datetime import datetime
+        try:
+            # Обновляем CRM карточку
+            self.data.update_crm_card(self.card_data['id'], {'survey_date': date_str})
+            self.card_data['survey_date'] = date_str
+
+            # Обновляем договор
+            contract_id = self.card_data.get('contract_id')
+            if contract_id:
+                self.data.update_contract(contract_id, {'measurement_date': date_str})
+
+            # Обновляем UI
+            d = datetime.strptime(date_str, '%Y-%m-%d')
+            display = d.strftime('%d.%m.%Y')
+            if hasattr(self, 'survey_date_label'):
+                self.survey_date_label.setText(display)
+            if hasattr(self, 'project_data_survey_date_label'):
+                self.project_data_survey_date_label.setText(display)
+
+            # Записываем в историю
+            self._add_action_history('survey_complete', f"Дата замера установлена автоматически: {display}")
+            self.reload_project_history()
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка автоустановки даты замера: {e}")
+
+    def _create_surveyor_folders(self):
+        """Создание папок замера и фотофиксации на ЯД при назначении замерщика"""
+        contract_id = self.card_data.get('contract_id')
+        if not contract_id:
+            return
+
+        # Получаем путь к папке договора на ЯД
+        contract_data = self._cached_contract
+        if not contract_data:
+            contract_data = self.data.get_contract(contract_id)
+        if not contract_data:
+            return
+
+        folder_path = contract_data.get('yandex_folder_path', '')
+        if not folder_path:
+            print("[WARN] yandex_folder_path не установлен для договора, пропускаем создание папок")
+            return
+
+        # Проверяем, не созданы ли уже ссылки
+        if contract_data.get('measurement_folder_public_link') and contract_data.get('photo_folder_public_link'):
+            print("[INFO] Папки замера уже имеют публичные ссылки, пропускаем")
+            self._update_surveyor_folder_links(contract_data)
+            return
+
+        import threading
+        from config import YANDEX_DISK_TOKEN
+        from utils.yandex_disk import YandexDiskManager
+
+        def create_folders_thread():
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+
+                # Создаём папки (если ещё нет)
+                meas_path = f"{folder_path}/Замер"
+                photo_path = f"{folder_path}/Фотофиксация"
+                yd.create_folder(meas_path)
+                import time
+                time.sleep(0.3)
+                yd.create_folder(photo_path)
+                time.sleep(0.3)
+
+                # Получаем публичные ссылки
+                meas_link = yd.get_public_link(meas_path)
+                time.sleep(0.3)
+                photo_link = yd.get_public_link(photo_path)
+
+                # Сохраняем в БД
+                update_data = {}
+                if meas_link:
+                    update_data['measurement_folder_public_link'] = meas_link
+                if photo_link:
+                    update_data['photo_folder_public_link'] = photo_link
+
+                if update_data:
+                    self.data.update_contract(contract_id, update_data)
+                    # Обновляем кэш
+                    if self._cached_contract:
+                        self._cached_contract.update(update_data)
+                    # Обновляем UI из главного потока
+                    from PyQt5.QtCore import QTimer
+                    QTimer.singleShot(0, lambda: self._update_surveyor_folder_links(
+                        self._cached_contract or update_data))
+                    print(f"[OK] Папки замера созданы на ЯД, ссылки сохранены")
+
+            except Exception as e:
+                print(f"[ERROR] Ошибка создания папок замера: {e}")
+                import traceback
+                traceback.print_exc()
+
+        thread = threading.Thread(target=create_folders_thread, daemon=True)
+        thread.start()
+
+    def _update_surveyor_folder_links(self, contract_data=None):
+        """Обновление UI ссылок на папки замера и фотофиксации"""
+        if contract_data is None:
+            contract_data = self.card_data.get('contract_data') or {}
+        meas_link = contract_data.get('measurement_folder_public_link', '')
+        photo_link = contract_data.get('photo_folder_public_link', '')
+        if meas_link:
+            self.measurement_folder_link_label.setText(
+                f'<a href="{meas_link}" title="Открыть папку замера">Открыть папку замера</a>'
+            )
+            self.measurement_copy_btn.setVisible(True)
+        else:
+            self.measurement_folder_link_label.setText('Не создана')
+            self.measurement_copy_btn.setVisible(False)
+        if photo_link:
+            self.photo_folder_link_label.setText(
+                f'<a href="{photo_link}" title="Открыть папку фотофиксации">Открыть папку фотофиксации</a>'
+            )
+            self.photo_copy_btn.setVisible(True)
+        else:
+            self.photo_folder_link_label.setText('Не создана')
+            self.photo_copy_btn.setVisible(False)
+
     def truncate_filename(self, filename, max_length=25):
         """Обрезает длинное имя файла с многоточием в середине"""
         if len(filename) <= max_length:
@@ -627,6 +820,65 @@ class CardEditDialog(QDialog):
 
             team_layout.addLayout(surveyor_row)
 
+            # Ссылки на папки замера и фотофиксации на ЯД
+            _link_label_style = '''
+                QLabel {
+                    background-color: #F8F9FA; padding: 4px 8px;
+                    border: 1px solid #E0E0E0; border-radius: 4px; font-size: 11px;
+                }
+            '''
+            _copy_btn_style = '''
+                QPushButton { background-color: #3498DB; color: white; border: none;
+                    border-radius: 4px; padding: 2px 8px; font-size: 10px; }
+                QPushButton:hover { background-color: #2980B9; }
+            '''
+
+            # Папка замера
+            measurement_link_row = QHBoxLayout()
+            measurement_link_row.setSpacing(8)
+            meas_link_label = QLabel('Папка замера:')
+            meas_link_label.setStyleSheet(LABEL_STYLE)
+            meas_link_label.setFixedWidth(120)
+            measurement_link_row.addWidget(meas_link_label)
+
+            self.measurement_folder_link_label = QLabel('Не создана')
+            self.measurement_folder_link_label.setStyleSheet(_link_label_style)
+            self.measurement_folder_link_label.setFixedHeight(28)
+            self.measurement_folder_link_label.setOpenExternalLinks(True)
+            self.measurement_folder_link_label.setTextFormat(Qt.RichText)
+            measurement_link_row.addWidget(self.measurement_folder_link_label, 1)
+
+            self.measurement_copy_btn = QPushButton('Копировать')
+            self.measurement_copy_btn.setStyleSheet(_copy_btn_style)
+            self.measurement_copy_btn.setFixedSize(80, 28)
+            self.measurement_copy_btn.setVisible(False)
+            self.measurement_copy_btn.clicked.connect(lambda: self._copy_folder_link('measurement'))
+            measurement_link_row.addWidget(self.measurement_copy_btn)
+            team_layout.addLayout(measurement_link_row)
+
+            # Папка фотофиксации
+            photo_link_row = QHBoxLayout()
+            photo_link_row.setSpacing(8)
+            photo_link_label = QLabel('Фотофиксация:')
+            photo_link_label.setStyleSheet(LABEL_STYLE)
+            photo_link_label.setFixedWidth(120)
+            photo_link_row.addWidget(photo_link_label)
+
+            self.photo_folder_link_label = QLabel('Не создана')
+            self.photo_folder_link_label.setStyleSheet(_link_label_style)
+            self.photo_folder_link_label.setFixedHeight(28)
+            self.photo_folder_link_label.setOpenExternalLinks(True)
+            self.photo_folder_link_label.setTextFormat(Qt.RichText)
+            photo_link_row.addWidget(self.photo_folder_link_label, 1)
+
+            self.photo_copy_btn = QPushButton('Копировать')
+            self.photo_copy_btn.setStyleSheet(_copy_btn_style)
+            self.photo_copy_btn.setFixedSize(80, 28)
+            self.photo_copy_btn.setVisible(False)
+            self.photo_copy_btn.clicked.connect(lambda: self._copy_folder_link('photo'))
+            photo_link_row.addWidget(self.photo_copy_btn)
+            team_layout.addLayout(photo_link_row)
+
             # Дата замера (статичная информация + кнопка изменить)
             survey_date_row = QHBoxLayout()
             survey_date_row.setSpacing(8)
@@ -1029,9 +1281,9 @@ class CardEditDialog(QDialog):
                 delete_btn.clicked.connect(self.delete_order)
                 buttons_layout.addWidget(delete_btn)
 
-            # Кнопка сброса карточки (только для руководителя)
+            # Кнопка сброса карточки (только для руководителя студии)
             position = (self.employee or {}).get('position', '')
-            if position in ('Руководитель студии', 'Старший менеджер проектов'):
+            if position == 'Руководитель студии':
                 reset_btn = IconLoader.create_icon_button('refresh-white', 'Сброс', 'Сбросить карточку до начального состояния', icon_size=12)
                 reset_btn.setStyleSheet("""
                     QPushButton {
@@ -4490,8 +4742,10 @@ class CardEditDialog(QDialog):
                     padding-top: 15px;
                 }}
                 QGroupBox::title {{
+                    subcontrol-origin: margin;
                     left: 10px;
                     padding: 0 5px;
+                    color: {title_color};
                 }}
             """
 
@@ -5333,6 +5587,11 @@ class CardEditDialog(QDialog):
                 self.survey_date_label.setText('Не установлена')
         # ==========================================
 
+        # ========== ЗАГРУЗКА ССЫЛОК НА ПАПКИ ЗАМЕРА ==========
+        if hasattr(self, 'measurement_folder_link_label') and self._cached_contract:
+            self._update_surveyor_folder_links(self._cached_contract)
+        # =====================================================
+
         # ========== ЗАГРУЗКА ТЗ ==========
         # Используем кэшированный контракт (один запрос вместо нескольких)
         tech_task_link_from_contract = None
@@ -5464,6 +5723,9 @@ class CardEditDialog(QDialog):
 
         # Фоновая валидация файлов стадий на Яндекс.Диске
         self.validate_stage_files_on_yandex()
+
+        # Автосинхронизация папки замера — проверяем файлы на ЯД
+        self._sync_measurement_folder()
 
         # ИСПРАВЛЕНИЕ: Разрешаем автосохранение после загрузки
         self._loading_data = False
@@ -6099,6 +6361,10 @@ class CardEditDialog(QDialog):
             description = f"Переназначен {role_name}: {employee_name}"
         self._add_action_history('executor_assigned', description)
         self.reload_project_history()
+
+        # При назначении замерщика — создаём папки на ЯД и получаем публичные ссылки
+        if role_name == 'Замерщик' and employee_id:
+            self._create_surveyor_folders()
 
         try:
             # Удаляем существующие выплаты для этой роли

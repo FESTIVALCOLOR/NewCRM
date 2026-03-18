@@ -117,18 +117,18 @@ class ContractsTab(QWidget):
                 border-top-right-radius: 8px;
             }
         """)
-        self.contracts_table.setColumnCount(11)
+        self.contracts_table.setColumnCount(12)
         self.contracts_table.setHorizontalHeaderLabels([
             ' № ', ' Дата ', ' Адрес объекта ', ' S, м2 ', ' Город ',
-            'Тип агента', 'Тип проекта', 'Сумма', 'Клиент', 'Статус', 'Действия'
+            'Тип агента', 'Тип проекта', 'Сумма', 'Клиент', 'Статус', 'Оплата', 'Действия'
         ])
 
         # Настройка пропорционального изменения размера:
-        # - Колонки 0-9 растягиваются пропорционально И можно менять вручную
-        # - Колонка 10 (Действия) фиксирована 110px
+        # - Колонки 0-10 растягиваются пропорционально И можно менять вручную
+        # - Колонка 11 (Действия) фиксирована 110px
         self.contracts_table.setup_proportional_resize(
-            column_ratios=[0.06, 0.08, 0.18, 0.06, 0.10, 0.10, 0.10, 0.10, 0.12, 0.10],  # Пропорции для колонок 0-9
-            fixed_columns={10: 110},  # Действия = 110px фиксированно
+            column_ratios=[0.05, 0.07, 0.16, 0.05, 0.08, 0.09, 0.09, 0.09, 0.10, 0.09, 0.10],  # Пропорции для колонок 0-10
+            fixed_columns={11: 110},  # Действия = 110px фиксированно
             min_width=50
         )
 
@@ -149,7 +149,10 @@ class ContractsTab(QWidget):
 
         # Подключаем обработчик сортировки для сохранения настроек
         self.contracts_table.horizontalHeader().sectionClicked.connect(self.on_sort_changed)
-        
+
+        # Двойной клик — просмотр карточки договора
+        self.contracts_table.cellDoubleClicked.connect(self._on_contract_double_click)
+
         layout.addWidget(self.contracts_table)
         
         self.setLayout(layout)
@@ -172,6 +175,55 @@ class ContractsTab(QWidget):
         else:
             self._last_load_time = now
             self.load_contracts()
+
+    def _get_payment_status_item(self, contract):
+        """Определение статуса оплаты для столбца 'Оплата'"""
+        status = contract.get('status', '')
+        project_type = contract.get('project_type', '')
+
+        # Расторгнут → отменён
+        if 'РАСТОРГНУТ' in status:
+            item = QTableWidgetItem('Отменён')
+            item.setForeground(QColor('#C0392B'))
+            return item
+
+        # Проверяем финальную оплату
+        if project_type == 'Индивидуальный':
+            final_paid = bool(contract.get('third_payment_paid_date'))
+        else:  # Шаблонный
+            final_paid = bool(contract.get('advance_payment_paid_date'))
+
+        if final_paid:
+            item = QTableWidgetItem('Оплачен')
+            item.setForeground(QColor('#27AE60'))
+            return item
+
+        # Выполненный проект без оплаты
+        if 'ВЫПОЛНЕННЫЙ' in status or 'Выполненный' in status:
+            item = QTableWidgetItem('Ожидает оплату')
+            item.setForeground(QColor('#E67E22'))
+            return item
+
+        # СДАН/АВТОРСКИЙ НАДЗОР + нет оплаты
+        if 'СДАН' in status or 'НАДЗОР' in status:
+            if not final_paid:
+                item = QTableWidgetItem('Ожидает оплату')
+                item.setForeground(QColor('#E67E22'))
+                return item
+
+        item = QTableWidgetItem('')
+        return item
+
+    def _get_row_color(self, contract, payment_text):
+        """Цвет строки: оранжевый для ожидания оплаты, зелёный для оплаченных, красный для расторгнутых"""
+        status = contract.get('status', '')
+        if 'РАСТОРГНУТ' in status:
+            return '#FADBD8'  # светло-красный
+        if payment_text == 'Оплачен' and ('СДАН' in status or 'НАДЗОР' in status):
+            return '#E8F8F5'  # светло-зелёный
+        if payment_text == 'Ожидает оплату':
+            return '#FFF3E0'  # светло-оранжевый
+        return None
 
     def load_contracts(self):
         """Загрузка списка договоров"""
@@ -273,7 +325,19 @@ class ContractsTab(QWidget):
                     status_item.setToolTip(f"Причина: {contract['termination_reason']}")
             
             self.contracts_table.setItem(row, 9, status_item)
-            
+
+            # ========== СТОЛБЕЦ ОПЛАТА ==========
+            payment_item = self._get_payment_status_item(contract)
+            self.contracts_table.setItem(row, 10, payment_item)
+
+            # Цветовая индикация строки
+            row_color = self._get_row_color(contract, payment_item.text())
+            if row_color:
+                for col_idx in range(self.contracts_table.columnCount() - 1):
+                    item = self.contracts_table.item(row, col_idx)
+                    if item:
+                        item.setBackground(QColor(row_color))
+
             # ========== КНОПКИ ДЕЙСТВИЙ (SVG) ==========
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
@@ -355,7 +419,7 @@ class ContractsTab(QWidget):
                 actions_layout.addWidget(delete_btn)
 
             actions_widget.setLayout(actions_layout)
-            self.contracts_table.setCellWidget(row, 10, actions_widget)
+            self.contracts_table.setCellWidget(row, 11, actions_widget)
 
         self.contracts_table.setSortingEnabled(True)
 
@@ -404,6 +468,16 @@ class ContractsTab(QWidget):
             self.load_contracts()
             self._refresh_dashboard()
             self._invalidate_crm_cache()
+
+    def _on_contract_double_click(self, row, col):
+        """Двойной клик по строке — просмотр карточки договора"""
+        id_item = self.contracts_table.item(row, 0)
+        if not id_item:
+            return
+        contract_id = int(id_item.text())
+        contract_data = self.data.get_contract(contract_id)
+        if contract_data:
+            self.view_contract(contract_data)
 
     def view_contract(self, contract_data):
         """Просмотр договора"""
@@ -651,6 +725,18 @@ class ContractsTab(QWidget):
             
             self.contracts_table.setItem(row, 9, status_item)
 
+            # Столбец Оплата
+            payment_item = self._get_payment_status_item(contract)
+            self.contracts_table.setItem(row, 10, payment_item)
+
+            # Цветовая индикация строки
+            row_color = self._get_row_color(contract, payment_item.text())
+            if row_color:
+                for col_idx in range(self.contracts_table.columnCount() - 1):
+                    item = self.contracts_table.item(row, col_idx)
+                    if item:
+                        item.setBackground(QColor(row_color))
+
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(2, 0, 2, 0)
@@ -731,7 +817,7 @@ class ContractsTab(QWidget):
                 actions_layout.addWidget(delete_btn)
 
             actions_widget.setLayout(actions_layout)
-            self.contracts_table.setCellWidget(row, 10, actions_widget)
+            self.contracts_table.setCellWidget(row, 11, actions_widget)
 
         self.contracts_table.setSortingEnabled(True)
 

@@ -3910,6 +3910,21 @@ class TechTaskDialog(QDialog):
 
         try:
             self.data.update_crm_card(self.card_id, updates)
+
+            # Записываем в историю
+            parent = self.parent()
+            if parent and hasattr(parent, 'employee') and parent.employee:
+                from datetime import datetime
+                user_id = parent.employee.get('id')
+                date_display = self.tech_task_date.date().toString('dd.MM.yyyy')
+                self.data.add_action_history(
+                    user_id=user_id,
+                    action_type='tech_task_date_changed',
+                    entity_type='crm_card',
+                    entity_id=self.card_id,
+                    description=f"ТЗ загружено: {date_display}"
+                )
+
             self.accept()
 
         except Exception as e:
@@ -4490,8 +4505,8 @@ class MeasurementDialog(QDialog):
                 self.data.add_action_history(
                     user_id=user_id,
                     action_type='survey_complete',
-                    entity_type='contract',
-                    entity_id=contract_id,
+                    entity_type='crm_card',
+                    entity_id=self.card_id,
                     description=description
                 )
 

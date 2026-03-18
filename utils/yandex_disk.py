@@ -599,9 +599,20 @@ class YandexDiskManager:
         level4 = f"{level3}/{folder_name}"
 
         if self.create_folder(level4):
+            # Создаём подпапки документов
+            self.create_document_subfolders(level4)
             return level4
         else:
             return None
+
+    def create_document_subfolders(self, contract_folder_path):
+        """Создание подпапок внутри Документы (Акты, Информационные письма, Доп. соглашения)"""
+        docs_folder = f"{contract_folder_path}/Документы"
+        self.create_folder(docs_folder)
+        time.sleep(0.2)
+        for subfolder in ('Акты', 'Информационные письма', 'Доп. соглашения'):
+            self.create_folder(f"{docs_folder}/{subfolder}")
+            time.sleep(0.2)
 
     def create_stage_folders(self, contract_folder_path):
         """Создание структуры папок для стадий проекта

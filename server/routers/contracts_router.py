@@ -102,13 +102,23 @@ async def create_contract(
         # Автоматически создаём CRM карточку для нового договора
         # (кроме Авторского надзора — для него создаётся SupervisionCard)
         if contract.project_type != 'Авторский надзор':
-            crm_card = CRMCard(
-                contract_id=contract.id,
-                column_name='Новый заказ',
-                manager_id=current_user.id
-            )
+            # Назначаем создателя в соответствующее поле по должности
+            crm_card_kwargs = {
+                'contract_id': contract.id,
+                'column_name': 'Новый заказ',
+            }
+            if current_user.position in ('Руководитель студии', 'Старший менеджер'):
+                crm_card_kwargs['senior_manager_id'] = current_user.id
+            elif current_user.position == 'Менеджер':
+                crm_card_kwargs['manager_id'] = current_user.id
+            else:
+                # Для остальных должностей — в manager_id как fallback
+                crm_card_kwargs['manager_id'] = current_user.id
+
+            crm_card = CRMCard(**crm_card_kwargs)
             db.add(crm_card)
-            logger.info(f"Создана CRM карточка для договора {contract.id}")
+            logger.info(f"Создана CRM карточка для договора {contract.id}, "
+                       f"создатель: {current_user.full_name} ({current_user.position})")
 
         # Лог
         log = ActivityLog(

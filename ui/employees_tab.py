@@ -1569,8 +1569,8 @@ class EmployeeDialog(QDialog):
             if not _has_perm(self.current_user, self.api_client, 'employees.update'):
                 CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование сотрудников.', 'error').exec_()
                 return
-        if not self.full_name.text().strip() or not self.login.text().strip():
-            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин)', 'warning').exec_()
+        if not self.full_name.text().strip() or not self.login.text().strip() or not self.email.text().strip():
+            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин, Email)', 'warning').exec_()
             return
         
         # Проверка пароля при создании
@@ -2747,8 +2747,8 @@ class EmployeeDialog(QDialog):
             if not _has_perm(self.current_user, self.api_client, 'employees.update'):
                 CustomMessageBox(self, 'Ошибка', 'У вас нет прав на редактирование сотрудников.', 'error').exec_()
                 return
-        if not self.full_name.text().strip() or not self.login.text().strip():
-            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин)', 'warning').exec_()
+        if not self.full_name.text().strip() or not self.login.text().strip() or not self.email.text().strip():
+            CustomMessageBox(self, 'Ошибка', 'Заполните все обязательные поля (ФИО, Логин, Email)', 'warning').exec_()
             return
         
         # Проверка пароля при создании

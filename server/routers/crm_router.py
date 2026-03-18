@@ -3517,10 +3517,9 @@ async def reset_crm_card(
 ):
     """Сброс карточки CRM до начального состояния (только для руководителей)"""
 
-    # Проверка прав — только руководители
-    allowed_positions = {'Руководитель студии', 'Старший менеджер проектов'}
-    if current_user.position not in allowed_positions:
-        raise HTTPException(status_code=403, detail="Сброс доступен только руководителям")
+    # Проверка прав — только руководитель студии
+    if current_user.position != 'Руководитель студии':
+        raise HTTPException(status_code=403, detail="Сброс доступен только руководителю студии")
 
     card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
     if not card:
@@ -3583,6 +3582,13 @@ async def reset_crm_card(
         card.paused_at = None
         card.total_pause_days = 0
         card.tags = None
+        # Сбрасываем назначенных сотрудников
+        card.manager_id = None
+        card.senior_manager_id = None
+        card.designer_id = None
+        card.draftsman_id = None
+        card.sdp_id = None
+        card.gap_id = None
 
         # 9. Сбрасываем поля замера в договоре
         contract = db.query(Contract).filter(Contract.id == contract_id).first()

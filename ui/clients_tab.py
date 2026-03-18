@@ -117,7 +117,10 @@ class ClientsTab(QWidget):
 
         # Подключаем обработчик сортировки для сохранения настроек
         self.clients_table.horizontalHeader().sectionClicked.connect(self.on_sort_changed)
-        
+
+        # Двойной клик — просмотр карточки клиента
+        self.clients_table.cellDoubleClicked.connect(self._on_client_double_click)
+
         layout.addWidget(self.clients_table)
         
         self.setLayout(layout)
@@ -262,6 +265,16 @@ class ClientsTab(QWidget):
         if result == QDialog.Accepted:
             self.load_clients()
             self._refresh_dashboard()
+
+    def _on_client_double_click(self, row, col):
+        """Двойной клик по строке — просмотр карточки клиента"""
+        id_item = self.clients_table.item(row, 0)
+        if not id_item:
+            return
+        client_id = int(id_item.text())
+        client_data = self.data.get_client(client_id)
+        if client_data:
+            self.view_client(client_data)
 
     def view_client(self, client_data):
         """Просмотр информации о клиенте"""
@@ -1126,12 +1139,11 @@ class ClientDialog(QDialog):
         client_type = self.client_type.currentText()
 
         if client_type == 'Физическое лицо':
-            if not self.full_name.text().strip() or not self.phone.text().strip():
-                # ========== ЗАМЕНИЛИ QMessageBox ==========
+            if not self.full_name.text().strip() or not self.phone.text().strip() or not self.email.text().strip():
                 CustomMessageBox(
                     self,
                     'Ошибка',
-                    'Заполните все обязательные поля (ФИО, Телефон)',
+                    'Заполните все обязательные поля (ФИО, Телефон, Email)',
                     'warning'
                 ).exec_()
                 return
@@ -1148,12 +1160,11 @@ class ClientDialog(QDialog):
                 'registration_address': self.registration_address.toPlainText().strip()
             }
         else:
-            if not self.org_name.text().strip() or not self.org_phone.text().strip():
-                # ========== ЗАМЕНИЛИ QMessageBox ==========
+            if not self.org_name.text().strip() or not self.org_phone.text().strip() or not self.org_email.text().strip():
                 CustomMessageBox(
                     self,
                     'Ошибка',
-                    'Заполните все обязательные поля (Название, Телефон)',
+                    'Заполните все обязательные поля (Название, Телефон, Email)',
                     'warning'
                 ).exec_()
                 return

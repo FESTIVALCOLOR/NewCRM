@@ -698,6 +698,7 @@ class ContractDialog(QDialog):
             ('act_concept', 'act_concept_signed', 'Акт КД:'),
             ('info_letter', 'info_letter_signed', 'Инф. письмо:'),
             ('act_final', 'act_final_signed', 'Акт финальный:'),
+            ('additional_agreement', 'additional_agreement_signed', 'Доп. соглашение:'),
         ]
 
         for unsigned_prefix, _, row_label in _act_rows:
@@ -963,6 +964,7 @@ class ContractDialog(QDialog):
             ('act_concept', 'act_concept_signed', 'Акт КД:'),
             ('info_letter', 'info_letter_signed', 'Инф. письмо:'),
             ('act_final', 'act_final_signed', 'Акт финальный:'),
+            ('additional_agreement', 'additional_agreement_signed', 'Доп. соглашение:'),
         ]
 
         tpl_acts_container = QHBoxLayout()
@@ -2268,10 +2270,12 @@ class ContractDialog(QDialog):
             'act_concept': 'Акт КД.pdf',
             'info_letter': 'Инф. письмо.pdf',
             'act_final': 'Акт финальный.pdf',
+            'additional_agreement': 'Доп. соглашение',
             'act_planning_signed': 'Акт ПР (подписан).pdf',
             'act_concept_signed': 'Акт КД (подписан).pdf',
             'info_letter_signed': 'Инф. письмо (подписано).pdf',
             'act_final_signed': 'Акт финальный (подписан).pdf',
+            'additional_agreement_signed': 'Доп. соглашение (подписано)',
         }
         for prefix, default_name in _doc_defaults.items():
             link = self.contract_data.get(f'{prefix}_link', '')
@@ -3344,14 +3348,47 @@ class ContractDialog(QDialog):
         if path:
             QDesktopServices.openUrl(QUrl(path))
 
+    # Маппинг префиксов документов → подпапки внутри "Документы"
+    _DOC_SUBFOLDER_MAP = {
+        'act_planning': 'Акты',
+        'act_concept': 'Акты',
+        'act_final': 'Акты',
+        'act_planning_signed': 'Акты',
+        'act_concept_signed': 'Акты',
+        'act_final_signed': 'Акты',
+        'info_letter': 'Информационные письма',
+        'info_letter_signed': 'Информационные письма',
+        'additional_agreement': 'Доп. соглашения',
+        'additional_agreement_signed': 'Доп. соглашения',
+    }
+
+    def _get_doc_subfolder(self, prefix):
+        """Подпапка внутри Документы для данного типа документа"""
+        subfolder = self._DOC_SUBFOLDER_MAP.get(prefix)
+        if subfolder:
+            return f"Документы/{subfolder}"
+        return "Документы"
+
     def _upload_doc_file(self, prefix, display_name):
-        """Загрузка файла акта/письма в папку Документы на ЯД"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, f"Выберите файл: {display_name}", "",
-            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
-        )
-        if not file_path:
-            return
+        """Загрузка файла акта/письма в подпапку Документы на ЯД"""
+        is_multi = prefix.startswith('additional_agreement')
+
+        if is_multi:
+            # Множественный выбор для доп. соглашений
+            file_paths, _ = QFileDialog.getOpenFileNames(
+                self, f"Выберите файлы: {display_name}", "",
+                "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
+            )
+            if not file_paths:
+                return
+        else:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, f"Выберите файл: {display_name}", "",
+                "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
+            )
+            if not file_path:
+                return
+            file_paths = [file_path]
 
         contract_folder = self.get_contract_yandex_folder()
         if not contract_folder:
@@ -3359,40 +3396,66 @@ class ContractDialog(QDialog):
                 'Сначала сохраните договор, чтобы создать папку на Яндекс.Диске', 'warning').exec_()
             return
 
-        file_name = os.path.basename(file_path)
+        total_files = len(file_paths)
+        total_steps = total_files * 3
+        progress = create_progress_dialog("Загрузка файлов" if is_multi else "Загрузка файла",
+                                          "Подготовка к загрузке...", "Отмена", total_steps, self)
 
-        progress = create_progress_dialog("Загрузка файла", "Подготовка к загрузке...", "Отмена", 3, self)
-
-        # R-02 FIX: Потокобезопасная проверка отмены вместо progress.wasCanceled() из фонового потока
         cancel_event = threading.Event()
         progress.canceled.connect(cancel_event.set)
+        doc_subfolder = self._get_doc_subfolder(prefix)
 
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                last_result = None
 
-                def update_progress(step, fname, phase):
+                for idx, fp in enumerate(file_paths):
                     if cancel_event.is_set():
-                        return
-                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
-                    QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
-                    phase_names = {'preparing': 'Подготовка...', 'uploading': 'Загрузка на Яндекс.Диск...', 'finalizing': 'Завершение...'}
-                    percent = int((step / 3) * 100)
-                    label_text = f"{phase_names.get(phase, phase)}\n{fname} ({percent}%)"
-                    QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
+                        break
+                    fname = os.path.basename(fp)
+                    base_step = idx * 3
 
-                result = yd.upload_file_to_contract_folder(
-                    file_path, contract_folder, "Документы", file_name,
-                    progress_callback=update_progress
-                )
+                    def update_progress(step, fn, phase, _base=base_step):
+                        if cancel_event.is_set():
+                            return
+                        from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                        actual_step = _base + step
+                        QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, actual_step))
+                        phase_names = {'preparing': 'Подготовка...', 'uploading': 'Загрузка на Яндекс.Диск...', 'finalizing': 'Завершение...'}
+                        percent = int((actual_step / total_steps) * 100)
+                        label_text = f"{phase_names.get(phase, phase)}\n{fn} ({percent}%)"
+                        QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
 
-                if result:
-                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
-                    QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, 3))
-                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
-                    self.doc_file_upload_completed.emit(
-                        prefix, result['public_link'], result['yandex_path'], result['file_name']
+                    result = yd.upload_file_to_contract_folder(
+                        fp, contract_folder, doc_subfolder, fname,
+                        progress_callback=update_progress
                     )
+                    if result:
+                        last_result = result
+
+                if last_result:
+                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, total_steps))
+                    QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
+
+                    if is_multi:
+                        # Для множественной загрузки — ссылка на папку
+                        folder_path = f"{contract_folder}/{doc_subfolder}"
+                        folder_link = yd.get_public_link(folder_path)
+                        if folder_link:
+                            display = f"{total_files} файл(ов)"
+                            self.doc_file_upload_completed.emit(
+                                prefix, folder_link, folder_path, display
+                            )
+                        else:
+                            self.doc_file_upload_completed.emit(
+                                prefix, last_result['public_link'], last_result['yandex_path'], last_result['file_name']
+                            )
+                    else:
+                        self.doc_file_upload_completed.emit(
+                            prefix, last_result['public_link'], last_result['yandex_path'], last_result['file_name']
+                        )
                 else:
                     from PyQt5.QtCore import QMetaObject, Qt
                     QMetaObject.invokeMethod(progress, "close", Qt.QueuedConnection)
@@ -4095,6 +4158,13 @@ class ContractDialog(QDialog):
             'act_final_signed_link': getattr(self, 'act_final_signed_file_path', '') or '',
             'act_final_signed_yandex_path': getattr(self, 'act_final_signed_yandex_path', '') or '',
             'act_final_signed_file_name': getattr(self, 'act_final_signed_file_name', '') or '',
+            # Доп. соглашения
+            'additional_agreement_link': getattr(self, 'additional_agreement_file_path', '') or '',
+            'additional_agreement_yandex_path': getattr(self, 'additional_agreement_yandex_path', '') or '',
+            'additional_agreement_file_name': getattr(self, 'additional_agreement_file_name', '') or '',
+            'additional_agreement_signed_link': getattr(self, 'additional_agreement_signed_file_path', '') or '',
+            'additional_agreement_signed_yandex_path': getattr(self, 'additional_agreement_signed_yandex_path', '') or '',
+            'additional_agreement_signed_file_name': getattr(self, 'additional_agreement_signed_file_name', '') or '',
             # Даты оплат (сохраняются мгновенно через _mark_payment_paid, но включаем для полноты)
             'advance_payment_paid_date': (self.contract_data or {}).get('advance_payment_paid_date', '') or '',
             'additional_payment_paid_date': (self.contract_data or {}).get('additional_payment_paid_date', '') or '',

@@ -258,6 +258,8 @@ class ContractBase(BaseModel):
     measurement_file_name: Optional[str] = None
     measurement_yandex_path: Optional[str] = None
     measurement_date: Optional[str] = None
+    measurement_folder_public_link: Optional[str] = None
+    photo_folder_public_link: Optional[str] = None
     status: str = "Новый заказ"
     status_changed_date: Optional[str] = None
     termination_reason: Optional[str] = None
@@ -291,6 +293,13 @@ class ContractBase(BaseModel):
     act_final_signed_link: Optional[str] = None
     act_final_signed_yandex_path: Optional[str] = None
     act_final_signed_file_name: Optional[str] = None
+    # Доп. соглашения
+    additional_agreement_link: Optional[str] = None
+    additional_agreement_yandex_path: Optional[str] = None
+    additional_agreement_file_name: Optional[str] = None
+    additional_agreement_signed_link: Optional[str] = None
+    additional_agreement_signed_yandex_path: Optional[str] = None
+    additional_agreement_signed_file_name: Optional[str] = None
     # Отслеживание платежей
     advance_payment_paid_date: Optional[str] = None
     additional_payment_paid_date: Optional[str] = None
@@ -348,6 +357,8 @@ class ContractUpdate(BaseModel):
     measurement_file_name: Optional[str] = None
     measurement_yandex_path: Optional[str] = None
     measurement_date: Optional[str] = None
+    measurement_folder_public_link: Optional[str] = None
+    photo_folder_public_link: Optional[str] = None
     status: Optional[str] = None
     status_changed_date: Optional[str] = None
     termination_reason: Optional[str] = None
@@ -381,6 +392,13 @@ class ContractUpdate(BaseModel):
     act_final_signed_link: Optional[str] = None
     act_final_signed_yandex_path: Optional[str] = None
     act_final_signed_file_name: Optional[str] = None
+    # Доп. соглашения
+    additional_agreement_link: Optional[str] = None
+    additional_agreement_yandex_path: Optional[str] = None
+    additional_agreement_file_name: Optional[str] = None
+    additional_agreement_signed_link: Optional[str] = None
+    additional_agreement_signed_yandex_path: Optional[str] = None
+    additional_agreement_signed_file_name: Optional[str] = None
     # Отслеживание платежей
     advance_payment_paid_date: Optional[str] = None
     additional_payment_paid_date: Optional[str] = None
@@ -1030,6 +1048,8 @@ class ContractFilesUpdate(BaseModel):
     measurement_file_name: Optional[str] = None
     measurement_yandex_path: Optional[str] = None
     measurement_date: Optional[str] = None
+    measurement_folder_public_link: Optional[str] = None
+    photo_folder_public_link: Optional[str] = None
     contract_file_link: Optional[str] = None
     contract_file_yandex_path: Optional[str] = None
     contract_file_name: Optional[str] = None
@@ -1063,6 +1083,13 @@ class ContractFilesUpdate(BaseModel):
     act_final_signed_link: Optional[str] = None
     act_final_signed_yandex_path: Optional[str] = None
     act_final_signed_file_name: Optional[str] = None
+    # Доп. соглашения
+    additional_agreement_link: Optional[str] = None
+    additional_agreement_yandex_path: Optional[str] = None
+    additional_agreement_file_name: Optional[str] = None
+    additional_agreement_signed_link: Optional[str] = None
+    additional_agreement_signed_yandex_path: Optional[str] = None
+    additional_agreement_signed_file_name: Optional[str] = None
     # Чеки платежей
     advance_receipt_link: Optional[str] = None
     advance_receipt_yandex_path: Optional[str] = None
