@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
                              QTableWidgetItem, QTabWidget, QTextEdit, QSizePolicy)
 from PyQt5.QtCore import Qt, QDate, pyqtSignal, QUrl, QTimer
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QCursor
 from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
 from utils.icon_loader import IconLoader
@@ -291,6 +291,7 @@ class ArchiveCardDetailsDialog(QDialog):
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("QDialog { background: transparent; }")
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
@@ -317,8 +318,7 @@ class ArchiveCardDetailsDialog(QDialog):
                 QFrame#borderFrame {
                     background-color: #FFFFFF;
                     border: 1px solid #E0E0E0;
-                    border-top-left-radius: 10px;
-                    border-top-right-radius: 10px;
+                    border-radius: 10px;
                 }
             """)
             
@@ -355,7 +355,14 @@ class ArchiveCardDetailsDialog(QDialog):
             layout.addWidget(header)
             
             tabs = QTabWidget()
-            
+            tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border-top: 1px solid #E0E0E0;
+                    margin-left: 20px;
+                    margin-right: 20px;
+                }
+            """)
+
             # === ВКЛАДКА 1: Основная информация ===
             info_widget = QWidget()
             info_main_layout = QVBoxLayout()
@@ -384,7 +391,9 @@ class ArchiveCardDetailsDialog(QDialog):
                 reason_label.setStyleSheet('color: #E74C3C; padding: 5px; background-color: #FADBD8; border-radius: 4px;')
                 info_layout.addRow('<b>Причина расторжения:</b>', reason_label)
             
-            separator = QLabel('<hr>')
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setStyleSheet('background-color: #E0E0E0; max-height: 1px; margin: 5px 0;')
             info_layout.addRow(separator)
 
             # Теги и общий дедлайн
@@ -998,10 +1007,15 @@ class ArchiveCardDetailsDialog(QDialog):
 
                     # Файл ТЗ
                     if contract_data['tech_task_link']:
-                        file_name = contract_data['tech_task_file_name'] or 'ТехЗадание.pdf'
-                        tz_file_label = QLabel(f'<a href="{contract_data["tech_task_link"]}">{file_name}</a>')
+                        tz_file_label = QLabel(f'<a href="{contract_data["tech_task_link"]}">Открыть папку с ТЗ</a>')
                         tz_file_label.setOpenExternalLinks(True)
-                        tz_file_label.setStyleSheet('color: #ffd93c; font-size: 10px; padding: 5px; background-color: #F8F9FA; border: 1px solid #E0E0E0; border-radius: 4px;')
+                        tz_file_label.setTextFormat(Qt.RichText)
+                        tz_file_label.setStyleSheet('''
+                            QLabel { background-color: #F8F9FA; padding: 6px 10px; border: 1px solid #E0E0E0; border-radius: 4px; font-size: 10px; }
+                            QLabel a { color: #ffd93c; text-decoration: none; }
+                            QLabel a:hover { color: #2980B9; text-decoration: underline; }
+                        ''')
+                        tz_file_label.setCursor(QCursor(Qt.PointingHandCursor))
                         tz_layout.addWidget(QLabel('Файл ТЗ:'))
                         tz_layout.addWidget(tz_file_label)
                     else:
@@ -1031,10 +1045,15 @@ class ArchiveCardDetailsDialog(QDialog):
                     survey_layout.setSpacing(8)
 
                     if contract_data['measurement_image_link']:
-                        file_name = contract_data['measurement_file_name'] or 'Замер'
-                        survey_file_label = QLabel(f'<a href="{contract_data["measurement_image_link"]}">{file_name}</a>')
+                        survey_file_label = QLabel(f'<a href="{contract_data["measurement_image_link"]}">Открыть папку с замером</a>')
                         survey_file_label.setOpenExternalLinks(True)
-                        survey_file_label.setStyleSheet('color: #ffd93c; font-size: 10px; padding: 5px; background-color: #F8F9FA; border: 1px solid #E0E0E0; border-radius: 4px;')
+                        survey_file_label.setTextFormat(Qt.RichText)
+                        survey_file_label.setStyleSheet('''
+                            QLabel { background-color: #F8F9FA; padding: 6px 10px; border: 1px solid #E0E0E0; border-radius: 4px; font-size: 10px; }
+                            QLabel a { color: #ffd93c; text-decoration: none; }
+                            QLabel a:hover { color: #2980B9; text-decoration: underline; }
+                        ''')
+                        survey_file_label.setCursor(QCursor(Qt.PointingHandCursor))
                         survey_layout.addWidget(QLabel('Файл замера:'))
                         survey_layout.addWidget(survey_file_label)
                     else:
@@ -1221,7 +1240,14 @@ class ArchiveCardDetailsDialog(QDialog):
             tabs.addTab(project_data_widget, 'Данные по проекту')
 
             layout.addWidget(tabs, 1)
-            
+
+            # Разделитель перед кнопками
+            bottom_separator = QFrame()
+            bottom_separator.setFrameShape(QFrame.HLine)
+            bottom_separator.setStyleSheet("background-color: #E0E0E0;")
+            bottom_separator.setFixedHeight(1)
+            layout.addWidget(bottom_separator)
+
             buttons_layout = QHBoxLayout()
 
             restore_perm = 'supervision.move' if self.card_type == 'supervision' else 'crm_cards.move'

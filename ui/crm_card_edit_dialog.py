@@ -1444,6 +1444,9 @@ class CardEditDialog(QDialog):
                 'measurement_date': survey_date.toString('yyyy-MM-dd')
             })
 
+            # Запоминаем, был ли замер до обновления (для записи в историю только первый раз)
+            had_survey_before = self.card_data.get('survey_date')
+
             # Обновляем crm_cards.survey_date
             updates = {'survey_date': survey_date.toString('yyyy-MM-dd'), 'surveyor_id': surveyor_id}
             self.data.update_crm_card(self.card_data["id"], updates)
@@ -1460,7 +1463,7 @@ class CardEditDialog(QDialog):
             self.refresh_project_info_tab()
 
             # Добавляем запись в историю проекта
-            if self.employee and existing is None:  # Только если это первый раз
+            if self.employee and not had_survey_before:  # Только если это первый раз
                 from datetime import datetime
                 # Получаем имя замерщика через DataAccess
                 surveyor_name = 'Неизвестный'
@@ -5152,8 +5155,8 @@ class CardEditDialog(QDialog):
             'Перемещение карточки': ['card_moved'],
             'Пауза / возобновление': ['card_paused', 'card_resumed'],
             'Назначение исполнителей': ['executor_assigned', 'executor_deleted', 'executor_completed'],
-            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance'],
-            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset'],
+            'Сдача / приёмка работы': ['work_submitted', 'work_accepted', 'work_rejected', 'acceptance', 'client_send', 'client_approved'],
+            'Стадии и согласование': ['stage_completed', 'stages_reset', 'approval_completed', 'approval_reset', 'designer_reset', 'draftsman_reset', 'close_stage', 'sign_act', 'advance_round', 'add_extra_round'],
             'Оплаты': ['payment_created', 'payment_updated'],
             'Изменение дедлайна': ['deadline_changed', 'executor_deadline_changed'],
             'Загрузка файлов': ['file_upload'],
