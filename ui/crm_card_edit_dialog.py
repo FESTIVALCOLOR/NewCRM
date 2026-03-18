@@ -8326,15 +8326,15 @@ class CardEditDialog(QDialog):
                 by_stage[s] = []
             by_stage[s].append(f)
 
-        # Обновляем виджеты каждой стадии
+        # Обновляем виджеты каждой стадии (все теперь VariationGalleryWidget)
         if hasattr(self, 'stage1_list'):
-            self.stage1_list.load_files(by_stage.get('stage1', []))
+            self._load_variation_gallery(self.stage1_list, by_stage.get('stage1', []))
         if hasattr(self, 'stage2_concept_gallery'):
             self._load_variation_gallery(self.stage2_concept_gallery, by_stage.get('stage2_concept', []))
         if hasattr(self, 'stage2_3d_gallery'):
             self._load_variation_gallery(self.stage2_3d_gallery, by_stage.get('stage2_3d', []))
         if hasattr(self, 'stage3_list'):
-            self.stage3_list.load_files(by_stage.get('stage3', []))
+            self._load_variation_gallery(self.stage3_list, by_stage.get('stage3', []))
 
     def _load_variation_gallery(self, gallery, files):
         """Загрузка файлов с группировкой по вариациям в галерею"""
