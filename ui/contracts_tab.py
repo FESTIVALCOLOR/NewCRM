@@ -167,9 +167,8 @@ class ContractsTab(QWidget):
         if first_time:
             self._data_loaded = True
             self._last_load_time = now
-            self.data.prefer_local = True
+            # НЕ используем prefer_local — нужны актуальные данные оплаты из API
             self.load_contracts()
-            self.data.prefer_local = False
         elif now - getattr(self, '_last_load_time', 0) < 30:
             return
         else:
@@ -220,28 +219,20 @@ class ContractsTab(QWidget):
         return None
 
     def _apply_row_color(self, row, color):
-        """Применение цвета ко всей строке через QLabel (как в зарплатах).
-        setBackground() не работает поверх stylesheet — используем setCellWidget."""
-        style = f"background-color: {color}; padding: 4px 5px;"
+        """Применение цвета ко всей строке через setBackground().
+        Не используем QLabel/setCellWidget — это ломает сортировку и двойной клик."""
+        bg = QBrush(QColor(color))
         last_col = self.contracts_table.columnCount() - 1
         for col in range(self.contracts_table.columnCount()):
-            existing_widget = self.contracts_table.cellWidget(row, col)
-            if existing_widget and col == last_col:
+            if col == last_col:
                 # Столбец кнопок действий — красим фон виджета
-                existing_widget.setStyleSheet(f"background-color: {color};")
+                widget = self.contracts_table.cellWidget(row, col)
+                if widget:
+                    widget.setStyleSheet(f"background-color: {color};")
             else:
                 item = self.contracts_table.item(row, col)
-                text = item.text() if item else ""
-                alignment = item.textAlignment() if item else int(Qt.AlignLeft | Qt.AlignVCenter)
-                fg = item.foreground().color().name() if item and item.foreground().color().isValid() else '#333'
-                tooltip = item.toolTip() if item else ""
-
-                label = QLabel(text)
-                label.setStyleSheet(f"{style} color: {fg};")
-                label.setAlignment(Qt.Alignment(alignment))
-                if tooltip:
-                    label.setToolTip(tooltip)
-                self.contracts_table.setCellWidget(row, col, label)
+                if item:
+                    item.setBackground(bg)
 
     def load_contracts(self):
         """Загрузка списка договоров"""
@@ -285,7 +276,9 @@ class ContractsTab(QWidget):
                 client = self.data.get_client(client_id)
                 client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', 'Неизвестно') if client else 'Неизвестно')
 
-            self.contracts_table.setItem(row, 0, QTableWidgetItem(str(contract.get('contract_number', ''))))
+            num_item = QTableWidgetItem(str(contract.get('contract_number', '')))
+            num_item.setData(Qt.UserRole, contract.get('id'))  # Сохраняем ID для двойного клика
+            self.contracts_table.setItem(row, 0, num_item)
 
             date_str = contract.get('contract_date', '')
             if date_str:
@@ -485,10 +478,13 @@ class ContractsTab(QWidget):
 
     def _on_contract_double_click(self, row, col):
         """Двойной клик по строке — просмотр карточки договора"""
+        # Получаем contract_id из UserRole (сохраняется при загрузке таблицы)
         id_item = self.contracts_table.item(row, 0)
         if not id_item:
             return
-        contract_id = int(id_item.text())
+        contract_id = id_item.data(Qt.UserRole)
+        if not contract_id:
+            return
         contract_data = self.data.get_contract(contract_id)
         if contract_data:
             self.view_contract(contract_data)
@@ -679,7 +675,9 @@ class ContractsTab(QWidget):
             client = get_client(contract.get('client_id'))
             client_name = client['full_name'] if client and client.get('client_type') == 'Физическое лицо' else (client.get('organization_name', '') if client else '')
 
-            self.contracts_table.setItem(row, 0, QTableWidgetItem(str(contract.get('contract_number', ''))))
+            num_item = QTableWidgetItem(str(contract.get('contract_number', '')))
+            num_item.setData(Qt.UserRole, contract.get('id'))
+            self.contracts_table.setItem(row, 0, num_item)
 
             date_str = contract.get('contract_date', '')
             if date_str:

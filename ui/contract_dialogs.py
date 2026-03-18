@@ -241,8 +241,9 @@ class ContractDialog(QDialog):
         self._sync_ended.connect(self._on_sync_ended)
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
 
         self.init_ui()
 
@@ -290,12 +291,19 @@ class ContractDialog(QDialog):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #FFFFFF;
+                border: none;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
 
-        
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
-            QWidget#dialogContent {
+            QWidget {
                 background-color: #FFFFFF;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
@@ -4334,11 +4342,12 @@ class ContractSearchDialog(QDialog):
         super().__init__(parent)
         
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        
+        self.setMouseTracking(True)
+
         self.init_ui()
-    
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
@@ -4572,8 +4581,9 @@ class AgentDialog(QDialog):
         super().__init__(parent)
         # Получаем DataAccess из parent (ContractDialog), иначе создаём новый
         self.data = getattr(parent, 'data', None) or DataAccess()
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
         self.init_ui()
 
     def init_ui(self):
