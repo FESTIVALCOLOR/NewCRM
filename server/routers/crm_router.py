@@ -16,7 +16,7 @@ from database import (
     CRMCard, StageExecutor, SupervisionCard,
     ApprovalStageDeadline, ProjectTimelineEntry,
     StageWorkflowState, Payment, ActionHistory,
-    MessengerChat,
+    MessengerChat, ProjectFile,
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -3505,3 +3505,110 @@ async def invite_client_to_chat(
     except Exception as e:
         logger.error(f"invite_client_to_chat: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== СБРОС КАРТОЧКИ ДО НАЧАЛЬНОГО СОСТОЯНИЯ ==========
+
+@router.post("/{card_id}/reset")
+async def reset_crm_card(
+    card_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Сброс карточки CRM до начального состояния (только для руководителей)"""
+
+    # Проверка прав — только руководители
+    allowed_positions = {'Руководитель студии', 'Старший менеджер проектов'}
+    if current_user.position not in allowed_positions:
+        raise HTTPException(status_code=403, detail="Сброс доступен только руководителям")
+
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    contract_id = card.contract_id
+
+    try:
+        # 1. Удаляем всех исполнителей стадий
+        db.query(StageExecutor).filter(StageExecutor.crm_card_id == card_id).delete()
+
+        # 2. Удаляем все оплаты
+        db.query(Payment).filter(Payment.crm_card_id == card_id).delete()
+
+        # 3. Удаляем файлы проекта (из БД, Yandex Disk очистка — опционально)
+        files = db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id).all()
+        # Попытка удалить файлы с Яндекс.Диска
+        try:
+            from yandex_disk_service import get_yandex_disk_service
+            yd = get_yandex_disk_service()
+            for f in files:
+                if f.yandex_path:
+                    try:
+                        yd.delete_file(f.yandex_path, permanently=False)
+                    except Exception:
+                        pass  # Файл мог быть уже удален
+        except Exception:
+            pass  # Yandex Disk недоступен
+        db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id).delete()
+
+        # 4. Удаляем workflow состояния
+        db.query(StageWorkflowState).filter(StageWorkflowState.crm_card_id == card_id).delete()
+
+        # 5. Удаляем дедлайны согласования
+        db.query(ApprovalStageDeadline).filter(ApprovalStageDeadline.crm_card_id == card_id).delete()
+
+        # 6. Сбрасываем таблицу сроков (actual_date → NULL)
+        db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id
+        ).update({
+            ProjectTimelineEntry.actual_date: None,
+            ProjectTimelineEntry.status: 'pending'
+        })
+
+        # 7. Удаляем всю историю действий
+        db.query(ActionHistory).filter(
+            ActionHistory.entity_type == 'crm_card',
+            ActionHistory.entity_id == card_id
+        ).delete()
+
+        # 8. Сбрасываем поля карточки
+        card.column_name = 'Новый заказ'
+        card.previous_column = None
+        card.survey_date = None
+        card.surveyor_id = None
+        card.tech_task_file = None
+        card.tech_task_date = None
+        card.project_data_link = None
+        card.deadline = None
+        card.paused_at = None
+        card.total_pause_days = 0
+        card.tags = None
+
+        # 9. Сбрасываем поля замера в договоре
+        contract = db.query(Contract).filter(Contract.id == contract_id).first()
+        if contract:
+            contract.measurement_date = None
+            contract.measurement_image_link = None
+            contract.measurement_file_name = None
+            contract.measurement_yandex_path = None
+
+        # 10. Записываем единственную запись в историю — "Сброс карточки"
+        db.add(ActionHistory(
+            user_id=current_user.id,
+            action_type='card_reset',
+            entity_type='crm_card',
+            entity_id=card_id,
+            description=f'Карточка сброшена до начального состояния пользователем {current_user.full_name}'
+        ))
+
+        db.commit()
+
+        logger.info(f"CRM card {card_id} reset by {current_user.full_name}")
+        return {"ok": True, "message": "Карточка успешно сброшена"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"reset_crm_card error: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка сброса: {str(e)}")

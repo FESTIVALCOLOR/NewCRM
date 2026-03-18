@@ -2,7 +2,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QLabel, QMessageBox, QGroupBox,
-                             QHeaderView, QDateEdit, QFrame, QTextEdit, QSpinBox, QMenu, QApplication)
+                             QHeaderView, QDateEdit, QFrame, QTextEdit, QSpinBox, QMenu, QApplication,
+                             QTabWidget, QScrollArea)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QSize, QTimer
 from database.db_manager import DatabaseManager
@@ -435,6 +436,7 @@ class ClientDialog(QDialog):
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("QDialog { background: transparent; }")
 
         self.init_ui()
 
@@ -479,16 +481,10 @@ class ClientDialog(QDialog):
         """)
         border_layout.addWidget(title_bar)
         
-        # ========== КОНТЕНТ ==========
-        content_widget = QWidget()
-        content_widget.setStyleSheet("""
-            QWidget#dialogContent {
-                background-color: #FFFFFF;
-                border-bottom-left-radius: 10px;
-                border-bottom-right-radius: 10px;
-            }
-        """)
-                
+        # ========== КОНТЕНТ (ФОРМА КЛИЕНТА) ==========
+        form_widget = QWidget()
+        form_widget.setStyleSheet("background-color: #FFFFFF;")
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -631,11 +627,68 @@ class ClientDialog(QDialog):
         self.legal_group.setLayout(legal_layout)
         layout.addWidget(self.legal_group)
 
-        # Кнопки
-        if not self.view_only:
-            buttons_layout = QHBoxLayout()
-            buttons_layout.addStretch()
+        form_widget.setLayout(layout)
 
+        # ========== ВКЛАДКИ (при редактировании/просмотре существующего клиента) ==========
+        if self.client_data:
+            tab_widget = QTabWidget()
+            tab_widget.setStyleSheet("""
+                QTabWidget::pane {
+                    border: none;
+                    border-top: 1px solid #E0E0E0;
+                    background-color: #FFFFFF;
+                }
+                QTabBar::tab {
+                    padding: 8px 20px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    color: #666;
+                    border: none;
+                    border-bottom: 2px solid transparent;
+                    background-color: #FFFFFF;
+                }
+                QTabBar::tab:selected {
+                    color: #2C3E50;
+                    border-bottom: 2px solid #3498DB;
+                }
+                QTabBar::tab:hover:!selected {
+                    color: #333;
+                    border-bottom: 2px solid #BDC3C7;
+                }
+            """)
+
+            # Вкладка 1: Информация по клиенту (существующая форма в scroll)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setStyleSheet("QScrollArea { border: none; background: #FFFFFF; }")
+            scroll.setWidget(form_widget)
+            tab_widget.addTab(scroll, 'Информация по клиенту')
+
+            # Вкладка 2: Привязанные договора
+            contracts_tab = self._create_contracts_tab()
+            tab_widget.addTab(contracts_tab, 'Привязанные договора')
+
+            border_layout.addWidget(tab_widget)
+        else:
+            # Новый клиент — без вкладок
+            border_layout.addWidget(form_widget)
+
+        # ========== КНОПКИ (вне вкладок) ==========
+        buttons_container = QWidget()
+        buttons_container.setStyleSheet("background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
+        buttons_container_layout = QVBoxLayout()
+        buttons_container_layout.setContentsMargins(20, 10, 20, 15)
+
+        # Разделитель
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("background-color: #E0E0E0; max-height: 1px;")
+        buttons_container_layout.addWidget(separator)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.addStretch()
+
+        if not self.view_only:
             save_btn = QPushButton('Сохранить')
             save_btn.setFixedHeight(36)
             save_btn.clicked.connect(self.save_client)
@@ -672,12 +725,9 @@ class ClientDialog(QDialog):
                 QPushButton:pressed { background-color: #C0C0C0; }
             """)
 
-            buttons_layout.addWidget(save_btn)
-            buttons_layout.addWidget(cancel_btn)
-
-            layout.addLayout(buttons_layout)
+            buttons_row.addWidget(save_btn)
+            buttons_row.addWidget(cancel_btn)
         else:
-            # ========== РЕЖИМ ПРОСМОТРА ==========
             close_btn = QPushButton('Закрыть')
             close_btn.setFixedHeight(36)
             close_btn.clicked.connect(self.reject)
@@ -695,12 +745,12 @@ class ClientDialog(QDialog):
                 QPushButton:hover { background-color: #D0D0D0; }
                 QPushButton:pressed { background-color: #C0C0C0; }
             """)
-            layout.addWidget(close_btn)
-            # =====================================
-        
-        content_widget.setLayout(layout)
-        border_layout.addWidget(content_widget)
-        
+            buttons_row.addWidget(close_btn)
+
+        buttons_container_layout.addLayout(buttons_row)
+        buttons_container.setLayout(buttons_container_layout)
+        border_layout.addWidget(buttons_container)
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
@@ -730,9 +780,12 @@ class ClientDialog(QDialog):
 
         self.on_type_changed('Физическое лицо')
 
-        # ========== ИСПРАВЛЕНИЕ: ФИКСИРОВАННАЯ ШИРИНА БЕЗ adjustSize() ==========
-        self.setFixedWidth(650)
-        # ========================================================================
+        # ========== ШИРИНА ДИАЛОГА ==========
+        if self.client_data:
+            self.setFixedWidth(900)  # Шире для вкладки с таблицей договоров
+        else:
+            self.setFixedWidth(650)
+        # ====================================
 
     def showEvent(self, event):
         """Центрируем диалог при показе (когда размеры уже правильно установлены)"""
@@ -882,6 +935,137 @@ class ClientDialog(QDialog):
             line_edit.setCursorPosition(4)
             line_edit.blockSignals(False)
     
+    def _create_contracts_tab(self):
+        """Создание вкладки с привязанными договорами"""
+        widget = QWidget()
+        widget.setStyleSheet("background-color: #FFFFFF;")
+        vlay = QVBoxLayout()
+        vlay.setContentsMargins(10, 10, 10, 10)
+
+        self.client_contracts_table = QTableWidget()
+        self.client_contracts_table.setColumnCount(9)
+        self.client_contracts_table.setHorizontalHeaderLabels([
+            ' № ', ' Дата ', ' Адрес объекта ', ' S, м2 ', ' Город ',
+            'Тип агента', 'Тип проекта', 'Сумма', 'Статус'
+        ])
+        self.client_contracts_table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #DDD;
+                border-radius: 4px;
+                gridline-color: #E0E0E0;
+                font-size: 11px;
+            }
+            QHeaderView::section {
+                background-color: #F5F5F5;
+                border: none;
+                border-bottom: 1px solid #DDD;
+                border-right: 1px solid #EEE;
+                padding: 6px;
+                font-weight: bold;
+                font-size: 10px;
+                color: #555;
+            }
+        """)
+        header = self.client_contracts_table.horizontalHeader()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        self.client_contracts_table.verticalHeader().setVisible(False)
+        self.client_contracts_table.verticalHeader().setDefaultSectionSize(34)
+        self.client_contracts_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.client_contracts_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.client_contracts_table.setAlternatingRowColors(True)
+        self.client_contracts_table.setSortingEnabled(True)
+
+        # Двойной клик — открыть договор
+        self.client_contracts_table.doubleClicked.connect(self._open_contract_from_table)
+
+        vlay.addWidget(self.client_contracts_table)
+        widget.setLayout(vlay)
+
+        # Загружаем договора
+        QTimer.singleShot(0, self._load_client_contracts)
+
+        return widget
+
+    def _load_client_contracts(self):
+        """Загрузка привязанных к клиенту договоров"""
+        if not self.client_data:
+            return
+        client_id = self.client_data.get('id')
+        if not client_id:
+            return
+
+        try:
+            all_contracts = self.data.get_all_contracts()
+            contracts = [c for c in (all_contracts or []) if c.get('client_id') == client_id]
+        except Exception as e:
+            print(f"[ERROR] Ошибка загрузки договоров клиента: {e}")
+            contracts = []
+
+        self.client_contracts_table.setSortingEnabled(False)
+        self.client_contracts_table.setRowCount(len(contracts))
+        self._client_contract_ids = []
+
+        from PyQt5.QtGui import QColor, QBrush
+
+        for row, contract in enumerate(contracts):
+            self._client_contract_ids.append(contract.get('id'))
+            self.client_contracts_table.setRowHeight(row, 34)
+
+            self.client_contracts_table.setItem(row, 0, QTableWidgetItem(contract.get('contract_number', '')))
+
+            date_str = contract.get('contract_date', '')
+            if date_str:
+                try:
+                    date_obj = QDate.fromString(date_str, 'yyyy-MM-dd')
+                    date_str = date_obj.toString('dd.MM.yyyy')
+                except Exception:
+                    pass
+            self.client_contracts_table.setItem(row, 1, QTableWidgetItem(date_str))
+            self.client_contracts_table.setItem(row, 2, QTableWidgetItem(contract.get('address', '')))
+            self.client_contracts_table.setItem(row, 3, QTableWidgetItem(str(contract.get('area', 0))))
+            self.client_contracts_table.setItem(row, 4, QTableWidgetItem(contract.get('city', '')))
+
+            agent_type = contract.get('agent_type', '')
+            agent_item = QTableWidgetItem(agent_type)
+            if agent_type:
+                agent_color = self.data.get_agent_color(agent_type)
+                if agent_color:
+                    bg = QColor(agent_color)
+                    agent_item.setBackground(QBrush(bg))
+                    brightness = 0.299 * bg.red() + 0.587 * bg.green() + 0.114 * bg.blue()
+                    agent_item.setForeground(QBrush(QColor('#000' if brightness > 128 else '#FFF')))
+            self.client_contracts_table.setItem(row, 5, agent_item)
+
+            self.client_contracts_table.setItem(row, 6, QTableWidgetItem(contract.get('project_type', '')))
+            self.client_contracts_table.setItem(row, 7, QTableWidgetItem(f"{contract.get('total_amount', 0):,.0f} ₽"))
+
+            status_item = QTableWidgetItem(contract.get('status', 'Новый заказ'))
+            status = contract.get('status', '')
+            if status == 'СДАН':
+                status_item.setBackground(Qt.green)
+            elif status == 'РАСТОРГНУТ':
+                status_item.setBackground(Qt.red)
+                if contract.get('termination_reason'):
+                    status_item.setToolTip(f"Причина: {contract['termination_reason']}")
+            self.client_contracts_table.setItem(row, 8, status_item)
+
+        self.client_contracts_table.setSortingEnabled(True)
+
+    def _open_contract_from_table(self, index):
+        """Открыть договор по двойному клику"""
+        row = index.row()
+        if not hasattr(self, '_client_contract_ids') or row >= len(self._client_contract_ids):
+            return
+        contract_id = self._client_contract_ids[row]
+        if not contract_id:
+            return
+        contract = self.data.get_contract(contract_id)
+        if contract:
+            from ui.contract_dialogs import ContractDialog
+            dlg = ContractDialog(self, contract_data=contract, view_only=True)
+            dlg.exec_()
+
     def on_type_changed(self, client_type):
         """Переключение между типами клиентов"""
         if client_type == 'Физическое лицо':

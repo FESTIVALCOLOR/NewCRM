@@ -1011,24 +1011,45 @@ class CardEditDialog(QDialog):
             buttons_layout = QHBoxLayout()
 
             if _has_perm(self.employee, self.api_client, 'crm_cards.delete'):
-                delete_btn = IconLoader.create_icon_button('delete', 'Удалить заказ', 'Полностью удалить заказ', icon_size=12)
+                delete_btn = IconLoader.create_icon_button('delete', '', 'Полностью удалить заказ', icon_size=14)
                 delete_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #E74C3C;
                         color: white;
-                        padding: 0px 30px;
+                        padding: 0px;
+                        border-radius: 4px;
+                        border: none;
+                        min-width: 36px; max-width: 36px;
+                        min-height: 36px; max-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #C0392B; }
+                    QPushButton:pressed { background-color: #A93226; }
+                """)
+                delete_btn.setFixedSize(36, 36)
+                delete_btn.clicked.connect(self.delete_order)
+                buttons_layout.addWidget(delete_btn)
+
+            # Кнопка сброса карточки (только для руководителя)
+            position = (self.employee or {}).get('position', '')
+            if position in ('Руководитель студии', 'Старший менеджер проектов'):
+                reset_btn = IconLoader.create_icon_button('refresh', 'Сброс', 'Сбросить карточку до начального состояния', icon_size=12)
+                reset_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #F39C12;
+                        color: white;
+                        padding: 0px 16px;
                         border-radius: 4px;
                         border: none;
                         font-weight: bold;
                         max-height: 36px;
                         min-height: 36px;
                     }
-                    QPushButton:hover { background-color: #C0392B; }
-                    QPushButton:pressed { background-color: #A93226; }
+                    QPushButton:hover { background-color: #E67E22; }
+                    QPushButton:pressed { background-color: #D35400; }
                 """)
-                delete_btn.setFixedHeight(36)
-                delete_btn.clicked.connect(self.delete_order)
-                buttons_layout.addWidget(delete_btn)
+                reset_btn.setFixedHeight(36)
+                reset_btn.clicked.connect(self.reset_card)
+                buttons_layout.addWidget(reset_btn)
 
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
@@ -6405,6 +6426,64 @@ class CardEditDialog(QDialog):
 
             print("Исполнитель переназначен, диалог остался открытым")       
     
+    def reset_card(self):
+        """Сброс карточки CRM до начального состояния"""
+        from ui.crm_tab import CRMTab
+        from ui.custom_message_box import CustomQuestionBox
+
+        reply = CustomQuestionBox(
+            self,
+            'Подтверждение сброса',
+            f"Вы точно хотите сбросить карточку?\n\n"
+            f"Договор: {self.card_data.get('contract_number', 'N/A')}\n"
+            f"Адрес: {self.card_data.get('address', 'N/A')}\n\n"
+            f"ВНИМАНИЕ: Это действие нельзя отменить!\n"
+            f"Будут сброшены:\n"
+            f"• Карточка переместится в 'Новый заказ'\n"
+            f"• Все исполнители\n"
+            f"• Все оплаты\n"
+            f"• Все загруженные файлы\n"
+            f"• Все даты в таблице сроков\n"
+            f"• Вся история (останется одна запись о сбросе)"
+        ).exec_()
+
+        if reply != QDialog.Accepted:
+            return
+
+        card_id = self.card_data.get('id')
+        try:
+            if self.data.is_multi_user and self.api_client:
+                result = self.api_client._request(
+                    'POST',
+                    f"{self.api_client.base_url}/api/v1/crm/{card_id}/reset"
+                )
+                if result.status_code >= 400:
+                    error_text = result.text
+                    CustomMessageBox(self, 'Ошибка сброса', f'Не удалось сбросить карточку: {error_text}', 'warning').exec_()
+                    return
+            else:
+                CustomMessageBox(self, 'Ошибка', 'Сброс доступен только в сетевом режиме', 'warning').exec_()
+                return
+
+            CustomMessageBox(self, 'Сброс выполнен', 'Карточка успешно сброшена до начального состояния', 'info').exec_()
+
+            # Обновляем CRM вкладку
+            crm_tab_parent = None
+            parent = self.parent()
+            while parent:
+                if isinstance(parent, CRMTab):
+                    crm_tab_parent = parent
+                    break
+                parent = parent.parent()
+
+            self.accept()
+
+            if crm_tab_parent:
+                QTimer.singleShot(100, crm_tab_parent.refresh_current_tab)
+
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Ошибка при сбросе карточки: {e}', 'warning').exec_()
+
     def delete_order(self):
         """Удаление заказа"""
         from ui.crm_tab import CRMTab
