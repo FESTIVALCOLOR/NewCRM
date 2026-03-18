@@ -4457,15 +4457,17 @@ class CardEditDialog(QDialog):
         can_delete_stage1 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
         can_upload_stage1 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
-        self.stage1_list = FileListWidget(
+        self.stage1_list = VariationGalleryWidget(
             title="PDF файлы планировочного решения",
             stage="stage1",
             file_types=['pdf'],
             can_delete=can_delete_stage1,
             can_upload=can_upload_stage1
         )
-        self.stage1_list.upload_requested.connect(self.upload_stage_files)
-        self.stage1_list.delete_requested.connect(self.delete_stage_file)
+        self.stage1_list.upload_requested.connect(self.upload_stage_files_with_variation)
+        self.stage1_list.delete_requested.connect(self.delete_stage_file_with_variation)
+        self.stage1_list.add_variation_requested.connect(self.add_variation_folder)
+        self.stage1_list.delete_variation_requested.connect(self.delete_variation_folder)
         self._add_corrections_button(self.stage1_list, 'Стадия 1')
         stage1_layout.addWidget(self.stage1_list)
 
@@ -4502,15 +4504,17 @@ class CardEditDialog(QDialog):
             can_delete_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
             can_upload_stage2 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
-            self.stage3_list = FileListWidget(  # используем stage3_list для совместимости с БД
+            self.stage3_list = VariationGalleryWidget(  # используем stage3_list для совместимости с БД
                 title="PDF и Excel файлы чертежного проекта",
                 stage="stage3",
                 file_types=['pdf', 'excel'],
                 can_delete=can_delete_stage2,
                 can_upload=can_upload_stage2
             )
-            self.stage3_list.upload_requested.connect(self.upload_stage_files)
-            self.stage3_list.delete_requested.connect(self.delete_stage_file)
+            self.stage3_list.upload_requested.connect(self.upload_stage_files_with_variation)
+            self.stage3_list.delete_requested.connect(self.delete_stage_file_with_variation)
+            self.stage3_list.add_variation_requested.connect(self.add_variation_folder)
+            self.stage3_list.delete_variation_requested.connect(self.delete_variation_folder)
             self._add_corrections_button(self.stage3_list, 'Стадия 2')
             stage2_layout.addWidget(self.stage3_list)
 
@@ -4645,15 +4649,17 @@ class CardEditDialog(QDialog):
             can_delete_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_delete')
             can_upload_stage3 = _has_perm(self.employee, self.api_client, 'crm_cards.files_upload')
 
-            self.stage3_list = FileListWidget(
+            self.stage3_list = VariationGalleryWidget(
                 title="PDF и Excel файлы чертежного проекта",
                 stage="stage3",
                 file_types=['pdf', 'excel'],
                 can_delete=can_delete_stage3,
                 can_upload=can_upload_stage3
             )
-            self.stage3_list.upload_requested.connect(self.upload_stage_files)
-            self.stage3_list.delete_requested.connect(self.delete_stage_file)
+            self.stage3_list.upload_requested.connect(self.upload_stage_files_with_variation)
+            self.stage3_list.delete_requested.connect(self.delete_stage_file_with_variation)
+            self.stage3_list.add_variation_requested.connect(self.add_variation_folder)
+            self.stage3_list.delete_variation_requested.connect(self.delete_variation_folder)
             self._add_corrections_button(self.stage3_list, 'Стадия 3')
             stage3_layout.addWidget(self.stage3_list)
 
@@ -7782,6 +7788,25 @@ class CardEditDialog(QDialog):
 
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
 
+                # Подсчитываем размеры файлов для отображения прогресса
+                file_sizes = {}
+                total_size = 0
+                for fp in file_paths:
+                    try:
+                        sz = os.path.getsize(fp)
+                        file_sizes[os.path.basename(fp)] = sz
+                        total_size += sz
+                    except OSError:
+                        file_sizes[os.path.basename(fp)] = 0
+
+                def _format_size(size_bytes):
+                    if size_bytes < 1024:
+                        return f"{size_bytes} Б"
+                    elif size_bytes < 1024 * 1024:
+                        return f"{size_bytes / 1024:.1f} КБ"
+                    else:
+                        return f"{size_bytes / (1024 * 1024):.1f} МБ"
+
                 # Callback для обновления прогресса загрузки
                 def update_upload_progress(current, total, file_name, phase):
                     if cancel_event.is_set():
@@ -7790,9 +7815,19 @@ class CardEditDialog(QDialog):
                         QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, "Подготовка папки на Яндекс.Диске..."))
                         return
                     step = current + 1
-                    percent = int((step / total) * 50)  # первые 50% - загрузка
+                    percent = int((step / total) * 100)
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
-                    label_text = f"Загрузка на Яндекс.Диск: {file_name}\n{step}/{total} ({percent}%)"
+                    fsize = file_sizes.get(file_name, 0)
+                    size_str = _format_size(fsize) if fsize else ''
+                    label_text = f"Загрузка на Яндекс.Диск: {file_name}"
+                    if size_str:
+                        label_text += f" ({size_str})"
+                    label_text += f"\n{step}/{total} файлов — {percent}%"
+                    if total_size > 0:
+                        # Приблизительный прогресс по размеру
+                        uploaded_size = sum(file_sizes.get(os.path.basename(file_paths[j]), 0) for j in range(current))
+                        uploaded_size += fsize  # текущий файл считаем загруженным
+                        label_text += f" ({_format_size(uploaded_size)} / {_format_size(total_size)})"
                     QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
 
                 uploaded_files = yd.upload_stage_files(file_paths, contract_folder, stage, progress_callback=update_upload_progress)
@@ -7808,10 +7843,10 @@ class CardEditDialog(QDialog):
                     total = len(uploaded_files)
                     # Вторые 50% - обработка файлов (превьюшки + БД)
                     step = len(file_paths) + current
-                    percent = 50 + int((current / total) * 50)
+                    percent = int((step / total_steps) * 100) if total_steps > 0 else 100
                     # ИСПРАВЛЕНИЕ 25.01.2026: Безопасный вызов Qt методов из фонового потока
                     QMetaObject.invokeMethod(progress, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
-                    label_text = f"Обработка {file_data['file_name']}...\n{current}/{total} ({percent}%)"
+                    label_text = f"Обработка {file_data['file_name']}...\n{current}/{total} файлов — {percent}%"
                     QMetaObject.invokeMethod(progress, "setLabelText", Qt.QueuedConnection, Q_ARG(str, label_text))
 
                     ext = os.path.splitext(file_data['file_name'])[1].lower()
@@ -7885,6 +7920,30 @@ class CardEditDialog(QDialog):
         reply = CustomQuestionBox(self, 'Подтверждение', 'Вы уверены, что хотите удалить этот файл?').exec_()
         if reply != QDialog.Accepted:
             return
+
+        # Проверка прав: исполнители могут удалять только свои файлы
+        if self.data.is_online and self.employee:
+            manager_positions = {'Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер'}
+            user_position = self.employee.get('position', '')
+            is_manager = user_position in manager_positions
+            if not is_manager:
+                try:
+                    resp = self.data.api_client._request(
+                        'GET',
+                        f"{self.data.api_client.base_url}/api/files/{file_id}",
+                        mark_offline=False
+                    )
+                    file_check = self.data.api_client._handle_response(resp)
+                    if file_check and file_check.get('uploaded_by') != self.employee.get('id'):
+                        from ui.custom_message_box import CustomMessageBox
+                        CustomMessageBox(
+                            self, 'Нет доступа',
+                            'Вы можете удалять только загруженные вами файлы.',
+                            'warning'
+                        ).exec_()
+                        return
+                except Exception:
+                    pass
 
         # Сначала удаляем через API (сервер удалит и из БД, и с ЯД)
         file_info = None
@@ -8316,7 +8375,17 @@ class CardEditDialog(QDialog):
             files = [f for f in files if '/правки/' not in (f.get('yandex_path') or '').lower()]
 
         if stage == 'stage1' and hasattr(self, 'stage1_list'):
-            self.stage1_list.load_files(files)
+            # Группируем файлы по вариациям (stage1 теперь VariationGalleryWidget)
+            variations = {}
+            for file_data in (files or []):
+                variation = file_data.get('variation', 1)
+                if variation not in variations:
+                    variations[variation] = []
+                variations[variation].append(file_data)
+            for variation, variation_files in variations.items():
+                self.stage1_list.load_files_for_variation(
+                    variation, variation_files, self.load_preview_for_file
+                )
         elif stage == 'stage2_concept' and hasattr(self, 'stage2_concept_gallery'):
             # Группируем файлы по вариациям
             variations = {}
@@ -8346,7 +8415,17 @@ class CardEditDialog(QDialog):
                     variation, variation_files, self.load_preview_for_file
                 )
         elif stage == 'stage3' and hasattr(self, 'stage3_list'):
-            self.stage3_list.load_files(files)
+            # Группируем файлы по вариациям (stage3 теперь VariationGalleryWidget)
+            variations = {}
+            for file_data in (files or []):
+                variation = file_data.get('variation', 1)
+                if variation not in variations:
+                    variations[variation] = []
+                variations[variation].append(file_data)
+            for variation, variation_files in variations.items():
+                self.stage3_list.load_files_for_variation(
+                    variation, variation_files, self.load_preview_for_file
+                )
 
     def load_preview_for_file(self, file_data):
         """Загрузка превью для файла из кэша.

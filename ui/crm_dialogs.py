@@ -37,20 +37,29 @@ class RejectWithCorrectionsDialog(QDialog):
         self.db = self.data.db
         self.api_client = api_client
         self.corrections_folder_path = ''
-        self.selected_file = ''
+        self.selected_files = []
         self.setWindowTitle('Отправить на исправление')
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedWidth(420)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: white;
-                border: 1px solid #E0E0E0;
-                border-radius: 8px;
-            }
-        """)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("QDialog { background: transparent; }")
         self._init_ui()
 
     def _init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #d9d9d9;
+                border-radius: 10px;
+            }
+        """)
+
         layout = QVBoxLayout()
         layout.setSpacing(10)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -61,19 +70,19 @@ class RejectWithCorrectionsDialog(QDialog):
         layout.addWidget(title)
 
         # Описание
-        desc = QLabel(f'Стадия: {self.stage_name}\n\nВыберите файл с правками для загрузки на Яндекс.Диск:')
+        desc = QLabel(f'Стадия: {self.stage_name}\n\nВыберите файлы с правками для загрузки на Яндекс.Диск:')
         desc.setWordWrap(True)
         desc.setStyleSheet('font-size: 11px; color: #555;')
         layout.addWidget(desc)
 
         # Выбор файла
         file_row = QHBoxLayout()
-        self.file_label = QLabel('Файл не выбран')
+        self.file_label = QLabel('Файлы не выбраны')
         self.file_label.setStyleSheet('font-size: 10px; color: #999; padding: 4px 8px; border: 1px dashed #CCC; border-radius: 4px;')
         self.file_label.setMinimumHeight(28)
         file_row.addWidget(self.file_label, 1)
 
-        select_btn = QPushButton('Выбрать файл')
+        select_btn = QPushButton('Выбрать файлы')
         select_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F5F5F5;
@@ -147,25 +156,28 @@ class RejectWithCorrectionsDialog(QDialog):
         btn_row.addWidget(self.send_btn)
 
         layout.addLayout(btn_row)
-        self.setLayout(layout)
+        border_frame.setLayout(layout)
+        main_layout.addWidget(border_frame)
+        self.setLayout(main_layout)
 
     def _select_file(self):
         from PyQt5.QtWidgets import QFileDialog
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 'Выбрать файл правок', '',
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self, 'Выбрать файлы правок', '',
             'Все файлы (*.*);;Документы (*.pdf *.doc *.docx);;Изображения (*.png *.jpg *.jpeg)'
         )
-        if file_path:
-            self.selected_file = file_path
+        if file_paths:
+            self.selected_files = file_paths
             import os
-            self.file_label.setText(os.path.basename(file_path))
+            names = [os.path.basename(f) for f in file_paths]
+            self.file_label.setText(', '.join(names))
             self.file_label.setStyleSheet('font-size: 10px; color: #333; padding: 4px 8px; border: 1px solid #27AE60; border-radius: 4px; background-color: #E8F8F5;')
             self.send_btn.setEnabled(True)
             self.send_btn.setStyleSheet(self._send_btn_active_style)
 
     def _submit(self):
-        """Отправка: загрузка файла на ЯД (если выбран) и закрытие диалога"""
-        if self.selected_file:
+        """Отправка: загрузка файлов на ЯД (если выбраны) и закрытие диалога"""
+        if self.selected_files:
             self.send_btn.setEnabled(False)
             self.send_btn.setText('Загрузка...')
             from PyQt5.QtWidgets import QApplication
@@ -178,7 +190,6 @@ class RejectWithCorrectionsDialog(QDialog):
                 # Получаем путь к папке договора на ЯД
                 contract_folder = None
                 if self.contract_id:
-                    # Используем тот же метод что и CRMCard
                     try:
                         if self.data.is_multi_user:
                             contract = self.data.get_contract(self.contract_id)
@@ -202,11 +213,11 @@ class RejectWithCorrectionsDialog(QDialog):
                     if corrections_path:
                         self.corrections_folder_path = corrections_path
                         import os
-                        file_name = os.path.basename(self.selected_file)
-                        yandex_file_path = f"{corrections_path}/{file_name}"
-
-                        # Загружаем файл
-                        yd.upload_file(self.selected_file, yandex_file_path)
+                        # Загружаем все выбранные файлы
+                        for file_path in self.selected_files:
+                            file_name = os.path.basename(file_path)
+                            yandex_file_path = f"{corrections_path}/{file_name}"
+                            yd.upload_file(file_path, yandex_file_path)
                     else:
                         CustomMessageBox(self, 'Ошибка',
                             'Не удалось создать папку правок на Яндекс.Диске.',

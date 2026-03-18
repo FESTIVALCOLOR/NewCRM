@@ -755,6 +755,10 @@ async def recalculate_payments(
                     if rate and rate.rate_per_m2:
                         new_amount = area * float(rate.rate_per_m2)
 
+                # Для Аванса и Доплаты — делим пополам
+                if payment.payment_type in ('Аванс', 'Доплата') and new_amount > 0:
+                    new_amount = new_amount / 2
+
                 # Обновляем если сумма изменилась
                 if new_amount != payment.calculated_amount:
                     old_amount = payment.calculated_amount
@@ -763,7 +767,7 @@ async def recalculate_payments(
                     if not payment.is_manual:
                         payment.final_amount = new_amount
                     updated += 1
-                    logger.debug(f"RECALC Payment ID={payment.id}: {old_amount} -> {new_amount}, manual={payment.is_manual}")
+                    logger.debug(f"RECALC Payment ID={payment.id}: {old_amount} -> {new_amount}, type={payment.payment_type}, manual={payment.is_manual}")
 
             except Exception as e:
                 errors.append({'payment_id': payment.id, 'error': str(e)})

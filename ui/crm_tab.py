@@ -2212,10 +2212,18 @@ class CRMCard(QFrame):
                 substep_text = f"Ожидает решения: {current_substep}"
                 substep_color = '#8E44AD'
             elif workflow_status == 'act_signing':
-                substep_text = f"Подписание акта: {current_substep}"
+                substep_text = "Подписание акта"
                 substep_color = '#9B59B6'
             elif workflow_status == 'stage_completed':
-                substep_text = f"Этап завершён: {current_substep}"
+                # Показываем "Стадия X завершена" вместо имени подэтапа
+                stage_name = self.card_data.get('column_name', '')
+                substep_text = f"Стадия завершена"
+                if stage_name:
+                    # Извлекаем номер стадии из названия колонки
+                    import re
+                    stage_match = re.search(r'[Сс]тадия\s*(\d+)', stage_name)
+                    if stage_match:
+                        substep_text = f"Стадия {stage_match.group(1)} завершена"
                 substep_color = '#27AE60'
             substep_label = QLabel(substep_text)
             substep_label.setStyleSheet(
@@ -2411,12 +2419,15 @@ class CRMCard(QFrame):
                     deadline_layout.setContentsMargins(8, 3, 8, 3)
                     deadline_layout.setAlignment(Qt.AlignVCenter)
 
-                    # Иконка дедлайна
-                    deadline_icon = IconLoader.create_icon_button('deadline', '', '', icon_size=10)
-                    deadline_icon.setFixedSize(10, 10)
-                    deadline_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
-                    deadline_icon.setEnabled(False)
-                    deadline_layout.addWidget(deadline_icon, 0, Qt.AlignVCenter)
+                    # Иконка дедлайна (белая на цветном фоне, тёмная на сером)
+                    icon_color = '#FFFFFF' if text_color == 'white' else '#333333'
+                    deadline_icon_widget = QLabel()
+                    dl_icon = IconLoader.load_colored('deadline', icon_color, 10)
+                    if dl_icon and not dl_icon.isNull():
+                        deadline_icon_widget.setPixmap(dl_icon.pixmap(QSize(10, 10)))
+                    deadline_icon_widget.setFixedSize(10, 10)
+                    deadline_icon_widget.setStyleSheet('border: none; background: transparent; padding: 0;')
+                    deadline_layout.addWidget(deadline_icon_widget, 0, Qt.AlignVCenter)
 
                     # Текст дедлайна
                     deadline_text = QLabel(text)
@@ -2449,11 +2460,13 @@ class CRMCard(QFrame):
                     deadline_layout.setAlignment(Qt.AlignVCenter)
 
                     # Иконка дедлайна
-                    deadline_icon = IconLoader.create_icon_button('deadline', '', '', icon_size=10)
-                    deadline_icon.setFixedSize(10, 10)
-                    deadline_icon.setStyleSheet('border: none; background: transparent; padding: 0;')
-                    deadline_icon.setEnabled(False)
-                    deadline_layout.addWidget(deadline_icon, 0, Qt.AlignVCenter)
+                    deadline_icon_widget = QLabel()
+                    dl_icon = IconLoader.load_colored('deadline', '#333333', 10)
+                    if dl_icon and not dl_icon.isNull():
+                        deadline_icon_widget.setPixmap(dl_icon.pixmap(QSize(10, 10)))
+                    deadline_icon_widget.setFixedSize(10, 10)
+                    deadline_icon_widget.setStyleSheet('border: none; background: transparent; padding: 0;')
+                    deadline_layout.addWidget(deadline_icon_widget, 0, Qt.AlignVCenter)
 
                     # Текст дедлайна
                     deadline_text = QLabel(f"Дедлайн: {deadline_display}")
@@ -2521,7 +2534,9 @@ class CRMCard(QFrame):
                 draftsman_name = self.card_data.get('draftsman_name', 'N/A')
                 completed_info.append(f"Чертёжник {draftsman_name}")
             
-            if completed_info:
+            # Не показываем зелёную карточку "работа сдана" при подписании акта или завершении стадии
+            wf_status_card = self.card_data.get('workflow_status')
+            if completed_info and wf_status_card not in ('act_signing', 'stage_completed'):
                 work_done_label = QLabel(f"Работа сдана: {', '.join(completed_info)}\nТребуется проверка и перемещение на следующую стадию")
                 work_done_label.setWordWrap(True)
                 work_done_label.setStyleSheet('''
@@ -2675,7 +2690,7 @@ class CRMCard(QFrame):
                             max-height: 22px;
                         }
                     """)
-                    layout.addWidget(wait_label, 0, Qt.AlignCenter)
+                    layout.addWidget(wait_label, 0)
                 elif wf_status == 'client_approval':
                     # Клиент согласовывает — работа исполнителя принята
                     client_label = QLabel('Клиент согласовывает')
@@ -2693,7 +2708,7 @@ class CRMCard(QFrame):
                             max-height: 22px;
                         }
                     """)
-                    layout.addWidget(client_label, 0, Qt.AlignCenter)
+                    layout.addWidget(client_label, 0)
                 else:
                     waiting_btn = QPushButton('Работа сдана')
                     waiting_btn.setEnabled(False)
@@ -2714,7 +2729,13 @@ class CRMCard(QFrame):
                 buttons_added = True
             elif self.is_assigned_to_current_user(self.employee):
                 # ========== КНОПКА "СДАТЬ РАБОТУ" (SVG) ==========
-                submit_btn = IconLoader.create_icon_button('submit', 'Сдать работу', 'Отметить работу как выполненную', icon_size=12)
+                submit_btn = QPushButton('Сдать работу')
+                submit_icon = IconLoader.load_colored('submit', '#FFFFFF', 12)
+                if submit_icon and not submit_icon.isNull():
+                    submit_btn.setIcon(submit_icon)
+                    submit_btn.setIconSize(QSize(12, 12))
+                submit_btn.setToolTip('Отметить работу как выполненную')
+                submit_btn.setAccessibleName('Сдать работу')
                 submit_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #58D68D;
@@ -3476,10 +3497,10 @@ class CRMCard(QFrame):
                     )
                     choice = dlg.exec_choice()
                     if choice == 'close':
-                        self.data.workflow_close_stage(self.card_data['id'])
+                        self.data.workflow_advance_round(self.card_data['id'])
                         CustomMessageBox(
-                            self, 'Этап закрыт',
-                            f'Оставшиеся строки пропущены. Переход к следующему подэтапу.',
+                            self, 'Следующий подэтап',
+                            f'Переход к следующему подэтапу.',
                             'success'
                         ).exec_()
                     # При 'continue' — ничего не делаем, сервер уже продвинул substep

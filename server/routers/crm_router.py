@@ -2703,8 +2703,19 @@ async def workflow_close_stage(
             description=f'Этап закрыт: {stage_name} (пропуск оставшихся кругов)'
         ))
 
-        # Обновляем дедлайн для следующего этапа
-        _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+        # Устанавливаем дедлайн 1 рабочий день для подписания акта
+        try:
+            act_deadline = _add_business_days(datetime.utcnow().strftime('%Y-%m-%d'), 1)
+            act_deadline_str = act_deadline.strftime('%Y-%m-%d')
+            stage_execs = db.query(StageExecutor).filter(
+                StageExecutor.crm_card_id == card_id,
+                StageExecutor.stage_name == stage_name
+            ).all()
+            for se in stage_execs:
+                se.deadline = act_deadline_str
+                logger.info(f"[close-stage] act_signing deadline → {act_deadline_str} для executor {se.executor_id}")
+        except Exception as e:
+            logger.warning(f"Ошибка установки дедлайна act_signing: {e}")
 
         db.commit()
         return {"status": "stage_closed"}
@@ -2779,6 +2790,63 @@ async def workflow_sign_act(
 
         # Обновляем дедлайн для следующего этапа
         _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+
+        # === Обновляем report_month у Доплаты при завершении стадии ===
+        try:
+            current_month = datetime.utcnow().strftime('%Y-%m')
+            from database import Contract, Payment as PaymentModel
+            contract_for_pm = db.query(Contract).filter(Contract.id == contract_id).first()
+            if contract_for_pm:
+                # Находим исполнителя стадии
+                executor = db.query(StageExecutor).filter(
+                    StageExecutor.crm_card_id == card_id,
+                    StageExecutor.stage_name == stage_name,
+                ).first()
+                executor_id = executor.executor_id if executor else None
+
+                if executor_id:
+                    if contract_for_pm.project_type == 'Индивидуальный':
+                        # Доплата исполнителя — report_month = месяц подписания акта
+                        payments = db.query(PaymentModel).filter(
+                            PaymentModel.contract_id == contract_id,
+                            PaymentModel.employee_id == executor_id,
+                            PaymentModel.stage_name == stage_name,
+                            PaymentModel.payment_type == 'Доплата'
+                        ).all()
+                        for p in payments:
+                            p.report_month = current_month
+                            logger.info(f"[sign-act] report_month Доплата → {current_month}, payment={p.id}")
+
+                    elif contract_for_pm.project_type == 'Шаблонный':
+                        # Для шаблонных — Полная оплата
+                        sl = stage_name.lower()
+                        if 'концепция' in sl or 'дизайн' in sl or 'визуализац' in sl:
+                            executor_role_name = 'Дизайнер'
+                        else:
+                            executor_role_name = 'Чертёжник'
+
+                        can_set_month = True
+                        if executor_role_name == 'Чертёжник':
+                            accepted_count = db.query(StageExecutor).filter(
+                                StageExecutor.crm_card_id == card_id,
+                                StageExecutor.executor_id == executor_id,
+                                StageExecutor.submitted_date.isnot(None)
+                            ).count()
+                            if accepted_count < 2:
+                                can_set_month = False
+
+                        if can_set_month:
+                            payments = db.query(PaymentModel).filter(
+                                PaymentModel.contract_id == contract_id,
+                                PaymentModel.employee_id == executor_id,
+                                PaymentModel.stage_name == stage_name,
+                                PaymentModel.payment_type == 'Полная оплата'
+                            ).all()
+                            for p in payments:
+                                p.report_month = current_month
+                                logger.info(f"[sign-act] report_month Полная оплата → {current_month}, payment={p.id}")
+        except Exception as e:
+            logger.warning(f"[sign-act] Ошибка обновления report_month: {e}")
 
         db.commit()
 

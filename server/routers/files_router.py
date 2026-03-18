@@ -748,7 +748,8 @@ async def get_file_record(
         'yandex_path': file_record.yandex_path,
         'file_name': file_record.file_name,
         'file_order': file_record.file_order,
-        'variation': file_record.variation
+        'variation': file_record.variation,
+        'uploaded_by': file_record.uploaded_by
     }
 
 
@@ -762,6 +763,16 @@ async def delete_file_record(
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="Файл не найден")
+
+    # Проверка прав: исполнители могут удалять только свои файлы
+    manager_positions = {'Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер'}
+    user_position = current_user.position or ''
+    is_manager = user_position in manager_positions
+    if not is_manager and file_record.uploaded_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Вы можете удалять только загруженные вами файлы"
+        )
 
     # Удаляем файл с Яндекс.Диска (до удаления из БД!)
     yandex_path = file_record.yandex_path

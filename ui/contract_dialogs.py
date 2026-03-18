@@ -1376,7 +1376,8 @@ class ContractDialog(QDialog):
             buttons_layout.addWidget(self.save_btn)
             buttons_layout.addWidget(self.cancel_btn)
 
-            layout.addLayout(buttons_layout)
+            # Кнопки будут добавлены ПОСЛЕ scroll_area (фиксированные внизу)
+            self._buttons_layout = buttons_layout
         else:
             # ========== РЕЖИМ ПРОСМОТРА ==========
             close_btn = QPushButton('Закрыть')
@@ -1399,14 +1400,24 @@ class ContractDialog(QDialog):
             view_buttons_layout = QHBoxLayout()
             view_buttons_layout.addStretch()
             view_buttons_layout.addWidget(close_btn)
-            layout.addLayout(view_buttons_layout)
+            self._buttons_layout = view_buttons_layout
             # =====================================
-        
+
         # ========== ПОМЕЩАЕМ КОНТЕНТ В SCROLL AREA ==========
         content_widget.setLayout(layout)
         scroll_area.setWidget(content_widget)
-        
+
         border_layout.addWidget(scroll_area)
+
+        # ========== КНОПКИ ФИКСИРОВАНЫ ВНИЗУ (ВНЕ scroll_area) ==========
+        if hasattr(self, '_buttons_layout'):
+            buttons_container = QWidget()
+            buttons_container.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E0E0E0;")
+            buttons_container_layout = QVBoxLayout()
+            buttons_container_layout.setContentsMargins(20, 10, 20, 15)
+            buttons_container_layout.addLayout(self._buttons_layout)
+            buttons_container.setLayout(buttons_container_layout)
+            border_layout.addWidget(buttons_container)
         # ====================================================
         
         border_frame.setLayout(border_layout)

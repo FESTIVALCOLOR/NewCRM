@@ -1046,7 +1046,7 @@ class EmployeeDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
@@ -2224,7 +2224,7 @@ class EmployeeDialog(QDialog):
         border_frame.setStyleSheet("""
             QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: none;
+                border: 1px solid #d9d9d9;
                 border-radius: 10px;
             }
         """)
