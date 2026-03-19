@@ -346,6 +346,12 @@ class CardEditDialog(QDialog):
                 yd.create_folder(photo_path)
                 time.sleep(0.3)
 
+                # Расшариваем папки с правом записи (для замерщика)
+                yd.share_folder_writable(meas_path)
+                time.sleep(0.3)
+                yd.share_folder_writable(photo_path)
+                time.sleep(0.3)
+
                 # Получаем публичные ссылки
                 meas_link = yd.get_public_link(meas_path)
                 time.sleep(0.3)

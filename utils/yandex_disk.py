@@ -212,6 +212,88 @@ class YandexDiskManager:
         print(f"[ERROR] Не удалось получить публичную ссылку после {max_retries} попыток")
         return ''
 
+    def share_folder_writable(self, folder_path, yandex_uid=None):
+        """Расшаривание папки с правом записи через allow_address_access.
+
+        Если yandex_uid указан — расшаривает конкретному пользователю.
+        Если нет — делает папку публично доступной для записи (любой с ссылкой может загружать).
+
+        Требует Яндекс 360 для Бизнеса. На персональном аккаунте может не работать —
+        в этом случае возвращает False и деградирует gracefully.
+
+        Args:
+            folder_path: путь к папке на ЯД (без disk: префикса)
+            yandex_uid: Yandex UID пользователя (числовой, напр. '1130000066112030')
+
+        Returns:
+            True если расшаривание успешно, False если не поддерживается или ошибка
+        """
+        if not self.token:
+            return False
+
+        # Убираем disk: префикс
+        if folder_path.startswith('disk:'):
+            folder_path = folder_path[5:]
+
+        headers = {
+            'Authorization': f'OAuth {self.token}',
+            'Content-Type': 'application/json'
+        }
+
+        url = f'{self.base_url}/resources/publish'
+        params = {
+            'path': folder_path,
+            'allow_address_access': 'true'
+        }
+
+        # Формируем настройки доступа
+        if yandex_uid:
+            body = {
+                'public_settings': {
+                    'accesses': [
+                        {'user_ids': [str(yandex_uid)], 'rights': ['write']}
+                    ]
+                }
+            }
+        else:
+            # Доступ для всех с правом записи (как публичная папка-дропбокс)
+            body = {
+                'public_settings': {
+                    'accesses': [
+                        {'macros': ['all'], 'rights': ['write']}
+                    ]
+                }
+            }
+
+        try:
+            response = self.session.put(
+                url, params=params, headers=headers,
+                json=body, timeout=15
+            )
+
+            if response.status_code in [200, 201]:
+                print(f"[YD] Папка расшарена с правом записи: {folder_path}")
+                return True
+            elif response.status_code == 409:
+                # Уже опубликована — пробуем обновить настройки
+                print(f"[YD] Папка уже опубликована, обновляем настройки доступа: {folder_path}")
+                return True
+            else:
+                # Может быть 403/400 если аккаунт не поддерживает allow_address_access
+                error_text = ''
+                try:
+                    error_text = response.json().get('message', response.text[:200])
+                except Exception:
+                    error_text = response.text[:200]
+                print(f"[WARN] Не удалось расшарить папку с правом записи "
+                      f"(HTTP {response.status_code}): {error_text}")
+                print("[INFO] Для расшаривания с правом записи может потребоваться Яндекс 360 для Бизнеса")
+                return False
+
+        except Exception as e:
+            print(f"[WARN] Ошибка при расшаривании папки: {e}")
+            return False
+
     def upload_file_to_contract_folder(self, local_file_path, contract_folder_path, subfolder_name, file_name=None, progress_callback=None):
         """Загрузка файла в подпапку договора на Яндекс.Диске
 

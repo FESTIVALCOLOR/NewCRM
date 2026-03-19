@@ -219,7 +219,6 @@ class ContractsTab(QWidget):
         # Расторгнут → отменён
         if 'РАСТОРГНУТ' in status:
             item = QTableWidgetItem('Отменён')
-            item.setForeground(QColor('#C0392B'))
             return item
 
         # Проверяем только для завершённых статусов
@@ -235,11 +234,9 @@ class ContractsTab(QWidget):
 
         if final_paid:
             item = QTableWidgetItem('Оплачен')
-            item.setForeground(QColor('#27AE60'))
             return item
         else:
             item = QTableWidgetItem('К оплате')
-            item.setForeground(QColor('#E67E22'))
             return item
 
     def _get_row_color(self, contract, payment_text):
@@ -373,7 +370,7 @@ class ContractsTab(QWidget):
             # ========== КНОПКИ ДЕЙСТВИЙ (SVG) ==========
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
-            actions_layout.setContentsMargins(2, 0, 2, 0)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(1)
 
             # Иконка комментария (желтый восклицательный знак)
@@ -462,12 +459,15 @@ class ContractsTab(QWidget):
 
         self.contracts_table.setSortingEnabled(True)
 
-        # Восстанавливаем сохраненную сортировку
+        # Восстанавливаем сохраненную сортировку (по умолчанию — по дате, новые сверху)
         column, order = self.table_settings.get_sort_order('contracts')
         if column is not None and order is not None:
             from PyQt5.QtCore import Qt as QtCore
             sort_order = QtCore.AscendingOrder if order == 0 else QtCore.DescendingOrder
             self.contracts_table.sortItems(column, sort_order)
+        else:
+            # По умолчанию: столбец 1 (Дата), по убыванию (новые сверху)
+            self.contracts_table.sortItems(1, Qt.DescendingOrder)
 
         # Принудительно обновляем viewport чтобы cellWidget (кнопки действий) отрисовались
         QTimer.singleShot(0, self.contracts_table.viewport().update)
@@ -770,8 +770,8 @@ class ContractsTab(QWidget):
 
             actions_widget = QWidget()
             actions_layout = QHBoxLayout()
-            actions_layout.setContentsMargins(2, 0, 2, 0)
-            actions_layout.setSpacing(2)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            actions_layout.setSpacing(1)
 
             # Иконка комментария (желтый восклицательный знак)
             if contract.get('comments') and contract['comments'].strip():
