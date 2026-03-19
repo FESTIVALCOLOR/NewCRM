@@ -257,10 +257,15 @@ class ContractsTab(QWidget):
         last_col = self.contracts_table.columnCount() - 1
         for col in range(self.contracts_table.columnCount()):
             if col == last_col:
-                # Столбец кнопок действий — красим фон виджета напрямую
+                # Столбец кнопок действий — красим фон виджета через palette + autoFillBackground
+                # stylesheet недостаточно — QWidget по умолчанию не рисует свой фон
                 widget = self.contracts_table.cellWidget(row, col)
                 if widget:
-                    widget.setStyleSheet(f"background-color: {color};")
+                    widget.setAutoFillBackground(True)
+                    from PyQt5.QtGui import QPalette
+                    pal = widget.palette()
+                    pal.setColor(QPalette.Window, QColor(color))
+                    widget.setPalette(pal)
             else:
                 item = self.contracts_table.item(row, col)
                 if item:

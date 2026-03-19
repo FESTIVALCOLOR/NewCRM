@@ -190,18 +190,55 @@ class CardEditDialog(QDialog):
         encoded = quote(full_path, safe='/')
         return f"https://disk.yandex.ru/client/disk{encoded}"
 
-    def _copy_folder_link(self, folder_type):
-        """Копирование прямой ссылки на папку замера/фотофиксации в буфер обмена"""
+    def _share_folder(self, folder_type):
+        """Поделиться папкой замера/фотофиксации с замерщиком.
+        Открывает папку в браузере ЯД и копирует email замерщика в буфер обмена."""
         from PyQt5.QtWidgets import QApplication
+        import webbrowser
+
         contract_data = self._cached_contract or self.card_data.get('contract_data') or {}
         folder_path = contract_data.get('yandex_folder_path', '')
         if not folder_path:
             CustomMessageBox(self, 'Ошибка', 'Папка на Яндекс.Диске не найдена', 'warning').exec_()
             return
+
         subfolder = 'Замер' if folder_type == 'measurement' else 'Фотофиксация'
         link = self._build_yd_folder_url(folder_path, subfolder)
-        QApplication.clipboard().setText(link)
-        CustomMessageBox(self, 'Скопировано', 'Ссылка скопирована в буфер обмена', 'info').exec_()
+
+        # Получаем email замерщика
+        surveyor_email = ''
+        surveyor_name = ''
+        surveyor_id = self.card_data.get('surveyor_id')
+        if surveyor_id:
+            try:
+                emp = self.data.get_employee(surveyor_id)
+                if emp:
+                    surveyor_email = emp.get('email', '') or ''
+                    surveyor_name = emp.get('full_name', '') or ''
+            except Exception:
+                pass
+
+        # Открываем папку в браузере
+        webbrowser.open(link)
+
+        if surveyor_email:
+            QApplication.clipboard().setText(surveyor_email)
+            CustomMessageBox(
+                self, 'Поделиться папкой',
+                f'Папка "{subfolder}" открыта в браузере.\n\n'
+                f'Email замерщика ({surveyor_name}) скопирован в буфер:\n{surveyor_email}\n\n'
+                f'В Яндекс.Диске: ПКМ на папку -> Поделиться -> вставьте email -> Редактирование.',
+                'info'
+            ).exec_()
+        else:
+            QApplication.clipboard().setText(link)
+            CustomMessageBox(
+                self, 'Поделиться папкой',
+                f'Папка "{subfolder}" открыта в браузере.\n\n'
+                f'У замерщика не указан email — ссылка скопирована в буфер.\n\n'
+                f'Для права загрузки файлов: ПКМ на папку -> Поделиться -> email -> Редактирование.',
+                'warning'
+            ).exec_()
 
     def _sync_measurement_folder(self):
         """Автосинхронизация: проверяем наличие файлов в папке замера на ЯД.
@@ -344,12 +381,6 @@ class CardEditDialog(QDialog):
                 import time
                 time.sleep(0.3)
                 yd.create_folder(photo_path)
-                time.sleep(0.3)
-
-                # Расшариваем папки с правом записи (для замерщика)
-                yd.share_folder_writable(meas_path)
-                time.sleep(0.3)
-                yd.share_folder_writable(photo_path)
                 time.sleep(0.3)
 
                 # Получаем публичные ссылки
@@ -904,11 +935,11 @@ class CardEditDialog(QDialog):
             self.measurement_folder_link_label.setTextFormat(Qt.RichText)
             measurement_link_row.addWidget(self.measurement_folder_link_label, 1)
 
-            self.measurement_copy_btn = QPushButton('Копировать')
+            self.measurement_copy_btn = QPushButton('Поделиться')
             self.measurement_copy_btn.setStyleSheet(_copy_btn_style)
             self.measurement_copy_btn.setFixedHeight(28)
             self.measurement_copy_btn.setVisible(False)
-            self.measurement_copy_btn.clicked.connect(lambda: self._copy_folder_link('measurement'))
+            self.measurement_copy_btn.clicked.connect(lambda: self._share_folder('measurement'))
             measurement_link_row.addWidget(self.measurement_copy_btn)
             team_layout.addLayout(measurement_link_row)
 
@@ -927,11 +958,11 @@ class CardEditDialog(QDialog):
             self.photo_folder_link_label.setTextFormat(Qt.RichText)
             photo_link_row.addWidget(self.photo_folder_link_label, 1)
 
-            self.photo_copy_btn = QPushButton('Копировать')
+            self.photo_copy_btn = QPushButton('Поделиться')
             self.photo_copy_btn.setStyleSheet(_copy_btn_style)
             self.photo_copy_btn.setFixedHeight(28)
             self.photo_copy_btn.setVisible(False)
-            self.photo_copy_btn.clicked.connect(lambda: self._copy_folder_link('photo'))
+            self.photo_copy_btn.clicked.connect(lambda: self._share_folder('photo'))
             photo_link_row.addWidget(self.photo_copy_btn)
             team_layout.addLayout(photo_link_row)
 
