@@ -192,9 +192,11 @@ class CardEditDialog(QDialog):
 
     def _share_folder(self, folder_type):
         """Поделиться папкой замера/фотофиксации с замерщиком.
-        Открывает папку в браузере ЯД и копирует email замерщика в буфер обмена."""
+        Открывает РОДИТЕЛЬСКУЮ папку договора (где Замер/Фотофиксация видны как подпапки),
+        чтобы можно было ПКМ → Настроить доступ → email → Редактирование."""
         from PyQt5.QtWidgets import QApplication
         import webbrowser
+        from urllib.parse import quote
 
         contract_data = self._cached_contract or self.card_data.get('contract_data') or {}
         folder_path = contract_data.get('yandex_folder_path', '')
@@ -203,7 +205,14 @@ class CardEditDialog(QDialog):
             return
 
         subfolder = 'Замер' if folder_type == 'measurement' else 'Фотофиксация'
-        link = self._build_yd_folder_url(folder_path, subfolder)
+
+        # Открываем РОДИТЕЛЬСКУЮ папку договора (НЕ вовнутрь),
+        # чтобы папка Замер/Фотофиксация была видна и можно было ПКМ → Настроить доступ
+        clean_path = folder_path
+        if clean_path.startswith('disk:'):
+            clean_path = clean_path[5:]
+        encoded = quote(clean_path, safe='/')
+        parent_url = f"https://disk.yandex.ru/client/disk{encoded}"
 
         # Получаем email замерщика
         surveyor_email = ''
@@ -218,25 +227,27 @@ class CardEditDialog(QDialog):
             except Exception:
                 pass
 
-        # Открываем папку в браузере
-        webbrowser.open(link)
+        # Открываем родительскую папку в браузере
+        webbrowser.open(parent_url)
 
         if surveyor_email:
             QApplication.clipboard().setText(surveyor_email)
             CustomMessageBox(
                 self, 'Поделиться папкой',
-                f'Папка "{subfolder}" открыта в браузере.\n\n'
+                f'Открыта папка договора в Яндекс.Диске.\n'
                 f'Email замерщика ({surveyor_name}) скопирован в буфер:\n{surveyor_email}\n\n'
-                f'В Яндекс.Диске: ПКМ на папку -> Поделиться -> вставьте email -> Редактирование.',
+                f'ПКМ на папку "{subfolder}" -> Настроить доступ\n'
+                f'-> Вставить email -> Редактирование -> Пригласить',
                 'info'
             ).exec_()
         else:
-            QApplication.clipboard().setText(link)
             CustomMessageBox(
                 self, 'Поделиться папкой',
-                f'Папка "{subfolder}" открыта в браузере.\n\n'
-                f'У замерщика не указан email — ссылка скопирована в буфер.\n\n'
-                f'Для права загрузки файлов: ПКМ на папку -> Поделиться -> email -> Редактирование.',
+                f'Открыта папка договора в Яндекс.Диске.\n\n'
+                f'У замерщика не указан email в карточке сотрудника.\n'
+                f'Укажите email в разделе Сотрудники, затем:\n\n'
+                f'ПКМ на папку "{subfolder}" -> Настроить доступ\n'
+                f'-> Ввести email -> Редактирование -> Пригласить',
                 'warning'
             ).exec_()
 
