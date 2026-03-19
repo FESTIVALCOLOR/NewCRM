@@ -51,16 +51,33 @@ __all__ = [
 
 class ContractRowColorDelegate(QStyledItemDelegate):
     """Делегат для отрисовки цвета фона строк в таблице договоров.
-    Читает BackgroundRole из item и применяет через palette (как PaymentStatusDelegate в зарплатах)."""
+    Qt stylesheet перекрывает setBackground() — поэтому рисуем фон и текст вручную.
+    Цвет хранится в Qt.UserRole + 1 каждого item."""
 
     def paint(self, painter, option, index):
-        bg_data = index.data(Qt.BackgroundRole)
-        if bg_data:
-            color = bg_data.color() if hasattr(bg_data, 'color') else bg_data
-            if color.isValid() and color != QColor(0, 0, 0):
-                option.palette.setColor(option.palette.Base, color)
-                option.palette.setColor(option.palette.AlternateBase, color)
-        super().paint(painter, option, index)
+        color_hex = index.data(Qt.UserRole + 1)
+        if color_hex:
+            # Рисуем цветной фон вручную (stylesheet не перекроет)
+            painter.save()
+            painter.fillRect(option.rect, QColor(color_hex))
+
+            # Выделение при клике
+            if option.state & 0x4000:  # State_Selected
+                painter.fillRect(option.rect, QColor(0, 0, 0, 40))
+
+            # Текст
+            text = index.data(Qt.DisplayRole) or ''
+            fg = index.data(Qt.ForegroundRole)
+            if fg:
+                pen_color = fg.color() if hasattr(fg, 'color') else fg
+                painter.setPen(pen_color)
+            else:
+                painter.setPen(QColor('#000000'))
+            painter.drawText(option.rect.adjusted(6, 0, -6, 0),
+                             Qt.AlignLeft | Qt.AlignVCenter, str(text))
+            painter.restore()
+        else:
+            super().paint(painter, option, index)
 
 
 # ========== ОСНОВНАЯ ВКЛАДКА ДОГОВОРОВ ==========
@@ -237,20 +254,20 @@ class ContractsTab(QWidget):
         return None
 
     def _apply_row_color(self, row, color):
-        """Применение цвета ко всей строке через setBackground().
+        """Применение цвета ко всей строке через UserRole+1 (для делегата).
+        Qt stylesheet перекрывает setBackground(), поэтому делегат рисует фон через painter.fillRect().
         Не используем QLabel/setCellWidget — это ломает сортировку и двойной клик."""
-        bg = QBrush(QColor(color))
         last_col = self.contracts_table.columnCount() - 1
         for col in range(self.contracts_table.columnCount()):
             if col == last_col:
-                # Столбец кнопок действий — красим фон виджета
+                # Столбец кнопок действий — красим фон виджета напрямую
                 widget = self.contracts_table.cellWidget(row, col)
                 if widget:
                     widget.setStyleSheet(f"background-color: {color};")
             else:
                 item = self.contracts_table.item(row, col)
                 if item:
-                    item.setBackground(bg)
+                    item.setData(Qt.UserRole + 1, color)
 
     def load_contracts(self):
         """Загрузка списка договоров"""
