@@ -11,6 +11,7 @@ import tempfile
 import time
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -65,9 +66,25 @@ def load_messenger_settings(db: Session, force: bool = False) -> dict:
 
 def seed_default_messenger_scripts(db: Session):
     """Заполнить дефолтные скрипты если таблица пуста"""
-    existing = db.query(MessengerScript).count()
-    if existing > 0:
-        return
+    # Блокировка от параллельного seed из нескольких worker'ов
+    try:
+        db.execute(sa.text("SELECT pg_advisory_lock(777888999)"))
+    except Exception:
+        pass  # SQLite не поддерживает advisory locks
+    try:
+        existing = db.query(MessengerScript).count()
+        if existing > 0:
+            return
+        _do_seed_scripts(db)
+    finally:
+        try:
+            db.execute(sa.text("SELECT pg_advisory_unlock(777888999)"))
+        except Exception:
+            pass
+
+
+def _do_seed_scripts(db: Session):
+    """Внутренняя функция — создание дефолтных скриптов"""
 
     defaults = [
         # =============================================
