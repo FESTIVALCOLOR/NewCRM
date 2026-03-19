@@ -4190,7 +4190,7 @@ class MeasurementDialog(QDialog):
         self.files_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.files_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self.files_table.setColumnWidth(1, 80)
-        self.files_table.setColumnWidth(2, 110)
+        self.files_table.setColumnWidth(2, 130)
         self.files_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.files_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.files_table.verticalHeader().setVisible(False)
@@ -4221,11 +4221,13 @@ class MeasurementDialog(QDialog):
         link_page_layout.addLayout(upload_row)
 
         self.link_progress = QProgressBar()
-        self.link_progress.setFixedHeight(6)
+        self.link_progress.setFixedHeight(16)
         self.link_progress.setVisible(False)
+        self.link_progress.setTextVisible(True)
         self.link_progress.setStyleSheet('''
-            QProgressBar { border: none; background-color: #F0F0F0; border-radius: 3px; }
-            QProgressBar::chunk { background-color: #1677FF; border-radius: 3px; }
+            QProgressBar { border: none; background-color: #F0F0F0; border-radius: 4px;
+                font-size: 10px; text-align: center; color: #333; }
+            QProgressBar::chunk { background-color: #1677FF; border-radius: 4px; }
         ''')
         link_page_layout.addWidget(self.link_progress)
         self.mode_stack.addWidget(link_page)
@@ -4696,16 +4698,32 @@ class MeasurementDialog(QDialog):
             name_item = QTableWidgetItem(name)
             size_str = f'{size / 1024 / 1024:.1f} МБ' if size > 1024 * 1024 else f'{size / 1024:.0f} КБ'
             size_item = QTableWidgetItem(size_str)
-            dest_item = QTableWidgetItem(dest)
-
-            if dest == 'Замер':
-                dest_item.setForeground(QColor('#1677FF'))
-            else:
-                dest_item.setForeground(QColor('#52C41A'))
 
             self.files_table.setItem(i, 0, name_item)
             self.files_table.setItem(i, 1, size_item)
-            self.files_table.setItem(i, 2, dest_item)
+
+            # Комбобокс для выбора назначения (Замер / Фотофиксация)
+            dest_combo = QComboBox()
+            dest_combo.addItems(['Фотофиксация', 'Замер'])
+            dest_combo.setCurrentText(dest)
+
+            def _apply_dest_style(cb, text):
+                color = '#1677FF' if text == 'Замер' else '#52C41A'
+                cb.setStyleSheet(f'''
+                    QComboBox {{
+                        border: none; background: transparent; font-size: 11px;
+                        padding: 2px 4px; color: {color};
+                    }}
+                    QComboBox:hover {{ background-color: #F5F5F5; border-radius: 3px; }}
+                    QComboBox::drop-down {{ border: none; width: 16px; }}
+                    QComboBox::down-arrow {{ image: none; border: none; width: 0; }}
+                    QComboBox QAbstractItemView {{ font-size: 11px; }}
+                ''')
+
+            _apply_dest_style(dest_combo, dest)
+            dest_combo.currentTextChanged.connect(
+                lambda text, cb=dest_combo: _apply_dest_style(cb, text))
+            self.files_table.setCellWidget(i, 2, dest_combo)
 
         if files:
             self.link_upload_btn.setEnabled(True)
@@ -4747,6 +4765,13 @@ class MeasurementDialog(QDialog):
         files_copy = list(self.link_files)
         public_url = self._public_url
 
+        # Собираем назначения из combobox-ов (main thread)
+        file_destinations = []
+        for i in range(len(files_copy)):
+            combo = self.files_table.cellWidget(i, 2)
+            dest = combo.currentText() if combo else self._classify_file(files_copy[i].get('name', ''))
+            file_destinations.append(dest)
+
         def upload_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
@@ -4764,7 +4789,7 @@ class MeasurementDialog(QDialog):
                 for i, f in enumerate(files_copy):
                     name = f.get('name', '')
                     file_path_in_folder = f.get('path', f'/{name}')
-                    dest = self._classify_file(name)
+                    dest = file_destinations[i]
                     dest_path = meas_path if dest == 'Замер' else photo_path
 
                     self.link_upload_progress.emit(i + 1, name)
