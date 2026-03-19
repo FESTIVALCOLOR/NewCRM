@@ -877,9 +877,10 @@ class CardEditDialog(QDialog):
                 }
             '''
             _copy_btn_style = '''
-                QPushButton { background-color: #FFFFFF; color: #333333; border: 1px solid #CCCCCC;
-                    border-radius: 4px; padding: 2px 8px; font-size: 10px; }
-                QPushButton:hover { background-color: #F0F0F0; border-color: #999999; }
+                QPushButton { background: #ffffff; color: #333333; border: 1px solid #d9d9d9;
+                    border-radius: 4px; padding: 0px 14px; font-size: 12px;
+                    min-height: 0px; max-height: 26px; }
+                QPushButton:hover { background: #F5F5F5; border-color: #c0c0c0; }
             '''
 
             # Папка замера
@@ -899,7 +900,7 @@ class CardEditDialog(QDialog):
 
             self.measurement_copy_btn = QPushButton('Копировать')
             self.measurement_copy_btn.setStyleSheet(_copy_btn_style)
-            self.measurement_copy_btn.setFixedSize(80, 28)
+            self.measurement_copy_btn.setFixedHeight(28)
             self.measurement_copy_btn.setVisible(False)
             self.measurement_copy_btn.clicked.connect(lambda: self._copy_folder_link('measurement'))
             measurement_link_row.addWidget(self.measurement_copy_btn)
@@ -922,7 +923,7 @@ class CardEditDialog(QDialog):
 
             self.photo_copy_btn = QPushButton('Копировать')
             self.photo_copy_btn.setStyleSheet(_copy_btn_style)
-            self.photo_copy_btn.setFixedSize(80, 28)
+            self.photo_copy_btn.setFixedHeight(28)
             self.photo_copy_btn.setVisible(False)
             self.photo_copy_btn.clicked.connect(lambda: self._copy_folder_link('photo'))
             photo_link_row.addWidget(self.photo_copy_btn)

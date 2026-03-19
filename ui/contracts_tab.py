@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, QSize, pyqtSignal, QTimer
 from PyQt5.QtGui import QValidator, QDesktopServices, QCursor, QColor, QBrush
+from PyQt5.QtWidgets import QStyledItemDelegate
 from PyQt5.QtCore import QUrl
 from database.db_manager import DatabaseManager
 from utils.data_access import DataAccess
@@ -46,6 +47,20 @@ __all__ = [
     'FormattedAreaInput',
     'FormattedPeriodInput',
 ]
+
+
+class ContractRowColorDelegate(QStyledItemDelegate):
+    """Делегат для отрисовки цвета фона строк в таблице договоров.
+    Читает BackgroundRole из item и применяет через palette (как PaymentStatusDelegate в зарплатах)."""
+
+    def paint(self, painter, option, index):
+        bg_data = index.data(Qt.BackgroundRole)
+        if bg_data:
+            color = bg_data.color() if hasattr(bg_data, 'color') else bg_data
+            if color.isValid() and color != QColor(0, 0, 0):
+                option.palette.setColor(option.palette.Base, color)
+                option.palette.setColor(option.palette.AlternateBase, color)
+        super().paint(painter, option, index)
 
 
 # ========== ОСНОВНАЯ ВКЛАДКА ДОГОВОРОВ ==========
@@ -143,6 +158,8 @@ class ContractsTab(QWidget):
         self.contracts_table.setEditTriggers(QTableWidget.NoEditTriggers)
         # НЕ используем setAlternatingRowColors, чтобы можно было окрашивать строки вручную (как в зарплатах)
         self.contracts_table.setAlternatingRowColors(False)
+        # Делегат для корректной отрисовки фона строк (как PaymentStatusDelegate в зарплатах)
+        self.contracts_table.setItemDelegate(ContractRowColorDelegate())
 
         # Добавляем контекстное меню для копирования
         self.contracts_table.setContextMenuPolicy(Qt.CustomContextMenu)
