@@ -257,12 +257,11 @@ class ContractsTab(QWidget):
         last_col = self.contracts_table.columnCount() - 1
         for col in range(self.contracts_table.columnCount()):
             if col == last_col:
-                # Столбец кнопок действий — plain QWidget по умолчанию не рисует фон.
-                # WA_StyledBackground заставляет QWidget рисовать background из stylesheet.
+                # Столбец кнопок действий — QFrame (вместо QWidget) надёжно рисует фон.
+                # QFrame.paintEvent() рисует background из stylesheet автоматически.
                 widget = self.contracts_table.cellWidget(row, col)
                 if widget:
-                    widget.setAttribute(Qt.WA_StyledBackground, True)
-                    widget.setStyleSheet(f"background-color: {color};")
+                    widget.setStyleSheet(f"QFrame {{ background-color: {color}; }}")
             else:
                 item = self.contracts_table.item(row, col)
                 if item:
@@ -370,7 +369,9 @@ class ContractsTab(QWidget):
             self.contracts_table.setItem(row, 10, payment_item)
 
             # ========== КНОПКИ ДЕЙСТВИЙ (SVG) ==========
-            actions_widget = QWidget()
+            # QFrame вместо QWidget — QFrame надёжно рисует background из stylesheet
+            actions_widget = QFrame()
+            actions_widget.setFrameStyle(QFrame.NoFrame)
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(1)
@@ -770,7 +771,8 @@ class ContractsTab(QWidget):
             payment_item = self._get_payment_status_item(contract)
             self.contracts_table.setItem(row, 10, payment_item)
 
-            actions_widget = QWidget()
+            actions_widget = QFrame()
+            actions_widget.setFrameStyle(QFrame.NoFrame)
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(1)
