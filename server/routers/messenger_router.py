@@ -1672,8 +1672,11 @@ async def send_files_to_chat(
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(doc["file_name"])[1]) as tmp:
                     yd.download_file(doc["yandex_path"], tmp.name)
-                    msg_id = await tg.send_document(
-                        chat.telegram_chat_id, tmp.name, caption=doc["file_name"]
+                    with open(tmp.name, 'rb') as f:
+                        file_bytes = f.read()
+                    msg_id = await tg.send_document_from_bytes(
+                        chat.telegram_chat_id, file_bytes,
+                        filename=doc["file_name"], caption=doc["file_name"]
                     )
                     if msg_id:
                         sent_ids.append(msg_id)

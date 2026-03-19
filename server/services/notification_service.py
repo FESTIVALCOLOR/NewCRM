@@ -354,9 +354,12 @@ async def trigger_messenger_notification(
                     delete=False, suffix=os.path.splitext(memo_filename)[1]
                 ) as tmp:
                     yd.download_file(script.memo_file_path, tmp.name)
-                    await tg.send_document(
+                    with open(tmp.name, 'rb') as f:
+                        file_bytes = f.read()
+                    await tg.send_document_from_bytes(
                         chat_id=chat.telegram_chat_id,
-                        file_path=tmp.name,
+                        file_bytes=file_bytes,
+                        filename=memo_filename,
                         caption=memo_filename,
                     )
                 os.unlink(tmp.name)
@@ -528,9 +531,12 @@ async def trigger_supervision_notification(
                     delete=False, suffix=os.path.splitext(memo_filename)[1]
                 ) as tmp:
                     yd.download_file(script.memo_file_path, tmp.name)
-                    await tg.send_document(
+                    with open(tmp.name, 'rb') as f:
+                        file_bytes = f.read()
+                    await tg.send_document_from_bytes(
                         chat_id=chat.telegram_chat_id,
-                        file_path=tmp.name,
+                        file_bytes=file_bytes,
+                        filename=memo_filename,
                         caption=memo_filename,
                     )
                 os.unlink(tmp.name)
