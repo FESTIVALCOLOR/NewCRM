@@ -55,6 +55,7 @@ CRM-система для интерьерного бюро с двухрежи�
 13. **Border-radius диалогов** — ВСЕ виджеты внутри `borderFrame` ДОЛЖНЫ иметь соответствующий `border-radius`: title_bar → `border-top-left/right-radius: 10px`, нижний контейнер (кнопки/scroll_area) → `border-bottom-left/right-radius: 10px`. Без этого фон вылазит за углы.
 14. **setAlternatingRowColors(False)** — если таблица использует ручную окраску строк через `setBackground()`, альтернирующие цвета ДОЛЖНЫ быть отключены (иначе Qt перезатирает фон)
 15. **ЯД URL формат** — `yandex_folder_path` начинается с `disk:` (напр. `disk:/CRM/Проекты/...`). Для URL: убрать `disk:` prefix, закодировать кириллицу через `quote(path, safe='/')`, формат: `https://disk.yandex.ru/client/disk{encoded_path}`
+16. **Выравнивание кнопок со строкой/блоком** — `setFixedHeight(28)` + CSS `max-height: 26px; padding: 0px 14px; font-size: 12px; border: 1px solid #d9d9d9; border-radius: 4px;` (паттерн из employee_reports_tab.py). НЕ использовать `setFixedSize` — ширина кнопки должна определяться текстом. Делегат для окраски строк: `QStyledItemDelegate.paint()` + `option.palette.setColor(Base/AlternateBase)` (как PaymentStatusDelegate)
 
 > Подробности: [docs/02-project-rules.md](../docs/02-project-rules.md)
 
