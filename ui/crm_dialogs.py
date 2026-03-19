@@ -3996,6 +3996,12 @@ class MeasurementDialog(QDialog):
     # Сигналы для межпоточного взаимодействия
     upload_completed = pyqtSignal(str, str, str, int)  # public_link, yandex_path, file_name, contract_id
     upload_error = pyqtSignal(str)  # error_msg
+    # Сигналы для загрузки по ссылке (threading.Thread → main thread)
+    files_fetched = pyqtSignal(object, str)  # files_list, public_url
+    fetch_failed = pyqtSignal(str)  # error_msg
+    link_upload_progress = pyqtSignal(int, str)  # step, filename
+    link_upload_finished = pyqtSignal(int, object, str, int)  # count, errors, meas_link, contract_id
+    link_upload_failed = pyqtSignal(str)  # error_msg
 
     def __init__(self, parent, card_id, employee=None, api_client=None):
         super().__init__(parent)
@@ -4011,6 +4017,12 @@ class MeasurementDialog(QDialog):
         # Подключаем сигналы к обработчикам
         self.upload_completed.connect(self._on_image_uploaded)
         self.upload_error.connect(self._on_image_upload_error)
+        # Сигналы загрузки по ссылке
+        self.files_fetched.connect(self._display_fetched_files)
+        self.fetch_failed.connect(self._on_fetch_error)
+        self.link_upload_progress.connect(self._update_link_progress)
+        self.link_upload_finished.connect(self._on_link_upload_done)
+        self.link_upload_failed.connect(self._on_link_upload_error)
 
         # Убираем стандартную рамку окна
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -4645,10 +4657,12 @@ class MeasurementDialog(QDialog):
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
                 items = yd.get_public_folder_contents(public_url)
-                files = [f for f in items if f.get('type') == 'file']
-                QTimer.singleShot(0, lambda: self._display_fetched_files(files, public_url))
+                # Все элементы кроме папок (dir)
+                files = [f for f in items if f.get('type') != 'dir']
+                print(f"[LINK] Всего: {len(items)}, файлов: {len(files)}")
+                self.files_fetched.emit(files, public_url)
             except Exception as e:
-                QTimer.singleShot(0, lambda: self._on_fetch_error(str(e)))
+                self.fetch_failed.emit(str(e))
 
         threading.Thread(target=fetch_thread, daemon=True).start()
 
@@ -4753,8 +4767,7 @@ class MeasurementDialog(QDialog):
                     dest = self._classify_file(name)
                     dest_path = meas_path if dest == 'Замер' else photo_path
 
-                    QTimer.singleShot(0, lambda idx=i + 1, n=name:
-                        self._update_link_progress(idx, n))
+                    self.link_upload_progress.emit(i + 1, name)
 
                     # Скачиваем во временный файл
                     tmp_path = os.path.join(tempfile.gettempdir(), f'crm_upload_{name}')
@@ -4791,13 +4804,12 @@ class MeasurementDialog(QDialog):
                 if update_data:
                     self.data.update_contract(contract_id, update_data)
 
-                QTimer.singleShot(0, lambda: self._on_link_upload_done(
-                    uploaded_count, errors, meas_link, contract_id))
+                self.link_upload_finished.emit(uploaded_count, errors, meas_link, contract_id)
 
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                QTimer.singleShot(0, lambda: self._on_link_upload_error(str(e)))
+                self.link_upload_failed.emit(str(e))
 
         threading.Thread(target=upload_thread, daemon=True).start()
 
