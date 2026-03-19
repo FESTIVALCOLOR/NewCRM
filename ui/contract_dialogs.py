@@ -3605,7 +3605,10 @@ class ContractDialog(QDialog):
         d_layout.setSpacing(12)
 
         date_edit = CustomDateEdit()
+        date_edit.setCalendarPopup(True)
+        add_today_button_to_dateedit(date_edit)
         date_edit.setDate(QDate.currentDate())
+        date_edit.setDisplayFormat('dd.MM.yyyy')
         d_layout.addWidget(date_edit)
 
         btn_row = QHBoxLayout()
@@ -4274,14 +4277,20 @@ class ContractDialog(QDialog):
         # Индикатор загрузки
         from PyQt5.QtWidgets import QApplication
         is_new = not self.contract_data
+        progress = None
         if is_new:
             self.save_btn.setEnabled(False)
             if hasattr(self, 'create_btn'):
                 self.create_btn.setEnabled(False)
-            # Обновляем заголовок на title_bar
-            if hasattr(self, 'title_bar') and hasattr(self.title_bar, '_title_label'):
-                self._original_title = self.title_bar._title_label.text()
-                self.title_bar._title_label.setText('Создание договора...')
+            # Показываем прогресс-диалог
+            progress = create_progress_dialog(
+                "Создание договора",
+                "Создание договора, подождите...",
+                None,  # без кнопки отмены
+                0,     # indeterminate
+                self
+            )
+            progress.show()
             QApplication.processEvents()
 
         try:
@@ -4428,17 +4437,13 @@ class ContractDialog(QDialog):
                     'error'
                 ).exec_()
         finally:
-            # Восстанавливаем кнопки и заголовок после операции
+            # Восстанавливаем кнопки и закрываем прогресс-диалог
             if is_new:
                 self.save_btn.setEnabled(True)
                 if hasattr(self, 'create_btn'):
                     self.create_btn.setEnabled(True)
-                if hasattr(self, 'title_bar') and hasattr(self.title_bar, '_title_label'):
-                    original = getattr(self, '_original_title', 'Добавление договора')
-                    if self.contract_data:
-                        self.title_bar._title_label.setText('Редактирование договора')
-                    else:
-                        self.title_bar._title_label.setText(original)
+                if progress:
+                    progress.close()
                 
 class ContractSearchDialog(QDialog):
     """Диалог поиска договоров"""

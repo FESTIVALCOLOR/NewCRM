@@ -1471,6 +1471,9 @@ class MessengerAdminDialog(QDialog):
             yandex_path = f"/CRM/memo/{file_name}"
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                # Создаём директории на ЯД если не существуют
+                yd.create_folder("/CRM")
+                yd.create_folder("/CRM/memo")
                 yd.upload_file(memo_path, yandex_path)
                 memo_server_path = yandex_path
                 logger.info(f"PDF-памятка загружена на ЯД: {yandex_path}")
