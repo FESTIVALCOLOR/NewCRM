@@ -4,7 +4,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QScrollArea, QFrame, QDialog, QFormLayout,
                              QLineEdit, QComboBox, QDateEdit,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
-                             QTableWidgetItem, QTabWidget, QTextEdit)
+                             QTableWidgetItem, QTabWidget, QTextEdit,
+                             QStackedWidget, QRadioButton, QProgressBar)
 from ui.custom_dateedit import CustomDateEdit
 from PyQt5.QtCore import Qt, QDate, pyqtSignal, QUrl, QTimer
 from PyQt5.QtGui import QColor, QPixmap, QFont
@@ -4004,6 +4005,8 @@ class MeasurementDialog(QDialog):
         self.db = self.data.db
         self.api_client = self.data.api_client
         self.uploaded_image_link = None
+        self.link_files = []  # Файлы из публичной ссылки
+        self._public_url = ''  # Текущая публичная ссылка
 
         # Подключаем сигналы к обработчикам
         self.upload_completed.connect(self._on_image_uploaded)
@@ -4079,34 +4082,40 @@ class MeasurementDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        # Виджет загрузки изображения замера
+        # === Переключатель режима загрузки ===
+        mode_layout = QHBoxLayout()
+        mode_layout.setSpacing(16)
+        self.mode_manual = QRadioButton('Загрузить файл')
+        self.mode_link = QRadioButton('По ссылке от замерщика')
+        self.mode_manual.setChecked(True)
+        radio_style = 'QRadioButton { font-size: 12px; } QRadioButton::indicator { width: 14px; height: 14px; }'
+        self.mode_manual.setStyleSheet(radio_style)
+        self.mode_link.setStyleSheet(radio_style)
+        mode_layout.addWidget(self.mode_manual)
+        mode_layout.addWidget(self.mode_link)
+        mode_layout.addStretch()
+        layout.addLayout(mode_layout)
+
+        self.mode_stack = QStackedWidget()
+
+        # --- Страница 1: ручная загрузка файла ---
+        manual_page = QWidget()
+        manual_layout = QVBoxLayout(manual_page)
+        manual_layout.setContentsMargins(0, 0, 0, 0)
+        manual_layout.setSpacing(8)
+
         file_label = QLabel('Изображение замера:')
-        layout.addWidget(file_label)
+        manual_layout.addWidget(file_label)
 
         file_row = QHBoxLayout()
         file_row.setSpacing(10)
-
         self.file_label_display = QLabel('Не загружено')
         self.file_label_display.setFixedHeight(28)
         self.file_label_display.setStyleSheet('''
-            QLabel {
-                background-color: #F8F9FA;
-                padding: 0px 8px;
-                border: 1px solid #E0E0E0;
-                border-radius: 4px;
-                font-size: 11px;
-                max-width: 300px;
-                max-height: 28px;
-                min-height: 28px;
-            }
-            QLabel a {
-                color: #2C3E50;
-                text-decoration: none;
-            }
-            QLabel a:hover {
-                color: #2980B9;
-                text-decoration: underline;
-            }
+            QLabel { background-color: #F8F9FA; padding: 0px 8px; border: 1px solid #E0E0E0;
+                border-radius: 4px; font-size: 11px; max-width: 300px; max-height: 28px; min-height: 28px; }
+            QLabel a { color: #2C3E50; text-decoration: none; }
+            QLabel a:hover { color: #2980B9; text-decoration: underline; }
         ''')
         self.file_label_display.setWordWrap(False)
         self.file_label_display.setOpenExternalLinks(True)
@@ -4115,29 +4124,104 @@ class MeasurementDialog(QDialog):
 
         upload_btn = QPushButton('Загрузить')
         upload_btn.setFixedWidth(120)
-        upload_btn.setFixedHeight(28)  # Выравниваем с полем ввода
+        upload_btn.setFixedHeight(28)
         upload_btn.clicked.connect(self.upload_image)
         upload_btn.setStyleSheet('''
-            QPushButton {
-                background-color: #E0E0E0;
-                color: #333333;
-                border: none;
-                padding: 0px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-                max-height: 28px;
-                min-height: 28px;
-            }
-            QPushButton:hover {
-                background-color: #D0D0D0;
-            }
-            QPushButton:pressed {
-                background-color: #C0C0C0;
-            }
+            QPushButton { background-color: #E0E0E0; color: #333333; border: none;
+                padding: 0px 12px; border-radius: 4px; font-weight: bold; max-height: 28px; min-height: 28px; }
+            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:pressed { background-color: #C0C0C0; }
         ''')
         file_row.addWidget(upload_btn)
+        manual_layout.addLayout(file_row)
+        manual_layout.addStretch()
+        self.mode_stack.addWidget(manual_page)
 
-        layout.addLayout(file_row)
+        # --- Страница 2: загрузка по ссылке ---
+        link_page = QWidget()
+        link_page_layout = QVBoxLayout(link_page)
+        link_page_layout.setContentsMargins(0, 0, 0, 0)
+        link_page_layout.setSpacing(6)
+
+        link_label = QLabel('Ссылка на папку замерщика:')
+        link_page_layout.addWidget(link_label)
+
+        link_row = QHBoxLayout()
+        link_row.setSpacing(8)
+        self.link_input = QLineEdit()
+        self.link_input.setPlaceholderText('Вставьте публичную ссылку ЯД или Google Drive...')
+        self.link_input.setFixedHeight(28)
+        self.link_input.setStyleSheet('''
+            QLineEdit { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+            QLineEdit:focus { border-color: #4096FF; }
+        ''')
+        link_row.addWidget(self.link_input, 1)
+
+        fetch_btn = QPushButton('Получить файлы')
+        fetch_btn.setFixedHeight(28)
+        fetch_btn.setFixedWidth(130)
+        fetch_btn.clicked.connect(self._fetch_files_from_link)
+        fetch_btn.setStyleSheet('''
+            QPushButton { background-color: #E0E0E0; color: #333333; border: none;
+                padding: 0px 12px; border-radius: 4px; font-weight: bold; max-height: 28px; min-height: 28px; }
+            QPushButton:hover { background-color: #D0D0D0; }
+        ''')
+        link_row.addWidget(fetch_btn)
+        link_page_layout.addLayout(link_row)
+
+        # Таблица файлов с распределением
+        self.files_table = QTableWidget()
+        self.files_table.setColumnCount(3)
+        self.files_table.setHorizontalHeaderLabels(['Файл', 'Размер', 'Назначение'])
+        self.files_table.horizontalHeader().setStretchLastSection(False)
+        self.files_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.files_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.files_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.files_table.setColumnWidth(1, 80)
+        self.files_table.setColumnWidth(2, 110)
+        self.files_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.files_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.files_table.verticalHeader().setVisible(False)
+        self.files_table.setMinimumHeight(120)
+        self.files_table.setStyleSheet('''
+            QTableWidget { border: 1px solid #d9d9d9; border-radius: 4px; font-size: 11px; }
+            QHeaderView::section { background-color: #fafafa; border: none;
+                border-bottom: 1px solid #e6e6e6; padding: 4px; font-size: 11px; }
+        ''')
+        link_page_layout.addWidget(self.files_table)
+
+        upload_row = QHBoxLayout()
+        self.link_status = QLabel('')
+        self.link_status.setStyleSheet('font-size: 11px; color: #666;')
+        upload_row.addWidget(self.link_status, 1)
+
+        self.link_upload_btn = QPushButton('Загрузить на Яндекс.Диск')
+        self.link_upload_btn.setFixedHeight(28)
+        self.link_upload_btn.setEnabled(False)
+        self.link_upload_btn.clicked.connect(self._upload_from_link)
+        self.link_upload_btn.setStyleSheet('''
+            QPushButton { background-color: #1677FF; color: white; border: none;
+                padding: 0px 16px; border-radius: 4px; font-weight: bold; max-height: 28px; min-height: 28px; }
+            QPushButton:hover { background-color: #0958D9; }
+            QPushButton:disabled { background-color: #BAD7FF; color: #FFFFFF; }
+        ''')
+        upload_row.addWidget(self.link_upload_btn)
+        link_page_layout.addLayout(upload_row)
+
+        self.link_progress = QProgressBar()
+        self.link_progress.setFixedHeight(6)
+        self.link_progress.setVisible(False)
+        self.link_progress.setStyleSheet('''
+            QProgressBar { border: none; background-color: #F0F0F0; border-radius: 3px; }
+            QProgressBar::chunk { background-color: #1677FF; border-radius: 3px; }
+        ''')
+        link_page_layout.addWidget(self.link_progress)
+        self.mode_stack.addWidget(link_page)
+
+        layout.addWidget(self.mode_stack)
+
+        # Переключение режимов
+        self.mode_manual.toggled.connect(self._on_mode_changed)
 
         # Замерщик
         surveyor_label = QLabel('Замерщик:')
@@ -4232,7 +4316,8 @@ class MeasurementDialog(QDialog):
         self.setLayout(main_layout)
 
         # Размер окна
-        self.setFixedSize(500, 350)
+        # Размер зависит от режима: ручная загрузка — компактно, по ссылке — больше
+        self.setFixedSize(500, 380)
 
     def load_existing_measurement(self):
         """Загрузка существующих данных о замере из договора"""
@@ -4515,10 +4600,249 @@ class MeasurementDialog(QDialog):
 
         CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки изображения: {error_msg}', 'error').exec_()
 
+    # === Методы режима загрузки по ссылке ===
+
+    def _on_mode_changed(self, manual_checked):
+        """Переключение между ручной загрузкой и загрузкой по ссылке."""
+        if manual_checked:
+            self.mode_stack.setCurrentIndex(0)
+            self.setFixedSize(500, 380)
+        else:
+            self.mode_stack.setCurrentIndex(1)
+            self.setFixedSize(560, 540)
+
+    def _classify_file(self, filename):
+        """Определить назначение файла: Замер или Фотофиксация."""
+        name_lower = filename.lower()
+        if 'замер' in name_lower or 'зам_' in name_lower or 'обмер' in name_lower:
+            return 'Замер'
+        return 'Фотофиксация'
+
+    def _fetch_files_from_link(self):
+        """Получить список файлов из публичной ссылки."""
+        url = self.link_input.text().strip()
+        if not url:
+            CustomMessageBox(self, 'Ошибка', 'Вставьте ссылку на папку замерщика', 'warning').exec_()
+            return
+
+        self.link_status.setText('Получение списка файлов...')
+        self.files_table.setRowCount(0)
+        self.link_upload_btn.setEnabled(False)
+        self.link_files = []
+
+        if 'yandex' in url or 'disk.yandex' in url or 'yadi.sk' in url:
+            self._fetch_yandex_files(url)
+        elif 'drive.google' in url:
+            self._fetch_google_drive_files(url)
+        else:
+            CustomMessageBox(self, 'Ошибка',
+                'Поддерживаются ссылки Яндекс.Диска и Google Drive', 'warning').exec_()
+            self.link_status.setText('')
+
+    def _fetch_yandex_files(self, public_url):
+        """Получить файлы из публичной папки ЯД."""
+        def fetch_thread():
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                items = yd.get_public_folder_contents(public_url)
+                files = [f for f in items if f.get('type') == 'file']
+                QTimer.singleShot(0, lambda: self._display_fetched_files(files, public_url))
+            except Exception as e:
+                QTimer.singleShot(0, lambda: self._on_fetch_error(str(e)))
+
+        threading.Thread(target=fetch_thread, daemon=True).start()
+
+    def _fetch_google_drive_files(self, url):
+        """Получить файлы из Google Drive (будет реализовано)."""
+        CustomMessageBox(self, 'Google Drive',
+            'Поддержка Google Drive будет добавлена в следующем обновлении.\n'
+            'Пока используйте ссылки Яндекс.Диска.',
+            'info').exec_()
+        self.link_status.setText('')
+
+    def _display_fetched_files(self, files, public_url):
+        """Отобразить полученные файлы в таблице с распределением."""
+        self.link_files = files
+        self._public_url = public_url
+        self.files_table.setRowCount(len(files))
+
+        measurement_count = 0
+        photo_count = 0
+
+        for i, f in enumerate(files):
+            name = f.get('name', '')
+            size = f.get('size', 0)
+            dest = self._classify_file(name)
+
+            if dest == 'Замер':
+                measurement_count += 1
+            else:
+                photo_count += 1
+
+            name_item = QTableWidgetItem(name)
+            size_str = f'{size / 1024 / 1024:.1f} МБ' if size > 1024 * 1024 else f'{size / 1024:.0f} КБ'
+            size_item = QTableWidgetItem(size_str)
+            dest_item = QTableWidgetItem(dest)
+
+            if dest == 'Замер':
+                dest_item.setForeground(QColor('#1677FF'))
+            else:
+                dest_item.setForeground(QColor('#52C41A'))
+
+            self.files_table.setItem(i, 0, name_item)
+            self.files_table.setItem(i, 1, size_item)
+            self.files_table.setItem(i, 2, dest_item)
+
+        if files:
+            self.link_upload_btn.setEnabled(True)
+            self.link_status.setText(
+                f'Найдено файлов: {len(files)} (замер: {measurement_count}, фото: {photo_count})')
+        else:
+            self.link_status.setText('Файлы не найдены в указанной папке')
+
+    def _on_fetch_error(self, error_msg):
+        """Ошибка получения файлов из ссылки."""
+        self.link_status.setText('')
+        CustomMessageBox(self, 'Ошибка', f'Не удалось получить файлы:\n{error_msg}', 'error').exec_()
+
+    def _upload_from_link(self):
+        """Скачать файлы из публичной ссылки и загрузить на ЯД владельца."""
+        if not self.link_files:
+            return
+
+        card = self.data.get_crm_card(self.card_id)
+        contract_id = card.get('contract_id') if card else None
+        if not contract_id:
+            CustomMessageBox(self, 'Ошибка', 'Договор не найден', 'error').exec_()
+            return
+
+        contract_folder = self._get_contract_yandex_folder(contract_id)
+        if not contract_folder:
+            CustomMessageBox(self, 'Ошибка',
+                'Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.',
+                'warning').exec_()
+            return
+
+        self.link_upload_btn.setEnabled(False)
+        self.link_progress.setVisible(True)
+        self.link_progress.setMaximum(len(self.link_files))
+        self.link_progress.setValue(0)
+        self.link_status.setText('Загрузка файлов...')
+
+        import tempfile
+        files_copy = list(self.link_files)
+        public_url = self._public_url
+
+        def upload_thread():
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+
+                # Создаём папки
+                meas_path = f"{contract_folder}/Замер"
+                photo_path = f"{contract_folder}/Фотофиксация"
+                yd.create_folder(contract_folder)
+                yd.create_folder(meas_path)
+                yd.create_folder(photo_path)
+
+                uploaded_count = 0
+                errors = []
+
+                for i, f in enumerate(files_copy):
+                    name = f.get('name', '')
+                    file_path_in_folder = f.get('path', f'/{name}')
+                    dest = self._classify_file(name)
+                    dest_path = meas_path if dest == 'Замер' else photo_path
+
+                    QTimer.singleShot(0, lambda idx=i + 1, n=name:
+                        self._update_link_progress(idx, n))
+
+                    # Скачиваем во временный файл
+                    tmp_path = os.path.join(tempfile.gettempdir(), f'crm_upload_{name}')
+                    try:
+                        ok = yd.download_public_file(public_url, file_path_in_folder, tmp_path)
+                        if ok:
+                            yd_dest = f"{dest_path}/{name}"
+                            yd.upload_file(tmp_path, yd_dest)
+                            uploaded_count += 1
+                        else:
+                            errors.append(name)
+                    except Exception as e:
+                        errors.append(f"{name}: {e}")
+                    finally:
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+
+                # Получаем публичные ссылки
+                import time
+                time.sleep(0.3)
+                meas_link = yd.get_public_link(meas_path)
+                time.sleep(0.3)
+                photo_link = yd.get_public_link(photo_path)
+
+                # Сохраняем в БД
+                update_data = {}
+                if meas_link:
+                    update_data['measurement_image_link'] = meas_link
+                    update_data['measurement_folder_public_link'] = meas_link
+                if photo_link:
+                    update_data['photo_folder_public_link'] = photo_link
+                if update_data:
+                    self.data.update_contract(contract_id, update_data)
+
+                QTimer.singleShot(0, lambda: self._on_link_upload_done(
+                    uploaded_count, errors, meas_link, contract_id))
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                QTimer.singleShot(0, lambda: self._on_link_upload_error(str(e)))
+
+        threading.Thread(target=upload_thread, daemon=True).start()
+
+    def _update_link_progress(self, step, filename):
+        """Обновить прогресс загрузки."""
+        self.link_progress.setValue(step)
+        self.link_status.setText(f'Загрузка: {filename}...')
+
+    def _on_link_upload_done(self, count, errors, meas_link, contract_id):
+        """Завершение загрузки по ссылке."""
+        self.link_progress.setVisible(False)
+        self.link_upload_btn.setEnabled(True)
+
+        if errors:
+            self.link_status.setText(f'Загружено {count} файлов, ошибки: {len(errors)}')
+            CustomMessageBox(self, 'Частичная загрузка',
+                f'Загружено файлов: {count}\nОшибки:\n' + '\n'.join(errors[:5]),
+                'warning').exec_()
+        else:
+            self.link_status.setText(f'Успешно загружено: {count} файлов')
+
+        if meas_link:
+            self.uploaded_image_link = meas_link
+
+        # Обновляем родительское окно
+        parent = self.parent()
+        if parent:
+            if hasattr(parent, '_cached_contract') and parent._cached_contract:
+                if meas_link:
+                    parent._cached_contract['measurement_folder_public_link'] = meas_link
+            if hasattr(parent, 'reload_measurement_data'):
+                parent.reload_measurement_data()
+
+    def _on_link_upload_error(self, error_msg):
+        """Ошибка загрузки по ссылке."""
+        self.link_progress.setVisible(False)
+        self.link_upload_btn.setEnabled(True)
+        self.link_status.setText('Ошибка загрузки')
+        CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки файлов:\n{error_msg}', 'error').exec_()
+
     def save(self):
         """Сохранение данных замера"""
         if not self.uploaded_image_link:
-            CustomMessageBox(self, 'Ошибка', 'Сначала загрузите изображение замера', 'warning').exec_()
+            msg = 'загрузите файлы по ссылке' if self.mode_link.isChecked() else 'загрузите изображение замера'
+            CustomMessageBox(self, 'Ошибка', f'Сначала {msg}', 'warning').exec_()
             return
 
         measurement_date = self.measurement_date.date().toString('yyyy-MM-dd')

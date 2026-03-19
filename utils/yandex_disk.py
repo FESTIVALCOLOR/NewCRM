@@ -538,6 +538,72 @@ class YandexDiskManager:
             print(f"[ERROR] Ошибка получения содержимого папки: {e}")
             return []
 
+    def get_public_folder_contents(self, public_url):
+        """Получение списка файлов из ПУБЛИЧНОЙ папки ЯД (без OAuth).
+        API: GET /v1/disk/public/resources?public_key=URL
+        Returns: список dict с ключами name, path, type, size, mime_type"""
+        url = f'{self.base_url}/public/resources'
+        params = {'public_key': public_url, 'limit': 1000}
+
+        try:
+            response = self.session.get(url, params=params, timeout=15)
+            if response.status_code != 200:
+                print(f"[ERROR] Ошибка получения публичной папки: {response.status_code} {response.text[:200]}")
+                return []
+            data = response.json()
+            items = data.get('_embedded', {}).get('items', [])
+            result = []
+            for item in items:
+                result.append({
+                    'name': item.get('name', ''),
+                    'path': item.get('path', ''),
+                    'type': item.get('type', ''),
+                    'size': item.get('size', 0),
+                    'mime_type': item.get('mime_type', ''),
+                })
+            print(f"[YD] Получено {len(result)} файлов из публичной папки")
+            return result
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения публичных ресурсов: {e}")
+            return []
+
+    def download_public_file(self, public_url, file_path_in_folder, local_path):
+        """Скачивание файла из ПУБЛИЧНОЙ папки ЯД (без OAuth).
+        API: GET /v1/disk/public/resources/download?public_key=URL&path=/file
+        Args:
+            public_url: публичная ссылка на папку
+            file_path_in_folder: путь файла внутри папки (напр. '/file.jpg')
+            local_path: локальный путь для сохранения
+        Returns: True при успехе"""
+        url = f'{self.base_url}/public/resources/download'
+        params = {'public_key': public_url, 'path': file_path_in_folder}
+
+        try:
+            response = self.session.get(url, params=params, timeout=15)
+            if response.status_code != 200:
+                print(f"[ERROR] Ошибка получения ссылки скачивания: {response.status_code}")
+                return False
+            data = response.json()
+            download_url = data.get('href')
+            if not download_url:
+                print("[ERROR] Нет href в ответе download")
+                return False
+
+            # Скачиваем файл
+            file_response = self.session.get(download_url, timeout=120, stream=True)
+            if file_response.status_code != 200:
+                print(f"[ERROR] Ошибка скачивания файла: {file_response.status_code}")
+                return False
+
+            with open(local_path, 'wb') as f:
+                for chunk in file_response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"[YD] Файл скачан: {file_path_in_folder} → {local_path}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Ошибка скачивания публичного файла: {e}")
+            return False
+
     def copy_file(self, from_path, to_path):
         """Копирование файла на Яндекс.Диске"""
         if not self.token:

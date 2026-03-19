@@ -6,8 +6,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QHeaderView, QDateEdit, QTextEdit, QDoubleSpinBox,
                              QSpinBox, QFrame, QFileDialog, QMenu, QApplication)  # ← ИСПРАВЛЕНО: QSpinBox + QFrame + QFileDialog + QMenu + QApplication
 from ui.custom_dateedit import CustomDateEdit
-from PyQt5.QtCore import Qt, QDate, QSize, pyqtSignal, QTimer
-from PyQt5.QtGui import QValidator, QDesktopServices, QCursor, QColor, QBrush
+from PyQt5.QtCore import Qt, QDate, QSize, pyqtSignal, QTimer, QEvent, QObject
+from PyQt5.QtGui import QValidator, QDesktopServices, QCursor, QColor, QBrush, QPainter
 from PyQt5.QtWidgets import QStyledItemDelegate
 from PyQt5.QtCore import QUrl
 from database.db_manager import DatabaseManager
@@ -78,6 +78,45 @@ class ContractRowColorDelegate(QStyledItemDelegate):
             painter.restore()
         else:
             super().paint(painter, option, index)
+
+
+class ActionColumnBgFilter(QObject):
+    """Фильтр viewport для отрисовки фона столбца действий.
+    setCellWidget() блокирует вызов делегата paint() для ячейки.
+    Этот фильтр рисует фон ПОСЛЕ обычной отрисовки таблицы,
+    до отрисовки дочерних виджетов (кнопок) поверх."""
+
+    def __init__(self, table):
+        super().__init__(table)
+        self.table = table
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Paint:
+            # Убираем себя чтобы избежать рекурсии при sendEvent
+            obj.removeEventFilter(self)
+            # Обычная отрисовка таблицы (через QAbstractScrollArea фильтр)
+            QApplication.sendEvent(obj, event)
+            # Возвращаем себя
+            obj.installEventFilter(self)
+
+            # Рисуем фон столбца действий поверх обычной отрисовки
+            last_col = self.table.columnCount() - 1
+            if last_col >= 0 and self.table.rowCount() > 0:
+                painter = QPainter(obj)
+                for row in range(self.table.rowCount()):
+                    item = self.table.item(row, 0)
+                    if not item:
+                        continue
+                    color_hex = item.data(Qt.UserRole + 1)
+                    if not color_hex:
+                        continue
+                    idx = self.table.model().index(row, last_col)
+                    rect = self.table.visualRect(idx)
+                    if rect.isValid() and not rect.isEmpty():
+                        painter.fillRect(rect, QColor(color_hex))
+                painter.end()
+            return True
+        return False
 
 
 # ========== ОСНОВНАЯ ВКЛАДКА ДОГОВОРОВ ==========
@@ -178,6 +217,10 @@ class ContractsTab(QWidget):
         # Делегат для корректной отрисовки фона строк (как PaymentStatusDelegate в зарплатах)
         self.contracts_table.setItemDelegate(ContractRowColorDelegate())
 
+        # Фильтр viewport для отрисовки фона столбца действий (setCellWidget блокирует делегат)
+        self._action_bg_filter = ActionColumnBgFilter(self.contracts_table)
+        self.contracts_table.viewport().installEventFilter(self._action_bg_filter)
+
         # Добавляем контекстное меню для копирования
         self.contracts_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.contracts_table.customContextMenuRequested.connect(self.show_context_menu)
@@ -251,21 +294,13 @@ class ContractsTab(QWidget):
         return None
 
     def _apply_row_color(self, row, color):
-        """Применение цвета ко всей строке через UserRole+1 (для делегата).
-        Qt stylesheet перекрывает setBackground(), поэтому делегат рисует фон через painter.fillRect().
-        Не используем QLabel/setCellWidget — это ломает сортировку и двойной клик."""
-        last_col = self.contracts_table.columnCount() - 1
+        """Применение цвета ко всей строке через UserRole+1.
+        Столбцы 0-10: делегат рисует фон через painter.fillRect().
+        Столбец действий: ActionColumnBgFilter рисует фон на viewport."""
         for col in range(self.contracts_table.columnCount()):
-            if col == last_col:
-                # Столбец кнопок действий — QFrame (вместо QWidget) надёжно рисует фон.
-                # QFrame.paintEvent() рисует background из stylesheet автоматически.
-                widget = self.contracts_table.cellWidget(row, col)
-                if widget:
-                    widget.setStyleSheet(f"QFrame {{ background-color: {color}; }}")
-            else:
-                item = self.contracts_table.item(row, col)
-                if item:
-                    item.setData(Qt.UserRole + 1, color)
+            item = self.contracts_table.item(row, col)
+            if item:
+                item.setData(Qt.UserRole + 1, color)
 
     def load_contracts(self):
         """Загрузка списка договоров"""
@@ -369,9 +404,8 @@ class ContractsTab(QWidget):
             self.contracts_table.setItem(row, 10, payment_item)
 
             # ========== КНОПКИ ДЕЙСТВИЙ (SVG) ==========
-            # QFrame вместо QWidget — QFrame надёжно рисует background из stylesheet
-            actions_widget = QFrame()
-            actions_widget.setFrameStyle(QFrame.NoFrame)
+            # QWidget без фона — ActionColumnBgFilter рисует фон на viewport
+            actions_widget = QWidget()
             actions_layout = QHBoxLayout()
             actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(1)
