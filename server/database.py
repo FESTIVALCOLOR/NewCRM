@@ -910,6 +910,7 @@ class MessengerScript(Base):
     __tablename__ = "messenger_scripts"
 
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=True)  # Пользовательское название скрипта
     script_type = Column(String, nullable=False)  # project_start/stage_complete/project_end
     project_type = Column(String, nullable=True)  # Индивидуальный/Шаблонный/Авторский надзор/NULL
     stage_name = Column(String, nullable=True)

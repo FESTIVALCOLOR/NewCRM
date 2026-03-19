@@ -738,11 +738,13 @@ def _add_chat_members(
         phone = None
         email = None
 
+        telegram_user_id = None
         if m.member_type == 'employee':
             emp = db.query(Employee).filter(Employee.id == m.member_id).first()
             if emp:
                 phone = emp.phone
                 email = emp.email
+                telegram_user_id = emp.telegram_user_id
         elif m.member_type == 'client':
             cl = db.query(Client).filter(Client.id == m.member_id).first()
             if cl:
@@ -757,6 +759,7 @@ def _add_chat_members(
             is_mandatory=m.is_mandatory,
             phone=phone,
             email=email,
+            telegram_user_id=telegram_user_id,
             invite_status='pending',
         )
         db.add(member)
@@ -881,8 +884,8 @@ async def create_messenger_chat(
 
     db.commit()
 
-    # Рассылаем invite-ссылки асинхронно
-    asyncio.create_task(send_invites_to_members(chat.id, db))
+    # Рассылаем invite-ссылки асинхронно (с собственной сессией БД)
+    asyncio.create_task(send_invites_to_members(chat.id))
 
     # Авто-триггер начального скрипта project_start
     try:

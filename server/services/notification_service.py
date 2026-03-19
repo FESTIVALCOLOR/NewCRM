@@ -208,60 +208,75 @@ def build_script_context(db: Session, card, contract) -> dict:
     return ctx
 
 
-async def send_invites_to_members(chat_id: int, db: Session):
-    """Разослать invite-ссылки участникам чата"""
-    chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
-    if not chat or not chat.invite_link:
-        return
+async def send_invites_to_members(chat_id: int, db: Session = None):
+    """Разослать invite-ссылки участникам чата.
+    Создаёт собственную сессию БД если вызвана из background task.
+    """
+    own_db = False
+    if db is None:
+        db = SessionLocal()
+        own_db = True
 
-    members = db.query(MessengerChatMember).filter(
-        MessengerChatMember.messenger_chat_id == chat_id,
-        MessengerChatMember.invite_status == 'pending'
-    ).all()
+    try:
+        chat = db.query(MessengerChat).filter(MessengerChat.id == chat_id).first()
+        if not chat or not chat.invite_link:
+            return
 
-    tg = get_telegram_service()
-    email_svc = get_email_service()
+        members = db.query(MessengerChatMember).filter(
+            MessengerChatMember.messenger_chat_id == chat_id,
+            MessengerChatMember.invite_status == 'pending'
+        ).all()
 
-    for member in members:
-        sent = False
+        tg = get_telegram_service()
+        email_svc = get_email_service()
 
-        # Пробуем через Telegram бота (личное сообщение)
-        if member.telegram_user_id and tg.bot_available:
-            try:
-                await tg.send_message(
-                    member.telegram_user_id,
-                    f"Вас пригласили в проектный чат: {chat.chat_title}\n"
-                    f"Присоединяйтесь: {chat.invite_link}"
-                )
-                member.invite_status = 'sent'
-                sent = True
-            except Exception:
-                pass
+        for member in members:
+            sent = False
 
-        # Если не получилось через Telegram — отправляем email
-        if not sent and member.email and email_svc.available:
-            # Получаем имя участника
-            name = ""
-            if member.member_type == 'employee':
-                emp = db.query(Employee).filter(Employee.id == member.member_id).first()
-                name = emp.full_name if emp else ""
-            elif member.member_type == 'client':
-                cl = db.query(Client).filter(Client.id == member.member_id).first()
-                name = cl.full_name if cl else ""
+            # Пробуем через Telegram бота (личное сообщение)
+            if member.telegram_user_id and tg.bot_available:
+                try:
+                    await tg.send_message(
+                        member.telegram_user_id,
+                        f"Вас пригласили в проектный чат: {chat.chat_title}\n"
+                        f"Присоединяйтесь: {chat.invite_link}"
+                    )
+                    member.invite_status = 'sent'
+                    sent = True
+                except Exception as e:
+                    logger.warning(f"Не удалось отправить TG invite участнику {member.member_id}: {e}")
 
-            success = await email_svc.send_chat_invite(
-                to_email=member.email,
-                recipient_name=name,
-                chat_title=chat.chat_title or "",
-                invite_link=chat.invite_link,
-            )
-            if success:
-                member.invite_status = 'email_sent'
-                sent = True
+            # Если не получилось через Telegram — отправляем email
+            if not sent and member.email and email_svc.available:
+                name = ""
+                if member.member_type == 'employee':
+                    emp = db.query(Employee).filter(Employee.id == member.member_id).first()
+                    name = emp.full_name if emp else ""
+                elif member.member_type == 'client':
+                    cl = db.query(Client).filter(Client.id == member.member_id).first()
+                    name = cl.full_name if cl else ""
 
-        member.invited_at = datetime.utcnow() if sent else None
+                try:
+                    success = await email_svc.send_chat_invite(
+                        to_email=member.email,
+                        recipient_name=name,
+                        chat_title=chat.chat_title or "",
+                        invite_link=chat.invite_link,
+                    )
+                    if success:
+                        member.invite_status = 'email_sent'
+                        sent = True
+                except Exception as e:
+                    logger.warning(f"Не удалось отправить email invite для {member.email}: {e}")
 
-    db.commit()
+            member.invited_at = datetime.utcnow() if sent else None
+
+        db.commit()
+    except Exception as e:
+        logger.error(f"Ошибка send_invites_to_members: {e}")
+    finally:
+        if own_db:
+            db.close()
 
 
 async def trigger_messenger_notification(

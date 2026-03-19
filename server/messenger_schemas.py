@@ -95,6 +95,7 @@ class MessengerChatDetailResponse(BaseModel):
 
 class MessengerScriptCreate(BaseModel):
     """Создание скрипта"""
+    name: Optional[str] = None
     script_type: str  # project_start / stage_complete / project_end
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
@@ -107,6 +108,7 @@ class MessengerScriptCreate(BaseModel):
 
 class MessengerScriptUpdate(BaseModel):
     """Обновление скрипта"""
+    name: Optional[str] = None
     script_type: Optional[str] = None
     project_type: Optional[str] = None
     stage_name: Optional[str] = None
@@ -120,6 +122,7 @@ class MessengerScriptUpdate(BaseModel):
 class MessengerScriptResponse(BaseModel):
     """Ответ с данными скрипта"""
     id: int
+    name: Optional[str] = None
     script_type: str
     project_type: Optional[str] = None
     stage_name: Optional[str] = None

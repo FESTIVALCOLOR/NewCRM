@@ -642,6 +642,20 @@ class MessengerAdminDialog(QDialog):
         ed_layout.setContentsMargins(0, 0, 0, 0)
         ed_layout.setSpacing(8)
 
+        # Название скрипта
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
+        name_row.addWidget(QLabel("Название:"))
+        self._script_name_edit = QLineEdit()
+        self._script_name_edit.setPlaceholderText("Название скрипта (необязательно)")
+        self._script_name_edit.setStyleSheet(
+            "QLineEdit { border: 1px solid #d9d9d9; border-radius: 4px; "
+            "padding: 4px 8px; font-size: 12px; } "
+            "QLineEdit:focus { border-color: #1677FF; }"
+        )
+        name_row.addWidget(self._script_name_edit)
+        ed_layout.addLayout(name_row)
+
         # Тип скрипта
         type_row = QHBoxLayout()
         type_row.setSpacing(8)
@@ -669,8 +683,8 @@ class MessengerAdminDialog(QDialog):
         ed_layout.addWidget(QLabel("Текст сообщения (HTML):"))
         self._script_text = QTextEdit()
         self._script_text.setStyleSheet(_TEXTEDIT_STYLE)
-        self._script_text.setMinimumHeight(120)
-        ed_layout.addWidget(self._script_text)
+        self._script_text.setMinimumHeight(200)
+        ed_layout.addWidget(self._script_text, 1)  # stretch=1 — занимает свободное место
 
         # Плейсхолдеры
         ph_label = QLabel("Доступные переменные (кликните для вставки):")
@@ -707,7 +721,7 @@ class MessengerAdminDialog(QDialog):
             btn.clicked.connect(lambda _, p=placeholder: self._insert_placeholder(p))
             ph_layout.addWidget(btn, row, col)
             col += 1
-            if col >= 4:
+            if col >= 5:
                 col = 0
                 row += 1
 
@@ -812,10 +826,16 @@ class MessengerAdminDialog(QDialog):
         script_btns.addStretch()
         ed_layout.addLayout(script_btns)
 
-        self._script_editor_stack.addWidget(editor_page)
+        # Оборачиваем редактор в QScrollArea для длинных скриптов
+        editor_scroll = QScrollArea()
+        editor_scroll.setWidgetResizable(True)
+        editor_scroll.setWidget(editor_page)
+        editor_scroll.setFrameShape(QFrame.NoFrame)
+        editor_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._script_editor_stack.addWidget(editor_scroll)
 
         right.addWidget(self._script_editor_stack)
-        layout.addLayout(right)
+        layout.addLayout(right, 1)  # stretch=1 для правой панели
 
         return tab
 
@@ -1121,9 +1141,12 @@ class MessengerAdminDialog(QDialog):
             is_enabled = script.get("is_enabled", True)
 
             type_label = SCRIPT_TYPES.get(script_type, script_type)
-            display = type_label
-            if stage:
+            name = script.get("name", "")
+            display = name if name else type_label
+            if stage and not name:
                 display += f" ({stage})"
+            elif stage and name:
+                display += f" — {stage}"
             if not is_enabled:
                 display += " [ВЫКЛ]"
 
@@ -1146,6 +1169,9 @@ class MessengerAdminDialog(QDialog):
         script = self._scripts[row]
         self._current_script_id = script.get("id")
         self._script_editor_stack.setCurrentIndex(1)
+
+        # Название
+        self._script_name_edit.setText(script.get("name", "") or "")
 
         # Тип
         script_type = script.get("script_type", "project_start")
@@ -1363,20 +1389,27 @@ class MessengerAdminDialog(QDialog):
         memo_path = getattr(self, '_memo_file_path', None)
         memo_server_path = None
         if memo_path and not memo_path.startswith('/'):
-            # Локальный файл — нужно загрузить на сервер
+            # Локальный файл — загружаем на ЯД через YandexDiskManager
             import os
+            from utils.yandex_disk import YandexDiskManager
+            from config import YANDEX_DISK_TOKEN
             file_name = os.path.basename(memo_path)
             yandex_path = f"/CRM/memo/{file_name}"
             try:
-                if self.data_access:
-                    self.data_access.upload_file(memo_path, yandex_path)
-                    memo_server_path = yandex_path
-            except Exception:
-                memo_server_path = memo_path  # fallback — сохраняем локальный путь
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                yd.upload_file(memo_path, yandex_path)
+                memo_server_path = yandex_path
+                logger.info(f"PDF-памятка загружена на ЯД: {yandex_path}")
+            except Exception as e:
+                logger.warning(f"Ошибка загрузки PDF-памятки на ЯД: {e}")
+                CustomMessageBox(self, "Предупреждение",
+                    f"Не удалось загрузить PDF на Яндекс.Диск:\n{e}",
+                    "warning").exec_()
         elif memo_path:
             memo_server_path = memo_path
 
         data = {
+            "name": self._script_name_edit.text().strip() or None,
             "script_type": self._script_type_combo.currentData(),
             "stage_name": self._script_stage_combo.currentData() or None,
             "message_template": text,

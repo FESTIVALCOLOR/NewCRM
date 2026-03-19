@@ -1559,7 +1559,8 @@ class CardEditDialog(QDialog):
             contract = self.data.get_contract(contract_id)
             report_month = survey_date.toString('yyyy-MM')
 
-            # Проверяем, есть ли уже выплата замерщику и создаем/обновляем
+            # Обновляем report_month у существующей оплаты замерщика
+            # НЕ создаём новую — оплата создаётся при назначении через on_employee_changed
             try:
                 payments = self.data.get_payments_for_contract(contract_id)
                 existing_payment = next(
@@ -1570,16 +1571,7 @@ class CardEditDialog(QDialog):
                     self.data.update_payment(existing_payment['id'], {'report_month': report_month})
                     print(f"Отчетный месяц замерщика обновлен: {report_month}")
                 else:
-                    payment_data = {
-                        'contract_id': contract_id,
-                        'employee_id': surveyor_id,
-                        'role': 'Замерщик',
-                        'payment_type': 'Полная оплата',
-                        'report_month': report_month,
-                        'crm_card_id': self.card_data['id']
-                    }
-                    self.data.create_payment(payment_data)
-                    print(f"Выплата замерщику создана в отчетном месяце {report_month}")
+                    print(f"[INFO] Оплата замерщика не найдена — будет создана при назначении")
             except Exception as e:
                 print(f"[WARNING] Ошибка работы с оплатами замерщика: {e}")
             # ======================================================================

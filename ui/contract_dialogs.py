@@ -1963,6 +1963,11 @@ class ContractDialog(QDialog):
             index = self.agent_combo.findText(current_text)
             if index >= 0:
                 self.agent_combo.setCurrentIndex(index)
+        elif not self.contract_data:
+            # Для нового договора — агент по умолчанию "ФЕСТИВАЛЬ"
+            idx = self.agent_combo.findText('ФЕСТИВАЛЬ')
+            if idx >= 0:
+                self.agent_combo.setCurrentIndex(idx)
 
     # ══════════════════════════════════════════════════════════════════
     # ОТЗЫВЫ КЛИЕНТОВ (survey)
@@ -3563,7 +3568,44 @@ class ContractDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', 'Укажите сумму платежа перед отметкой оплаты', 'warning').exec_()
             return
 
-        today = QDate.currentDate().toString('yyyy-MM-dd')
+        # Диалог выбора даты оплаты (по умолчанию сегодня)
+        from ui.custom_dateedit import CustomDateEdit
+        date_dialog = QDialog(self)
+        date_dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        date_dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        d_frame = QFrame(date_dialog)
+        d_frame.setObjectName("borderFrame")
+        d_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+            }
+        """)
+        d_layout = QVBoxLayout(d_frame)
+        d_layout.setContentsMargins(16, 12, 16, 12)
+        d_layout.setSpacing(10)
+        d_layout.addWidget(QLabel('Дата оплаты:'))
+        date_edit = CustomDateEdit()
+        date_edit.setDate(QDate.currentDate())
+        d_layout.addWidget(date_edit)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        ok_btn = QPushButton('OK')
+        ok_btn.setStyleSheet('QPushButton { background-color: #1677FF; color: white; border: none; border-radius: 6px; padding: 6px 20px; font-size: 12px; } QPushButton:hover { background-color: #0958D9; }')
+        ok_btn.clicked.connect(date_dialog.accept)
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setStyleSheet('QPushButton { background-color: #F5F5F5; color: #595959; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px 20px; font-size: 12px; } QPushButton:hover { background-color: #E8E8E8; }')
+        cancel_btn.clicked.connect(date_dialog.reject)
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(ok_btn)
+        d_layout.addLayout(btn_row)
+        main_d = QVBoxLayout(date_dialog)
+        main_d.setContentsMargins(0, 0, 0, 0)
+        main_d.addWidget(d_frame)
+
+        if date_dialog.exec_() != QDialog.Accepted:
+            return
+
+        today = date_edit.date().toString('yyyy-MM-dd')
         date_field = f'{prefix}_paid_date'
         update_data = {date_field: today}
 
@@ -4190,6 +4232,16 @@ class ContractDialog(QDialog):
             'comments': self.comments.toPlainText().strip()
         }
 
+        # Индикатор загрузки
+        from PyQt5.QtWidgets import QApplication
+        is_new = not self.contract_data
+        if is_new:
+            self.save_btn.setEnabled(False)
+            if hasattr(self, 'create_btn'):
+                self.create_btn.setEnabled(False)
+            self.setWindowTitle('Создание договора...')
+            QApplication.processEvents()
+
         try:
             new_contract_id = None
             if self.contract_data:
@@ -4319,7 +4371,6 @@ class ContractDialog(QDialog):
         except Exception as e:
             error_msg = str(e)
             if 'UNIQUE constraint failed' in error_msg or 'уже существует' in error_msg:
-                # ========== ЗАМЕНИЛИ QMessageBox ==========
                 CustomMessageBox(
                     self,
                     'Ошибка сохранения',
@@ -4328,13 +4379,22 @@ class ContractDialog(QDialog):
                     'error'
                 ).exec_()
             else:
-                # ========== ЗАМЕНИЛИ QMessageBox ==========
                 CustomMessageBox(
                     self,
                     'Ошибка',
                     f'Не удалось сохранить договор:\n{error_msg}',
                     'error'
                 ).exec_()
+        finally:
+            # Восстанавливаем кнопки после операции
+            if is_new:
+                self.save_btn.setEnabled(True)
+                if hasattr(self, 'create_btn'):
+                    self.create_btn.setEnabled(True)
+                if not self.contract_data:
+                    self.setWindowTitle('Добавление договора')
+                else:
+                    self.setWindowTitle('Редактирование договора')
                 
 class ContractSearchDialog(QDialog):
     """Диалог поиска договоров"""

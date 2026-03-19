@@ -4100,7 +4100,7 @@ class MeasurementDialog(QDialog):
         self.mode_manual = QRadioButton('Загрузить файл')
         self.mode_link = QRadioButton('По ссылке от замерщика')
         self.mode_manual.setChecked(True)
-        radio_style = 'QRadioButton { font-size: 12px; } QRadioButton::indicator { width: 14px; height: 14px; }'
+        radio_style = 'QRadioButton { font-size: 12px; spacing: 6px; } QRadioButton::indicator { width: 16px; height: 16px; }'
         self.mode_manual.setStyleSheet(radio_style)
         self.mode_link.setStyleSheet(radio_style)
         mode_layout.addWidget(self.mode_manual)
@@ -4932,27 +4932,24 @@ class MeasurementDialog(QDialog):
                     description=description
                 )
 
-                # Создаём выплату замерщику (если ещё нет)
+                # Обновляем report_month у существующей оплаты замерщика (НЕ создаём новую —
+                # оплата создаётся при назначении замерщика через on_employee_changed)
                 if surveyor_id and contract_id:
                     try:
                         report_month = datetime.strptime(measurement_date, '%Y-%m-%d').strftime('%Y-%m')
                         payments = self.data.get_payments_for_contract(contract_id)
-                        has_surveyor_payment = any(
-                            p.get('employee_id') == surveyor_id and p.get('role') == 'Замерщик'
-                            for p in (payments or [])
+                        existing = next(
+                            (p for p in (payments or [])
+                             if p.get('employee_id') == surveyor_id and p.get('role') == 'Замерщик'),
+                            None
                         )
-                        if not has_surveyor_payment:
-                            self.data.create_payment({
-                                'contract_id': contract_id,
-                                'employee_id': surveyor_id,
-                                'role': 'Замерщик',
-                                'payment_type': 'Полная оплата',
-                                'report_month': report_month,
-                                'crm_card_id': self.card_id
-                            })
-                            print(f"[OK] Выплата замерщику создана: {report_month}")
+                        if existing:
+                            self.data.update_payment(existing['id'], {'report_month': report_month})
+                            print(f"[OK] report_month замерщика обновлён: {report_month}")
+                        else:
+                            print(f"[INFO] Оплата замерщика не найдена — будет создана при назначении")
                     except Exception as e:
-                        print(f"[WARNING] Ошибка создания выплаты замерщику: {e}")
+                        print(f"[WARNING] Ошибка обновления report_month замерщика: {e}")
 
                 # Обновляем историю в родительском окне
                 if hasattr(parent, 'reload_project_history'):
