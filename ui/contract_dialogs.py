@@ -1422,7 +1422,7 @@ class ContractDialog(QDialog):
         # ========== КНОПКИ ФИКСИРОВАНЫ ВНИЗУ (ВНЕ scroll_area) ==========
         if hasattr(self, '_buttons_layout'):
             buttons_container = QWidget()
-            buttons_container.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E0E0E0;")
+            buttons_container.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E0E0E0; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
             buttons_container_layout = QVBoxLayout()
             buttons_container_layout.setContentsMargins(20, 10, 20, 15)
             buttons_container_layout.addLayout(self._buttons_layout)

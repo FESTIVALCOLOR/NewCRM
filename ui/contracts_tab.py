@@ -141,7 +141,8 @@ class ContractsTab(QWidget):
         self.contracts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.contracts_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.contracts_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.contracts_table.setAlternatingRowColors(True)
+        # НЕ используем setAlternatingRowColors, чтобы можно было окрашивать строки вручную (как в зарплатах)
+        self.contracts_table.setAlternatingRowColors(False)
 
         # Добавляем контекстное меню для копирования
         self.contracts_table.setContextMenuPolicy(Qt.CustomContextMenu)

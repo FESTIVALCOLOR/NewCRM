@@ -177,6 +177,19 @@ class CardEditDialog(QDialog):
             traceback.print_exc()
 
 
+    def _build_yd_folder_url(self, folder_path, subfolder):
+        """Построение прямой ссылки на папку ЯД из yandex_folder_path.
+        yandex_folder_path = 'disk:/CRM/Проекты/...' → URL = 'https://disk.yandex.ru/client/disk/CRM/Проекты/.../subfolder'
+        Кириллицу кодируем через percent-encoding, слэши оставляем."""
+        from urllib.parse import quote
+        # Убираем 'disk:' prefix — URL уже содержит /client/disk
+        clean_path = folder_path
+        if clean_path.startswith('disk:'):
+            clean_path = clean_path[5:]  # Убираем 'disk:'
+        full_path = f"{clean_path}/{subfolder}"
+        encoded = quote(full_path, safe='/')
+        return f"https://disk.yandex.ru/client/disk{encoded}"
+
     def _copy_folder_link(self, folder_type):
         """Копирование прямой ссылки на папку замера/фотофиксации в буфер обмена"""
         from PyQt5.QtWidgets import QApplication
@@ -186,7 +199,7 @@ class CardEditDialog(QDialog):
             CustomMessageBox(self, 'Ошибка', 'Папка на Яндекс.Диске не найдена', 'warning').exec_()
             return
         subfolder = 'Замер' if folder_type == 'measurement' else 'Фотофиксация'
-        link = f"https://disk.yandex.ru/client/disk{folder_path}/{subfolder}"
+        link = self._build_yd_folder_url(folder_path, subfolder)
         QApplication.clipboard().setText(link)
         CustomMessageBox(self, 'Скопировано', 'Ссылка скопирована в буфер обмена', 'info').exec_()
 
@@ -377,12 +390,11 @@ class CardEditDialog(QDialog):
         if contract_data is None:
             contract_data = self.card_data.get('contract_data') or {}
 
-        # Формируем прямые ссылки на ЯД из yandex_folder_path (не public — для загрузки файлов)
-        # Кириллические пути НЕ кодируем — ЯД веб-интерфейс принимает их as-is
+        # Формируем прямые ссылки на ЯД из yandex_folder_path
         folder_path = contract_data.get('yandex_folder_path', '')
         if folder_path:
-            meas_url = f"https://disk.yandex.ru/client/disk{folder_path}/Замер"
-            photo_url = f"https://disk.yandex.ru/client/disk{folder_path}/Фотофиксация"
+            meas_url = self._build_yd_folder_url(folder_path, 'Замер')
+            photo_url = self._build_yd_folder_url(folder_path, 'Фотофиксация')
 
             self.measurement_folder_link_label.setText(
                 f'<a href="{meas_url}" title="Открыть папку замера">Открыть папку замера</a>'
@@ -887,7 +899,7 @@ class CardEditDialog(QDialog):
 
             self.measurement_copy_btn = QPushButton('Копировать')
             self.measurement_copy_btn.setStyleSheet(_copy_btn_style)
-            self.measurement_copy_btn.setFixedSize(80, 26)
+            self.measurement_copy_btn.setFixedSize(80, 28)
             self.measurement_copy_btn.setVisible(False)
             self.measurement_copy_btn.clicked.connect(lambda: self._copy_folder_link('measurement'))
             measurement_link_row.addWidget(self.measurement_copy_btn)
@@ -910,7 +922,7 @@ class CardEditDialog(QDialog):
 
             self.photo_copy_btn = QPushButton('Копировать')
             self.photo_copy_btn.setStyleSheet(_copy_btn_style)
-            self.photo_copy_btn.setFixedSize(80, 26)
+            self.photo_copy_btn.setFixedSize(80, 28)
             self.photo_copy_btn.setVisible(False)
             self.photo_copy_btn.clicked.connect(lambda: self._copy_folder_link('photo'))
             photo_link_row.addWidget(self.photo_copy_btn)
@@ -8099,7 +8111,7 @@ class CardEditDialog(QDialog):
                 return
             # corr_path содержит полный путь на ЯД (напр. disk:/АРХИВ ПРОЕКТОВ/.../правки)
             clean = corr_path.replace('disk:/', '').replace('disk:', '').lstrip('/')
-            encoded = urllib.parse.quote(clean)
+            encoded = urllib.parse.quote(clean, safe='/')
             webbrowser.open(f"https://disk.yandex.ru/client/disk/{encoded}")
 
         btn.clicked.connect(open_folder)

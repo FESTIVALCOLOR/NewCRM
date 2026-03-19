@@ -52,6 +52,9 @@ CRM-система для интерьерного бюро с двухрежи�
 10. **API-first с fallback** на локальную БД при записи
 11. **PyQt Signal Safety** — emit из threading.Thread только через `QTimer.singleShot(0, ...)`
 12. **Offline-очередь** — только сетевые ошибки (APIConnectionError/APITimeoutError), НЕ бизнес-ошибки (409/400)
+13. **Border-radius диалогов** — ВСЕ виджеты внутри `borderFrame` ДОЛЖНЫ иметь соответствующий `border-radius`: title_bar → `border-top-left/right-radius: 10px`, нижний контейнер (кнопки/scroll_area) → `border-bottom-left/right-radius: 10px`. Без этого фон вылазит за углы.
+14. **setAlternatingRowColors(False)** — если таблица использует ручную окраску строк через `setBackground()`, альтернирующие цвета ДОЛЖНЫ быть отключены (иначе Qt перезатирает фон)
+15. **ЯД URL формат** — `yandex_folder_path` начинается с `disk:` (напр. `disk:/CRM/Проекты/...`). Для URL: убрать `disk:` prefix, закодировать кириллицу через `quote(path, safe='/')`, формат: `https://disk.yandex.ru/client/disk{encoded_path}`
 
 > Подробности: [docs/02-project-rules.md](../docs/02-project-rules.md)
 
