@@ -274,7 +274,7 @@ class ContractDialog(QDialog):
         border_layout.setSpacing(0)
 
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, title, simple_mode=True)
+        self.title_bar = title_bar = CustomTitleBar(self, title, simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -3570,9 +3570,12 @@ class ContractDialog(QDialog):
 
         # Диалог выбора даты оплаты (по умолчанию сегодня)
         from ui.custom_dateedit import CustomDateEdit
+        from ui.custom_title_bar import CustomTitleBar
         date_dialog = QDialog(self)
         date_dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         date_dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        date_dialog.setFixedWidth(300)
+
         d_frame = QFrame(date_dialog)
         d_frame.setObjectName("borderFrame")
         d_frame.setStyleSheet("""
@@ -3580,24 +3583,60 @@ class ContractDialog(QDialog):
                 background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
             }
         """)
-        d_layout = QVBoxLayout(d_frame)
-        d_layout.setContentsMargins(16, 12, 16, 12)
-        d_layout.setSpacing(10)
-        d_layout.addWidget(QLabel('Дата оплаты:'))
+        frame_layout = QVBoxLayout(d_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(date_dialog, 'Дата оплаты', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        frame_layout.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
+        d_layout = QVBoxLayout(content)
+        d_layout.setContentsMargins(20, 16, 20, 16)
+        d_layout.setSpacing(12)
+
         date_edit = CustomDateEdit()
         date_edit.setDate(QDate.currentDate())
         d_layout.addWidget(date_edit)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        ok_btn = QPushButton('OK')
-        ok_btn.setStyleSheet('QPushButton { background-color: #1677FF; color: white; border: none; border-radius: 6px; padding: 6px 20px; font-size: 12px; } QPushButton:hover { background-color: #0958D9; }')
-        ok_btn.clicked.connect(date_dialog.accept)
         cancel_btn = QPushButton('Отмена')
-        cancel_btn.setStyleSheet('QPushButton { background-color: #F5F5F5; color: #595959; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px 20px; font-size: 12px; } QPushButton:hover { background-color: #E8E8E8; }')
+        cancel_btn.setFixedHeight(32)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F5F5F5; color: #595959;
+                border: 1px solid #d9d9d9; border-radius: 6px;
+                padding: 0px 20px; font-size: 12px;
+            }
+            QPushButton:hover { background-color: #E8E8E8; }
+        """)
         cancel_btn.clicked.connect(date_dialog.reject)
+        ok_btn = QPushButton('OK')
+        ok_btn.setFixedHeight(32)
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFD93C; color: #333;
+                border: none; border-radius: 6px;
+                padding: 0px 24px; font-size: 12px; font-weight: 600;
+            }
+            QPushButton:hover { background-color: #F0C929; }
+        """)
+        ok_btn.clicked.connect(date_dialog.accept)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(ok_btn)
         d_layout.addLayout(btn_row)
+
+        frame_layout.addWidget(content)
         main_d = QVBoxLayout(date_dialog)
         main_d.setContentsMargins(0, 0, 0, 0)
         main_d.addWidget(d_frame)
@@ -4239,7 +4278,10 @@ class ContractDialog(QDialog):
             self.save_btn.setEnabled(False)
             if hasattr(self, 'create_btn'):
                 self.create_btn.setEnabled(False)
-            self.setWindowTitle('Создание договора...')
+            # Обновляем заголовок на title_bar
+            if hasattr(self, 'title_bar') and hasattr(self.title_bar, '_title_label'):
+                self._original_title = self.title_bar._title_label.text()
+                self.title_bar._title_label.setText('Создание договора...')
             QApplication.processEvents()
 
         try:
@@ -4386,15 +4428,17 @@ class ContractDialog(QDialog):
                     'error'
                 ).exec_()
         finally:
-            # Восстанавливаем кнопки после операции
+            # Восстанавливаем кнопки и заголовок после операции
             if is_new:
                 self.save_btn.setEnabled(True)
                 if hasattr(self, 'create_btn'):
                     self.create_btn.setEnabled(True)
-                if not self.contract_data:
-                    self.setWindowTitle('Добавление договора')
-                else:
-                    self.setWindowTitle('Редактирование договора')
+                if hasattr(self, 'title_bar') and hasattr(self.title_bar, '_title_label'):
+                    original = getattr(self, '_original_title', 'Добавление договора')
+                    if self.contract_data:
+                        self.title_bar._title_label.setText('Редактирование договора')
+                    else:
+                        self.title_bar._title_label.setText(original)
                 
 class ContractSearchDialog(QDialog):
     """Диалог поиска договоров"""

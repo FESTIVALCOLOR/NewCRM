@@ -50,6 +50,7 @@ class TelegramService:
         self._api_hash: Optional[str] = None
         self._phone: Optional[str] = None
         self._initialized = False
+        self._mtproto_lock = asyncio.Lock()
 
     def configure(self, settings: Dict[str, str]):
         """Конфигурация из настроек БД"""
@@ -262,51 +263,54 @@ class TelegramService:
         if not os.path.exists(session_file):
             return {"valid": False}
 
-        client = PyrogramClient(
-            session_path,
-            api_id=self._api_id,
-            api_hash=self._api_hash,
-        )
-        try:
-            await client.connect()
-            me = await client.get_me()
-            await client.disconnect()
-            return {
-                "valid": True,
-                "first_name": me.first_name or "",
-                "last_name": me.last_name or "",
-                "username": me.username or "",
-            }
-        except Exception as e:
-            logger.warning(f"Сессия невалидна: {e}")
+        # Используем lock чтобы не конкурировать с основным клиентом за SQLite сессию
+        async with self._mtproto_lock:
+            client = PyrogramClient(
+                session_path,
+                api_id=self._api_id,
+                api_hash=self._api_hash,
+            )
             try:
+                await client.connect()
+                me = await client.get_me()
                 await client.disconnect()
-            except Exception:
-                pass
-            return {"valid": False}
+                return {
+                    "valid": True,
+                    "first_name": me.first_name or "",
+                    "last_name": me.last_name or "",
+                    "username": me.username or "",
+                }
+            except Exception as e:
+                logger.warning(f"Сессия невалидна: {e}")
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+                return {"valid": False}
 
     # ========================================
     # MTProto — создание групп (Pyrogram)
     # ========================================
 
     async def _get_pyrogram_client(self) -> Any:
-        """Получить или создать Pyrogram клиент"""
+        """Получить или создать Pyrogram клиент (с блокировкой от конкурентного доступа)"""
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
 
-        if self._pyrogram_client is None:
-            session_path = os.path.join(
-                os.path.dirname(__file__), "telegram_session"
-            )
-            self._pyrogram_client = PyrogramClient(
-                session_path,
-                api_id=self._api_id,
-                api_hash=self._api_hash,
-                phone_number=self._phone,
-            )
+        async with self._mtproto_lock:
+            if self._pyrogram_client is None:
+                session_path = os.path.join(
+                    os.path.dirname(__file__), "telegram_session"
+                )
+                self._pyrogram_client = PyrogramClient(
+                    session_path,
+                    api_id=self._api_id,
+                    api_hash=self._api_hash,
+                    phone_number=self._phone,
+                )
 
-        if not self._pyrogram_client.is_connected:
-            await self._pyrogram_client.start()
+            if not self._pyrogram_client.is_connected:
+                await self._pyrogram_client.start()
 
         return self._pyrogram_client
 

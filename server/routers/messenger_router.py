@@ -74,6 +74,7 @@ def seed_default_messenger_scripts(db: Session):
         # CRM ИНДИВИДУАЛЬНЫЕ — project_start (§6.1)
         # =============================================
         MessengerScript(
+            name="Начало проекта (инд.)",
             script_type="project_start",
             project_type="Индивидуальный",
             stage_name=None,
@@ -107,6 +108,7 @@ def seed_default_messenger_scripts(db: Session):
         # CRM ИНДИВИДУАЛЬНЫЕ — stage_complete (§6.2)
         # =============================================
         MessengerScript(
+            name="Планировки (первичная)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 1, подэтап 1.1",
@@ -134,6 +136,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=2,
         ),
         MessengerScript(
+            name="Фин. планировка (1 круг)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 1, подэтап 1.2",
@@ -156,6 +159,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=3,
         ),
         MessengerScript(
+            name="Планировка (2 круг правок)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 1, подэтап 1.3",
@@ -177,6 +181,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=4,
         ),
         MessengerScript(
+            name="Планировка (платный круг)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 1, платный круг",
@@ -198,6 +203,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=5,
         ),
         MessengerScript(
+            name="Мудборды",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.1",
@@ -223,6 +229,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=6,
         ),
         MessengerScript(
+            name="Визуализация 1 помещения",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.2",
@@ -247,6 +254,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=7,
         ),
         MessengerScript(
+            name="Виз. 1 пом. (1 круг правок)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.3",
@@ -269,6 +277,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=8,
         ),
         MessengerScript(
+            name="Виз. 1 пом. (2 круг правок)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.4",
@@ -290,6 +299,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=9,
         ),
         MessengerScript(
+            name="Визуализации всех помещений",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.5",
@@ -313,6 +323,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=10,
         ),
         MessengerScript(
+            name="Виз. все (1 круг правок)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.6",
@@ -335,6 +346,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=11,
         ),
         MessengerScript(
+            name="Виз. все (2 круг правок)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, подэтап 2.7",
@@ -356,6 +368,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=12,
         ),
         MessengerScript(
+            name="Визуализация (платный круг)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 2, платный круг",
@@ -377,6 +390,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=13,
         ),
         MessengerScript(
+            name="Рабочая документация",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 3",
@@ -400,6 +414,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=14,
         ),
         MessengerScript(
+            name="Раб. документация (платный круг)",
             script_type="stage_complete",
             project_type="Индивидуальный",
             stage_name="Стадия 3, платный круг",
@@ -424,6 +439,7 @@ def seed_default_messenger_scripts(db: Session):
         # CRM ИНДИВИДУАЛЬНЫЕ — project_end (§6.4)
         # =============================================
         MessengerScript(
+            name="Завершение проекта (инд.)",
             script_type="project_end",
             project_type="Индивидуальный",
             stage_name=None,
@@ -456,6 +472,7 @@ def seed_default_messenger_scripts(db: Session):
         # CRM ШАБЛОННЫЕ — project_start (§6.1)
         # =============================================
         MessengerScript(
+            name="Начало проекта (шабл.)",
             script_type="project_start",
             project_type="Шаблонный",
             stage_name=None,
@@ -481,6 +498,7 @@ def seed_default_messenger_scripts(db: Session):
         # CRM ШАБЛОННЫЕ — stage_complete (§6.3)
         # =============================================
         MessengerScript(
+            name="Планировки (шабл.)",
             script_type="stage_complete",
             project_type="Шаблонный",
             stage_name="Стадия 1",
@@ -504,6 +522,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=18,
         ),
         MessengerScript(
+            name="Фин. планировка (шабл.)",
             script_type="stage_complete",
             project_type="Шаблонный",
             stage_name="Стадия 1, подэтап 1.2",
@@ -525,6 +544,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=19,
         ),
         MessengerScript(
+            name="Рабочие чертежи (шабл.)",
             script_type="stage_complete",
             project_type="Шаблонный",
             stage_name="Стадия 2",
@@ -546,6 +566,7 @@ def seed_default_messenger_scripts(db: Session):
             sort_order=20,
         ),
         MessengerScript(
+            name="3Д визуализация (шабл.)",
             script_type="stage_complete",
             project_type="Шаблонный",
             stage_name="Стадия 3",
@@ -570,6 +591,7 @@ def seed_default_messenger_scripts(db: Session):
         # CRM ШАБЛОННЫЕ — project_end (§6.4)
         # =============================================
         MessengerScript(
+            name="Завершение проекта (шабл.)",
             script_type="project_end",
             project_type="Шаблонный",
             stage_name=None,
@@ -594,6 +616,7 @@ def seed_default_messenger_scripts(db: Session):
         # АВТОРСКИЙ НАДЗОР — supervision_start (§7.1)
         # =============================================
         MessengerScript(
+            name="Начало надзора",
             script_type="supervision_start",
             project_type="Авторский надзор",
             stage_name=None,
@@ -627,6 +650,7 @@ def seed_default_messenger_scripts(db: Session):
         # АВТОРСКИЙ НАДЗОР — supervision_stage_complete (§7.2)
         # =============================================
         MessengerScript(
+            name="Завершение стадии надзора",
             script_type="supervision_stage_complete",
             project_type="Авторский надзор",
             stage_name=None,
@@ -650,6 +674,7 @@ def seed_default_messenger_scripts(db: Session):
         # АВТОРСКИЙ НАДЗОР — supervision_visit (§7.3)
         # =============================================
         MessengerScript(
+            name="Выезд надзора",
             script_type="supervision_visit",
             project_type="Авторский надзор",
             stage_name=None,
@@ -671,6 +696,7 @@ def seed_default_messenger_scripts(db: Session):
         # АВТОРСКИЙ НАДЗОР — supervision_end (§7.4)
         # =============================================
         MessengerScript(
+            name="Завершение надзора",
             script_type="supervision_end",
             project_type="Авторский надзор",
             stage_name=None,
@@ -695,6 +721,353 @@ def seed_default_messenger_scripts(db: Session):
             attach_stage_files=False,
             is_enabled=True,
             sort_order=26,
+        ),
+        # =============================================
+        # ЛИЧНЫЕ УВЕДОМЛЕНИЯ — Индивидуальные проекты (§2)
+        # =============================================
+        MessengerScript(
+            name="Назначение на проект",
+            script_type="personal_assigned",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Вы назначены {role_name} по проекту {address} ({client_name})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=27,
+        ),
+        MessengerScript(
+            name="Смена стадии (исполнитель)",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Проект {address} перешёл в \"{stage_name}\". Приступайте к работе."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=28,
+        ),
+        MessengerScript(
+            name="Смена стадии (проверяющий)",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Проект {address} перешёл в \"{stage_name}\". Вы — проверяющий."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=29,
+        ),
+        MessengerScript(
+            name="Сдача работы (проверяющему)",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "{executor_role} сдал работу по проекту {address}, стадия \"{stage_name}\". Проверьте."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=30,
+        ),
+        MessengerScript(
+            name="Возврат на исправление",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Работа по проекту {address} возвращена на исправление (правка #{revision_count})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=31,
+        ),
+        MessengerScript(
+            name="Отправлено клиенту",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Проект {address} отправлен клиенту на согласование ({stage_name})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=32,
+        ),
+        MessengerScript(
+            name="Клиент согласовал",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Клиент согласовал {stage_name} по проекту {address}."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=33,
+        ),
+        MessengerScript(
+            name="Акт подписан",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Акт по {stage_name} проекта {address} подписан."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=34,
+        ),
+        MessengerScript(
+            name="Проект завершён (личное)",
+            script_type="personal_crm_stage",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Проект {address} завершён."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=35,
+        ),
+        MessengerScript(
+            name="Дедлайн через 2 дня",
+            script_type="personal_deadline",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Дедлайн по проекту {address} через 2 рабочих дня ({deadline_date})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=36,
+        ),
+        MessengerScript(
+            name="Дедлайн просрочен",
+            script_type="personal_deadline",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Дедлайн по проекту {address} просрочен! Было: {deadline_date}."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=37,
+        ),
+        MessengerScript(
+            name="Создание оплаты",
+            script_type="personal_payment",
+            project_type="Индивидуальный",
+            stage_name=None,
+            message_template=(
+                "Создана оплата {amount} руб. по договору {contract_number} ({address})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=38,
+        ),
+        # =============================================
+        # ЛИЧНЫЕ УВЕДОМЛЕНИЯ — Шаблонные проекты (§3)
+        # =============================================
+        MessengerScript(
+            name="Назначение на проект (шабл.)",
+            script_type="personal_assigned",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "Вы назначены {role_name} по проекту {address} ({client_name})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=39,
+        ),
+        MessengerScript(
+            name="Смена стадии (шабл., исполнитель)",
+            script_type="personal_crm_stage",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "Проект {address} перешёл в \"{stage_name}\". Приступайте к работе."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=40,
+        ),
+        MessengerScript(
+            name="Сдача работы (шабл., проверяющему)",
+            script_type="personal_crm_stage",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "{executor_role} сдал работу по проекту {address}. Проверьте."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=41,
+        ),
+        MessengerScript(
+            name="Проект завершён (шабл., личное)",
+            script_type="personal_crm_stage",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "Проект {address} завершён."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=42,
+        ),
+        MessengerScript(
+            name="Дедлайн через 2 дня (шабл.)",
+            script_type="personal_deadline",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "Дедлайн по проекту {address} через 2 рабочих дня ({deadline_date})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=43,
+        ),
+        MessengerScript(
+            name="Дедлайн просрочен (шабл.)",
+            script_type="personal_deadline",
+            project_type="Шаблонный",
+            stage_name=None,
+            message_template=(
+                "Дедлайн по проекту {address} просрочен! Было: {deadline_date}."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=44,
+        ),
+        # =============================================
+        # ЛИЧНЫЕ УВЕДОМЛЕНИЯ — Авторский надзор (§4)
+        # =============================================
+        MessengerScript(
+            name="Создание карточки надзора",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Новая карточка авторского надзора: {address} ({client_name}). Назначьте сотрудников."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=45,
+        ),
+        MessengerScript(
+            name="Назначение ДАН",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Вы назначены дизайнером авторского надзора по объекту {address} ({client_name})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=46,
+        ),
+        MessengerScript(
+            name="Дедлайн стадии надзора",
+            script_type="personal_deadline",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Дедлайн по стадии \"{stage_name}\" надзора {address} через 2 рабочих дня ({deadline_date})."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=47,
+        ),
+        MessengerScript(
+            name="Завершение стадии (личное)",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Стадия \"{stage_name}\" завершена по надзору {address}."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=48,
+        ),
+        MessengerScript(
+            name="Приостановка надзора",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Карточка надзора {address} приостановлена. Причина: {pause_reason}."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=49,
+        ),
+        MessengerScript(
+            name="Возобновление надзора",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Карточка надзора {address} возобновлена."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=50,
+        ),
+        MessengerScript(
+            name="Выезд надзора (личное)",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Запланирован выезд по надзору {address} на {visit_date}."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=51,
+        ),
+        MessengerScript(
+            name="Надзор завершён (личное)",
+            script_type="personal_supervision",
+            project_type="Авторский надзор",
+            stage_name=None,
+            message_template=(
+                "Авторский надзор по {address} завершён."
+            ),
+            use_auto_deadline=False,
+            attach_stage_files=False,
+            is_enabled=True,
+            sort_order=52,
         ),
     ]
 
