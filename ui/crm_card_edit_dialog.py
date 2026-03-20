@@ -6963,7 +6963,7 @@ class CardEditDialog(QDialog):
         btn.setFixedSize(28, 28)
         btn.setToolTip(f'Пригласить в чат ({role_name})')
         btn.setEnabled(False)  # По умолчанию выключена, _update_chat_buttons_state включит при наличии чата
-        icon = IconLoader.get_icon('telegram')
+        icon = IconLoader.load('telegram', size=16)
         if icon and not icon.isNull():
             btn.setIcon(icon)
             btn.setIconSize(QSize(16, 16))
