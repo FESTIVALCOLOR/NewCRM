@@ -832,10 +832,49 @@ class TelegramService:
         try:
             async with self._mtproto_lock:
                 client = await self._ensure_pyrogram_client()
-                chat = await client.join_chat(invite_link)
-                chat_id = chat.id
-                title = chat.title or ""
-                logger.info(f"MTProto вступил в чат: {title} (chat_id={chat_id})")
+
+                # Пробуем вступить; если уже участник — получаем чат по ссылке
+                try:
+                    chat = await client.join_chat(invite_link)
+                    chat_id = chat.id
+                    title = chat.title or ""
+                    logger.info(f"MTProto вступил в чат: {title} (chat_id={chat_id})")
+                except Exception as join_err:
+                    err_msg = str(join_err)
+                    if "USER_ALREADY_PARTICIPANT" in err_msg or "INVITE_REQUEST_SENT" in err_msg:
+                        # Уже в чате — получаем info через get_chat по ссылке
+                        logger.info(f"Уже участник чата, получаем данные: {invite_link}")
+                        try:
+                            chat = await client.get_chat(invite_link)
+                            chat_id = chat.id
+                            title = chat.title or ""
+                        except Exception:
+                            # Пробуем извлечь hash из ссылки и получить info через API
+                            import re
+                            hash_match = re.search(r't\.me/\+([A-Za-z0-9_-]+)', invite_link)
+                            if hash_match:
+                                try:
+                                    from pyrogram import raw
+                                    invite_info = await client.invoke(
+                                        raw.functions.messages.CheckChatInvite(
+                                            hash=hash_match.group(1)
+                                        )
+                                    )
+                                    # ChatInviteAlready — мы уже в чате
+                                    ch = getattr(invite_info, 'chat', None)
+                                    if ch:
+                                        chat_id = -int(f"100{ch.id}") if getattr(ch, 'megagroup', False) or getattr(ch, 'broadcast', False) else -ch.id
+                                        title = getattr(ch, 'title', '') or ""
+                                        logger.info(f"CheckChatInvite → chat_id={chat_id}, title={title}")
+                                    else:
+                                        raise RuntimeError("CheckChatInvite не вернул chat")
+                                except Exception as check_err:
+                                    logger.error(f"CheckChatInvite ошибка: {check_err}")
+                                    raise join_err
+                            else:
+                                raise join_err
+                    else:
+                        raise
 
                 # Добавляем бота в чат и повышаем до админа
                 if self.bot_available:
@@ -843,9 +882,21 @@ class TelegramService:
                         bot_me = await self._bot.get_me()
                         bot_username = bot_me.username
                         if bot_username:
-                            await client.add_chat_members(chat_id, bot_username)
-                            logger.info(f"Бот @{bot_username} добавлен в чат {chat_id}")
-                            # Повышаем бота до админа
+                            # Проверяем, не в чате ли уже бот
+                            bot_already_in = False
+                            try:
+                                member = await client.get_chat_member(chat_id, bot_username)
+                                if member and member.status.value in ("member", "administrator", "owner"):
+                                    bot_already_in = True
+                                    logger.info(f"Бот @{bot_username} уже в чате {chat_id}")
+                            except Exception:
+                                pass
+
+                            if not bot_already_in:
+                                await client.add_chat_members(chat_id, bot_username)
+                                logger.info(f"Бот @{bot_username} добавлен в чат {chat_id}")
+
+                            # Повышаем бота до админа (даже если уже в чате — возможно без прав)
                             try:
                                 from pyrogram.types import ChatPrivileges as _CP
                                 await client.promote_chat_member(
