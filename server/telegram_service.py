@@ -8,6 +8,7 @@ import os
 import json
 import asyncio
 import logging
+import sqlite3 as _sqlite3
 from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -258,8 +259,7 @@ class TelegramService:
         if not PYROGRAM_AVAILABLE or not self._api_id or not self._api_hash:
             return {"valid": False}
 
-        session_path = os.path.join(os.path.dirname(__file__), "telegram_session")
-        session_file = session_path + ".session"
+        session_file = self._get_session_path() + ".session"
         if not os.path.exists(session_file):
             return {"valid": False}
 
@@ -275,16 +275,73 @@ class TelegramService:
                 }
             except Exception as e:
                 logger.warning(f"Сессия невалидна: {e}")
+                # Принудительно очистить клиент, чтобы не оставлять stale connection
+                self._force_close_client()
                 return {"valid": False}
 
     # ========================================
     # MTProto — создание групп (Pyrogram)
     # ========================================
 
+    def _get_session_path(self) -> str:
+        """Путь к файлу сессии Pyrogram (без расширения .session)."""
+        return os.path.join(os.path.dirname(__file__), "telegram_session")
+
+    def _prepare_session_db(self) -> None:
+        """Подготовить SQLite session DB: снять stale locks, переключить на WAL.
+        Вызывать ПЕРЕД созданием PyrogramClient.
+        """
+        db_path = self._get_session_path() + ".session"
+        if not os.path.exists(db_path):
+            return
+
+        try:
+            conn = _sqlite3.connect(db_path, timeout=30)
+            conn.execute("PRAGMA busy_timeout = 30000")
+            # WAL mode — намного устойчивее к блокировкам
+            conn.execute("PRAGMA journal_mode = WAL")
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            conn.close()
+            logger.debug("Session DB подготовлена: WAL mode, checkpoint OK")
+        except Exception as e:
+            logger.warning(f"Не удалось подготовить session DB: {e}")
+            # Крайняя мера — удаляем stale journal/wal/shm файлы
+            self._cleanup_session_locks()
+
+    def _cleanup_session_locks(self) -> None:
+        """Удалить stale lock-файлы SQLite сессии."""
+        db_path = self._get_session_path() + ".session"
+        for ext in ("-wal", "-shm", "-journal"):
+            lock_file = db_path + ext
+            if os.path.exists(lock_file):
+                try:
+                    os.remove(lock_file)
+                    logger.info(f"Удалён stale lock: {lock_file}")
+                except Exception as rm_err:
+                    logger.warning(f"Не удалось удалить {lock_file}: {rm_err}")
+
+    def _force_close_client(self) -> None:
+        """Принудительно закрыть Pyrogram клиент и его SQLite-соединение."""
+        client = self._pyrogram_client
+        if client is None:
+            return
+        # Закрыть SQLite storage напрямую (синхронный метод)
+        try:
+            if hasattr(client, 'storage') and client.storage:
+                if hasattr(client.storage, 'conn') and client.storage.conn:
+                    client.storage.conn.close()
+                    logger.debug("SQLite storage connection закрыта принудительно")
+        except Exception:
+            pass
+        self._pyrogram_client = None
+
     async def _ensure_pyrogram_client(self) -> Any:
         """Получить или создать Pyrogram клиент.
         ВАЖНО: вызывать только под self._mtproto_lock!
-        При ошибке 'database is locked' — пересоздаёт клиент с паузой (до 3 попыток).
+        При ошибке 'database is locked' — подготавливает DB и пересоздаёт клиент.
         """
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
@@ -292,9 +349,9 @@ class TelegramService:
         max_attempts = 3
         for attempt in range(max_attempts):
             if self._pyrogram_client is None:
-                session_path = os.path.join(
-                    os.path.dirname(__file__), "telegram_session"
-                )
+                # Подготовка session DB перед созданием клиента
+                self._prepare_session_db()
+                session_path = self._get_session_path()
                 self._pyrogram_client = PyrogramClient(
                     session_path,
                     api_id=self._api_id,
@@ -306,23 +363,24 @@ class TelegramService:
                 try:
                     await self._pyrogram_client.start()
                 except Exception as e:
-                    if "database is locked" in str(e) and attempt < max_attempts - 1:
-                        delay = 1.0 + attempt * 0.5  # 1.0, 1.5, ...
+                    err_msg = str(e)
+                    logger.error(
+                        f"Pyrogram start() failed (попытка {attempt+1}/{max_attempts}): {err_msg}"
+                    )
+                    if "database is locked" in err_msg and attempt < max_attempts - 1:
+                        delay = 2.0 + attempt * 2.0  # 2с, 4с
                         logger.warning(
-                            f"Pyrogram SQLite locked (попытка {attempt+1}/{max_attempts}), "
-                            f"пересоздаю клиент через {delay}с"
+                            f"SQLite locked — cleanup + retry через {delay}с"
                         )
-                        # Агрессивный cleanup: disconnect + stop + delete
+                        # Агрессивный cleanup: закрыть storage напрямую
                         try:
                             if self._pyrogram_client.is_connected:
                                 await self._pyrogram_client.disconnect()
                         except Exception:
                             pass
-                        try:
-                            await self._pyrogram_client.stop()
-                        except Exception:
-                            pass
-                        self._pyrogram_client = None
+                        self._force_close_client()
+                        # Подчистить lock-файлы
+                        self._cleanup_session_locks()
                         await asyncio.sleep(delay)
                         continue
                     raise
