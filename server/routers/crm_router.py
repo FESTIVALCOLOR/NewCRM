@@ -27,7 +27,7 @@ from schemas import (
     CompleteApprovalStageRequest, StageExecutorDeadlineRequest,
     CompleteStageExecutorRequest, ManagerAcceptanceRequest,
 )
-from services.notification_service import trigger_messenger_notification
+from services.notification_service import trigger_messenger_notification, send_survey_to_chat
 from services.notification_dispatcher import dispatch_notification
 from constants import (
     POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
@@ -848,6 +848,8 @@ async def move_crm_card_to_column(
                     card.id, 'project_end', stage_name=new_column,
                     sender_id=current_user.id
                 ))
+                # Автоотправка опроса (Яндекс Формы) с задержкой после завершающего скрипта
+                asyncio.create_task(send_survey_to_chat(card.id))
             elif 'Стадия' in new_column:
                 asyncio.create_task(trigger_messenger_notification(
                     card.id, 'stage_complete', stage_name=old_column,

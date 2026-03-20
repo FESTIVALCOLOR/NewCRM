@@ -415,6 +415,132 @@ async def trigger_messenger_notification(
         own_db.close()
 
 
+async def send_survey_to_chat(crm_card_id: int):
+    """
+    Автоматически создать опрос и отправить ссылку в чат при перемещении в 'Выполненный проект'.
+    Три формы: individual, template, supervision — выбор по project_type договора.
+    """
+    import asyncio as _asyncio
+    import secrets
+    from datetime import timedelta
+    from database import ClientSurvey
+
+    # Задержка чтобы сообщение опроса пришло после завершающего скрипта + PDF
+    await _asyncio.sleep(10)
+
+    YANDEX_FORM_IDS = {
+        'individual': '69b6c7214936397cd99e21f7',
+        'template': '69b6dce484227c670638562d',
+        'supervision': '69b6ddd784227c6ccf385618',
+    }
+    SURVEY_EXPIRY_DAYS = 30
+
+    own_db = SessionLocal()
+    try:
+        # Найти чат
+        chat = own_db.query(MessengerChat).filter(
+            MessengerChat.crm_card_id == crm_card_id,
+            MessengerChat.is_active == True
+        ).first()
+        if not chat or not chat.telegram_chat_id:
+            return
+
+        # Получить карточку и договор
+        card = own_db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+        if not card:
+            return
+        contract = own_db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if not contract:
+            return
+
+        # Определить project_type для формы
+        pt = (contract.project_type or '').lower()
+        if 'шаблон' in pt or 'template' in pt:
+            survey_type = 'template'
+        elif 'надзор' in pt or 'supervision' in pt:
+            survey_type = 'supervision'
+        else:
+            survey_type = 'individual'
+
+        form_id = YANDEX_FORM_IDS.get(survey_type)
+        if not form_id:
+            logger.warning(f"Форма не настроена для типа {survey_type}")
+            return
+
+        # Создать опрос в БД (если ещё нет активного)
+        existing = own_db.query(ClientSurvey).filter(
+            ClientSurvey.contract_id == contract.id,
+            ClientSurvey.project_type == survey_type,
+            ClientSurvey.status.in_(['pending', 'sent']),
+        ).first()
+
+        if existing:
+            survey = existing
+        else:
+            token = secrets.token_urlsafe(32)
+            survey = ClientSurvey(
+                contract_id=contract.id,
+                project_type=survey_type,
+                access_token=token,
+                status='pending',
+                expires_at=datetime.utcnow() + timedelta(days=SURVEY_EXPIRY_DAYS),
+            )
+            own_db.add(survey)
+            own_db.commit()
+            own_db.refresh(survey)
+            logger.info(f"Опрос создан: survey_id={survey.id}, contract={contract.id}, type={survey_type}")
+
+        survey_link = (
+            f"https://forms.yandex.ru/cloud/{form_id}/"
+            f"?contract_id={contract.id}"
+            f"&project_type={survey_type}"
+            f"&survey_token={survey.access_token}"
+        )
+
+        # Имя клиента для обращения
+        client_first_name = ''
+        if contract.client_id:
+            client = own_db.query(Client).filter(Client.id == contract.client_id).first()
+            if client:
+                client_first_name = _get_first_name(client.full_name or '')
+
+        greeting = f"{client_first_name}, " if client_first_name else ""
+
+        message = (
+            f"{greeting}мы будем очень благодарны, если Вы уделите 2 минуты "
+            f"и оцените нашу работу в коротком опросе.\n\n"
+            f"Ваше мнение помогает нам становиться лучше!\n\n"
+            f"👉 {survey_link}"
+        )
+
+        # Отправить в чат
+        tg = get_telegram_service()
+        msg_id = await tg.send_message(chat.telegram_chat_id, message)
+
+        # Обновить статус опроса
+        if msg_id:
+            survey.status = 'sent'
+            own_db.commit()
+
+            # Записать в лог
+            log_entry = MessengerMessageLog(
+                messenger_chat_id=chat.id,
+                message_type='auto_survey',
+                message_text=message,
+                sent_by=None,
+                telegram_message_id=msg_id,
+                delivery_status='sent',
+            )
+            own_db.add(log_entry)
+            own_db.commit()
+            logger.info(f"Опрос отправлен в чат: card={crm_card_id}, survey_id={survey.id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка отправки опроса (card={crm_card_id}): {e}")
+    finally:
+        own_db.close()
+
+
 async def trigger_supervision_notification(
     supervision_card_id: int,
     script_type: str,
