@@ -209,6 +209,39 @@ class MessageLogResponse(BaseModel):
 
 
 # =========================
+# PREVIEW / SEND SCRIPT
+# =========================
+
+class PreviewScriptRequest(BaseModel):
+    """Запрос предпросмотра скрипта перед отправкой"""
+    card_id: int
+    script_type: str = "stage_complete"
+    stage_name: Optional[str] = None  # подэтап, если None — берём column_name
+
+
+class PreviewScriptResponse(BaseModel):
+    """Ответ с рендеренным скриптом и файлами подэтапа"""
+    rendered_text: str  # готовый текст скрипта с подставленными переменными
+    script_id: Optional[int] = None
+    script_name: Optional[str] = None
+    stage_name: str  # стадия
+    deadline_date: Optional[str] = None  # дедлайн по норма-дням (dd.MM.yyyy)
+    norm_days: int = 0
+    files: List[dict] = []  # [{id, file_name, yandex_path, variation, file_type, public_link}]
+    chat_id: Optional[int] = None  # telegram_chat_id (для отправки)
+    messenger_chat_id: Optional[int] = None  # ID записи в messenger_chats
+
+
+class SendEditedScriptRequest(BaseModel):
+    """Отправка отредактированного скрипта в чат"""
+    card_id: int
+    text: str  # отредактированный текст
+    file_ids: List[int] = []  # ID файлов для отправки
+    deadline_date: Optional[str] = None  # dd.MM.yyyy — дедлайн для отображения
+    custom_deadline: bool = False  # если True — обновить custom_norm_days в timeline
+
+
+# =========================
 # INVITE
 # =========================
 

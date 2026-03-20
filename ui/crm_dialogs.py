@@ -2,7 +2,7 @@
 """Мелкие диалоги CRM, выделенные из crm_tab.py"""
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QScrollArea, QFrame, QDialog, QFormLayout,
-                             QLineEdit, QComboBox, QDateEdit,
+                             QLineEdit, QComboBox, QDateEdit, QCheckBox,
                              QGroupBox, QSpinBox, QTableWidget, QHeaderView,
                              QTableWidgetItem, QTabWidget, QTextEdit,
                              QStackedWidget, QRadioButton, QProgressBar)
@@ -5007,3 +5007,238 @@ class MeasurementDialog(QDialog):
             y = (screen.height() - self.height()) // 3 + screen.top()
             self.move(x, y)
 
+
+
+
+# ===========================================================================
+# ScriptPreviewDialog
+# ===========================================================================
+
+class ScriptPreviewDialog(QDialog):
+    """Диалог предпросмотра скрипта перед отправкой в групповой чат."""
+
+    def __init__(self, parent, card_data, data_access, api_client=None):
+        super().__init__(parent)
+        self.card_data = card_data
+        self.data = data_access
+        self.api_client = api_client
+        self._preview_data = None
+        self._original_deadline = None
+        self._file_checkboxes = []
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self._init_ui()
+        self._load_preview()
+
+    def _init_ui(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet(
+            "QFrame#borderFrame { background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px; }"
+        )
+        outer.addWidget(frame)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
+
+        stage = self.card_data.get("column_name", "")
+        title_bar = CustomTitleBar(self, "Отправить клиенту: " + stage, simple_mode=True)
+        title_bar.setStyleSheet(
+            "background-color: #F5F5F5; border-top-left-radius: 10px; border-top-right-radius: 10px;"
+        )
+        frame_layout.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet(
+            "background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;"
+        )
+        c_layout = QVBoxLayout(content)
+        c_layout.setContentsMargins(16, 12, 16, 12)
+        c_layout.setSpacing(10)
+
+        lbl_text = QLabel("Текст сообщения:")
+        lbl_text.setStyleSheet("font-size: 12px; font-weight: bold; color: #2C3E50;")
+        c_layout.addWidget(lbl_text)
+
+        self._text_edit = QTextEdit()
+        self._text_edit.setMinimumHeight(160)
+        self._text_edit.setStyleSheet(
+            "QTextEdit { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px;"
+            " font-size: 12px; background-color: #FAFAFA; }"
+        )
+        c_layout.addWidget(self._text_edit)
+
+        lbl_files = QLabel("Файлы для отправки:")
+        lbl_files.setStyleSheet("font-size: 12px; font-weight: bold; color: #2C3E50;")
+        c_layout.addWidget(lbl_files)
+
+        self._files_scroll = QScrollArea()
+        self._files_scroll.setWidgetResizable(True)
+        self._files_scroll.setMaximumHeight(140)
+        self._files_scroll.setStyleSheet(
+            "QScrollArea { border: 1px solid #d9d9d9; border-radius: 6px; background-color: #FAFAFA; }"
+        )
+        self._files_container = QWidget()
+        self._files_layout = QVBoxLayout(self._files_container)
+        self._files_layout.setContentsMargins(8, 6, 8, 6)
+        self._files_layout.setSpacing(4)
+        self._no_files_label = QLabel("Загрузка...")
+        self._no_files_label.setStyleSheet("color: #999; font-size: 11px;")
+        self._files_layout.addWidget(self._no_files_label)
+        self._files_scroll.setWidget(self._files_container)
+        c_layout.addWidget(self._files_scroll)
+
+        deadline_row = QHBoxLayout()
+        deadline_row.setSpacing(10)
+        lbl_deadline = QLabel("Дедлайн согласования:")
+        lbl_deadline.setStyleSheet("font-size: 12px; font-weight: bold; color: #2C3E50;")
+        deadline_row.addWidget(lbl_deadline)
+
+        self._deadline_edit = CustomDateEdit()
+        self._deadline_edit.setCalendarPopup(True)
+        add_today_button_to_dateedit(self._deadline_edit)
+        self._deadline_edit.setDisplayFormat("dd.MM.yyyy")
+        self._deadline_edit.setDate(QDate.currentDate())
+        self._deadline_edit.setFixedWidth(140)
+        self._deadline_edit.setStyleSheet(
+            "QDateEdit { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px;"
+            " font-size: 12px; background-color: white; }"
+        )
+        deadline_row.addWidget(self._deadline_edit)
+        self._norm_days_label = QLabel("")
+        self._norm_days_label.setStyleSheet("font-size: 11px; color: #888;")
+        deadline_row.addWidget(self._norm_days_label)
+        deadline_row.addStretch()
+        c_layout.addLayout(deadline_row)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedHeight(32)
+        cancel_btn.setStyleSheet(
+            "QPushButton { background-color: #F5F5F5; color: #595959;"
+            " border: 1px solid #d9d9d9; border-radius: 6px;"
+            " padding: 0px 20px; font-size: 12px; }"
+            " QPushButton:hover { background-color: #E8E8E8; }"
+        )
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+
+        send_btn = QPushButton("Отправить в чат")
+        send_btn.setFixedHeight(32)
+        send_btn.setStyleSheet(
+            "QPushButton { background-color: #58D68D; color: white;"
+            " border: none; border-radius: 6px;"
+            " padding: 0px 20px; font-size: 12px; font-weight: bold; }"
+            " QPushButton:hover { background-color: #48C77D; }"
+        )
+        send_btn.clicked.connect(self._on_send)
+        self._send_btn = send_btn
+        btn_row.addWidget(send_btn)
+        c_layout.addLayout(btn_row)
+        frame_layout.addWidget(content)
+        self.setFixedSize(580, 520)
+
+        if self.parent():
+            pg = self.parent().window().geometry() if self.parent().window() else self.parent().geometry()
+            self.move(
+                pg.x() + (pg.width() - self.width()) // 2,
+                pg.y() + (pg.height() - self.height()) // 3,
+            )
+
+    def _load_preview(self):
+        card_id = self.card_data.get("id")
+        if not card_id or not self.data:
+            return
+        try:
+            preview = self.data.preview_script(card_id, "stage_complete")
+            if not preview:
+                self._text_edit.setPlainText("(Скрипт не найден для данной стадии)")
+                self._no_files_label.setText("Нет файлов")
+                return
+            self._preview_data = preview
+            self._text_edit.setPlainText(preview.get("rendered_text", ""))
+            dl = preview.get("deadline_date", "")
+            if dl:
+                try:
+                    from datetime import datetime as dt
+                    d = dt.strptime(dl, "%d.%m.%Y")
+                    self._deadline_edit.setDate(QDate(d.year, d.month, d.day))
+                    self._original_deadline = dl
+                except Exception:
+                    pass
+            norm = preview.get("norm_days", 0)
+            if norm:
+                self._norm_days_label.setText("(норма: " + str(norm) + " раб. дн.)")
+            files = preview.get("files", [])
+            self._populate_files(files)
+            if not preview.get("chat_id"):
+                self._send_btn.setEnabled(False)
+                self._send_btn.setToolTip("Чат не создан для этой карточки")
+        except Exception as e:
+            self._text_edit.setPlainText("Ошибка загрузки скрипта: " + str(e))
+
+    def _populate_files(self, files):
+        self._no_files_label.setVisible(False)
+        if not files:
+            self._no_files_label.setText("Нет файлов для этого подэтапа")
+            self._no_files_label.setVisible(True)
+            return
+        self._file_checkboxes = []
+        for f in files:
+            cb = QCheckBox()
+            name = f.get("file_name", "?")
+            variation = f.get("variation", 1)
+            label = name
+            if variation and variation > 1:
+                label += " (вариант " + str(variation) + ")"
+            cb.setText(label)
+            cb.setChecked(True)
+            cb.setProperty("file_id", f.get("id"))
+            cb.setStyleSheet("font-size: 11px; padding: 2px 0;")
+            self._files_layout.addWidget(cb)
+            self._file_checkboxes.append(cb)
+        self._files_layout.addStretch()
+
+    def _on_send(self):
+        text = self._text_edit.toPlainText().strip()
+        if not text:
+            CustomMessageBox(self, "Ошибка", "Текст сообщения не может быть пустым", "warning").exec_()
+            return
+        selected_ids = []
+        for cb in self._file_checkboxes:
+            if cb.isChecked():
+                fid = cb.property("file_id")
+                if fid:
+                    selected_ids.append(fid)
+        current_dl = self._deadline_edit.date().toString("dd.MM.yyyy")
+        custom_deadline = (self._original_deadline and current_dl != self._original_deadline)
+        card_id = self.card_data.get("id")
+
+        from PyQt5.QtWidgets import QApplication
+        progress = create_progress_dialog("Отправка", "Отправка сообщения в чат...", None, 0, self)
+        progress.show()
+        QApplication.processEvents()
+        try:
+            result = self.data.send_edited_script(
+                card_id=card_id, text=text, file_ids=selected_ids,
+                deadline_date=current_dl if custom_deadline else None,
+                custom_deadline=bool(custom_deadline),
+            )
+            progress.close()
+            if result and result.get("status") == "sent":
+                sent_files = result.get("sent_files", 0)
+                msg = "Сообщение отправлено в чат."
+                if sent_files > 0:
+                    msg += "\nФайлов прикреплено: " + str(sent_files)
+                if custom_deadline:
+                    msg += "\nДедлайн согласования: " + current_dl
+                CustomMessageBox(self, "Отправлено", msg, "success").exec_()
+                self.accept()
+            else:
+                CustomMessageBox(self, "Ошибка", "Не удалось отправить сообщение", "error").exec_()
+        except Exception as e:
+            progress.close()
+            CustomMessageBox(self, "Ошибка", "Ошибка отправки: " + str(e), "error").exec_()

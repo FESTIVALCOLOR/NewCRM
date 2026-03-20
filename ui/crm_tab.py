@@ -3326,13 +3326,13 @@ class CRMCard(QFrame):
                 ).exec_()
                 return
 
-        reply = CustomQuestionBox(
-            self,
-            'Отправить клиенту',
-            f'Принять работу и отправить клиенту по стадии "{current_column}"?\n\n'
-            f'Дедлайн будет приостановлен до получения ответа.'
-        ).exec_()
-        if reply == QDialog.Accepted:
+        # Открываем диалог предпросмотра скрипта перед отправкой
+        from ui.crm_dialogs import ScriptPreviewDialog
+        dlg = ScriptPreviewDialog(self, self.card_data, self.data, self.api_client)
+        result = dlg.exec_()
+
+        if result == QDialog.Accepted:
+            # Скрипт отправлен в чат — теперь выполняем серверный workflow
             try:
                 if self.data.is_multi_user:
                     self.data.workflow_client_send(self.card_data['id'])
@@ -3348,7 +3348,7 @@ class CRMCard(QFrame):
                         break
                     parent = parent.parent()
             except Exception as e:
-                CustomMessageBox(self, 'Ошибка', f'Не удалось отправить клиенту: {e}', 'error').exec_()
+                CustomMessageBox(self, 'Ошибка', f'Не удалось обновить статус: {e}', 'error').exec_()
 
     def send_to_client(self):
         """Оставлен для обратной совместимости — вызывает send_to_client_combined"""

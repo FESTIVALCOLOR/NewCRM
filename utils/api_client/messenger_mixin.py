@@ -120,6 +120,32 @@ class MessengerMixin:
         except Exception:
             return False
 
+    def preview_script(self, card_id: int, script_type: str = 'stage_complete',
+                       stage_name: str = None) -> Dict[str, Any]:
+        """Предпросмотр скрипта с рендерингом переменных"""
+        payload = {'card_id': card_id, 'script_type': script_type}
+        if stage_name:
+            payload['stage_name'] = stage_name
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/preview-script", json=payload
+        )
+        return self._handle_response(response)
+
+    def send_edited_script(self, card_id: int, text: str, file_ids: list = None,
+                           deadline_date: str = None, custom_deadline: bool = False) -> Dict[str, Any]:
+        """Отправить отредактированный скрипт в групповой чат"""
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/send-edited-script",
+            json={
+                'card_id': card_id,
+                'text': text,
+                'file_ids': file_ids or [],
+                'deadline_date': deadline_date,
+                'custom_deadline': custom_deadline,
+            }
+        )
+        return self._handle_response(response)
+
     # --- Скрипты ---
 
     def get_messenger_scripts(self, project_type: str = None, script_type: str = None) -> List[Dict[str, Any]]:

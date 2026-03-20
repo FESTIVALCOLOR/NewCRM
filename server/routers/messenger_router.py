@@ -31,13 +31,14 @@ from messenger_schemas import (
     MessengerScriptCreate, MessengerScriptUpdate, MessengerScriptResponse,
     MessengerSettingUpdate, MessengerSettingResponse, MessengerSettingsBulkUpdate,
     SendMessageRequest, SendFilesRequest, SendScriptMessageRequest, MessageLogResponse,
-    SendInvitesRequest
+    SendInvitesRequest, PreviewScriptRequest, PreviewScriptResponse, SendEditedScriptRequest,
 )
 from telegram_service import get_telegram_service, PYROGRAM_AVAILABLE
 from email_service import get_email_service
 from services.notification_service import (
     send_invites_to_members, build_script_context, decline_name_dative,
     trigger_messenger_notification, trigger_supervision_notification,
+    _find_matching_script,
 )
 
 logger = logging.getLogger(__name__)
@@ -1157,6 +1158,241 @@ def _add_chat_members(
         members_resp.append(ChatMemberResponse.model_validate(member))
 
     return members_resp
+
+
+# =============================================
+# PREVIEW SCRIPT (предпросмотр перед отправкой)
+# =============================================
+
+@router.post("/preview-script", response_model=PreviewScriptResponse)
+async def preview_script(
+    data: PreviewScriptRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Предпросмотр скрипта с рендерингом переменных и списком файлов подэтапа"""
+    from database import ProjectTimelineEntry, StageWorkflowState
+
+    card = db.query(CRMCard).filter(CRMCard.id == data.card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    stage_name = data.stage_name or card.column_name or ''
+    project_type = contract.project_type or ''
+
+    # 1. Найти подходящий скрипт
+    script = _find_matching_script(db, data.script_type, stage_name, project_type)
+
+    # 2. Собрать контекст и рендерить
+    ctx = build_script_context(db, card, contract)
+    ctx['stage_name'] = stage_name
+
+    # 3. Вычислить дедлайн по норма-дням
+    from routers.crm_router import _resolve_stage_group, _add_business_days
+    stage_group = _resolve_stage_group(stage_name)
+    deadline_str = ''
+    norm_days_val = 0
+
+    if stage_group:
+        client_entry = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract.id,
+            ProjectTimelineEntry.stage_group == stage_group,
+            ProjectTimelineEntry.executor_role == 'Клиент',
+            ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+        ).order_by(ProjectTimelineEntry.sort_order).first()
+
+        if client_entry:
+            norm_days_val = client_entry.custom_norm_days or client_entry.norm_days or 3
+            # Ищем предыдущую заполненную строку для базовой даты
+            prev_entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract.id,
+                ProjectTimelineEntry.sort_order < client_entry.sort_order,
+                ProjectTimelineEntry.actual_date.isnot(None),
+                ProjectTimelineEntry.actual_date != ''
+            ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+
+            base_date = prev_entry.actual_date if prev_entry else None
+            if not base_date:
+                from datetime import date as date_type
+                base_date = date_type.today().strftime('%Y-%m-%d')
+
+            try:
+                deadline_date = _add_business_days(base_date, norm_days_val)
+                deadline_str = deadline_date.strftime('%d.%m.%Y')
+            except Exception:
+                pass
+
+    ctx['deadline'] = deadline_str
+    ctx['deadline_date'] = deadline_str
+
+    rendered_text = ''
+    script_id = None
+    script_name = None
+    if script:
+        tg = get_telegram_service()
+        rendered_text = tg.render_template(script.message_template, ctx)
+        script_id = script.id
+        script_name = script.name
+
+    # 4. Файлы подэтапа (stage = column_name карточки)
+    files = db.query(ProjectFile).filter(
+        ProjectFile.contract_id == contract.id,
+        ProjectFile.stage == stage_name,
+    ).order_by(ProjectFile.file_order, ProjectFile.variation).all()
+
+    files_list = [{
+        'id': f.id,
+        'file_name': f.file_name,
+        'yandex_path': f.yandex_path,
+        'variation': f.variation,
+        'file_type': f.file_type or 'file',
+        'public_link': f.public_link or '',
+    } for f in files]
+
+    # 5. Найти чат для карточки
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == data.card_id,
+        MessengerChat.is_active == True
+    ).first()
+
+    return PreviewScriptResponse(
+        rendered_text=rendered_text,
+        script_id=script_id,
+        script_name=script_name,
+        stage_name=stage_name,
+        deadline_date=deadline_str,
+        norm_days=norm_days_val,
+        files=files_list,
+        chat_id=chat.telegram_chat_id if chat else None,
+        messenger_chat_id=chat.id if chat else None,
+    )
+
+
+@router.post("/send-edited-script")
+async def send_edited_script(
+    data: SendEditedScriptRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить отредактированный скрипт в групповой чат + прикрепить выбранные файлы"""
+    from database import ProjectTimelineEntry
+
+    card = db.query(CRMCard).filter(CRMCard.id == data.card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
+
+    # Найти активный чат
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == data.card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if not chat or not chat.telegram_chat_id:
+        raise HTTPException(status_code=404, detail="Чат не найден или не привязан к Telegram")
+
+    tg = get_telegram_service()
+
+    # 1. Отправить текст
+    msg_id = await tg.send_message(chat.telegram_chat_id, data.text, parse_mode="HTML")
+
+    # 2. Отправить выбранные файлы
+    sent_file_ids = []
+    if data.file_ids:
+        from yandex_disk_service import get_yandex_disk_service
+        yd = get_yandex_disk_service()
+
+        for file_id in data.file_ids:
+            pf = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
+            if not pf or not pf.yandex_path:
+                continue
+            try:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=os.path.splitext(pf.file_name or '.file')[1]
+                ) as tmp:
+                    yd.download_file(pf.yandex_path, tmp.name)
+                    with open(tmp.name, 'rb') as f:
+                        file_bytes = f.read()
+                    fmsg_id = await tg.send_document_from_bytes(
+                        chat.telegram_chat_id,
+                        file_bytes,
+                        filename=pf.file_name,
+                        caption=pf.file_name,
+                    )
+                    if fmsg_id:
+                        sent_file_ids.append(fmsg_id)
+                os.unlink(tmp.name)
+            except Exception as e:
+                logger.warning(f"Ошибка отправки файла {pf.file_name}: {e}")
+
+    # 3. Обновить custom_norm_days если дедлайн изменён вручную
+    if data.custom_deadline and data.deadline_date:
+        from routers.crm_router import _resolve_stage_group, _add_business_days
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        stage_group = _resolve_stage_group(card.column_name)
+        if stage_group and contract:
+            client_entry = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract.id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role == 'Клиент',
+                ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
+            ).order_by(ProjectTimelineEntry.sort_order).first()
+
+            if client_entry:
+                # Считаем custom_norm_days из выбранного дедлайна
+                try:
+                    from datetime import date as date_type
+                    dl = datetime.strptime(data.deadline_date, '%d.%m.%Y').date()
+                    # Базовая дата — предыдущая заполненная строка или сегодня
+                    prev_entry = db.query(ProjectTimelineEntry).filter(
+                        ProjectTimelineEntry.contract_id == contract.id,
+                        ProjectTimelineEntry.sort_order < client_entry.sort_order,
+                        ProjectTimelineEntry.actual_date.isnot(None),
+                        ProjectTimelineEntry.actual_date != ''
+                    ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+
+                    base = prev_entry.actual_date if prev_entry else date_type.today().strftime('%Y-%m-%d')
+                    if isinstance(base, str):
+                        base = datetime.strptime(base, '%Y-%m-%d').date()
+
+                    # Считаем рабочие дни между base и dl
+                    from routers.crm_router import _is_working_day
+                    working = 0
+                    cur = base
+                    from datetime import timedelta
+                    while cur < dl:
+                        cur += timedelta(days=1)
+                        if _is_working_day(cur):
+                            working += 1
+
+                    if working != (client_entry.norm_days or 3):
+                        client_entry.custom_norm_days = working
+                        client_entry.updated_at = datetime.utcnow()
+                        logger.info(
+                            f"custom_norm_days обновлён: {client_entry.norm_days} → {working} "
+                            f"(contract={contract.id}, stage_group={stage_group})"
+                        )
+                except Exception as e:
+                    logger.warning(f"Ошибка расчёта custom_norm_days: {e}")
+
+    # 4. Логируем сообщение
+    log = MessengerMessageLog(
+        messenger_chat_id=chat.id,
+        message_type='script_manual',
+        message_text=data.text,
+        sent_by=current_user.id,
+        telegram_message_id=msg_id,
+        delivery_status='sent' if msg_id else 'failed',
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "status": "sent" if msg_id else "failed",
+        "telegram_message_id": msg_id,
+        "sent_files": len(sent_file_ids),
+    }
 
 
 # =============================================

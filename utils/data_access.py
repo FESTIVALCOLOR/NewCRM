@@ -3614,6 +3614,28 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] trigger_script error: {e}")
         return False
 
+    def preview_script(self, card_id: int, script_type: str = 'stage_complete',
+                       stage_name: str = None) -> Optional[Dict]:
+        """Предпросмотр скрипта с рендерингом переменных и файлами"""
+        if self.api_client:
+            try:
+                return self.api_client.preview_script(card_id, script_type, stage_name)
+            except Exception as e:
+                _safe_log(f"[DataAccess] preview_script error: {e}")
+        return None
+
+    def send_edited_script(self, card_id: int, text: str, file_ids: list = None,
+                           deadline_date: str = None, custom_deadline: bool = False) -> Optional[Dict]:
+        """Отправить отредактированный скрипт в групповой чат"""
+        if self.api_client:
+            try:
+                return self.api_client.send_edited_script(
+                    card_id, text, file_ids, deadline_date, custom_deadline
+                )
+            except Exception as e:
+                _safe_log(f"[DataAccess] send_edited_script error: {e}")
+        return None
+
     def create_messenger_script(self, data: Dict) -> Optional[Dict]:
         """Создать скрипт мессенджера"""
         if self.api_client:
