@@ -1095,6 +1095,12 @@ class CardEditDialog(QDialog):
             self.surveyor.currentIndexChanged.connect(
                 lambda: self.on_employee_changed(self.surveyor, 'Замерщик')
             )
+
+            # Обновлять состояние invite-кнопок при смене сотрудника
+            for combo_name in ('senior_manager', 'sdp', 'gap', 'manager'):
+                combo = getattr(self, combo_name, None)
+                if combo:
+                    combo.currentIndexChanged.connect(self._update_chat_buttons_state)
             # =========================================================================
 
             edit_layout.addStretch()
@@ -6724,11 +6730,32 @@ class CardEditDialog(QDialog):
                 self.start_script_btn.setEnabled(has_chat and is_online)
                 self.end_script_btn.setEnabled(has_chat and is_online)
 
-            # Кнопки приглашения сотрудников — активны только если чат создан
-            for btn_name in ('_invite_sm_btn', '_invite_sdp_btn', '_invite_gap_btn', '_invite_mgr_btn'):
+            # Кнопки приглашения сотрудников — активны если чат создан и сотрудник ещё не в чате
+            chat_member_ids = set()
+            if has_chat and self._messenger_chat_data:
+                for m in self._messenger_chat_data.get('members', []):
+                    if m.get('member_type') == 'employee':
+                        chat_member_ids.add(m.get('member_id'))
+
+            invite_btn_combo_map = {
+                '_invite_sm_btn': 'senior_manager',
+                '_invite_sdp_btn': 'sdp',
+                '_invite_gap_btn': 'gap',
+                '_invite_mgr_btn': 'manager',
+            }
+            for btn_name, combo_name in invite_btn_combo_map.items():
                 btn = getattr(self, btn_name, None)
-                if btn:
-                    btn.setEnabled(has_chat and is_online)
+                combo = getattr(self, combo_name, None)
+                if btn and combo:
+                    emp_id = combo.currentData()
+                    already_in_chat = emp_id in chat_member_ids if emp_id else False
+                    btn.setEnabled(has_chat and is_online and bool(emp_id) and not already_in_chat)
+                    if already_in_chat:
+                        btn.setToolTip('Уже в чате')
+                    elif not emp_id:
+                        btn.setToolTip('Сотрудник не назначен')
+                    else:
+                        btn.setToolTip(f'Пригласить в чат')
 
             if not is_online:
                 self.create_chat_btn.setToolTip("Требуется подключение к серверу")
@@ -6957,7 +6984,7 @@ class CardEditDialog(QDialog):
     def _make_invite_btn(self, role_name: str) -> QPushButton:
         """Создать кнопку приглашения сотрудника в чат."""
         btn = QPushButton()
-        btn.setFixedHeight(26)
+        btn.setFixedHeight(24)
         btn.setToolTip(f'Пригласить в чат ({role_name})')
         btn.setEnabled(False)
         icon = IconLoader.load('telegram', size=14)
@@ -6966,7 +6993,7 @@ class CardEditDialog(QDialog):
             btn.setIconSize(QSize(14, 14))
         btn.setStyleSheet("""
             QPushButton {
-                max-height: 26px; padding: 0px 5px;
+                max-height: 24px; padding: 0px 4px;
                 border: 1px solid #d9d9d9; border-radius: 4px;
                 background: #F8F9FA;
             }
@@ -7006,6 +7033,10 @@ class CardEditDialog(QDialog):
             try:
                 result = self.data.add_member_to_chat(chat_id, employee_id, role)
                 if result:
+                    # Добавляем в локальный список members чтобы кнопка стала неактивной
+                    if self._messenger_chat_data is not None:
+                        members = self._messenger_chat_data.setdefault('members', [])
+                        members.append({'member_type': 'employee', 'member_id': employee_id})
                     msg = f'{employee_name} ({role}) приглашён в чат'
                 else:
                     error = 'Не удалось добавить сотрудника в чат'
