@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Флаг доступности Pyrogram (MTProto)
 PYROGRAM_AVAILABLE = False
 try:
-    from pyrogram import Client as PyrogramClient
+    from pyrogram import Client as PyrogramClient, raw
     from pyrogram.types import ChatPhoto
     from pyrogram.errors import (
         FloodWait, UserNotParticipant, ChatAdminRequired,
@@ -340,6 +340,24 @@ class TelegramService:
                 group = await client.create_group(title, users or ["me"])
                 chat_id = group.id
 
+                # Повышаем бота до админа (чтобы бот мог кикать/удалять)
+                if bot_username:
+                    try:
+                        from pyrogram.types import ChatPrivileges
+                        await client.promote_chat_member(
+                            chat_id, bot_username,
+                            privileges=ChatPrivileges(
+                                can_manage_chat=True,
+                                can_delete_messages=True,
+                                can_restrict_members=True,
+                                can_invite_users=True,
+                                can_pin_messages=True,
+                            )
+                        )
+                        logger.info(f"Бот {bot_username} повышен до админа в {chat_id}")
+                    except Exception as e:
+                        logger.warning(f"Не удалось повысить бота до админа: {e}")
+
                 # Устанавливаем фото
                 if photo_path and os.path.exists(photo_path):
                     try:
@@ -349,8 +367,21 @@ class TelegramService:
                     except Exception as e:
                         logger.warning(f"Не удалось установить фото группы: {e}")
 
-                # Генерируем invite-ссылку
+                # Генерируем invite-ссылку (может конвертировать в supergroup)
                 invite_link = await client.export_chat_invite_link(chat_id)
+
+                # Включаем видимость истории для новых участников
+                # (работает только после конвертации в supergroup)
+                try:
+                    peer = await client.resolve_peer(chat_id)
+                    await client.invoke(
+                        raw.functions.channels.TogglePreHistoryHidden(
+                            channel=peer, enabled=False  # False = история ВИДНА новым участникам
+                        )
+                    )
+                    logger.info(f"История чата {chat_id} открыта для новых участников")
+                except Exception as e:
+                    logger.warning(f"Не удалось открыть историю чата {chat_id}: {e}")
 
                 logger.info(f"Группа создана: {title} (chat_id={chat_id})")
                 return {
@@ -368,9 +399,10 @@ class TelegramService:
                 logger.error(f"Ошибка создания группы: {e}")
                 raise
 
-    async def delete_group(self, chat_id: int) -> bool:
+    async def delete_group(self, chat_id: int, member_tg_ids: list = None) -> bool:
         """Удалить группу через MTProto: кикнуть всех участников, потом удалить группу.
-        Если MTProto недоступен — fallback на бота (кик через бота + leave).
+        Если MTProto недоступен — fallback на бота (кик по member_tg_ids + leave).
+        member_tg_ids — telegram_user_id участников из БД (для fallback через бота).
         """
         # Сначала пробуем через MTProto (полное удаление)
         if self.mtproto_available:
@@ -413,9 +445,21 @@ class TelegramService:
             except Exception as e:
                 logger.warning(f"MTProto ошибка удаления группы {chat_id}: {e}")
 
-        # Fallback: бот покидает чат
+        # Fallback: бот кикает участников по списку из БД и покидает чат
         if self.bot_available:
             try:
+                # Бот-админ кикает участников по telegram_user_id из БД
+                if member_tg_ids:
+                    bot_me = await self._bot.get_me()
+                    for tg_id in member_tg_ids:
+                        if tg_id == bot_me.id:
+                            continue
+                        try:
+                            await self._bot.ban_chat_member(chat_id, tg_id)
+                            logger.debug(f"Бот кикнул {tg_id} из {chat_id}")
+                        except Exception as kick_err:
+                            logger.warning(f"Бот не смог кикнуть {tg_id}: {kick_err}")
+
                 await self._bot.leave_chat(chat_id)
                 logger.info(f"Бот покинул чат {chat_id} (fallback)")
                 return True

@@ -1976,9 +1976,18 @@ async def delete_messenger_chat(
 
     tg = get_telegram_service()
 
+    # Собираем telegram_user_id участников из БД для кика
+    member_tg_ids = []
+    db_members = db.query(MessengerChatMember).filter(
+        MessengerChatMember.messenger_chat_id == chat_id
+    ).all()
+    for m in db_members:
+        if m.telegram_user_id:
+            member_tg_ids.append(m.telegram_user_id)
+
     # Если чат был создан автоматически — пробуем удалить группу
     if chat.creation_method == 'auto' and chat.telegram_chat_id:
-        await tg.delete_group(chat.telegram_chat_id)
+        await tg.delete_group(chat.telegram_chat_id, member_tg_ids=member_tg_ids)
     elif chat.telegram_chat_id and tg.bot_available:
         # Для привязанного чата — бот просто покидает
         await tg.leave_chat(chat.telegram_chat_id)
