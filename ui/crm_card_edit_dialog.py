@@ -7136,7 +7136,6 @@ class CardEditDialog(QDialog):
 
         # Загружаем выплаты из API или БД
         payments = self.data.get_payments_for_contract(self.card_data['contract_id'])
-        print(f"[PAYMENTS TAB] source={'API' if self.data.is_multi_user else 'LOCAL'}, count={len(payments)}, ids={[p.get('id') for p in payments]}")
 
         # Приоритеты ролей
         role_priority = {

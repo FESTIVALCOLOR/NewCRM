@@ -28,6 +28,7 @@ from schemas import (
     CompleteStageExecutorRequest, ManagerAcceptanceRequest,
 )
 from services.notification_service import trigger_messenger_notification, send_survey_to_chat
+from routers.payments_router import auto_create_employee_payment
 from services.notification_dispatcher import dispatch_notification
 from constants import (
     POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
@@ -616,6 +617,26 @@ async def update_crm_card(
             new_values=json.dumps({k: str(v) if v is not None else None for k, v in update_data.items()}, ensure_ascii=False)
         )
         db.add(activity)
+
+        # Автосоздание оплат при назначении сотрудника на роль
+        role_field_map = {
+            'senior_manager_id': 'Старший менеджер проектов',
+            'sdp_id': 'СДП',
+            'gap_id': 'ГАП',
+            'manager_id': 'Менеджер',
+            'surveyor_id': 'Замерщик',
+        }
+        for field, role in role_field_map.items():
+            if field in update_data:
+                new_emp = update_data[field]
+                old_emp = old_values.get(field)
+                if new_emp != old_emp and card.contract_id:
+                    try:
+                        auto_create_employee_payment(
+                            db, card.contract_id, card.id, new_emp, role
+                        )
+                    except Exception as e:
+                        logger.warning(f"[AUTO_PAY] Ошибка для {role}: {e}")
 
         db.commit()
         db.refresh(card)

@@ -343,6 +343,82 @@ async def calculate_payment_amount(
         return {'amount': 0, 'error': str(e)}
 
 
+def auto_create_employee_payment(db: Session, contract_id: int, crm_card_id: int,
+                                  employee_id: int, role: str):
+    """Автоматическое создание оплат при назначении сотрудника на роль.
+    Вызывается из crm_router при update_crm_card.
+    """
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        return
+
+    # Шаблонные проекты: СМП и Менеджер получают оклад, платежи не создаём
+    if contract.project_type == 'Шаблонный' and role in ('Старший менеджер проектов', 'Менеджер'):
+        return
+
+    area = float(contract.area) if contract.area else 0
+
+    # Удаляем старые оплаты для этой роли (не для исполнителей — только руководство/поддержка)
+    if role not in ('Дизайнер', 'Чертёжник'):
+        old_payments = db.query(Payment).filter(
+            Payment.contract_id == contract_id,
+            Payment.role == role,
+        ).all()
+        for p in old_payments:
+            db.delete(p)
+        if old_payments:
+            db.flush()
+            logger.info(f"[AUTO_PAY] Удалено {len(old_payments)} старых оплат для роли {role}")
+
+    # Рассчитываем сумму
+    amount = 0
+    if role == 'Замерщик':
+        rate = db.query(Rate).filter(Rate.role == 'Замерщик', Rate.city == contract.city).first()
+        if rate and rate.surveyor_price:
+            amount = float(rate.surveyor_price)
+    else:
+        if contract.project_type == 'Индивидуальный':
+            rate = db.query(Rate).filter(
+                Rate.project_type == 'Индивидуальный', Rate.role == role, Rate.stage_name.is_(None)
+            ).first()
+            if rate and rate.rate_per_m2:
+                amount = area * float(rate.rate_per_m2)
+        elif contract.project_type == 'Шаблонный':
+            rate = db.query(Rate).filter(
+                Rate.project_type == 'Шаблонный', Rate.role == role,
+                Rate.area_from <= area, or_(Rate.area_to >= area, Rate.area_to.is_(None))
+            ).order_by(Rate.area_from.asc()).first()
+            if rate and rate.fixed_price:
+                amount = float(rate.fixed_price)
+
+    # СДП — аванс + доплата
+    if role == 'СДП':
+        advance = amount / 2
+        balance = amount / 2
+        current_month = datetime.now().strftime('%Y-%m')
+
+        db.add(Payment(
+            contract_id=contract_id, crm_card_id=crm_card_id, employee_id=employee_id,
+            role=role, calculated_amount=advance, final_amount=advance,
+            payment_type='Аванс', report_month=current_month,
+        ))
+        db.add(Payment(
+            contract_id=contract_id, crm_card_id=crm_card_id, employee_id=employee_id,
+            role=role, calculated_amount=balance, final_amount=balance,
+            payment_type='Доплата',
+        ))
+        logger.info(f"[AUTO_PAY] Созданы аванс ({advance}) + доплата ({balance}) для {role}")
+    else:
+        db.add(Payment(
+            contract_id=contract_id, crm_card_id=crm_card_id, employee_id=employee_id,
+            role=role, calculated_amount=amount, final_amount=amount,
+            payment_type='Полная оплата',
+        ))
+        logger.info(f"[AUTO_PAY] Создана оплата {amount} для {role}")
+
+    db.flush()
+
+
 @router.get("/summary")
 async def get_payments_summary(
     year: int,
