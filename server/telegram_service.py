@@ -782,10 +782,13 @@ class TelegramService:
         self, template: str, context: Dict[str, str]
     ) -> str:
         """Подставить переменные в шаблон скрипта"""
+        import re
         result = template
         for key, value in context.items():
             placeholder = "{" + key + "}"
             result = result.replace(placeholder, str(value) if value else "")
+        # Убираем пустые (@), ( @) и подобные артефакты когда username не задан
+        result = re.sub(r'\s*\(@?\s*\)', '', result)
         return result
 
     async def send_script_message(
