@@ -967,10 +967,9 @@ class ContractDialog(QDialog):
         template_layout.addRow('Файл договора:', template_contract_file_layout)
 
         # === Акты (шаблонный) — 2 столбца: без подписи / с подписью ===
+        # У шаблонных нет стадии «концепция дизайна» → нет Акта КД и Инф. письма
         _tpl_act_rows = [
             ('act_planning', 'act_planning_signed', 'Акт ПР:'),
-            ('act_concept', 'act_concept_signed', 'Акт КД:'),
-            ('info_letter', 'info_letter_signed', 'Инф. письмо:'),
             ('act_final', 'act_final_signed', 'Акт финальный:'),
             ('additional_agreement', 'additional_agreement_signed', 'Доп. соглашение:'),
         ]
