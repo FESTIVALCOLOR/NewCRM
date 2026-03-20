@@ -6984,16 +6984,19 @@ class CardEditDialog(QDialog):
     def _make_invite_btn(self, role_name: str) -> QPushButton:
         """Создать кнопку приглашения сотрудника в чат."""
         btn = QPushButton()
-        btn.setFixedHeight(24)
+        btn.setFixedSize(24, 24)
         btn.setToolTip(f'Пригласить в чат ({role_name})')
         btn.setEnabled(False)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         icon = IconLoader.load('telegram', size=14)
         if icon and not icon.isNull():
             btn.setIcon(icon)
             btn.setIconSize(QSize(14, 14))
         btn.setStyleSheet("""
             QPushButton {
-                max-height: 24px; padding: 0px 4px;
+                min-height: 24px; max-height: 24px;
+                min-width: 24px; max-width: 24px;
+                padding: 0px;
                 border: 1px solid #d9d9d9; border-radius: 4px;
                 background: #F8F9FA;
             }
