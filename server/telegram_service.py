@@ -802,28 +802,95 @@ class TelegramService:
     # Привязка чата по invite-ссылке
     # ========================================
 
-    async def resolve_invite_link(self, invite_link: str) -> Optional[int]:
+    async def join_chat_by_link(self, invite_link: str) -> Optional[Dict[str, Any]]:
         """
-        Извлечь chat_id из invite-ссылки.
-        Бот должен быть уже добавлен в чат.
+        Вступить в чат по invite-ссылке через MTProto и добавить бота.
+        Возвращает {chat_id, title, invite_link} или None.
         """
-        if not self.bot_available:
-            return None
-
-        # Если это числовой ID
+        # Если это числовой ID — бот просто пробует получить чат
         try:
-            return int(invite_link)
+            numeric_id = int(invite_link)
+            if self.bot_available:
+                try:
+                    chat = await self._bot.get_chat(numeric_id)
+                    return {
+                        "chat_id": chat.id,
+                        "title": chat.title or "",
+                        "invite_link": invite_link,
+                    }
+                except Exception:
+                    pass
+            return {"chat_id": numeric_id, "title": "", "invite_link": invite_link}
         except ValueError:
             pass
 
-        # Пробуем получить чат напрямую
-        # (работает только если бот уже в чате)
-        # Для t.me/+hash ссылок бот не может resolve без вступления
-        logger.info(
-            f"Для привязки чата бот должен быть добавлен вручную. "
-            f"Ссылка: {invite_link}"
-        )
-        return None
+        # Вступаем через MTProto (user-аккаунт может join по invite-ссылке)
+        if not self.mtproto_available:
+            logger.warning("MTProto недоступен — не могу вступить в чат по ссылке")
+            return None
+
+        try:
+            async with self._mtproto_lock:
+                client = await self._ensure_pyrogram_client()
+                chat = await client.join_chat(invite_link)
+                chat_id = chat.id
+                title = chat.title or ""
+                logger.info(f"MTProto вступил в чат: {title} (chat_id={chat_id})")
+
+                # Добавляем бота в чат и повышаем до админа
+                if self.bot_available:
+                    try:
+                        bot_me = await self._bot.get_me()
+                        bot_username = bot_me.username
+                        if bot_username:
+                            await client.add_chat_members(chat_id, bot_username)
+                            logger.info(f"Бот @{bot_username} добавлен в чат {chat_id}")
+                            # Повышаем бота до админа
+                            try:
+                                from pyrogram.types import ChatPrivileges as _CP
+                                await client.promote_chat_member(
+                                    chat_id, bot_username,
+                                    privileges=_CP(
+                                        can_manage_chat=True,
+                                        can_post_messages=True,
+                                        can_edit_messages=True,
+                                        can_delete_messages=True,
+                                        can_invite_users=True,
+                                        can_restrict_members=True,
+                                        can_pin_messages=True,
+                                        can_manage_video_chats=True,
+                                    )
+                                )
+                                logger.info(f"Бот повышен до админа в чате {chat_id}")
+                            except Exception as promo_err:
+                                logger.warning(f"Не удалось повысить бота: {promo_err}")
+                    except Exception as bot_err:
+                        logger.warning(f"Не удалось добавить бота в чат: {bot_err}")
+
+                # Экспортируем invite-ссылку (если есть права)
+                final_link = invite_link
+                try:
+                    exported = await client.export_chat_invite_link(chat_id)
+                    if exported:
+                        final_link = exported
+                except Exception:
+                    pass
+
+                return {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "invite_link": final_link,
+                }
+        except Exception as e:
+            logger.error(f"Ошибка вступления в чат по ссылке {invite_link}: {e}")
+            return None
+
+    async def resolve_invite_link(self, invite_link: str) -> Optional[int]:
+        """
+        Извлечь chat_id из invite-ссылки (legacy, вызывает join_chat_by_link).
+        """
+        result = await self.join_chat_by_link(invite_link)
+        return result["chat_id"] if result else None
 
     # ========================================
     # Очистка

@@ -32,7 +32,8 @@ class MessengerMixin:
                 "invite_link": invite_link,
                 "messenger_type": messenger_type,
                 "members": members or []
-            }
+            },
+            timeout=60  # MTProto join + добавление бота + promote — долгая операция
         )
         return self._handle_response(response)
 

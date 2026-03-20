@@ -1799,14 +1799,23 @@ async def bind_messenger_chat(
     else:
         avatar_type = 'petrovich'
 
-    # Пробуем получить chat_id через бота (бот должен быть в группе)
+    # Вступаем в чат через MTProto + добавляем бота + повышаем до админа
     tg = get_telegram_service()
-    telegram_chat_id = None
+    messenger_settings = load_messenger_settings(db)
+    tg.configure(messenger_settings)
 
-    if tg.bot_available:
-        resolved = await tg.resolve_invite_link(data.invite_link)
-        if resolved:
-            telegram_chat_id = resolved
+    telegram_chat_id = None
+    final_invite_link = data.invite_link
+
+    join_result = await tg.join_chat_by_link(data.invite_link)
+    if join_result:
+        telegram_chat_id = join_result["chat_id"]
+        final_invite_link = join_result.get("invite_link") or data.invite_link
+        if join_result.get("title"):
+            chat_title = join_result["title"]  # Используем реальное название чата
+        logger.info(f"Привязка чата: вступили в {telegram_chat_id}, бот добавлен")
+    else:
+        logger.warning(f"Не удалось вступить в чат по ссылке {data.invite_link}, сохраняем без chat_id")
 
     chat = MessengerChat(
         contract_id=contract.id,
@@ -1814,7 +1823,7 @@ async def bind_messenger_chat(
         messenger_type=data.messenger_type,
         telegram_chat_id=telegram_chat_id,
         chat_title=chat_title,
-        invite_link=data.invite_link,
+        invite_link=final_invite_link,
         avatar_type=avatar_type,
         creation_method="manual",
         created_by=current_user.id,
@@ -1829,7 +1838,7 @@ async def bind_messenger_chat(
     db.commit()
 
     # Рассылаем invite-ссылки
-    asyncio.create_task(send_invites_to_members(chat.id, db))
+    asyncio.create_task(send_invites_to_members(chat.id))
 
     return MessengerChatDetailResponse(
         chat=MessengerChatResponse.model_validate(chat),
