@@ -158,10 +158,12 @@ DEFAULT_ROLE_PERMISSIONS = {
     },
     "Дизайнер": {
         "access.crm",
+        "crm_cards.update",
         "crm_cards.files_upload",
     },
     "Чертёжник": {
         "access.crm",
+        "crm_cards.update",
         "crm_cards.files_upload",
     },
     "Замерщик": {

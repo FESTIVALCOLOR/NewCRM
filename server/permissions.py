@@ -197,10 +197,12 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
     },
     "Дизайнер": {
         "access.crm",
+        "crm_cards.update",
         "crm_cards.files_upload",
     },
     "Чертёжник": {
         "access.crm",
+        "crm_cards.update",
         "crm_cards.files_upload",
     },
     POSITION_MEASURER: {
