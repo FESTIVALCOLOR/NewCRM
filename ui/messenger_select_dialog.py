@@ -12,9 +12,9 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QStackedWidget, QRadioButton, QButtonGroup,
     QLineEdit, QCheckBox, QGroupBox, QGridLayout, QWidget,
-    QSizePolicy, QScrollArea,
+    QSizePolicy, QScrollArea, QProgressBar,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QPixmap, QFont
 
 from utils.resource_path import resource_path
@@ -607,41 +607,76 @@ class MessengerSelectDialog(QDialog):
 
         members = self._collect_members()
 
+        # Блокируем кнопку + показываем прогресс
         self._create_btn.setEnabled(False)
-        self._create_btn.setText("Подождите...")
+        self._create_btn.setText("Создание чата...")
+        self._back_btn.setEnabled(False)
+        self._show_progress(True)
 
-        try:
-            if is_manual:
-                # Привязка
-                invite_link = self._invite_link_edit.text().strip()
-                result = self._do_bind(crm_card_id, invite_link, members)
-            else:
-                # Автоматическое создание
-                result = self._do_create(crm_card_id, members, chat_title)
+        # Запускаем создание в фоновом потоке
+        import threading
 
-            if result:
-                self.result_chat_data = result
-                CustomMessageBox(
-                    self, "Готово",
-                    "Чат успешно " + ("привязан" if is_manual else "создан"),
-                    "success",
-                ).exec_()
-                self.accept()
-            else:
-                CustomMessageBox(
-                    self, "Ошибка",
-                    "Не удалось " + ("привязать" if is_manual else "создать") + " чат.\n"
-                    "Проверьте подключение к серверу.",
-                    "error",
-                ).exec_()
-        except Exception as e:
-            logger.error(f"Ошибка создания чата: {e}")
+        def _worker():
+            result = None
+            error = None
+            try:
+                if is_manual:
+                    invite_link_val = self._invite_link_edit.text().strip()
+                    result = self._do_bind(crm_card_id, invite_link_val, members)
+                else:
+                    result = self._do_create(crm_card_id, members, chat_title)
+            except Exception as e:
+                error = str(e)
+
+            # Возвращаемся в UI-поток
+            QTimer.singleShot(0, lambda: self._on_create_finished(result, error, is_manual))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _show_progress(self, show: bool):
+        """Показать/скрыть прогрессбар создания чата."""
+        if not hasattr(self, '_progress_bar'):
+            self._progress_bar = QProgressBar(self)
+            self._progress_bar.setRange(0, 0)  # Indeterminate mode
+            self._progress_bar.setFixedHeight(4)
+            self._progress_bar.setTextVisible(False)
+            self._progress_bar.setStyleSheet("""
+                QProgressBar { border: none; background: transparent; }
+                QProgressBar::chunk { background-color: #ffd93c; }
+            """)
+            # Вставляем перед кнопками (в конец layout страницы 2)
+            page = self._stack.widget(1)
+            if page and page.layout():
+                page.layout().addWidget(self._progress_bar)
+        self._progress_bar.setVisible(show)
+
+    def _on_create_finished(self, result, error, is_manual):
+        """Callback из фонового потока — обработка результата."""
+        from ui.custom_message_box import CustomMessageBox
+
+        self._show_progress(False)
+        self._create_btn.setEnabled(True)
+        self._back_btn.setEnabled(True)
+        self._update_create_btn_text()
+
+        if error:
+            logger.error(f"Ошибка создания чата: {error}")
+            CustomMessageBox(self, "Ошибка", f"Произошла ошибка:\n{error}", "error").exec_()
+        elif result:
+            self.result_chat_data = result
             CustomMessageBox(
-                self, "Ошибка", f"Произошла ошибка:\n{str(e)}", "error",
+                self, "Готово",
+                "Чат успешно " + ("привязан" if is_manual else "создан"),
+                "success",
             ).exec_()
-        finally:
-            self._create_btn.setEnabled(True)
-            self._update_create_btn_text()
+            self.accept()
+        else:
+            CustomMessageBox(
+                self, "Ошибка",
+                "Не удалось " + ("привязать" if is_manual else "создать") + " чат.\n"
+                "Проверьте подключение к серверу.",
+                "error",
+            ).exec_()
 
     def _do_create(self, card_id: int, members: List[Dict], chat_title: str = None) -> Optional[Dict]:
         """Автоматическое создание чата через MTProto"""
