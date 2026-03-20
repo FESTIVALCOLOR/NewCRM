@@ -1216,6 +1216,14 @@ async def preview_script(
     ctx = build_script_context(db, card, contract)
     ctx['stage_name'] = substage_group or stage_name
 
+    # Подпись отправителя = текущий пользователь (не роль из карточки)
+    sender_name = current_user.full_name or ''
+    ctx['sender_name'] = sender_name
+    # Шаблоны используют {senior_manager} или {manager_name} для подписи —
+    # в превью заменяем на текущего пользователя (plain text, без tg-ссылки)
+    ctx['senior_manager'] = sender_name
+    ctx['manager_name'] = sender_name
+
     # 3. Вычислить дедлайн по норма-дням
     deadline_str = ''
     norm_days_val = 0
@@ -1297,6 +1305,7 @@ async def preview_script(
         deadline_date=deadline_str,
         norm_days=norm_days_val,
         files=files_list,
+        sender_name=sender_name,
         chat_id=chat.telegram_chat_id if chat else None,
         messenger_chat_id=chat.id if chat else None,
     )

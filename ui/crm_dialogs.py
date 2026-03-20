@@ -5102,6 +5102,7 @@ class ScriptPreviewDialog(QDialog):
         self._deadline_edit.setDisplayFormat("dd.MM.yyyy")
         self._deadline_edit.setDate(QDate.currentDate())
         self._deadline_edit.setFixedWidth(140)
+        self._deadline_edit.dateChanged.connect(self._on_deadline_changed)
         self._deadline_edit.setStyleSheet(
             "QDateEdit { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px;"
             " font-size: 12px; background-color: white; }"
@@ -5201,6 +5202,19 @@ class ScriptPreviewDialog(QDialog):
             self._files_layout.addWidget(cb)
             self._file_checkboxes.append(cb)
         self._files_layout.addStretch()
+
+    def _on_deadline_changed(self, new_date):
+        """Обновить дедлайн в тексте сообщения при смене даты в календаре."""
+        if not self._original_deadline:
+            return
+        new_dl = new_date.toString("dd.MM.yyyy")
+        text = self._text_edit.toPlainText()
+        # Заменить текущую дату дедлайна в тексте на новую
+        current_dl = getattr(self, '_current_text_deadline', self._original_deadline)
+        if current_dl and current_dl in text:
+            text = text.replace(current_dl, new_dl)
+            self._text_edit.setPlainText(text)
+        self._current_text_deadline = new_dl
 
     def _on_send(self):
         text = self._text_edit.toPlainText().strip()

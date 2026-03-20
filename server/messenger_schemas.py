@@ -228,6 +228,7 @@ class PreviewScriptResponse(BaseModel):
     deadline_date: Optional[str] = None  # дедлайн по норма-дням (dd.MM.yyyy)
     norm_days: int = 0
     files: List[dict] = []  # [{id, file_name, yandex_path, variation, file_type, public_link}]
+    sender_name: Optional[str] = None  # имя отправителя (текущий пользователь)
     chat_id: Optional[int] = None  # telegram_chat_id (для отправки)
     messenger_chat_id: Optional[int] = None  # ID записи в messenger_chats
 
