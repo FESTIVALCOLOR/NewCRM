@@ -750,9 +750,6 @@ class CardEditDialog(QDialog):
             for surv in _emps_by_pos('Замерщик'):
                 self.surveyor.addItem(surv['full_name'], surv['id'])
             surveyor_row.addWidget(self.surveyor, 1)
-            self._invite_surv_btn = self._make_invite_btn('Замерщик')
-            self._invite_surv_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.surveyor, 'Замерщик'))
-            surveyor_row.addWidget(self._invite_surv_btn)
 
             team_layout.addLayout(surveyor_row)
 
@@ -6728,7 +6725,7 @@ class CardEditDialog(QDialog):
                 self.end_script_btn.setEnabled(has_chat and is_online)
 
             # Кнопки приглашения сотрудников — активны только если чат создан
-            for btn_name in ('_invite_sm_btn', '_invite_sdp_btn', '_invite_gap_btn', '_invite_mgr_btn', '_invite_surv_btn'):
+            for btn_name in ('_invite_sm_btn', '_invite_sdp_btn', '_invite_gap_btn', '_invite_mgr_btn'):
                 btn = getattr(self, btn_name, None)
                 if btn:
                     btn.setEnabled(has_chat and is_online)
@@ -6940,7 +6937,7 @@ class CardEditDialog(QDialog):
         self._chat_action_running = True
         self._show_chat_progress(True)
         for btn_name in ('invite_client_btn', 'start_script_btn', 'end_script_btn', 'delete_chat_btn', 'create_chat_btn',
-                         '_invite_sm_btn', '_invite_sdp_btn', '_invite_gap_btn', '_invite_mgr_btn', '_invite_surv_btn'):
+                         '_invite_sm_btn', '_invite_sdp_btn', '_invite_gap_btn', '_invite_mgr_btn'):
             btn = getattr(self, btn_name, None)
             if btn:
                 btn.setEnabled(False)
@@ -6958,21 +6955,23 @@ class CardEditDialog(QDialog):
             CustomMessageBox(self, 'Готово', msg, 'success').exec_()
 
     def _make_invite_btn(self, role_name: str) -> QPushButton:
-        """Создать квадратную кнопку приглашения сотрудника в чат."""
+        """Создать кнопку приглашения сотрудника в чат."""
         btn = QPushButton()
-        btn.setFixedSize(28, 28)
+        btn.setFixedHeight(28)
         btn.setToolTip(f'Пригласить в чат ({role_name})')
-        btn.setEnabled(False)  # По умолчанию выключена, _update_chat_buttons_state включит при наличии чата
+        btn.setEnabled(False)
         icon = IconLoader.load('telegram', size=16)
         if icon and not icon.isNull():
             btn.setIcon(icon)
             btn.setIconSize(QSize(16, 16))
         btn.setStyleSheet("""
             QPushButton {
-                background: #F8F9FA; border: 1px solid #d9d9d9; border-radius: 4px;
+                max-height: 26px; padding: 0px 5px;
+                border: 1px solid #d9d9d9; border-radius: 4px;
+                background: #F8F9FA;
             }
             QPushButton:hover { background: #E3F2FD; border-color: #2196F3; }
-            QPushButton:disabled { opacity: 0.4; background: #F0F0F0; }
+            QPushButton:disabled { background: #F0F0F0; }
         """)
         return btn
 
