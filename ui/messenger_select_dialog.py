@@ -264,7 +264,7 @@ class MessengerSelectDialog(QDialog):
         self._radio_manual.setStyleSheet(_RADIO_STYLE)
         self._method_group.addButton(self._radio_auto, 0)
         self._method_group.addButton(self._radio_manual, 1)
-        self._radio_manual.setChecked(True)  # По умолчанию — ручная привязка (безопаснее)
+        self._radio_auto.setChecked(True)  # По умолчанию — автоматическое создание
 
         layout.addWidget(self._radio_auto)
         layout.addWidget(self._radio_manual)

@@ -284,11 +284,13 @@ class TelegramService:
     async def _ensure_pyrogram_client(self) -> Any:
         """Получить или создать Pyrogram клиент.
         ВАЖНО: вызывать только под self._mtproto_lock!
+        При ошибке 'database is locked' — пересоздаёт клиент с паузой (до 3 попыток).
         """
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
 
-        for attempt in range(2):
+        max_attempts = 3
+        for attempt in range(max_attempts):
             if self._pyrogram_client is None:
                 session_path = os.path.join(
                     os.path.dirname(__file__), "telegram_session"
@@ -304,14 +306,24 @@ class TelegramService:
                 try:
                     await self._pyrogram_client.start()
                 except Exception as e:
-                    if "database is locked" in str(e) and attempt == 0:
-                        logger.warning(f"Pyrogram SQLite locked, пересоздаю клиент (попытка {attempt+1})")
+                    if "database is locked" in str(e) and attempt < max_attempts - 1:
+                        delay = 1.0 + attempt * 0.5  # 1.0, 1.5, ...
+                        logger.warning(
+                            f"Pyrogram SQLite locked (попытка {attempt+1}/{max_attempts}), "
+                            f"пересоздаю клиент через {delay}с"
+                        )
+                        # Агрессивный cleanup: disconnect + stop + delete
+                        try:
+                            if self._pyrogram_client.is_connected:
+                                await self._pyrogram_client.disconnect()
+                        except Exception:
+                            pass
                         try:
                             await self._pyrogram_client.stop()
                         except Exception:
                             pass
                         self._pyrogram_client = None
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(delay)
                         continue
                     raise
             break
@@ -371,15 +383,45 @@ class TelegramService:
                 invite_link = await client.export_chat_invite_link(chat_id)
 
                 # Включаем видимость истории для новых участников
-                # (работает только после конвертации в supergroup)
+                # promote_chat_member обычно конвертирует basic group в supergroup
                 try:
                     peer = await client.resolve_peer(chat_id)
-                    await client.invoke(
-                        raw.functions.channels.TogglePreHistoryHidden(
-                            channel=peer, enabled=False  # False = история ВИДНА новым участникам
+                    # resolve_peer возвращает InputPeerChannel, а API требует InputChannel
+                    if hasattr(peer, 'channel_id'):
+                        channel = raw.types.InputChannel(
+                            channel_id=peer.channel_id,
+                            access_hash=peer.access_hash
                         )
-                    )
-                    logger.info(f"История чата {chat_id} открыта для новых участников")
+                        await client.invoke(
+                            raw.functions.channels.TogglePreHistoryHidden(
+                                channel=channel,
+                                enabled=False  # False = история ВИДНА новым участникам
+                            )
+                        )
+                        logger.info(f"История чата {chat_id} открыта для новых участников")
+                    else:
+                        # Если группа ещё базовая — принудительная миграция
+                        logger.info(f"Чат {chat_id} — базовая группа, пробуем миграцию в supergroup")
+                        try:
+                            updates = await client.invoke(
+                                raw.functions.messages.MigrateChat(chat_id=-chat_id)
+                            )
+                            # Ищем новый channel в результате миграции
+                            for ch in getattr(updates, 'chats', []):
+                                if getattr(ch, 'megagroup', False):
+                                    new_channel = raw.types.InputChannel(
+                                        channel_id=ch.id,
+                                        access_hash=ch.access_hash
+                                    )
+                                    await client.invoke(
+                                        raw.functions.channels.TogglePreHistoryHidden(
+                                            channel=new_channel, enabled=False
+                                        )
+                                    )
+                                    logger.info(f"Чат мигрирован в supergroup, история открыта")
+                                    break
+                        except Exception as mig_err:
+                            logger.warning(f"Миграция в supergroup не удалась: {mig_err}")
                 except Exception as e:
                     logger.warning(f"Не удалось открыть историю чата {chat_id}: {e}")
 
