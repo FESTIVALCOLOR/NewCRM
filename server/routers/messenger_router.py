@@ -1183,30 +1183,59 @@ async def preview_script(
     stage_name = data.stage_name or card.column_name or ''
     project_type = contract.project_type or ''
 
+    # Определяем stage_group и текущий подэтап через workflow state
+    from routers.crm_router import _resolve_stage_group, _add_business_days
+    stage_group = _resolve_stage_group(stage_name)
+
+    # Получить текущий подэтап из workflow state → substage_group из timeline
+    script_stage_name = stage_name  # fallback
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == data.card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+
+    substage_group = ''
+    if wf and wf.current_substep_code and stage_group:
+        # Найти timeline entry по substep_code → получить substage_group
+        tl_entry = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract.id,
+            ProjectTimelineEntry.stage_code == wf.current_substep_code,
+        ).first()
+        if tl_entry and tl_entry.substage_group:
+            substage_group = tl_entry.substage_group
+            # Скрипты имеют stage_name в формате "Стадия N, подэтап X.Y"
+            # Маппинг: STAGE1 + "Подэтап 1.1" → "Стадия 1, подэтап 1.1"
+            stage_num = stage_group.replace('STAGE', '')
+            substep_num = substage_group.replace('Подэтап ', '')
+            script_stage_name = f"Стадия {stage_num}, подэтап {substep_num}"
+
     # 1. Найти подходящий скрипт
-    script = _find_matching_script(db, data.script_type, stage_name, project_type)
+    script = _find_matching_script(db, data.script_type, script_stage_name, project_type)
 
     # 2. Собрать контекст и рендерить
     ctx = build_script_context(db, card, contract)
-    ctx['stage_name'] = stage_name
+    ctx['stage_name'] = substage_group or stage_name
 
     # 3. Вычислить дедлайн по норма-дням
-    from routers.crm_router import _resolve_stage_group, _add_business_days
-    stage_group = _resolve_stage_group(stage_name)
     deadline_str = ''
     norm_days_val = 0
 
     if stage_group:
-        client_entry = db.query(ProjectTimelineEntry).filter(
+        # Ищем следующую незаполненную клиентскую строку в текущем подэтапе
+        client_q = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract.id,
             ProjectTimelineEntry.stage_group == stage_group,
             ProjectTimelineEntry.executor_role == 'Клиент',
             ProjectTimelineEntry.actual_date.is_(None) | (ProjectTimelineEntry.actual_date == '')
-        ).order_by(ProjectTimelineEntry.sort_order).first()
+        )
+        if substage_group:
+            client_q = client_q.filter(
+                ProjectTimelineEntry.substage_group == substage_group
+            )
+        client_entry = client_q.order_by(ProjectTimelineEntry.sort_order).first()
 
         if client_entry:
             norm_days_val = client_entry.custom_norm_days or client_entry.norm_days or 3
-            # Ищем предыдущую заполненную строку для базовой даты
             prev_entry = db.query(ProjectTimelineEntry).filter(
                 ProjectTimelineEntry.contract_id == contract.id,
                 ProjectTimelineEntry.sort_order < client_entry.sort_order,
@@ -1237,10 +1266,12 @@ async def preview_script(
         script_id = script.id
         script_name = script.name
 
-    # 4. Файлы подэтапа (stage = column_name карточки)
+    # 4. Файлы подэтапа
+    # STAGE1 → stage1, STAGE2 → stage2, STAGE3 → stage3
+    file_stage_code = stage_group.lower() if stage_group else ''
     files = db.query(ProjectFile).filter(
         ProjectFile.contract_id == contract.id,
-        ProjectFile.stage == stage_name,
+        ProjectFile.stage == file_stage_code,
     ).order_by(ProjectFile.file_order, ProjectFile.variation).all()
 
     files_list = [{
