@@ -1435,27 +1435,31 @@ async def send_act(
     await tg.send_message(chat.telegram_chat_id, data.text, parse_mode="HTML")
 
     # 2. Отправить ссылки на акты из договора
+    #    link в БД — ссылка на ПАПКУ, не на файл.
+    #    Поэтому собираем путь к конкретному файлу и публикуем его.
     sent_files = 0
     if data.act_prefixes:
         contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
         if contract:
-            from urllib.parse import quote
+            from yandex_disk_service import get_yandex_disk_service
             file_lines = []
             for prefix in data.act_prefixes:
-                link = getattr(contract, f'{prefix}_link', '') or ''
                 yandex_path = getattr(contract, f'{prefix}_yandex_path', '') or ''
-                file_name = getattr(contract, f'{prefix}_file_name', '') or f'{prefix}.pdf'
+                file_name = getattr(contract, f'{prefix}_file_name', '') or ''
 
-                url = link
-                if not url and yandex_path:
-                    yd = yandex_path
-                    if yd.startswith('disk:'):
-                        yd = yd[5:]
-                    encoded = quote(yd, safe='/')
-                    url = f"https://disk.yandex.ru/client/disk{encoded}"
+                if not yandex_path or not file_name:
+                    continue
 
-                if url:
-                    file_lines.append(f'<a href="{url}">{file_name}</a>')
+                # yandex_path — путь к папке, file_name — имя файла
+                file_full_path = f"{yandex_path}/{file_name}"
+                try:
+                    yd_svc = get_yandex_disk_service()
+                    public_url = yd_svc.get_public_link(file_full_path)
+                except Exception:
+                    public_url = ''
+
+                if public_url:
+                    file_lines.append(f'<a href="{public_url}">{file_name}</a>')
                 else:
                     file_lines.append(file_name)
                 sent_files += 1
