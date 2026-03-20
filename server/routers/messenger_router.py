@@ -1343,34 +1343,33 @@ async def send_edited_script(
     # 1. Отправить текст
     msg_id = await tg.send_message(chat.telegram_chat_id, data.text, parse_mode="HTML")
 
-    # 2. Отправить выбранные файлы
-    sent_file_ids = []
+    # 2. Отправить выбранные файлы как ссылки на Яндекс.Диск
+    #    (мгновенно, без скачивания/загрузки, без лимита 50МБ)
+    sent_file_count = 0
     if data.file_ids:
-        from yandex_disk_service import get_yandex_disk_service
-        yd = get_yandex_disk_service()
-
+        file_lines = []
         for file_id in data.file_ids:
             pf = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
-            if not pf or not pf.yandex_path:
+            if not pf:
                 continue
-            try:
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=os.path.splitext(pf.file_name or '.file')[1]
-                ) as tmp:
-                    yd.download_file(pf.yandex_path, tmp.name)
-                    with open(tmp.name, 'rb') as f:
-                        file_bytes = f.read()
-                    fmsg_id = await tg.send_document_from_bytes(
-                        chat.telegram_chat_id,
-                        file_bytes,
-                        filename=pf.file_name,
-                        caption=pf.file_name,
-                    )
-                    if fmsg_id:
-                        sent_file_ids.append(fmsg_id)
-                os.unlink(tmp.name)
-            except Exception as e:
-                logger.warning(f"Ошибка отправки файла {pf.file_name}: {e}")
+            link = pf.public_link or ''
+            if not link and pf.yandex_path:
+                # Генерируем ссылку из пути ЯД
+                from urllib.parse import quote
+                yd_path = pf.yandex_path
+                if yd_path.startswith('disk:'):
+                    yd_path = yd_path[5:]
+                encoded = quote(yd_path, safe='/')
+                link = f"https://disk.yandex.ru/client/disk{encoded}"
+            if link:
+                file_lines.append(f'<a href="{link}">{pf.file_name}</a>')
+            else:
+                file_lines.append(pf.file_name)
+            sent_file_count += 1
+
+        if file_lines:
+            files_msg = "\n".join(file_lines)
+            await tg.send_message(chat.telegram_chat_id, files_msg, parse_mode="HTML")
 
     # 3. Обновить custom_norm_days если дедлайн изменён вручную
     if data.custom_deadline and data.deadline_date:
@@ -1437,7 +1436,7 @@ async def send_edited_script(
     return {
         "status": "sent" if msg_id else "failed",
         "telegram_message_id": msg_id,
-        "sent_files": len(sent_file_ids),
+        "sent_files": sent_file_count,
     }
 
 
