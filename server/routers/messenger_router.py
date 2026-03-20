@@ -46,6 +46,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messenger"])
 sync_messenger_router = APIRouter(tags=["sync"])
 
+# Lock для предотвращения одновременного создания чата для одной карточки
+_chat_creation_locks: dict[int, asyncio.Lock] = {}
+
 
 # =============================================
 # HELPER-ФУНКЦИИ
@@ -1644,6 +1647,25 @@ async def create_messenger_chat(
     db: Session = Depends(get_db)
 ):
     """Создать чат автоматически (MTProto) для CRM-карточки"""
+    # Lock per card: предотвращает race condition при двойном клике
+    card_id = data.crm_card_id
+    if card_id not in _chat_creation_locks:
+        _chat_creation_locks[card_id] = asyncio.Lock()
+    lock = _chat_creation_locks[card_id]
+
+    if lock.locked():
+        raise HTTPException(status_code=409, detail="Чат уже создаётся, подождите")
+
+    async with lock:
+        return await _do_create_messenger_chat(data, current_user, db)
+
+
+async def _do_create_messenger_chat(
+    data: MessengerChatCreate,
+    current_user: Employee,
+    db: Session,
+):
+    """Внутренняя логика создания чата (под lock)."""
     # Перечитываем настройки (для консистентности между воркерами)
     messenger_settings = load_messenger_settings(db)
     tg_svc = get_telegram_service()

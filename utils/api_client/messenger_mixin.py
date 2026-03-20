@@ -16,7 +16,8 @@ class MessengerMixin:
         response = self._request(
             'POST',
             f"{self.base_url}/api/v1/messenger/chats",
-            json=payload
+            json=payload,
+            timeout=60  # Создание TG-группы + миграция в supergroup — долгая операция
         )
         return self._handle_response(response)
 
