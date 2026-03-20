@@ -499,12 +499,13 @@ class TelegramService:
         Если MTProto недоступен — fallback на бота (кик по member_tg_ids + leave).
         member_tg_ids — telegram_user_id участников из БД (для fallback через бота).
         """
+        mtproto_success = False
+
         # Сначала пробуем через MTProto (полное удаление)
         if self.mtproto_available:
             try:
                 async with self._mtproto_lock:
                     client = await self._ensure_pyrogram_client()
-                    kicked_all = False
 
                     # Кикаем всех участников перед удалением
                     try:
@@ -517,33 +518,36 @@ class TelegramService:
                             try:
                                 await client.ban_chat_member(chat_id, member.user.id)
                                 kicked_count += 1
-                                logger.debug(f"Кикнут участник {member.user.id} из {chat_id}")
                             except Exception as kick_err:
                                 logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
-                        kicked_all = True
                         logger.info(f"Исключено {kicked_count} участников из {chat_id}")
+                        mtproto_success = True
                     except Exception as members_err:
                         logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
 
                     # Пробуем удалить группу целиком
                     try:
                         await client.delete_supergroup(chat_id)
-                        logger.info(f"Группа {chat_id} удалена")
+                        logger.info(f"Группа {chat_id} удалена через MTProto")
                         return True
                     except Exception as del_err:
-                        logger.warning(f"Не удалось удалить группу {chat_id}: {del_err}")
+                        logger.warning(f"delete_supergroup({chat_id}): {del_err}")
                         try:
                             await client.leave_chat(chat_id)
+                            mtproto_success = True
                         except Exception:
                             pass
-                        return kicked_all
             except Exception as e:
                 logger.warning(f"MTProto ошибка удаления группы {chat_id}: {e}")
 
+        # Если MTProto полностью справился — не нужен fallback
+        if mtproto_success:
+            return True
+
         # Fallback: бот кикает участников по списку из БД и покидает чат
         if self.bot_available:
+            kicked_any = False
             try:
-                # Бот-админ кикает участников по telegram_user_id из БД
                 if member_tg_ids:
                     bot_me = await self._bot.get_me()
                     for tg_id in member_tg_ids:
@@ -551,15 +555,21 @@ class TelegramService:
                             continue
                         try:
                             await self._bot.ban_chat_member(chat_id, tg_id)
+                            kicked_any = True
                             logger.debug(f"Бот кикнул {tg_id} из {chat_id}")
                         except Exception as kick_err:
                             logger.warning(f"Бот не смог кикнуть {tg_id}: {kick_err}")
+            except Exception as e:
+                logger.warning(f"Бот: ошибка кика участников {chat_id}: {e}")
 
+            try:
                 await self._bot.leave_chat(chat_id)
                 logger.info(f"Бот покинул чат {chat_id} (fallback)")
                 return True
             except Exception as bot_err:
                 logger.warning(f"Бот не смог покинуть чат {chat_id}: {bot_err}")
+                return kicked_any
+
         return False
 
     # ========================================

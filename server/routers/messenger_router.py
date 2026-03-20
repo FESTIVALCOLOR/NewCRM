@@ -1992,8 +1992,17 @@ async def delete_messenger_chat(
         # Для привязанного чата — бот просто покидает
         await tg.leave_chat(chat.telegram_chat_id)
 
-    # Помечаем как неактивный
+    # Помечаем как неактивный + деактивируем orphan-чаты этой карточки
     chat.is_active = False
+    if chat.crm_card_id:
+        orphans = db.query(MessengerChat).filter(
+            MessengerChat.crm_card_id == chat.crm_card_id,
+            MessengerChat.id != chat.id,
+            MessengerChat.is_active == True
+        ).all()
+        for orphan in orphans:
+            orphan.is_active = False
+            logger.info(f"Деактивирован orphan-чат id={orphan.id} для карточки {chat.crm_card_id}")
     db.commit()
 
     return {"status": "deleted", "chat_id": chat_id}
