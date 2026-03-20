@@ -253,7 +253,7 @@ class TelegramService:
 
     async def check_session_valid(self) -> Dict[str, Any]:
         """Проверить, есть ли валидная Pyrogram-сессия.
-        Возвращает info о пользователе или None.
+        Использует основной клиент (под _mtproto_lock), не создавая отдельного.
         """
         if not PYROGRAM_AVAILABLE or not self._api_id or not self._api_hash:
             return {"valid": False}
@@ -263,17 +263,10 @@ class TelegramService:
         if not os.path.exists(session_file):
             return {"valid": False}
 
-        # Используем lock чтобы не конкурировать с основным клиентом за SQLite сессию
         async with self._mtproto_lock:
-            client = PyrogramClient(
-                session_path,
-                api_id=self._api_id,
-                api_hash=self._api_hash,
-            )
             try:
-                await client.connect()
+                client = await self._ensure_pyrogram_client()
                 me = await client.get_me()
-                await client.disconnect()
                 return {
                     "valid": True,
                     "first_name": me.first_name or "",
@@ -282,22 +275,20 @@ class TelegramService:
                 }
             except Exception as e:
                 logger.warning(f"Сессия невалидна: {e}")
-                try:
-                    await client.disconnect()
-                except Exception:
-                    pass
                 return {"valid": False}
 
     # ========================================
     # MTProto — создание групп (Pyrogram)
     # ========================================
 
-    async def _get_pyrogram_client(self) -> Any:
-        """Получить или создать Pyrogram клиент (с блокировкой от конкурентного доступа)"""
+    async def _ensure_pyrogram_client(self) -> Any:
+        """Получить или создать Pyrogram клиент.
+        ВАЖНО: вызывать только под self._mtproto_lock!
+        """
         if not self.mtproto_available:
             raise RuntimeError("MTProto не настроен")
 
-        async with self._mtproto_lock:
+        for attempt in range(2):
             if self._pyrogram_client is None:
                 session_path = os.path.join(
                     os.path.dirname(__file__), "telegram_session"
@@ -310,7 +301,20 @@ class TelegramService:
                 )
 
             if not self._pyrogram_client.is_connected:
-                await self._pyrogram_client.start()
+                try:
+                    await self._pyrogram_client.start()
+                except Exception as e:
+                    if "database is locked" in str(e) and attempt == 0:
+                        logger.warning(f"Pyrogram SQLite locked, пересоздаю клиент (попытка {attempt+1})")
+                        try:
+                            await self._pyrogram_client.stop()
+                        except Exception:
+                            pass
+                        self._pyrogram_client = None
+                        await asyncio.sleep(0.5)
+                        continue
+                    raise
+            break
 
         return self._pyrogram_client
 
@@ -324,93 +328,100 @@ class TelegramService:
         Создать группу через MTProto.
         Возвращает: {chat_id, title, invite_link}
         """
-        client = await self._get_pyrogram_client()
+        async with self._mtproto_lock:
+            client = await self._ensure_pyrogram_client()
 
-        try:
-            # Создаём группу (нужен хотя бы один участник — бот)
-            users = []
-            if bot_username:
-                users.append(bot_username)
+            try:
+                # Создаём группу (нужен хотя бы один участник — бот)
+                users = []
+                if bot_username:
+                    users.append(bot_username)
 
-            group = await client.create_group(title, users or ["me"])
-            chat_id = group.id
+                group = await client.create_group(title, users or ["me"])
+                chat_id = group.id
 
-            # Устанавливаем фото
-            if photo_path and os.path.exists(photo_path):
-                try:
-                    await client.set_chat_photo(
-                        chat_id=chat_id, photo=photo_path
-                    )
-                except Exception as e:
-                    logger.warning(f"Не удалось установить фото группы: {e}")
+                # Устанавливаем фото
+                if photo_path and os.path.exists(photo_path):
+                    try:
+                        await client.set_chat_photo(
+                            chat_id=chat_id, photo=photo_path
+                        )
+                    except Exception as e:
+                        logger.warning(f"Не удалось установить фото группы: {e}")
 
-            # Генерируем invite-ссылку
-            invite_link = await client.export_chat_invite_link(chat_id)
+                # Генерируем invite-ссылку
+                invite_link = await client.export_chat_invite_link(chat_id)
 
-            logger.info(f"Группа создана: {title} (chat_id={chat_id})")
-            return {
-                "chat_id": chat_id,
-                "title": title,
-                "invite_link": invite_link,
-            }
+                logger.info(f"Группа создана: {title} (chat_id={chat_id})")
+                return {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "invite_link": invite_link,
+                }
 
-        except FloodWait as e:
-            logger.error(f"Telegram FloodWait: ожидание {e.value} сек")
-            raise RuntimeError(
-                f"Telegram ограничил запросы. Повторите через {e.value} сек."
-            )
-        except Exception as e:
-            logger.error(f"Ошибка создания группы: {e}")
-            raise
+            except FloodWait as e:
+                logger.error(f"Telegram FloodWait: ожидание {e.value} сек")
+                raise RuntimeError(
+                    f"Telegram ограничил запросы. Повторите через {e.value} сек."
+                )
+            except Exception as e:
+                logger.error(f"Ошибка создания группы: {e}")
+                raise
 
     async def delete_group(self, chat_id: int) -> bool:
-        """Удалить группу через MTProto: кикнуть всех участников, потом удалить группу"""
-        kicked_all = False
-        try:
-            client = await self._get_pyrogram_client()
-
-            # Кикаем всех участников перед удалением
+        """Удалить группу через MTProto: кикнуть всех участников, потом удалить группу.
+        Если MTProto недоступен — fallback на бота (кик через бота + leave).
+        """
+        # Сначала пробуем через MTProto (полное удаление)
+        if self.mtproto_available:
             try:
-                me = await client.get_me()
-                my_id = me.id
-                kicked_count = 0
-                async for member in client.get_chat_members(chat_id):
-                    if member.user.id == my_id:
-                        continue
+                async with self._mtproto_lock:
+                    client = await self._ensure_pyrogram_client()
+                    kicked_all = False
+
+                    # Кикаем всех участников перед удалением
                     try:
-                        await client.ban_chat_member(chat_id, member.user.id)
-                        kicked_count += 1
-                        logger.debug(f"Кикнут участник {member.user.id} из {chat_id}")
-                    except Exception as kick_err:
-                        logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
-                kicked_all = True
-                logger.info(f"Исключено {kicked_count} участников из {chat_id}")
-            except Exception as members_err:
-                logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
+                        me = await client.get_me()
+                        my_id = me.id
+                        kicked_count = 0
+                        async for member in client.get_chat_members(chat_id):
+                            if member.user.id == my_id:
+                                continue
+                            try:
+                                await client.ban_chat_member(chat_id, member.user.id)
+                                kicked_count += 1
+                                logger.debug(f"Кикнут участник {member.user.id} из {chat_id}")
+                            except Exception as kick_err:
+                                logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
+                        kicked_all = True
+                        logger.info(f"Исключено {kicked_count} участников из {chat_id}")
+                    except Exception as members_err:
+                        logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
 
-            # Пробуем удалить группу целиком
+                    # Пробуем удалить группу целиком
+                    try:
+                        await client.delete_supergroup(chat_id)
+                        logger.info(f"Группа {chat_id} удалена")
+                        return True
+                    except Exception as del_err:
+                        logger.warning(f"Не удалось удалить группу {chat_id}: {del_err}")
+                        try:
+                            await client.leave_chat(chat_id)
+                        except Exception:
+                            pass
+                        return kicked_all
+            except Exception as e:
+                logger.warning(f"MTProto ошибка удаления группы {chat_id}: {e}")
+
+        # Fallback: бот покидает чат
+        if self.bot_available:
             try:
-                await client.delete_supergroup(chat_id)
-                logger.info(f"Группа {chat_id} удалена")
+                await self._bot.leave_chat(chat_id)
+                logger.info(f"Бот покинул чат {chat_id} (fallback)")
                 return True
-            except Exception as del_err:
-                logger.warning(f"Не удалось удалить группу {chat_id}: {del_err}")
-                # Группа не удалилась, но участники уже кикнуты — покидаем сами
-                try:
-                    await client.leave_chat(chat_id)
-                except Exception:
-                    pass
-                return kicked_all
-        except Exception as e:
-            logger.warning(f"Ошибка удаления группы {chat_id}: {e}")
-            # MTProto недоступен — пробуем через бота
-            if self.bot_available:
-                try:
-                    await self._bot.leave_chat(chat_id)
-                    return True
-                except Exception:
-                    pass
-            return False
+            except Exception as bot_err:
+                logger.warning(f"Бот не смог покинуть чат {chat_id}: {bot_err}")
+        return False
 
     # ========================================
     # Bot API — привязка и управление

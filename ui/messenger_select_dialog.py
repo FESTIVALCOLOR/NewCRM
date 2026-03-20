@@ -381,6 +381,15 @@ class MessengerSelectDialog(QDialog):
         """Построить чекбоксы участников из card_data"""
         self._participant_checkboxes = []
 
+        # Клиент (обязательный, email-invite)
+        client_id = self.card_data.get("client_id")
+        client_name = self.card_data.get("client_name")
+        if client_id and client_name:
+            self._add_participant_cb(
+                layout, "Клиент", client_name,
+                client_id, mandatory=True, member_type="client",
+            )
+
         # Директор: ищем среди сотрудников
         director_info = self._find_director()
         if director_info:
@@ -447,6 +456,7 @@ class MessengerSelectDialog(QDialog):
     def _add_participant_cb(
         self, layout: QVBoxLayout, role: str, name: str,
         employee_id: int, mandatory: bool = False, checked: bool = True,
+        member_type: str = "employee",
     ):
         cb = QCheckBox(f"{role}: {name}")
         cb.setStyleSheet(_CHECKBOX_STYLE)
@@ -461,6 +471,7 @@ class MessengerSelectDialog(QDialog):
             "name": name,
             "employee_id": employee_id,
             "mandatory": mandatory,
+            "member_type": member_type,
         })
 
     def _find_director(self) -> Optional[Dict]:
@@ -559,7 +570,7 @@ class MessengerSelectDialog(QDialog):
             cb: QCheckBox = item["checkbox"]
             if cb.isChecked():
                 members.append({
-                    "member_type": "employee",
+                    "member_type": item.get("member_type", "employee"),
                     "member_id": item["employee_id"],
                     "role_in_project": item["role"],
                     "is_mandatory": item["mandatory"],

@@ -230,8 +230,13 @@ async def send_invites_to_members(chat_id: int, db: Session = None):
         tg = get_telegram_service()
         email_svc = get_email_service()
 
+        logger.info(f"send_invites_to_members: chat_id={chat_id}, участников={len(members)}, "
+                     f"email_available={email_svc.available}")
+
         for member in members:
             sent = False
+            logger.info(f"  Участник: type={member.member_type}, id={member.member_id}, "
+                         f"email={member.email}, tg_id={member.telegram_user_id}")
 
             if member.member_type == 'client':
                 # Клиент — только email (telegram_user_id не привязывается)

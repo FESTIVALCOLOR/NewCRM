@@ -446,6 +446,7 @@ async def get_crm_card(
                 'contract_period': contract.contract_period,
                 'contract_status': contract.status,
                 'client_name': client.full_name if client else None,
+                'client_id': contract.client_id,
             })
 
         return result
