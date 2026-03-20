@@ -589,6 +589,9 @@ class MessengerSelectDialog(QDialog):
 
     def _on_create(self):
         """Обработчик кнопки Создать/Привязать"""
+        # Защита от повторного вызова (двойной клик / повторный Enter)
+        if getattr(self, '_creating', False):
+            return
         from ui.custom_message_box import CustomMessageBox
 
         chat_title = self._chat_title_edit.text().strip()
@@ -613,7 +616,8 @@ class MessengerSelectDialog(QDialog):
 
         members = self._collect_members()
 
-        # Блокируем кнопку + показываем прогресс
+        # Блокируем кнопку + показываем прогресс + флаг _creating
+        self._creating = True
         self._create_btn.setEnabled(False)
         self._create_btn.setText("Создание чата...")
         self._back_btn.setEnabled(False)
@@ -660,6 +664,7 @@ class MessengerSelectDialog(QDialog):
         """Callback из фонового потока — обработка результата."""
         from ui.custom_message_box import CustomMessageBox
 
+        self._creating = False
         self._show_progress(False)
         self._create_btn.setEnabled(True)
         self._back_btn.setEnabled(True)

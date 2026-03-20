@@ -59,6 +59,7 @@ class CardEditDialog(QDialog):
     stage_upload_error = pyqtSignal(str)  # error_msg - ошибка загрузки
     _reload_stage_files_signal = pyqtSignal()  # потокобезопасный сигнал для перезагрузки файлов стадий
     _sync_ended = pyqtSignal()  # Сигнал завершения фоновой синхронизации
+    _delete_chat_finished = pyqtSignal(object)  # Сигнал завершения удаления чата (error_str или None)
 
     def __init__(self, parent, card_data, view_only=False, employee=None, api_client=None):
         super().__init__(parent)
@@ -119,6 +120,7 @@ class CardEditDialog(QDialog):
         # Синхронизация
         self._active_sync_count = 0
         self._sync_ended.connect(self._on_sync_ended)
+        self._delete_chat_finished.connect(self._on_delete_chat_finished)
 
         # Подключаем сигнал для фоновой загрузки превью
         self.preview_loaded.connect(self._on_preview_loaded)
@@ -6756,6 +6758,8 @@ class CardEditDialog(QDialog):
         """Обработчик кнопки 'Удалить чат'"""
         if not self._messenger_chat_data:
             return
+        if getattr(self, '_deleting_chat', False):
+            return
 
         from ui.custom_message_box import CustomQuestionBox
         reply = CustomQuestionBox(
@@ -6766,23 +6770,67 @@ class CardEditDialog(QDialog):
         ).exec_()
 
         if reply == QDialog.Accepted:
-            try:
-                chat = self._messenger_chat_data.get('chat', {})
-                chat_id = chat.get('id')
-                if chat_id:
+            chat = self._messenger_chat_data.get('chat', {})
+            chat_id = chat.get('id')
+            if not chat_id:
+                return
+
+            # Блокируем кнопки + показываем прогресс
+            self._deleting_chat = True
+            self.delete_chat_btn.setEnabled(False)
+            self.delete_chat_btn.setText("Удаление...")
+            self.create_chat_btn.setEnabled(False)
+            self._show_chat_progress(True)
+
+            import threading
+
+            def _worker():
+                error = None
+                try:
                     if hasattr(self, 'data_access') and self.data_access:
                         self.data_access.delete_messenger_chat(chat_id)
                     elif self.data.is_multi_user:
                         self.data.delete_messenger_chat(chat_id)
+                except Exception as e:
+                    error = str(e)
+                self._delete_chat_finished.emit(error)
 
-                    self._messenger_chat_data = None
-                    self._update_chat_buttons_state()
+            threading.Thread(target=_worker, daemon=True).start()
 
-                    from ui.custom_message_box import CustomMessageBox
-                    CustomMessageBox(self, 'Успех', 'Чат успешно удалён', 'success').exec_()
-            except Exception as e:
-                from ui.custom_message_box import CustomMessageBox
-                CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{str(e)}', 'error').exec_()
+    def _on_delete_chat_finished(self, error):
+        """Callback завершения удаления чата из фонового потока."""
+        from ui.custom_message_box import CustomMessageBox
+
+        self._deleting_chat = False
+        self._show_chat_progress(False)
+        self.delete_chat_btn.setText("Удалить чат")
+
+        if error:
+            self._update_chat_buttons_state()
+            CustomMessageBox(self, 'Ошибка', f'Не удалось удалить чат:\n{error}', 'error').exec_()
+        else:
+            self._messenger_chat_data = None
+            self._update_chat_buttons_state()
+            CustomMessageBox(self, 'Успех', 'Чат успешно удалён', 'success').exec_()
+
+    def _show_chat_progress(self, show: bool):
+        """Показать/скрыть прогрессбар операции с чатом."""
+        if not hasattr(self, '_chat_progress_bar'):
+            from PyQt5.QtWidgets import QProgressBar
+            self._chat_progress_bar = QProgressBar(self)
+            self._chat_progress_bar.setRange(0, 0)
+            self._chat_progress_bar.setFixedHeight(4)
+            self._chat_progress_bar.setTextVisible(False)
+            self._chat_progress_bar.setStyleSheet("""
+                QProgressBar { border: none; background: transparent; }
+                QProgressBar::chunk { background-color: #ffd93c; }
+            """)
+            # Вставляем над кнопками чата
+            if hasattr(self, 'delete_chat_btn') and self.delete_chat_btn.parent():
+                parent_layout = self.delete_chat_btn.parent().layout()
+                if parent_layout:
+                    parent_layout.addWidget(self._chat_progress_bar)
+        self._chat_progress_bar.setVisible(show)
 
     def _on_invite_client(self):
         """Отправить клиенту email с приглашением в проектный Telegram-чат"""

@@ -46,8 +46,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messenger"])
 sync_messenger_router = APIRouter(tags=["sync"])
 
-# Lock для предотвращения одновременного создания чата для одной карточки
-_chat_creation_locks: dict[int, asyncio.Lock] = {}
+# PostgreSQL advisory lock namespace для предотвращения дублей между воркерами
+_CHAT_CREATE_LOCK_NS = 900100  # namespace для pg_advisory_xact_lock(ns, card_id)
 
 
 # =============================================
@@ -1647,17 +1647,22 @@ async def create_messenger_chat(
     db: Session = Depends(get_db)
 ):
     """Создать чат автоматически (MTProto) для CRM-карточки"""
-    # Lock per card: предотвращает race condition при двойном клике
     card_id = data.crm_card_id
-    if card_id not in _chat_creation_locks:
-        _chat_creation_locks[card_id] = asyncio.Lock()
-    lock = _chat_creation_locks[card_id]
 
-    if lock.locked():
+    # PostgreSQL advisory lock — работает между воркерами uvicorn
+    # pg_try_advisory_xact_lock возвращает false если лок уже занят другим воркером
+    try:
+        got_lock = db.execute(
+            sa.text("SELECT pg_try_advisory_xact_lock(:ns, :card_id)"),
+            {"ns": _CHAT_CREATE_LOCK_NS, "card_id": card_id}
+        ).scalar()
+    except Exception:
+        got_lock = True  # fallback для SQLite (тестов)
+
+    if not got_lock:
         raise HTTPException(status_code=409, detail="Чат уже создаётся, подождите")
 
-    async with lock:
-        return await _do_create_messenger_chat(data, current_user, db)
+    return await _do_create_messenger_chat(data, current_user, db)
 
 
 async def _do_create_messenger_chat(
