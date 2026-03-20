@@ -115,7 +115,8 @@ def _do_seed_scripts(db: Session):
                 " — Принимать Ваши замечания и пожелания\n\n"
                 "Прикрепляем памятку клиента — в ней описаны основные этапы\n"
                 "работы и что от Вас потребуется на каждом из них.\n\n"
-                "С уважением, команда Festival Color"
+                "С уважением, {sender_name}\n"
+                "Festival Color"
             ),
             use_auto_deadline=False,
             attach_stage_files=False,
@@ -133,7 +134,7 @@ def _do_seed_scripts(db: Session):
             message_template=(
                 "{client_first_name}, добрый день!\n\n"
                 "По Вашему проекту ({address}) завершена разработка\n"
-                "планировочных решений.\n\n"
+                "3 вариантов планировочных решений.\n\n"
                 "Результаты работы направлены Вам на рассмотрение.\n"
                 "{stage_files}\n\n"
                 "Срок на рассмотрение и предоставление замечаний: {deadline}\n"
@@ -145,7 +146,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -168,7 +169,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -190,7 +191,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -212,7 +213,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -238,7 +239,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -263,7 +264,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -286,7 +287,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -308,7 +309,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -332,7 +333,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -355,7 +356,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -377,7 +378,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -399,7 +400,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -423,7 +424,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -445,7 +446,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -479,7 +480,8 @@ def _do_seed_scripts(db: Session):
                 "Если в будущем потребуется авторский надзор за ремонтом\n"
                 "или другие услуги — обращайтесь, мы всегда на связи!\n\n"
                 "С благодарностью,\n"
-                "команда Festival Color"
+                "{sender_name}\n"
+                "Festival Color"
             ),
             use_auto_deadline=False,
             attach_stage_files=False,
@@ -505,7 +507,8 @@ def _do_seed_scripts(db: Session):
                 "Здесь Вы будете получать уведомления о ходе работы,\n"
                 "результаты на каждом этапе и сможете задавать вопросы.\n\n"
                 "Прикрепляем памятку клиента с описанием этапов и сроков.\n\n"
-                "С уважением, команда Festival Color"
+                "С уважением, {sender_name}\n"
+                "Festival Color"
             ),
             use_auto_deadline=False,
             attach_stage_files=False,
@@ -531,7 +534,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {manager_name}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -553,7 +556,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {manager_name}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -575,7 +578,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {manager_name}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -597,7 +600,7 @@ def _do_seed_scripts(db: Session):
                 "При необходимости видеосозвона напишите удобную дату.\n"
                 "Если необходимо больше времени на рассмотрение, просим\n"
                 "Вас сообщить об этом.\n\n"
-                "С уважением, {manager_name}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -623,7 +626,8 @@ def _do_seed_scripts(db: Session):
                 "В приложении — полезная памятка.\n"
                 "Если потребуются дополнительные услуги — обращайтесь!\n\n"
                 "С благодарностью,\n"
-                "команда Festival Color"
+                "{sender_name}\n"
+                "Festival Color"
             ),
             use_auto_deadline=False,
             attach_stage_files=False,
@@ -657,7 +661,8 @@ def _do_seed_scripts(db: Session):
                 " — Координировать работу со строительной бригадой\n\n"
                 "Прикрепляем памятку — в ней описаны все 12 стадий закупок\n"
                 "и что от Вас потребуется на каждой из них.\n\n"
-                "С уважением, команда Festival Color"
+                "С уважением, {sender_name}\n"
+                "Festival Color"
             ),
             use_auto_deadline=False,
             attach_stage_files=False,
@@ -680,7 +685,7 @@ def _do_seed_scripts(db: Session):
                 "выбранных позиций, поставщиков и стоимости.\n\n"
                 "Если у Вас есть вопросы по выбранным позициям — пишите\n"
                 "в этот чат, мы оперативно ответим.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=True,
@@ -702,7 +707,7 @@ def _do_seed_scripts(db: Session):
                 "надзора ({visit_date}).\n\n"
                 "В приложении — отчёт по результатам выезда.\n\n"
                 "Если у Вас есть вопросы — пишите в этот чат.\n\n"
-                "С уважением, {senior_manager}\n"
+                "С уважением, {sender_name}\n"
                 "Festival Color"
             ),
             use_auto_deadline=False,
@@ -733,7 +738,8 @@ def _do_seed_scripts(db: Session):
                 "материалов и контролю ремонтных работ.\n\n"
                 "Если возникнут вопросы — обращайтесь, мы всегда на связи!\n\n"
                 "С благодарностью,\n"
-                "команда Festival Color"
+                "{sender_name}\n"
+                "Festival Color"
             ),
             use_auto_deadline=False,
             attach_stage_files=False,
@@ -1453,9 +1459,11 @@ async def trigger_script_endpoint(
 ):
     """Ручная отправка скрипта мессенджера"""
     if request.entity_type == 'supervision':
-        await trigger_supervision_notification(request.card_id, request.script_type)
+        await trigger_supervision_notification(request.card_id, request.script_type,
+                                                sender_id=current_user.id)
     else:
-        await trigger_messenger_notification(request.card_id, request.script_type)
+        await trigger_messenger_notification(request.card_id, request.script_type,
+                                              sender_id=current_user.id)
 
     return {"status": "success"}
 
@@ -1557,7 +1565,8 @@ async def create_messenger_chat(
     try:
         if data.crm_card_id:
             asyncio.create_task(
-                trigger_messenger_notification(data.crm_card_id, 'project_start')
+                trigger_messenger_notification(data.crm_card_id, 'project_start',
+                                               sender_id=current_user.id)
             )
     except Exception as e:
         logger.warning(f"Не удалось отправить project_start: {e}")

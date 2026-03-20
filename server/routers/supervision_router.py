@@ -330,7 +330,8 @@ async def create_supervision_card(
         # N4: Автотриггер supervision_start при создании карточки
         try:
             asyncio.create_task(trigger_supervision_notification(
-                card.id, 'supervision_start', stage_name=card.column_name or ''
+                card.id, 'supervision_start', stage_name=card.column_name or '',
+                sender_id=current_user.id
             ))
         except Exception as e:
             logger.warning(f"supervision_start trigger: {e}")
@@ -606,11 +607,13 @@ async def move_supervision_card_to_column(
             # N4: supervision_end при перемещении в "Выполненный проект"
             if new_column == 'Выполненный проект':
                 asyncio.create_task(trigger_supervision_notification(
-                    card_id, 'supervision_end', stage_name=new_column
+                    card_id, 'supervision_end', stage_name=new_column,
+                    sender_id=current_user.id
                 ))
             else:
                 asyncio.create_task(trigger_supervision_notification(
-                    card_id, 'supervision_move', stage_name=new_column
+                    card_id, 'supervision_move', stage_name=new_column,
+                    sender_id=current_user.id
                 ))
 
         return {

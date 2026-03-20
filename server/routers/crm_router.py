@@ -844,11 +844,13 @@ async def move_crm_card_to_column(
         if old_column != new_column:
             if new_column == 'Выполненный проект':
                 asyncio.create_task(trigger_messenger_notification(
-                    card.id, 'project_end', stage_name=new_column
+                    card.id, 'project_end', stage_name=new_column,
+                    sender_id=current_user.id
                 ))
             elif 'Стадия' in new_column:
                 asyncio.create_task(trigger_messenger_notification(
-                    card.id, 'stage_complete', stage_name=old_column
+                    card.id, 'stage_complete', stage_name=old_column,
+                    sender_id=current_user.id
                 ))
 
         # Личные уведомления при перемещении в новую стадию / выполненный проект

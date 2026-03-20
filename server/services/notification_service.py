@@ -284,6 +284,7 @@ async def trigger_messenger_notification(
     script_type: str,
     stage_name: str = "",
     extra_context: dict = None,
+    sender_id: int = None,
 ):
     """
     Хук автоуведомлений: найти чат карточки -> найти подходящий скрипт -> отправить.
@@ -323,6 +324,15 @@ async def trigger_messenger_notification(
         # Собрать контекст
         ctx = build_script_context(own_db, card, contract)
         ctx['stage_name'] = stage_name or card.column_name or ''
+
+        # Подпись отправителя
+        if sender_id:
+            sender = own_db.query(Employee).filter(Employee.id == sender_id).first()
+            if sender:
+                ctx['sender_name'] = sender.full_name or ''
+        if 'sender_name' not in ctx:
+            ctx['sender_name'] = ctx.get('senior_manager', '') or ctx.get('manager_name', '')
+
         if extra_context:
             ctx.update(extra_context)
 
@@ -394,6 +404,7 @@ async def trigger_supervision_notification(
     script_type: str,
     stage_name: str = "",
     extra_context: dict = None,
+    sender_id: int = None,
 ):
     """
     Хук автоуведомлений для надзора: найти чат -> скрипт -> отправить.
@@ -499,6 +510,14 @@ async def trigger_supervision_notification(
             ).order_by(Payment.id.desc()).first()
             if last_payment and last_payment.final_amount:
                 ctx['amount'] = f"{last_payment.final_amount:,.0f}".replace(',', ' ')
+
+        # Подпись отправителя
+        if sender_id:
+            sender = own_db.query(Employee).filter(Employee.id == sender_id).first()
+            if sender:
+                ctx['sender_name'] = sender.full_name or ''
+        if 'sender_name' not in ctx:
+            ctx['sender_name'] = ctx.get('senior_manager', '') or ctx.get('dan', '')
 
         # Extra context
         if extra_context:
