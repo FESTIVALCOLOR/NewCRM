@@ -202,15 +202,15 @@ class LoginWindow(QWidget):
         self.setWindowTitle('Festival Color - Вход')
         self.setFixedSize(400, 580)
 
-        # Явная установка иконки для панели задач Windows (frameless окна теряют иконку)
-        from PyQt5.QtWidgets import QApplication
-        if QApplication.instance():
-            self.setWindowIcon(QApplication.instance().windowIcon())
-
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)  # Для border-radius
         # ===============================================
+
+        # Иконка для панели задач ПОСЛЕ setWindowFlags (frameless сбрасывает иконку)
+        from PyQt5.QtWidgets import QApplication
+        if QApplication.instance():
+            self.setWindowIcon(QApplication.instance().windowIcon())
         
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
