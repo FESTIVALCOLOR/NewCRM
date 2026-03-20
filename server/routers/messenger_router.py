@@ -1342,23 +1342,24 @@ async def preview_act(
     if contract.client_id:
         client = db.query(Client).filter(Client.id == contract.client_id).first()
         if client:
-            client_first_name = (client.full_name or '').split()[0] if client.full_name else ''
+            parts = (client.full_name or '').split()
+            client_first_name = parts[1] if len(parts) > 1 else parts[0] if parts else ''
 
     address = contract.address or ''
 
-    # Определяем описание стадии для текста
+    # Определяем описание стадии для текста (с заглавной буквы)
     stage_desc = stage_name
     if 'планировочн' in stage_name.lower():
-        stage_desc = 'планировочных решений'
+        stage_desc = 'Планировочные решения'
     elif 'концепция' in stage_name.lower() or 'дизайн' in stage_name.lower():
-        stage_desc = 'концепции дизайна'
+        stage_desc = 'Концепция дизайна'
     elif 'рабочие чертежи' in stage_name.lower() or 'рабочая документация' in stage_name.lower():
-        stage_desc = 'рабочей документации'
+        stage_desc = 'Рабочая документация'
 
     # Генерируем текст скрипта акта
     rendered_text = (
         f"{client_first_name}, добрый день!\n\n"
-        f"Работа по стадии «{stage_desc}» Вашего проекта ({address}) "
+        f"Работа по стадии: {stage_desc} Вашего проекта ({address}) "
         f"завершена и согласована.\n\n"
         f"Направляем Вам акт выполненных работ на подписание.\n\n"
         f"Просим ознакомиться, подписать и направить скан подписанного акта "
