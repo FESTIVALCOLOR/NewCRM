@@ -844,11 +844,9 @@ async def move_crm_card_to_column(
         # Хук: автоуведомление в чат при перемещении карточки
         if old_column != new_column:
             if new_column == 'Выполненный проект':
-                asyncio.create_task(trigger_messenger_notification(
-                    card.id, 'project_end', stage_name=new_column,
-                    sender_id=current_user.id
-                ))
-                # Автоотправка опроса (Яндекс Формы) с задержкой после завершающего скрипта
+                # Завершающий скрипт (project_end) НЕ отправляется автоматически —
+                # менеджер отправляет его вручную через кнопку в карточке.
+                # Автоматически отправляется только опрос (Яндекс Формы).
                 asyncio.create_task(send_survey_to_chat(card.id))
             elif 'Стадия' in new_column:
                 asyncio.create_task(trigger_messenger_notification(

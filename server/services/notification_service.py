@@ -420,13 +420,9 @@ async def send_survey_to_chat(crm_card_id: int):
     Автоматически создать опрос и отправить ссылку в чат при перемещении в 'Выполненный проект'.
     Три формы: individual, template, supervision — выбор по project_type договора.
     """
-    import asyncio as _asyncio
     import secrets
     from datetime import timedelta
     from database import ClientSurvey
-
-    # Задержка чтобы сообщение опроса пришло после завершающего скрипта + PDF
-    await _asyncio.sleep(10)
 
     YANDEX_FORM_IDS = {
         'individual': '69b6c7214936397cd99e21f7',
