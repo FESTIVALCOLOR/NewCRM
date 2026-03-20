@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QCheckBox, QGroupBox, QGridLayout, QWidget,
     QSizePolicy, QScrollArea, QProgressBar,
 )
-from PyQt5.QtCore import Qt, QSize, QTimer
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QPixmap, QFont
 
 from utils.resource_path import resource_path
@@ -97,6 +97,9 @@ _CHECKBOX_STYLE = """
 class MessengerSelectDialog(QDialog):
     """Двухшаговый диалог: выбор мессенджера -> настройка чата"""
 
+    # Сигнал из фонового потока → UI-поток (result_json, error, is_manual)
+    _create_finished = pyqtSignal(object, object, bool)
+
     def __init__(
         self,
         parent,
@@ -118,6 +121,9 @@ class MessengerSelectDialog(QDialog):
 
         self._selected_messenger = "telegram"
         self._participant_checkboxes: List[Dict] = []
+
+        # Подключаем сигнал завершения фонового потока
+        self._create_finished.connect(self._on_create_finished)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -628,8 +634,8 @@ class MessengerSelectDialog(QDialog):
             except Exception as e:
                 error = str(e)
 
-            # Возвращаемся в UI-поток
-            QTimer.singleShot(0, lambda: self._on_create_finished(result, error, is_manual))
+            # Возвращаемся в UI-поток через pyqtSignal (thread-safe)
+            self._create_finished.emit(result, error, is_manual)
 
         threading.Thread(target=_worker, daemon=True).start()
 
