@@ -1669,8 +1669,8 @@ async def create_messenger_chat(
     if not tg.mtproto_available:
         raise HTTPException(status_code=503, detail="MTProto не настроен. Используйте привязку чата.")
 
-    # Формируем название чата
-    chat_title = _build_chat_title(contract, card)
+    # Формируем название чата (кастомное или автогенерация)
+    chat_title = data.chat_title.strip() if data.chat_title else _build_chat_title(contract, card)
 
     # Определяем фото
     avatar_type = (contract.agent_type or '').lower()
@@ -1853,7 +1853,8 @@ async def create_supervision_chat(
             if addr_check.startswith(c):
                 address = address[len(c):].lstrip('.,;:_ -')
                 break
-    chat_title = f"АН-{city}-{address}"
+    # Кастомное имя или автогенерация
+    chat_title = data.chat_title.strip() if data.chat_title else f"АН-{city}-{address}"
 
     # Определяем фото
     avatar_type = (contract.agent_type or '').lower()

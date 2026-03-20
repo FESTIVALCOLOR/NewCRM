@@ -4,16 +4,19 @@ from typing import Optional, List, Dict, Any
 class MessengerMixin:
 
     def create_messenger_chat(self, crm_card_id: int, messenger_type: str = "telegram",
-                               members: list = None) -> Dict[str, Any]:
+                               members: list = None, chat_title: str = None) -> Dict[str, Any]:
         """Создать чат автоматически (MTProto)"""
+        payload = {
+            "crm_card_id": crm_card_id,
+            "messenger_type": messenger_type,
+            "members": members or []
+        }
+        if chat_title:
+            payload["chat_title"] = chat_title
         response = self._request(
             'POST',
             f"{self.base_url}/api/v1/messenger/chats",
-            json={
-                "crm_card_id": crm_card_id,
-                "messenger_type": messenger_type,
-                "members": members or []
-            }
+            json=payload
         )
         return self._handle_response(response)
 
@@ -49,16 +52,19 @@ class MessengerMixin:
             return None
 
     def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram",
-                                 members: list = None) -> Dict[str, Any]:
+                                 members: list = None, chat_title: str = None) -> Dict[str, Any]:
         """Создать чат для карточки надзора"""
+        payload = {
+            "supervision_card_id": supervision_card_id,
+            "messenger_type": messenger_type,
+            "members": members or []
+        }
+        if chat_title:
+            payload["chat_title"] = chat_title
         response = self._request(
             'POST',
             f"{self.base_url}/api/v1/messenger/chats/supervision",
-            json={
-                "supervision_card_id": supervision_card_id,
-                "messenger_type": messenger_type,
-                "members": members or []
-            }
+            json=payload
         )
         return self._handle_response(response)
 

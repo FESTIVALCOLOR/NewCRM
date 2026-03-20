@@ -3504,11 +3504,11 @@ class DataAccess(QObject):
     # =========================
 
     def create_messenger_chat(self, crm_card_id: int, messenger_type: str = "telegram",
-                               members: list = None) -> Optional[Dict]:
+                               members: list = None, chat_title: str = None) -> Optional[Dict]:
         """Создать чат автоматически"""
         if self._should_use_api():
             try:
-                return self.api_client.create_messenger_chat(crm_card_id, messenger_type, members)
+                return self.api_client.create_messenger_chat(crm_card_id, messenger_type, members, chat_title)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка create_messenger_chat: {e}")
         return None
@@ -3542,11 +3542,11 @@ class DataAccess(QObject):
         return None
 
     def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram",
-                                 members: list = None) -> Optional[Dict]:
+                                 members: list = None, chat_title: str = None) -> Optional[Dict]:
         """Создать чат для карточки надзора"""
         if self._should_use_api():
             try:
-                return self.api_client.create_supervision_chat(supervision_card_id, messenger_type, members)
+                return self.api_client.create_supervision_chat(supervision_card_id, messenger_type, members, chat_title)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка create_supervision_chat: {e}")
         return None

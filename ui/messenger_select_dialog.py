@@ -606,7 +606,7 @@ class MessengerSelectDialog(QDialog):
                 result = self._do_bind(crm_card_id, invite_link, members)
             else:
                 # Автоматическое создание
-                result = self._do_create(crm_card_id, members)
+                result = self._do_create(crm_card_id, members, chat_title)
 
             if result:
                 self.result_chat_data = result
@@ -632,17 +632,17 @@ class MessengerSelectDialog(QDialog):
             self._create_btn.setEnabled(True)
             self._update_create_btn_text()
 
-    def _do_create(self, card_id: int, members: List[Dict]) -> Optional[Dict]:
+    def _do_create(self, card_id: int, members: List[Dict], chat_title: str = None) -> Optional[Dict]:
         """Автоматическое создание чата через MTProto"""
         if not self.data_access:
             return None
         if self.card_type == "supervision":
             return self.data_access.create_supervision_chat(
-                card_id, self._selected_messenger, members,
+                card_id, self._selected_messenger, members, chat_title,
             )
         else:
             return self.data_access.create_messenger_chat(
-                card_id, self._selected_messenger, members,
+                card_id, self._selected_messenger, members, chat_title,
             )
 
     def _do_bind(self, card_id: int, invite_link: str, members: List[Dict]) -> Optional[Dict]:

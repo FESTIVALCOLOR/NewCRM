@@ -22,6 +22,7 @@ class MessengerChatCreate(BaseModel):
     """Создание чата (автоматическое)"""
     crm_card_id: int
     messenger_type: str = "telegram"
+    chat_title: Optional[str] = None  # Кастомное имя чата (если None — автогенерация)
     members: List[ChatMemberInput] = []
 
 
@@ -37,6 +38,7 @@ class SupervisionChatCreate(BaseModel):
     """Создание чата для карточки надзора"""
     supervision_card_id: int
     messenger_type: str = "telegram"
+    chat_title: Optional[str] = None
     members: List[ChatMemberInput] = []
 
 

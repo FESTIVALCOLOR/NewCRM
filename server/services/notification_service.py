@@ -231,9 +231,10 @@ async def send_invites_to_members(chat_id: int, db: Session = None):
         email_svc = get_email_service()
 
         for member in members:
-            sent = False
+            tg_sent = False
+            email_sent = False
 
-            # Пробуем через Telegram бота (личное сообщение)
+            # Отправляем через Telegram бота (личное сообщение)
             if member.telegram_user_id and tg.bot_available:
                 try:
                     await tg.send_message(
@@ -241,13 +242,12 @@ async def send_invites_to_members(chat_id: int, db: Session = None):
                         f"Вас пригласили в проектный чат: {chat.chat_title}\n"
                         f"Присоединяйтесь: {chat.invite_link}"
                     )
-                    member.invite_status = 'sent'
-                    sent = True
+                    tg_sent = True
                 except Exception as e:
                     logger.warning(f"Не удалось отправить TG invite участнику {member.member_id}: {e}")
 
-            # Если не получилось через Telegram — отправляем email
-            if not sent and member.email and email_svc.available:
+            # Отправляем email ВСЕМ у кого есть адрес (не fallback, а дополнительно)
+            if member.email and email_svc.available:
                 name = ""
                 if member.member_type == 'employee':
                     emp = db.query(Employee).filter(Employee.id == member.member_id).first()
@@ -264,12 +264,19 @@ async def send_invites_to_members(chat_id: int, db: Session = None):
                         invite_link=chat.invite_link,
                     )
                     if success:
-                        member.invite_status = 'email_sent'
-                        sent = True
+                        email_sent = True
                 except Exception as e:
                     logger.warning(f"Не удалось отправить email invite для {member.email}: {e}")
 
-            member.invited_at = datetime.utcnow() if sent else None
+            # Определяем итоговый статус
+            if tg_sent and email_sent:
+                member.invite_status = 'sent'
+            elif tg_sent:
+                member.invite_status = 'sent'
+            elif email_sent:
+                member.invite_status = 'email_sent'
+
+            member.invited_at = datetime.utcnow() if (tg_sent or email_sent) else None
 
         db.commit()
     except Exception as e:

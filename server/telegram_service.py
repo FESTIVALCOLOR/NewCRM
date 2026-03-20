@@ -364,7 +364,8 @@ class TelegramService:
             raise
 
     async def delete_group(self, chat_id: int) -> bool:
-        """Удалить группу через MTProto: сначала кикнуть всех, потом удалить"""
+        """Удалить группу через MTProto: кикнуть всех участников, потом удалить группу"""
+        kicked_all = False
         try:
             client = await self._get_pyrogram_client()
 
@@ -372,23 +373,37 @@ class TelegramService:
             try:
                 me = await client.get_me()
                 my_id = me.id
+                kicked_count = 0
                 async for member in client.get_chat_members(chat_id):
                     if member.user.id == my_id:
                         continue
                     try:
                         await client.ban_chat_member(chat_id, member.user.id)
+                        kicked_count += 1
                         logger.debug(f"Кикнут участник {member.user.id} из {chat_id}")
                     except Exception as kick_err:
                         logger.warning(f"Не удалось кикнуть {member.user.id}: {kick_err}")
+                kicked_all = True
+                logger.info(f"Исключено {kicked_count} участников из {chat_id}")
             except Exception as members_err:
                 logger.warning(f"Не удалось получить участников {chat_id}: {members_err}")
 
-            await client.delete_supergroup(chat_id)
-            logger.info(f"Группа {chat_id} удалена (участники исключены)")
-            return True
+            # Пробуем удалить группу целиком
+            try:
+                await client.delete_supergroup(chat_id)
+                logger.info(f"Группа {chat_id} удалена")
+                return True
+            except Exception as del_err:
+                logger.warning(f"Не удалось удалить группу {chat_id}: {del_err}")
+                # Группа не удалилась, но участники уже кикнуты — покидаем сами
+                try:
+                    await client.leave_chat(chat_id)
+                except Exception:
+                    pass
+                return kicked_all
         except Exception as e:
-            logger.warning(f"Не удалось удалить группу {chat_id}: {e}")
-            # Пробуем через бота покинуть чат
+            logger.warning(f"Ошибка удаления группы {chat_id}: {e}")
+            # MTProto недоступен — пробуем через бота
             if self.bot_available:
                 try:
                     await self._bot.leave_chat(chat_id)
