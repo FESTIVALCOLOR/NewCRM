@@ -231,52 +231,56 @@ async def send_invites_to_members(chat_id: int, db: Session = None):
         email_svc = get_email_service()
 
         for member in members:
-            tg_sent = False
-            email_sent = False
+            sent = False
 
-            # Отправляем через Telegram бота (личное сообщение)
-            if member.telegram_user_id and tg.bot_available:
-                try:
-                    await tg.send_message(
-                        member.telegram_user_id,
-                        f"Вас пригласили в проектный чат: {chat.chat_title}\n"
-                        f"Присоединяйтесь: {chat.invite_link}"
-                    )
-                    tg_sent = True
-                except Exception as e:
-                    logger.warning(f"Не удалось отправить TG invite участнику {member.member_id}: {e}")
-
-            # Отправляем email ВСЕМ у кого есть адрес (не fallback, а дополнительно)
-            if member.email and email_svc.available:
-                name = ""
-                if member.member_type == 'employee':
-                    emp = db.query(Employee).filter(Employee.id == member.member_id).first()
-                    name = emp.full_name if emp else ""
-                elif member.member_type == 'client':
+            if member.member_type == 'client':
+                # Клиент — только email (telegram_user_id не привязывается)
+                if member.email and email_svc.available:
                     cl = db.query(Client).filter(Client.id == member.member_id).first()
                     name = cl.full_name if cl else ""
+                    try:
+                        success = await email_svc.send_chat_invite(
+                            to_email=member.email,
+                            recipient_name=name,
+                            chat_title=chat.chat_title or "",
+                            invite_link=chat.invite_link,
+                        )
+                        if success:
+                            member.invite_status = 'email_sent'
+                            sent = True
+                    except Exception as e:
+                        logger.warning(f"Не удалось отправить email invite клиенту {member.email}: {e}")
+            else:
+                # Сотрудник — сначала Telegram, если нет → email fallback
+                if member.telegram_user_id and tg.bot_available:
+                    try:
+                        await tg.send_message(
+                            member.telegram_user_id,
+                            f"Вас пригласили в проектный чат: {chat.chat_title}\n"
+                            f"Присоединяйтесь: {chat.invite_link}"
+                        )
+                        member.invite_status = 'sent'
+                        sent = True
+                    except Exception as e:
+                        logger.warning(f"Не удалось отправить TG invite участнику {member.member_id}: {e}")
 
-                try:
-                    success = await email_svc.send_chat_invite(
-                        to_email=member.email,
-                        recipient_name=name,
-                        chat_title=chat.chat_title or "",
-                        invite_link=chat.invite_link,
-                    )
-                    if success:
-                        email_sent = True
-                except Exception as e:
-                    logger.warning(f"Не удалось отправить email invite для {member.email}: {e}")
+                if not sent and member.email and email_svc.available:
+                    emp = db.query(Employee).filter(Employee.id == member.member_id).first()
+                    name = emp.full_name if emp else ""
+                    try:
+                        success = await email_svc.send_chat_invite(
+                            to_email=member.email,
+                            recipient_name=name,
+                            chat_title=chat.chat_title or "",
+                            invite_link=chat.invite_link,
+                        )
+                        if success:
+                            member.invite_status = 'email_sent'
+                            sent = True
+                    except Exception as e:
+                        logger.warning(f"Не удалось отправить email invite для {member.email}: {e}")
 
-            # Определяем итоговый статус
-            if tg_sent and email_sent:
-                member.invite_status = 'sent'
-            elif tg_sent:
-                member.invite_status = 'sent'
-            elif email_sent:
-                member.invite_status = 'email_sent'
-
-            member.invited_at = datetime.utcnow() if (tg_sent or email_sent) else None
+            member.invited_at = datetime.utcnow() if sent else None
 
         db.commit()
     except Exception as e:
