@@ -3415,9 +3415,9 @@ class CRMCard(QFrame):
                                     f'В договоре не загружен файл "{act_label} с подписью".\n'
                                     f'Загрузите акт в раздел "Акты с подписью" в договоре.\n\n'
                                     f'Продолжить подписание без акта?'
-                            ).exec_()
-                            if reply != QDialog.Accepted:
-                                return
+                                ).exec_()
+                                if reply != QDialog.Accepted:
+                                    return
 
             result = self.data.workflow_sign_act(card_id)
             if result:
