@@ -242,6 +242,28 @@ class SendEditedScriptRequest(BaseModel):
     custom_deadline: bool = False  # если True — обновить custom_norm_days в timeline
 
 
+class PreviewActRequest(BaseModel):
+    """Запрос на предпросмотр скрипта акта"""
+    card_id: int
+
+
+class PreviewActResponse(BaseModel):
+    """Ответ с текстом акта и файлами"""
+    rendered_text: str
+    stage_name: str
+    act_files: List[dict] = []  # [{prefix, file_name, link, yandex_path}]
+    sender_name: Optional[str] = None
+    chat_id: Optional[int] = None
+    messenger_chat_id: Optional[int] = None
+
+
+class SendActRequest(BaseModel):
+    """Отправка акта в групповой чат"""
+    card_id: int
+    text: str  # отредактированный текст
+    act_prefixes: List[str] = []  # ['act_planning', 'act_concept', 'info_letter', 'act_final']
+
+
 # =========================
 # INVITE
 # =========================

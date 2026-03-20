@@ -2541,8 +2541,22 @@ class CRMCard(QFrame):
                 client_ok_btn.clicked.connect(self.client_approved)
                 layout.addWidget(client_ok_btn, 0)
 
-            # Кнопка "Акт подписан" при act_signing
+            # Кнопки при act_signing: "Отправить акт" + "Акт подписан"
             if current_wf_status == 'act_signing':
+                send_act_btn = QPushButton('Отправить акт')
+                send_act_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #58D68D; color: white;
+                        border: none; border-radius: 4px;
+                        padding: 4px 12px; font-size: 10px;
+                        font-weight: bold;
+                        min-height: 22px; max-height: 22px;
+                    }
+                    QPushButton:hover { background-color: #48C77D; }
+                """)
+                send_act_btn.clicked.connect(self._open_act_send_dialog)
+                layout.addWidget(send_act_btn, 0)
+
                 sign_act_btn = QPushButton('Акт подписан')
                 sign_act_btn.setStyleSheet("""
                     QPushButton {
@@ -3354,38 +3368,53 @@ class CRMCard(QFrame):
         """Оставлен для обратной совместимости — вызывает send_to_client_combined"""
         self.send_to_client_combined()
 
-    def sign_act(self, card_id):
+    def _open_act_send_dialog(self):
+        """Открыть диалог отправки акта клиенту."""
+        from ui.crm_dialogs import ActSendDialog
+        dlg = ActSendDialog(self, self.card_data, self.data, self.api_client)
+        result = dlg.exec_()
+
+        if result == ActSendDialog.SKIP_RESULT:
+            # Пропустить — вызываем sign_act логику (продолжить без акта)
+            self.sign_act(self.card_data['id'], skip_check=True)
+        elif result == QDialog.Accepted:
+            # Акт отправлен в чат — ничего дополнительного не делаем,
+            # ждём когда клиент подпишет и пользователь нажмёт "Акт подписан"
+            pass
+
+    def sign_act(self, card_id, skip_check=False):
         """Подписание акта — финальный шаг стадии."""
         try:
-            # Проверка: загружен ли файл акта с подписью в договоре
-            stage_name = self.card_data.get('column_name', '').lower()
-            contract_id = self.card_data.get('contract_id')
-            if contract_id:
-                contract_data = self.data.get_contract(contract_id)
-                if contract_data:
-                    # Определяем какой акт нужен для текущей стадии
-                    act_field = None
-                    act_label = ''
-                    if 'планировочн' in stage_name:
-                        act_field = 'act_planning_signed'
-                        act_label = 'Акт ПР'
-                    elif 'концепция' in stage_name or 'дизайн' in stage_name:
-                        act_field = 'act_concept_signed'
-                        act_label = 'Акт КД'
-                    elif 'рабочие чертежи' in stage_name or 'рабочая документация' in stage_name or 'чертежн' in stage_name:
-                        act_field = 'act_final_signed'
-                        act_label = 'Акт финальный'
+            if not skip_check:
+                # Проверка: загружен ли файл акта с подписью в договоре
+                stage_name = self.card_data.get('column_name', '').lower()
+                contract_id = self.card_data.get('contract_id')
+                if contract_id:
+                    contract_data = self.data.get_contract(contract_id)
+                    if contract_data:
+                        # Определяем какой акт нужен для текущей стадии
+                        act_field = None
+                        act_label = ''
+                        if 'планировочн' in stage_name:
+                            act_field = 'act_planning_signed'
+                            act_label = 'Акт ПР'
+                        elif 'концепция' in stage_name or 'дизайн' in stage_name:
+                            act_field = 'act_concept_signed'
+                            act_label = 'Акт КД'
+                        elif 'рабочие чертежи' in stage_name or 'рабочая документация' in stage_name or 'чертежн' in stage_name:
+                            act_field = 'act_final_signed'
+                            act_label = 'Акт финальный'
 
-                    if act_field:
-                        link = contract_data.get(f'{act_field}_link') or ''
-                        yandex = contract_data.get(f'{act_field}_yandex_path') or ''
-                        if not link and not yandex:
-                            from ui.custom_message_box import CustomQuestionBox
-                            reply = CustomQuestionBox(
-                                self, 'Акт не загружен',
-                                f'В договоре не загружен файл "{act_label} с подписью".\n'
-                                f'Загрузите акт в раздел "Акты с подписью" в договоре.\n\n'
-                                f'Продолжить подписание без акта?'
+                        if act_field:
+                            link = contract_data.get(f'{act_field}_link') or ''
+                            yandex = contract_data.get(f'{act_field}_yandex_path') or ''
+                            if not link and not yandex:
+                                from ui.custom_message_box import CustomQuestionBox
+                                reply = CustomQuestionBox(
+                                    self, 'Акт не загружен',
+                                    f'В договоре не загружен файл "{act_label} с подписью".\n'
+                                    f'Загрузите акт в раздел "Акты с подписью" в договоре.\n\n'
+                                    f'Продолжить подписание без акта?'
                             ).exec_()
                             if reply != QDialog.Accepted:
                                 return

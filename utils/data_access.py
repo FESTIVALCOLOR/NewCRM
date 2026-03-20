@@ -3624,6 +3624,24 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] preview_script error: {e}")
         return None
 
+    def preview_act(self, card_id: int) -> Optional[Dict]:
+        """Предпросмотр скрипта отправки акта клиенту"""
+        if self.api_client:
+            try:
+                return self.api_client.preview_act(card_id)
+            except Exception as e:
+                _safe_log(f"[DataAccess] preview_act error: {e}")
+        return None
+
+    def send_act(self, card_id: int, text: str, act_prefixes: list = None) -> Optional[Dict]:
+        """Отправить акт в групповой чат"""
+        if self.api_client:
+            try:
+                return self.api_client.send_act(card_id, text, act_prefixes)
+            except Exception as e:
+                _safe_log(f"[DataAccess] send_act error: {e}")
+        return None
+
     def send_edited_script(self, card_id: int, text: str, file_ids: list = None,
                            deadline_date: str = None, custom_deadline: bool = False) -> Optional[Dict]:
         """Отправить отредактированный скрипт в групповой чат"""

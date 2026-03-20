@@ -5283,3 +5283,242 @@ class ScriptPreviewDialog(QDialog):
         self._send_btn.setEnabled(True)
         self._send_btn.setText("Отправить в чат")
         CustomMessageBox(self, "Ошибка", "Ошибка отправки: " + error_text, "error").exec_()
+
+
+class ActSendDialog(QDialog):
+    """Диалог отправки акта клиенту в групповой чат.
+
+    result codes:
+      Accepted  — акт отправлен в чат
+      2         — пользователь нажал "Пропустить" (продолжить без акта)
+      Rejected  — отмена
+    """
+    SKIP_RESULT = 2
+    _send_done = pyqtSignal(object)
+    _send_error = pyqtSignal(str)
+
+    def __init__(self, parent, card_data, data_access, api_client=None):
+        super().__init__(parent)
+        self._send_done.connect(self._on_send_finished)
+        self._send_error.connect(self._on_send_error)
+        self.card_data = card_data
+        self.data = data_access
+        self.api_client = api_client
+        self._preview_data = None
+        self._file_checkboxes = []
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self._init_ui()
+        self._load_preview()
+
+    def _init_ui(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet(
+            "QFrame#borderFrame { background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px; }"
+        )
+        outer.addWidget(frame)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
+
+        stage = self.card_data.get("column_name", "")
+        title_bar = CustomTitleBar(self, "Отправить акт: " + stage, simple_mode=True)
+        title_bar.setStyleSheet(
+            "background-color: #F5F5F5; border-top-left-radius: 10px; border-top-right-radius: 10px;"
+        )
+        frame_layout.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet(
+            "background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;"
+        )
+        c_layout = QVBoxLayout(content)
+        c_layout.setContentsMargins(16, 12, 16, 12)
+        c_layout.setSpacing(10)
+
+        lbl_text = QLabel("Текст сообщения:")
+        lbl_text.setStyleSheet("font-size: 12px; font-weight: bold; color: #2C3E50;")
+        c_layout.addWidget(lbl_text)
+
+        self._text_edit = QTextEdit()
+        self._text_edit.setMinimumHeight(180)
+        self._text_edit.setStyleSheet(
+            "QTextEdit { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px;"
+            " font-size: 12px; background-color: #FAFAFA; }"
+        )
+        c_layout.addWidget(self._text_edit)
+
+        lbl_files = QLabel("Файлы актов:")
+        lbl_files.setStyleSheet("font-size: 12px; font-weight: bold; color: #2C3E50;")
+        c_layout.addWidget(lbl_files)
+
+        self._files_scroll = QScrollArea()
+        self._files_scroll.setWidgetResizable(True)
+        self._files_scroll.setMaximumHeight(100)
+        self._files_scroll.setStyleSheet(
+            "QScrollArea { border: 1px solid #d9d9d9; border-radius: 6px; background-color: #FAFAFA; }"
+        )
+        self._files_container = QWidget()
+        self._files_layout = QVBoxLayout(self._files_container)
+        self._files_layout.setContentsMargins(8, 6, 8, 6)
+        self._files_layout.setSpacing(4)
+        self._no_files_label = QLabel("Загрузка...")
+        self._no_files_label.setStyleSheet("color: #999; font-size: 11px;")
+        self._files_layout.addWidget(self._no_files_label)
+        self._files_scroll.setWidget(self._files_container)
+        c_layout.addWidget(self._files_scroll)
+
+        # Кнопки: Отмена | Пропустить | Отправить акт
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedHeight(32)
+        cancel_btn.setStyleSheet(
+            "QPushButton { background-color: #F5F5F5; color: #595959;"
+            " border: 1px solid #d9d9d9; border-radius: 6px;"
+            " padding: 0px 20px; font-size: 12px; }"
+            " QPushButton:hover { background-color: #E8E8E8; }"
+        )
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+
+        skip_btn = QPushButton("Пропустить")
+        skip_btn.setFixedHeight(32)
+        skip_btn.setStyleSheet(
+            "QPushButton { background-color: #F5F5F5; color: #595959;"
+            " border: 1px solid #d9d9d9; border-radius: 6px;"
+            " padding: 0px 20px; font-size: 12px; }"
+            " QPushButton:hover { background-color: #E8E8E8; }"
+        )
+        skip_btn.clicked.connect(self._on_skip)
+        btn_row.addWidget(skip_btn)
+
+        send_btn = QPushButton("Отправить акт")
+        send_btn.setFixedHeight(32)
+        send_btn.setStyleSheet(
+            "QPushButton { background-color: #58D68D; color: white;"
+            " border: none; border-radius: 6px;"
+            " padding: 0px 20px; font-size: 12px; font-weight: bold; }"
+            " QPushButton:hover { background-color: #48C77D; }"
+        )
+        send_btn.clicked.connect(self._on_send)
+        self._send_btn = send_btn
+        btn_row.addWidget(send_btn)
+
+        c_layout.addLayout(btn_row)
+        frame_layout.addWidget(content)
+        self.setFixedSize(580, 480)
+
+        if self.parent():
+            pg = self.parent().window().geometry() if self.parent().window() else self.parent().geometry()
+            self.move(
+                pg.x() + (pg.width() - self.width()) // 2,
+                pg.y() + (pg.height() - self.height()) // 3,
+            )
+
+    def _load_preview(self):
+        card_id = self.card_data.get("id")
+        if not card_id or not self.data:
+            return
+        try:
+            preview = self.data.preview_act(card_id)
+            if not preview:
+                self._text_edit.setPlainText("(Не удалось загрузить скрипт акта)")
+                self._no_files_label.setText("Нет данных")
+                return
+            self._preview_data = preview
+            self._text_edit.setPlainText(preview.get("rendered_text", ""))
+            act_files = preview.get("act_files", [])
+            self._populate_files(act_files)
+            if not preview.get("chat_id"):
+                self._send_btn.setEnabled(False)
+                self._send_btn.setToolTip("Чат не создан для этой карточки")
+        except Exception as e:
+            self._text_edit.setPlainText("Ошибка загрузки: " + str(e))
+
+    def _populate_files(self, act_files):
+        self._no_files_label.setVisible(False)
+        if not act_files:
+            self._no_files_label.setText("Нет актов для этой стадии")
+            self._no_files_label.setVisible(True)
+            return
+        self._file_checkboxes = []
+        for f in act_files:
+            cb = QCheckBox()
+            label = f.get("label", "")
+            fname = f.get("file_name", "")
+            cb.setText(label + " — " + fname if fname else label)
+            cb.setChecked(True)
+            cb.setProperty("act_prefix", f.get("prefix"))
+            cb.setStyleSheet("font-size: 11px; padding: 2px 0;")
+            self._files_layout.addWidget(cb)
+            self._file_checkboxes.append(cb)
+        self._files_layout.addStretch()
+
+    def _on_skip(self):
+        """Пропустить — спрашиваем подтверждение, как в sign_act."""
+        reply = CustomQuestionBox(
+            self, 'Пропустить акт',
+            'Продолжить без отправки акта?\n\n'
+            'Этап подписания акта будет пропущен.'
+        ).exec_()
+        if reply == QDialog.Accepted:
+            self.done(self.SKIP_RESULT)
+
+    def _on_send(self):
+        text = self._text_edit.toPlainText().strip()
+        if not text:
+            CustomMessageBox(self, "Ошибка", "Текст сообщения не может быть пустым", "warning").exec_()
+            return
+
+        selected_prefixes = []
+        for cb in self._file_checkboxes:
+            if cb.isChecked():
+                prefix = cb.property("act_prefix")
+                if prefix:
+                    selected_prefixes.append(prefix)
+
+        card_id = self.card_data.get("id")
+
+        self._send_btn.setEnabled(False)
+        self._send_btn.setText("Отправка...")
+
+        self._progress = create_progress_dialog("Отправка", "Отправка акта в чат...", None, 0, self)
+        self._progress.show()
+
+        def _do_send():
+            try:
+                result = self.data.send_act(
+                    card_id=card_id, text=text, act_prefixes=selected_prefixes
+                )
+                self._send_done.emit(result)
+            except Exception as e:
+                self._send_error.emit(str(e))
+
+        threading.Thread(target=_do_send, daemon=True).start()
+
+    def _on_send_finished(self, result):
+        if hasattr(self, '_progress') and self._progress:
+            self._progress.close()
+        if result and result.get("status") == "sent":
+            sent_files = result.get("sent_files", 0)
+            msg = "Акт отправлен в чат."
+            if sent_files > 0:
+                msg += "\nФайлов отправлено: " + str(sent_files)
+            CustomMessageBox(self, "Отправлено", msg, "success").exec_()
+            self.accept()
+        else:
+            self._send_btn.setEnabled(True)
+            self._send_btn.setText("Отправить акт")
+            CustomMessageBox(self, "Ошибка", "Не удалось отправить акт", "error").exec_()
+
+    def _on_send_error(self, error_text):
+        if hasattr(self, '_progress') and self._progress:
+            self._progress.close()
+        self._send_btn.setEnabled(True)
+        self._send_btn.setText("Отправить акт")
+        CustomMessageBox(self, "Ошибка", "Ошибка отправки: " + error_text, "error").exec_()

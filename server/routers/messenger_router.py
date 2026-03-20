@@ -32,6 +32,7 @@ from messenger_schemas import (
     MessengerSettingUpdate, MessengerSettingResponse, MessengerSettingsBulkUpdate,
     SendMessageRequest, SendFilesRequest, SendScriptMessageRequest, MessageLogResponse,
     SendInvitesRequest, PreviewScriptRequest, PreviewScriptResponse, SendEditedScriptRequest,
+    PreviewActRequest, PreviewActResponse, SendActRequest,
 )
 from telegram_service import get_telegram_service, PYROGRAM_AVAILABLE
 from email_service import get_email_service
@@ -1315,6 +1316,165 @@ async def preview_script(
         chat_id=chat.telegram_chat_id if chat else None,
         messenger_chat_id=chat.id if chat else None,
     )
+
+
+# =============================================
+# PREVIEW ACT (предпросмотр скрипта акта)
+# =============================================
+
+@router.post("/preview-act", response_model=PreviewActResponse)
+async def preview_act(
+    data: PreviewActRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Предпросмотр скрипта отправки акта клиенту"""
+    card = db.query(CRMCard).filter(CRMCard.id == data.card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    stage_name = card.column_name or ''
+    sender_name = current_user.full_name or ''
+    client_first_name = ''
+    if contract.client_id:
+        client = db.query(Client).filter(Client.id == contract.client_id).first()
+        if client:
+            client_first_name = (client.full_name or '').split()[0] if client.full_name else ''
+
+    address = contract.address or ''
+
+    # Определяем описание стадии для текста
+    stage_desc = stage_name
+    if 'планировочн' in stage_name.lower():
+        stage_desc = 'планировочных решений'
+    elif 'концепция' in stage_name.lower() or 'дизайн' in stage_name.lower():
+        stage_desc = 'концепции дизайна'
+    elif 'рабочие чертежи' in stage_name.lower() or 'рабочая документация' in stage_name.lower():
+        stage_desc = 'рабочей документации'
+
+    # Генерируем текст скрипта акта
+    rendered_text = (
+        f"{client_first_name}, добрый день!\n\n"
+        f"Работа по стадии «{stage_desc}» Вашего проекта ({address}) "
+        f"завершена и согласована.\n\n"
+        f"Направляем Вам акт выполненных работ на подписание.\n\n"
+        f"Просим ознакомиться, подписать и направить скан подписанного акта "
+        f"в этот чат.\nПосле подписания акта мы сможем перейти к разработке "
+        f"следующего этапа.\n\n"
+        f"С уважением, {sender_name}\n"
+        f"Festival Color"
+    )
+
+    # Определяем какие акты без подписи есть в договоре для данной стадии
+    act_files = []
+    stage_lower = stage_name.lower()
+
+    act_mappings = []
+    if 'планировочн' in stage_lower:
+        act_mappings.append(('act_planning', 'Акт ПР'))
+    elif 'концепция' in stage_lower or 'дизайн' in stage_lower:
+        act_mappings.append(('act_concept', 'Акт КД'))
+    elif 'рабочие чертежи' in stage_lower or 'рабочая документация' in stage_lower or 'чертежн' in stage_lower:
+        act_mappings.append(('act_final', 'Акт финальный'))
+        act_mappings.append(('info_letter', 'Информационное письмо'))
+
+    for prefix, label in act_mappings:
+        link = getattr(contract, f'{prefix}_link', '') or ''
+        yandex_path = getattr(contract, f'{prefix}_yandex_path', '') or ''
+        file_name = getattr(contract, f'{prefix}_file_name', '') or ''
+        if link or yandex_path:
+            act_files.append({
+                'prefix': prefix,
+                'label': label,
+                'file_name': file_name or f'{label}.pdf',
+                'link': link,
+                'yandex_path': yandex_path,
+            })
+
+    # Чат
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == data.card_id,
+        MessengerChat.is_active == True
+    ).first()
+
+    return PreviewActResponse(
+        rendered_text=rendered_text,
+        stage_name=stage_name,
+        act_files=act_files,
+        sender_name=sender_name,
+        chat_id=chat.telegram_chat_id if chat else None,
+        messenger_chat_id=chat.id if chat else None,
+    )
+
+
+@router.post("/send-act")
+async def send_act(
+    data: SendActRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Отправить акт в групповой чат: текст + ссылки на файлы актов из договора"""
+    card = db.query(CRMCard).filter(CRMCard.id == data.card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="CRM-карточка не найдена")
+
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.crm_card_id == data.card_id,
+        MessengerChat.is_active == True
+    ).first()
+    if not chat or not chat.telegram_chat_id:
+        raise HTTPException(status_code=404, detail="Чат не найден или не привязан к Telegram")
+
+    tg = get_telegram_service()
+
+    # 1. Отправить текст
+    await tg.send_message(chat.telegram_chat_id, data.text, parse_mode="HTML")
+
+    # 2. Отправить ссылки на акты из договора
+    sent_files = 0
+    if data.act_prefixes:
+        contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+        if contract:
+            from urllib.parse import quote
+            file_lines = []
+            for prefix in data.act_prefixes:
+                link = getattr(contract, f'{prefix}_link', '') or ''
+                yandex_path = getattr(contract, f'{prefix}_yandex_path', '') or ''
+                file_name = getattr(contract, f'{prefix}_file_name', '') or f'{prefix}.pdf'
+
+                url = link
+                if not url and yandex_path:
+                    yd = yandex_path
+                    if yd.startswith('disk:'):
+                        yd = yd[5:]
+                    encoded = quote(yd, safe='/')
+                    url = f"https://disk.yandex.ru/client/disk{encoded}"
+
+                if url:
+                    file_lines.append(f'<a href="{url}">{file_name}</a>')
+                else:
+                    file_lines.append(file_name)
+                sent_files += 1
+
+            if file_lines:
+                files_msg = "\n".join(file_lines)
+                await tg.send_message(chat.telegram_chat_id, files_msg, parse_mode="HTML")
+
+    # 3. Логируем
+    log = MessengerMessageLog(
+        messenger_chat_id=chat.id,
+        message_type='act',
+        message_text=data.text[:500],
+        sent_by=current_user.id,
+        delivery_status='sent',
+    )
+    db.add(log)
+    db.commit()
+
+    return {"status": "sent", "sent_files": sent_files}
 
 
 @router.post("/send-edited-script")

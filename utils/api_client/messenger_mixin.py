@@ -131,6 +131,27 @@ class MessengerMixin:
         )
         return self._handle_response(response)
 
+    def preview_act(self, card_id: int) -> Dict[str, Any]:
+        """Предпросмотр скрипта отправки акта клиенту"""
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/preview-act",
+            json={'card_id': card_id}
+        )
+        return self._handle_response(response)
+
+    def send_act(self, card_id: int, text: str, act_prefixes: list = None) -> Dict[str, Any]:
+        """Отправить акт в групповой чат"""
+        response = self._request(
+            'POST', f"{self.base_url}/api/v1/messenger/send-act",
+            timeout=60,
+            json={
+                'card_id': card_id,
+                'text': text,
+                'act_prefixes': act_prefixes or [],
+            }
+        )
+        return self._handle_response(response)
+
     def send_edited_script(self, card_id: int, text: str, file_ids: list = None,
                            deadline_date: str = None, custom_deadline: bool = False) -> Dict[str, Any]:
         """Отправить отредактированный скрипт в групповой чат"""
