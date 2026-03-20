@@ -2127,24 +2127,24 @@ async def add_member_to_chat(
     invite_link = chat.invite_link
     emp_name = emp.full_name or 'Коллега'
 
+    email_sent = False
     if invite_link and emp.email:
         try:
             email_svc = get_email_service()
             messenger_settings = load_messenger_settings(db)
             email_svc.configure(messenger_settings)
-            app_download_url = messenger_settings.get('app_download_url', '')
             await email_svc.send_chat_invite(
                 to_email=emp.email,
-                employee_name=emp_name,
+                recipient_name=emp_name,
                 chat_title=chat.chat_title or '',
                 invite_link=invite_link,
-                app_download_url=app_download_url,
             )
+            email_sent = True
             logger.info(f"Invite отправлен: {emp_name} ({emp.email}) → чат {chat.id}")
         except Exception as e:
             logger.warning(f"Не удалось отправить invite {emp.email}: {e}")
 
-    return {"status": "ok", "employee_name": emp_name}
+    return {"status": "ok", "employee_name": emp_name, "email_sent": email_sent}
 
 
 @router.post("/chats/{chat_id}/send-invites")

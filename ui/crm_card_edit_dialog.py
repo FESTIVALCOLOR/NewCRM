@@ -7040,7 +7040,10 @@ class CardEditDialog(QDialog):
                     if self._messenger_chat_data is not None:
                         members = self._messenger_chat_data.setdefault('members', [])
                         members.append({'member_type': 'employee', 'member_id': employee_id})
-                    msg = f'{employee_name} ({role}) приглашён в чат'
+                    if result.get('email_sent'):
+                        msg = f'{employee_name} ({role}) — приглашение отправлено на email'
+                    else:
+                        msg = f'{employee_name} ({role}) добавлен в список участников чата'
                 else:
                     error = 'Не удалось добавить сотрудника в чат'
             except Exception as e:
