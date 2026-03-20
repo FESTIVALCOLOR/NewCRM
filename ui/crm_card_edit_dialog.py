@@ -7041,13 +7041,21 @@ class CardEditDialog(QDialog):
                         members = self._messenger_chat_data.setdefault('members', [])
                         members.append({'member_type': 'employee', 'member_id': employee_id})
                     if result.get('email_sent'):
-                        msg = f'{employee_name} ({role}) — приглашение отправлено на email'
+                        msg = f'{employee_name} — приглашение отправлено на email'
+                    elif result.get('has_telegram'):
+                        msg = f'{employee_name} — добавлен в участники (Telegram ID найден)'
                     else:
-                        msg = f'{employee_name} ({role}) добавлен в список участников чата'
+                        msg = f'{employee_name} — добавлен в список участников'
                 else:
-                    error = 'Не удалось добавить сотрудника в чат'
+                    error = 'Сервер недоступен'
             except Exception as e:
-                error = str(e)
+                # Извлекаем detail из APIResponseError
+                err_str = str(e)
+                # Формат: "Ошибка сервера (HTTP 400): текст"
+                if '): ' in err_str:
+                    error = err_str.split('): ', 1)[1]
+                else:
+                    error = err_str
             self._chat_action_finished.emit(msg, error)
 
         threading.Thread(target=_worker, daemon=True).start()

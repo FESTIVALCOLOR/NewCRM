@@ -2099,6 +2099,18 @@ async def add_member_to_chat(
     if not emp:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
+    emp_name = emp.full_name or 'Коллега'
+    has_email = bool(emp.email)
+    has_telegram = bool(emp.telegram_user_id)
+
+    # Нет ни email ни telegram — нельзя пригласить
+    if not has_email and not has_telegram:
+        raise HTTPException(
+            status_code=400,
+            detail=f"У сотрудника {emp_name} не указаны ни email, ни Telegram ID. "
+                   f"Заполните контактные данные в карточке сотрудника."
+        )
+
     # Проверяем, не добавлен ли уже
     existing_member = db.query(MessengerChatMember).filter(
         MessengerChatMember.messenger_chat_id == chat_id,
@@ -2106,29 +2118,30 @@ async def add_member_to_chat(
         MessengerChatMember.member_type == 'employee',
     ).first()
     if existing_member:
-        # Если уже есть — просто переотправим invite
-        pass
-    else:
-        member = MessengerChatMember(
-            messenger_chat_id=chat.id,
-            member_type='employee',
-            member_id=data.employee_id,
-            role_in_project=data.role_in_project,
-            is_mandatory=False,
-            phone=emp.phone,
-            email=emp.email,
-            telegram_user_id=emp.telegram_user_id,
-            invite_status='pending',
+        raise HTTPException(
+            status_code=409,
+            detail=f"{emp_name} уже добавлен в чат"
         )
-        db.add(member)
-        db.commit()
+
+    member = MessengerChatMember(
+        messenger_chat_id=chat.id,
+        member_type='employee',
+        member_id=data.employee_id,
+        role_in_project=data.role_in_project,
+        is_mandatory=False,
+        phone=emp.phone,
+        email=emp.email,
+        telegram_user_id=emp.telegram_user_id,
+        invite_status='pending',
+    )
+    db.add(member)
+    db.commit()
 
     # Отправить invite только этому сотруднику
     invite_link = chat.invite_link
-    emp_name = emp.full_name or 'Коллега'
 
     email_sent = False
-    if invite_link and emp.email:
+    if invite_link and has_email:
         try:
             email_svc = get_email_service()
             messenger_settings = load_messenger_settings(db)
@@ -2144,7 +2157,12 @@ async def add_member_to_chat(
         except Exception as e:
             logger.warning(f"Не удалось отправить invite {emp.email}: {e}")
 
-    return {"status": "ok", "employee_name": emp_name, "email_sent": email_sent}
+    return {
+        "status": "ok",
+        "employee_name": emp_name,
+        "email_sent": email_sent,
+        "has_telegram": has_telegram,
+    }
 
 
 @router.post("/chats/{chat_id}/send-invites")

@@ -3552,12 +3552,9 @@ class DataAccess(QObject):
         return None
 
     def add_member_to_chat(self, chat_id: int, employee_id: int, role_in_project: str = "") -> Optional[Dict]:
-        """Добавить сотрудника в существующий чат"""
+        """Добавить сотрудника в существующий чат. Пробрасывает ошибки для UI."""
         if self._should_use_api():
-            try:
-                return self.api_client.add_member_to_chat(chat_id, employee_id, role_in_project)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка add_member_to_chat: {e}")
+            return self.api_client.add_member_to_chat(chat_id, employee_id, role_in_project)
         return None
 
     def delete_messenger_chat(self, chat_id: int) -> Optional[Dict]:
