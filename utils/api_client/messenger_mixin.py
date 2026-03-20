@@ -103,6 +103,15 @@ class MessengerMixin:
         )
         return self._handle_response(response)
 
+    def add_member_to_chat(self, chat_id: int, employee_id: int, role_in_project: str = "") -> Dict[str, Any]:
+        """Добавить сотрудника в существующий чат"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/v1/messenger/chats/{chat_id}/add-member",
+            json={"employee_id": employee_id, "role_in_project": role_in_project}
+        )
+        return self._handle_response(response)
+
     def send_messenger_invites(self, chat_id: int, member_ids: list = None) -> Dict[str, Any]:
         """Разослать invite-ссылки"""
         response = self._request(

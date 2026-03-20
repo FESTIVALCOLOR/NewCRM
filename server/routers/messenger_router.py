@@ -2076,6 +2076,77 @@ async def send_chat_message(
     return {"status": "sent" if msg_id else "failed", "telegram_message_id": msg_id}
 
 
+class AddMemberRequest(BaseModel):
+    employee_id: int
+    role_in_project: str = ""
+
+
+@router.post("/chats/{chat_id}/add-member")
+async def add_member_to_chat(
+    chat_id: int,
+    data: AddMemberRequest,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Добавить сотрудника в существующий чат и отправить invite"""
+    chat = db.query(MessengerChat).filter(
+        MessengerChat.id == chat_id, MessengerChat.is_active == True
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+
+    emp = db.query(Employee).filter(Employee.id == data.employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    # Проверяем, не добавлен ли уже
+    existing_member = db.query(MessengerChatMember).filter(
+        MessengerChatMember.messenger_chat_id == chat_id,
+        MessengerChatMember.member_id == data.employee_id,
+        MessengerChatMember.member_type == 'employee',
+    ).first()
+    if existing_member:
+        # Если уже есть — просто переотправим invite
+        pass
+    else:
+        member = MessengerChatMember(
+            messenger_chat_id=chat.id,
+            member_type='employee',
+            member_id=data.employee_id,
+            role_in_project=data.role_in_project,
+            is_mandatory=False,
+            phone=emp.phone,
+            email=emp.email,
+            telegram_user_id=emp.telegram_user_id,
+            invite_status='pending',
+        )
+        db.add(member)
+        db.commit()
+
+    # Отправить invite только этому сотруднику
+    invite_link = chat.invite_link
+    emp_name = emp.full_name or 'Коллега'
+
+    if invite_link and emp.email:
+        try:
+            email_svc = get_email_service()
+            messenger_settings = load_messenger_settings(db)
+            email_svc.configure(messenger_settings)
+            app_download_url = messenger_settings.get('app_download_url', '')
+            await email_svc.send_chat_invite(
+                to_email=emp.email,
+                employee_name=emp_name,
+                chat_title=chat.chat_title or '',
+                invite_link=invite_link,
+                app_download_url=app_download_url,
+            )
+            logger.info(f"Invite отправлен: {emp_name} ({emp.email}) → чат {chat.id}")
+        except Exception as e:
+            logger.warning(f"Не удалось отправить invite {emp.email}: {e}")
+
+    return {"status": "ok", "employee_name": emp_name}
+
+
 @router.post("/chats/{chat_id}/send-invites")
 async def send_chat_invites(
     chat_id: int,

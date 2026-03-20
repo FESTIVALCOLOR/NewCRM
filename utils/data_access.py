@@ -3551,6 +3551,15 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка create_supervision_chat: {e}")
         return None
 
+    def add_member_to_chat(self, chat_id: int, employee_id: int, role_in_project: str = "") -> Optional[Dict]:
+        """Добавить сотрудника в существующий чат"""
+        if self._should_use_api():
+            try:
+                return self.api_client.add_member_to_chat(chat_id, employee_id, role_in_project)
+            except Exception as e:
+                _safe_log(f"[DataAccess] Ошибка add_member_to_chat: {e}")
+        return None
+
     def delete_messenger_chat(self, chat_id: int) -> Optional[Dict]:
         """Удалить чат"""
         if self._should_use_api():
