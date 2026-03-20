@@ -549,6 +549,11 @@ class MessengerAdminDialog(QDialog):
         self._app_download_url.setStyleSheet(_INPUT_STYLE)
         form.addRow("Ссылка на скачивание:", self._app_download_url)
 
+        self._review_link = QLineEdit()
+        self._review_link.setPlaceholderText("https://yandex.ru/maps/... или другая ссылка на отзывы")
+        self._review_link.setStyleSheet(_INPUT_STYLE)
+        form.addRow("Ссылка на отзывы:", self._review_link)
+
         layout.addLayout(form)
 
         # Статус Email
@@ -908,6 +913,9 @@ class MessengerAdminDialog(QDialog):
             )
             self._app_download_url.setText(
                 self._settings.get("app_download_url", "")
+            )
+            self._review_link.setText(
+                self._settings.get("review_link", "")
             )
         except Exception as e:
             logger.error(f"Ошибка загрузки настроек: {e}")
@@ -1576,6 +1584,7 @@ class MessengerAdminDialog(QDialog):
             {"setting_key": "smtp_use_tls", "setting_value": "true" if self._smtp_tls.isChecked() else "false"},
             {"setting_key": "smtp_from_name", "setting_value": self._smtp_from_name.text().strip() or "Festival Color CRM"},
             {"setting_key": "app_download_url", "setting_value": self._app_download_url.text().strip()},
+            {"setting_key": "review_link", "setting_value": self._review_link.text().strip()},
         ]
 
         try:

@@ -60,6 +60,7 @@ class CardEditDialog(QDialog):
     _reload_stage_files_signal = pyqtSignal()  # потокобезопасный сигнал для перезагрузки файлов стадий
     _sync_ended = pyqtSignal()  # Сигнал завершения фоновой синхронизации
     _delete_chat_finished = pyqtSignal(object)  # Сигнал завершения удаления чата (error_str или None)
+    _chat_action_finished = pyqtSignal(object, object)  # (success_msg, error_msg) — универсальный сигнал операций с чатом
 
     def __init__(self, parent, card_data, view_only=False, employee=None, api_client=None):
         super().__init__(parent)
@@ -121,6 +122,7 @@ class CardEditDialog(QDialog):
         self._active_sync_count = 0
         self._sync_ended.connect(self._on_sync_ended)
         self._delete_chat_finished.connect(self._on_delete_chat_finished)
+        self._chat_action_finished.connect(self._on_chat_action_finished)
 
         # Подключаем сигнал для фоновой загрузки превью
         self.preview_loaded.connect(self._on_preview_loaded)
@@ -6835,55 +6837,103 @@ class CardEditDialog(QDialog):
     def _on_invite_client(self):
         """Отправить клиенту email с приглашением в проектный Telegram-чат"""
         from ui.custom_message_box import CustomMessageBox
+        if getattr(self, '_chat_action_running', False):
+            return
         card_id = self.card_data.get('id')
         if not card_id:
             CustomMessageBox(self, 'Ошибка', 'Карточка не сохранена', 'warning').exec_()
             return
 
-        try:
-            result = self.data_access.invite_client_to_chat(card_id)
-            if result and result.get('ok'):
-                msg = result.get('message', 'Приглашение отправлено')
-                CustomMessageBox(self, 'Готово', msg, 'info').exec_()
-            else:
-                detail = (result or {}).get('detail', 'Неизвестная ошибка')
-                CustomMessageBox(self, 'Ошибка', f'Не удалось отправить приглашение: {detail}', 'warning').exec_()
-        except Exception as e:
-            CustomMessageBox(self, 'Ошибка', f'Не удалось отправить приглашение: {str(e)}', 'error').exec_()
+        self._start_chat_action()
+        import threading
+
+        def _worker():
+            error = None
+            msg = None
+            try:
+                result = self.data_access.invite_client_to_chat(card_id)
+                if result and result.get('ok'):
+                    msg = result.get('message', 'Приглашение отправлено')
+                else:
+                    error = (result or {}).get('detail', 'Неизвестная ошибка')
+            except Exception as e:
+                error = str(e)
+            self._chat_action_finished.emit(msg, error)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _on_send_start_script(self):
         """Отправить начальный скрипт в чат"""
+        if getattr(self, '_chat_action_running', False):
+            return
         card_id = self.card_data.get('id') if self.card_data else None
         if not card_id:
             return
-        try:
-            result = self.data.trigger_script(card_id, 'project_start')
-            if result:
-                from ui.custom_message_box import CustomMessageBox
-                CustomMessageBox(self, 'Скрипт', 'Начальный скрипт отправлен в чат', 'success').exec_()
-            else:
-                from ui.custom_message_box import CustomMessageBox
-                CustomMessageBox(self, 'Ошибка', 'Не удалось отправить скрипт', 'warning').exec_()
-        except Exception as e:
-            from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Ошибка', str(e), 'error').exec_()
+
+        self._start_chat_action()
+        import threading
+
+        def _worker():
+            error = None
+            msg = None
+            try:
+                result = self.data.trigger_script(card_id, 'project_start')
+                if result:
+                    msg = 'Начальный скрипт отправлен в чат'
+                else:
+                    error = 'Не удалось отправить скрипт'
+            except Exception as e:
+                error = str(e)
+            self._chat_action_finished.emit(msg, error)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _on_send_end_script(self):
         """Отправить завершающий скрипт в чат"""
+        if getattr(self, '_chat_action_running', False):
+            return
         card_id = self.card_data.get('id') if self.card_data else None
         if not card_id:
             return
-        try:
-            result = self.data.trigger_script(card_id, 'project_end')
-            if result:
-                from ui.custom_message_box import CustomMessageBox
-                CustomMessageBox(self, 'Скрипт', 'Завершающий скрипт отправлен в чат', 'success').exec_()
-            else:
-                from ui.custom_message_box import CustomMessageBox
-                CustomMessageBox(self, 'Ошибка', 'Не удалось отправить скрипт', 'warning').exec_()
-        except Exception as e:
-            from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Ошибка', str(e), 'error').exec_()
+
+        self._start_chat_action()
+        import threading
+
+        def _worker():
+            error = None
+            msg = None
+            try:
+                result = self.data.trigger_script(card_id, 'project_end')
+                if result:
+                    msg = 'Завершающий скрипт отправлен в чат'
+                else:
+                    error = 'Не удалось отправить скрипт'
+            except Exception as e:
+                error = str(e)
+            self._chat_action_finished.emit(msg, error)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _start_chat_action(self):
+        """Блокировка кнопок чата + прогресс-бар"""
+        self._chat_action_running = True
+        self._show_chat_progress(True)
+        for btn_name in ('invite_client_btn', 'start_script_btn', 'end_script_btn', 'delete_chat_btn', 'create_chat_btn'):
+            btn = getattr(self, btn_name, None)
+            if btn:
+                btn.setEnabled(False)
+
+    def _on_chat_action_finished(self, msg, error):
+        """Callback завершения любой операции с чатом."""
+        from ui.custom_message_box import CustomMessageBox
+        self._chat_action_running = False
+        self._show_chat_progress(False)
+        self._update_chat_buttons_state()
+
+        if error:
+            CustomMessageBox(self, 'Ошибка', str(error), 'error').exec_()
+        elif msg:
+            CustomMessageBox(self, 'Готово', msg, 'success').exec_()
 
     def _on_chat_admin(self):
         """Обработчик кнопки 'Настройки чатов' (Директор)"""
