@@ -396,21 +396,37 @@ class TelegramService:
     ) -> Dict[str, Any]:
         """
         Создать группу через MTProto.
+        Порядок: создать basic group → мигрировать в supergroup → настроить.
         Возвращает: {chat_id, title, invite_link}
         """
         async with self._mtproto_lock:
             client = await self._ensure_pyrogram_client()
 
             try:
-                # Создаём группу (нужен хотя бы один участник — бот)
-                users = []
-                if bot_username:
-                    users.append(bot_username)
-
-                group = await client.create_group(title, users or ["me"])
+                # 1. Создаём базовую группу (нужен хотя бы один участник — бот)
+                users = [bot_username] if bot_username else ["me"]
+                group = await client.create_group(title, users)
                 chat_id = group.id
+                logger.info(f"Базовая группа создана: {title} (chat_id={chat_id})")
 
-                # Повышаем бота до админа (чтобы бот мог кикать/удалять)
+                # 2. Принудительная миграция в supergroup СРАЗУ
+                #    (чтобы все последующие операции работали с единым chat_id)
+                try:
+                    updates = await client.invoke(
+                        raw.functions.messages.MigrateChat(chat_id=-chat_id)
+                    )
+                    for ch in getattr(updates, 'chats', []):
+                        if getattr(ch, 'megagroup', False):
+                            old_id = chat_id
+                            chat_id = -int(f"100{ch.id}")
+                            logger.info(
+                                f"Мигрирована в supergroup: {old_id} → {chat_id}"
+                            )
+                            break
+                except Exception as mig_err:
+                    logger.warning(f"Миграция в supergroup: {mig_err}")
+
+                # 3. Повышаем бота до админа (уже на supergroup)
                 if bot_username:
                     try:
                         from pyrogram.types import ChatPrivileges
@@ -428,7 +444,7 @@ class TelegramService:
                     except Exception as e:
                         logger.warning(f"Не удалось повысить бота до админа: {e}")
 
-                # Устанавливаем фото
+                # 4. Устанавливаем фото
                 if photo_path and os.path.exists(photo_path):
                     try:
                         await client.set_chat_photo(
@@ -437,14 +453,16 @@ class TelegramService:
                     except Exception as e:
                         logger.warning(f"Не удалось установить фото группы: {e}")
 
-                # Генерируем invite-ссылку (может конвертировать в supergroup)
-                invite_link = await client.export_chat_invite_link(chat_id)
+                # 5. Генерируем invite-ссылку
+                try:
+                    invite_link = await client.export_chat_invite_link(chat_id)
+                except Exception as e:
+                    logger.warning(f"export_chat_invite_link({chat_id}) ошибка: {e}")
+                    invite_link = None
 
-                # Включаем видимость истории для новых участников
-                # promote_chat_member обычно конвертирует basic group в supergroup
+                # 6. Включаем видимость истории для новых участников
                 try:
                     peer = await client.resolve_peer(chat_id)
-                    # resolve_peer возвращает InputPeerChannel, а API требует InputChannel
                     if hasattr(peer, 'channel_id'):
                         channel = raw.types.InputChannel(
                             channel_id=peer.channel_id,
@@ -457,29 +475,6 @@ class TelegramService:
                             )
                         )
                         logger.info(f"История чата {chat_id} открыта для новых участников")
-                    else:
-                        # Если группа ещё базовая — принудительная миграция
-                        logger.info(f"Чат {chat_id} — базовая группа, пробуем миграцию в supergroup")
-                        try:
-                            updates = await client.invoke(
-                                raw.functions.messages.MigrateChat(chat_id=-chat_id)
-                            )
-                            # Ищем новый channel в результате миграции
-                            for ch in getattr(updates, 'chats', []):
-                                if getattr(ch, 'megagroup', False):
-                                    new_channel = raw.types.InputChannel(
-                                        channel_id=ch.id,
-                                        access_hash=ch.access_hash
-                                    )
-                                    await client.invoke(
-                                        raw.functions.channels.TogglePreHistoryHidden(
-                                            channel=new_channel, enabled=False
-                                        )
-                                    )
-                                    logger.info(f"Чат мигрирован в supergroup, история открыта")
-                                    break
-                        except Exception as mig_err:
-                            logger.warning(f"Миграция в supergroup не удалась: {mig_err}")
                 except Exception as e:
                     logger.warning(f"Не удалось открыть историю чата {chat_id}: {e}")
 
