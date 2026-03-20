@@ -136,6 +136,7 @@ class MessengerMixin:
         """Отправить отредактированный скрипт в групповой чат"""
         response = self._request(
             'POST', f"{self.base_url}/api/v1/messenger/send-edited-script",
+            timeout=120,  # Скачивание с ЯД + отправка в Telegram — долгая операция
             json={
                 'card_id': card_id,
                 'text': text,

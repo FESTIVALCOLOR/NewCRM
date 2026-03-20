@@ -5231,28 +5231,48 @@ class ScriptPreviewDialog(QDialog):
         custom_deadline = (self._original_deadline and current_dl != self._original_deadline)
         card_id = self.card_data.get("id")
 
-        from PyQt5.QtWidgets import QApplication
+        # Блокируем кнопку чтобы не нажали дважды
+        self._send_btn.setEnabled(False)
+        self._send_btn.setText("Отправка...")
+
         progress = create_progress_dialog("Отправка", "Отправка сообщения в чат...", None, 0, self)
         progress.show()
-        QApplication.processEvents()
-        try:
-            result = self.data.send_edited_script(
-                card_id=card_id, text=text, file_ids=selected_ids,
-                deadline_date=current_dl if custom_deadline else None,
-                custom_deadline=bool(custom_deadline),
-            )
-            progress.close()
-            if result and result.get("status") == "sent":
-                sent_files = result.get("sent_files", 0)
-                msg = "Сообщение отправлено в чат."
-                if sent_files > 0:
-                    msg += "\nФайлов прикреплено: " + str(sent_files)
-                if custom_deadline:
-                    msg += "\nДедлайн согласования: " + current_dl
-                CustomMessageBox(self, "Отправлено", msg, "success").exec_()
-                self.accept()
-            else:
-                CustomMessageBox(self, "Ошибка", "Не удалось отправить сообщение", "error").exec_()
-        except Exception as e:
-            progress.close()
-            CustomMessageBox(self, "Ошибка", "Ошибка отправки: " + str(e), "error").exec_()
+
+        # Отправка в фоновом потоке, чтобы не блокировать UI
+        import threading
+        from PyQt5.QtCore import QTimer
+
+        def _do_send():
+            try:
+                result = self.data.send_edited_script(
+                    card_id=card_id, text=text, file_ids=selected_ids,
+                    deadline_date=current_dl if custom_deadline else None,
+                    custom_deadline=bool(custom_deadline),
+                )
+                QTimer.singleShot(0, lambda: self._on_send_finished(result, custom_deadline, current_dl, progress))
+            except Exception as e:
+                QTimer.singleShot(0, lambda: self._on_send_error(str(e), progress))
+
+        threading.Thread(target=_do_send, daemon=True).start()
+
+    def _on_send_finished(self, result, custom_deadline, current_dl, progress):
+        progress.close()
+        if result and result.get("status") == "sent":
+            sent_files = result.get("sent_files", 0)
+            msg = "Сообщение отправлено в чат."
+            if sent_files > 0:
+                msg += "\nФайлов прикреплено: " + str(sent_files)
+            if custom_deadline:
+                msg += "\nДедлайн согласования: " + current_dl
+            CustomMessageBox(self, "Отправлено", msg, "success").exec_()
+            self.accept()
+        else:
+            self._send_btn.setEnabled(True)
+            self._send_btn.setText("Отправить в чат")
+            CustomMessageBox(self, "Ошибка", "Не удалось отправить сообщение", "error").exec_()
+
+    def _on_send_error(self, error_text, progress):
+        progress.close()
+        self._send_btn.setEnabled(True)
+        self._send_btn.setText("Отправить в чат")
+        CustomMessageBox(self, "Ошибка", "Ошибка отправки: " + error_text, "error").exec_()
