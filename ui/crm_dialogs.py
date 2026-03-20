@@ -5016,9 +5016,13 @@ class MeasurementDialog(QDialog):
 
 class ScriptPreviewDialog(QDialog):
     """Диалог предпросмотра скрипта перед отправкой в групповой чат."""
+    _send_done = pyqtSignal(object, bool, str)
+    _send_error = pyqtSignal(str)
 
     def __init__(self, parent, card_data, data_access, api_client=None):
         super().__init__(parent)
+        self._send_done.connect(self._on_send_finished)
+        self._send_error.connect(self._on_send_error)
         self.card_data = card_data
         self.data = data_access
         self.api_client = api_client
@@ -5234,13 +5238,14 @@ class ScriptPreviewDialog(QDialog):
         # Блокируем кнопку чтобы не нажали дважды
         self._send_btn.setEnabled(False)
         self._send_btn.setText("Отправка...")
+        self._send_custom_deadline = custom_deadline
+        self._send_current_dl = current_dl
 
-        progress = create_progress_dialog("Отправка", "Отправка сообщения в чат...", None, 0, self)
-        progress.show()
+        self._progress = create_progress_dialog("Отправка", "Отправка сообщения в чат...", None, 0, self)
+        self._progress.show()
 
-        # Отправка в фоновом потоке, чтобы не блокировать UI
+        # Отправка в фоновом потоке через pyqtSignal
         import threading
-        from PyQt5.QtCore import QTimer
 
         def _do_send():
             try:
@@ -5249,19 +5254,20 @@ class ScriptPreviewDialog(QDialog):
                     deadline_date=current_dl if custom_deadline else None,
                     custom_deadline=bool(custom_deadline),
                 )
-                QTimer.singleShot(0, lambda: self._on_send_finished(result, custom_deadline, current_dl, progress))
+                self._send_done.emit(result, custom_deadline, current_dl)
             except Exception as e:
-                QTimer.singleShot(0, lambda: self._on_send_error(str(e), progress))
+                self._send_error.emit(str(e))
 
         threading.Thread(target=_do_send, daemon=True).start()
 
-    def _on_send_finished(self, result, custom_deadline, current_dl, progress):
-        progress.close()
+    def _on_send_finished(self, result, custom_deadline, current_dl):
+        if hasattr(self, '_progress') and self._progress:
+            self._progress.close()
         if result and result.get("status") == "sent":
             sent_files = result.get("sent_files", 0)
             msg = "Сообщение отправлено в чат."
             if sent_files > 0:
-                msg += "\nФайлов прикреплено: " + str(sent_files)
+                msg += "\nСсылок на файлы: " + str(sent_files)
             if custom_deadline:
                 msg += "\nДедлайн согласования: " + current_dl
             CustomMessageBox(self, "Отправлено", msg, "success").exec_()
@@ -5271,8 +5277,9 @@ class ScriptPreviewDialog(QDialog):
             self._send_btn.setText("Отправить в чат")
             CustomMessageBox(self, "Ошибка", "Не удалось отправить сообщение", "error").exec_()
 
-    def _on_send_error(self, error_text, progress):
-        progress.close()
+    def _on_send_error(self, error_text):
+        if hasattr(self, '_progress') and self._progress:
+            self._progress.close()
         self._send_btn.setEnabled(True)
         self._send_btn.setText("Отправить в чат")
         CustomMessageBox(self, "Ошибка", "Ошибка отправки: " + error_text, "error").exec_()
