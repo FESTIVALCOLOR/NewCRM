@@ -2908,37 +2908,37 @@ class CRMCard(QFrame):
         for role, name, role_key, is_completed in employees:
             # Создаем горизонтальный layout для строки
             employee_row_widget = QWidget()
+            employee_row_widget.setFixedHeight(24)
             employee_row_layout = QHBoxLayout()
             employee_row_layout.setContentsMargins(0, 0, 0, 0)
-            employee_row_layout.setSpacing(5)
-            
+            employee_row_layout.setSpacing(4)
+
             # Метка с именем сотрудника
             if is_completed:
                 display_text = f"{role}: {name} "
             else:
                 display_text = f"{role}: {name}"
-            
+
             employee_label = QLabel(display_text)
-            employee_label.setWordWrap(True)
-            
+
             if is_completed:
                 employee_label.setStyleSheet('''
-                    font-size: 12px; 
-                    color: #1B5E20; 
+                    font-size: 11px;
+                    color: #1B5E20;
                     font-weight: bold;
                     background-color: #C8E6C9;
-                    padding: 3px 5px;
-                    border-radius: 4px;
+                    padding: 2px 5px;
+                    border-radius: 3px;
                     border: 1px solid #81C784;
                 ''')
             elif role_key == highlight_role:
                 employee_label.setStyleSheet('''
-                    font-size: 12px; 
-                    color: #F57C00; 
+                    font-size: 11px;
+                    color: #F57C00;
                     font-weight: bold;
                     background-color: #FFE082;
-                    padding: 3px 5px;
-                    border-radius: 4px;
+                    padding: 2px 5px;
+                    border-radius: 3px;
                     border: 1px solid #FFB74D;
                 ''')
             else:
@@ -2956,15 +2956,14 @@ class CRMCard(QFrame):
 
             if can_show_reassign:
 
-                reassign_btn = IconLoader.create_icon_button('refresh', '', 'Переназначить исполнителя', icon_size=12)
-                reassign_btn.setFixedSize(22, 22)
+                reassign_btn = IconLoader.create_icon_button('refresh', '', 'Переназначить исполнителя', icon_size=10)
+                reassign_btn.setFixedSize(18, 18)
                 reassign_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #FF9800;
                         color: white;
                         border: none;
-                        border-radius: 4px;
-                        font-size: 12px;
+                        border-radius: 3px;
                         padding: 0px;
                     }
                     QPushButton:hover {
@@ -2973,8 +2972,6 @@ class CRMCard(QFrame):
                     QPushButton:pressed {
                         background-color: #E65100;
                     }
-
-                    /* ========== СВЕТЛАЯ ВСПЛЫВАЮЩАЯ ПОДСКАЗКА ========== */
                     QToolTip {
                         background-color: #FFFFFF;
                         color: #333333;
