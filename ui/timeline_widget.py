@@ -223,7 +223,7 @@ class ProjectTimelineWidget(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
         self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(True)
+        self.table.setShowGrid(False)  # Grid рисуется через border на виджетах ячеек
         self.table.setAlternatingRowColors(False)
 
         header = self.table.horizontalHeader()
@@ -307,6 +307,7 @@ class ProjectTimelineWidget(QWidget):
         dw_layout.addWidget(self._deviation_text)
         self._deviation_warning.hide()
         btn_layout.addWidget(self._deviation_warning)
+        btn_layout.addSpacing(10)
 
         layout.addLayout(btn_layout)
 
@@ -647,11 +648,12 @@ class ProjectTimelineWidget(QWidget):
         """Создать QLabel для ячейки таблицы (обход глобального stylesheet)"""
         lbl = QLabel(text)
         weight = 'bold' if bold else 'normal'
-        has_border = '4CAF50' in extra_style
-        pad = '0px 4px' if has_border else '4px 6px'
+        has_green = '4CAF50' in extra_style
+        # setShowGrid=False: grid-линии рисуются вручную. Для зелёной рамки — без grid.
+        grid = '' if has_green else 'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;'
         lbl.setStyleSheet(
-            f'background-color: {bg_color}; color: {color}; padding: {pad}; '
-            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 0; {extra_style}'
+            f'background-color: {bg_color}; color: {color}; padding: 4px 6px; '
+            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 0; {grid} {extra_style}'
         )
         qt_align = Qt.AlignCenter if align == 'center' else (Qt.AlignLeft | Qt.AlignVCenter)
         lbl.setAlignment(qt_align)
@@ -730,7 +732,7 @@ class ProjectTimelineWidget(QWidget):
                         dev_lbl.setTextFormat(Qt.RichText)
                         dev_lbl.setText(f'<b style="color:{dev_color}">{dev_text}</b>')
                         dev_lbl.setAlignment(Qt.AlignCenter)
-                        dev_lbl.setStyleSheet(f'background-color: {bg}; padding: 2px 4px;')
+                        dev_lbl.setStyleSheet(f'background-color: {bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
                         # Тултип с причинами отклонения
                         if reasons:
                             reason_lines = []
@@ -869,7 +871,7 @@ class ProjectTimelineWidget(QWidget):
                     # Обычная строка — QLabel (read-only) + кнопка-карандаш
                     planned = entry.get('_planned_date', '')
                     date_container = QWidget()
-                    _dc_border = _brd_mid if _active_border else ''
+                    _dc_border = _brd_mid if _active_border else 'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;'
                     date_container.setStyleSheet(f'background-color: transparent; {_dc_border}')
                     date_layout = QHBoxLayout(date_container)
                     _dc_m = 0 if _active_border else 2
@@ -951,7 +953,8 @@ class ProjectTimelineWidget(QWidget):
                         f'<b style="color:#C62828">{custom_norm}</b>'
                     )
                     norm_label.setAlignment(Qt.AlignCenter)
-                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; {_brd_mid}')
+                    _norm_brd = _brd_mid if _active_border else 'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;'
+                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; {_norm_brd}')
                     norm_label.setToolTip(
                         f'Превышение стандартного значения нормо-дней '
                         f'(+{custom_norm - norm_days_val} дн.).\n'
@@ -1021,7 +1024,7 @@ class ProjectTimelineWidget(QWidget):
     def _enable_date_edit(self, row, entry_idx, stage_code, current_actual_date):
         """Переключить ячейку даты в режим редактирования (QDateEdit)"""
         date_container = QWidget()
-        date_container.setStyleSheet('background-color: transparent;')
+        date_container.setStyleSheet('background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
         date_layout = QHBoxLayout(date_container)
         date_layout.setContentsMargins(2, 0, 2, 0)
         date_layout.setSpacing(0)
