@@ -223,7 +223,7 @@ class ProjectTimelineWidget(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
         self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)  # Рамки рисуются на виджетах ячеек
+        self.table.setShowGrid(True)
         self.table.setAlternatingRowColors(False)
 
         header = self.table.horizontalHeader()
@@ -240,6 +240,7 @@ class ProjectTimelineWidget(QWidget):
         self.table.setStyleSheet("""
             QTableWidget {
                 border: 1px solid #E0E0E0;
+                gridline-color: #E0E0E0;
                 font-size: 12px;
             }
             QHeaderView::section {
@@ -295,21 +296,17 @@ class ProjectTimelineWidget(QWidget):
         dw_layout = QHBoxLayout(self._deviation_warning)
         dw_layout.setContentsMargins(8, 4, 10, 4)
         dw_layout.setSpacing(5)
-        # Иконка warning (IconLoader уже импортирован из utils.icon_loader)
         dw_icon = IconLoader.load_colored('warning', '#E65100', 14)
         dw_icon_label = QLabel()
         dw_icon_label.setPixmap(dw_icon.pixmap(14, 14))
         dw_icon_label.setFixedSize(14, 14)
         dw_icon_label.setStyleSheet('background: transparent; border: none;')
         dw_layout.addWidget(dw_icon_label)
-        # Текст
         self._deviation_text = QLabel()
         self._deviation_text.setStyleSheet('background: transparent; border: none; color: #E65100; font-size: 12px;')
         dw_layout.addWidget(self._deviation_text)
         self._deviation_warning.hide()
         btn_layout.addWidget(self._deviation_warning)
-        # Отступ справа — выравнивание с левым краем столбца ФИО
-        btn_layout.addSpacing(140)
 
         layout.addLayout(btn_layout)
 
@@ -647,14 +644,14 @@ class ProjectTimelineWidget(QWidget):
     @staticmethod
     def _make_cell_label(text, bg_color, align='center', bold=False, font_size=12,
                          color='#333333', extra_style=''):
-        """Создать QLabel для ячейки таблицы (обход глобального stylesheet).
-        Grid отключён — рамки ячеек рисуются здесь через border-right/bottom."""
+        """Создать QLabel для ячейки таблицы (обход глобального stylesheet)"""
         lbl = QLabel(text)
         weight = 'bold' if bold else 'normal'
+        has_border = '4CAF50' in extra_style
+        pad = '0px 4px' if has_border else '4px 6px'
         lbl.setStyleSheet(
-            f'background-color: {bg_color}; color: {color}; padding: 4px 6px; '
-            f'font-size: {font_size}px; font-weight: {weight}; '
-            f'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0; {extra_style}'
+            f'background-color: {bg_color}; color: {color}; padding: {pad}; '
+            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 0; {extra_style}'
         )
         qt_align = Qt.AlignCenter if align == 'center' else (Qt.AlignLeft | Qt.AlignVCenter)
         lbl.setAlignment(qt_align)
@@ -733,7 +730,7 @@ class ProjectTimelineWidget(QWidget):
                         dev_lbl.setTextFormat(Qt.RichText)
                         dev_lbl.setText(f'<b style="color:{dev_color}">{dev_text}</b>')
                         dev_lbl.setAlignment(Qt.AlignCenter)
-                        dev_lbl.setStyleSheet(f'background-color: {bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+                        dev_lbl.setStyleSheet(f'background-color: {bg}; padding: 2px 4px;')
                         # Тултип с причинами отклонения
                         if reasons:
                             reason_lines = []
@@ -825,15 +822,15 @@ class ProjectTimelineWidget(QWidget):
                 elif not is_in_scope:
                     row_bg = '#E0E0E0'
 
-                # Подсветка текущего активного подэтапа: зелёный фон + левый акцент
-                if _active_border:
-                    row_bg = '#E8F5E9'
-                _accent = 'border-left: 3px solid #4CAF50;' if _active_border else ''
+                # Бордеры для зелёной рамки текущего подэтапа
+                _brd_first = 'border: 2px solid #4CAF50; border-right: none; border-radius: 0;' if _active_border else ''
+                _brd_mid = 'border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-left: none; border-right: none; border-radius: 0;' if _active_border else ''
+                _brd_last = 'border: 2px solid #4CAF50; border-left: none; border-radius: 0;' if _active_border else ''
 
                 # Кол 0: Название
                 self.table.setCellWidget(row, 0,
                     self._make_cell_label(entry.get('stage_name', ''), row_bg, 'left',
-                                          extra_style=_accent))
+                                          extra_style=_brd_first))
 
                 # Кол 1: Дата
                 is_start_row = (stage_code == 'START')
@@ -872,10 +869,10 @@ class ProjectTimelineWidget(QWidget):
                     # Обычная строка — QLabel (read-only) + кнопка-карандаш
                     planned = entry.get('_planned_date', '')
                     date_container = QWidget()
-                    _dc_bg = row_bg if _active_border else 'transparent'
-                    date_container.setStyleSheet(f'background-color: {_dc_bg}; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+                    _dc_border = _brd_mid if _active_border else ''
+                    date_container.setStyleSheet(f'background-color: transparent; {_dc_border}')
                     date_layout = QHBoxLayout(date_container)
-                    _dc_m = 2
+                    _dc_m = 0 if _active_border else 2
                     date_layout.setContentsMargins(_dc_m, 0, _dc_m, 0)
                     date_layout.setSpacing(2)
                     date_layout.setAlignment(Qt.AlignVCenter)
@@ -940,7 +937,7 @@ class ProjectTimelineWidget(QWidget):
                 # Кол 2: Кол-во дней (показываем "0" если дата заполнена)
                 days_text = str(actual_days) if has_date else ''
                 self.table.setCellWidget(row, 2,
-                    self._make_cell_label(days_text, row_bg))
+                    self._make_cell_label(days_text, row_bg, extra_style=_brd_mid))
 
                 # Кол 3: Норма дней (с отображением превышения)
                 custom_norm = entry.get('custom_norm_days')
@@ -954,7 +951,7 @@ class ProjectTimelineWidget(QWidget):
                         f'<b style="color:#C62828">{custom_norm}</b>'
                     )
                     norm_label.setAlignment(Qt.AlignCenter)
-                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; {_brd_mid}')
                     norm_label.setToolTip(
                         f'Превышение стандартного значения нормо-дней '
                         f'(+{custom_norm - norm_days_val} дн.).\n'
@@ -964,7 +961,7 @@ class ProjectTimelineWidget(QWidget):
                 else:
                     norm_text = str(norm_days_val) if norm_days_val > 0 else ''
                     self.table.setCellWidget(row, 3,
-                        self._make_cell_label(norm_text, norm_bg))
+                        self._make_cell_label(norm_text, norm_bg, extra_style=_brd_mid))
 
                 # Кол 4: Статус
                 status_color = '#333333'
@@ -974,16 +971,16 @@ class ProjectTimelineWidget(QWidget):
                     status_color = '#C62828'
                 self.table.setCellWidget(row, 4,
                     self._make_cell_label(status_text, row_bg, bold=bool(status_text),
-                                          color=status_color))
+                                          color=status_color, extra_style=_brd_mid))
 
                 # Кол 5: Исполнитель
                 self.table.setCellWidget(row, 5,
-                    self._make_cell_label(role, row_bg))
+                    self._make_cell_label(role, row_bg, extra_style=_brd_mid))
 
                 # Кол 6: ФИО
                 fio = self._get_fio(role)
                 self.table.setCellWidget(row, 6,
-                    self._make_cell_label(fio, row_bg))
+                    self._make_cell_label(fio, row_bg, extra_style=_brd_last))
 
         finally:
             self.table.setUpdatesEnabled(True)
@@ -1024,7 +1021,7 @@ class ProjectTimelineWidget(QWidget):
     def _enable_date_edit(self, row, entry_idx, stage_code, current_actual_date):
         """Переключить ячейку даты в режим редактирования (QDateEdit)"""
         date_container = QWidget()
-        date_container.setStyleSheet('background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
+        date_container.setStyleSheet('background-color: transparent;')
         date_layout = QHBoxLayout(date_container)
         date_layout.setContentsMargins(2, 0, 2, 0)
         date_layout.setSpacing(0)
