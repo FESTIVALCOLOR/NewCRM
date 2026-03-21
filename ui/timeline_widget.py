@@ -254,6 +254,22 @@ class ProjectTimelineWidget(QWidget):
 
         layout.addWidget(self.table, 1)
 
+        # === ПРЕДУПРЕЖДЕНИЕ О ПРЕВЫШЕНИИ НОРМОДНЕЙ ===
+        self._deviation_warning = QLabel()
+        self._deviation_warning.setWordWrap(True)
+        self._deviation_warning.setStyleSheet("""
+            QLabel {
+                background-color: #FFF3E0;
+                border: 1px solid #FFB74D;
+                border-radius: 4px;
+                padding: 8px 12px;
+                color: #E65100;
+                font-size: 12px;
+            }
+        """)
+        self._deviation_warning.hide()
+        layout.addWidget(self._deviation_warning)
+
         # === КНОПКИ ===
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
@@ -618,14 +634,14 @@ class ProjectTimelineWidget(QWidget):
 
     @staticmethod
     def _make_cell_label(text, bg_color, align='center', bold=False, font_size=12,
-                         color='#333333'):
+                         color='#333333', extra_style=''):
         """Создать QLabel для ячейки таблицы (обход глобального stylesheet)"""
         lbl = QLabel(text)
         weight = 'bold' if bold else 'normal'
         text_align = 'center' if align == 'center' else 'left'
         lbl.setStyleSheet(
             f'background-color: {bg_color}; color: {color}; padding: 4px 6px; '
-            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 2px;'
+            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 2px; {extra_style}'
         )
         qt_align = Qt.AlignCenter if align == 'center' else (Qt.AlignLeft | Qt.AlignVCenter)
         lbl.setAlignment(qt_align)
@@ -780,12 +796,12 @@ class ProjectTimelineWidget(QWidget):
 
                 entry_status = entry.get('status', '')
                 has_date = bool(entry.get('actual_date'))
+                # Зелёная рамка для текущего активного подэтапа (без фона)
+                _active_border = is_current_step and not has_date
                 if entry_status == 'skipped':
                     row_bg = '#F5F5F5'
                     status_text = 'Пропущен'
-                elif is_current_step and not has_date:
-                    # Текущий активный подэтап — зелёная подсветка
-                    row_bg = '#E8F8E0'
+                    _active_border = False
                 elif has_date and norm_days_val > 0:
                     if actual_days <= norm_days_val:
                         status_text = 'В срок'
@@ -796,9 +812,15 @@ class ProjectTimelineWidget(QWidget):
                 elif not is_in_scope:
                     row_bg = '#E0E0E0'
 
+                # Бордеры для зелёной рамки текущего подэтапа
+                _brd_first = 'border: 2px solid #4CAF50; border-right: none; border-radius: 0;' if _active_border else ''
+                _brd_mid = 'border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-left: none; border-right: none; border-radius: 0;' if _active_border else ''
+                _brd_last = 'border: 2px solid #4CAF50; border-left: none; border-radius: 0;' if _active_border else ''
+
                 # Кол 0: Название
                 self.table.setCellWidget(row, 0,
-                    self._make_cell_label(entry.get('stage_name', ''), row_bg, 'left'))
+                    self._make_cell_label(entry.get('stage_name', ''), row_bg, 'left',
+                                          extra_style=_brd_first))
 
                 # Кол 1: Дата
                 is_start_row = (stage_code == 'START')
@@ -837,7 +859,8 @@ class ProjectTimelineWidget(QWidget):
                     # Обычная строка — QLabel (read-only) + кнопка-карандаш
                     planned = entry.get('_planned_date', '')
                     date_container = QWidget()
-                    date_container.setStyleSheet('background-color: transparent;')
+                    _dc_border = _brd_mid if _active_border else ''
+                    date_container.setStyleSheet(f'background-color: transparent; {_dc_border}')
                     date_layout = QHBoxLayout(date_container)
                     date_layout.setContentsMargins(2, 0, 2, 0)
                     date_layout.setSpacing(2)
@@ -903,7 +926,7 @@ class ProjectTimelineWidget(QWidget):
                 # Кол 2: Кол-во дней (показываем "0" если дата заполнена)
                 days_text = str(actual_days) if has_date else ''
                 self.table.setCellWidget(row, 2,
-                    self._make_cell_label(days_text, row_bg))
+                    self._make_cell_label(days_text, row_bg, extra_style=_brd_mid))
 
                 # Кол 3: Норма дней (с отображением превышения)
                 custom_norm = entry.get('custom_norm_days')
@@ -917,7 +940,7 @@ class ProjectTimelineWidget(QWidget):
                         f'<b style="color:#C62828">{custom_norm}</b>'
                     )
                     norm_label.setAlignment(Qt.AlignCenter)
-                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px;')
+                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; {_brd_mid}')
                     norm_label.setToolTip(
                         f'Превышение стандартного значения нормо-дней '
                         f'(+{custom_norm - norm_days_val} дн.).\n'
@@ -927,7 +950,7 @@ class ProjectTimelineWidget(QWidget):
                 else:
                     norm_text = str(norm_days_val) if norm_days_val > 0 else ''
                     self.table.setCellWidget(row, 3,
-                        self._make_cell_label(norm_text, norm_bg))
+                        self._make_cell_label(norm_text, norm_bg, extra_style=_brd_mid))
 
                 # Кол 4: Статус
                 status_color = '#333333'
@@ -937,20 +960,49 @@ class ProjectTimelineWidget(QWidget):
                     status_color = '#C62828'
                 self.table.setCellWidget(row, 4,
                     self._make_cell_label(status_text, row_bg, bold=bool(status_text),
-                                          color=status_color))
+                                          color=status_color, extra_style=_brd_mid))
 
                 # Кол 5: Исполнитель
                 self.table.setCellWidget(row, 5,
-                    self._make_cell_label(role, row_bg))
+                    self._make_cell_label(role, row_bg, extra_style=_brd_mid))
 
                 # Кол 6: ФИО
                 fio = self._get_fio(role)
                 self.table.setCellWidget(row, 6,
-                    self._make_cell_label(fio, row_bg))
+                    self._make_cell_label(fio, row_bg, extra_style=_brd_last))
 
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
+
+        # Обновляем предупреждение о превышении нормодней
+        self._update_deviation_warning(display_rows)
+
+    def _update_deviation_warning(self, display_rows):
+        """Показать/скрыть предупреждение о превышении нормодней под таблицей"""
+        # Собираем подэтапы с увеличенными нормоднями
+        exceeded = []
+        for e in self.entries:
+            if e.get('executor_role', '') == 'header':
+                continue
+            custom = e.get('custom_norm_days')
+            norm = e.get('norm_days', 0) or 0
+            if custom and norm > 0 and custom > norm:
+                exceeded.append({
+                    'name': e.get('stage_name', '?'),
+                    'diff': custom - norm,
+                })
+
+        if exceeded:
+            total_excess = sum(x['diff'] for x in exceeded)
+            details = ', '.join(f"{x['name']} (+{x['diff']})" for x in exceeded)
+            self._deviation_warning.setText(
+                f'⚠ Превышение нормодней на {total_excess} дн. ({details}). '
+                f'Учитывайте при дальнейшей работе для соблюдения дедлайна проекта.'
+            )
+            self._deviation_warning.show()
+        else:
+            self._deviation_warning.hide()
 
     def _enable_date_edit(self, row, entry_idx, stage_code, current_actual_date):
         """Переключить ячейку даты в режим редактирования (QDateEdit)"""

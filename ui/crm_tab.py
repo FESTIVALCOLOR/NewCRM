@@ -181,48 +181,52 @@ class CRMTab(QWidget):
         """)
 
         # === ИНДИВИДУАЛЬНЫЕ ПРОЕКТЫ ===
-        individual_main_widget = QWidget()
-        individual_main_layout = QVBoxLayout()
-        individual_main_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.individual_subtabs = QTabWidget()
-        self.individual_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
-        self.individual_subtabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: none;
-            }
-            QTabBar::tab {
-                padding: 6px 16px;
-                font-size: 12px;
-                font-weight: bold;
-                border: 1px solid #d9d9d9;
-                border-bottom: none;
-                border-radius: 0px;
-                background-color: #E8E8E8;
-            }
-            QTabBar::tab:first {
-                border-bottom-left-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                border-bottom: 2px solid #F57C00;
-            }
-            QTabBar::tab:hover:!selected {
-                background-color: #F0F0F0;
-            }
-        """)
-        
         self.individual_widget = self.create_crm_board('Индивидуальный')
-        self.individual_subtabs.addTab(self.individual_widget, 'Активные проекты')
 
         if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+            # Есть архив — показываем подвкладки
+            individual_main_widget = QWidget()
+            individual_main_layout = QVBoxLayout()
+            individual_main_layout.setContentsMargins(0, 0, 0, 0)
+
+            self.individual_subtabs = QTabWidget()
+            self.individual_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
+            self.individual_subtabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: none;
+                }
+                QTabBar::tab {
+                    padding: 6px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: 1px solid #d9d9d9;
+                    border-bottom: none;
+                    border-radius: 0px;
+                    background-color: #E8E8E8;
+                }
+                QTabBar::tab:first {
+                    border-bottom-left-radius: 4px;
+                }
+                QTabBar::tab:selected {
+                    background-color: white;
+                    border-bottom: 2px solid #F57C00;
+                }
+                QTabBar::tab:hover:!selected {
+                    background-color: #F0F0F0;
+                }
+            """)
+
+            self.individual_subtabs.addTab(self.individual_widget, 'Активные проекты')
             self.individual_archive_widget = self.create_archive_board('Индивидуальный')
             self.individual_subtabs.addTab(self.individual_archive_widget, 'Архив (0)')
 
-        individual_main_layout.addWidget(self.individual_subtabs)
-        individual_main_widget.setLayout(individual_main_layout)
+            individual_main_layout.addWidget(self.individual_subtabs)
+            individual_main_widget.setLayout(individual_main_layout)
 
-        self.project_tabs.addTab(individual_main_widget, 'Индивидуальные проекты')
+            self.project_tabs.addTab(individual_main_widget, 'Индивидуальные проекты')
+        else:
+            # Нет архива — показываем доску напрямую без подвкладок
+            self.project_tabs.addTab(self.individual_widget, 'Индивидуальные проекты')
 
         # === ШАБЛОННЫЕ ПРОЕКТЫ (видны всем с access.crm) ===
         if True:  # Шаблонные проекты видны всем, кто видит CRM

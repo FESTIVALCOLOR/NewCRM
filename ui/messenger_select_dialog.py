@@ -672,7 +672,10 @@ class MessengerSelectDialog(QDialog):
 
         if error:
             logger.error(f"Ошибка создания чата: {error}")
-            CustomMessageBox(self, "Ошибка", f"Произошла ошибка:\n{error}", "error").exec_()
+            # Убираем технический префикс "Ошибка сервера (HTTP NNN): "
+            import re
+            clean_error = re.sub(r'^Ошибка сервера \(HTTP \d+\):\s*', '', str(error))
+            CustomMessageBox(self, "Ошибка", clean_error, "error").exec_()
         elif result:
             self.result_chat_data = result
             CustomMessageBox(
