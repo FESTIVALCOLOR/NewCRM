@@ -296,7 +296,7 @@ class ProjectTimelineWidget(QWidget):
         dw_layout.setContentsMargins(8, 4, 10, 4)
         dw_layout.setSpacing(5)
         # Иконка warning (IconLoader уже импортирован из utils.icon_loader)
-        dw_icon = IconLoader.create_svg_icon('warning', '#E65100', 14)
+        dw_icon = IconLoader.load_colored('warning', '#E65100', 14)
         dw_icon_label = QLabel()
         dw_icon_label.setPixmap(dw_icon.pixmap(14, 14))
         dw_icon_label.setFixedSize(14, 14)
@@ -643,7 +643,7 @@ class ProjectTimelineWidget(QWidget):
         return display_rows
 
     @staticmethod
-    def _make_cell_label(self, text, bg_color, align='center', bold=False, font_size=12,
+    def _make_cell_label(text, bg_color, align='center', bold=False, font_size=12,
                          color='#333333', extra_style=''):
         """Создать QLabel для ячейки таблицы (обход глобального stylesheet).
         Grid отключён — рамки ячеек рисуются здесь."""
