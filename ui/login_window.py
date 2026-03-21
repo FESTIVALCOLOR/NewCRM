@@ -395,8 +395,8 @@ class LoginWindow(QWidget):
         """)
 
         content_layout = QVBoxLayout()
-        content_layout.setSpacing(20)
-        content_layout.setContentsMargins(40, 20, 40, 40)
+        content_layout.setSpacing(14)
+        content_layout.setContentsMargins(40, 12, 40, 30)
         # ===========================================
         
         # ===== ЛОГОТИП =====
@@ -412,13 +412,13 @@ class LoginWindow(QWidget):
             logo_label.setPixmap(scaled_logo)
             logo_label.setAlignment(Qt.AlignCenter)
             content_layout.addWidget(logo_label)
-            content_layout.addSpacing(10)
+            content_layout.addSpacing(4)
         else:
             emoji_label = QLabel('FC')
             emoji_label.setAlignment(Qt.AlignCenter)
             emoji_label.setStyleSheet('font-size: 36px; font-weight: bold; color: #FF9800; background-color: transparent;')
             content_layout.addWidget(emoji_label)
-            content_layout.addSpacing(10)
+            content_layout.addSpacing(4)
             print("[WARN] Логотип не найден: resources/logo.png")
         
         # Заголовок
@@ -428,8 +428,8 @@ class LoginWindow(QWidget):
         title.setFont(title_font)
         title.setStyleSheet('color: #333333; font-size: 20px; margin-bottom: 0px; background-color: transparent;')
         content_layout.addWidget(title)
-        
-        content_layout.addSpacing(20)
+
+        content_layout.addSpacing(12)
         
         # Поле логина
         login_label = QLabel('Логин:')
@@ -448,8 +448,8 @@ class LoginWindow(QWidget):
             }
         """)
         content_layout.addWidget(self.login_input)
-        
-        content_layout.addSpacing(10)
+
+        content_layout.addSpacing(6)
         
         # Поле пароля
         password_label = QLabel('Пароль:')

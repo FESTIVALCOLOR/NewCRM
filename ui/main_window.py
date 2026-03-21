@@ -1978,12 +1978,6 @@ class MainWindow(QMainWindow):
             # Останавливаем offline_manager перед выходом
             if self.offline_manager:
                 self.offline_manager.stop_monitoring()
-            # Очищаем сохранённую сессию (автологин) при явном выходе
-            try:
-                from utils.session_storage import clear_session
-                clear_session()
-            except Exception:
-                pass
             # Закрываем все matplotlib figures (предотвращает crash при выходе)
             try:
                 import matplotlib.pyplot as plt
