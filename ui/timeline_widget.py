@@ -240,7 +240,6 @@ class ProjectTimelineWidget(QWidget):
         self.table.setStyleSheet("""
             QTableWidget {
                 border: 1px solid #E0E0E0;
-                gridline-color: #E0E0E0;
                 font-size: 12px;
             }
             QHeaderView::section {
@@ -307,7 +306,7 @@ class ProjectTimelineWidget(QWidget):
         dw_layout.addWidget(self._deviation_text)
         self._deviation_warning.hide()
         btn_layout.addWidget(self._deviation_warning)
-        btn_layout.addSpacing(10)
+        btn_layout.addSpacing(20)
 
         layout.addLayout(btn_layout)
 
@@ -824,10 +823,10 @@ class ProjectTimelineWidget(QWidget):
                 elif not is_in_scope:
                     row_bg = '#E0E0E0'
 
-                # Бордеры для зелёной рамки текущего подэтапа
-                _brd_first = 'border: 2px solid #4CAF50; border-right: none; border-radius: 0;' if _active_border else ''
-                _brd_mid = 'border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-left: none; border-right: none; border-radius: 0;' if _active_border else ''
-                _brd_last = 'border: 2px solid #4CAF50; border-left: none; border-radius: 0;' if _active_border else ''
+                # Зелёная рамка: 2px на внешних краях, 1px на внутренних стыках
+                _brd_first = 'border: 2px solid #4CAF50; border-right: 1px solid #4CAF50; border-radius: 0;' if _active_border else ''
+                _brd_mid = 'border: 1px solid #4CAF50; border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0;' if _active_border else ''
+                _brd_last = 'border: 2px solid #4CAF50; border-left: 1px solid #4CAF50; border-radius: 0;' if _active_border else ''
 
                 # Кол 0: Название
                 self.table.setCellWidget(row, 0,
