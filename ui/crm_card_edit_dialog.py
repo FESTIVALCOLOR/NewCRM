@@ -1197,6 +1197,26 @@ class CardEditDialog(QDialog):
                 reset_btn.clicked.connect(self.reset_card)
                 buttons_layout.addWidget(reset_btn)
 
+            # Кнопка восстановления workflow (руководитель студии)
+            if position == 'Руководитель студии':
+                repair_btn = IconLoader.create_icon_button('tool', '', 'Диагностика и восстановление карточки', icon_size=14)
+                repair_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #5DADE2;
+                        color: white;
+                        padding: 0px;
+                        border-radius: 4px;
+                        border: none;
+                        min-width: 36px; max-width: 36px;
+                        min-height: 36px; max-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #3498DB; }
+                    QPushButton:pressed { background-color: #2E86C1; }
+                """)
+                repair_btn.setFixedSize(36, 36)
+                repair_btn.clicked.connect(self.repair_workflow)
+                buttons_layout.addWidget(repair_btn)
+
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
 
@@ -6613,6 +6633,78 @@ class CardEditDialog(QDialog):
 
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Ошибка при сбросе карточки: {e}', 'warning').exec_()
+
+    def repair_workflow(self):
+        """Диагностика и восстановление workflow карточки.
+        Проверяет соответствие current_substep_code реальному состоянию таймлайна
+        и исправляет при необходимости."""
+        from ui.crm_tab import CRMTab
+
+        card_id = self.card_data.get('id')
+        address = self.card_data.get('address', 'N/A')
+        column = self.card_data.get('column_name', 'N/A')
+
+        if not self.data.is_multi_user or not self.api_client:
+            CustomMessageBox(self, 'Ошибка', 'Восстановление доступно только в сетевом режиме', 'warning').exec_()
+            return
+
+        try:
+            result = self.data.workflow_repair(card_id)
+            if not result:
+                CustomMessageBox(self, 'Ошибка', 'Не удалось выполнить диагностику карточки', 'error').exec_()
+                return
+
+            old_status = result.get('old_status', '?')
+            new_status = result.get('new_status', '?')
+            old_substep = result.get('old_substep', '?')
+            new_substep = result.get('new_substep', '?')
+            old_substage = result.get('old_substage', '?')
+            new_substage = result.get('new_substage', '?')
+
+            # Определяем, были ли изменения
+            changed = (old_status != new_status or
+                       old_substep != new_substep or
+                       old_substage != new_substage)
+
+            if changed:
+                details = []
+                if old_status != new_status:
+                    details.append(f'Статус: {old_status} → {new_status}')
+                if old_substep != new_substep:
+                    details.append(f'Подэтап: {old_substep} → {new_substep}')
+                if old_substage != new_substage:
+                    details.append(f'Группа: {old_substage} → {new_substage}')
+                details_text = '\n'.join(details)
+
+                CustomMessageBox(
+                    self, 'Карточка восстановлена',
+                    f'Карточка "{address}" ({column}) восстановлена.\n\n'
+                    f'Изменения:\n{details_text}',
+                    'success'
+                ).exec_()
+
+                # Обновляем CRM вкладку
+                crm_tab_parent = None
+                parent = self.parent()
+                while parent:
+                    if isinstance(parent, CRMTab):
+                        crm_tab_parent = parent
+                        break
+                    parent = parent.parent()
+                if crm_tab_parent:
+                    QTimer.singleShot(100, crm_tab_parent.refresh_current_tab)
+            else:
+                CustomMessageBox(
+                    self, 'Диагностика',
+                    f'Карточка "{address}" ({column}) в порядке.\n\n'
+                    f'Статус: {new_status}\n'
+                    f'Подэтап: {new_substep}\n'
+                    f'Группа: {new_substage}',
+                    'info'
+                ).exec_()
+
+        except Exception as e:
+            CustomMessageBox(self, 'Ошибка', f'Ошибка диагностики: {e}', 'error').exec_()
 
     def delete_order(self):
         """Удаление заказа"""

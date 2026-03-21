@@ -34,6 +34,7 @@
 | 25 | [Фаза Design](25-design.md) | C4, DFD, ADR, стратегия тестирования, API контракты | `docs/25-design.md` |
 | 28 | [Система обновления](28-update-system.md) | Обновление программы через Яндекс.Диск, version.json, VersionDialog | `docs/28-update-system.md` |
 | 29 | [Руководство пользователя](29-user-manual.md) | Инструкция для всех ролей: функционал, вкладки, ежедневные задачи | `docs/29-user-manual.md` |
+| — | [**Changelog**](changelog.md) | Журнал изменений по версиям (для публикации обновлений) | `docs/changelog.md` |
 
 ## Быстрые ссылки
 
