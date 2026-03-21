@@ -1058,6 +1058,19 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_add_extra_round: {e}")
             return None
 
+    def workflow_repair(self, card_id: int) -> Optional[Dict]:
+        """Восстановить застрявшую карточку — пересчёт substep из таймлайна (только API)"""
+        if not self.api_client:
+            _safe_log("[DataAccess] workflow_repair: API недоступен")
+            return None
+        try:
+            result = self.api_client._post(f'/cards/{card_id}/workflow/repair')
+            _global_cache.invalidate("crm_cards")
+            return result
+        except Exception as e:
+            _safe_log(f"[DataAccess] Ошибка API workflow_repair: {e}")
+            return None
+
     def get_contract_id_by_crm_card(self, card_id: int) -> Optional[int]:
         """Получить ID договора по ID CRM карточки"""
         if self._should_use_api():

@@ -1557,6 +1557,69 @@ def _server_recalculate_actual_days(db, contract_id: int):
             prev_date = actual_date
 
 
+def _resolve_next_active_substep(db, contract_id: int, stage_group: str,
+                                  after_sort_order: int = 0):
+    """Единый резолвер следующего активного подэтапа.
+
+    Находит первую незаполненную, не-пропущенную, не-header строку
+    таймлайна после заданной позиции. Используется всеми workflow
+    endpoint-ами для определения 'куда карточке дальше'.
+    """
+    return db.query(ProjectTimelineEntry).filter(
+        ProjectTimelineEntry.contract_id == contract_id,
+        ProjectTimelineEntry.stage_group == stage_group,
+        ProjectTimelineEntry.executor_role != 'header',
+        ProjectTimelineEntry.sort_order > after_sort_order,
+        or_(ProjectTimelineEntry.actual_date.is_(None), ProjectTimelineEntry.actual_date == ''),
+        or_(ProjectTimelineEntry.status.is_(None), ProjectTimelineEntry.status != 'skipped'),
+    ).order_by(ProjectTimelineEntry.sort_order).first()
+
+
+def _sync_workflow_substep(db, card_id: int, stage_name: str, contract_id: int):
+    """Синхронизировать current_substep_code/current_substage_group с реальным состоянием таймлайна.
+
+    Вызывается ПОСЛЕ каждого workflow-действия как safety-net перед commit.
+    Гарантирует что карточка всегда знает 'где она сейчас'.
+
+    НЕ меняет статус (status) — только позицию (substep_code + substage_group).
+    Пропускает защищённые статусы (pending_decision, act_signing, stage_completed),
+    где позиция управляется специальной логикой.
+    """
+    stage_group = _resolve_stage_group(stage_name)
+    if not stage_group or not contract_id:
+        return
+
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if not wf:
+        return
+
+    # Статусы с нестандартной логикой позиционирования — не трогать.
+    # pending_review/revision: substep указывает на последнюю сданную работу (для reject)
+    # client_approval: substep указывает на клиентскую строку
+    # pending_decision/act_signing/stage_completed: финальные позиции
+    PROTECTED_STATUSES = {
+        'pending_review', 'revision', 'client_approval',
+        'pending_decision', 'act_signing', 'stage_completed',
+    }
+    if wf.status in PROTECTED_STATUSES:
+        return
+
+    next_entry = _resolve_next_active_substep(db, contract_id, stage_group)
+    if next_entry:
+        old_code = wf.current_substep_code
+        if old_code != next_entry.stage_code:
+            logger.info(
+                f"[WorkflowSync] card={card_id}: substep {old_code} → "
+                f"{next_entry.stage_code} ({next_entry.stage_name}), "
+                f"substage: {next_entry.substage_group}"
+            )
+            wf.current_substep_code = next_entry.stage_code
+            wf.current_substage_group = next_entry.substage_group
+
+
 def _update_executor_deadline_for_next_substep(db, card_id: int, stage_name: str, contract_id: int):
     """Обновить дедлайн исполнителя стадии по norm_days следующего незаполненного подэтапа.
 
@@ -1662,6 +1725,99 @@ async def get_workflow_state(
         {c.name: getattr(s, c.name) for c in s.__table__.columns}
         for s in states
     ]
+
+
+@router.post("/cards/{card_id}/workflow/repair")
+async def workflow_repair(
+    card_id: int,
+    current_user: Employee = Depends(require_permission("crm_cards.move")),
+    db: Session = Depends(get_db)
+):
+    """Восстановить застрявшую карточку: пересчитать substep из таймлайна.
+
+    Если карточка застряла в pending_decision (диалог был закрыт) или
+    current_substep_code указывает на неправильную строку — этот endpoint
+    принудительно синхронизирует позицию с реальным состоянием таймлайна.
+    Доступен для ст.менеджера и директора.
+    """
+    card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+
+    stage_name = card.column_name
+    contract_id = card.contract_id
+    stage_group = _resolve_stage_group(stage_name)
+    if not stage_group or not contract_id:
+        raise HTTPException(status_code=400, detail="Невозможно определить стадию")
+
+    wf = db.query(StageWorkflowState).filter(
+        StageWorkflowState.crm_card_id == card_id,
+        StageWorkflowState.stage_name == stage_name
+    ).first()
+    if not wf:
+        raise HTTPException(status_code=400, detail="Нет workflow state для этой карточки")
+
+    old_status = wf.status
+    old_substep = wf.current_substep_code
+    old_substage = wf.current_substage_group
+
+    # Принудительная синхронизация (игнорируем protected statuses)
+    next_entry = _resolve_next_active_substep(db, contract_id, stage_group)
+    if next_entry:
+        wf.current_substep_code = next_entry.stage_code
+        wf.current_substage_group = next_entry.substage_group
+        # Если карточка была в pending_decision — переводим в in_progress
+        if wf.status == 'pending_decision':
+            wf.status = 'in_progress'
+        wf.updated_at = datetime.utcnow()
+    else:
+        # Все строки заполнены — стадия завершена, можно перевести в act_signing
+        if wf.status not in ('act_signing', 'stage_completed'):
+            wf.status = 'act_signing'
+            wf.updated_at = datetime.utcnow()
+
+    # Пересчёт дедлайна
+    _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+
+    # Сбросить executor state если карточка была stuck
+    if old_status == 'pending_decision':
+        executors = db.query(StageExecutor).filter(
+            StageExecutor.crm_card_id == card_id,
+            StageExecutor.stage_name == stage_name,
+            StageExecutor.completed == True,
+            StageExecutor.submitted_date.is_(None),
+        ).all()
+        for ex in executors:
+            ex.completed = False
+            ex.completed_date = None
+
+    db.add(ActionHistory(
+        user_id=current_user.id, action_type='workflow_repair',
+        entity_type='crm_card', entity_id=card_id,
+        description=(
+            f'Восстановление карточки: {old_status} → {wf.status}, '
+            f'{old_substep} → {wf.current_substep_code}'
+        )
+    ))
+
+    db.commit()
+
+    logger.info(
+        f"[WorkflowRepair] card={card_id}: "
+        f"status {old_status} → {wf.status}, "
+        f"substep {old_substep} → {wf.current_substep_code}, "
+        f"substage {old_substage} → {wf.current_substage_group}"
+    )
+
+    return {
+        "status": "repaired",
+        "old_status": old_status,
+        "new_status": wf.status,
+        "old_substep": old_substep,
+        "new_substep": wf.current_substep_code,
+        "old_substage": old_substage,
+        "new_substage": wf.current_substage_group,
+    }
 
 
 @router.post("/cards/{card_id}/workflow/submit")
@@ -1853,6 +2009,9 @@ async def workflow_accept_work(
 
         # Обновляем дедлайн исполнителя по norm_days следующего подэтапа
         _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+
+        # Safety-net: синхронизировать substep с реальным состоянием таймлайна
+        _sync_workflow_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
         return {"status": "accepted"}
@@ -2523,6 +2682,9 @@ async def workflow_client_approved(
         if not (wf and hasattr(wf, 'status') and wf.status == 'pending_decision'):
             _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
+        # Safety-net: синхронизировать substep с реальным состоянием таймлайна
+        _sync_workflow_substep(db, card_id, stage_name, contract_id)
+
         db.commit()
 
         # Хук: уведомление в чат о согласовании клиентом
@@ -2693,6 +2855,9 @@ async def workflow_advance_round(
 
         # Обновляем дедлайн
         _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
+
+        # Safety-net: синхронизировать substep с реальным состоянием таймлайна
+        _sync_workflow_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
         return {"status": "advanced", "next_round": next_subgroup}
@@ -3134,6 +3299,12 @@ async def workflow_add_extra_round(
             entity_type='crm_card', entity_id=card_id,
             description=f'Добавлен доп. круг {ext_num}: {stage_name}'
         ))
+
+        # Flush для того чтобы новые entries были видны в sync
+        db.flush()
+
+        # Safety-net: синхронизировать substep с реальным состоянием таймлайна
+        _sync_workflow_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
         return {"status": "extra_round_added", "round_number": ext_num}
