@@ -734,6 +734,7 @@ class ExecutorSelectionDialog(QDialog):
             self.stage_deadline.setDate(QDate.currentDate().addDays(7))
         self.stage_deadline.setDisplayFormat('dd.MM.yyyy')
         self.stage_deadline.setStyleSheet(CALENDAR_STYLE)
+        add_today_button_to_dateedit(self.stage_deadline)
         form_layout.addRow('Дедлайн:', self.stage_deadline)
 
         layout.addLayout(form_layout)

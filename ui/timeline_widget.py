@@ -254,23 +254,7 @@ class ProjectTimelineWidget(QWidget):
 
         layout.addWidget(self.table, 1)
 
-        # === ПРЕДУПРЕЖДЕНИЕ О ПРЕВЫШЕНИИ НОРМОДНЕЙ ===
-        self._deviation_warning = QLabel()
-        self._deviation_warning.setWordWrap(True)
-        self._deviation_warning.setStyleSheet("""
-            QLabel {
-                background-color: #FFF3E0;
-                border: 1px solid #FFB74D;
-                border-radius: 4px;
-                padding: 8px 12px;
-                color: #E65100;
-                font-size: 12px;
-            }
-        """)
-        self._deviation_warning.hide()
-        layout.addWidget(self._deviation_warning)
-
-        # === КНОПКИ ===
+        # === КНОПКИ + ПРЕДУПРЕЖДЕНИЕ О ПРЕВЫШЕНИИ НОРМОДНЕЙ ===
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
@@ -299,6 +283,22 @@ class ProjectTimelineWidget(QWidget):
         btn_layout.addWidget(self.btn_pdf)
 
         btn_layout.addStretch()
+
+        # Предупреждение о превышении нормодней (справа от кнопок экспорта)
+        self._deviation_warning = QLabel()
+        self._deviation_warning.setStyleSheet("""
+            QLabel {
+                background-color: #FFF3E0;
+                border: 1px solid #FFB74D;
+                border-radius: 4px;
+                padding: 4px 10px;
+                color: #E65100;
+                font-size: 12px;
+            }
+        """)
+        self._deviation_warning.hide()
+        btn_layout.addWidget(self._deviation_warning)
+
         layout.addLayout(btn_layout)
 
     def _load_data_async(self):
@@ -638,10 +638,13 @@ class ProjectTimelineWidget(QWidget):
         """Создать QLabel для ячейки таблицы (обход глобального stylesheet)"""
         lbl = QLabel(text)
         weight = 'bold' if bold else 'normal'
-        text_align = 'center' if align == 'center' else 'left'
+        # Если есть зелёная рамка — убираем padding чтобы рамка была вплотную к краям
+        has_border = '4CAF50' in extra_style
+        pad = '0px 4px' if has_border else '4px 6px'
+        radius = '0' if has_border else '2px'
         lbl.setStyleSheet(
-            f'background-color: {bg_color}; color: {color}; padding: 4px 6px; '
-            f'font-size: {font_size}px; font-weight: {weight}; border-radius: 2px; {extra_style}'
+            f'background-color: {bg_color}; color: {color}; padding: {pad}; '
+            f'font-size: {font_size}px; font-weight: {weight}; border-radius: {radius}; {extra_style}'
         )
         qt_align = Qt.AlignCenter if align == 'center' else (Qt.AlignLeft | Qt.AlignVCenter)
         lbl.setAlignment(qt_align)
@@ -862,7 +865,8 @@ class ProjectTimelineWidget(QWidget):
                     _dc_border = _brd_mid if _active_border else ''
                     date_container.setStyleSheet(f'background-color: transparent; {_dc_border}')
                     date_layout = QHBoxLayout(date_container)
-                    date_layout.setContentsMargins(2, 0, 2, 0)
+                    _dc_m = 0 if _active_border else 2
+                    date_layout.setContentsMargins(_dc_m, 0, _dc_m, 0)
                     date_layout.setSpacing(2)
                     date_layout.setAlignment(Qt.AlignVCenter)
 
@@ -995,14 +999,17 @@ class ProjectTimelineWidget(QWidget):
 
         if exceeded:
             total_excess = sum(x['diff'] for x in exceeded)
-            details = ', '.join(f"{x['name']} (+{x['diff']})" for x in exceeded)
             self._deviation_warning.setText(
-                f'⚠ Превышение нормодней на {total_excess} дн. ({details}). '
-                f'Учитывайте при дальнейшей работе для соблюдения дедлайна проекта.'
+                f'⚠ Превышение нормодней на {total_excess} дн.'
             )
+            # Детали — в tooltip при наведении
+            tooltip_lines = [f"• {x['name']} (+{x['diff']} дн.)" for x in exceeded]
+            tooltip_text = '\n'.join(tooltip_lines)
+            self._deviation_warning.setToolTip(tooltip_text)
             self._deviation_warning.show()
         else:
             self._deviation_warning.hide()
+            self._deviation_warning.setToolTip('')
 
     def _enable_date_edit(self, row, entry_idx, stage_code, current_actual_date):
         """Переключить ячейку даты в режим редактирования (QDateEdit)"""

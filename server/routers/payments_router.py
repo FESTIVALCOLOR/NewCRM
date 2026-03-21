@@ -981,6 +981,7 @@ async def create_payment(
             address = contract.address if contract else ''
             contract_number = contract.contract_number if contract else ''
             amount_val = payment.final_amount or payment.calculated_amount or 0
+            emp_name = payment.employee_name or 'Неизвестный'
             sm_id = None
             pt_key = 'individual'
             if payment.crm_card_id:
@@ -1001,7 +1002,7 @@ async def create_payment(
                     employee_id=sm_id,
                     event_type='payment',
                     title=f'Оплата: {address}',
-                    message=f'Создана оплата {amount_val} руб. по договору {contract_number} ({address}).',
+                    message=f'Создана оплата {amount_val} руб. для {emp_name} по договору {contract_number} ({address}).',
                     related_entity_type='payment',
                     related_entity_id=payment.id,
                     project_type=pt_key,
