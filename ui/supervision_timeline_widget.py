@@ -61,6 +61,7 @@ class SupervisionTimelineWidget(QWidget):
         self.entries = []
         self.totals = {}
         self._loading = False
+        self._saving = False
 
         self.card_id = card_data.get('id')
 
@@ -296,32 +297,38 @@ class SupervisionTimelineWidget(QWidget):
         ''')
 
         def save_and_close():
-            text = line_edit.text().strip()
-            value = None
-            if is_number:
-                try:
-                    value = float(text) if text else 0
-                except ValueError:
-                    value = 0
-            else:
-                value = text
+            if self._saving:
+                return
+            self._saving = True
+            try:
+                text = line_edit.text().strip()
+                value = None
+                if is_number:
+                    try:
+                        value = float(text) if text else 0
+                    except ValueError:
+                        value = 0
+                else:
+                    value = text
 
-            if row < len(self.entries):
-                self.entries[row][field_name] = value
+                if row < len(self.entries):
+                    self.entries[row][field_name] = value
 
-            updates = {field_name: value}
+                updates = {field_name: value}
 
-            # Автоподсчёт экономии при изменении бюджета
-            if field_name in ('budget_planned', 'budget_actual'):
-                bp = self.entries[row].get('budget_planned', 0) or 0
-                ba = self.entries[row].get('budget_actual', 0) or 0
-                savings = bp - ba
-                self.entries[row]['budget_savings'] = savings
-                updates['budget_savings'] = savings
+                # Автоподсчёт экономии при изменении бюджета
+                if field_name in ('budget_planned', 'budget_actual'):
+                    bp = self.entries[row].get('budget_planned', 0) or 0
+                    ba = self.entries[row].get('budget_actual', 0) or 0
+                    savings = bp - ba
+                    self.entries[row]['budget_savings'] = savings
+                    updates['budget_savings'] = savings
 
-            self._save_entry(stage_code, updates)
-            self._populate_table()
-            self._update_summary()
+                self._save_entry(stage_code, updates)
+                self._populate_table()
+                self._update_summary()
+            finally:
+                self._saving = False
 
         line_edit.editingFinished.connect(save_and_close)
 
@@ -388,7 +395,19 @@ class SupervisionTimelineWidget(QWidget):
         return mapping.get(field_name, -1)
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        from PyQt5.QtWidgets import QScrollArea, QFrame
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(0, 15, 0, 20)
         layout.setSpacing(6)
 
@@ -517,6 +536,9 @@ class SupervisionTimelineWidget(QWidget):
         # === БЛОК ФАЙЛОВ ===
         self._build_files_section(layout)
 
+        scroll.setWidget(scroll_content)
+        outer_layout.addWidget(scroll)
+
     # Стадии надзора для локальной инициализации
     SUPERVISION_STAGES = [
         ('STAGE_1_CERAMIC', 'Стадия 1: Закупка керамогранита'),
@@ -636,6 +658,7 @@ class SupervisionTimelineWidget(QWidget):
                 idx = executor_combo.findText(current_executor)
                 if idx >= 0:
                     executor_combo.setCurrentIndex(idx)
+                executor_combo.setFocusPolicy(Qt.StrongFocus)
                 executor_combo.setStyleSheet(
                     "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
                     " font-size: 11px; background: white; }")
@@ -675,8 +698,10 @@ class SupervisionTimelineWidget(QWidget):
                 self.table.setCellWidget(row, 3, fact_cell)
 
                 # Кол 4: Дней (авто-расчёт, только чтение)
-                days_val = entry.get('actual_days', '') or ''
-                days_lbl = self._make_cell_label(str(days_val) if days_val else '', bg)
+                days_val = entry.get('actual_days', 0)
+                has_fact = bool(entry.get('actual_date', ''))
+                days_text = str(days_val) if has_fact else ''
+                days_lbl = self._make_cell_label(days_text, bg)
                 self.table.setCellWidget(row, 4, days_lbl)
 
                 # Кол 5: Расхождение (авто-расчёт, цвет)
@@ -741,6 +766,7 @@ class SupervisionTimelineWidget(QWidget):
                 status_combo.addItems(STATUS_OPTIONS)
                 idx = STATUS_OPTIONS.index(status) if status in STATUS_OPTIONS else 0
                 status_combo.setCurrentIndex(idx)
+                status_combo.setFocusPolicy(Qt.StrongFocus)
                 status_combo.setStyleSheet(
                     "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
                     " font-size: 11px; background: white; }")
@@ -791,7 +817,8 @@ class SupervisionTimelineWidget(QWidget):
 
         # Кол 4: Итого дней
         total_days = sum(e.get('actual_days', 0) or 0 for e in self.entries)
-        days_text = str(total_days) if total_days else ''
+        has_any_fact = any(e.get('actual_date', '') for e in self.entries)
+        days_text = str(total_days) if has_any_fact else ''
         days_lbl = self._make_cell_label(days_text, totals_bg, 'center', bold=True)
         self.table.setCellWidget(row, 4, days_lbl)
 
@@ -882,9 +909,21 @@ class SupervisionTimelineWidget(QWidget):
             fact_date = entry.get('actual_date', '')
             if fact_date and prev_date:
                 days = networkdays(prev_date, fact_date)
-                entry['actual_days'] = days
+                entry['actual_days'] = max(days, 0)
             else:
                 entry['actual_days'] = 0
+
+            # Расхождение план vs факт (для использования в итогах)
+            plan_date = entry.get('plan_date', '')
+            if plan_date and fact_date:
+                try:
+                    p = datetime.strptime(plan_date, '%Y-%m-%d').date()
+                    a = datetime.strptime(fact_date, '%Y-%m-%d').date()
+                    entry['_deviation'] = (a - p).days
+                except (ValueError, TypeError):
+                    entry['_deviation'] = None
+            else:
+                entry['_deviation'] = None
 
             # Следующая стадия считает от факт. даты текущей
             if fact_date:

@@ -95,7 +95,19 @@ class SupervisionVisitsWidget(QWidget):
         return names
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        from PyQt5.QtWidgets import QScrollArea, QFrame
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(0, 15, 0, 20)
         layout.setSpacing(6)
 
@@ -201,6 +213,9 @@ class SupervisionVisitsWidget(QWidget):
 
         # === БЛОК «ОТЧЁТЫ» (файлы) ===
         self._build_reports_section(layout)
+
+        scroll.setWidget(scroll_content)
+        outer_layout.addWidget(scroll)
 
     def _build_reports_section(self, parent_layout):
         """Блок загрузки файлов «Отчёты»"""
@@ -356,6 +371,7 @@ class SupervisionVisitsWidget(QWidget):
                 idx = executor_combo.findText(current_executor)
                 if idx >= 0:
                     executor_combo.setCurrentIndex(idx)
+                executor_combo.setFocusPolicy(Qt.StrongFocus)
                 executor_combo.setStyleSheet(
                     "QComboBox { border: 1px solid #E0E0E0; padding: 2px;"
                     " font-size: 11px; background: white; }")

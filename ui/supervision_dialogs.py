@@ -2225,7 +2225,6 @@ class SupervisionStartDateDialog(QDialog):
         date_layout.addStretch()
 
         from ui.custom_dateedit import CustomDateEdit
-        from utils.calendar_helpers import add_today_button_to_dateedit
 
         self.date_widget = CustomDateEdit()
         self.date_widget.setCalendarPopup(True)
@@ -2233,14 +2232,7 @@ class SupervisionStartDateDialog(QDialog):
         self.date_widget.setDate(current_date or QDate.currentDate())
         self.date_widget.setDisplayFormat('dd.MM.yyyy')
         self.date_widget.setMinimumWidth(150)
-        self.date_widget.setStyleSheet("""
-            QDateEdit {
-                padding: 6px;
-                border: 1px solid #CCC;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-        """)
+        self.date_widget.setStyleSheet(CALENDAR_STYLE)
         date_layout.addWidget(self.date_widget)
         date_layout.addStretch()
         layout.addLayout(date_layout)
@@ -2253,11 +2245,11 @@ class SupervisionStartDateDialog(QDialog):
         cancel_btn.setFixedSize(100, 32)
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: #E0E0E0; color: #333;
-                border: none; border-radius: 4px;
-                font-weight: bold; font-size: 11px;
+                background-color: #95A5A6; color: white;
+                border-radius: 4px; font-weight: bold;
+                padding: 0px 20px;
             }
-            QPushButton:hover { background-color: #D0D0D0; }
+            QPushButton:hover { background-color: #7F8C8D; }
         """)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
@@ -2266,11 +2258,11 @@ class SupervisionStartDateDialog(QDialog):
         save_btn.setFixedSize(100, 32)
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50; color: white;
-                border: none; border-radius: 4px;
-                font-weight: bold; font-size: 11px;
+                background-color: #16A085; color: white;
+                border-radius: 4px; font-weight: bold;
+                padding: 0px 20px;
             }
-            QPushButton:hover { background-color: #45a049; }
+            QPushButton:hover { background-color: #138D75; }
         """)
         save_btn.clicked.connect(self._save)
         btn_layout.addWidget(save_btn)

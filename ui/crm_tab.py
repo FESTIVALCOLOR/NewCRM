@@ -3779,18 +3779,22 @@ class PreviewLoaderThread(threading.Thread):
         self._stopped = True
         self._stop_event.set()
 
-    def _safe_callback(self, file_id, pixmap):
+    def _safe_callback(self, file_id, image_or_pixmap):
         """Безопасный вызов callback через QTimer в главном потоке.
 
         ИСПРАВЛЕНИЕ R-04: Проверяем _stopped перед вызовом, чтобы не обращаться
         к удалённому Qt-объекту. QTimer.singleShot гарантирует вызов в main thread.
+
+        Принимает QImage (из фонового потока) или QPixmap — конвертирует в QPixmap
+        в главном потоке (QPixmap можно создавать только в main thread).
         """
         if self._stopped:
             return
         from PyQt5.QtCore import QTimer
+        from PyQt5.QtGui import QPixmap, QImage
         # Захватываем значения в замыкание
         _fid = file_id
-        _pix = pixmap
+        _img = image_or_pixmap
         _cb = self.callback
         _self = self
 
@@ -3798,7 +3802,12 @@ class PreviewLoaderThread(threading.Thread):
             if _self._stopped:
                 return
             try:
-                _cb(_fid, _pix)
+                # Конвертируем QImage → QPixmap в главном потоке
+                if isinstance(_img, QImage):
+                    pix = QPixmap.fromImage(_img)
+                else:
+                    pix = _img
+                _cb(_fid, pix)
             except RuntimeError:
                 pass  # Qt-объект уже удалён
 
@@ -3839,9 +3848,12 @@ class PreviewLoaderThread(threading.Thread):
                 # Проверяем кэш ещё раз (мог появиться)
                 cache_path = PreviewGenerator.get_cache_path(contract_id, stage, file_name)
                 if os.path.exists(cache_path):
-                    pixmap = PreviewGenerator.load_preview_from_cache(cache_path)
-                    if pixmap:
-                        self._safe_callback(file_id, pixmap)
+                    # Загружаем через QImage (потокобезопасно) — конвертация в QPixmap
+                    # произойдёт в главном потоке внутри _safe_callback
+                    from PyQt5.QtGui import QImage
+                    cached_image = QImage(cache_path)
+                    if not cached_image.isNull():
+                        self._safe_callback(file_id, cached_image)
                         continue
 
                 # Скачиваем во временный файл
@@ -3896,14 +3908,14 @@ class PreviewLoaderThread(threading.Thread):
                         logger.warning(f"[PreviewLoader] Файл слишком мал ({file_size} байт), пропуск: {file_name}")
                         continue
 
-                    # Генерируем превью
-                    pixmap = PreviewGenerator.generate_image_preview(tmp_path)
-                    if pixmap:
-                        PreviewGenerator.save_preview_to_cache(pixmap, cache_path)
-                        self._safe_callback(file_id, pixmap)
+                    # Генерируем превью через QImage (потокобезопасно)
+                    image = PreviewGenerator.generate_image_preview_threadsafe(tmp_path)
+                    if image:
+                        PreviewGenerator.save_image_to_cache(image, cache_path)
+                        self._safe_callback(file_id, image)
                         logger.info(f"[PreviewLoader] Превью создано: {file_name}")
                     else:
-                        logger.warning(f"[PreviewLoader] QPixmap null для {file_name} ({file_size} байт)")
+                        logger.warning(f"[PreviewLoader] QImage null для {file_name} ({file_size} байт)")
 
                 finally:
                     try:

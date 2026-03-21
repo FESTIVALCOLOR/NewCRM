@@ -8,9 +8,9 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
     QTableWidgetItem, QPushButton, QHeaderView, QDateEdit,
-    QAbstractItemView, QFileDialog
+    QAbstractItemView, QFileDialog, QFrame
 )
-from PyQt5.QtCore import Qt, QDate, pyqtSignal
+from PyQt5.QtCore import Qt, QDate, pyqtSignal, QEvent
 from PyQt5.QtGui import QColor, QFont, QBrush
 from utils.calendar_helpers import add_today_button_to_dateedit, add_working_days
 from utils.timeline_calc import calc_planned_dates
@@ -118,6 +118,7 @@ class ProjectTimelineWidget(QWidget):
         self.entries = []
         self._loading = False
         self._readonly = readonly
+        self._active_overlay_row = None
 
         # Получаем данные контракта (из API, чтобы advance_payment_paid_date был актуальным)
         contract_id = card_data.get('contract_id')
@@ -240,14 +241,24 @@ class ProjectTimelineWidget(QWidget):
         self.table.setStyleSheet("""
             QTableWidget {
                 border: 1px solid #E0E0E0;
+                border-radius: 6px;
                 font-size: 12px;
             }
             QHeaderView::section {
                 background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                border: none;
+                border-right: 1px solid #E0E0E0;
+                border-bottom: 1px solid #E0E0E0;
                 padding: 6px;
                 font-weight: bold;
                 font-size: 11px;
+            }
+            QHeaderView::section:first {
+                border-top-left-radius: 6px;
+            }
+            QHeaderView::section:last {
+                border-right: none;
+                border-top-right-radius: 6px;
             }
         """)
 
@@ -306,7 +317,7 @@ class ProjectTimelineWidget(QWidget):
         dw_layout.addWidget(self._deviation_text)
         self._deviation_warning.hide()
         btn_layout.addWidget(self._deviation_warning)
-        btn_layout.addSpacing(20)
+        btn_layout.addSpacing(18)
 
         layout.addLayout(btn_layout)
 
@@ -667,6 +678,7 @@ class ProjectTimelineWidget(QWidget):
         self._loading = True
         self.table.setUpdatesEnabled(False)
         try:
+            self._active_overlay_row = None
             self.table.setRowCount(0)
             self._calc_planned_dates()
             display_rows = self._build_display_rows()
@@ -823,15 +835,13 @@ class ProjectTimelineWidget(QWidget):
                 elif not is_in_scope:
                     row_bg = '#E0E0E0'
 
-                # Зелёная рамка: 2px на внешних краях, 1px на внутренних стыках
-                _brd_first = 'border: 2px solid #4CAF50; border-right: 1px solid #4CAF50; border-radius: 0;' if _active_border else ''
-                _brd_mid = 'border: 1px solid #4CAF50; border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0;' if _active_border else ''
-                _brd_last = 'border: 2px solid #4CAF50; border-left: 1px solid #4CAF50; border-radius: 0;' if _active_border else ''
+                # Запоминаем номер активной строки для overlay
+                if _active_border:
+                    self._active_overlay_row = row
 
                 # Кол 0: Название
                 self.table.setCellWidget(row, 0,
-                    self._make_cell_label(entry.get('stage_name', ''), row_bg, 'left',
-                                          extra_style=_brd_first))
+                    self._make_cell_label(entry.get('stage_name', ''), row_bg, 'left'))
 
                 # Кол 1: Дата
                 is_start_row = (stage_code == 'START')
@@ -870,10 +880,9 @@ class ProjectTimelineWidget(QWidget):
                     # Обычная строка — QLabel (read-only) + кнопка-карандаш
                     planned = entry.get('_planned_date', '')
                     date_container = QWidget()
-                    _dc_border = _brd_mid if _active_border else 'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;'
-                    date_container.setStyleSheet(f'background-color: transparent; {_dc_border}')
+                    date_container.setStyleSheet('background-color: transparent; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
                     date_layout = QHBoxLayout(date_container)
-                    _dc_m = 0 if _active_border else 2
+                    _dc_m = 2
                     date_layout.setContentsMargins(_dc_m, 0, _dc_m, 0)
                     date_layout.setSpacing(2)
                     date_layout.setAlignment(Qt.AlignVCenter)
@@ -915,7 +924,7 @@ class ProjectTimelineWidget(QWidget):
                     date_label.setAlignment(Qt.AlignCenter)
                     date_label.setStyleSheet(
                         f'background-color: {date_bg}; color: #333333; padding: 2px 4px; '
-                        f'font-size: 12px; border-radius: 2px; border: 1px solid #E0E0E0;'
+                        f'font-size: 12px; border-radius: 0; border: none;'
                     )
                     date_label.setToolTip(tooltip)
                     date_label.setMinimumWidth(80)
@@ -926,10 +935,15 @@ class ProjectTimelineWidget(QWidget):
                         bg_color='transparent', hover_color='#E3F2FD',
                         icon_size=14, button_size=22, icon_color='#666666'
                     )
-                    pencil_btn.clicked.connect(
-                        lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date:
-                            self._enable_date_edit(r, ei, sc, ad)
-                    )
+                    # Блокировка редактирования для выполненных/просроченных/пропущенных строк
+                    if status_text in ('В срок', 'Просрочен', 'Пропущен'):
+                        pencil_btn.setEnabled(False)
+                        pencil_btn.setToolTip(f'Редактирование заблокировано (статус: {status_text})')
+                    else:
+                        pencil_btn.clicked.connect(
+                            lambda checked, r=row, ei=entry_idx, sc=stage_code, ad=actual_date:
+                                self._enable_date_edit(r, ei, sc, ad)
+                        )
 
                     date_layout.addWidget(date_label, 1)
                     date_layout.addWidget(pencil_btn, 0)
@@ -938,13 +952,12 @@ class ProjectTimelineWidget(QWidget):
                 # Кол 2: Кол-во дней (показываем "0" если дата заполнена)
                 days_text = str(actual_days) if has_date else ''
                 self.table.setCellWidget(row, 2,
-                    self._make_cell_label(days_text, row_bg, extra_style=_brd_mid))
+                    self._make_cell_label(days_text, row_bg))
 
                 # Кол 3: Норма дней (с отображением превышения)
                 custom_norm = entry.get('custom_norm_days')
                 norm_bg = row_bg if row_bg != '#FFFFFF' else '#F2F2F2'
                 if custom_norm and norm_days_val > 0 and custom_norm != norm_days_val:
-                    # Превышение: зачёркнутая стандартная + красная кастомная
                     norm_label = QLabel()
                     norm_label.setTextFormat(Qt.RichText)
                     norm_label.setText(
@@ -952,8 +965,7 @@ class ProjectTimelineWidget(QWidget):
                         f'<b style="color:#C62828">{custom_norm}</b>'
                     )
                     norm_label.setAlignment(Qt.AlignCenter)
-                    _norm_brd = _brd_mid if _active_border else 'border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;'
-                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; {_norm_brd}')
+                    norm_label.setStyleSheet(f'background-color: {norm_bg}; padding: 2px 4px; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0;')
                     norm_label.setToolTip(
                         f'Превышение стандартного значения нормо-дней '
                         f'(+{custom_norm - norm_days_val} дн.).\n'
@@ -963,7 +975,7 @@ class ProjectTimelineWidget(QWidget):
                 else:
                     norm_text = str(norm_days_val) if norm_days_val > 0 else ''
                     self.table.setCellWidget(row, 3,
-                        self._make_cell_label(norm_text, norm_bg, extra_style=_brd_mid))
+                        self._make_cell_label(norm_text, norm_bg))
 
                 # Кол 4: Статус
                 status_color = '#333333'
@@ -973,16 +985,16 @@ class ProjectTimelineWidget(QWidget):
                     status_color = '#C62828'
                 self.table.setCellWidget(row, 4,
                     self._make_cell_label(status_text, row_bg, bold=bool(status_text),
-                                          color=status_color, extra_style=_brd_mid))
+                                          color=status_color))
 
                 # Кол 5: Исполнитель
                 self.table.setCellWidget(row, 5,
-                    self._make_cell_label(role, row_bg, extra_style=_brd_mid))
+                    self._make_cell_label(role, row_bg))
 
                 # Кол 6: ФИО
                 fio = self._get_fio(role)
                 self.table.setCellWidget(row, 6,
-                    self._make_cell_label(fio, row_bg, extra_style=_brd_last))
+                    self._make_cell_label(fio, row_bg))
 
         finally:
             self.table.setUpdatesEnabled(True)
@@ -990,6 +1002,56 @@ class ProjectTimelineWidget(QWidget):
 
         # Обновляем предупреждение о превышении нормодней
         self._update_deviation_warning(display_rows)
+        # Рисуем зелёную рамку поверх таблицы (overlay)
+        self._show_active_overlay()
+
+    def _show_active_overlay(self):
+        """Рисует зелёную рамку поверх строки активного подэтапа (QFrame overlay)"""
+        if not hasattr(self, '_active_overlay_row') or self._active_overlay_row is None:
+            if hasattr(self, '_active_frame'):
+                self._active_frame.hide()
+            return
+        row = self._active_overlay_row
+        if not hasattr(self, '_active_frame'):
+            self._active_frame = QFrame(self.table.viewport())
+            self._active_frame.setStyleSheet(
+                'background: transparent; border: 2px solid #4CAF50; border-radius: 0;'
+            )
+            self._active_frame.setAttribute(Qt.WA_TransparentForMouseEvents)
+            # Обновляем позицию при скролле и ресайзе
+            self.table.verticalScrollBar().valueChanged.connect(self._update_overlay_pos)
+            self.table.viewport().installEventFilter(self)
+        y = self.table.rowViewportPosition(row)
+        h = self.table.rowHeight(row)
+        w = self.table.viewport().width()
+        self._active_frame.setGeometry(0, y, w - 2, h - 2)
+        self._active_frame.show()
+        self._active_frame.raise_()
+
+    def _update_overlay_pos(self):
+        """Обновить позицию overlay при скролле"""
+        if not hasattr(self, '_active_frame') or not hasattr(self, '_active_overlay_row'):
+            return
+        row = self._active_overlay_row
+        if row is None:
+            self._active_frame.hide()
+            return
+        y = self.table.rowViewportPosition(row)
+        h = self.table.rowHeight(row)
+        w = self.table.viewport().width()
+        self._active_frame.setGeometry(0, y, w - 2, h - 2)
+        # Скрыть если строка вне viewport
+        if y + h <= 0 or y >= self.table.viewport().height():
+            self._active_frame.hide()
+        else:
+            self._active_frame.show()
+            self._active_frame.raise_()
+
+    def eventFilter(self, obj, event):
+        """Обновить размер overlay при ресайзе viewport"""
+        if obj == self.table.viewport() and event.type() == QEvent.Resize:
+            self._update_overlay_pos()
+        return super().eventFilter(obj, event)
 
     def _update_deviation_warning(self, display_rows):
         """Показать/скрыть предупреждение о превышении нормодней под таблицей"""
@@ -1066,7 +1128,7 @@ class ProjectTimelineWidget(QWidget):
             QDateEdit {
                 background-color: #FFF2CC;
                 border: 1px solid #CCCCCC;
-                border-radius: 2px;
+                border-radius: 0;
                 padding: 0px 4px;
                 min-height: 20px;
                 max-height: 20px;
@@ -1086,7 +1148,7 @@ class ProjectTimelineWidget(QWidget):
             QCalendarWidget QToolButton {
                 background-color: #ffffff;
                 color: #333333;
-                border-radius: 2px;
+                border-radius: 0px;
                 padding: 4px;
             }
             QCalendarWidget QSpinBox {

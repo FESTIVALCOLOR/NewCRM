@@ -226,6 +226,8 @@ async def get_supervision_cards(
                 'area': contract.area,
                 'city': contract.city,
                 'agent_type': contract.agent_type,
+                'project_type': contract.project_type,
+                'project_subtype': contract.project_subtype,
                 'contract_status': contract.status,
                 'termination_reason': contract.termination_reason if status == "archived" else None,
                 # S-14: Добавлено status_changed_date для фильтрации в архиве
@@ -276,6 +278,7 @@ async def get_supervision_card(
         senior_manager_name = card.senior_manager.full_name if card.senior_manager else None
         dan_name = card.dan.full_name if card.dan else None
         studio_director_name = card.studio_director.full_name if card.studio_director else None
+        contract = card.contract
 
         return {
             'id': card.id,
@@ -294,6 +297,13 @@ async def get_supervision_card(
             'senior_manager_name': senior_manager_name,
             'dan_name': dan_name,
             'studio_director_name': studio_director_name,
+            'contract_number': contract.contract_number if contract else None,
+            'address': contract.address if contract else None,
+            'area': contract.area if contract else None,
+            'city': contract.city if contract else None,
+            'agent_type': contract.agent_type if contract else None,
+            'project_type': contract.project_type if contract else None,
+            'project_subtype': contract.project_subtype if contract else None,
             'created_at': card.created_at.isoformat() if card.created_at else None,
             'updated_at': card.updated_at.isoformat() if card.updated_at else None,
         }

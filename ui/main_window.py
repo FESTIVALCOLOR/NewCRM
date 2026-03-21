@@ -1966,12 +1966,16 @@ class MainWindow(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             # Удаляем eventFilter перед выходом
             QApplication.instance().removeEventFilter(self)
-            # Отправляем logout на сервер (снимает is_online)
-            try:
-                if hasattr(self, 'api_client') and self.api_client:
-                    self.api_client.logout()
-            except Exception as e:
-                print(f"[WARNING] Ошибка logout при закрытии: {e}")
+            # Если есть сохранённая сессия ("Запомнить меня") — НЕ делаем logout,
+            # чтобы серверная сессия осталась активной для автологина.
+            # Heartbeat перестанет приходить → сервер сам снимет is_online через ~2 мин.
+            from utils.session_storage import has_saved_session
+            if not has_saved_session():
+                try:
+                    if hasattr(self, 'api_client') and self.api_client:
+                        self.api_client.logout()
+                except Exception as e:
+                    print(f"[WARNING] Ошибка logout при закрытии: {e}")
             # Останавливаем sync_manager перед выходом
             if self.sync_manager:
                 self.sync_manager.stop()

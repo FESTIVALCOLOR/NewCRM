@@ -168,7 +168,10 @@ class ArchiveCard(QFrame):
         layout.addStretch(1)
 
         # ========== КНОПКА "ПЕРЕВЕСТИ В АВТОРСКИЙ НАДЗОР" ==========
-        if 'АВТОРСКИЙ НАДЗОР' not in status and 'НАДЗОР' not in status:
+        # Только для руководителя студии и старшего менеджера
+        user_pos = (self.employee or {}).get('position', '')
+        can_transfer_supervision = user_pos in ('Руководитель студии', 'Старший менеджер проектов')
+        if can_transfer_supervision and 'АВТОРСКИЙ НАДЗОР' not in status and 'НАДЗОР' not in status:
             supervision_btn = IconLoader.create_icon_button(
                 'shield-white', 'В авторский надзор', 'Перевести в авторский надзор', icon_size=12)
             supervision_btn.setStyleSheet("""
@@ -1260,8 +1263,9 @@ class ArchiveCardDetailsDialog(QDialog):
 
             buttons_layout = QHBoxLayout()
 
-            restore_perm = 'supervision.move' if self.card_type == 'supervision' else 'crm_cards.move'
-            can_restore = _has_perm(self.employee, self.api_client, restore_perm)
+            # Кнопка доступна только руководителю студии и старшему менеджеру
+            user_pos = (self.employee or {}).get('position', '')
+            can_restore = user_pos in ('Руководитель студии', 'Старший менеджер проектов')
             restore_btn = IconLoader.create_icon_button('refresh-black', 'Вернуть в активные проекты', icon_size=12)
             restore_btn.setStyleSheet("""
                 QPushButton {

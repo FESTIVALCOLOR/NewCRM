@@ -73,6 +73,44 @@ class PreviewGenerator:
             return None
 
     @staticmethod
+    def generate_image_preview_threadsafe(image_path):
+        """Генерация превью через QImage (потокобезопасно, для фоновых потоков).
+
+        QPixmap нельзя создавать вне главного потока Qt — может вернуть null.
+        QImage безопасен для использования в любом потоке.
+
+        Returns:
+            QImage или None
+        """
+        try:
+            image = QImage(image_path)
+            if image.isNull():
+                return None
+
+            scaled = image.scaled(
+                PreviewGenerator.PREVIEW_WIDTH,
+                PreviewGenerator.PREVIEW_HEIGHT,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+
+            return scaled
+
+        except Exception as e:
+            print(f"[ERROR] Ошибка генерации превью (threadsafe): {e}")
+            return None
+
+    @staticmethod
+    def save_image_to_cache(image, cache_path):
+        """Сохранение QImage в кэш (потокобезопасно)"""
+        try:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            return image.save(cache_path, 'PNG')
+        except Exception as e:
+            print(f"[ERROR] Ошибка сохранения QImage в кэш: {e}")
+            return False
+
+    @staticmethod
     def generate_pdf_preview(pdf_path):
         """Генерация превью первой страницы PDF
 

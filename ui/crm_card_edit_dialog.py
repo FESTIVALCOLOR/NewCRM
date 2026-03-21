@@ -395,6 +395,12 @@ class CardEditDialog(QDialog):
         has_move_access = _has_perm(self.employee, self.api_client, 'crm_cards.move')
         is_sdp_or_gap = not has_full_access and not is_executor
 
+        # === ОГРАНИЧЕНИЯ ПО ДОЛЖНОСТИ (помимо permissions) ===
+        user_position = (self.employee or {}).get('position', '')
+        can_invite_to_chat = user_position in ('Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
+        can_change_status = user_position in ('Руководитель студии', 'Старший менеджер проектов')
+        can_send_scripts = user_position in ('Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
+
         # === ВКЛАДКА 1: ИСПОЛНИТЕЛИ И ДЕДЛАЙН (для всех кроме исполнителей) ===
         if not is_executor:
             # Главный виджет вкладки
@@ -613,7 +619,7 @@ class CardEditDialog(QDialog):
             self.status_combo = CustomComboBox()
             self.status_combo.addItems(['Новый заказ', 'В работе', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'])
             self.status_combo.setFixedHeight(28)
-            self.status_combo.setEnabled(has_move_access)  # По праву crm_cards.move
+            self.status_combo.setEnabled(has_move_access and can_change_status)  # По праву + только Руководитель/СМ
             status_row.addWidget(self.status_combo, 1)
             project_info_layout.addLayout(status_row)
 
@@ -662,6 +668,7 @@ class CardEditDialog(QDialog):
             senior_mgr_row.addWidget(self.senior_manager, 1)
             self._invite_sm_btn = self._make_invite_btn('Старший менеджер')
             self._invite_sm_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.senior_manager, 'Старший менеджер'))
+            self._invite_sm_btn.setEnabled(can_invite_to_chat)
             senior_mgr_row.addWidget(self._invite_sm_btn)
             team_layout.addLayout(senior_mgr_row)
 
@@ -685,6 +692,7 @@ class CardEditDialog(QDialog):
                 sdp_row.addWidget(self.sdp, 1)
                 self._invite_sdp_btn = self._make_invite_btn('СДП')
                 self._invite_sdp_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.sdp, 'СДП'))
+                self._invite_sdp_btn.setEnabled(can_invite_to_chat)
                 sdp_row.addWidget(self._invite_sdp_btn)
                 team_layout.addLayout(sdp_row)
             else:
@@ -707,6 +715,7 @@ class CardEditDialog(QDialog):
             gap_row.addWidget(self.gap, 1)
             self._invite_gap_btn = self._make_invite_btn('ГАП')
             self._invite_gap_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.gap, 'ГАП'))
+            self._invite_gap_btn.setEnabled(can_invite_to_chat)
             gap_row.addWidget(self._invite_gap_btn)
             team_layout.addLayout(gap_row)
 
@@ -732,6 +741,7 @@ class CardEditDialog(QDialog):
             manager_row.addWidget(self.manager, 1)
             self._invite_mgr_btn = self._make_invite_btn('Менеджер')
             self._invite_mgr_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.manager, 'Менеджер'))
+            self._invite_mgr_btn.setEnabled(can_invite_to_chat)
             manager_row.addWidget(self._invite_mgr_btn)
             team_layout.addLayout(manager_row)
 
@@ -1321,6 +1331,7 @@ class CardEditDialog(QDialog):
                     QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
                 """)
                 self.start_script_btn.setFixedSize(36, 36)
+                self.start_script_btn.setEnabled(can_send_scripts)
                 self.start_script_btn.clicked.connect(self._on_send_start_script)
 
                 self.end_script_btn = IconLoader.create_icon_button(
@@ -1341,6 +1352,7 @@ class CardEditDialog(QDialog):
                     QPushButton:disabled { background-color: #fafafa; color: #b0b0b0; border-color: #e6e6e6; }
                 """)
                 self.end_script_btn.setFixedSize(36, 36)
+                self.end_script_btn.setEnabled(can_send_scripts)
                 self.end_script_btn.clicked.connect(self._on_send_end_script)
 
                 buttons_layout.addWidget(self.start_script_btn)
@@ -6809,10 +6821,12 @@ class CardEditDialog(QDialog):
                     has_chat and has_invite_link and is_online and has_client_email
                 )
 
-            # Кнопки скриптов доступны только при наличии чата и подключении к серверу
+            # Кнопки скриптов доступны только при наличии чата, подключении к серверу И разрешённой должности
             if hasattr(self, 'start_script_btn'):
-                self.start_script_btn.setEnabled(has_chat and is_online)
-                self.end_script_btn.setEnabled(has_chat and is_online)
+                user_pos = (self.employee or {}).get('position', '')
+                _can_scripts = user_pos in ('Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
+                self.start_script_btn.setEnabled(has_chat and is_online and _can_scripts)
+                self.end_script_btn.setEnabled(has_chat and is_online and _can_scripts)
 
             # Кнопки приглашения сотрудников — активны если чат создан и сотрудник ещё не в чате
             chat_member_ids = set()
@@ -6833,7 +6847,8 @@ class CardEditDialog(QDialog):
                 if btn and combo:
                     emp_id = combo.currentData()
                     already_in_chat = emp_id in chat_member_ids if emp_id else False
-                    btn.setEnabled(has_chat and is_online and bool(emp_id) and not already_in_chat)
+                    _can_invite = (self.employee or {}).get('position', '') in ('Руководитель студии', 'Старший менеджер проектов', 'Менеджер')
+                    btn.setEnabled(has_chat and is_online and bool(emp_id) and not already_in_chat and _can_invite)
                     if already_in_chat:
                         btn.setToolTip('Уже в чате')
                     elif not emp_id:
@@ -8945,12 +8960,29 @@ class CardEditDialog(QDialog):
 
         if contract_id and file_name:
             cache_path = PreviewGenerator.get_cache_path(contract_id, stage, file_name)
+            print(f"[Preview] file={file_name} contract={contract_id} stage={stage} cache={cache_path} exists={os.path.exists(cache_path)}")
             if os.path.exists(cache_path):
                 pixmap = PreviewGenerator.load_preview_from_cache(cache_path)
                 if pixmap:
                     return pixmap
+                else:
+                    print(f"[Preview] WARN: cache file exists but load failed: {cache_path}")
 
-        # Если кэша нет - возвращаем None, превью будет загружено асинхронно
+        # Способ 3: Генерация из локального файла (если файл есть на диске)
+        local_path = file_data.get('local_path', '')
+        if local_path and os.path.exists(local_path) and file_data.get('file_type') == 'image':
+            try:
+                pixmap = PreviewGenerator.generate_preview_for_file(local_path, 'image')
+                if pixmap:
+                    # Кэшируем для будущих открытий
+                    if contract_id and file_name:
+                        cache_path = PreviewGenerator.get_cache_path(contract_id, stage, file_name)
+                        PreviewGenerator.save_preview_to_cache(pixmap, cache_path)
+                    return pixmap
+            except Exception:
+                pass
+
+        # Если кэша нет и локального файла нет - возвращаем None, превью будет загружено асинхронно
         return None
 
     def _start_background_preview_loading(self):
@@ -8965,9 +8997,15 @@ class CardEditDialog(QDialog):
         # Собираем все файлы изображений без кэша
         files_to_load = []
 
-        # Получаем все файлы проекта
-        all_files = self.data.get_project_files(contract_id, 'stage2_concept')
-        all_files += self.data.get_project_files(contract_id, 'stage2_3d')
+        # Получаем все файлы проекта (все стадии)
+        all_files = []
+        for stage_name in ('stage1', 'stage2_concept', 'stage2_3d', 'stage3'):
+            try:
+                stage_files = self.data.get_project_files(contract_id, stage_name)
+                if stage_files:
+                    all_files += stage_files
+            except Exception:
+                pass
 
         for file_data in all_files:
             if file_data.get('file_type') != 'image':
@@ -8985,7 +9023,12 @@ class CardEditDialog(QDialog):
             # Проверяем, есть ли уже кэш
             cache_path = PreviewGenerator.get_cache_path(contract_id, stage, file_name)
             if os.path.exists(cache_path):
-                continue  # Уже есть кэш
+                # Кэш есть — подхватываем превью для виджетов, которые показывают "FILE"
+                # (load_preview_for_file мог не найти кэш при первичной загрузке)
+                pixmap = PreviewGenerator.load_preview_from_cache(cache_path)
+                if pixmap:
+                    self._on_preview_loaded(file_id, pixmap)
+                continue
 
             files_to_load.append((file_id, public_link, contract_id, stage, file_name, yandex_path))
 
@@ -9032,19 +9075,14 @@ class CardEditDialog(QDialog):
             except RuntimeError:
                 del self._preview_widgets_map[file_id]
 
-        # Ищем в галерее концептов
-        if hasattr(self, 'stage2_concept_gallery'):
-            widget = self._find_widget_in_variation_gallery(self.stage2_concept_gallery, file_id)
-            if widget:
-                self._preview_widgets_map[file_id] = widget
-                return widget
-
-        # Ищем в галерее 3D
-        if hasattr(self, 'stage2_3d_gallery'):
-            widget = self._find_widget_in_variation_gallery(self.stage2_3d_gallery, file_id)
-            if widget:
-                self._preview_widgets_map[file_id] = widget
-                return widget
+        # Ищем во всех галереях
+        for gallery_name in ('stage1_list', 'stage2_concept_gallery', 'stage2_3d_gallery', 'stage3_list'):
+            gallery = getattr(self, gallery_name, None)
+            if gallery:
+                widget = self._find_widget_in_variation_gallery(gallery, file_id)
+                if widget:
+                    self._preview_widgets_map[file_id] = widget
+                    return widget
 
         return None
 

@@ -1622,18 +1622,19 @@ class SupervisionCard(QFrame):
             edit_btn = IconLoader.create_icon_button('edit', 'Данные карточки', 'Открыть данные карточки', icon_size=12)
             edit_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #4A90E2;
-                    color: white;
-                    padding: 0px 10px;
-                    border-radius: 6px;
-                    font-size: 10px;
+                    background-color: #E0E0E0;
+                    color: #333333;
+                    border: none;
+                    padding: 4px 12px;
+                    border-radius: 4px;
+                    font-size: 11px;
                     font-weight: bold;
-                    min-height: 28px;
-                    max-height: 28px;
+                    max-height: 19px;
+                    min-height: 19px;
                 }
-                QPushButton:hover { background-color: #357ABD; }
+                QPushButton:hover { background-color: #D0D0D0; }
+                QPushButton:pressed { background-color: #C0C0C0; }
             """)
-            edit_btn.setFixedHeight(28)
             edit_btn.setAccessibleName("Данные карточки надзора")
             edit_btn.clicked.connect(self.edit_card)
             layout.addWidget(edit_btn, 0)

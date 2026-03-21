@@ -1777,7 +1777,17 @@ async def workflow_repair(
         StageWorkflowState.stage_name == stage_name
     ).first()
     if not wf:
-        raise HTTPException(status_code=400, detail="Нет workflow state для этой карточки")
+        # Создаём workflow state если его нет (шаблонные проекты и др.)
+        next_entry = _resolve_next_active_substep(db, contract_id, stage_group)
+        wf = StageWorkflowState(
+            crm_card_id=card_id,
+            stage_name=stage_name,
+            status='in_progress',
+            current_substep_code=next_entry.stage_code if next_entry else None,
+            current_substage_group=next_entry.substage_group if next_entry else None,
+        )
+        db.add(wf)
+        logger.info(f"[WorkflowRepair] Создан workflow state для card={card_id}, stage={stage_name}")
 
     old_status = wf.status
     old_substep = wf.current_substep_code

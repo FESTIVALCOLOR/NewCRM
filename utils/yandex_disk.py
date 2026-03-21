@@ -399,6 +399,28 @@ class YandexDiskManager:
             print(f"[ERROR] Исключение при создании папки: {e}")
             return False
 
+    def ensure_folder_exists(self, folder_path):
+        """Рекурсивное создание папки (создаёт все промежуточные папки).
+        Аналог os.makedirs — если родительских папок нет, создаёт их по цепочке.
+        """
+        if not folder_path or folder_path in ('disk:', 'disk:/'):
+            return True
+
+        # Попытка создать папку напрямую
+        result = self.create_folder(folder_path)
+        if result:
+            return True
+
+        # Если не удалось (родительская не существует) — создаём рекурсивно
+        # Разбиваем путь: disk:/A/B/C → parent = disk:/A/B
+        parts = folder_path.rstrip('/').rsplit('/', 1)
+        if len(parts) == 2:
+            parent = parts[0]
+            if parent and parent not in ('disk:', 'disk:'):
+                if self.ensure_folder_exists(parent):
+                    return self.create_folder(folder_path)
+        return False
+
     def move_folder(self, from_path, to_path):
         """Перемещение папки на Яндекс.Диске"""
         if not self.token:

@@ -196,6 +196,8 @@ class EmployeesTab(QWidget):
         self.can_create = _has_perm(employee, api_client, 'employees.create')
         self.can_edit = _has_perm(employee, api_client, 'employees.update')
         self.can_delete = _has_perm(employee, api_client, 'employees.delete')
+        # Тип оплаты и пароль видит только Руководитель студии
+        self.is_director = employee.get('position', '') == 'Руководитель студии'
         # ======================================
 
         self._data_loaded = False
@@ -312,6 +314,9 @@ class EmployeesTab(QWidget):
 
         # ========== СКРЫВАЕМ КОЛОНКУ ID ==========
         self.employees_table.setColumnHidden(0, True)
+        # Колонка "Тип оплаты" видна только руководителю студии
+        if not self.is_director:
+            self.employees_table.setColumnHidden(5, True)
         # =========================================
 
         # Настройка пропорционального изменения размера:
@@ -419,7 +424,9 @@ class EmployeesTab(QWidget):
                     if emp.get(k):
                         tooltip_lines.append(f"{label}: {emp[k]}")
             if tooltip_lines:
-                payment_item.setToolTip('\n'.join(tooltip_lines))
+                # Храним текст в UserRole (а не в tooltip) — иначе Qt показывает
+                # свой стандартный tooltip-прямоугольник поверх кастомного popup
+                payment_item.setData(Qt.UserRole, '\n'.join(tooltip_lines))
             self.employees_table.setItem(row, 5, payment_item)
 
             # Дата рождения (колонка 6)
@@ -657,7 +664,9 @@ class EmployeesTab(QWidget):
                 if emp.get('payment_bank_name'):
                     tooltip_lines.append(f"Банк: {emp['payment_bank_name']}")
             if tooltip_lines:
-                payment_item.setToolTip('\n'.join(tooltip_lines))
+                # Храним текст в UserRole (а не в tooltip) — иначе Qt показывает
+                # свой стандартный tooltip-прямоугольник поверх кастомного popup
+                payment_item.setData(Qt.UserRole, '\n'.join(tooltip_lines))
             self.employees_table.setItem(row, 5, payment_item)
             # =========================================
 
@@ -839,10 +848,11 @@ class EmployeesTab(QWidget):
         """При наведении на ячейку 'Тип оплаты' — показать popup с реквизитами"""
         if column == 5:
             item = self.employees_table.item(row, column)
-            if item and item.toolTip():
+            popup_text = item.data(Qt.UserRole) if item else None
+            if popup_text:
                 cell_rect = self.employees_table.visualItemRect(item)
                 global_pos = self.employees_table.viewport().mapToGlobal(cell_rect.bottomLeft())
-                self._payment_popup.show_at(item.toolTip(), global_pos)
+                self._payment_popup.show_at(popup_text, global_pos)
                 return
         # При наведении на другие столбцы — скрываем popup
         if self._payment_popup.isVisible():
@@ -1022,6 +1032,7 @@ class EmployeeDialog(QDialog):
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
         self.api_client = getattr(parent, 'api_client', None)
+        self._is_director = self.current_user.get('position', '') == 'Руководитель студии'
         # ==========================================
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -1193,6 +1204,9 @@ class EmployeeDialog(QDialog):
 
         payment_group.setLayout(self._payment_form_layout)
         layout.addWidget(payment_group)
+        # Секция оплаты видна только руководителю студии
+        if not self._is_director:
+            payment_group.setVisible(False)
         self._update_payment_fields_visibility()
 
         # Данные для входа
@@ -1227,6 +1241,9 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_layout.addWidget(self._eye_btn)
+        # Показать пароль может только руководитель студии
+        if not self._is_director:
+            self._eye_btn.setVisible(False)
 
         self.password_confirm = QLineEdit()
         self.password_confirm.setEchoMode(QLineEdit.Password)
@@ -1252,6 +1269,8 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_confirm_layout.addWidget(self._eye_btn_confirm)
+        if not self._is_director:
+            self._eye_btn_confirm.setVisible(False)
 
         if self.employee_data:
             self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
@@ -2200,6 +2219,7 @@ class EmployeeDialog(QDialog):
         # ========== НОВОЕ: ПРОВЕРКА ПРАВ ==========
         self.current_user = parent.employee  # Получаем текущего пользователя
         self.api_client = getattr(parent, 'api_client', None)
+        self._is_director = self.current_user.get('position', '') == 'Руководитель студии'
         # ==========================================
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -2371,6 +2391,9 @@ class EmployeeDialog(QDialog):
 
         payment_group.setLayout(self._payment_form_layout)
         layout.addWidget(payment_group)
+        # Секция оплаты видна только руководителю студии
+        if not self._is_director:
+            payment_group.setVisible(False)
         self._update_payment_fields_visibility()
 
         # Данные для входа
@@ -2405,6 +2428,9 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_layout.addWidget(self._eye_btn)
+        # Показать пароль может только руководитель студии
+        if not self._is_director:
+            self._eye_btn.setVisible(False)
 
         self.password_confirm = QLineEdit()
         self.password_confirm.setEchoMode(QLineEdit.Password)
@@ -2430,6 +2456,8 @@ class EmployeeDialog(QDialog):
             )
         )
         pw_confirm_layout.addWidget(self._eye_btn_confirm)
+        if not self._is_director:
+            self._eye_btn_confirm.setVisible(False)
 
         if self.employee_data:
             self.password.setPlaceholderText('Оставьте пустым, чтобы не менять пароль')
