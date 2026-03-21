@@ -2,7 +2,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QDialog, QFrame,
                              QGraphicsDropShadowEffect, QProgressBar,
-                             QApplication)
+                             QApplication, QCheckBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QPixmap, QColor
 from PyQt5.QtWidgets import QTabWidget
@@ -197,18 +197,111 @@ class LoginWindow(QWidget):
                 app_logger.error(f"Ошибка инициализации API клиента: {e}")
 
         self.init_ui()
-        
+
+        # Попытка автологина из сохранённой сессии
+        self._auto_login_attempted = False
+
+    def try_auto_login(self):
+        """Попытка автологина из сохранённой сессии (вызывается после show)."""
+        if self._auto_login_attempted:
+            return
+        self._auto_login_attempted = True
+
+        if not MULTI_USER_MODE or not self.api_client:
+            return
+
+        from utils.session_storage import load_session, clear_session
+        session = load_session()
+        if not session:
+            return
+
+        refresh_token = session.get('refresh_token')
+        if not refresh_token:
+            return
+
+        app_logger.info(f"Автологин: пробуем восстановить сессию для {session.get('login', '?')}")
+
+        try:
+            # Устанавливаем refresh_token и пробуем обновить access_token
+            self.api_client.refresh_token = refresh_token
+            refreshed = self.api_client.refresh_access_token()
+
+            if not refreshed or not self.api_client.token:
+                app_logger.info("Автологин: refresh_token истёк или отозван")
+                clear_session()
+                return
+
+            # Refresh удался — получаем данные пользователя
+            try:
+                me = self.api_client._request('GET', f"{self.api_client.base_url}/api/v1/auth/me")
+                if me.status_code != 200:
+                    clear_session()
+                    return
+                user_data = me.json()
+            except Exception:
+                clear_session()
+                return
+
+            position = user_data.get('position', '') or user_data.get('role', '')
+            self.current_employee = {
+                'id': user_data['id'],
+                'full_name': user_data.get('full_name', ''),
+                'role': user_data.get('role', ''),
+                'position': position,
+                'secondary_position': user_data.get('secondary_position', ''),
+                'department': user_data.get('department', ''),
+                'login': session.get('login', ''),
+                'api_mode': True,
+                'offline_mode': False,
+            }
+
+            # Устанавливаем auto-relogin callback
+            _login = session.get('login', '')
+            _api = self.api_client
+            def _auto_relogin():
+                try:
+                    _api.refresh_token = refresh_token
+                    return _api.refresh_access_token()
+                except Exception:
+                    return False
+            self.api_client.set_relogin_callback(_auto_relogin)
+
+            log_auth_attempt(session.get('login', '?'), success=True)
+            app_logger.info(f"Автологин успешен: {user_data.get('full_name', '?')}")
+
+            # Обновляем refresh_token в файле (мог быть ротирован)
+            from utils.session_storage import save_session
+            save_session(
+                refresh_token=self.api_client.refresh_token,
+                employee_id=user_data['id'],
+                full_name=user_data.get('full_name', ''),
+                login=session.get('login', ''),
+            )
+
+            # Запускаем синхронизацию
+            self._start_sync()
+
+        except Exception as e:
+            app_logger.warning(f"Автологин не удался: {e}")
+            clear_session()
+
     def init_ui(self):
         self.setWindowTitle('Festival Color - Вход')
         self.setFixedSize(400, 580)
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
-        self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)  # Для border-radius
+        # Qt.Window обязателен — без него окно не появляется в панели задач
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         # ===============================================
 
-        # Иконка для панели задач ПОСЛЕ setWindowFlags (frameless сбрасывает иконку)
-        from PyQt5.QtWidgets import QApplication
+        import sys
+        if sys.platform == 'win32':
+            # Windows: DWM для прозрачности (как в main_window), НЕ WA_TranslucentBackground
+            self._setup_windows_taskbar()
+        else:
+            self.setAttribute(Qt.WA_TranslucentBackground, True)  # macOS/Linux: CSS border-radius
+
+        # Иконка через Qt (fallback для не-Windows)
         if QApplication.instance():
             self.setWindowIcon(QApplication.instance().windowIcon())
         
@@ -219,14 +312,16 @@ class LoginWindow(QWidget):
         # ====================================
         
         # ========== КОНТЕЙНЕР С РАМКОЙ  ==========
+        import sys as _sys
+        _radius = '10px' if _sys.platform != 'win32' else '0px'
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
-        border_frame.setStyleSheet("""
-            QFrame#borderFrame {
+        border_frame.setStyleSheet(f"""
+            QFrame#borderFrame {{
                 background-color: #FFFFFF;
                 border: 1px solid #d9d9d9;
-                border-radius: 10px;
-            }
+                border-radius: {_radius};
+            }}
         """)
         
         # ================================================
@@ -241,13 +336,13 @@ class LoginWindow(QWidget):
         title_bar = CustomTitleBar(self, "", simple_mode=True)
         
         # ========== СКРУГЛЯЕМ ВЕРХНИЕ УГЛЫ TITLE BAR ==========
-        title_bar.setStyleSheet("""
-            CustomTitleBar {
+        title_bar.setStyleSheet(f"""
+            CustomTitleBar {{
                 background-color: #FFFFFF;
                 border-bottom: 1px solid #E0E0E0;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-            }
+                border-top-left-radius: {_radius};
+                border-top-right-radius: {_radius};
+            }}
         """)
         # ======================================================
         
@@ -256,12 +351,12 @@ class LoginWindow(QWidget):
         
         # ========== КОНТЕЙНЕР ДЛЯ КОНТЕНТА ==========
         content_widget = QWidget()
-        content_widget.setStyleSheet("""
-            QWidget {
+        content_widget.setStyleSheet(f"""
+            QWidget {{
                 background-color: #FFFFFF;
-                border-bottom-left-radius: 10px;
-                border-bottom-right-radius: 10px;
-            }
+                border-bottom-left-radius: {_radius};
+                border-bottom-right-radius: {_radius};
+            }}
         """)
 
         content_layout = QVBoxLayout()
@@ -339,9 +434,31 @@ class LoginWindow(QWidget):
             }
         """)
         content_layout.addWidget(self.password_input)
-        
-        content_layout.addSpacing(10)
-        
+
+        # Чекбокс "Запомнить меня"
+        self.remember_me = QCheckBox('Запомнить меня')
+        self.remember_me.setStyleSheet("""
+            QCheckBox {
+                color: #666666;
+                font-size: 12px;
+                spacing: 6px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #d9d9d9;
+                border-radius: 3px;
+                background-color: #FFFFFF;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #F57C00;
+                border-color: #F57C00;
+            }
+        """)
+        content_layout.addWidget(self.remember_me)
+
+        content_layout.addSpacing(5)
+
         # Кнопка входа
         login_btn = QPushButton('ВОЙТИ')
         login_btn.setFixedHeight(50)
@@ -363,6 +480,82 @@ class LoginWindow(QWidget):
         
         self.center_on_screen()
     
+    def _setup_windows_taskbar(self):
+        """Windows: WS_CAPTION для taskbar + DWM прозрачность + Win32 иконка."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            import os
+
+            hwnd = int(self.winId())
+
+            # Добавляем WS_CAPTION — окно появится в панели задач
+            GWL_STYLE = -16
+            WS_CAPTION = 0x00C00000
+            style = ctypes.windll.user32.GetWindowLongPtrW(hwnd, GWL_STYLE)
+            style |= WS_CAPTION
+            ctypes.windll.user32.SetWindowLongPtrW(hwnd, GWL_STYLE, style)
+
+            # DWM: расширяем фрейм — даёт прозрачность без WA_TranslucentBackground
+            class MARGINS(ctypes.Structure):
+                _fields_ = [
+                    ('cxLeftWidth', ctypes.c_int),
+                    ('cxRightWidth', ctypes.c_int),
+                    ('cyTopHeight', ctypes.c_int),
+                    ('cyBottomHeight', ctypes.c_int),
+                ]
+            margins = MARGINS(0, 0, 1, 0)
+            ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(margins))
+
+            # Win32 иконка (WM_SETICON + SetClassLongPtrW)
+            WM_SETICON = 0x0080
+            ICON_BIG = 1
+            ICON_SMALL = 0
+            GCL_HICON = -14
+            GCL_HICONSM = -34
+            LR_LOADFROMFILE = 0x00000010
+            LR_SHARED = 0x00008000
+            IMAGE_ICON = 1
+
+            from utils.resource_path import resource_path
+            ico_path = resource_path('resources/icon256.ico')
+            if not os.path.exists(ico_path):
+                ico_path = resource_path('resources/icon.ico')
+            ico_small_path = resource_path('resources/icon32.ico')
+            if not os.path.exists(ico_small_path):
+                ico_small_path = ico_path
+
+            hicon_big = ctypes.windll.user32.LoadImageW(
+                0, ico_path, IMAGE_ICON, 256, 256, LR_LOADFROMFILE | LR_SHARED
+            )
+            hicon_small = ctypes.windll.user32.LoadImageW(
+                0, ico_small_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE | LR_SHARED
+            )
+            if hicon_big:
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big)
+                ctypes.windll.user32.SetClassLongPtrW(hwnd, GCL_HICON, hicon_big)
+            if hicon_small:
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
+                ctypes.windll.user32.SetClassLongPtrW(hwnd, GCL_HICONSM, hicon_small)
+        except Exception as e:
+            app_logger.warning(f"Win32 taskbar icon setup failed: {e}")
+
+    def nativeEvent(self, eventType, message):
+        """Убираем стандартный заголовок Windows, который добавляет WS_CAPTION."""
+        try:
+            import sys
+            if sys.platform == 'win32':
+                import ctypes
+                from ctypes import wintypes
+                msg = wintypes.MSG.from_address(message.__int__())
+                WM_NCCALCSIZE = 0x0083
+                if msg.message == WM_NCCALCSIZE:
+                    # Клиентская область = всё окно (убираем рамку от WS_CAPTION)
+                    return True, 0
+        except Exception:
+            pass
+        return super().nativeEvent(eventType, message)
+
     def center_on_screen(self):
         from PyQt5.QtWidgets import QDesktopWidget
         screen = QDesktopWidget().screenGeometry()
@@ -429,6 +622,16 @@ class LoginWindow(QWidget):
 
                 # Кешируем пароль для offline-входа
                 self._cache_password_for_offline(result['employee_id'], password)
+
+                # Сохраняем сессию для автологина ("Запомнить меня")
+                if self.remember_me.isChecked() and self.api_client.refresh_token:
+                    from utils.session_storage import save_session
+                    save_session(
+                        refresh_token=self.api_client.refresh_token,
+                        employee_id=result['employee_id'],
+                        full_name=result['full_name'],
+                        login=login,
+                    )
 
                 # Запускаем синхронизацию данных
                 self._start_sync()

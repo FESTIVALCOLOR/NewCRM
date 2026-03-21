@@ -265,6 +265,10 @@ def main():
         login_window = LoginWindow()
         login_window.show()
 
+        # Автологин из сохранённой сессии (после отображения окна)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, login_window.try_auto_login)
+
         app_logger.info("Приложение запущено успешно")
         app_logger.info("="*60)
 

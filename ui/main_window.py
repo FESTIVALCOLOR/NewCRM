@@ -272,6 +272,24 @@ class MainWindow(QMainWindow):
         notif_btn.clicked.connect(self._open_notification_settings)
         info_bar_layout.addWidget(notif_btn)
 
+        # Кнопка «Инструкция» — открывает PDF-инструкцию для текущей роли с Яндекс.Диска
+        manual_btn = _IconLoader.create_icon_button(
+            'file-text', '', 'Открыть инструкцию по использованию программы', icon_size=12
+        )
+        manual_btn.setFixedSize(22, 22)
+        manual_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover {
+                background: #f0f0f0; border-color: #d9d9d9;
+            }
+        """)
+        manual_btn.setCursor(Qt.PointingHandCursor)
+        manual_btn.clicked.connect(self._open_user_manual)
+        info_bar_layout.addWidget(manual_btn)
+
         layout.addWidget(info_bar)
         
         #
@@ -1564,6 +1582,44 @@ class MainWindow(QMainWindow):
         # Загрузка данных первой вкладки + показ дашборда (дашборд создастся по требованию)
         self.on_tab_changed(self.tabs.currentIndex())
 
+    # ========== ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ ==========
+    def _open_user_manual(self):
+        """Открыть PDF-инструкцию для текущей роли с Яндекс.Диска."""
+        import webbrowser
+
+        # Маппинг должностей на публичные ссылки инструкций на Яндекс.Диске
+        MANUAL_URLS = {
+            "Руководитель студии": "https://yadi.sk/i/ri0ccGzd1hixUg",
+            "Старший менеджер проектов": "https://yadi.sk/i/jc_MLORFQJYw8g",
+            "Менеджер": "https://yadi.sk/i/_b3QKB0cxD1RIQ",
+            "СДП": "https://yadi.sk/i/VWlLjErSrnk_Kw",
+            "ГАП": "https://yadi.sk/i/lAhXe7-DNrtcuw",
+            "Дизайнер": "https://yadi.sk/i/FuD7OjI9qGpThg",
+            "Чертёжник": "https://yadi.sk/i/ByeUw6h0erkLuQ",
+            "Замерщик": "https://yadi.sk/i/H4MJFHmKIu0zdQ",
+            "ДАН": "https://yadi.sk/i/LAkkj1h3f5Bv7g",
+        }
+
+        position = self.employee.get("position", "")
+        # Проверяем основную должность (может быть совмещённая через «/»: «Дизайнер/Чертёжник»)
+        url = MANUAL_URLS.get(position)
+        if not url and "/" in position:
+            # Совмещённая должность — берём первую часть
+            url = MANUAL_URLS.get(position.split("/")[0].strip())
+        if not url:
+            secondary = self.employee.get("secondary_position", "")
+            url = MANUAL_URLS.get(secondary)
+
+        if url:
+            webbrowser.open(url)
+        else:
+            from ui.custom_message_box import CustomMessageBox
+            CustomMessageBox.info(
+                self, "Инструкция",
+                f"Инструкция для должности «{position}» пока не доступна.\n"
+                "Обратитесь к руководителю студии."
+            )
+
     # ========== НАСТРОЙКИ УВЕДОМЛЕНИЙ ==========
     def _open_notification_settings(self):
         """Открыть диалог настроек уведомлений для текущего пользователя"""
@@ -1860,6 +1916,12 @@ class MainWindow(QMainWindow):
             # Останавливаем offline_manager перед выходом
             if self.offline_manager:
                 self.offline_manager.stop_monitoring()
+            # Очищаем сохранённую сессию (автологин) при явном выходе
+            try:
+                from utils.session_storage import clear_session
+                clear_session()
+            except Exception:
+                pass
             # Закрываем все matplotlib figures (предотвращает crash при выходе)
             try:
                 import matplotlib.pyplot as plt
