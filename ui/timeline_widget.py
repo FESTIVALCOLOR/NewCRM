@@ -295,9 +295,8 @@ class ProjectTimelineWidget(QWidget):
         dw_layout = QHBoxLayout(self._deviation_warning)
         dw_layout.setContentsMargins(8, 4, 10, 4)
         dw_layout.setSpacing(5)
-        # Иконка warning
-        from ui.icon_loader import IconLoader as _DWIconLoader
-        dw_icon = _DWIconLoader.create_svg_icon('warning', '#E65100', 14)
+        # Иконка warning (IconLoader уже импортирован из utils.icon_loader)
+        dw_icon = IconLoader.create_svg_icon('warning', '#E65100', 14)
         dw_icon_label = QLabel()
         dw_icon_label.setPixmap(dw_icon.pixmap(14, 14))
         dw_icon_label.setFixedSize(14, 14)
