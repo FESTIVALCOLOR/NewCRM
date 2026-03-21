@@ -318,6 +318,20 @@ async def trigger_messenger_notification(
         if not chat or not chat.telegram_chat_id:
             return  # Чат не создан или не привязан к Telegram
 
+        # Дедупликация одноразовых скриптов (project_start отправляется один раз при создании чата)
+        if script_type in ('project_start',):
+            existing_msg = own_db.query(MessengerMessageLog).filter(
+                MessengerMessageLog.messenger_chat_id == chat.id,
+                MessengerMessageLog.message_type == f'auto_{script_type}',
+                MessengerMessageLog.delivery_status == 'sent',
+            ).first()
+            if existing_msg:
+                logger.info(
+                    f"Автоуведомление уже отправлено: card={crm_card_id}, "
+                    f"type={script_type} — пропускаем дубликат"
+                )
+                return
+
         # Получить card и contract для определения project_type
         card = own_db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
         if not card:

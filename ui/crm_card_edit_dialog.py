@@ -1199,21 +1199,11 @@ class CardEditDialog(QDialog):
 
             # Кнопка диагностики workflow (руководитель, СМ, СДП, ГАП)
             if not is_executor:
-                repair_btn = IconLoader.create_icon_button('tool', '', 'Диагностика и восстановление карточки', icon_size=14)
-                repair_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #5DADE2;
-                        color: white;
-                        padding: 0px;
-                        border-radius: 4px;
-                        border: none;
-                        min-width: 36px; max-width: 36px;
-                        min-height: 36px; max-height: 36px;
-                    }
-                    QPushButton:hover { background-color: #3498DB; }
-                    QPushButton:pressed { background-color: #2E86C1; }
-                """)
-                repair_btn.setFixedSize(36, 36)
+                repair_btn = IconLoader.create_action_button(
+                    'tool', 'Диагностика и восстановление карточки',
+                    bg_color='#5DADE2', hover_color='#3498DB',
+                    icon_color='#FFFFFF', icon_size=14, button_size=36
+                )
                 repair_btn.clicked.connect(self.repair_workflow)
                 buttons_layout.addWidget(repair_btn)
 

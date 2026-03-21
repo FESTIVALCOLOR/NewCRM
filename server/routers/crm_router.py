@@ -431,6 +431,28 @@ async def get_crm_card(
             'stage_executors': executor_data,
         }
 
+        # Текущий подэтап из StageWorkflowState
+        wf = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == card.column_name,
+        ).first()
+        if wf:
+            substep_name = None
+            if wf.current_substep_code:
+                tle = db.query(ProjectTimelineEntry.stage_name).filter(
+                    ProjectTimelineEntry.stage_code == wf.current_substep_code
+                ).first()
+                substep_name = tle.stage_name if tle else None
+            result['current_substep_code'] = wf.current_substep_code
+            result['current_substep_name'] = substep_name
+            result['workflow_status'] = wf.status
+            result['revision_count'] = wf.revision_count
+        else:
+            result['current_substep_code'] = None
+            result['current_substep_name'] = None
+            result['workflow_status'] = None
+            result['revision_count'] = 0
+
         # Поля из контракта
         if contract:
             # Имя клиента

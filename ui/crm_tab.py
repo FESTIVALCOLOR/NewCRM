@@ -226,48 +226,52 @@ class CRMTab(QWidget):
 
         # === ШАБЛОННЫЕ ПРОЕКТЫ (видны всем с access.crm) ===
         if True:  # Шаблонные проекты видны всем, кто видит CRM
-            template_main_widget = QWidget()
-            template_main_layout = QVBoxLayout()
-            template_main_layout.setContentsMargins(0, 0, 0, 0)
-            
-            self.template_subtabs = QTabWidget()
-            self.template_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
-            self.template_subtabs.setStyleSheet("""
-                QTabWidget::pane {
-                    border: none;
-                }
-                QTabBar::tab {
-                    padding: 6px 16px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    border: 1px solid #d9d9d9;
-                    border-bottom: none;
-                    border-radius: 0px;
-                    background-color: #E8E8E8;
-                }
-                QTabBar::tab:first {
-                    border-bottom-left-radius: 4px;
-                }
-                QTabBar::tab:selected {
-                    background-color: white;
-                    border-bottom: 2px solid #F57C00;
-                }
-                QTabBar::tab:hover:!selected {
-                    background-color: #F0F0F0;
-                }
-            """)
-            
             self.template_widget = self.create_crm_board('Шаблонный')
-            self.template_subtabs.addTab(self.template_widget, 'Активные проекты')
 
             if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+                # Есть архив — показываем подвкладки
+                template_main_widget = QWidget()
+                template_main_layout = QVBoxLayout()
+                template_main_layout.setContentsMargins(0, 0, 0, 0)
+
+                self.template_subtabs = QTabWidget()
+                self.template_subtabs.setTabBar(SyncedTabBar(self.project_tabs))
+                self.template_subtabs.setStyleSheet("""
+                    QTabWidget::pane {
+                        border: none;
+                    }
+                    QTabBar::tab {
+                        padding: 6px 16px;
+                        font-size: 12px;
+                        font-weight: bold;
+                        border: 1px solid #d9d9d9;
+                        border-bottom: none;
+                        border-radius: 0px;
+                        background-color: #E8E8E8;
+                    }
+                    QTabBar::tab:first {
+                        border-bottom-left-radius: 4px;
+                    }
+                    QTabBar::tab:selected {
+                        background-color: white;
+                        border-bottom: 2px solid #F57C00;
+                    }
+                    QTabBar::tab:hover:!selected {
+                        background-color: #F0F0F0;
+                    }
+                """)
+
+                self.template_subtabs.addTab(self.template_widget, 'Активные проекты')
                 self.template_archive_widget = self.create_archive_board('Шаблонный')
                 self.template_subtabs.addTab(self.template_archive_widget, 'Архив (0)')
-            
-            template_main_layout.addWidget(self.template_subtabs)
-            template_main_widget.setLayout(template_main_layout)
-            
-            self.project_tabs.addTab(template_main_widget, 'Шаблонные проекты')
+
+                template_main_layout.addWidget(self.template_subtabs)
+                template_main_widget.setLayout(template_main_layout)
+
+                self.project_tabs.addTab(template_main_widget, 'Шаблонные проекты')
+            else:
+                # Нет архива — показываем доску напрямую без подвкладок
+                self.project_tabs.addTab(self.template_widget, 'Шаблонные проекты')
             
         self.project_tabs.currentChanged.connect(self.on_tab_changed)
         
@@ -305,19 +309,17 @@ class CRMTab(QWidget):
                         template_archive_count += 1
             
             self.project_tabs.setTabText(0, f'Индивидуальные проекты ({individual_count})')
-            
-            if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
-                self.project_tabs.setTabText(1, f'Шаблонные проекты ({template_count})')
-            
+            self.project_tabs.setTabText(1, f'Шаблонные проекты ({template_count})')
+
             if hasattr(self, 'individual_subtabs'):
                 self.individual_subtabs.setTabText(0, f'Активные проекты ({individual_count})')
-                
+
                 if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     self.individual_subtabs.setTabText(1, f'Архив ({individual_archive_count})')
-            
-            if hasattr(self, 'template_subtabs') and _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+
+            if hasattr(self, 'template_subtabs'):
                 self.template_subtabs.setTabText(0, f'Активные проекты ({template_count})')
-                
+
                 if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
                     self.template_subtabs.setTabText(1, f'Архив ({template_archive_count})')
             

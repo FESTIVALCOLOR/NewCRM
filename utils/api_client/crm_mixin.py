@@ -383,3 +383,8 @@ class CrmMixin:
                                        'reviewer_role': reviewer_role, 'norm_days_work': norm_days_work,
                                        'norm_days_review': norm_days_review})
         return self._handle_response(response)
+
+    def workflow_repair(self, card_id: int) -> Dict[str, Any]:
+        """Диагностика и восстановление карточки"""
+        response = self._request('POST', f"{self.base_url}/api/v1/crm/cards/{card_id}/workflow/repair")
+        return self._handle_response(response)

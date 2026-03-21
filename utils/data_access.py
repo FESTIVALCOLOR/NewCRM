@@ -1064,7 +1064,7 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_repair: API недоступен")
             return None
         try:
-            result = self.api_client._post(f'/cards/{card_id}/workflow/repair')
+            result = self.api_client.workflow_repair(card_id)
             _global_cache.invalidate("crm_cards")
             return result
         except Exception as e:
@@ -3520,20 +3520,16 @@ class DataAccess(QObject):
                                members: list = None, chat_title: str = None) -> Optional[Dict]:
         """Создать чат автоматически"""
         if self._should_use_api():
-            try:
-                return self.api_client.create_messenger_chat(crm_card_id, messenger_type, members, chat_title)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка create_messenger_chat: {e}")
+            # Не глотаем исключения — пусть дойдут до UI для показа текста ошибки
+            return self.api_client.create_messenger_chat(crm_card_id, messenger_type, members, chat_title)
         return None
 
     def bind_messenger_chat(self, crm_card_id: int, invite_link: str,
                              messenger_type: str = "telegram", members: list = None) -> Optional[Dict]:
         """Привязать существующий чат"""
         if self._should_use_api():
-            try:
-                return self.api_client.bind_messenger_chat(crm_card_id, invite_link, messenger_type, members)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка bind_messenger_chat: {e}")
+            # Не глотаем исключения — пусть дойдут до UI для показа текста ошибки
+            return self.api_client.bind_messenger_chat(crm_card_id, invite_link, messenger_type, members)
         return None
 
     def get_messenger_chat(self, crm_card_id: int) -> Optional[Dict]:
