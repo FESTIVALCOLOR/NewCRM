@@ -263,6 +263,18 @@ async def refresh_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Проверка: уволенный / в резерве / неактивный сотрудник не может обновить токен
+    if employee.status != "активный":
+        # Деактивируем сессию
+        session.is_active = False
+        session.logout_time = datetime.utcnow()
+        db.commit()
+        status_label = employee.status or "неизвестен"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Вход запрещён. Статус сотрудника: {status_label}",
+        )
+
     # Создаём новый access_token
     new_access_token = create_access_token(data={"sub": str(employee.id)})
 

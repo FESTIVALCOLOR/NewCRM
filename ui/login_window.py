@@ -224,14 +224,49 @@ class LoginWindow(QWidget):
         try:
             # Устанавливаем refresh_token и пробуем обновить access_token
             self.api_client.refresh_token = refresh_token
-            refreshed = self.api_client.refresh_access_token()
 
-            if not refreshed or not self.api_client.token:
+            # Пробуем refresh — если 403 (уволен/резерв), покажем сообщение
+            try:
+                resp = self.api_client._request(
+                    'POST',
+                    f"{self.api_client.base_url}/api/v1/auth/refresh",
+                    json={"refresh_token": refresh_token},
+                    mark_offline=False,
+                )
+            except Exception:
+                app_logger.info("Автологин: сервер недоступен")
+                clear_session()
+                return
+
+            if resp.status_code == 403:
+                # Уволен / в резерве — показываем сообщение
+                detail = ''
+                try:
+                    detail = resp.json().get('detail', '')
+                except Exception:
+                    pass
+                app_logger.info(f"Автологин запрещён: {detail}")
+                clear_session()
+                from ui.custom_message_box import CustomMessageBox
+                CustomMessageBox(
+                    self, 'Сессия завершена',
+                    detail or 'Ваша учётная запись деактивирована. Обратитесь к руководителю.',
+                    'warning',
+                ).exec_()
+                return
+
+            if resp.status_code != 200:
                 app_logger.info("Автологин: refresh_token истёк или отозван")
                 clear_session()
                 return
 
-            # Refresh удался — получаем данные пользователя
+            # Refresh удался — сохраняем токены
+            data = resp.json()
+            new_refresh = data.get("refresh_token", refresh_token)
+            self.api_client.set_token(data["access_token"], new_refresh)
+            self.api_client.employee_id = data.get("employee_id", self.api_client.employee_id)
+
+            # Получаем данные пользователя
             try:
                 me = self.api_client._request('GET', f"{self.api_client.base_url}/api/v1/auth/me")
                 if me.status_code != 200:

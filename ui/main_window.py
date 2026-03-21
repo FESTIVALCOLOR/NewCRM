@@ -290,6 +290,24 @@ class MainWindow(QMainWindow):
         manual_btn.clicked.connect(self._open_user_manual)
         info_bar_layout.addWidget(manual_btn)
 
+        # Кнопка «Выйти» — логаут и возврат к экрану входа
+        logout_btn = _IconLoader.create_icon_button(
+            'log-out', '', 'Выйти из учётной записи', icon_size=12
+        )
+        logout_btn.setFixedSize(22, 22)
+        logout_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover {
+                background: #FFF0F0; border-color: #e74c3c;
+            }
+        """)
+        logout_btn.setCursor(Qt.PointingHandCursor)
+        logout_btn.clicked.connect(self._logout_to_login)
+        info_bar_layout.addWidget(logout_btn)
+
         layout.addWidget(info_bar)
         
         #
@@ -1891,8 +1909,52 @@ class MainWindow(QMainWindow):
 
     # ==========================================
 
+    def _logout_to_login(self):
+        """Выход из учётной записи — возврат к экрану входа"""
+        from ui.custom_message_box import CustomQuestionBox
+
+        dialog = CustomQuestionBox(
+            self,
+            'Выход из учётной записи',
+            'Вы уверены, что хотите выйти? Потребуется повторный вход.',
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        # Logout на сервере
+        try:
+            if hasattr(self, 'api_client') and self.api_client:
+                self.api_client.logout()
+        except Exception:
+            pass
+
+        # Очищаем сессию автологина
+        try:
+            from utils.session_storage import clear_session
+            clear_session()
+        except Exception:
+            pass
+
+        # Останавливаем фоновые процессы
+        if self.sync_manager:
+            self.sync_manager.stop()
+        if self.offline_manager:
+            self.offline_manager.stop_monitoring()
+
+        # Открываем окно логина и закрываем текущее окно
+        from ui.login_window import LoginWindow
+        self._login_window = LoginWindow()
+        self._login_window.show()
+        self._logging_out = True  # Флаг: closeEvent не показывает диалог
+        self.close()
+
     def closeEvent(self, event):
         """Подтверждение выхода из программы"""
+        # Если logout через кнопку «Выйти» — подтверждение уже было
+        if getattr(self, '_logging_out', False):
+            event.accept()
+            return
+
         from ui.custom_message_box import CustomQuestionBox
 
         dialog = CustomQuestionBox(
