@@ -243,6 +243,10 @@ class ProjectTimelineWidget(QWidget):
                 gridline-color: #E0E0E0;
                 font-size: 12px;
             }
+            QTableWidget::item {
+                padding: 0px;
+                margin: 0px;
+            }
             QHeaderView::section {
                 background-color: #F5F5F5;
                 border: 1px solid #E0E0E0;
@@ -285,17 +289,29 @@ class ProjectTimelineWidget(QWidget):
         btn_layout.addStretch()
 
         # Предупреждение о превышении нормодней (справа от кнопок экспорта)
-        self._deviation_warning = QLabel()
+        self._deviation_warning = QWidget()
         self._deviation_warning.setStyleSheet("""
-            QLabel {
+            QWidget {
                 background-color: #FFF3E0;
                 border: 1px solid #FFB74D;
                 border-radius: 4px;
-                padding: 4px 10px;
-                color: #E65100;
-                font-size: 12px;
             }
         """)
+        dw_layout = QHBoxLayout(self._deviation_warning)
+        dw_layout.setContentsMargins(8, 4, 10, 4)
+        dw_layout.setSpacing(5)
+        # Иконка warning
+        from ui.icon_loader import IconLoader as _DWIconLoader
+        dw_icon = _DWIconLoader.create_svg_icon('warning', '#E65100', 14)
+        dw_icon_label = QLabel()
+        dw_icon_label.setPixmap(dw_icon.pixmap(14, 14))
+        dw_icon_label.setFixedSize(14, 14)
+        dw_icon_label.setStyleSheet('background: transparent; border: none;')
+        dw_layout.addWidget(dw_icon_label)
+        # Текст
+        self._deviation_text = QLabel()
+        self._deviation_text.setStyleSheet('background: transparent; border: none; color: #E65100; font-size: 12px;')
+        dw_layout.addWidget(self._deviation_text)
         self._deviation_warning.hide()
         btn_layout.addWidget(self._deviation_warning)
 
@@ -815,10 +831,11 @@ class ProjectTimelineWidget(QWidget):
                 elif not is_in_scope:
                     row_bg = '#E0E0E0'
 
-                # Бордеры для зелёной рамки текущего подэтапа
-                _brd_first = 'border: 2px solid #4CAF50; border-right: none; border-radius: 0;' if _active_border else ''
+                # Зелёная рамка текущего подэтапа
+                # Используем outline вместо border — он рисуется ПОВЕРХ виджета, без съедания пространства
+                _brd_first = 'border-left: 3px solid #4CAF50; border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-right: none; border-radius: 0;' if _active_border else ''
                 _brd_mid = 'border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-left: none; border-right: none; border-radius: 0;' if _active_border else ''
-                _brd_last = 'border: 2px solid #4CAF50; border-left: none; border-radius: 0;' if _active_border else ''
+                _brd_last = 'border-right: 3px solid #4CAF50; border-top: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-left: none; border-radius: 0;' if _active_border else ''
 
                 # Кол 0: Название
                 self.table.setCellWidget(row, 0,
@@ -999,8 +1016,8 @@ class ProjectTimelineWidget(QWidget):
 
         if exceeded:
             total_excess = sum(x['diff'] for x in exceeded)
-            self._deviation_warning.setText(
-                f'⚠ Превышение нормодней на {total_excess} дн.'
+            self._deviation_text.setText(
+                f'Превышение нормодней на {total_excess} дн.'
             )
             # Детали — в tooltip при наведении
             tooltip_lines = [f"• {x['name']} (+{x['diff']} дн.)" for x in exceeded]

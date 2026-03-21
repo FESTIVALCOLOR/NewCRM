@@ -996,7 +996,7 @@ async def create_payment(
                 if sv:
                     sm_id = sv.senior_manager_id
                 pt_key = 'supervision'
-            if sm_id:
+            if sm_id and amount_val > 0:
                 asyncio.create_task(dispatch_notification(
                     db=db,
                     employee_id=sm_id,
