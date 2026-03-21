@@ -1197,8 +1197,8 @@ class CardEditDialog(QDialog):
                 reset_btn.clicked.connect(self.reset_card)
                 buttons_layout.addWidget(reset_btn)
 
-            # Кнопка восстановления workflow (руководитель студии)
-            if position == 'Руководитель студии':
+            # Кнопка диагностики workflow (руководитель, СМ, СДП, ГАП)
+            if not is_executor:
                 repair_btn = IconLoader.create_icon_button('tool', '', 'Диагностика и восстановление карточки', icon_size=14)
                 repair_btn.setStyleSheet("""
                     QPushButton {
