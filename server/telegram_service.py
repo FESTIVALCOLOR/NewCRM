@@ -789,6 +789,9 @@ class TelegramService:
             result = result.replace(placeholder, str(value) if value else "")
         # Убираем пустые (@), ( @) и подобные артефакты когда username не задан
         result = re.sub(r'\s*\(@?\s*\)', '', result)
+        # Убираем строки команды с пустыми ролями (когда сотрудник не назначен)
+        # Формат: " — Роль: \n" → убрать всю строку
+        result = re.sub(r' — [^:]+:\s*\n', '', result)
         return result
 
     async def send_script_message(

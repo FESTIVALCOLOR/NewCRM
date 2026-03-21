@@ -1692,6 +1692,24 @@ async def _do_create_messenger_chat(
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
+    # Проверка обязательных ролей перед созданием чата
+    project_type = (contract.project_type or '').strip()
+    missing_roles = []
+    if not card.senior_manager_id:
+        missing_roles.append('Старший менеджер')
+    if project_type == 'Индивидуальный':
+        if not card.sdp_id:
+            missing_roles.append('Старший дизайнер-проектировщик (СДП)')
+    elif project_type == 'Шаблонный':
+        if not card.manager_id:
+            missing_roles.append('Менеджер')
+    if missing_roles:
+        roles_str = ', '.join(missing_roles)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Нельзя создать чат: не назначены обязательные роли: {roles_str}"
+        )
+
     tg = get_telegram_service()
     if not tg.mtproto_available:
         raise HTTPException(status_code=503, detail="MTProto не настроен. Используйте привязку чата.")
@@ -1873,6 +1891,20 @@ async def create_supervision_chat(
     contract = db.query(Contract).filter(Contract.id == sv_card.contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
+
+    # Проверка обязательных ролей для надзора
+    missing_roles = []
+    if not sv_card.senior_manager_id:
+        missing_roles.append('Старший менеджер')
+    dan_id = getattr(sv_card, 'dan_id', None)
+    if not dan_id:
+        missing_roles.append('Руководитель надзора (ДАН)')
+    if missing_roles:
+        roles_str = ', '.join(missing_roles)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Нельзя создать чат: не назначены обязательные роли: {roles_str}"
+        )
 
     tg = get_telegram_service()
     if not tg.mtproto_available:

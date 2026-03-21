@@ -4612,9 +4612,11 @@ class CardEditDialog(QDialog):
         # ========== Подсветка активной стадии ==========
         current_column = (self.card_data.get('column_name', '') or '').lower()
 
-        def _stage_group_style(stage_keyword):
-            """Возвращает стиль QGroupBox: зелёный для активной стадии, серый для остальных"""
-            is_active = stage_keyword.lower() in current_column
+        def _stage_group_style(stage_number):
+            """Возвращает стиль QGroupBox: зелёный для активной стадии, серый для остальных.
+            stage_number: 1, 2 или 3 — номер стадии для сопоставления с column_name.
+            """
+            is_active = f'стадия {stage_number}' in current_column
             border_color = '#27AE60' if is_active else '#E0E0E0'
             title_color = '#27AE60' if is_active else '#2C3E50'
             return f"""
@@ -4637,7 +4639,7 @@ class CardEditDialog(QDialog):
 
         # ========== СЕКЦИЯ: 1 СТАДИЯ - ПЛАНИРОВОЧНОЕ РЕШЕНИЕ ==========
         stage1_group = QGroupBox("1 стадия - Планировочное решение")
-        stage1_group.setStyleSheet(_stage_group_style('планировочн'))
+        stage1_group.setStyleSheet(_stage_group_style(1))
 
         stage1_layout = QVBoxLayout()
 
@@ -4671,7 +4673,7 @@ class CardEditDialog(QDialog):
 
             # ========== СЕКЦИЯ: 2 СТАДИЯ - ЧЕРТЕЖНЫЙ ПРОЕКТ ==========
             stage2_group = QGroupBox("2 стадия - Чертежный проект")
-            stage2_group.setStyleSheet(_stage_group_style('рабочие чертежи'))
+            stage2_group.setStyleSheet(_stage_group_style(2))
 
             stage2_layout = QVBoxLayout()
 
@@ -4699,7 +4701,7 @@ class CardEditDialog(QDialog):
 
             # ========== СЕКЦИЯ: 3 СТАДИЯ - 3D ВИЗУАЛИЗАЦИЯ (ДОПОЛНИТЕЛЬНАЯ) ==========
             stage3_group = QGroupBox("3 стадия - 3D Визуализация (дополнительная)")
-            stage3_group.setStyleSheet(_stage_group_style('3d визуализация'))
+            stage3_group.setStyleSheet(_stage_group_style(3))
 
             stage3_layout = QVBoxLayout()
 
@@ -4734,7 +4736,7 @@ class CardEditDialog(QDialog):
             # ========== СЕКЦИЯ: 2 СТАДИЯ - КОНЦЕПЦИЯ ДИЗАЙНА ==========
 
             stage2_group = QGroupBox("2 стадия - Концепция дизайна")
-            stage2_group.setStyleSheet(_stage_group_style('концепция'))
+            stage2_group.setStyleSheet(_stage_group_style(2))
 
             stage2_layout = QVBoxLayout()
 
@@ -4777,7 +4779,7 @@ class CardEditDialog(QDialog):
 
             # ========== СЕКЦИЯ: 3 СТАДИЯ - ЧЕРТЕЖНЫЙ ПРОЕКТ ==========
             stage3_group = QGroupBox("3 стадия - Чертежный проект")
-            stage3_group.setStyleSheet(_stage_group_style('чертежн'))
+            stage3_group.setStyleSheet(_stage_group_style(3))
 
             stage3_layout = QVBoxLayout()
 

@@ -1582,14 +1582,9 @@ def _update_executor_deadline_for_next_substep(db, card_id: int, stage_name: str
         # Все подэтапы стадии заполнены — стадия завершена, дедлайн не нужен
         return
 
-    # Фаза 4: Если следующий подэтап вне расчёта срока (is_in_contract_scope=False),
-    # дедлайн приостанавливается (клиентские этапы, сбор правок и т.п.)
-    if not getattr(next_entry, 'is_in_contract_scope', True):
-        logger.info(
-            f"[Deadline] Пауза: card={card_id}, подэтап «{next_entry.stage_name}» "
-            f"вне расчёта срока — дедлайн не обновляется"
-        )
-        return
+    # is_in_contract_scope влияет только на расчёт срока договора (итоги),
+    # а НЕ на дедлайн текущего подэтапа на канбане. Дедлайн всегда обновляется,
+    # чтобы карточка отражала норму дней для текущего шага.
 
     # norm_days с учётом custom_norm_days (если менеджер изменил)
     norm = next_entry.norm_days or 0
@@ -2331,7 +2326,8 @@ async def workflow_client_approved(
     db: Session = Depends(get_db)
 ):
     """Клиент согласовал — записывает дату в клиентскую строку Отправка/Согласование.
-    Также записывает дату в следующую строку «Сбор правок» (роль СДП/Менеджер)."""
+    Также записывает дату в следующую строку «Сбор правок» (роль СДП/Менеджер).
+    Идемпотентен: если карточка уже в pending_decision, возвращает кэшированный результат."""
     card = db.query(CRMCard).filter(CRMCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Карточка не найдена")
@@ -2339,6 +2335,48 @@ async def workflow_client_approved(
     try:
         stage_name = card.column_name
         contract_id = card.contract_id
+
+        # ── ИДЕМПОТЕНТНОСТЬ: если уже в pending_decision, вернуть результат без изменений ──
+        wf_check = db.query(StageWorkflowState).filter(
+            StageWorkflowState.crm_card_id == card_id,
+            StageWorkflowState.stage_name == stage_name
+        ).first()
+        if wf_check and wf_check.status == 'pending_decision':
+            # Карточка уже ожидает решения (повторный вызов после краша/retry)
+            current_subgroup = wf_check.current_substage_group
+            ROUND_PAIRS_IDEM = {
+                'Подэтап 1.1': 'Подэтап 1.2', 'Подэтап 1.2': 'Подэтап 1.3',
+                'Подэтап 2.1': 'Подэтап 2.2', 'Подэтап 2.2': 'Подэтап 2.3',
+                'Подэтап 2.3': 'Подэтап 2.4', 'Подэтап 2.4': 'Подэтап 2.5',
+                'Подэтап 2.5': 'Подэтап 2.6', 'Подэтап 2.6': 'Подэтап 2.7',
+            }
+            LAST_ROUNDS_IDEM = {'Подэтап 1.3', 'Подэтап 2.7'}
+            next_round_name = ROUND_PAIRS_IDEM.get(current_subgroup)
+            stage_group_idem = _resolve_stage_group(stage_name)
+            has_next = False
+            if next_round_name and contract_id and stage_group_idem:
+                has_next = db.query(ProjectTimelineEntry).filter(
+                    ProjectTimelineEntry.contract_id == contract_id,
+                    ProjectTimelineEntry.stage_group == stage_group_idem,
+                    ProjectTimelineEntry.substage_group == next_round_name,
+                ).first() is not None
+            is_last = current_subgroup in LAST_ROUNDS_IDEM
+            if not current_subgroup or not current_subgroup.strip():
+                is_last = True
+            project_type = ''
+            if contract_id:
+                c = db.query(Contract).filter(Contract.id == contract_id).first()
+                if c:
+                    project_type = c.project_type or ''
+            logger.info(f"client-ok: идемпотентный повторный вызов для карточки {card_id} (pending_decision)")
+            return {
+                "status": "client_approved",
+                "has_next_round": has_next,
+                "next_round_name": next_round_name,
+                "is_last_round": is_last,
+                "has_remaining_client": False,
+                "project_type": project_type,
+            }
 
         stage_group = _resolve_stage_group(stage_name)
         client_entry = None

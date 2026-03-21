@@ -747,14 +747,24 @@ class ProjectTimelineWidget(QWidget):
                     self.table.setSpan(row, 0, 1, num_cols)
                     continue
 
-                # --- ЗАГОЛОВОК ПОДЭТАПА (голубой) ---
+                # --- ЗАГОЛОВОК ПОДЭТАПА (голубой, зелёный если текущий) ---
                 if is_subheader:
-                    bg = '#D6E4F0'
+                    # Проверяем, является ли этот подэтап текущим
+                    _cur_code = self.card_data.get('current_substep_code', '')
+                    _is_current_substage = False
+                    if _cur_code and substage_group:
+                        for _e in self.entries:
+                            if _e.get('substage_group') == substage_group and _e.get('stage_code') == _cur_code:
+                                _is_current_substage = True
+                                break
+                    bg = '#C8E6C9' if _is_current_substage else '#D6E4F0'
+                    title_color = '#1B5E20' if _is_current_substage else '#333333'
                     for col in range(num_cols):
                         lbl = self._make_cell_label(
                             entry.get('stage_name', '') if col == 0 else '',
                             bg, 'left' if col == 0 else 'center',
-                            bold=True, font_size=11
+                            bold=True, font_size=11,
+                            color=title_color
                         )
                         self.table.setCellWidget(row, col, lbl)
                     continue
@@ -764,12 +774,18 @@ class ProjectTimelineWidget(QWidget):
                 norm_days_val = entry.get('norm_days', 0) or 0
                 status_text = ''
                 row_bg = '#FFFFFF'
+                # Проверяем, является ли эта строка текущим подэтапом
+                _current_code = self.card_data.get('current_substep_code', '')
+                is_current_step = bool(_current_code and stage_code == _current_code)
 
                 entry_status = entry.get('status', '')
                 has_date = bool(entry.get('actual_date'))
                 if entry_status == 'skipped':
                     row_bg = '#F5F5F5'
                     status_text = 'Пропущен'
+                elif is_current_step and not has_date:
+                    # Текущий активный подэтап — зелёная подсветка
+                    row_bg = '#E8F8E0'
                 elif has_date and norm_days_val > 0:
                     if actual_days <= norm_days_val:
                         status_text = 'В срок'

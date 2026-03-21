@@ -169,9 +169,14 @@ async def send_test_notification(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Отправить тестовое уведомление (только Директор)"""
-    if current_user.role not in SUPERUSER_ROLES:
-        raise HTTPException(status_code=403, detail="Только директор может отправлять тесты")
+    """Отправить тестовое уведомление.
+    Директор может отправить любому сотруднику (employee_id).
+    Обычный пользователь может отправить только себе.
+    """
+    if employee_id and employee_id != current_user.id:
+        # Отправка другому сотруднику — только для директора
+        if current_user.role not in SUPERUSER_ROLES:
+            raise HTTPException(status_code=403, detail="Только директор может отправлять тесты другим сотрудникам")
 
     target_id = employee_id or current_user.id
     from services.notification_dispatcher import dispatch_notification

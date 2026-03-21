@@ -224,8 +224,8 @@ class CRMTab(QWidget):
 
         self.project_tabs.addTab(individual_main_widget, 'Индивидуальные проекты')
 
-        # === ШАБЛОННЫЕ ПРОЕКТЫ (скрыто от чистого СДП) ===
-        if _has_perm(self.employee, self.api_client, 'crm_cards.move'):
+        # === ШАБЛОННЫЕ ПРОЕКТЫ (видны всем с access.crm) ===
+        if True:  # Шаблонные проекты видны всем, кто видит CRM
             template_main_widget = QWidget()
             template_main_layout = QVBoxLayout()
             template_main_layout.setContentsMargins(0, 0, 0, 0)
@@ -1810,6 +1810,9 @@ class _WorkflowChoiceDialog(QDialog):
                 border-top-right-radius: 10px;
             }
         """)
+        # Скрыть кнопку закрытия — диалог можно закрыть только кнопками выбора
+        if hasattr(title_bar, 'close_btn'):
+            title_bar.close_btn.hide()
         border_layout.addWidget(title_bar)
 
         content = QWidget()
@@ -1854,6 +1857,20 @@ class _WorkflowChoiceDialog(QDialog):
     def _select(self, value):
         self._choice = value
         self.accept()
+
+    def closeEvent(self, event):
+        """Запрет закрытия без выбора — предотвращает зависание карточки в pending_decision"""
+        if self._choice is None:
+            event.ignore()
+        else:
+            super().closeEvent(event)
+
+    def keyPressEvent(self, event):
+        """Блокировка Escape — диалог можно закрыть только кнопками"""
+        if event.key() == Qt.Key_Escape:
+            event.ignore()
+        else:
+            super().keyPressEvent(event)
 
     def exec_choice(self):
         self.exec_()
@@ -3000,7 +3017,13 @@ class CRMCard(QFrame):
     def update_card_height_immediately(self):
         """Немедленное обновление высоты карточки БЕЗ прыганий"""
         from PyQt5.QtWidgets import QApplication
-        # Используем sizeHint() — ручной расчет высоты, корректно учитывающий wordWrap и видимость секций
+        # Снимаем фиксированную высоту, чтобы layout пересчитал реальный sizeHint
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(16777215)
+        # Инвалидируем кеш layout — заставляем пересчитать после hide/show
+        if self.layout():
+            self.layout().invalidate()
+        QApplication.processEvents()
         new_height = self.sizeHint().height()
         self.setFixedHeight(new_height)
 
@@ -3348,13 +3371,18 @@ class CRMCard(QFrame):
         if result == QDialog.Accepted:
             # Скрипт отправлен в чат — теперь выполняем серверный workflow
             try:
+                wf_ok = True
                 if self.data.is_multi_user:
-                    self.data.workflow_client_send(self.card_data['id'])
-                CustomMessageBox(
-                    self, 'Отправлено',
-                    f'Работа принята и отправлена клиенту на согласование.\nДедлайн приостановлен.',
-                    'success'
-                ).exec_()
+                    wf_result = self._workflow_action_with_retry(
+                        'Отправка клиенту',
+                        self.data.workflow_client_send, self.card_data['id'])
+                    wf_ok = wf_result is not None
+                if wf_ok:
+                    CustomMessageBox(
+                        self, 'Отправлено',
+                        f'Работа принята и отправлена клиенту на согласование.\nДедлайн приостановлен.',
+                        'success'
+                    ).exec_()
                 parent = self.parent()
                 while parent:
                     if isinstance(parent, CRMTab):
@@ -3433,8 +3461,31 @@ class CRMCard(QFrame):
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Ошибка подписания акта: {e}', 'error').exec_()
 
+    def _workflow_action_with_retry(self, action_name, action_func, *args, max_retries=2):
+        """Выполнить workflow-действие с retry при ошибке.
+        Предотвращает зависание карточки в pending_decision при сбое сети."""
+        for attempt in range(max_retries):
+            result = action_func(*args)
+            if result is not None:
+                return result
+            if attempt < max_retries - 1:
+                from ui.custom_message_box import CustomQuestionBox
+                retry = CustomQuestionBox(
+                    self, 'Ошибка связи',
+                    f'Не удалось выполнить действие "{action_name}".\n'
+                    f'Повторить попытку?'
+                ).exec_()
+                if retry != QDialog.Accepted:
+                    return None
+        CustomMessageBox(self, 'Ошибка',
+                         f'Действие "{action_name}" не выполнено после {max_retries} попыток.\n'
+                         f'Попробуйте ещё раз позже.',
+                         'error').exec_()
+        return None
+
     def client_approved(self):
-        """Клиент согласовал работу — три варианта: следующий круг, платный круг, закрыть этап"""
+        """Клиент согласовал работу — три варианта: следующий круг, платный круг, закрыть этап.
+        Защита от рассинхрона: non-closeable диалог + retry + идемпотентный server endpoint."""
         if not _has_perm(self.employee, self.api_client, 'crm_cards.complete_approval'):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на согласование работы.', 'error').exec_()
             return
@@ -3453,8 +3504,6 @@ class CRMCard(QFrame):
                 is_individual = 'Индивидуальный' in project_type
 
                 if has_remaining and not has_next:
-                    # Подэтап с внутренними клиентскими кругами (2.1 Мудборды):
-                    # первое согласование — продолжить правки или перейти дальше
                     dlg = _WorkflowChoiceDialog(
                         self,
                         'Клиент согласовал',
@@ -3467,7 +3516,9 @@ class CRMCard(QFrame):
                     )
                     choice = dlg.exec_choice()
                     if choice == 'close':
-                        self.data.workflow_advance_round(self.card_data['id'])
+                        self._workflow_action_with_retry(
+                            'Переход к следующему подэтапу',
+                            self.data.workflow_advance_round, self.card_data['id'])
                         CustomMessageBox(
                             self, 'Следующий подэтап',
                             f'Переход к следующему подэтапу.',
@@ -3475,7 +3526,6 @@ class CRMCard(QFrame):
                         ).exec_()
                     # При 'continue' — ничего не делаем, сервер уже продвинул substep
                 elif has_next:
-                    # Есть следующий круг — диалог с цветными кнопками
                     dlg = _WorkflowChoiceDialog(
                         self,
                         'Клиент согласовал',
@@ -3487,14 +3537,18 @@ class CRMCard(QFrame):
                     )
                     choice = dlg.exec_choice()
                     if choice == 'advance':
-                        self.data.workflow_advance_round(self.card_data['id'])
+                        self._workflow_action_with_retry(
+                            f'Переход к "{next_name}"',
+                            self.data.workflow_advance_round, self.card_data['id'])
                         CustomMessageBox(
                             self, 'Следующий круг',
                             f'Переход к "{next_name}". Дедлайн возобновлен.',
                             'success'
                         ).exec_()
                     elif choice == 'close':
-                        self.data.workflow_close_stage(self.card_data['id'])
+                        self._workflow_action_with_retry(
+                            'Закрытие этапа',
+                            self.data.workflow_close_stage, self.card_data['id'])
                         CustomMessageBox(
                             self, 'Этап закрыт',
                             f'Оставшиеся круги пропущены. Дедлайн возобновлен.',
@@ -3502,7 +3556,6 @@ class CRMCard(QFrame):
                         ).exec_()
                 elif is_last:
                     if is_individual:
-                        # Последний круг (индивидуальный) — закрыть или платный круг
                         dlg = _WorkflowChoiceDialog(
                             self,
                             'Клиент согласовал',
@@ -3514,14 +3567,18 @@ class CRMCard(QFrame):
                         )
                         choice = dlg.exec_choice()
                         if choice == 'close':
-                            self.data.workflow_close_stage(self.card_data['id'])
+                            self._workflow_action_with_retry(
+                                'Закрытие этапа',
+                                self.data.workflow_close_stage, self.card_data['id'])
                             CustomMessageBox(
                                 self, 'Этап закрыт',
                                 f'Этап закрыт. Дедлайн возобновлен.',
                                 'success'
                             ).exec_()
                         elif choice == 'paid':
-                            self.data.workflow_add_extra_round(self.card_data['id'], current_column)
+                            self._workflow_action_with_retry(
+                                'Добавление платного круга',
+                                self.data.workflow_add_extra_round, self.card_data['id'], current_column)
                             CustomMessageBox(
                                 self, 'Платный круг',
                                 'Добавлен платный круг правок.',
@@ -3529,7 +3586,9 @@ class CRMCard(QFrame):
                             ).exec_()
                     else:
                         # Последний круг (шаблонный) — просто закрыть этап, нет платных кругов
-                        self.data.workflow_close_stage(self.card_data['id'])
+                        self._workflow_action_with_retry(
+                            'Закрытие этапа',
+                            self.data.workflow_close_stage, self.card_data['id'])
                         CustomMessageBox(
                             self, 'Этап закрыт',
                             f'Клиент согласовал. Этап закрыт.',
@@ -3537,7 +3596,9 @@ class CRMCard(QFrame):
                         ).exec_()
                 else:
                     # Нет следующего круга и не последний — закрыть этап
-                    self.data.workflow_close_stage(self.card_data['id'])
+                    self._workflow_action_with_retry(
+                        'Закрытие этапа',
+                        self.data.workflow_close_stage, self.card_data['id'])
                     CustomMessageBox(
                         self, 'Этап закрыт',
                         f'Клиент согласовал работу по стадии "{current_column}".\nЭтап закрыт.',
