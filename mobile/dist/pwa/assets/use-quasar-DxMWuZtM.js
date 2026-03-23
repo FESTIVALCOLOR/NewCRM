@@ -1,1 +1,0 @@
-import{K as e}from"./render-DzSe_nHf.js";function t(){return e(`_q_`)}export{t};

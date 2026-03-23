@@ -145,6 +145,7 @@ const menuItems = [
   { to: '/reports', icon: 'bar_chart', label: 'Отчёты и Статистика' },
   { to: '/employees', icon: 'badge', label: 'Сотрудники' },
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
+  { to: '/employee-reports', icon: 'assessment', label: 'Отчёты по сотрудникам' },
   { to: '/files', icon: 'folder', label: 'Файлы' },
   { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
   { to: '/profile', icon: 'person', label: 'Профиль' }

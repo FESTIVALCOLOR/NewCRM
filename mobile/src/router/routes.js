@@ -88,7 +88,13 @@ export default [
         path: 'reports',
         name: 'reports',
         component: () => import('src/pages/ReportsPage.vue'),
-        meta: { title: 'Отчёты', icon: 'bar_chart' }
+        meta: { title: 'Отчёты и Статистика', icon: 'bar_chart' }
+      },
+      {
+        path: 'employee-reports',
+        name: 'employee-reports',
+        component: () => import('src/pages/EmployeeReportsPage.vue'),
+        meta: { title: 'Отчёты по сотрудникам', icon: 'assessment' }
       },
       {
         path: 'notifications',

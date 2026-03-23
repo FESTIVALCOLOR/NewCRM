@@ -54,7 +54,13 @@
           <q-input v-model="form.address" label="Адрес объекта" outlined dense />
 
           <!-- Город -->
-          <q-input v-model="form.city" label="Город" outlined dense />
+          <q-select v-model="form.city" :options="cityOptions" label="Город" outlined dense use-input new-value-mode="add" />
+
+          <!-- Тип агента -->
+          <q-select v-model="form.agent_type" :options="agentOptions" label="Тип агента" outlined dense use-input new-value-mode="add" />
+
+          <!-- Статус -->
+          <q-select v-if="isEdit" v-model="form.status" :options="statusOptions" label="Статус" outlined dense />
 
           <!-- Площадь -->
           <q-input
@@ -92,6 +98,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
+import { api } from 'src/boot/axios'
 import { contractsApi, clientsApi } from 'src/services/api'
 
 const props = defineProps({
@@ -108,26 +115,34 @@ const formRef = ref(null)
 const isEdit = ref(false)
 const clientOptions = ref([])
 
+const today = new Date().toISOString().split('T')[0]
+
 const emptyForm = () => ({
   client_id: null,
   contract_number: '',
   project_type: 'Индивидуальный',
   address: '',
-  city: '',
+  city: 'Москва',
   area: null,
   floors: 1,
-  contract_date: '',
-  contract_period: null,
+  agent_type: '',
+  contract_date: today,
+  contract_period: 45,
   total_amount: null,
   advance_payment: null,
   additional_payment: null,
   third_payment: null,
+  status: 'Новый заказ',
   comments: ''
 })
 
 const form = ref(emptyForm())
 
-watch(() => props.modelValue, (val) => {
+const statusOptions = ['Новый заказ', 'В ожидании', 'В работе', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
+const cityOptions = ref(['Москва', 'Санкт-Петербург', 'Казань', 'Нижний Новгород'])
+const agentOptions = ref([])
+
+watch(() => props.modelValue, async (val) => {
   show.value = val
   if (val && props.contract) {
     isEdit.value = true
@@ -135,6 +150,19 @@ watch(() => props.modelValue, (val) => {
   } else if (val) {
     isEdit.value = false
     form.value = emptyForm()
+    // Загружаем справочники для предустановки
+    try {
+      const [agentsRes, citiesRes] = await Promise.allSettled([
+        api.get('/api/v1/statistics/agent-types'),
+        api.get('/api/v1/statistics/cities')
+      ])
+      if (agentsRes.status === 'fulfilled') {
+        agentOptions.value = (agentsRes.value.data || []).filter(a => a !== 'Все')
+      }
+      if (citiesRes.status === 'fulfilled') {
+        cityOptions.value = (citiesRes.value.data || []).filter(c => c !== 'Все')
+      }
+    } catch {}
   }
 })
 

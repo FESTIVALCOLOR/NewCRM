@@ -163,7 +163,39 @@
         <q-card-section v-else class="text-center text-grey-5 q-py-md">
           Нет выездов
         </q-card-section>
+        <q-card-actions>
+          <q-btn flat color="positive" icon="add" label="Добавить выезд" no-caps @click="showAddVisit = true" />
+        </q-card-actions>
       </q-card>
+
+      <!-- Фото с камеры -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold">Фотофиксация</div>
+        </q-card-section>
+        <q-card-section>
+          <q-btn icon="photo_camera" label="Сделать фото" color="accent" text-color="dark" no-caps unelevated @click="takePhoto" class="q-mr-sm" />
+          <q-btn icon="upload_file" label="Загрузить" flat no-caps @click="uploadPhoto" />
+          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handlePhotoCapture" />
+          <input ref="fileInput" type="file" accept="image/*,.pdf" style="display:none" @change="handleFileUpload" />
+        </q-card-section>
+      </q-card>
+
+      <!-- Диалог добавления выезда -->
+      <q-dialog v-model="showAddVisit">
+        <q-card style="min-width: 320px">
+          <q-card-section><div class="text-subtitle1 text-weight-bold">Новый выезд</div></q-card-section>
+          <q-card-section>
+            <q-input v-model="visitForm.visit_date" label="Дата выезда" outlined dense type="date" class="q-mb-sm" />
+            <q-select v-model="visitForm.stage_code" :options="stageCodesForVisit" label="Стадия" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-input v-model="visitForm.notes" label="Заметки" outlined dense type="textarea" autogrow />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" v-close-popup no-caps />
+            <q-btn unelevated color="positive" label="Сохранить" no-caps @click="saveVisit" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
 
       <!-- Действия -->
       <q-card class="is-card q-mb-md">
@@ -199,7 +231,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { supervisionApi } from 'src/services/api'
+import { supervisionApi, filesApi } from 'src/services/api'
 
 const route = useRoute()
 const $q = useQuasar()
@@ -208,6 +240,25 @@ const card = ref(null)
 const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
+const showAddVisit = ref(false)
+const cameraInput = ref(null)
+const fileInput = ref(null)
+const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '' })
+
+const stageCodesForVisit = [
+  { label: 'Ст. 1: Закупка керамогранита', value: 'STAGE_1_CERAMIC' },
+  { label: 'Ст. 2: Закупка сантехники', value: 'STAGE_2_PLUMBING' },
+  { label: 'Ст. 3: Закупка оборудования', value: 'STAGE_3_EQUIPMENT' },
+  { label: 'Ст. 4: Двери и окна', value: 'STAGE_4_DOORS' },
+  { label: 'Ст. 5: Настенные материалы', value: 'STAGE_5_WALLS' },
+  { label: 'Ст. 6: Напольные материалы', value: 'STAGE_6_FLOORS' },
+  { label: 'Ст. 7: Лепной декор', value: 'STAGE_7_STUCCO' },
+  { label: 'Ст. 8: Освещение', value: 'STAGE_8_LIGHTING' },
+  { label: 'Ст. 9: Бытовая техника', value: 'STAGE_9_APPLIANCES' },
+  { label: 'Ст. 10: Заказная мебель', value: 'STAGE_10_CUSTOM_FURNITURE' },
+  { label: 'Ст. 11: Фабричная мебель', value: 'STAGE_11_FACTORY_FURNITURE' },
+  { label: 'Ст. 12: Декор', value: 'STAGE_12_DECOR' }
+]
 
 function stageIcon(status) {
   const icons = {
@@ -284,6 +335,55 @@ async function handleResume() {
     await reloadData()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function saveVisit() {
+  if (!visitForm.value.visit_date || !visitForm.value.stage_code) {
+    $q.notify({ type: 'warning', message: 'Заполните дату и стадию' })
+    return
+  }
+  try {
+    const stageLabel = stageCodesForVisit.find(s => s.value === visitForm.value.stage_code)?.label || ''
+    await supervisionApi.createVisit(card.value.id, {
+      stage_code: visitForm.value.stage_code,
+      stage_name: stageLabel,
+      visit_date: visitForm.value.visit_date,
+      executor_name: '',
+      notes: visitForm.value.notes
+    })
+    $q.notify({ type: 'positive', message: 'Выезд добавлен' })
+    showAddVisit.value = false
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+function takePhoto() { cameraInput.value?.click() }
+function uploadPhoto() { fileInput.value?.click() }
+
+async function handlePhotoCapture(event) {
+  await uploadFile(event.target.files?.[0])
+  event.target.value = ''
+}
+
+async function handleFileUpload(event) {
+  await uploadFile(event.target.files?.[0])
+  event.target.value = ''
+}
+
+async function uploadFile(file) {
+  if (!file) return
+  try {
+    $q.loading.show({ message: 'Загрузка...' })
+    const yandexPath = `/CRM/Надзор/${card.value.contract_number || card.value.id}/${file.name}`
+    await filesApi.upload(file, yandexPath)
+    $q.notify({ type: 'positive', message: 'Файл загружен' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки' })
+  } finally {
+    $q.loading.hide()
   }
 }
 

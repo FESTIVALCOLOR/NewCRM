@@ -40,6 +40,8 @@
         <q-tab name="team" label="Команда" />
         <q-tab name="timeline" label="Сроки" />
         <q-tab name="files" label="Файлы" />
+        <q-tab name="payments" label="Оплаты" />
+        <q-tab name="history" label="История" />
         <q-tab name="actions" label="Действия" />
       </q-tabs>
 
@@ -128,6 +130,50 @@
           </q-card>
         </q-tab-panel>
 
+        <!-- Оплаты -->
+        <q-tab-panel name="payments" class="q-pa-none">
+          <q-card class="is-card">
+            <q-list dense separator v-if="cardPayments.length > 0">
+              <q-item v-for="p in cardPayments" :key="p.id">
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">{{ p.employee_name || 'Без исполнителя' }}</q-item-label>
+                  <q-item-label caption>{{ p.stage_name || p.payment_subtype || '—' }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="text-right">
+                    <div class="text-weight-bold" :class="p.is_paid ? 'text-positive' : 'text-warning'">
+                      {{ formatMoney(p.final_amount || p.amount) }}
+                    </div>
+                    <q-badge :color="p.is_paid ? 'positive' : 'warning'" :label="p.is_paid ? 'Оплачено' : 'Ожидает'" dense />
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section v-else class="text-center text-grey-5">Нет платежей</q-card-section>
+          </q-card>
+        </q-tab-panel>
+
+        <!-- История -->
+        <q-tab-panel name="history" class="q-pa-none">
+          <q-card class="is-card">
+            <q-list dense separator v-if="cardHistory.length > 0">
+              <q-item v-for="h in cardHistory" :key="h.id || h.action_date">
+                <q-item-section avatar>
+                  <q-icon name="history" color="grey-5" size="20px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ h.action_type || h.message || '—' }}</q-item-label>
+                  <q-item-label caption>{{ h.employee_name || '' }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="text-caption text-grey-5">{{ formatDate(h.action_date || h.created_at) }}</div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section v-else class="text-center text-grey-5">Нет истории</q-card-section>
+          </q-card>
+        </q-tab-panel>
+
         <!-- Действия -->
         <q-tab-panel name="actions" class="q-pa-none">
           <q-card class="is-card">
@@ -209,6 +255,8 @@ const activeTab = ref('team')
 const actionLoading = ref(false)
 const employeeOptions = ref([])
 const assignForm = ref({ stage_name: '', executor_id: null, deadline: '' })
+const cardPayments = ref([])
+const cardHistory = ref([])
 
 const stageOptions = [
   'Стадия 1: планировочные решения',
@@ -271,6 +319,11 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
 
+function formatMoney(v) {
+  if (!v) return '0 ₽'
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v)
+}
+
 function openLink(url) { if (url) window.open(url, '_blank') }
 
 async function doAction(action) {
@@ -317,10 +370,20 @@ async function assignExecutor() {
 }
 
 onMounted(async () => {
-  crmStore.loadCard(route.params.id)
-  try {
-    const { data } = await employeesApi.getList()
-    employeeOptions.value = data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
-  } catch {}
+  const cardId = route.params.id
+  crmStore.loadCard(cardId)
+
+  // Параллельная загрузка всех данных
+  const [empRes, payRes, histRes] = await Promise.allSettled([
+    employeesApi.getList(),
+    crmApi.getPayments(cardId),
+    crmApi.getHistory(cardId)
+  ])
+
+  if (empRes.status === 'fulfilled') {
+    employeeOptions.value = empRes.value.data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+  }
+  if (payRes.status === 'fulfilled') cardPayments.value = payRes.value.data || []
+  if (histRes.status === 'fulfilled') cardHistory.value = histRes.value.data || []
 })
 </script>

@@ -18,16 +18,13 @@
     </q-card>
 
     <q-pull-to-refresh @refresh="onRefresh">
-      <!-- KPI карточки -->
-      <div class="row q-col-gutter-sm q-mb-md">
-        <div class="col-6 col-md-4" v-for="kpi in kpiCards" :key="kpi.label">
-          <q-card class="is-card">
-            <q-card-section class="q-pa-md">
-              <div class="row items-center justify-between q-mb-xs">
-                <q-icon :name="kpi.icon" size="20px" :style="{ color: kpi.borderColor }" />
-                <div class="text-h6 text-weight-bold">{{ kpi.value }}</div>
-              </div>
-              <div class="text-caption text-grey-7">{{ kpi.label }}</div>
+      <!-- KPI карточки (8 шт) -->
+      <div class="row q-col-gutter-xs q-mb-md">
+        <div class="col-6 col-md-3" v-for="kpi in kpiCards" :key="kpi.label">
+          <q-card class="is-card" :style="{ borderLeft: `3px solid ${kpi.color}` }">
+            <q-card-section class="q-pa-sm">
+              <div class="text-h6 text-weight-bold">{{ kpi.value }}</div>
+              <div class="text-caption text-grey-7" style="font-size: 10px">{{ kpi.label }}</div>
             </q-card-section>
           </q-card>
         </div>
@@ -36,28 +33,33 @@
       <!-- Секция: Клиенты -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold q-mb-sm">Клиенты</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">Клиенты</div>
           <div class="row q-col-gutter-sm q-mb-md">
-            <div class="col-4" v-for="m in clientMini" :key="m.label">
-              <div class="text-center">
-                <div class="text-h6 text-weight-bold">{{ m.value }}</div>
-                <div class="text-caption text-grey-7">{{ m.label }}</div>
-              </div>
+            <div class="col-4 text-center" v-for="m in clientMini" :key="m.label">
+              <div class="text-h6 text-weight-bold">{{ m.value }}</div>
+              <div class="text-caption text-grey-7">{{ m.label }}</div>
             </div>
           </div>
+          <!-- График: динамика клиентов -->
+          <line-chart v-if="clientsDynamics" :labels="clientsDynamics.labels" :datasets="clientsDynamics.datasets" />
         </q-card-section>
       </q-card>
 
       <!-- Секция: Договоры -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold q-mb-sm">Договоры</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">Договоры</div>
           <div class="row q-col-gutter-sm q-mb-md">
-            <div class="col-4" v-for="m in contractMini" :key="m.label">
-              <div class="text-center">
-                <div class="text-h6 text-weight-bold">{{ m.value }}</div>
-                <div class="text-caption text-grey-7">{{ m.label }}</div>
-              </div>
+            <div class="col-4 text-center" v-for="m in contractMini" :key="m.label">
+              <div class="text-h6 text-weight-bold">{{ m.value }}</div>
+              <div class="text-caption text-grey-7">{{ m.label }}</div>
+            </div>
+          </div>
+          <!-- Pie: тип проекта -->
+          <div class="row q-col-gutter-md" v-if="projectTypePie">
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-center q-mb-xs">Тип проекта</div>
+              <pie-chart :labels="projectTypePie.labels" :values="projectTypePie.values" />
             </div>
           </div>
         </q-card-section>
@@ -66,29 +68,15 @@
       <!-- Секция: Воронка CRM -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold q-mb-sm">Воронка CRM</div>
-          <div v-if="funnel">
-            <div v-for="(count, stage) in funnel.funnel" :key="stage" class="q-mb-sm">
-              <div class="row items-center justify-between q-mb-xs">
-                <span class="text-caption">{{ stage }}</span>
-                <span class="text-weight-bold">{{ count }}</span>
-              </div>
-              <q-linear-progress
-                :value="funnel.total ? count / funnel.total : 0"
-                color="accent"
-                track-color="grey-3"
-                style="height: 8px; border-radius: 4px"
-              />
-            </div>
-          </div>
-          <div v-else class="text-center text-grey-5 q-py-md">Нет данных</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">Воронка CRM</div>
+          <bar-chart v-if="funnelChart" :labels="funnelChart.labels" :datasets="funnelChart.datasets" horizontal />
         </q-card-section>
       </q-card>
 
       <!-- Секция: CRM аналитика -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold q-mb-sm">Проекты</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">Проекты</div>
           <q-tabs v-model="projectTab" dense active-color="dark" indicator-color="accent" no-caps align="left">
             <q-tab name="individual" label="Индивидуальные" />
             <q-tab name="template" label="Шаблонные" />
@@ -96,11 +84,29 @@
           <div v-if="projectStats" class="q-mt-md">
             <div class="row q-col-gutter-sm">
               <div class="col-6" v-for="s in projectStatCards" :key="s.label">
-                <div class="text-center q-pa-sm" style="border: 1px solid #E0E0E0; border-radius: 8px">
+                <div class="text-center q-pa-sm" :style="{ border: `1px solid ${s.color || '#E0E0E0'}`, borderRadius: '8px' }">
                   <div class="text-h6 text-weight-bold">{{ s.value }}</div>
                   <div class="text-caption text-grey-7">{{ s.label }}</div>
                 </div>
               </div>
+            </div>
+            <!-- По городам -->
+            <div class="q-mt-md" v-if="cityChart">
+              <div class="text-caption text-weight-bold q-mb-xs">По городам</div>
+              <bar-chart :labels="cityChart.labels" :datasets="cityChart.datasets" horizontal />
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Секция: Надзор -->
+      <q-card class="is-card q-mb-md" v-if="supervisionStats">
+        <q-card-section>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">Авторский надзор</div>
+          <div class="row q-col-gutter-sm">
+            <div class="col-6 text-center" v-for="s in supervisionMini" :key="s.label">
+              <div class="text-h6 text-weight-bold">{{ s.value }}</div>
+              <div class="text-caption text-grey-7">{{ s.label }}</div>
             </div>
           </div>
         </q-card-section>
@@ -112,35 +118,48 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { reportsApi, statisticsApi } from 'src/services/api'
+import PieChart from 'src/components/charts/PieChart.vue'
+import BarChart from 'src/components/charts/BarChart.vue'
+import LineChart from 'src/components/charts/LineChart.vue'
 
 const currentYear = new Date().getFullYear()
 const filters = ref({ year: currentYear, quarter: null, month: null })
 const summary = ref(null)
 const funnel = ref(null)
 const projectStats = ref(null)
+const supervisionStats = ref(null)
+const clientsDynamicsRaw = ref(null)
 const projectTab = ref('individual')
-const loading = ref(false)
 
 const years = Array.from({ length: 7 }, (_, i) => currentYear - i)
 const quarters = [{ label: 'Все', value: null }, { label: 'Q1', value: 1 }, { label: 'Q2', value: 2 }, { label: 'Q3', value: 3 }, { label: 'Q4', value: 4 }]
 const monthOpts = [{ label: 'Все', value: null }, ...Array.from({ length: 12 }, (_, i) => ({ label: new Date(2000, i).toLocaleDateString('ru-RU', { month: 'long' }), value: i + 1 }))]
 
+function fmtMoney(v) {
+  if (!v) return '0 ₽'
+  if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M ₽`
+  if (v >= 1000) return `${(v / 1000).toFixed(0)}K ₽`
+  return `${Math.round(v)} ₽`
+}
+
 const kpiCards = computed(() => {
   const s = summary.value || {}
   return [
-    { label: 'Всего клиентов', value: s.total_clients ?? '—', icon: 'people', borderColor: '#ffd93c' },
-    { label: 'Новых клиентов', value: s.new_clients ?? '—', icon: 'person_add', borderColor: '#27AE60' },
-    { label: 'Повторных', value: s.returning_clients ?? '—', icon: 'replay', borderColor: '#85C1E9' },
-    { label: 'Всего договоров', value: s.total_contracts ?? '—', icon: 'description', borderColor: '#F39C12' },
-    { label: 'Общая стоимость', value: s.total_amount ? formatMoney(s.total_amount) : '—', icon: 'payments', borderColor: '#E74C3C' },
-    { label: 'Средний чек', value: s.avg_amount ? formatMoney(s.avg_amount) : '—', icon: 'trending_up', borderColor: '#9B59B6' }
+    { label: 'Всего клиентов', value: s.total_clients ?? '—', color: '#ffd93c' },
+    { label: 'Новых клиентов', value: s.new_clients ?? '—', color: '#27AE60' },
+    { label: 'Повторных', value: s.returning_clients ?? '—', color: '#85C1E9' },
+    { label: 'Договоров', value: s.total_contracts ?? '—', color: '#F39C12' },
+    { label: 'Стоимость', value: fmtMoney(s.total_amount), color: '#E74C3C' },
+    { label: 'Средний чек', value: fmtMoney(s.avg_amount), color: '#9B59B6' },
+    { label: 'Площадь (м²)', value: s.total_area ? Math.round(s.total_area) : '—', color: '#1ABC9C' },
+    { label: 'Ср. площадь', value: s.avg_area ? Math.round(s.avg_area) : '—', color: '#E67E22' }
   ]
 })
 
 const clientMini = computed(() => {
   const s = summary.value || {}
   return [
-    { label: 'Всего', value: s.total_clients ?? '—' },
+    { label: 'Физлица', value: s.total_clients ? Math.round((s.total_clients - (s.returning_clients || 0))) : '—' },
     { label: 'Новые', value: s.new_clients ?? '—' },
     { label: 'Повторные', value: s.returning_clients ?? '—' }
   ]
@@ -155,42 +174,91 @@ const contractMini = computed(() => {
   ]
 })
 
+const clientsDynamics = computed(() => {
+  const raw = clientsDynamicsRaw.value
+  if (!raw || typeof raw !== 'object') return null
+  const keys = Object.keys(raw).sort()
+  if (keys.length === 0) return null
+  return {
+    labels: keys.map(k => { const [, m] = k.split('-'); return new Date(2000, parseInt(m) - 1).toLocaleDateString('ru-RU', { month: 'short' }) }),
+    datasets: [
+      { label: 'Новые', data: keys.map(k => raw[k]?.new || 0), color: '#27AE60' },
+      { label: 'Повторные', data: keys.map(k => raw[k]?.returning || 0), color: '#85C1E9' }
+    ]
+  }
+})
+
+const projectTypePie = computed(() => {
+  const s = summary.value
+  if (!s || !s.total_contracts) return null
+  const ind = s.total_contracts - (s.returning_clients || 0)
+  const tmpl = s.returning_clients || 0
+  return { labels: ['Индивидуальные', 'Шаблонные'], values: [ind, tmpl] }
+})
+
+const funnelChart = computed(() => {
+  if (!funnel.value?.funnel) return null
+  const f = funnel.value.funnel
+  const labels = Object.keys(f)
+  return {
+    labels,
+    datasets: [{ label: 'Проектов', data: labels.map(k => f[k]), color: '#ffd93c' }]
+  }
+})
+
 const projectStatCards = computed(() => {
   const p = projectStats.value || {}
   return [
-    { label: 'Всего', value: p.total_orders ?? '—' },
-    { label: 'Активных', value: p.active ?? '—' },
-    { label: 'Завершённых', value: p.completed ?? '—' },
-    { label: 'Просроченных', value: p.overdue ?? '—' }
+    { label: 'Всего', value: p.total_orders ?? '—', color: '#ffd93c' },
+    { label: 'Активных', value: p.active ?? '—', color: '#27AE60' },
+    { label: 'Завершённых', value: p.completed ?? '—', color: '#85C1E9' },
+    { label: 'Просроченных', value: p.overdue ?? '—', color: '#E74C3C' }
   ]
 })
 
-function formatMoney(v) {
-  if (!v) return '0 ₽'
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v)
-}
+const cityChart = computed(() => {
+  const p = projectStats.value
+  if (!p?.by_cities) return null
+  const entries = Object.entries(p.by_cities).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  return {
+    labels: entries.map(([k]) => k),
+    datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: '#85C1E9' }]
+  }
+})
+
+const supervisionMini = computed(() => {
+  const s = supervisionStats.value || {}
+  return [
+    { label: 'Всего', value: s.total_orders ?? '—' },
+    { label: 'Активных', value: s.active ?? '—' },
+    { label: 'Завершённых', value: s.completed ?? '—' },
+    { label: 'Просроченных', value: s.overdue ?? '—' }
+  ]
+})
 
 async function loadData() {
-  loading.value = true
   const params = { year: filters.value.year }
   if (filters.value.quarter) params.quarter = filters.value.quarter
   if (filters.value.month) params.month = filters.value.month
 
-  const [sumRes, funnelRes, projRes] = await Promise.allSettled([
+  const pt = projectTab.value === 'template' ? 'Шаблонный' : 'Индивидуальный'
+
+  const [sumR, funnelR, projR, dynR, supR] = await Promise.allSettled([
     reportsApi.getSummary(params),
     reportsApi.getFunnel(params),
-    reportsApi.getCrmAnalytics({ ...params, project_type: projectTab.value === 'template' ? 'Шаблонный' : 'Индивидуальный' })
+    reportsApi.getCrmAnalytics({ ...params, project_type: pt }),
+    reportsApi.getClientsDynamics({ year: filters.value.year }),
+    statisticsApi.getProjects({ ...params, project_type: 'Авторский надзор' })
   ])
 
-  if (sumRes.status === 'fulfilled') summary.value = sumRes.value.data
-  if (funnelRes.status === 'fulfilled') funnel.value = funnelRes.value.data
-  if (projRes.status === 'fulfilled') projectStats.value = projRes.value.data
-  loading.value = false
+  if (sumR.status === 'fulfilled') summary.value = sumR.value.data
+  if (funnelR.status === 'fulfilled') funnel.value = funnelR.value.data
+  if (projR.status === 'fulfilled') projectStats.value = projR.value.data
+  if (dynR.status === 'fulfilled') clientsDynamicsRaw.value = dynR.value.data
+  if (supR.status === 'fulfilled') supervisionStats.value = supR.value.data
 }
 
 watch(projectTab, () => loadData())
-
 function onRefresh(done) { loadData().finally(done) }
-
 onMounted(() => loadData())
 </script>

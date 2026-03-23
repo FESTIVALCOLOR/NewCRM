@@ -1,1 +1,0 @@
-import{M as e}from"./render-DzSe_nHf.js";var t={dark:{type:Boolean,default:null}};function n(t,n){return e(()=>t.dark===null?n.dark.isActive:t.dark)}export{n,t};

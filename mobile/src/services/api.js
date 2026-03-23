@@ -90,7 +90,13 @@ export const crmApi = {
     api.post(`/api/v1/crm/cards/${cardId}/workflow/sign-act`),
 
   getTimeline: (contractId) =>
-    api.get(`/api/v1/contracts/${contractId}/timeline`)
+    api.get(`/api/v1/contracts/${contractId}/timeline`),
+
+  getPayments: (cardId) =>
+    api.get('/api/v1/payments', { params: { crm_card_id: cardId } }),
+
+  getHistory: (cardId) =>
+    api.get(`/api/v1/crm/cards/${cardId}/stage-history`)
 }
 
 // === Clients ===
@@ -260,7 +266,16 @@ export const supervisionApi = {
     api.post(`/api/v1/supervision/cards/${cardId}/resume`),
 
   completeStage: (cardId) =>
-    api.post(`/api/v1/supervision/cards/${cardId}/complete-stage`)
+    api.post(`/api/v1/supervision/cards/${cardId}/complete-stage`),
+
+  createVisit: (cardId, data) =>
+    api.post(`/api/v1/supervision-visits/${cardId}/visits`, data),
+
+  updateTimelineEntry: (cardId, stageCode, data) =>
+    api.put(`/api/v1/supervision-timeline/${cardId}/entry/${stageCode}`, data),
+
+  addHistory: (cardId, data) =>
+    api.post(`/api/v1/supervision/cards/${cardId}/history`, data)
 }
 
 // === Files (Яндекс.Диск) ===
