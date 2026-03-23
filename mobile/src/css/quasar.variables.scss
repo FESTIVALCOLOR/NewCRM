@@ -1,9 +1,9 @@
-// Quasar SCSS Variables
-$primary   : #1a1a2e;
-$secondary : #16213e;
-$accent    : #0f3460;
-$dark      : #1d1d1d;
-$positive  : #4caf50;
-$negative  : #e53935;
-$info      : #2196f3;
-$warning   : #ff9800;
+// Quasar SCSS Variables — соответствие десктопной версии
+$primary   : #333333;    // Тёмный текст для header
+$secondary : #F8F9FA;    // Серый фон info bar
+$accent    : #ffd93c;    // Жёлтый accent (selected tab, primary button)
+$dark      : #333333;
+$positive  : #27AE60;    // Зелёный (success, approved)
+$negative  : #E74C3C;    // Красный (error, delete)
+$info      : #85C1E9;    // Голубой (info)
+$warning   : #F39C12;    // Оранжевый (warning, pending)

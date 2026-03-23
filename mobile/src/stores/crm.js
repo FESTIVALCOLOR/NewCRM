@@ -2,14 +2,23 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { crmApi } from 'src/services/api'
 
-// Порядок колонок CRM доски
-const COLUMN_ORDER = [
+// Колонки CRM доски — ТОЧНЫЕ названия из десктопа
+const COLUMNS_INDIVIDUAL = [
   'Новый заказ',
-  'Стадия 1: планировочное решение',
+  'В ожидании',
+  'Стадия 1: планировочные решения',
   'Стадия 2: концепция дизайна',
-  'Стадия 3: рабочая документация',
-  'На согласовании',
-  'Согласовано'
+  'Стадия 3: рабочие чертежи',
+  'Выполненный проект'
+]
+
+const COLUMNS_TEMPLATE = [
+  'Новый заказ',
+  'В ожидании',
+  'Стадия 1: планировочные решения',
+  'Стадия 2: рабочие чертежи',
+  'Стадия 3: 3д визуализация (Дополнительная)',
+  'Выполненный проект'
 ]
 
 export const useCrmStore = defineStore('crm', () => {
@@ -20,16 +29,20 @@ export const useCrmStore = defineStore('crm', () => {
   const selectedCard = ref(null)
   const cardLoading = ref(false)
 
+  // Актуальный порядок колонок зависит от типа проекта
+  const columnOrder = computed(() =>
+    projectType.value === 'Шаблонный' ? COLUMNS_TEMPLATE : COLUMNS_INDIVIDUAL
+  )
+
   // Группировка карточек по колонкам
   const columns = computed(() => {
+    const order = columnOrder.value
     const grouped = {}
 
-    // Инициализация всех колонок
-    for (const col of COLUMN_ORDER) {
+    for (const col of order) {
       grouped[col] = []
     }
 
-    // Распределение карточек по колонкам
     for (const card of cards.value) {
       const col = card.column_name || 'Новый заказ'
       if (!grouped[col]) {
@@ -38,8 +51,7 @@ export const useCrmStore = defineStore('crm', () => {
       grouped[col].push(card)
     }
 
-    // Конвертация в массив для отображения
-    return COLUMN_ORDER
+    return order
       .filter(col => grouped[col])
       .map(col => ({
         name: col,
@@ -89,6 +101,6 @@ export const useCrmStore = defineStore('crm', () => {
     cards, loading, projectType, showArchive, selectedCard, cardLoading,
     columns, totalCards,
     loadCards, loadCard, setProjectType, toggleArchive,
-    COLUMN_ORDER
+    columnOrder, COLUMNS_INDIVIDUAL, COLUMNS_TEMPLATE
   }
 })

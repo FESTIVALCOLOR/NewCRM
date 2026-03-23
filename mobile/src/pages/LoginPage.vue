@@ -3,10 +3,10 @@
     <q-card class="login-card shadow-10">
       <!-- Логотип и заголовок -->
       <q-card-section class="text-center q-pb-none">
-        <q-avatar size="72px" color="primary" text-color="white" class="q-mb-md">
-          <span class="text-h5 text-weight-bold">IS</span>
+        <q-avatar size="72px" color="accent" text-color="dark" class="q-mb-md">
+          <span class="text-h5 text-weight-bold">FC</span>
         </q-avatar>
-        <div class="text-h5 text-weight-bold text-primary q-mb-xs">Interior Studio</div>
+        <div class="text-h5 text-weight-bold q-mb-xs" style="color: #333">FESTIVAL COLOR</div>
         <div class="text-caption text-grey-7">CRM для интерьерного бюро</div>
       </q-card-section>
 

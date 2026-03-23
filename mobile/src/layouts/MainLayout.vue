@@ -1,7 +1,7 @@
 <template>
   <q-layout view="hHh lpR fFf">
     <!-- Шапка -->
-    <q-header elevated class="bg-primary">
+    <q-header elevated class="bg-white text-dark">
       <q-toolbar>
         <q-btn
           flat
@@ -146,13 +146,13 @@ const menuItems = [
   { to: '/profile', icon: 'person', label: 'Профиль' }
 ]
 
-// Bottom tabs — только 5 основных (телефон)
+// Bottom tabs — 5 основных как в десктопе (телефон)
 const bottomTabs = [
-  { to: '/', icon: 'dashboard', label: 'Главная' },
-  { to: '/crm', icon: 'view_kanban', label: 'CRM' },
+  { to: '/', icon: 'dashboard', label: 'Дашборд' },
   { to: '/clients', icon: 'people', label: 'Клиенты' },
-  { to: '/supervision', icon: 'engineering', label: 'Надзор' },
-  { to: '/profile', icon: 'person', label: 'Профиль' }
+  { to: '/contracts', icon: 'description', label: 'Договора' },
+  { to: '/crm', icon: 'view_kanban', label: 'СРМ' },
+  { to: '/supervision', icon: 'engineering', label: 'Надзор' }
 ]
 
 function toggleDrawer() {

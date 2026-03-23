@@ -43,14 +43,14 @@ export default configure(function (/* ctx */) {
     framework: {
       config: {
         brand: {
-          primary: '#1a1a2e',
-          secondary: '#16213e',
-          accent: '#0f3460',
-          dark: '#1d1d1d',
-          positive: '#4caf50',
-          negative: '#e53935',
-          info: '#2196f3',
-          warning: '#ff9800'
+          primary: '#333333',
+          secondary: '#F8F9FA',
+          accent: '#ffd93c',
+          dark: '#333333',
+          positive: '#27AE60',
+          negative: '#E74C3C',
+          info: '#85C1E9',
+          warning: '#F39C12'
         },
         notify: {
           position: 'top',
