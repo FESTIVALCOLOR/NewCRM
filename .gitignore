@@ -27,6 +27,8 @@ cache/
 # Build
 build/
 dist/
+# PWA dist включён для деплоя (на сервере нет Node.js)
+!mobile/dist/
 *.egg-info/
 
 # IDE
