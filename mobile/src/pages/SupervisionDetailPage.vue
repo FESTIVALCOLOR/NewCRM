@@ -1,0 +1,247 @@
+<template>
+  <q-page padding>
+    <div v-if="loading" class="q-pa-md">
+      <q-skeleton type="rect" height="150px" class="q-mb-md" />
+      <q-skeleton type="text" width="70%" />
+      <q-skeleton type="text" width="50%" />
+    </div>
+
+    <template v-else-if="card">
+      <!-- Шапка -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section>
+          <div class="row items-center justify-between q-mb-sm">
+            <div class="text-h6 text-weight-bold">{{ card.contract_number }}</div>
+            <q-badge
+              :color="card.is_paused ? 'warning' : 'positive'"
+              :label="card.is_paused ? 'Приостановлено' : card.column_name"
+            />
+          </div>
+          <div class="text-body1 q-mb-xs">{{ card.address }}</div>
+          <div class="row q-gutter-md text-caption text-grey-7">
+            <span v-if="card.area"><q-icon name="square_foot" size="14px" /> {{ card.area }} м²</span>
+            <span v-if="card.city"><q-icon name="location_on" size="14px" /> {{ card.city }}</span>
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Команда -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold">Команда</div>
+        </q-card-section>
+        <q-list dense>
+          <q-item v-if="card.dan_name">
+            <q-item-section avatar>
+              <q-avatar size="32px" color="orange-2" text-color="orange-8">{{ card.dan_name[0] }}</q-avatar>
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ card.dan_name }}</q-item-label>
+              <q-item-label caption>ДАН</q-item-label>
+            </q-item-section>
+            <q-item-section side v-if="card.dan_completed">
+              <q-icon name="check_circle" color="positive" />
+            </q-item-section>
+          </q-item>
+          <q-item v-if="card.senior_manager_name">
+            <q-item-section avatar>
+              <q-avatar size="32px" color="blue-2" text-color="blue-8">{{ card.senior_manager_name[0] }}</q-avatar>
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ card.senior_manager_name }}</q-item-label>
+              <q-item-label caption>Ст. менеджер</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="card.studio_director_name">
+            <q-item-section avatar>
+              <q-avatar size="32px" color="purple-2" text-color="purple-8">{{ card.studio_director_name[0] }}</q-avatar>
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ card.studio_director_name }}</q-item-label>
+              <q-item-label caption>Руководитель студии</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+
+      <!-- Таблица сроков (стадии) -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle2 text-weight-bold">Стадии закупок</div>
+            <div class="text-caption text-grey-7" v-if="summary">
+              {{ summary.total_site_visits }} выездов
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-list v-if="timeline.length > 0" dense separator>
+          <q-item v-for="entry in timeline" :key="entry.id">
+            <q-item-section avatar>
+              <q-icon
+                :name="stageIcon(entry.status)"
+                :color="stageColor(entry.status)"
+                size="20px"
+              />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label class="text-weight-medium">
+                {{ entry.stage_name.replace(/^Стадия \d+: /, '') }}
+              </q-item-label>
+              <q-item-label caption>
+                <span v-if="entry.plan_date">План: {{ formatDate(entry.plan_date) }}</span>
+                <span v-if="entry.actual_date"> | Факт: {{ formatDate(entry.actual_date) }}</span>
+              </q-item-label>
+              <q-item-label caption v-if="entry.supplier" class="text-grey-7">
+                {{ entry.supplier }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-badge :color="stageColor(entry.status)" :label="entry.status" dense />
+            </q-item-section>
+          </q-item>
+        </q-list>
+
+        <q-card-section v-else class="text-center text-grey-5">
+          Стадии не инициализированы
+        </q-card-section>
+      </q-card>
+
+      <!-- Бюджет -->
+      <q-card class="is-card q-mb-md" v-if="summary && summary.total_budget_planned > 0">
+        <q-card-section>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">Бюджет</div>
+          <div class="row q-col-gutter-sm">
+            <div class="col-6">
+              <div class="text-caption text-grey-7">Запланировано</div>
+              <div class="text-weight-bold">{{ formatMoney(summary.total_budget_planned) }}</div>
+            </div>
+            <div class="col-6">
+              <div class="text-caption text-grey-7">Фактически</div>
+              <div class="text-weight-bold">{{ formatMoney(summary.total_budget_actual) }}</div>
+            </div>
+            <div class="col-6">
+              <div class="text-caption text-grey-7">Экономия</div>
+              <div class="text-weight-bold text-positive">{{ formatMoney(summary.total_savings) }}</div>
+            </div>
+            <div class="col-6">
+              <div class="text-caption text-grey-7">Дефекты</div>
+              <div class="text-weight-bold">
+                {{ summary.total_defects_resolved }}/{{ summary.total_defects_found }}
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Выезды -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold">Выезды на объект</div>
+        </q-card-section>
+
+        <q-list v-if="visits.length > 0" dense separator>
+          <q-item v-for="visit in visits" :key="visit.id">
+            <q-item-section avatar>
+              <q-icon name="place" color="blue" size="20px" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ formatDate(visit.visit_date) }}</q-item-label>
+              <q-item-label caption>
+                {{ visit.stage_name?.replace(/^Стадия \d+: /, '') }}
+              </q-item-label>
+              <q-item-label caption v-if="visit.notes" class="text-grey-7">
+                {{ visit.notes }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side class="text-caption text-grey-7">
+              {{ visit.executor_name }}
+            </q-item-section>
+          </q-item>
+        </q-list>
+
+        <q-card-section v-else class="text-center text-grey-5 q-py-md">
+          Нет выездов
+        </q-card-section>
+      </q-card>
+    </template>
+
+    <div v-else class="text-center q-pa-xl text-grey-5">
+      <q-icon name="search_off" size="48px" class="q-mb-sm" />
+      <div>Карточка не найдена</div>
+      <q-btn flat color="primary" label="Назад" @click="$router.back()" class="q-mt-md" no-caps />
+    </div>
+  </q-page>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { supervisionApi } from 'src/services/api'
+
+const route = useRoute()
+const loading = ref(true)
+const card = ref(null)
+const timeline = ref([])
+const summary = ref(null)
+const visits = ref([])
+
+function stageIcon(status) {
+  const icons = {
+    'Не начато': 'radio_button_unchecked',
+    'В работе': 'pending',
+    'Закуплено': 'shopping_cart',
+    'Доставлено': 'check_circle',
+    'Просрочено': 'error'
+  }
+  return icons[status] || 'radio_button_unchecked'
+}
+
+function stageColor(status) {
+  const colors = {
+    'Не начато': 'grey-5',
+    'В работе': 'orange',
+    'Закуплено': 'blue',
+    'Доставлено': 'positive',
+    'Просрочено': 'negative'
+  }
+  return colors[status] || 'grey'
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—'
+  return new Date(dateStr).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'short'
+  })
+}
+
+function formatMoney(amount) {
+  if (!amount) return '0 ₽'
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency', currency: 'RUB', maximumFractionDigits: 0
+  }).format(amount)
+}
+
+onMounted(async () => {
+  const cardId = route.params.id
+  if (!cardId) return
+
+  try {
+    const [cardRes, timelineRes, summaryRes, visitsRes] = await Promise.allSettled([
+      supervisionApi.getCard(cardId),
+      supervisionApi.getTimeline(cardId),
+      supervisionApi.getTimelineSummary(cardId),
+      supervisionApi.getVisits(cardId)
+    ])
+
+    if (cardRes.status === 'fulfilled') card.value = cardRes.value.data
+    if (timelineRes.status === 'fulfilled') {
+      timeline.value = timelineRes.value.data?.entries || timelineRes.value.data || []
+    }
+    if (summaryRes.status === 'fulfilled') summary.value = summaryRes.value.data
+    if (visitsRes.status === 'fulfilled') visits.value = visitsRes.value.data || []
+  } finally {
+    loading.value = false
+  }
+})
+</script>
