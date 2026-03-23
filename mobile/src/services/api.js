@@ -68,7 +68,29 @@ export const crmApi = {
     api.patch(`/api/v1/crm/cards/${cardId}/stage-executor/${encodeURIComponent(stageName)}/complete`, { executor_id: executorId }),
 
   updateDeadline: (cardId, stageName, deadline) =>
-    api.patch(`/api/v1/crm/cards/${cardId}/stage-executor-deadline`, { stage_name: stageName, deadline })
+    api.patch(`/api/v1/crm/cards/${cardId}/stage-executor-deadline`, { stage_name: stageName, deadline }),
+
+  // Workflow actions
+  submitWork: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/submit`),
+
+  acceptWork: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/accept`),
+
+  rejectWork: (cardId, data) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/reject`, data),
+
+  sendToClient: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/client-send`),
+
+  clientApproved: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/client-approved`),
+
+  signAct: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/sign-act`),
+
+  getTimeline: (contractId) =>
+    api.get(`/api/v1/contracts/${contractId}/timeline`)
 }
 
 // === Clients ===
@@ -122,8 +144,86 @@ export const notificationsApi = {
 // === Employees ===
 
 export const employeesApi = {
-  getList: () =>
-    api.get('/api/v1/employees')
+  getList: (params = {}) =>
+    api.get('/api/v1/employees', { params }),
+
+  getById: (id) =>
+    api.get(`/api/v1/employees/${id}`),
+
+  create: (data) =>
+    api.post('/api/v1/employees', data),
+
+  update: (id, data) =>
+    api.put(`/api/v1/employees/${id}`, data),
+
+  delete: (id) =>
+    api.delete(`/api/v1/employees/${id}`)
+}
+
+// === Payments ===
+
+export const paymentsApi = {
+  getList: (params = {}) =>
+    api.get('/api/v1/payments', { params }),
+
+  calculate: (params) =>
+    api.get('/api/v1/payments/calculate', { params }),
+
+  create: (data) =>
+    api.post('/api/v1/payments', data),
+
+  update: (id, data) =>
+    api.put(`/api/v1/payments/${id}`, data),
+
+  delete: (id) =>
+    api.delete(`/api/v1/payments/${id}`),
+
+  markPaid: (id) =>
+    api.patch(`/api/v1/payments/${id}/mark-paid`)
+}
+
+// === Salaries ===
+
+export const salariesApi = {
+  getList: (params = {}) =>
+    api.get('/api/v1/salaries', { params }),
+
+  getReport: (params = {}) =>
+    api.get('/api/v1/salaries/report', { params }),
+
+  create: (data) =>
+    api.post('/api/v1/salaries', data),
+
+  update: (id, data) =>
+    api.put(`/api/v1/salaries/${id}`, data),
+
+  delete: (id) =>
+    api.delete(`/api/v1/salaries/${id}`)
+}
+
+// === Reports ===
+
+export const reportsApi = {
+  getSummary: (params = {}) =>
+    api.get('/api/v1/dashboard/reports/summary', { params }),
+
+  getClientsDynamics: (params = {}) =>
+    api.get('/api/v1/dashboard/reports/clients-dynamics', { params }),
+
+  getCrmAnalytics: (params = {}) =>
+    api.get('/api/v1/statistics/projects', { params }),
+
+  getFunnel: (params = {}) =>
+    api.get('/api/v1/statistics/funnel', { params }),
+
+  getAgentTypes: () =>
+    api.get('/api/v1/statistics/agent-types'),
+
+  getCities: () =>
+    api.get('/api/v1/statistics/cities'),
+
+  getContractYears: () =>
+    api.get('/api/v1/dashboard/contract-years')
 }
 
 // === Supervision ===

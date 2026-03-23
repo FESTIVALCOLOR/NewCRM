@@ -135,12 +135,16 @@ const pageTitle = computed(() => {
   return route.meta.title || 'Interior Studio'
 })
 
+// Все вкладки как в десктопе
 const menuItems = [
-  { to: '/', icon: 'dashboard', label: 'Главная' },
-  { to: '/crm', icon: 'view_kanban', label: 'CRM' },
+  { to: '/', icon: 'dashboard', label: 'Дашборд' },
   { to: '/clients', icon: 'people', label: 'Клиенты' },
-  { to: '/contracts', icon: 'description', label: 'Договоры' },
-  { to: '/supervision', icon: 'engineering', label: 'Надзор' },
+  { to: '/contracts', icon: 'description', label: 'Договора' },
+  { to: '/crm', icon: 'view_kanban', label: 'СРМ' },
+  { to: '/supervision', icon: 'engineering', label: 'СРМ надзора' },
+  { to: '/reports', icon: 'bar_chart', label: 'Отчёты и Статистика' },
+  { to: '/employees', icon: 'badge', label: 'Сотрудники' },
+  { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/files', icon: 'folder', label: 'Файлы' },
   { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
   { to: '/profile', icon: 'person', label: 'Профиль' }

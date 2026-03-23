@@ -1,1 +1,0 @@
-import{B as e,P as t,at as n,nt as r,ut as i}from"./render-D3YxizKc.js";import{n as a,t as o}from"./QLayout-B1P6fSIz.js";import{t as s}from"./_plugin-vue_export-helper-DgIil7xy.js";var c={};function l(s,c){let l=n(`router-view`);return r(),t(o,{view:`hHh lpR fFf`},{default:i(()=>[e(a,null,{default:i(()=>[e(l)]),_:1})]),_:1})}var u=s(c,[[`render`,l]]);export{u as default};

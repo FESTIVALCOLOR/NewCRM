@@ -73,6 +73,24 @@ export default [
         meta: { title: 'Карточка надзора' }
       },
       {
+        path: 'employees',
+        name: 'employees',
+        component: () => import('src/pages/EmployeesPage.vue'),
+        meta: { title: 'Сотрудники', icon: 'badge' }
+      },
+      {
+        path: 'salaries',
+        name: 'salaries',
+        component: () => import('src/pages/SalariesPage.vue'),
+        meta: { title: 'Зарплаты', icon: 'payments' }
+      },
+      {
+        path: 'reports',
+        name: 'reports',
+        component: () => import('src/pages/ReportsPage.vue'),
+        meta: { title: 'Отчёты', icon: 'bar_chart' }
+      },
+      {
         path: 'notifications',
         name: 'notifications',
         component: () => import('src/pages/NotificationsPage.vue'),
