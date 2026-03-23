@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output (dist/pwa коммитится для деплоя — на сервере нет Node.js)
+# dist/
 
 # Quasar temp
 .quasar/
