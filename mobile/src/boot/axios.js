@@ -1,8 +1,8 @@
+import { boot } from 'quasar/wrappers'
 import axios from 'axios'
-import { useAuthStore } from 'src/stores/auth'
 
 const api = axios.create({
-  baseURL: process.env.API_URL || 'https://crm.festivalcolor.ru',
+  baseURL: 'https://crm.festivalcolor.ru',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -41,7 +41,6 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
-    // Если 401 и это не повторный запрос и не запрос на login/refresh
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
@@ -49,7 +48,6 @@ api.interceptors.response.use(
       !originalRequest.url?.includes('/auth/refresh')
     ) {
       if (isRefreshing) {
-        // Если уже идёт refresh — ставим запрос в очередь
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         }).then(token => {
@@ -80,9 +78,10 @@ api.interceptors.response.use(
         return api(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        // Refresh не удался — разлогиниваем
-        const authStore = useAuthStore()
-        authStore.logout()
+        // Refresh не удался — очищаем токены и редиректим
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        window.location.href = '/login'
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -93,5 +92,8 @@ api.interceptors.response.use(
   }
 )
 
+export default boot(({ app }) => {
+  app.config.globalProperties.$api = api
+})
+
 export { api }
-export default api
