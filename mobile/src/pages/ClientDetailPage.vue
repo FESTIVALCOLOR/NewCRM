@@ -110,6 +110,13 @@
           Нет договоров
         </q-card-section>
       </q-card>
+
+      <!-- FAB редактирования -->
+      <q-page-sticky position="bottom-right" :offset="[18, 18]">
+        <q-btn fab icon="edit" color="primary" @click="showEdit = true" />
+      </q-page-sticky>
+
+      <client-form-dialog v-model="showEdit" :client="client" @saved="reloadClient" />
     </template>
 
     <!-- Не найден -->
@@ -127,10 +134,19 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useClientsStore } from 'src/stores/clients'
+import ClientFormDialog from 'src/components/ClientFormDialog.vue'
 
 const route = useRoute()
 const clientsStore = useClientsStore()
 const loaded = ref(false)
+const showEdit = ref(false)
+
+async function reloadClient() {
+  const clientId = route.params.id
+  if (clientId) {
+    await clientsStore.loadClient(clientId)
+  }
+}
 
 const client = computed(() => clientsStore.selectedClient)
 

@@ -82,16 +82,26 @@
         <div>{{ clientsStore.search ? 'Ничего не найдено' : 'Нет клиентов' }}</div>
       </div>
     </q-pull-to-refresh>
+
+    <!-- FAB создания клиента -->
+    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+      <q-btn fab icon="person_add" color="primary" @click="showForm = true" />
+    </q-page-sticky>
+
+    <!-- Форма создания/редактирования -->
+    <client-form-dialog v-model="showForm" @saved="onSaved" />
   </q-page>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import ClientFormDialog from 'src/components/ClientFormDialog.vue'
 import { useRouter } from 'vue-router'
 import { useClientsStore } from 'src/stores/clients'
 
 const router = useRouter()
 const clientsStore = useClientsStore()
+const showForm = ref(false)
 
 function openClient(clientId) {
   router.push(`/clients/${clientId}`)
@@ -108,6 +118,10 @@ function clearSearch() {
 
 function onRefresh(done) {
   clientsStore.loadClients().finally(done)
+}
+
+function onSaved() {
+  clientsStore.loadClients()
 }
 
 onMounted(() => {

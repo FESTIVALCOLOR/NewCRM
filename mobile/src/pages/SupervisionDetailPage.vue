@@ -164,6 +164,27 @@
           Нет выездов
         </q-card-section>
       </q-card>
+
+      <!-- Действия -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold">Действия</div>
+        </q-card-section>
+        <q-list>
+          <q-item v-if="!card.is_paused" clickable v-ripple @click="handlePause">
+            <q-item-section avatar><q-icon name="pause_circle" color="warning" /></q-item-section>
+            <q-item-section>Приостановить</q-item-section>
+          </q-item>
+          <q-item v-else clickable v-ripple @click="handleResume">
+            <q-item-section avatar><q-icon name="play_circle" color="positive" /></q-item-section>
+            <q-item-section>Возобновить</q-item-section>
+          </q-item>
+          <q-item clickable v-ripple @click="handleCompleteStage">
+            <q-item-section avatar><q-icon name="check_circle" color="primary" /></q-item-section>
+            <q-item-section>Завершить текущую стадию</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
     </template>
 
     <div v-else class="text-center q-pa-xl text-grey-5">
@@ -177,9 +198,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { supervisionApi } from 'src/services/api'
 
 const route = useRoute()
+const $q = useQuasar()
 const loading = ref(true)
 const card = ref(null)
 const timeline = ref([])
@@ -220,6 +243,58 @@ function formatMoney(amount) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency', currency: 'RUB', maximumFractionDigits: 0
   }).format(amount)
+}
+
+async function reloadData() {
+  const cardId = route.params.id
+  if (!cardId) return
+  const [cardRes, timelineRes, summaryRes, visitsRes] = await Promise.allSettled([
+    supervisionApi.getCard(cardId),
+    supervisionApi.getTimeline(cardId),
+    supervisionApi.getTimelineSummary(cardId),
+    supervisionApi.getVisits(cardId)
+  ])
+  if (cardRes.status === 'fulfilled') card.value = cardRes.value.data
+  if (timelineRes.status === 'fulfilled') timeline.value = timelineRes.value.data?.entries || timelineRes.value.data || []
+  if (summaryRes.status === 'fulfilled') summary.value = summaryRes.value.data
+  if (visitsRes.status === 'fulfilled') visits.value = visitsRes.value.data || []
+}
+
+async function handlePause() {
+  $q.dialog({
+    title: 'Приостановить',
+    message: 'Укажите причину приостановки',
+    prompt: { model: '', type: 'text' },
+    cancel: true
+  }).onOk(async (reason) => {
+    try {
+      await supervisionApi.pause(card.value.id, reason || 'Без причины')
+      $q.notify({ type: 'positive', message: 'Карточка приостановлена' })
+      await reloadData()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
+}
+
+async function handleResume() {
+  try {
+    await supervisionApi.resume(card.value.id)
+    $q.notify({ type: 'positive', message: 'Карточка возобновлена' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function handleCompleteStage() {
+  try {
+    await supervisionApi.completeStage(card.value.id)
+    $q.notify({ type: 'positive', message: 'Стадия завершена' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
 }
 
 onMounted(async () => {

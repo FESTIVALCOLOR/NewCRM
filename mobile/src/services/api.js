@@ -56,7 +56,19 @@ export const crmApi = {
     api.get(`/api/v1/crm/cards/${cardId}/stage-history`),
 
   moveCard: (cardId, columnName) =>
-    api.patch(`/api/v1/crm/cards/${cardId}/column`, { column_name: columnName })
+    api.patch(`/api/v1/crm/cards/${cardId}/column`, { column_name: columnName }),
+
+  updateCard: (cardId, data) =>
+    api.patch(`/api/v1/crm/cards/${cardId}`, data),
+
+  assignExecutor: (cardId, data) =>
+    api.post(`/api/v1/crm/cards/${cardId}/stage-executor`, data),
+
+  completeStage: (cardId, stageName, executorId) =>
+    api.patch(`/api/v1/crm/cards/${cardId}/stage-executor/${encodeURIComponent(stageName)}/complete`, { executor_id: executorId }),
+
+  updateDeadline: (cardId, stageName, deadline) =>
+    api.patch(`/api/v1/crm/cards/${cardId}/stage-executor-deadline`, { stage_name: stageName, deadline })
 }
 
 // === Clients ===
@@ -66,7 +78,16 @@ export const clientsApi = {
     api.get('/api/v1/clients', { params }),
 
   getById: (clientId) =>
-    api.get(`/api/v1/clients/${clientId}`)
+    api.get(`/api/v1/clients/${clientId}`),
+
+  create: (data) =>
+    api.post('/api/v1/clients', data),
+
+  update: (clientId, data) =>
+    api.put(`/api/v1/clients/${clientId}`, data),
+
+  delete: (clientId) =>
+    api.delete(`/api/v1/clients/${clientId}`)
 }
 
 // === Contracts ===
@@ -76,7 +97,16 @@ export const contractsApi = {
     api.get('/api/v1/contracts', { params }),
 
   getById: (contractId) =>
-    api.get(`/api/v1/contracts/${contractId}`)
+    api.get(`/api/v1/contracts/${contractId}`),
+
+  create: (data) =>
+    api.post('/api/v1/contracts', data),
+
+  update: (contractId, data) =>
+    api.put(`/api/v1/contracts/${contractId}`, data),
+
+  delete: (contractId) =>
+    api.delete(`/api/v1/contracts/${contractId}`)
 }
 
 // === Notifications ===
@@ -115,7 +145,22 @@ export const supervisionApi = {
     api.get(`/api/v1/supervision-visits/${cardId}/visits`),
 
   getHistory: (cardId) =>
-    api.get(`/api/v1/supervision/cards/${cardId}/history`)
+    api.get(`/api/v1/supervision/cards/${cardId}/history`),
+
+  updateCard: (cardId, data) =>
+    api.patch(`/api/v1/supervision/cards/${cardId}`, data),
+
+  moveCard: (cardId, columnName) =>
+    api.patch(`/api/v1/supervision/cards/${cardId}/column`, { column_name: columnName }),
+
+  pause: (cardId, reason) =>
+    api.post(`/api/v1/supervision/cards/${cardId}/pause`, { pause_reason: reason }),
+
+  resume: (cardId) =>
+    api.post(`/api/v1/supervision/cards/${cardId}/resume`),
+
+  completeStage: (cardId) =>
+    api.post(`/api/v1/supervision/cards/${cardId}/complete-stage`)
 }
 
 // === Files (Яндекс.Диск) ===

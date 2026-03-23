@@ -1,0 +1,164 @@
+<template>
+  <q-dialog v-model="show" persistent maximized transition-show="slide-up" transition-hide="slide-down">
+    <q-card>
+      <q-toolbar class="bg-primary text-white">
+        <q-btn flat round dense icon="close" @click="close" />
+        <q-toolbar-title>{{ isEdit ? 'Редактировать клиента' : 'Новый клиент' }}</q-toolbar-title>
+        <q-btn flat label="Сохранить" no-caps @click="save" :loading="saving" />
+      </q-toolbar>
+
+      <q-card-section class="q-pa-md" style="max-height: calc(100vh - 50px); overflow-y: auto">
+        <q-form ref="formRef" class="q-gutter-md">
+          <!-- Тип клиента -->
+          <q-select
+            v-model="form.client_type"
+            :options="['Физическое лицо', 'Юридическое лицо']"
+            label="Тип клиента"
+            outlined
+            dense
+          />
+
+          <!-- ФИО -->
+          <q-input
+            v-model="form.full_name"
+            label="ФИО *"
+            outlined
+            dense
+            :rules="[val => !!val || 'Обязательное поле']"
+          />
+
+          <!-- Телефон -->
+          <q-input
+            v-model="form.phone"
+            label="Телефон *"
+            outlined
+            dense
+            type="tel"
+            :rules="[val => !!val || 'Обязательное поле']"
+          />
+
+          <!-- Email -->
+          <q-input v-model="form.email" label="Email" outlined dense type="email" />
+
+          <!-- Адрес регистрации -->
+          <q-input v-model="form.registration_address" label="Адрес регистрации" outlined dense />
+
+          <!-- Юр. лицо — дополнительные поля -->
+          <template v-if="form.client_type === 'Юридическое лицо'">
+            <div class="text-subtitle2 text-weight-bold q-mt-md">Организация</div>
+
+            <q-select
+              v-model="form.organization_type"
+              :options="['ООО', 'ИП', 'АО', 'ПАО', 'ЗАО']"
+              label="Тип организации"
+              outlined
+              dense
+            />
+
+            <q-input v-model="form.organization_name" label="Название организации" outlined dense />
+            <q-input v-model="form.inn" label="ИНН" outlined dense />
+            <q-input v-model="form.ogrn" label="ОГРН" outlined dense />
+            <q-input v-model="form.account_details" label="Банковские реквизиты" outlined dense type="textarea" autogrow />
+            <q-input v-model="form.responsible_person" label="Ответственное лицо" outlined dense />
+          </template>
+
+          <!-- Физ. лицо — паспорт -->
+          <template v-if="form.client_type === 'Физическое лицо'">
+            <div class="text-subtitle2 text-weight-bold q-mt-md">Паспортные данные</div>
+
+            <div class="row q-col-gutter-sm">
+              <div class="col-4">
+                <q-input v-model="form.passport_series" label="Серия" outlined dense />
+              </div>
+              <div class="col-8">
+                <q-input v-model="form.passport_number" label="Номер" outlined dense />
+              </div>
+            </div>
+
+            <q-input v-model="form.passport_issued_by" label="Кем выдан" outlined dense />
+            <q-input v-model="form.passport_issued_date" label="Дата выдачи" outlined dense type="date" />
+          </template>
+        </q-form>
+      </q-card-section>
+    </q-card>
+  </q-dialog>
+</template>
+
+<script setup>
+import { ref, watch } from 'vue'
+import { useQuasar } from 'quasar'
+import { clientsApi } from 'src/services/api'
+
+const props = defineProps({
+  modelValue: Boolean,
+  client: { type: Object, default: null }
+})
+
+const emit = defineEmits(['update:modelValue', 'saved'])
+
+const $q = useQuasar()
+const show = ref(false)
+const saving = ref(false)
+const formRef = ref(null)
+const isEdit = ref(false)
+
+const emptyForm = () => ({
+  client_type: 'Физическое лицо',
+  full_name: '',
+  phone: '',
+  email: '',
+  registration_address: '',
+  organization_type: '',
+  organization_name: '',
+  inn: '',
+  ogrn: '',
+  account_details: '',
+  responsible_person: '',
+  passport_series: '',
+  passport_number: '',
+  passport_issued_by: '',
+  passport_issued_date: ''
+})
+
+const form = ref(emptyForm())
+
+watch(() => props.modelValue, (val) => {
+  show.value = val
+  if (val && props.client) {
+    isEdit.value = true
+    form.value = { ...emptyForm(), ...props.client }
+  } else if (val) {
+    isEdit.value = false
+    form.value = emptyForm()
+  }
+})
+
+watch(show, (val) => emit('update:modelValue', val))
+
+function close() {
+  show.value = false
+}
+
+async function save() {
+  const valid = await formRef.value?.validate()
+  if (!valid) return
+
+  saving.value = true
+  try {
+    if (isEdit.value) {
+      await clientsApi.update(props.client.id, form.value)
+      $q.notify({ type: 'positive', message: 'Клиент обновлён' })
+    } else {
+      await clientsApi.create(form.value)
+      $q.notify({ type: 'positive', message: 'Клиент создан' })
+    }
+    emit('saved')
+    close()
+  } catch (err) {
+    const msg = err.response?.data?.detail || 'Ошибка сохранения'
+    $q.notify({ type: 'negative', message: msg })
+  } finally {
+    saving.value = false
+  }
+}
+</script>

@@ -60,16 +60,24 @@
         </div>
       </template>
     </q-pull-to-refresh>
+    <!-- FAB создания -->
+    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+      <q-btn fab icon="add" color="primary" @click="showForm = true" />
+    </q-page-sticky>
+
+    <contract-form-dialog v-model="showForm" @saved="loadContracts" />
   </q-page>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { contractsApi } from 'src/services/api'
+import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
 const contracts = ref([])
 const loading = ref(false)
 const search = ref('')
+const showForm = ref(false)
 
 const filtered = computed(() => {
   if (!search.value) return contracts.value

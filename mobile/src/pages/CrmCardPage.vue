@@ -145,6 +145,13 @@
           </q-item>
         </q-list>
       </q-card>
+
+      <!-- FAB действий -->
+      <q-page-sticky position="bottom-right" :offset="[18, 18]">
+        <q-btn fab icon="more_vert" color="primary" @click="showActions = true" />
+      </q-page-sticky>
+
+      <crm-actions-sheet v-model="showActions" :card="card" @updated="reloadCard" />
     </template>
 
     <!-- Не найдено -->
@@ -157,13 +164,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCrmStore } from 'src/stores/crm'
+import CrmActionsSheet from 'src/components/CrmActionsSheet.vue'
 
 const route = useRoute()
 const crmStore = useCrmStore()
 const card = computed(() => crmStore.selectedCard)
+const showActions = ref(false)
+
+function reloadCard() {
+  const cardId = route.params.id
+  if (cardId) crmStore.loadCard(cardId)
+}
 
 const teamMembers = computed(() => {
   if (!card.value) return []
