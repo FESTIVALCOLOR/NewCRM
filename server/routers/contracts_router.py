@@ -14,7 +14,7 @@ from database import (
     get_db, Contract, CRMCard, SupervisionCard, ProjectFile,
     ActivityLog, Employee, StageExecutor,
     Client, Payment, ProjectTimelineEntry,
-    SupervisionTimelineEntry, SupervisionProjectHistory,
+    SupervisionTimelineEntry, SupervisionProjectHistory, SupervisionVisit,
     StageWorkflowState, ApprovalStageDeadline, MessengerChat,
     Salary, FileStorage
 )
@@ -294,6 +294,8 @@ async def delete_contract(
         for card in supervision_cards:
             # Удаляем timeline записи надзора
             db.query(SupervisionTimelineEntry).filter(SupervisionTimelineEntry.supervision_card_id == card.id).delete()
+            # Удаляем выезды надзора
+            db.query(SupervisionVisit).filter(SupervisionVisit.supervision_card_id == card.id).delete()
             # Удаляем связанную историю
             db.query(SupervisionProjectHistory).filter(SupervisionProjectHistory.supervision_card_id == card.id).delete()
             # Удаляем платежи привязанные к карточке надзора
