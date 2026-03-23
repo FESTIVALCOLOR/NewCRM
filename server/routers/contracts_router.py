@@ -15,7 +15,8 @@ from database import (
     ActivityLog, Employee, StageExecutor,
     Client, Payment, ProjectTimelineEntry,
     SupervisionTimelineEntry, SupervisionProjectHistory,
-    StageWorkflowState, ApprovalStageDeadline, MessengerChat
+    StageWorkflowState, ApprovalStageDeadline, MessengerChat,
+    Salary, FileStorage
 )
 from auth import get_current_user
 from permissions import require_permission
@@ -307,6 +308,12 @@ async def delete_contract(
 
         # Удаляем связанные файлы проекта
         db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id).delete()
+
+        # Удаляем зарплаты привязанные к договору
+        db.query(Salary).filter(Salary.contract_id == contract_id).delete()
+
+        # Удаляем записи файлового хранилища
+        db.query(FileStorage).filter(FileStorage.contract_id == contract_id).delete()
 
         # Лог перед удалением
         log = ActivityLog(
