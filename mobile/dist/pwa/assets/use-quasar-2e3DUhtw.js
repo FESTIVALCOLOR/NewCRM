@@ -1,0 +1,1 @@
+import{Y as e}from"./dom-C3Zb804p.js";function t(){return e(`_q_`)}export{t};

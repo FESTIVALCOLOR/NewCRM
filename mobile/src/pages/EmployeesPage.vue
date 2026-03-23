@@ -70,6 +70,7 @@
           <q-btn flat round dense icon="close" @click="showDetail = false" />
           <q-toolbar-title>{{ selected.full_name }}</q-toolbar-title>
           <q-btn flat icon="edit" @click="editMode = !editMode" :color="editMode ? 'accent' : 'grey-7'" />
+          <q-btn flat icon="delete" color="negative" @click="deleteEmployee" />
         </q-toolbar>
 
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
@@ -248,6 +249,25 @@ async function createEmployee() {
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   } finally { saving.value = false }
+}
+
+async function deleteEmployee() {
+  if (!selected.value) return
+  $q.dialog({
+    title: 'Удалить сотрудника?',
+    message: selected.value.full_name,
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      await employeesApi.delete(selected.value.id)
+      $q.notify({ type: 'positive', message: 'Сотрудник удалён' })
+      showDetail.value = false
+      loadEmployees()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка удаления' })
+    }
+  })
 }
 
 function onRefresh(done) { loadEmployees().finally(done) }

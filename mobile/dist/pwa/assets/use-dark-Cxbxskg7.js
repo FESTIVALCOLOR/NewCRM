@@ -1,0 +1,1 @@
+import{F as e}from"./dom-C3Zb804p.js";var t={dark:{type:Boolean,default:null}};function n(t,n){return e(()=>t.dark===null?n.dark.isActive:t.dark)}export{n,t};

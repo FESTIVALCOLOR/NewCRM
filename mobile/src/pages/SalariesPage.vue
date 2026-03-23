@@ -55,11 +55,14 @@
             <div class="text-caption text-grey-7 q-mb-xs">
               {{ p.address || p.project_type || 'Оклад' }}
             </div>
-            <div class="row q-gutter-sm text-caption text-grey-5">
+            <div class="row items-center q-gutter-sm text-caption text-grey-5">
               <q-badge :color="p.is_paid ? 'positive' : 'warning'" :label="p.is_paid ? 'Оплачено' : 'Ожидает'" dense />
               <span v-if="p.stage_name">{{ p.stage_name }}</span>
               <span v-if="p.report_month">{{ p.report_month }}</span>
               <span v-if="p.payment_subtype">{{ p.payment_subtype }}</span>
+              <q-space />
+              <q-btn v-if="!p.is_paid && p.id" flat dense size="sm" icon="check" color="positive" @click.stop="markPaid(p)" />
+              <q-btn v-if="p.id" flat dense size="sm" icon="delete" color="negative" @click.stop="deletePayment(p)" />
             </div>
           </q-card-section>
         </q-card>
@@ -75,8 +78,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useQuasar } from 'quasar'
 import { paymentsApi } from 'src/services/api'
 
+const $q = useQuasar()
 const payments = ref([])
 const loading = ref(false)
 const currentYear = new Date().getFullYear()
@@ -132,6 +137,28 @@ async function loadData() {
     payments.value = data
   } catch { payments.value = [] }
   finally { loading.value = false }
+}
+
+async function markPaid(p) {
+  try {
+    await paymentsApi.markPaid(p.id)
+    $q.notify({ type: 'positive', message: 'Отмечено как оплачено' })
+    p.is_paid = true
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function deletePayment(p) {
+  $q.dialog({ title: 'Удалить платёж?', message: `${p.employee_name || ''} — ${formatMoney(p.final_amount || p.amount)}`, cancel: true }).onOk(async () => {
+    try {
+      await paymentsApi.delete(p.id)
+      payments.value = payments.value.filter(x => x.id !== p.id)
+      $q.notify({ type: 'positive', message: 'Платёж удалён' })
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
 }
 
 function onRefresh(done) { loadData().finally(done) }

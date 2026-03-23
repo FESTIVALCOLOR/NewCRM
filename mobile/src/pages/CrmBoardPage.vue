@@ -26,7 +26,22 @@
         >
           <q-tooltip>{{ crmStore.showArchive ? 'Активные' : 'Архив' }}</q-tooltip>
         </q-btn>
-        <q-badge color="grey-7" :label="`${crmStore.totalCards} карточек`" class="q-ml-xs" />
+        <q-badge color="grey-7" :label="`${filteredTotal} карточек`" class="q-ml-xs" />
+      </div>
+      <!-- Фильтр по исполнителю -->
+      <div class="row q-gutter-xs q-mt-xs">
+        <q-select
+          v-model="executorFilter"
+          :options="executorOptions"
+          label="Исполнитель"
+          outlined
+          dense
+          emit-value
+          map-options
+          clearable
+          style="min-width: 200px"
+          @update:model-value="applyFilter"
+        />
       </div>
     </div>
 
@@ -122,10 +137,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
+import { employeesApi } from 'src/services/api'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 
 const $q = useQuasar()
@@ -133,8 +149,26 @@ const router = useRouter()
 const crmStore = useCrmStore()
 
 const activeColumn = ref('Новый заказ')
+const executorFilter = ref(null)
+const executorOptions = ref([])
 
-// Установить первую колонку при загрузке
+const filteredTotal = computed(() => {
+  if (!executorFilter.value) return crmStore.totalCards
+  return crmStore.cards.filter(c => matchExecutor(c)).length
+})
+
+function matchExecutor(card) {
+  if (!executorFilter.value) return true
+  const name = executorFilter.value
+  return card.designer_name === name || card.draftsman_name === name ||
+    card.senior_manager_name === name || card.manager_name === name ||
+    card.sdp_name === name || card.gap_name === name
+}
+
+function applyFilter() {
+  // Фильтрация через computed в колонках — просто trigger reactivity
+}
+
 watch(() => crmStore.columns, (cols) => {
   if (cols.length > 0 && !cols.find(c => c.name === activeColumn.value)) {
     activeColumn.value = cols[0].name
@@ -145,7 +179,11 @@ function openCard(cardId) {
   router.push(`/crm/${cardId}`)
 }
 
-onMounted(() => {
+onMounted(async () => {
   crmStore.loadCards()
+  try {
+    const { data } = await employeesApi.getList()
+    executorOptions.value = data.filter(e => e.status === 'активный').map(e => ({ label: e.full_name, value: e.full_name }))
+  } catch {}
 })
 </script>

@@ -1,1 +1,0 @@
-import{K as e}from"./render-YMkS2hLS.js";function t(){return e(`_q_`)}export{t};

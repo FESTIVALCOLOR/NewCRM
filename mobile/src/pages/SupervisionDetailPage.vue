@@ -76,13 +76,9 @@
         </q-card-section>
 
         <q-list v-if="timeline.length > 0" dense separator>
-          <q-item v-for="entry in timeline" :key="entry.id">
+          <q-item v-for="entry in timeline" :key="entry.id" clickable v-ripple @click="editTimelineEntry(entry)">
             <q-item-section avatar>
-              <q-icon
-                :name="stageIcon(entry.status)"
-                :color="stageColor(entry.status)"
-                size="20px"
-              />
+              <q-icon :name="stageIcon(entry.status)" :color="stageColor(entry.status)" size="20px" />
             </q-item-section>
             <q-item-section>
               <q-item-label class="text-weight-medium">
@@ -92,8 +88,9 @@
                 <span v-if="entry.plan_date">План: {{ formatDate(entry.plan_date) }}</span>
                 <span v-if="entry.actual_date"> | Факт: {{ formatDate(entry.actual_date) }}</span>
               </q-item-label>
-              <q-item-label caption v-if="entry.supplier" class="text-grey-7">
-                {{ entry.supplier }}
+              <q-item-label caption v-if="entry.supplier" style="color: #888">{{ entry.supplier }}</q-item-label>
+              <q-item-label caption v-if="entry.budget_planned > 0" style="color: #888">
+                Бюджет: {{ formatMoney(entry.budget_actual || 0) }} / {{ formatMoney(entry.budget_planned) }}
               </q-item-label>
             </q-item-section>
             <q-item-section side>
@@ -197,6 +194,27 @@
         </q-card>
       </q-dialog>
 
+      <!-- Диалог редактирования стадии -->
+      <q-dialog v-model="showEditEntry">
+        <q-card style="min-width: 320px">
+          <q-card-section><div class="text-subtitle1 text-weight-bold">{{ editEntry?.stage_name }}</div></q-card-section>
+          <q-card-section class="q-pt-none" v-if="editEntry">
+            <q-input v-model="editEntry.plan_date" label="Плановая дата" outlined dense type="date" class="q-mb-sm" />
+            <q-input v-model="editEntry.actual_date" label="Фактическая дата" outlined dense type="date" class="q-mb-sm" />
+            <q-input v-model.number="editEntry.budget_planned" label="Бюджет план" outlined dense type="number" prefix="₽" class="q-mb-sm" />
+            <q-input v-model.number="editEntry.budget_actual" label="Бюджет факт" outlined dense type="number" prefix="₽" class="q-mb-sm" />
+            <q-input v-model="editEntry.supplier" label="Поставщик" outlined dense class="q-mb-sm" />
+            <q-select v-model="editEntry.status" :options="['Не начато','В работе','Закуплено','Доставлено','Просрочено']" label="Статус" outlined dense class="q-mb-sm" />
+            <q-input v-model="editEntry.notes" label="Заметки" outlined dense type="textarea" autogrow class="q-mb-sm" />
+            <q-input v-model="editEntry.executor" label="Исполнитель" outlined dense class="q-mb-sm" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" v-close-popup no-caps />
+            <q-btn unelevated color="accent" text-color="dark" label="Сохранить" no-caps @click="saveTimelineEntry" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <!-- Действия -->
       <q-card class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
@@ -241,6 +259,8 @@ const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
 const showAddVisit = ref(false)
+const showEditEntry = ref(false)
+const editEntry = ref(null)
 const cameraInput = ref(null)
 const fileInput = ref(null)
 const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '' })
@@ -332,6 +352,32 @@ async function handleResume() {
   try {
     await supervisionApi.resume(card.value.id)
     $q.notify({ type: 'positive', message: 'Карточка возобновлена' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+function editTimelineEntry(entry) {
+  editEntry.value = { ...entry }
+  showEditEntry.value = true
+}
+
+async function saveTimelineEntry() {
+  if (!editEntry.value || !card.value) return
+  try {
+    await supervisionApi.updateTimelineEntry(card.value.id, editEntry.value.stage_code, {
+      plan_date: editEntry.value.plan_date,
+      actual_date: editEntry.value.actual_date,
+      budget_planned: editEntry.value.budget_planned,
+      budget_actual: editEntry.value.budget_actual,
+      supplier: editEntry.value.supplier,
+      status: editEntry.value.status,
+      notes: editEntry.value.notes,
+      executor: editEntry.value.executor
+    })
+    $q.notify({ type: 'positive', message: 'Стадия обновлена' })
+    showEditEntry.value = false
     await reloadData()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })

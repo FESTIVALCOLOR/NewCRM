@@ -1,0 +1,1 @@
+import{T as e}from"./dom-C3Zb804p.js";import{i as t,n,r}from"./QTabs-BezUBJqc.js";var i=e({name:`QTab`,props:r,emits:n,setup(e,{slots:n,emit:r}){let{renderTab:i}=t(e,n,r);return()=>i(`div`)}});export{i as t};
