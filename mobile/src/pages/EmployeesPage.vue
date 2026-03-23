@@ -173,8 +173,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { employeesApi } from 'src/services/api'
+import { useReferencesStore } from 'src/stores/references'
 
 const $q = useQuasar()
+const refs = useReferencesStore()
 const employees = ref([])
 const loading = ref(false)
 const saving = ref(false)
@@ -185,10 +187,7 @@ const showCreate = ref(false)
 const editMode = ref(false)
 const createForm = ref(null)
 
-const positions = [
-  'Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП',
-  'Менеджер', 'Замерщик', 'Дизайнер', 'Чертёжник', 'ДАН'
-]
+const positions = refs.positions
 
 const form = ref({
   full_name: '', position: '', secondary_position: '', status: 'активный',

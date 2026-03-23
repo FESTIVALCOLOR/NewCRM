@@ -98,8 +98,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import { api } from 'src/boot/axios'
 import { contractsApi, clientsApi } from 'src/services/api'
+import { useReferencesStore } from 'src/stores/references'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -109,6 +109,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const $q = useQuasar()
+const refs = useReferencesStore()
 const show = ref(false)
 const saving = ref(false)
 const formRef = ref(null)
@@ -138,11 +139,11 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm())
 
-const statusOptions = ['Новый заказ', 'В ожидании', 'В работе', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
-const cityOptions = ref(['Москва', 'Санкт-Петербург', 'Казань', 'Нижний Новгород'])
-const agentOptions = ref([])
+const statusOptions = refs.contractStatuses
+const cityOptions = refs.cities
+const agentOptions = refs.agentNames()
 
-watch(() => props.modelValue, async (val) => {
+watch(() => props.modelValue, (val) => {
   show.value = val
   if (val && props.contract) {
     isEdit.value = true
@@ -150,19 +151,6 @@ watch(() => props.modelValue, async (val) => {
   } else if (val) {
     isEdit.value = false
     form.value = emptyForm()
-    // Загружаем справочники для предустановки
-    try {
-      const [agentsRes, citiesRes] = await Promise.allSettled([
-        api.get('/api/v1/statistics/agent-types'),
-        api.get('/api/v1/statistics/cities')
-      ])
-      if (agentsRes.status === 'fulfilled') {
-        agentOptions.value = (agentsRes.value.data || []).filter(a => a !== 'Все')
-      }
-      if (citiesRes.status === 'fulfilled') {
-        cityOptions.value = (citiesRes.value.data || []).filter(c => c !== 'Все')
-      }
-    } catch {}
   }
 })
 

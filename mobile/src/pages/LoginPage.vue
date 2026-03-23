@@ -1,13 +1,11 @@
 <template>
   <q-page class="login-page flex flex-center">
-    <q-card class="login-card shadow-10">
+    <q-card class="login-card">
       <!-- Логотип и заголовок -->
       <q-card-section class="text-center q-pb-none">
-        <q-avatar size="72px" color="accent" text-color="dark" class="q-mb-md">
-          <span class="text-h5 text-weight-bold">FC</span>
-        </q-avatar>
+        <img src="/festival_logo.png" alt="Festival Color" style="height: 72px; width: auto" class="q-mb-md" />
         <div class="text-h5 text-weight-bold q-mb-xs" style="color: #333">FESTIVAL COLOR</div>
-        <div class="text-caption text-grey-7">CRM для интерьерного бюро</div>
+        <div class="text-caption" style="color: #888">CRM для интерьерного бюро</div>
       </q-card-section>
 
       <!-- Форма входа -->

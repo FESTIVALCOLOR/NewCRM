@@ -97,6 +97,12 @@ export default [
         meta: { title: 'Отчёты по сотрудникам', icon: 'assessment' }
       },
       {
+        path: 'admin',
+        name: 'admin',
+        component: () => import('src/pages/AdminPage.vue'),
+        meta: { title: 'Администрирование', icon: 'admin_panel_settings' }
+      },
+      {
         path: 'notifications',
         name: 'notifications',
         component: () => import('src/pages/NotificationsPage.vue'),

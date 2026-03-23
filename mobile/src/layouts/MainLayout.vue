@@ -13,7 +13,8 @@
           class="lt-md"
         />
 
-        <q-toolbar-title class="text-weight-bold">
+        <img src="/logo.png" alt="" class="fc-logo q-mr-sm" />
+        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
           {{ pageTitle }}
         </q-toolbar-title>
 
@@ -114,18 +115,20 @@ import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 import { useNotificationsStore } from 'src/stores/notifications'
+import { useReferencesStore } from 'src/stores/references'
 
 const $q = useQuasar()
 const route = useRoute()
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
+const referencesStore = useReferencesStore()
 
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
 
 onMounted(() => {
   notificationsStore.load()
-  // Обновлять уведомления каждые 60 секунд
+  referencesStore.loadAll()
   setInterval(() => notificationsStore.load(), 60000)
 })
 
@@ -147,6 +150,7 @@ const menuItems = [
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты по сотрудникам' },
   { to: '/files', icon: 'folder', label: 'Файлы' },
+  { to: '/admin', icon: 'admin_panel_settings', label: 'Администрирование' },
   { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
   { to: '/profile', icon: 'person', label: 'Профиль' }
 ]

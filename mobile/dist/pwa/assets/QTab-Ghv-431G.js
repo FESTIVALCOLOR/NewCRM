@@ -1,0 +1,1 @@
+import{S as e}from"./render-YMkS2hLS.js";import{i as t,n,r}from"./QTabs-Ti9WFxfH.js";var i=e({name:`QTab`,props:r,emits:n,setup(e,{slots:n,emit:r}){let{renderTab:i}=t(e,n,r);return()=>i(`div`)}});export{i as t};

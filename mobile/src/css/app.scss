@@ -1,198 +1,211 @@
-// Основные стили Interior Studio CRM PWA
-// Соответствие десктопной версии
+// Interior Studio CRM — мобильные стили
+// ТОЧНОЕ соответствие десктопной версии
 
-// Safe areas для iPhone (notch, Dynamic Island)
+// Safe areas (iPhone notch / Dynamic Island)
 body {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  margin: 0;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
 
-// Брендовые цвета (десктоп)
+// ===== ЦВЕТА ДЕСКТОПА (ТОЧНЫЕ) =====
 :root {
-  --is-accent: #ffd93c;      // Жёлтый accent
-  --is-bg: #FFFFFF;           // Белый фон
-  --is-bg-secondary: #F8F9FA; // Серый фон
-  --is-surface: #FFFFFF;
-  --is-text: #333333;
-  --is-text-secondary: #808080;
-  --is-border: #d9d9d9;
-  --is-border-light: #E0E0E0;
-  --is-success: #27AE60;
-  --is-warning: #F39C12;
-  --is-error: #E74C3C;
-  --is-agent-fallback: #95A5A6;
+  --fc-white: #FFFFFF;
+  --fc-bg: #FFFFFF;
+  --fc-bg-info: #F8F9FA;
+  --fc-bg-alt: #F5F5F5;
+  --fc-bg-hover: #FAFAFA;
+  --fc-accent: #ffd93c;
+  --fc-accent-hover: #f0c929;
+  --fc-accent-border: #e6c235;
+  --fc-border: #d9d9d9;
+  --fc-border-light: #E0E0E0;
+  --fc-border-card: #CCCCCC;
+  --fc-text: #333333;
+  --fc-text-secondary: #666666;
+  --fc-text-light: #888888;
+  --fc-text-muted: #999999;
+  --fc-green: #27AE60;
+  --fc-red: #E74C3C;
+  --fc-orange: #F39C12;
+  --fc-blue: #3498DB;
+  --fc-purple: #8E44AD;
+  --fc-teal: #1ABC9C;
+  --fc-tab-inactive: #E8E8E8;
+  --fc-tab-hover: #F0F0F0;
 }
 
-// Quasar overrides
-.q-header {
-  .q-toolbar {
-    background: #FFFFFF !important;
-    color: #333333 !important;
-    border-bottom: 1px solid #E0E0E0;
-  }
+// ===== HEADER (белый, как десктоп title bar) =====
+.q-header .q-toolbar {
+  background: var(--fc-white) !important;
+  color: var(--fc-text) !important;
+  border-bottom: 1px solid var(--fc-border-light);
+  min-height: 48px;
 }
 
-.q-footer {
-  border-top: 1px solid #E0E0E0 !important;
-}
-
+// ===== PAGES =====
 .q-page {
-  background-color: #F8F9FA;
+  background-color: var(--fc-white);
 }
 
-// Tab стиль как в десктопе
-.q-tab {
-  text-transform: none !important;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: #808080;
-
-  &--active {
-    color: #333333 !important;
-    font-weight: bold;
-  }
-}
-
-.q-tabs__content {
-  .q-tab__indicator {
-    background: #ffd93c !important;
-    height: 2px;
-  }
-}
-
-// Карточки
+// ===== CARDS (CRM карточки — border-radius: 8px, border: 1px) =====
 .is-card {
-  border-radius: 10px;
-  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  border: 1px solid var(--fc-border-light);
   box-shadow: none;
-  background: #FFFFFF;
+  background: var(--fc-white);
 }
 
-// CRM карточка проекта
+// CRM Kanban карточка
 .crm-card {
-  border: 1px solid #d9d9d9;
+  border: 2px solid var(--fc-border-card);
   border-radius: 8px;
-  background: #FFFFFF;
-  transition: box-shadow 0.2s;
+  background: var(--fc-white);
+  padding: 12px;
 
   &:active {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    border-color: #909090;
+    background: var(--fc-bg-alt);
   }
 }
 
-// Badge агента (цветной)
+// ===== TABS (как десктоп — серый фон, жёлтый border-bottom) =====
+.q-tab {
+  text-transform: none !important;
+  font-weight: bold;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--fc-text-secondary);
+}
+
+.q-tab--active {
+  color: var(--fc-text) !important;
+  background: var(--fc-white) !important;
+}
+
+.q-tabs__content .q-tab__indicator {
+  background: var(--fc-accent) !important;
+  height: 2px;
+}
+
+// ===== BUTTONS =====
+// Primary (жёлтый) — ТОЛЬКО для "Добавить", "Сохранить"
+.q-btn--unelevated.bg-accent,
+.btn-primary {
+  background: var(--fc-accent) !important;
+  color: var(--fc-text) !important;
+  border: 1px solid var(--fc-accent-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+
+  &:hover, &:active {
+    background: var(--fc-accent-hover) !important;
+  }
+}
+
+// Default button
+.q-btn--flat {
+  font-size: 12px;
+}
+
+// ===== DIALOGS (border-radius: 10px) =====
+.q-dialog .q-card {
+  border-radius: 10px;
+}
+
+// ===== DRAWER =====
+.q-drawer {
+  border-right: 1px solid var(--fc-border-light) !important;
+  background: var(--fc-white) !important;
+
+  .q-item {
+    border-radius: 4px;
+    margin: 1px 4px;
+    font-size: 13px;
+  }
+
+  .q-item--active {
+    color: var(--fc-text);
+    font-weight: bold;
+    background: var(--fc-bg-alt);
+    border-left: 3px solid var(--fc-accent);
+  }
+}
+
+// ===== FOOTER (bottom tabs) =====
+.q-footer {
+  border-top: 1px solid var(--fc-border-light) !important;
+  background: var(--fc-white) !important;
+
+  .q-tab--active {
+    color: var(--fc-text) !important;
+  }
+  .q-tab__indicator {
+    background: var(--fc-accent) !important;
+  }
+}
+
+// ===== BADGE агента =====
 .agent-badge {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
   color: white;
 }
 
-// Deadline badge
-.deadline-badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
-
-  &--ok { background: #27AE60; color: white; }
-  &--warning { background: #F39C12; color: white; }
-  &--overdue { background: #E74C3C; color: white; }
-}
-
-// Типография
-.is-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333333;
-}
-
-.is-subtitle {
-  font-size: 11px;
-  color: #808080;
-}
-
-// Drawer
-.q-drawer {
-  border-right: 1px solid #E0E0E0 !important;
-
-  .q-item {
-    border-radius: 8px;
-    margin: 2px 8px;
-
-    &--active {
-      border-bottom: 2px solid #ffd93c;
-      font-weight: bold;
-    }
-  }
-}
-
-// Кнопки как в десктопе
-.btn-primary {
-  background: #ffd93c !important;
-  color: #333333 !important;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.btn-success {
-  background: #27AE60 !important;
-  color: white !important;
-}
-
-.btn-danger {
-  background: #E74C3C !important;
-  color: white !important;
-}
-
-// Login page
+// ===== LOGIN PAGE =====
 .login-page {
   min-height: 100vh;
-  background: #FFFFFF;
+  background: var(--fc-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .login-card {
   border-radius: 10px;
-  border: 1px solid #E0E0E0;
+  border: 1px solid var(--fc-border-light);
   max-width: 400px;
   width: 100%;
   padding: 32px 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
 
-// Pull-to-refresh
-.q-pull-to-refresh {
-  .q-pull-to-refresh__puller {
-    color: #ffd93c;
-  }
+// ===== KPI карточка (дашборд/отчёты) =====
+.kpi-card {
+  border-radius: 8px;
+  background: var(--fc-white);
+  padding: 12px;
+  text-align: center;
 }
 
-// Отключить tap highlight
-* {
-  -webkit-tap-highlight-color: transparent;
+// ===== PULL TO REFRESH =====
+.q-pull-to-refresh .q-pull-to-refresh__puller {
+  color: var(--fc-accent);
 }
 
-html {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
+// ===== FORM INPUTS =====
+.q-field--outlined .q-field__control {
+  border-radius: 4px;
 }
 
-.no-select {
-  -webkit-user-select: none;
-  user-select: none;
-}
+// ===== TYPOGRAPHY =====
+.text-fc-primary { color: var(--fc-text); }
+.text-fc-secondary { color: var(--fc-text-secondary); }
+.text-fc-light { color: var(--fc-text-light); }
 
-// Bottom tabs
-.q-footer .q-tabs {
-  .q-tab--active {
-    color: #333333 !important;
-  }
-  .q-tab__indicator {
-    background: #ffd93c !important;
-  }
+// ===== GLOBAL =====
+* { -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+
+// Logo
+.fc-logo {
+  height: 24px;
+  width: auto;
 }
