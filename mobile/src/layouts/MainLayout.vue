@@ -51,7 +51,7 @@
       </div>
       <q-separator />
       <q-list padding>
-        <q-item v-for="item in menuItems" :key="item.to" :to="item.to" clickable v-ripple
+        <q-item v-for="item in filteredMenuItems" :key="item.to" :to="item.to" clickable v-ripple
           active-class="drawer-active">
           <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
           <q-item-section style="font-size: 13px">{{ item.label }}</q-item-section>
@@ -74,7 +74,7 @@
     <q-footer v-if="$q.screen.lt.md" class="bg-white" style="border-top: 1px solid #E0E0E0">
       <div class="row justify-around items-center" style="height: 48px">
         <q-btn
-          v-for="tab in bottomTabs"
+          v-for="tab in filteredBottomTabs"
           :key="tab.to"
           flat
           dense
@@ -98,12 +98,14 @@ import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 import { useNotificationsStore } from 'src/stores/notifications'
 import { useReferencesStore } from 'src/stores/references'
+import { usePermissionsStore } from 'src/stores/permissions'
 
 const $q = useQuasar()
 const route = useRoute()
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
 const referencesStore = useReferencesStore()
+const permsStore = usePermissionsStore()
 
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
@@ -111,7 +113,23 @@ const unreadCount = computed(() => notificationsStore.unreadCount)
 onMounted(() => {
   notificationsStore.load()
   referencesStore.loadAll()
+  permsStore.load()
   setInterval(() => notificationsStore.load(), 60000)
+})
+
+// Фильтр меню по правам
+const filteredMenuItems = computed(() => {
+  if (permsStore.isSuperuser) return menuItems
+  const visible = permsStore.visiblePages
+  if (visible === 'all') return menuItems
+  return menuItems.filter(item => visible.includes(item.to))
+})
+
+const filteredBottomTabs = computed(() => {
+  if (permsStore.isSuperuser) return bottomTabs
+  const visible = permsStore.visiblePages
+  if (visible === 'all') return bottomTabs
+  return bottomTabs.filter(item => visible.includes(item.to))
 })
 
 // Порядок как в десктопе: Дашборд, Клиенты, Договора, СРМ, СРМ надзора, Отчёты, Сотрудники, Зарплаты, Отчёты по сотр.

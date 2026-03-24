@@ -181,19 +181,11 @@
             <q-card-section v-else class="text-center" style="color: #999">Нет файлов</q-card-section>
           </q-card>
 
-          <!-- Загрузка файлов -->
-          <div class="row q-col-gutter-sm">
-            <div class="col-6">
-              <q-btn outline color="grey-7" icon="upload_file" label="ТЗ" no-caps class="full-width" @click="uploadFor('tech_task')" />
-            </div>
-            <div class="col-6">
-              <q-btn outline color="grey-7" icon="straighten" label="Замер" no-caps class="full-width" @click="uploadFor('measurement')" />
-            </div>
-            <div class="col-6">
-              <q-btn outline color="grey-7" icon="photo_camera" label="Фото" no-caps class="full-width" @click="uploadFor('photo_documentation')" />
-            </div>
-            <div class="col-6">
-              <q-btn outline color="grey-7" icon="folder" label="Документ" no-caps class="full-width" @click="uploadFor('documents')" />
+          <!-- Загрузка файлов (все типы как в десктопе) -->
+          <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Загрузить файл</div>
+          <div class="row q-col-gutter-xs">
+            <div class="col-6" v-for="btn in fileUploadButtons" :key="btn.stage">
+              <q-btn outline color="grey-7" :icon="btn.icon" :label="btn.label" no-caps class="full-width q-mb-xs" dense style="font-size: 10px; border-radius: 4px" @click="uploadFor(btn.stage)" />
             </div>
           </div>
           <input ref="fileInput" type="file" style="display: none" @change="handleFileUpload" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg" />
@@ -244,6 +236,19 @@ const financeCards = computed(() => {
     { label: 'Третий платёж', value: fmtMoney(c.third_payment), color: '#F39C12' }
   ]
 })
+
+const fileUploadButtons = [
+  { stage: 'tech_task', label: 'Тех. задание', icon: 'description' },
+  { stage: 'measurement', label: 'Замер', icon: 'straighten' },
+  { stage: 'stage1', label: 'Планировка', icon: 'architecture' },
+  { stage: 'stage2_concept', label: 'Концепция', icon: 'palette' },
+  { stage: 'stage3', label: 'Чертежи', icon: 'draw' },
+  { stage: 'documents', label: 'Договор/Допсогл.', icon: 'gavel' },
+  { stage: 'questionnaire', label: 'Опрос', icon: 'quiz' },
+  { stage: 'references', label: 'Референсы', icon: 'collections' },
+  { stage: 'photo_documentation', label: 'Фотофиксация', icon: 'photo_camera' },
+  { stage: 'supervision', label: 'Акты', icon: 'verified' }
+]
 
 const STAGE_LABELS = {
   stage1: 'Планировочное решение', stage2_concept: 'Концепция',
