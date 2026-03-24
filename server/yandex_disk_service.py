@@ -151,7 +151,7 @@ class YandexDiskService:
 
     def create_folder(self, yandex_path: str) -> dict:
         """
-        Создать папку на Яндекс.Диске
+        Создать папку на Яндекс.Диске (рекурсивно создаёт промежуточные)
 
         Args:
             yandex_path: Путь к папке
@@ -165,10 +165,45 @@ class YandexDiskService:
             params={"path": yandex_path}
         )
 
-        if response.status_code not in [200, 201, 409]:  # 409 = папка уже существует
-            raise Exception(f"Ошибка создания папки: {response.json()}")
+        if response.status_code in [200, 201]:
+            # Папка создана
+            try:
+                return self.get_file_info(yandex_path)
+            except Exception:
+                return {"path": yandex_path, "type": "dir"}
+        elif response.status_code == 409:
+            # 409 может быть: папка уже существует ИЛИ родительская не существует
+            try:
+                err_data = response.json()
+                err_code = err_data.get('error', '')
+            except Exception:
+                err_code = ''
 
-        return self.get_file_info(yandex_path)
+            if 'DiskPathDoesntExistsError' in err_code or 'DoesntExist' in err_code:
+                # Родительская папка не существует — создаём рекурсивно
+                parts = yandex_path.replace('disk:/', '').split('/')
+                current = 'disk:'
+                for part in parts:
+                    if not part:
+                        continue
+                    current = current + '/' + part
+                    requests.put(
+                        f"{self.base_url}/resources",
+                        headers=self.headers,
+                        params={"path": current}
+                    )
+                try:
+                    return self.get_file_info(yandex_path)
+                except Exception:
+                    return {"path": yandex_path, "type": "dir"}
+            else:
+                # Папка уже существует
+                try:
+                    return self.get_file_info(yandex_path)
+                except Exception:
+                    return {"path": yandex_path, "type": "dir"}
+        else:
+            raise Exception(f"Ошибка создания папки: {response.json()}")
 
     def delete_file(self, yandex_path: str, permanently: bool = True) -> dict:
         """

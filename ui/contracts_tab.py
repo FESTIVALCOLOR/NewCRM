@@ -164,6 +164,16 @@ class ContractsTab(QWidget):
             add_btn.clicked.connect(lambda checked: self.add_contract())
             header_layout.addWidget(add_btn)
 
+        # Кнопка диагностики папок ЯД (только для руководителя/СМ)
+        if self.employee.get('role') in ('admin', 'director') or self.employee.get('position') in ('Руководитель студии', 'Старший менеджер проектов'):
+            fix_btn = QPushButton("🔧 Починить папки ЯД")
+            fix_btn.setToolTip("Проверить и создать папки на Яндекс.Диске для всех договоров")
+            fix_btn.setStyleSheet("background: #E8F4F8; color: #333; border: 1px solid #85C1E9; border-radius: 4px; padding: 4px 12px; font-size: 11px;")
+            fix_btn.setFixedHeight(28)
+            fix_btn.setCursor(Qt.PointingHandCursor)
+            fix_btn.clicked.connect(self._fix_yd_folders)
+            header_layout.addWidget(fix_btn)
+
         layout.addLayout(header_layout)
 
         # Таблица договоров - используем ProportionalResizeTable для растягивания + ручного изменения
@@ -535,6 +545,31 @@ class ContractsTab(QWidget):
                 sup_tab._data_loaded = False
             if hasattr(sup_tab, 'refresh_current_tab'):
                 sup_tab.refresh_current_tab()
+
+    def _fix_yd_folders(self):
+        """Диагностика и починка папок Яндекс.Диска для договоров"""
+        from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
+        reply = CustomQuestionBox(
+            self, "Диагностика папок",
+            "Проверить и создать папки на Яндекс.Диске для ВСЕХ договоров?\n\n"
+            "Это создаст отсутствующие папки проектов."
+        ).exec_()
+        if reply != 0:  # 0 = Yes
+            return
+
+        try:
+            result = self.api_client.post("/contracts/fix-all-folders")
+            if result:
+                msg = result.get('message', 'Готово')
+                errors = result.get('errors', [])
+                text = msg
+                if errors:
+                    text += "\n\nОшибки:\n" + "\n".join(errors[:5])
+                CustomMessageBox(self, "Результат", text, "info").exec_()
+            else:
+                CustomMessageBox(self, "Ошибка", "Не удалось выполнить диагностику", "error").exec_()
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка", str(e), "error").exec_()
 
     @debounce_click
     def add_contract(self):
