@@ -4206,26 +4206,34 @@ class ContractDialog(QDialog):
 
         contract_id = self.contract_data['id']
         try:
+            base_url = self.api_client.base_url
             # 1. Починка папки
-            result = self.api_client.post("/contracts/" + str(contract_id) + "/fix-folder")
-            msg = "Папка: " + (result.get('message', '?') if result else 'Ошибка')
+            resp1 = self.api_client._request("POST", base_url + "/api/v1/contracts/" + str(contract_id) + "/fix-folder")
+            result = resp1.json() if resp1.status_code == 200 else None
+            msg = "Папка: " + (result.get('message', '?') if result else 'Ошибка ' + str(resp1.status_code))
 
             # 2. Сканирование файлов в папке
-            scan_result = self.api_client.post("/files/scan/" + str(contract_id))
-            if scan_result:
-                new_files = scan_result.get('new_files_added', 0)
-                msg += "\nФайлов найдено: " + str(scan_result.get('total_on_disk', 0))
-                msg += "\nНовых подгружено: " + str(new_files)
-            else:
-                msg += "\nСканирование файлов: не удалось"
+            try:
+                resp2 = self.api_client._request("POST", base_url + "/api/v1/files/scan/" + str(contract_id))
+                scan_result = resp2.json() if resp2.status_code == 200 else None
+                if scan_result:
+                    msg += "\nФайлов на диске: " + str(scan_result.get('total_on_disk', 0))
+                    msg += "\nНовых подгружено: " + str(scan_result.get('new_files_added', 0))
+                else:
+                    msg += "\nСканирование: не удалось"
+            except Exception:
+                msg += "\nСканирование: ошибка"
 
             CustomMessageBox(self, "Диагностика", msg, "info").exec_()
 
             # 3. Обновляем данные карточки
-            fresh = self.api_client.get("/contracts/" + str(contract_id))
-            if fresh:
-                self.contract_data = fresh
-                self.fill_data()
+            try:
+                fresh = self.api_client.get_contract(contract_id)
+                if fresh:
+                    self.contract_data = fresh
+                    self.fill_data()
+            except Exception:
+                pass
 
         except Exception as e:
             CustomMessageBox(self, "Ошибка", str(e), "error").exec_()
