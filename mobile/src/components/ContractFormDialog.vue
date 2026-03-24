@@ -1,10 +1,12 @@
 <template>
   <q-dialog v-model="show" persistent maximized transition-show="slide-up" transition-hide="slide-down">
     <q-card>
-      <q-toolbar class="bg-primary text-white">
+      <q-toolbar style="background: #ffd93c; color: #333">
         <q-btn flat round dense icon="close" @click="close" />
-        <q-toolbar-title>{{ isEdit ? 'Редактировать договор' : 'Новый договор' }}</q-toolbar-title>
-        <q-btn flat label="Сохранить" no-caps @click="save" :loading="saving" />
+        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+          {{ isEdit ? 'Редактировать договор' : 'Новый договор' }}
+        </q-toolbar-title>
+        <q-btn label="Сохранить" no-caps @click="save" :loading="saving" outline style="border: 1px solid #333; border-radius: 8px; color: #333" />
       </q-toolbar>
 
       <q-card-section class="q-pa-md" style="max-height: calc(100vh - 50px); overflow-y: auto">

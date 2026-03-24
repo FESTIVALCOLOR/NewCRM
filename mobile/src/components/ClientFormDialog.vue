@@ -1,10 +1,20 @@
 <template>
   <q-dialog v-model="show" persistent maximized transition-show="slide-up" transition-hide="slide-down">
     <q-card>
-      <q-toolbar class="bg-primary text-white">
+      <!-- Жёлтый заголовок, чёрный текст -->
+      <q-toolbar style="background: #ffd93c; color: #333">
         <q-btn flat round dense icon="close" @click="close" />
-        <q-toolbar-title>{{ isEdit ? 'Редактировать клиента' : 'Новый клиент' }}</q-toolbar-title>
-        <q-btn flat label="Сохранить" no-caps @click="save" :loading="saving" />
+        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+          {{ isEdit ? 'Редактировать клиента' : 'Новый клиент' }}
+        </q-toolbar-title>
+        <q-btn
+          label="Сохранить"
+          no-caps
+          @click="save"
+          :loading="saving"
+          outline
+          style="border: 1px solid #333; border-radius: 8px; color: #333"
+        />
       </q-toolbar>
 
       <q-card-section class="q-pa-md" style="max-height: calc(100vh - 50px); overflow-y: auto">
@@ -37,8 +47,8 @@
             :rules="[val => !!val || 'Обязательное поле']"
           />
 
-          <!-- Email -->
-          <q-input v-model="form.email" label="Email" outlined dense type="email" />
+          <!-- Email (обязательный) -->
+          <q-input v-model="form.email" label="Email *" outlined dense type="email" :rules="[val => !!val || 'Введите email']" />
 
           <!-- Адрес регистрации -->
           <q-input v-model="form.registration_address" label="Адрес регистрации" outlined dense />
@@ -78,6 +88,18 @@
             <q-input v-model="form.passport_issued_by" label="Кем выдан" outlined dense />
             <q-input v-model="form.passport_issued_date" label="Дата выдачи" outlined dense type="date" />
           </template>
+
+          <!-- Кнопка удаления (только при редактировании) -->
+          <q-btn
+            v-if="isEdit"
+            label="Удалить клиента"
+            icon="delete"
+            color="negative"
+            flat
+            no-caps
+            class="full-width q-mt-lg"
+            @click="deleteClient"
+          />
         </q-form>
       </q-card-section>
     </q-card>
@@ -137,6 +159,24 @@ watch(show, (val) => emit('update:modelValue', val))
 
 function close() {
   show.value = false
+}
+
+async function deleteClient() {
+  $q.dialog({
+    title: 'Удалить клиента?',
+    message: form.value.full_name,
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      await clientsApi.delete(props.client.id)
+      $q.notify({ type: 'positive', message: 'Клиент удалён' })
+      emit('saved')
+      close()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка удаления' })
+    }
+  })
 }
 
 async function save() {

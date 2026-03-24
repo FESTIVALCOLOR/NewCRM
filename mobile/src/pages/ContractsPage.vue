@@ -62,7 +62,7 @@
     </q-pull-to-refresh>
     <!-- FAB создания -->
     <q-page-sticky position="bottom-right" :offset="[18, 18]">
-      <q-btn fab icon="add" color="primary" @click="showForm = true" />
+      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 
     <contract-form-dialog v-model="showForm" @saved="loadContracts" />

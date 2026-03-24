@@ -83,9 +83,9 @@
       </div>
     </q-pull-to-refresh>
 
-    <!-- FAB создания клиента -->
-    <q-page-sticky position="bottom-right" :offset="[18, 18]">
-      <q-btn fab icon="person_add" color="primary" @click="showForm = true" />
+    <!-- Круглая жёлтая кнопка добавления (стандарт) -->
+    <q-page-sticky position="bottom-right" :offset="[18, 70]">
+      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 
     <!-- Форма создания/редактирования -->

@@ -60,7 +60,7 @@
     </q-pull-to-refresh>
 
     <q-page-sticky position="bottom-right" :offset="[18, 18]">
-      <q-btn fab icon="person_add" color="accent" text-color="dark" @click="showCreate = true" />
+      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreate = true" />
     </q-page-sticky>
 
     <!-- Диалог просмотра/редактирования -->
@@ -135,10 +135,10 @@
     <!-- Диалог создания -->
     <q-dialog v-model="showCreate" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card>
-        <q-toolbar class="bg-white text-dark" style="border-bottom: 1px solid #E0E0E0">
+        <q-toolbar style="background: #ffd93c; color: #333">
           <q-btn flat round dense icon="close" @click="showCreate = false" />
-          <q-toolbar-title>Новый сотрудник</q-toolbar-title>
-          <q-btn flat label="Сохранить" no-caps @click="createEmployee" :loading="saving" color="positive" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Новый сотрудник</q-toolbar-title>
+          <q-btn label="Сохранить" no-caps @click="createEmployee" :loading="saving" outline style="border: 1px solid #333; border-radius: 8px; color: #333" />
         </q-toolbar>
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
           <q-form ref="createForm" class="q-gutter-md">
