@@ -4751,8 +4751,8 @@ class MeasurementDialog(QDialog):
 
             # Кнопка удаления строки из списка
             del_btn = QPushButton('✕')
-            del_btn.setFixedSize(22, 22)
-            del_btn.setStyleSheet('background: transparent; color: #E74C3C; border: none; font-size: 14px; font-weight: bold;')
+            del_btn.setFixedSize(24, 24)
+            del_btn.setStyleSheet('background: transparent; color: #E74C3C; border: none; font-size: 12px; font-weight: bold; text-align: center; padding: 0px;')
             del_btn.setCursor(Qt.PointingHandCursor)
             del_btn.setToolTip('Убрать из загрузки')
             row_idx = i
