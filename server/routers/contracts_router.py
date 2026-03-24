@@ -263,43 +263,65 @@ async def fix_all_contract_folders(
     current_user: Employee = Depends(require_permission("contracts.update")),
     db: Session = Depends(get_db)
 ):
-    """Массовая починка папок ЯД для всех договоров без yandex_folder_path."""
+    """Массовая починка папок ЯД: создаёт папки которых нет на диске,
+    генерирует путь для договоров без yandex_folder_path."""
     import re
-    contracts = db.query(Contract).filter(
-        (Contract.yandex_folder_path == None) | (Contract.yandex_folder_path == '')
-    ).all()
-
-    if not contracts:
-        return {"status": "success", "message": "Все договоры имеют папки", "fixed": 0}
+    # Берём ВСЕ активные договоры (не только без пути)
+    contracts = db.query(Contract).all()
 
     from yandex_disk_service import YandexDiskService
+    import requests as req
+    import os
     yd = YandexDiskService()
+    token = os.environ.get('YANDEX_DISK_TOKEN', '')
     fixed = 0
+    already_ok = 0
     errors = []
 
     for contract in contracts:
         try:
-            agent = contract.agent_type or 'ФЕСТИВАЛЬ'
-            ptype = contract.project_type or 'Индивидуальный'
-            city = contract.city or 'Москва'
-            address = contract.address or 'Без адреса'
-            area = contract.area or 0
-            type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
-            folder_name = f"{city}-{address}-{area}м2"
-            folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
-            folder_path = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
+            # Генерируем путь если нет
+            folder_path = contract.yandex_folder_path
+            if not folder_path:
+                agent = contract.agent_type or 'ФЕСТИВАЛЬ'
+                ptype = contract.project_type or 'Индивидуальный'
+                city = contract.city or 'Москва'
+                address = contract.address or 'Без адреса'
+                area = contract.area or 0
+                type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
+                folder_name = f"{city}-{address}-{area}м2"
+                folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
+                folder_path = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
 
-            yd.create_folder(folder_path)
-            contract.yandex_folder_path = folder_path
-            fixed += 1
+            # Проверяем существование папки на ЯД
+            check = req.get(
+                'https://cloud-api.yandex.net/v1/disk/resources',
+                params={'path': folder_path},
+                headers={'Authorization': f'OAuth {token}'},
+                timeout=10
+            )
+            if check.status_code == 200:
+                # Папка существует
+                if not contract.yandex_folder_path:
+                    contract.yandex_folder_path = folder_path
+                    fixed += 1
+                else:
+                    already_ok += 1
+            else:
+                # Папка НЕ существует — создаём
+                yd.create_folder(folder_path)
+                contract.yandex_folder_path = folder_path
+                fixed += 1
+                logger.info(f"Папка создана для договора {contract.id}: {folder_path}")
         except Exception as e:
-            errors.append(f"Договор {contract.id}: {e}")
+            errors.append(f"ID {contract.id}: {str(e)[:100]}")
 
     db.commit()
     return {
         "status": "success",
-        "message": f"Починено {fixed} из {len(contracts)} договоров",
+        "message": f"Починено {fixed}, уже ОК {already_ok}, ошибки {len(errors)} из {len(contracts)} договоров",
         "fixed": fixed,
+        "already_ok": already_ok,
         "errors": errors[:10]
     }
 
