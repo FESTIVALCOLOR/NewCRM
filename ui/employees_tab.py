@@ -2610,8 +2610,9 @@ class EmployeeDialog(QDialog):
 
         self.setMinimumWidth(650)
         self.adjustSize()
-        # Добавляем запас высоты для Telegram блока
-        self.resize(self.width(), self.height() + 20)
+        # Запас высоты только если есть Telegram блок (руководитель)
+        if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
+            self.resize(self.width(), self.height() + 20)
 
     def format_phone(self, text):
         """Форматирование телефона +7 (XXX) XXX-XX-XX"""
