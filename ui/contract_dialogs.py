@@ -1380,24 +1380,13 @@ class ContractDialog(QDialog):
                 }
             """)
 
-            # Кнопка диагностики ЯД (только при редактировании, для руководителя/СМ)
+            # Кнопка диагностики ЯД (как в CRM — голубая квадратная с иконкой tool)
             if self.contract_data and self._is_superuser():
-                fix_btn = QPushButton("🔧 Починить")
-                fix_btn.setToolTip("Проверить/создать папку на ЯД и загрузить найденные файлы")
-                fix_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #E8F4F8;
-                        color: #333333;
-                        border: 1px solid #85C1E9;
-                        border-radius: 4px;
-                        padding: 0px 12px;
-                        font-size: 11px;
-                        max-height: 36px;
-                        min-height: 36px;
-                    }
-                    QPushButton:hover { background-color: #D4EDFB; }
-                """)
-                fix_btn.setCursor(Qt.PointingHandCursor)
+                fix_btn = IconLoader.create_action_button(
+                    'tool', 'Диагностика и починка папки ЯД + загрузка файлов',
+                    bg_color='#5DADE2', hover_color='#3498DB',
+                    icon_color='#FFFFFF', icon_size=14, button_size=36
+                )
                 fix_btn.clicked.connect(self._fix_contract_folder)
                 buttons_layout.addWidget(fix_btn)
 
