@@ -97,12 +97,21 @@
         <q-tab-panel name="finance" class="q-pa-none">
           <q-card class="is-card q-mb-md">
             <q-card-section>
-              <div class="row q-col-gutter-sm">
+              <div class="row q-col-gutter-sm q-mb-md">
                 <div class="col-6" v-for="f in financeCards" :key="f.label">
                   <div :style="{ borderLeft: `3px solid ${f.color}`, paddingLeft: '8px' }">
                     <div class="text-caption" style="color: #888">{{ f.label }}</div>
-                    <div class="text-weight-bold">{{ f.value }}</div>
+                    <div class="text-weight-bold" style="color: #333">{{ f.value }}</div>
                   </div>
+                </div>
+              </div>
+              <!-- Кнопки: редактировать финансы и провести оплату -->
+              <div class="row q-col-gutter-sm">
+                <div class="col-6">
+                  <q-btn outline color="grey-7" icon="edit" label="Редактировать" no-caps class="full-width" dense style="border-radius: 4px; font-size: 11px" @click="showEdit = true" />
+                </div>
+                <div class="col-6">
+                  <q-btn unelevated icon="payments" label="Провести оплату" no-caps class="full-width" dense style="background: #27AE60; color: white; border-radius: 4px; font-size: 11px" @click="conductPayment" />
                 </div>
               </div>
             </q-card-section>
@@ -289,6 +298,28 @@ async function handleFileUpload(event) {
     $q.loading.hide()
     event.target.value = ''
   }
+}
+
+function conductPayment() {
+  $q.dialog({
+    title: 'Провести оплату',
+    message: 'Отметить аванс как оплаченный?',
+    cancel: true
+  }).onOk(async () => {
+    // Ищем неоплаченный платёж по этому договору и отмечаем
+    const unpaid = payments.value.find(p => !p.is_paid && p.id)
+    if (unpaid) {
+      try {
+        await paymentsApi.markPaid(unpaid.id)
+        unpaid.is_paid = true
+        $q.notify({ type: 'positive', message: 'Оплата проведена' })
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+      }
+    } else {
+      $q.notify({ type: 'info', message: 'Нет неоплаченных платежей' })
+    }
+  })
 }
 
 async function deleteContract() {

@@ -88,6 +88,33 @@
         </q-btn>
       </div>
     </q-footer>
+    <!-- Диалог настроек уведомлений -->
+    <q-dialog v-model="showNotifDialog">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #ffd93c; color: #333">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Настройки уведомлений</q-toolbar-title>
+          <q-btn flat round dense icon="close" @click="showNotifDialog = false" />
+        </q-toolbar>
+        <q-card-section v-if="notifSettings" style="max-height: 70vh; overflow-y: auto">
+          <q-list dense>
+            <q-item tag="label"><q-item-section>Telegram</q-item-section><q-item-section side><q-toggle v-model="notifSettings.telegram_enabled" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Email</q-item-section><q-item-section side><q-toggle v-model="notifSettings.email_enabled" color="accent" /></q-item-section></q-item>
+            <q-separator class="q-my-xs" />
+            <q-item tag="label"><q-item-section>Смена стадии CRM</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_crm_stage" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Назначение задач</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_assigned" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Дедлайны</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_deadline" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Оплаты</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_payment" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Авт. надзор</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_supervision" color="accent" /></q-item-section></q-item>
+            <q-separator class="q-my-xs" />
+            <q-item tag="label"><q-item-section>Индивидуальные</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_individual" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Шаблонные</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_template" color="accent" /></q-item-section></q-item>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="center">
+          <q-btn label="Сохранить" no-caps unelevated style="background: #ffd93c; color: #333; border-radius: 8px; width: 200px" @click="saveNotifSettings" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-layout>
 </template>
 
@@ -192,18 +219,33 @@ function openManual() {
   }
 }
 
-function openNotifSettings() {
+const showNotifDialog = ref(false)
+const notifSettings = ref(null)
+
+async function openNotifSettings() {
   const empId = authStore.user?.id
-  if (empId) {
-    // Открываем страницу настроек уведомлений
-    import('src/boot/axios').then(({ api }) => {
-      api.get(`/api/v1/notifications/settings/${empId}`).then(({ data }) => {
-        // TODO: открыть диалог настроек уведомлений
-      })
-    })
+  if (!empId) return
+  try {
+    const { api } = await import('src/boot/axios')
+    const { data } = await api.get(`/api/v1/notifications/settings/${empId}`)
+    notifSettings.value = data
+    showNotifDialog.value = true
+  } catch {
+    import('quasar').then(({ Notify }) => Notify.create({ type: 'negative', message: 'Не удалось загрузить настройки' }))
   }
-  // Пока редирект на админку → вкладка уведомлений
-  window.location.href = '/admin'
+}
+
+async function saveNotifSettings() {
+  const empId = authStore.user?.id
+  if (!empId || !notifSettings.value) return
+  try {
+    const { api } = await import('src/boot/axios')
+    await api.put(`/api/v1/notifications/settings/${empId}`, notifSettings.value)
+    import('quasar').then(({ Notify }) => Notify.create({ type: 'positive', message: 'Настройки сохранены' }))
+    showNotifDialog.value = false
+  } catch (err) {
+    import('quasar').then(({ Notify }) => Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }))
+  }
 }
 
 async function handleLogout() { await authStore.logout() }

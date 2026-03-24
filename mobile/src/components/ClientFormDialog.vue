@@ -76,13 +76,9 @@
           <template v-if="form.client_type === 'Физическое лицо'">
             <div class="text-subtitle2 text-weight-bold q-mt-md">Паспортные данные</div>
 
-            <div class="row q-col-gutter-sm">
-              <div class="col-6">
-                <q-input v-model="form.passport_series" label="Серия" outlined dense />
-              </div>
-              <div class="col-6">
-                <q-input v-model="form.passport_number" label="Номер" outlined dense />
-              </div>
+            <div class="row q-gutter-sm">
+              <q-input v-model="form.passport_series" label="Серия паспорта" outlined dense style="flex: 1; min-width: 120px" />
+              <q-input v-model="form.passport_number" label="Номер паспорта" outlined dense style="flex: 1; min-width: 120px" />
             </div>
 
             <q-input v-model="form.passport_issued_by" label="Кем выдан" outlined dense />
