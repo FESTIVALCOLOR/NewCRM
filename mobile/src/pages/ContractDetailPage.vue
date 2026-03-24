@@ -66,11 +66,11 @@
                 {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
               </q-item-label>
             </q-item-section>
-            <q-item-section side>
-              <div class="column q-gutter-xs">
-                <q-btn v-if="!contract.advance_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('advance')" style="border-radius: 4px" />
-                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px" @click="uploadReceipt('advance')" />
-                <q-btn v-if="contract.advance_receipt_link" flat dense size="sm" icon="visibility" label="Просмотр" color="grey-7" no-caps @click="openLink(contract.advance_receipt_link)" />
+            <q-item-section side style="min-width: 110px">
+              <div class="column q-gutter-xs items-stretch">
+                <q-btn v-if="!contract.advance_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('advance')" style="border-radius: 4px; min-width: 105px" />
+                <q-badge v-else color="positive" label="Оплачено" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center" />
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px" @click="uploadReceipt('advance')" />
               </div>
             </q-item-section>
           </q-item>
@@ -83,10 +83,11 @@
                 {{ contract.additional_payment_paid_date ? `Оплачено ${fmtDate(contract.additional_payment_paid_date)}` : 'Не оплачено' }}
               </q-item-label>
             </q-item-section>
-            <q-item-section side>
-              <div class="column q-gutter-xs">
-                <q-btn v-if="!contract.additional_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('additional')" style="border-radius: 4px" />
-                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px" @click="uploadReceipt('additional')" />
+            <q-item-section side style="min-width: 110px">
+              <div class="column q-gutter-xs items-stretch">
+                <q-btn v-if="!contract.additional_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('additional')" style="border-radius: 4px; min-width: 105px" />
+                <q-badge v-else color="positive" label="Оплачено" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center" />
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px" @click="uploadReceipt('additional')" />
               </div>
             </q-item-section>
           </q-item>
@@ -99,10 +100,11 @@
                 {{ contract.third_payment_paid_date ? `Оплачено ${fmtDate(contract.third_payment_paid_date)}` : 'Не оплачено' }}
               </q-item-label>
             </q-item-section>
-            <q-item-section side>
-              <div class="column q-gutter-xs">
-                <q-btn v-if="!contract.third_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('third')" style="border-radius: 4px" />
-                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px" @click="uploadReceipt('third')" />
+            <q-item-section side style="min-width: 110px">
+              <div class="column q-gutter-xs items-stretch">
+                <q-btn v-if="!contract.third_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('third')" style="border-radius: 4px; min-width: 105px" />
+                <q-badge v-else color="positive" label="Оплачено" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center" />
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px" @click="uploadReceipt('third')" />
               </div>
             </q-item-section>
           </q-item>
@@ -236,16 +238,24 @@ const fileUploadButtons = [
   { stage: 'tech_task', label: 'ТЗ', icon: 'description' },
   { stage: 'measurement', label: 'Замер', icon: 'straighten' },
   { stage: 'stage1', label: 'Акт ПР', icon: 'verified' },
+  { stage: 'stage1_signed', label: 'Акт ПР подп.', icon: 'verified_user' },
   { stage: 'stage2_concept', label: 'Акт КД', icon: 'verified' },
+  { stage: 'stage2_signed', label: 'Акт КД подп.', icon: 'verified_user' },
+  { stage: 'stage3', label: 'Акт РЧ', icon: 'verified' },
+  { stage: 'stage3_signed', label: 'Акт РЧ подп.', icon: 'verified_user' },
   { stage: 'references', label: 'Референсы', icon: 'collections' },
   { stage: 'photo_documentation', label: 'Фотофикс.', icon: 'photo_camera' },
   { stage: 'supervision', label: 'Доп.согл.', icon: 'handshake' }
 ]
 
 const STAGE_LABELS = {
-  stage1: 'Планировочное решение', stage2_concept: 'Концепция', stage2_3d: '3D визуализация',
-  stage3: 'Чертёжный проект', references: 'Референсы', photo_documentation: 'Фотофиксация',
-  tech_task: 'Тех. задание', documents: 'Договор', measurement: 'Замер', supervision: 'Доп. соглашение'
+  stage1: 'Планировочное решение', stage1_signed: 'Акт ПР (подписанный)',
+  stage2_concept: 'Концепция дизайна', stage2_signed: 'Акт КД (подписанный)',
+  stage2_3d: '3D визуализация',
+  stage3: 'Рабочие чертежи', stage3_signed: 'Акт РЧ (подписанный)',
+  references: 'Референсы', photo_documentation: 'Фотофиксация',
+  tech_task: 'Тех. задание', documents: 'Договор', measurement: 'Замер',
+  supervision: 'Доп. соглашение'
 }
 
 function stageLabel(s) { return STAGE_LABELS[s] || s || '' }

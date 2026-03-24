@@ -1,41 +1,19 @@
 <template>
   <q-page>
-    <!-- Тулбар: индивидуальные/шаблонные + обновить + архив -->
-    <div class="q-pa-sm" style="border-bottom: 1px solid #E0E0E0">
-      <div class="row items-center q-gutter-xs">
-        <!-- Индивидуальные / Шаблонные (как десктоп — серые кнопки, жёлтый border selected) -->
-        <q-btn
-          :outline="crmStore.projectType !== 'Индивидуальный'"
-          :unelevated="crmStore.projectType === 'Индивидуальный'"
-          :style="crmStore.projectType === 'Индивидуальный' ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
-          label="Индивидуальные"
-          dense no-caps size="sm"
-          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 12px"
-          @click="crmStore.setProjectType('Индивидуальный')"
-        />
-        <q-btn
-          :outline="crmStore.projectType !== 'Шаблонный'"
-          :unelevated="crmStore.projectType === 'Шаблонный'"
-          :style="crmStore.projectType === 'Шаблонный' ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
-          label="Шаблонные"
-          dense no-caps size="sm"
-          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 12px"
-          @click="crmStore.setProjectType('Шаблонный')"
-        />
+    <!-- Компактный тулбар: Инд/Шабл + Актив/Архив в одну строку -->
+    <div style="border-bottom: 1px solid #E0E0E0; padding: 6px 8px">
+      <div class="row items-center no-wrap">
+        <!-- Тип проекта — pill toggle -->
+        <div class="toggle-pills">
+          <button :class="{ active: crmStore.projectType === 'Индивидуальный' }" @click="crmStore.setProjectType('Индивидуальный')">Инд.</button>
+          <button :class="{ active: crmStore.projectType === 'Шаблонный' }" @click="crmStore.setProjectType('Шаблонный')">Шабл.</button>
+        </div>
         <q-space />
-        <!-- Активные / Архив — toggle как индивидуальные/шаблонные -->
-        <q-btn
-          :style="!crmStore.showArchive ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
-          label="Активные" dense no-caps size="sm"
-          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 10px"
-          @click="crmStore.showArchive && crmStore.toggleArchive()"
-        />
-        <q-btn
-          :style="crmStore.showArchive ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
-          label="Архив" dense no-caps size="sm"
-          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 10px"
-          @click="!crmStore.showArchive && crmStore.toggleArchive()"
-        />
+        <!-- Актив/Архив — pill toggle -->
+        <div class="toggle-pills">
+          <button :class="{ active: !crmStore.showArchive }" @click="crmStore.showArchive && crmStore.toggleArchive()">Активные</button>
+          <button :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">Архив</button>
+        </div>
       </div>
     </div>
 
@@ -46,10 +24,9 @@
       </q-card>
     </div>
 
-    <!-- Колонки -->
     <template v-if="!crmStore.loading">
 
-      <!-- АРХИВ — просто список без столбцов -->
+      <!-- АРХИВ — список без столбцов -->
       <div v-if="crmStore.showArchive" class="q-pa-sm">
         <div v-if="crmStore.cards.length === 0" class="text-center q-py-xl" style="color: #999">
           <q-icon name="archive" size="40px" class="q-mb-sm" />
@@ -58,33 +35,49 @@
         <crm-card-item v-for="card in crmStore.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
       </div>
 
-      <!-- АКТИВНЫЕ — столбцы-кнопки -->
-      <div v-if="!crmStore.showArchive && $q.screen.lt.md" class="q-pa-xs" style="overflow-x: auto; white-space: nowrap; border: 1px solid #d9d9d9; border-radius: 4px; margin: 4px">
-        <q-btn
-          v-for="col in crmStore.columns"
-          :key="col.name"
-          dense no-caps size="sm"
-          :label="`${col.shortName} (${col.count})`"
-          :style="activeColumn === col.name
-            ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold; color: #333'
-            : 'background: #E8E8E8; color: #666'"
-          style="border: 1px solid #d9d9d9; border-radius: 4px 4px 0 0; font-size: 10px; padding: 4px 8px; margin-right: 2px"
-          @click="activeColumn = col.name"
-        />
-      </div>
-
-      <!-- Контент колонки (в рамке) — только для активных -->
-      <div v-if="!crmStore.showArchive && $q.screen.lt.md" style="border: 1px solid #d9d9d9; border-top: none; border-radius: 0 0 4px 4px; margin: 0 4px; min-height: 200px">
-        <div v-for="col in crmStore.columns" :key="col.name" v-show="activeColumn === col.name" class="q-pa-sm">
-          <div v-if="col.cards.length === 0" class="text-center q-py-xl" style="color: #999">
-            <q-icon name="inbox" size="40px" class="q-mb-sm" />
-            <div class="text-caption">Нет карточек</div>
-          </div>
-          <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
+      <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
+      <template v-if="!crmStore.showArchive && $q.screen.lt.md">
+        <!-- Мини-навигация колонок: горизонтальный скролл -->
+        <div class="column-nav">
+          <button
+            v-for="(col, idx) in crmStore.columns" :key="col.name"
+            :class="{ active: currentSlide === idx }"
+            @click="currentSlide = idx"
+          >
+            {{ col.shortName }}
+            <span class="count">{{ col.count }}</span>
+          </button>
         </div>
-      </div>
 
-      <!-- Планшет — колонки рядом (только для активных) -->
+        <!-- Карусель колонок — свайп влево/вправо -->
+        <q-carousel
+          v-model="currentSlide"
+          swipeable
+          animated
+          transition-prev="slide-right"
+          transition-next="slide-left"
+          style="min-height: calc(100vh - 220px); background: transparent"
+          control-color="grey-7"
+        >
+          <q-carousel-slide v-for="(col, idx) in crmStore.columns" :key="col.name" :name="idx" class="q-pa-none">
+            <div class="column-frame">
+              <div class="column-header">
+                <span class="column-title">{{ col.name }}</span>
+                <q-badge color="grey-7" :label="col.count" />
+              </div>
+              <div class="column-body" v-if="col.cards.length > 0">
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
+              </div>
+              <div v-else class="column-empty">
+                <q-icon name="inbox" size="32px" color="grey-4" />
+                <div>Нет карточек</div>
+              </div>
+            </div>
+          </q-carousel-slide>
+        </q-carousel>
+      </template>
+
+      <!-- Планшет — колонки рядом -->
       <div v-if="$q.screen.gt.sm && !crmStore.showArchive" class="row q-pa-sm q-col-gutter-sm" style="overflow-x: auto">
         <div v-for="col in crmStore.columns" :key="col.name" class="col-3" style="min-width: 280px">
           <q-card class="is-card">
@@ -96,6 +89,7 @@
             </q-card-section>
             <q-card-section class="q-pt-xs">
               <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
+              <div v-if="col.cards.length === 0" class="text-center q-py-md" style="color: #bbb; font-size: 11px">Нет карточек</div>
             </q-card-section>
           </q-card>
         </div>
@@ -114,11 +108,13 @@ import CrmCardItem from 'src/components/CrmCardItem.vue'
 const $q = useQuasar()
 const router = useRouter()
 const crmStore = useCrmStore()
-const activeColumn = ref('Новый заказ')
+const currentSlide = ref(0)
 
+// При смене данных сбрасываем слайд на первый непустой столбец
 watch(() => crmStore.columns, (cols) => {
-  if (cols.length > 0 && !cols.find(c => c.name === activeColumn.value)) {
-    activeColumn.value = cols[0].name
+  if (cols.length > 0) {
+    const firstNonEmpty = cols.findIndex(c => c.count > 0)
+    currentSlide.value = firstNonEmpty >= 0 ? firstNonEmpty : 0
   }
 })
 
@@ -126,3 +122,114 @@ function openCard(cardId) { router.push(`/crm/${cardId}`) }
 
 onMounted(() => { crmStore.loadCards() })
 </script>
+
+<style scoped>
+/* Toggle pill buttons */
+.toggle-pills {
+  display: inline-flex;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.toggle-pills button {
+  border: none;
+  background: #F0F0F0;
+  color: #666;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.toggle-pills button.active {
+  background: white;
+  color: #333;
+  font-weight: bold;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.toggle-pills button + button {
+  border-left: 1px solid #d9d9d9;
+}
+
+/* Column navigation mini-bar */
+.column-nav {
+  display: flex;
+  overflow-x: auto;
+  padding: 6px 8px;
+  gap: 4px;
+  border-bottom: 1px solid #E0E0E0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.column-nav::-webkit-scrollbar { display: none }
+.column-nav button {
+  border: 1px solid #d9d9d9;
+  border-radius: 16px;
+  background: #F5F5F5;
+  color: #888;
+  font-size: 10px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.column-nav button.active {
+  background: #333;
+  color: white;
+  border-color: #333;
+  font-weight: bold;
+}
+.column-nav button .count {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 0 4px;
+  margin-left: 3px;
+  font-size: 9px;
+}
+.column-nav button.active .count {
+  background: rgba(255,255,255,0.3);
+}
+
+/* Column frame inside carousel */
+.column-frame {
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  margin: 8px;
+  background: #FAFAFA;
+  min-height: calc(100vh - 260px);
+  display: flex;
+  flex-direction: column;
+}
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E0E0E0;
+  background: white;
+  border-radius: 8px 8px 0 0;
+}
+.column-title {
+  font-size: 13px;
+  font-weight: bold;
+  color: #333;
+}
+.column-body {
+  padding: 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+.column-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #bbb;
+  font-size: 12px;
+  padding: 40px 0;
+}
+</style>
