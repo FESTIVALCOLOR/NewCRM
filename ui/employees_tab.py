@@ -2550,21 +2550,21 @@ class EmployeeDialog(QDialog):
                 tg_id = self.employee_data.get('telegram_user_id')
                 tg_token_cmd = None
                 try:
-                    resp = self.api_client.get(f"/employees/{self.employee_data['id']}/telegram-info")
+                    emp_id = self.employee_data.get('id')
+                    resp = self.api_client.get("/employees/" + str(emp_id) + "/telegram-info")
                     if resp:
                         tg_id = resp.get('telegram_user_id')
                         tg_token_cmd = resp.get('token_command')
                 except Exception:
                     pass
 
-                status_lbl = QLabel('✅ Telegram подключён' if tg_id else '⚠️ Telegram НЕ подключён')
-                status_lbl.setStyleSheet(f"color: {'#27AE60' if tg_id else '#E74C3C'}; font-size: 12px; font-weight: bold;")
+                status_lbl = QLabel('Telegram подключён' if tg_id else 'Telegram НЕ подключён')
+                tg_color = '#27AE60' if tg_id else '#E74C3C'
+                status_lbl.setStyleSheet("color: " + tg_color + "; font-size: 12px; font-weight: bold;")
                 tg_lay.addWidget(status_lbl)
 
                 if tg_token_cmd and not tg_id:
-                    instr_lbl = QLabel(f'Инструкция (скопируйте и отправьте сотруднику):
-Откройте Telegram → @festival_color_crm_bot → отправьте:
-{tg_token_cmd}')
+                    instr_lbl = QLabel("Инструкция (скопируйте и отправьте сотруднику):\nОткройте Telegram → @festival_color_crm_bot → отправьте:\n" + str(tg_token_cmd))
                     instr_lbl.setStyleSheet('color: #555; font-size: 11px; background: #F5F5F5; padding: 8px; border-radius: 4px;')
                     instr_lbl.setWordWrap(True)
                     instr_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -2580,7 +2580,7 @@ class EmployeeDialog(QDialog):
                     copy_btn.clicked.connect(_copy_tg)
                     tg_lay.addWidget(copy_btn)
                 elif tg_id:
-                    tg_lay.addWidget(QLabel(f'Telegram ID: {tg_id}'))
+                    tg_lay.addWidget(QLabel("Telegram ID: " + str(tg_id)))
 
                 tg_group.setLayout(tg_lay)
                 for w in self.findChildren(QWidget):
@@ -2589,7 +2589,7 @@ class EmployeeDialog(QDialog):
                         lay.addWidget(tg_group)
                         break
             except Exception as e:
-                print(f'[WARN] Telegram блок: {e}')
+                print("[WARN] Telegram блок:", str(e))
         # ==================================================================================
 
         self.setMinimumWidth(650)
