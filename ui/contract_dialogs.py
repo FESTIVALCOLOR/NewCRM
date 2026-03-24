@@ -3058,7 +3058,7 @@ class ContractDialog(QDialog):
             self,
             "Выберите файл договора",
             "",
-            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
+            "Документы и изображения (*.pdf *.jpg *.jpeg *.png *.webp *.heic *.bmp *.tiff *.gif);;PDF (*.pdf);;Изображения (*.png *.jpg *.jpeg *.webp *.heic *.bmp);;Все файлы (*.*)"
         )
 
         if not file_path:
@@ -3203,15 +3203,16 @@ class ContractDialog(QDialog):
         """Загрузка файла тех.задания на Яндекс.Диск"""
         from PyQt5.QtCore import Qt
 
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Выберите файл тех.задания",
+            "Выберите файлы тех.задания",
             "",
-            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
+            "Документы и изображения (*.pdf *.jpg *.jpeg *.png *.webp *.heic *.bmp *.tiff *.gif);;PDF (*.pdf);;Изображения (*.png *.jpg *.jpeg *.webp *.heic *.bmp);;Все файлы (*.*)"
         )
 
-        if not file_path:
+        if not file_paths:
             return
+        file_path = file_paths[0]  # Основной файл — первый, остальные загрузятся в папку
 
         # Проверяем наличие yandex_folder_path
         contract_folder = self.get_contract_yandex_folder()
@@ -3389,14 +3390,14 @@ class ContractDialog(QDialog):
             # Множественный выбор для доп. соглашений
             file_paths, _ = QFileDialog.getOpenFileNames(
                 self, f"Выберите файлы: {display_name}", "",
-                "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
+                "Документы и изображения (*.pdf *.jpg *.jpeg *.png *.webp *.heic *.bmp *.tiff *.gif);;PDF (*.pdf);;Изображения (*.png *.jpg *.jpeg *.webp *.heic *.bmp);;Все файлы (*.*)"
             )
             if not file_paths:
                 return
         else:
             file_path, _ = QFileDialog.getOpenFileName(
                 self, f"Выберите файл: {display_name}", "",
-                "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
+                "Документы и изображения (*.pdf *.jpg *.jpeg *.png *.webp *.heic *.bmp *.tiff *.gif);;PDF (*.pdf);;Изображения (*.png *.jpg *.jpeg *.webp *.heic *.bmp);;Все файлы (*.*)"
             )
             if not file_path:
                 return

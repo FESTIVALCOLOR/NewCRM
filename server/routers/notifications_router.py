@@ -243,10 +243,10 @@ async def send_employee_invite(
     if not employee.email:
         raise HTTPException(status_code=400, detail="Email сотрудника не заполнен")
 
-    # Генерация одноразового токена Telegram (действует 7 дней)
+    # Генерация одноразового токена Telegram (действует 30 дней)
     token = secrets.token_hex(16)
     employee.telegram_link_token = token
-    employee.telegram_link_token_expires = datetime.utcnow() + timedelta(days=7)
+    employee.telegram_link_token_expires = datetime.utcnow() + timedelta(days=30)
 
     # Временный пароль: используем существующий или генерируем новый
     from auth import get_password_hash

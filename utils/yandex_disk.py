@@ -388,8 +388,8 @@ class YandexDiskManager:
                 except Exception:
                     err_code = ''
                 if 'DoesntExist' in err_code or 'not found' in err_code.lower():
-                    print(f"[ERROR] Родительская папка не существует: {folder_path} ({err_code})")
-                    return False
+                    print(f"[YD] Родительская папка не существует, создаём рекурсивно: {folder_path}")
+                    return self.ensure_folder_exists(folder_path)
                 print(f"[YD] Папка уже существует: {folder_path}")
                 return True
             else:
