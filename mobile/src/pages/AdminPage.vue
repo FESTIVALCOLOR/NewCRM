@@ -153,11 +153,44 @@
           </q-card-section>
         </q-card>
 
+        <!-- Токены сотрудников для ручного подключения -->
+        <q-card class="is-card q-mb-md">
+          <q-card-section>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Telegram-токены сотрудников</div>
+            <div class="text-caption q-mb-md" style="color: #888">
+              Если сотрудник не может открыть ссылку — отправьте ему инструкцию вручную
+            </div>
+            <q-select v-model="tgInfoEmployeeId" :options="inviteEmployeeOpts" label="Выберите сотрудника" outlined dense emit-value map-options class="q-mb-sm" @update:model-value="loadTgInfo" />
+            <template v-if="tgInfo">
+              <q-card flat bordered class="q-pa-sm q-mb-sm" style="border-radius: 8px">
+                <div class="row items-center q-mb-xs">
+                  <q-icon :name="tgInfo.telegram_connected ? 'check_circle' : 'radio_button_unchecked'" :color="tgInfo.telegram_connected ? 'positive' : 'warning'" size="20px" class="q-mr-xs" />
+                  <span style="font-size: 12px; color: #333">{{ tgInfo.telegram_connected ? 'Telegram подключён' : 'Не подключён' }}</span>
+                </div>
+                <template v-if="tgInfo.token_command">
+                  <div class="text-caption q-mb-xs" style="color: #888">Инструкция для сотрудника:</div>
+                  <div style="background: #F5F5F5; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; color: #333; word-break: break-all">
+                    Откройте Telegram → найдите бота @festival_color_crm_bot → отправьте:<br>
+                    <strong>{{ tgInfo.token_command }}</strong>
+                  </div>
+                  <div class="row q-gutter-xs q-mt-sm">
+                    <q-btn flat dense size="sm" icon="content_copy" label="Копировать команду" no-caps color="grey-7" @click="copyToClipboard(tgInfo.token_command)" />
+                    <q-btn flat dense size="sm" icon="link" label="Копировать tg://" no-caps color="grey-7" @click="copyToClipboard(tgInfo.tg_link)" />
+                  </div>
+                </template>
+                <div v-else class="text-caption" style="color: #999">
+                  {{ tgInfo.telegram_connected ? 'Уже подключён, токен не нужен' : 'Токен не создан — отправьте приглашение' }}
+                </div>
+              </q-card>
+            </template>
+          </q-card-section>
+        </q-card>
+
         <q-card class="is-card">
           <q-card-section>
             <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Email сервис</div>
             <div class="text-caption" style="color: #888">
-              SMTP настроен на сервере. Для изменения параметров используйте docker-compose.
+              SMTP настроен на сервере.
             </div>
           </q-card-section>
         </q-card>
@@ -236,6 +269,8 @@ const editingRate = ref(null)
 const rolesList = refs.positions
 const inviteEmployeeId = ref(null)
 const inviteEmployeeOpts = ref([])
+const tgInfoEmployeeId = ref(null)
+const tgInfo = ref(null)
 
 // Блоки прав как в десктопе
 const PERMISSION_GROUPS = {
@@ -360,6 +395,21 @@ function addCity() {
 function editCity(city) {
   $q.dialog({ title: 'Редактировать', prompt: { model: city, type: 'text' }, cancel: true }).onOk(() => {
     $q.notify({ type: 'info', message: 'Переименование: удалите старый и создайте новый' })
+  })
+}
+
+async function loadTgInfo() {
+  if (!tgInfoEmployeeId.value) { tgInfo.value = null; return }
+  try {
+    const { data } = await api.get(`/api/v1/employees/${tgInfoEmployeeId.value}/telegram-info`)
+    tgInfo.value = data
+  } catch { tgInfo.value = null }
+}
+
+function copyToClipboard(text) {
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    $q.notify({ type: 'positive', message: 'Скопировано' })
   })
 }
 

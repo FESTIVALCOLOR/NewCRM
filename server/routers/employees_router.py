@@ -68,6 +68,40 @@ async def get_employee(
     return employee
 
 
+@router.get("/employees/{employee_id}/telegram-info")
+async def get_employee_telegram_info(
+    employee_id: int,
+    current_user: Employee = Depends(require_permission("employees.update")),
+    db: Session = Depends(get_db)
+):
+    """Получить Telegram-информацию сотрудника (токен, статус).
+    Только для руководителя/админа.
+    """
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    token = employee.telegram_link_token
+    expires = employee.telegram_link_token_expires
+    connected = employee.telegram_user_id is not None
+
+    result = {
+        "employee_id": employee.id,
+        "full_name": employee.full_name,
+        "telegram_connected": connected,
+        "telegram_user_id": employee.telegram_user_id,
+        "token_active": token is not None and expires is not None,
+        "token_command": f"/start {token}" if token else None,
+        "tg_link": f"tg://resolve?domain=festival_color_crm_bot&start={token}" if token else None,
+        "http_link": f"https://t.me/festival_color_crm_bot?start={token}" if token else None,
+        "instruction": (
+            f"Откройте Telegram → найдите бота @festival_color_crm_bot → отправьте сообщение:\n"
+            f"/start {token}"
+        ) if token else "Токен не создан. Отправьте приглашение повторно."
+    }
+    return result
+
+
 @router.post("/employees", response_model=EmployeeResponse, status_code=201)
 async def create_employee(
     employee_data: EmployeeCreate,
