@@ -2475,8 +2475,10 @@ class EmployeeDialog(QDialog):
         # ========== TELEGRAM ПОДКЛЮЧЕНИЕ ==========
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
             tg_group = QGroupBox('Telegram подключение')
-            tg_group.setStyleSheet('QGroupBox { font-weight: bold; color: #333; padding-top: 5px; margin-top: 5px; }')
+            tg_group.setStyleSheet('QGroupBox { font-weight: bold; color: #333; } QGroupBox::title { padding-top: -2px; }')
             tg_lay = QVBoxLayout()
+            tg_lay.setContentsMargins(8, 2, 8, 2)
+            tg_lay.setSpacing(2)
             tg_id = self.employee_data.get('telegram_user_id')
             tg_token_cmd = None
             try:
@@ -2500,7 +2502,7 @@ class EmployeeDialog(QDialog):
                 _row2.addWidget(_sl)
                 _row2.addStretch()
                 _cb = QPushButton('Копировать команду')
-                _cb.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 3px; padding: 2px 10px; font-size: 10px; margin-top: -8px;')
+                _cb.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 3px; padding: 2px 10px; font-size: 10px;')
                 _cb.setFixedHeight(22)
                 _cb.setCursor(Qt.PointingHandCursor)
                 _tcmd = str(tg_token_cmd)
@@ -2519,7 +2521,7 @@ class EmployeeDialog(QDialog):
                 _row.addWidget(_sl)
                 _row.addStretch()
                 _ctb = QPushButton('Создать токен')
-                _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 3px; padding: 2px 10px; font-size: 10px; margin-top: -8px;')
+                _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 3px; padding: 2px 10px; font-size: 10px;')
                 _ctb.setFixedHeight(22)
                 _ctb.setCursor(Qt.PointingHandCursor)
                 _meid = self.employee_data.get('id')
