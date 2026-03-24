@@ -2471,6 +2471,74 @@ class EmployeeDialog(QDialog):
         
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
+
+        # ========== TELEGRAM ПОДКЛЮЧЕНИЕ ==========
+        if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
+            tg_group = QGroupBox('Telegram подключение')
+            tg_group.setStyleSheet('QGroupBox { font-weight: bold; color: #333; }')
+            tg_lay = QVBoxLayout()
+            tg_id = self.employee_data.get('telegram_user_id')
+            tg_token_cmd = None
+            try:
+                _eid = self.employee_data.get('id')
+                _resp = self.api_client._request('GET', self.api_client.base_url + '/api/v1/employees/' + str(_eid) + '/telegram-info')
+                if _resp.status_code == 200:
+                    _info = _resp.json()
+                    tg_id = _info.get('telegram_user_id')
+                    tg_token_cmd = _info.get('token_command')
+            except Exception:
+                pass
+            if tg_id:
+                _sl = QLabel('Telegram подключён')
+                _sl.setStyleSheet('color: #27AE60; font-size: 12px; font-weight: bold;')
+                tg_lay.addWidget(_sl)
+                tg_lay.addWidget(QLabel('Telegram ID: ' + str(tg_id)))
+            elif tg_token_cmd:
+                _sl = QLabel('Telegram НЕ подключён')
+                _sl.setStyleSheet('color: #E74C3C; font-size: 12px; font-weight: bold;')
+                tg_lay.addWidget(_sl)
+                _il = QLabel('Скопируйте и отправьте сотруднику: Найдите @festival_color_crm_bot в Telegram, отправьте: ' + str(tg_token_cmd))
+                _il.setStyleSheet('color: #555; font-size: 11px; background: #F5F5F5; padding: 8px; border-radius: 4px;')
+                _il.setWordWrap(True)
+                _il.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                tg_lay.addWidget(_il)
+                _cb = QPushButton('Копировать команду')
+                _cb.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 4px; padding: 4px 12px; font-size: 11px;')
+                _cb.setFixedHeight(28)
+                _cb.setCursor(Qt.PointingHandCursor)
+                _tcmd = str(tg_token_cmd)
+                _cb.clicked.connect(lambda ch=False, c=_tcmd: __import__('PyQt5.QtWidgets', fromlist=['QApplication']).QApplication.clipboard().setText(c))
+                tg_lay.addWidget(_cb)
+            else:
+                _sl = QLabel('Telegram НЕ подключён (токен не создан)')
+                _sl.setStyleSheet('color: #E74C3C; font-size: 12px; font-weight: bold;')
+                tg_lay.addWidget(_sl)
+                _ctb = QPushButton('Создать токен')
+                _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 11px; font-weight: bold;')
+                _ctb.setFixedHeight(28)
+                _ctb.setCursor(Qt.PointingHandCursor)
+                _meid = self.employee_data.get('id')
+                def _mk_tok(ch=False, eid=_meid):
+                    try:
+                        _r = self.api_client._request('POST', self.api_client.base_url + '/api/v1/employees/' + str(eid) + '/send-invite')
+                        if _r.status_code == 200:
+                            _r2 = self.api_client._request('GET', self.api_client.base_url + '/api/v1/employees/' + str(eid) + '/telegram-info')
+                            if _r2.status_code == 200:
+                                _cmd = _r2.json().get('token_command', '')
+                                if _cmd:
+                                    from PyQt5.QtWidgets import QApplication
+                                    QApplication.clipboard().setText(_cmd)
+                                    CustomMessageBox(self, 'Токен создан', 'Команда скопирована: ' + _cmd, 'info').exec_()
+                        else:
+                            CustomMessageBox(self, 'Ошибка', str(_r.status_code), 'error').exec_()
+                    except Exception as _ex:
+                        CustomMessageBox(self, 'Ошибка', str(_ex), 'error').exec_()
+                _ctb.clicked.connect(_mk_tok)
+                tg_lay.addWidget(_ctb)
+            tg_group.setLayout(tg_lay)
+            layout.addWidget(tg_group)
+        # ==================================================================================
+
         
         # Кнопка "Администрирование" — по праву access.admin
         if not self.view_only:
@@ -2540,57 +2608,7 @@ class EmployeeDialog(QDialog):
         # ==========================================================
 
 
-        # ========== TELEGRAM-ИНФОРМАЦИЯ (только для руководителя) ==========
-        if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
-            try:
-                tg_group = QGroupBox('Telegram подключение')
-                tg_group.setStyleSheet('QGroupBox { font-weight: bold; color: #333; }')
-                tg_lay = QVBoxLayout()
-
-                tg_id = self.employee_data.get('telegram_user_id')
-                tg_token_cmd = None
-                try:
-                    emp_id = self.employee_data.get('id')
-                    resp = self.api_client.get("/employees/" + str(emp_id) + "/telegram-info")
-                    if resp:
-                        tg_id = resp.get('telegram_user_id')
-                        tg_token_cmd = resp.get('token_command')
-                except Exception:
-                    pass
-
-                status_lbl = QLabel('Telegram подключён' if tg_id else 'Telegram НЕ подключён')
-                tg_color = '#27AE60' if tg_id else '#E74C3C'
-                status_lbl.setStyleSheet("color: " + tg_color + "; font-size: 12px; font-weight: bold;")
-                tg_lay.addWidget(status_lbl)
-
-                if tg_token_cmd and not tg_id:
-                    instr_lbl = QLabel("Инструкция (скопируйте и отправьте сотруднику):\nОткройте Telegram → @festival_color_crm_bot → отправьте:\n" + str(tg_token_cmd))
-                    instr_lbl.setStyleSheet('color: #555; font-size: 11px; background: #F5F5F5; padding: 8px; border-radius: 4px;')
-                    instr_lbl.setWordWrap(True)
-                    instr_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-                    tg_lay.addWidget(instr_lbl)
-                    copy_btn = QPushButton('Копировать команду')
-                    copy_btn.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 4px; padding: 4px 12px; font-size: 11px;')
-                    copy_btn.setFixedHeight(28)
-                    copy_btn.setCursor(Qt.PointingHandCursor)
-                    _cmd = tg_token_cmd
-                    def _copy_tg():
-                        from PyQt5.QtWidgets import QApplication
-                        QApplication.clipboard().setText(_cmd)
-                    copy_btn.clicked.connect(_copy_tg)
-                    tg_lay.addWidget(copy_btn)
-                elif tg_id:
-                    tg_lay.addWidget(QLabel("Telegram ID: " + str(tg_id)))
-
-                tg_group.setLayout(tg_lay)
-                for w in self.findChildren(QWidget):
-                    lay = w.layout()
-                    if lay and isinstance(lay, QVBoxLayout) and lay.count() > 5:
-                        lay.addWidget(tg_group)
-                        break
-            except Exception as e:
-                print("[WARN] Telegram блок:", str(e))
-        # ==================================================================================
+        # Telegram блок убран отсюда — добавляется в init_ui через scroll_content
 
         self.setMinimumWidth(650)
     
