@@ -66,21 +66,52 @@
     <!-- Диалог просмотра/редактирования -->
     <q-dialog v-model="showDetail" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card v-if="selected">
-        <q-toolbar class="bg-white text-dark" style="border-bottom: 1px solid #E0E0E0">
-          <q-btn flat round dense icon="close" @click="showDetail = false" />
-          <q-toolbar-title>{{ selected.full_name }}</q-toolbar-title>
-          <q-btn flat icon="edit" @click="editMode = !editMode" :color="editMode ? 'accent' : 'grey-7'" />
-          <q-btn flat icon="delete" color="negative" @click="deleteEmployee" />
+        <q-toolbar :style="editMode ? 'background: #ffd93c; color: #333' : 'background: white; color: #333; border-bottom: 1px solid #E0E0E0'">
+          <q-btn flat round dense icon="close" @click="showDetail = false; editMode = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            {{ editMode ? 'Редактировать' : selected.full_name }}
+          </q-toolbar-title>
+          <q-btn v-if="editMode" label="Сохранить" no-caps @click="saveEmployee" :loading="saving" outline style="border: 1px solid #333; border-radius: 8px; color: #333" />
         </q-toolbar>
 
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
+          <!-- Режим редактирования -->
+          <template v-if="editMode">
+            <q-form class="q-gutter-md">
+              <q-input v-model="editForm.full_name" label="ФИО *" outlined dense />
+              <q-select v-model="editForm.position" :options="positions" label="Должность *" outlined dense />
+              <q-select v-model="editForm.secondary_position" :options="['', ...positions]" label="Доп. должность" outlined dense />
+              <q-select v-model="editForm.status" :options="refs.employeeStatuses" label="Статус" outlined dense />
+              <q-input v-model="editForm.phone" label="Телефон" outlined dense type="tel" />
+              <q-input v-model="editForm.email" label="Email" outlined dense type="email" />
+              <q-input v-model="editForm.birth_date" label="Дата рождения" outlined dense type="date" />
+              <q-separator />
+              <div class="text-subtitle2 text-weight-bold">Данные входа</div>
+              <q-input v-model="editForm.login" label="Логин" outlined dense />
+              <q-input v-model="editForm.password" label="Новый пароль (если менять)" outlined dense type="password" />
+              <q-separator />
+              <div class="text-subtitle2 text-weight-bold">Способ оплаты</div>
+              <q-select v-model="editForm.payment_type" :options="refs.paymentTypes" label="Тип оплаты" outlined dense />
+              <q-input v-if="editForm.payment_type === 'Наличными'" v-model="editForm.payment_phone" label="Телефон" outlined dense />
+              <q-input v-if="editForm.payment_type === 'Переводом на карту'" v-model="editForm.payment_account" label="Номер счёта" outlined dense />
+              <template v-if="editForm.payment_type === 'Переводом по реквизитам'">
+                <q-input v-model="editForm.payment_bank_name" label="Банк" outlined dense />
+                <q-input v-model="editForm.payment_bik" label="БИК" outlined dense />
+                <q-input v-model="editForm.payment_corr_account" label="Кор. счёт" outlined dense />
+              </template>
+              <q-btn label="Удалить сотрудника" icon="delete" color="negative" flat no-caps class="full-width q-mt-md" @click="deleteEmployee" />
+            </q-form>
+          </template>
+
+          <!-- Режим просмотра -->
+          <template v-else>
           <!-- Профиль -->
           <div class="text-center q-mb-md">
             <q-avatar size="64px" :color="statusColor(selected.status)" text-color="white">
               <span class="text-h4">{{ selected.full_name ? selected.full_name[0] : '?' }}</span>
             </q-avatar>
-            <div class="text-h6 text-weight-bold q-mt-sm">{{ selected.full_name }}</div>
-            <div class="text-body2 text-grey-7">{{ selected.position }}</div>
+            <div class="text-h6 text-weight-bold q-mt-sm" style="color: #333">{{ selected.full_name }}</div>
+            <div class="text-body2" style="color: #666">{{ selected.position }}{{ selected.secondary_position ? ' / ' + selected.secondary_position : '' }}</div>
             <q-badge :color="statusColor(selected.status)" :label="selected.status" class="q-mt-xs" />
           </div>
 
@@ -128,6 +159,12 @@
               </q-item>
             </q-list>
           </q-card>
+
+          <!-- Круглая кнопка редактирования (внизу) -->
+          <div class="text-center q-mt-md">
+            <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="startEdit" />
+          </div>
+          </template>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -189,6 +226,7 @@ const editMode = ref(false)
 const createForm = ref(null)
 
 const positions = refs.positions
+const editForm = ref({})
 
 const form = ref({
   full_name: '', position: '', secondary_position: '', status: 'активный',
@@ -245,6 +283,26 @@ async function createEmployee() {
     await employeesApi.create(form.value)
     $q.notify({ type: 'positive', message: 'Сотрудник создан' })
     showCreate.value = false
+    loadEmployees()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { saving.value = false }
+}
+
+function startEdit() {
+  editForm.value = { ...selected.value, password: '' }
+  editMode.value = true
+}
+
+async function saveEmployee() {
+  saving.value = true
+  try {
+    const data = { ...editForm.value }
+    if (!data.password) delete data.password
+    await employeesApi.update(selected.value.id, data)
+    $q.notify({ type: 'positive', message: 'Сотрудник обновлён' })
+    editMode.value = false
+    showDetail.value = false
     loadEmployees()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
