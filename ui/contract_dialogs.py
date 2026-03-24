@@ -1306,7 +1306,7 @@ class ContractDialog(QDialog):
         # Кнопки
         if not self.view_only:
             buttons_layout = QHBoxLayout()
-            buttons_layout.addStretch()
+            # stretch будет добавлен после кнопки починки (перед Сохранить/Отмена)
 
             # Кнопка "Создать" (зелёная) — только для нового договора
             # После создания превращается в "Сохранить" (жёлтую)
