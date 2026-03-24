@@ -6,6 +6,7 @@
       <q-tab name="cities" label="Города" />
       <q-tab name="roles" label="Роли" />
       <q-tab name="normdays" label="Нормодни" />
+      <q-tab name="telegram" label="Telegram/Email" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated class="bg-transparent">
@@ -128,6 +129,39 @@
           </q-card-section>
         </q-card>
       </q-tab-panel>
+
+      <!-- TELEGRAM / EMAIL -->
+      <q-tab-panel name="telegram" class="q-pa-none">
+        <q-card class="is-card q-mb-md">
+          <q-card-section>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Telegram</div>
+            <div class="text-caption q-mb-md" style="color: #888">
+              Управление подключением Telegram бота для уведомлений сотрудников
+            </div>
+            <q-btn unelevated label="Отправить тестовое уведомление" icon="send" no-caps style="background: #ffd93c; color: #333; border-radius: 4px" class="full-width q-mb-sm" @click="sendTestNotification" />
+          </q-card-section>
+        </q-card>
+
+        <q-card class="is-card q-mb-md">
+          <q-card-section>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Приглашения сотрудникам</div>
+            <div class="text-caption q-mb-md" style="color: #888">
+              Отправить welcome-email с ссылкой на Telegram бот и временным паролем
+            </div>
+            <q-select v-model="inviteEmployeeId" :options="inviteEmployeeOpts" label="Сотрудник" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-btn unelevated label="Отправить приглашение" icon="mail" no-caps style="background: #27AE60; color: white; border-radius: 4px" class="full-width" @click="sendInvite" :disable="!inviteEmployeeId" />
+          </q-card-section>
+        </q-card>
+
+        <q-card class="is-card">
+          <q-card-section>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Email сервис</div>
+            <div class="text-caption" style="color: #888">
+              SMTP настроен на сервере. Для изменения параметров используйте docker-compose.
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Диалог прав роли — ПО БЛОКАМ -->
@@ -200,6 +234,8 @@ const showRateDialog = ref(false)
 const editingRate = ref(null)
 
 const rolesList = refs.positions
+const inviteEmployeeId = ref(null)
+const inviteEmployeeOpts = ref([])
 
 // Блоки прав как в десктопе
 const PERMISSION_GROUPS = {
@@ -327,5 +363,30 @@ function editCity(city) {
   })
 }
 
-onMounted(() => { loadRates() })
+async function sendTestNotification() {
+  try {
+    await api.post('/api/v1/notifications/test')
+    $q.notify({ type: 'positive', message: 'Тестовое уведомление отправлено' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function sendInvite() {
+  if (!inviteEmployeeId.value) return
+  try {
+    await api.post(`/api/v1/employees/${inviteEmployeeId.value}/send-invite`)
+    $q.notify({ type: 'positive', message: 'Приглашение отправлено' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+onMounted(async () => {
+  loadRates()
+  try {
+    const { data } = await api.get('/api/v1/employees')
+    inviteEmployeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ label: `${e.full_name} (${e.email || 'нет email'})`, value: e.id }))
+  } catch {}
+})
 </script>

@@ -1,5 +1,13 @@
 <template>
   <q-page padding>
+    <!-- Заголовок + экспорт -->
+    <div class="row items-center justify-between q-mb-sm">
+      <div class="text-subtitle1 text-weight-bold" style="color: #333">Отчёты и Статистика</div>
+      <q-btn flat dense icon="picture_as_pdf" color="grey-7" @click="exportPDF">
+        <q-tooltip>Экспорт PDF</q-tooltip>
+      </q-btn>
+    </div>
+
     <!-- Фильтры -->
     <q-card class="is-card q-mb-md">
       <q-card-section class="q-pa-sm">
@@ -256,6 +264,11 @@ async function loadData() {
   if (projR.status === 'fulfilled') projectStats.value = projR.value.data
   if (dynR.status === 'fulfilled') clientsDynamicsRaw.value = dynR.value.data
   if (supR.status === 'fulfilled') supervisionStats.value = supR.value.data
+}
+
+function exportPDF() {
+  // На мобильных — используем системный print (сохранение как PDF)
+  window.print()
 }
 
 watch(projectTab, () => loadData())

@@ -93,8 +93,8 @@
       </div>
     </q-pull-to-refresh>
 
-    <!-- Круглая жёлтая кнопка добавления (стандарт) -->
-    <q-page-sticky position="bottom-right" :offset="[18, 70]">
+    <!-- Круглая жёлтая кнопка добавления (если есть право) -->
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 70]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 
@@ -104,13 +104,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { usePermission } from 'src/composables/usePermission'
 import ClientFormDialog from 'src/components/ClientFormDialog.vue'
 import { useRouter } from 'vue-router'
 import { useClientsStore } from 'src/stores/clients'
 
 const router = useRouter()
 const clientsStore = useClientsStore()
+const { can } = usePermission()
+const canCreate = computed(() => can('clients.create'))
 const showForm = ref(false)
 const clientType = ref('Все')
 const sortBy = ref('name')

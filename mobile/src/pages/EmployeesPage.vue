@@ -59,7 +59,7 @@
       </div>
     </q-pull-to-refresh>
 
-    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 70]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreate = true" />
     </q-page-sticky>
 
@@ -212,9 +212,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { employeesApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
+import { usePermission } from 'src/composables/usePermission'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
+const { can } = usePermission()
+const canCreate = computed(() => can('employees.create'))
 const employees = ref([])
 const loading = ref(false)
 const saving = ref(false)

@@ -69,8 +69,14 @@
         <q-card-section class="q-pb-none">
           <div class="row items-center justify-between">
             <div class="text-subtitle2 text-weight-bold">Стадии закупок</div>
-            <div class="text-caption text-grey-7" v-if="summary">
-              {{ summary.total_site_visits }} выездов
+            <div class="row q-gutter-xs">
+              <q-btn flat dense size="xs" icon="picture_as_pdf" color="grey-7" @click="exportTimelinePDF">
+                <q-tooltip>Экспорт PDF</q-tooltip>
+              </q-btn>
+              <q-btn flat dense size="xs" icon="table_chart" color="grey-7" @click="exportTimelineExcel">
+                <q-tooltip>Экспорт Excel</q-tooltip>
+              </q-btn>
+              <div class="text-caption text-grey-7" v-if="summary">{{ summary.total_site_visits }} выездов</div>
             </div>
           </div>
         </q-card-section>
@@ -356,6 +362,18 @@ async function handleResume() {
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
+}
+
+function exportTimelinePDF() {
+  if (!card.value) return
+  const url = `https://crm.festivalcolor.ru/api/v1/supervision-timeline/${card.value.id}/export/pdf`
+  window.open(url, '_blank')
+}
+
+function exportTimelineExcel() {
+  if (!card.value) return
+  const url = `https://crm.festivalcolor.ru/api/v1/supervision-timeline/${card.value.id}/export/excel`
+  window.open(url, '_blank')
 }
 
 function editTimelineEntry(entry) {

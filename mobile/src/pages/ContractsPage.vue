@@ -77,8 +77,8 @@
         </div>
       </template>
     </q-pull-to-refresh>
-    <!-- FAB создания -->
-    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+    <!-- FAB создания (если есть право) -->
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 70]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 
@@ -90,9 +90,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { contractsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
+import { usePermission } from 'src/composables/usePermission'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
 const refs = useReferencesStore()
+const { can } = usePermission()
+const canCreate = computed(() => can('contracts.create'))
 const contracts = ref([])
 const loading = ref(false)
 const search = ref('')
