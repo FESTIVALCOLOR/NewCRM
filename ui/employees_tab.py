@@ -2612,7 +2612,7 @@ class EmployeeDialog(QDialog):
         self.adjustSize()
         # Запас высоты только если есть Telegram блок (руководитель)
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
-            self.resize(self.width(), self.height() + 20)
+            self.resize(self.width(), self.height() + 50)
 
     def format_phone(self, text):
         """Форматирование телефона +7 (XXX) XXX-XX-XX"""
