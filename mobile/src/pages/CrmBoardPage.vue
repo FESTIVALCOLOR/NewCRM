@@ -48,40 +48,31 @@
 
     <!-- Колонки — табы сверху (мобиль) -->
     <template v-if="!crmStore.loading">
-      <q-tabs
-        v-if="$q.screen.lt.md"
-        v-model="activeColumn"
-        dense
-        active-color="dark"
-        indicator-color="accent"
-        no-caps
-        align="left"
-        outside-arrows
-        mobile-arrows
-        class="q-mt-xs"
-        style="border-bottom: 1px solid #E0E0E0"
-      >
-        <q-tab
+      <!-- Столбцы-кнопки (как в десктопе — серые, с подчёркиванием активного) -->
+      <div v-if="$q.screen.lt.md" class="q-pa-xs" style="overflow-x: auto; white-space: nowrap; border: 1px solid #d9d9d9; border-radius: 4px; margin: 4px">
+        <q-btn
           v-for="col in crmStore.columns"
           :key="col.name"
-          :name="col.name"
-          no-caps
-          style="font-size: 11px; padding: 4px 8px"
-        >
-          <div>{{ col.shortName }}</div>
-          <q-badge color="grey-7" :label="col.count" class="q-ml-xs" style="font-size: 9px" />
-        </q-tab>
-      </q-tabs>
+          dense no-caps size="sm"
+          :label="`${col.shortName} (${col.count})`"
+          :style="activeColumn === col.name
+            ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold; color: #333'
+            : 'background: #E8E8E8; color: #666'"
+          style="border: 1px solid #d9d9d9; border-radius: 4px 4px 0 0; font-size: 10px; padding: 4px 8px; margin-right: 2px"
+          @click="activeColumn = col.name"
+        />
+      </div>
 
-      <q-tab-panels v-if="$q.screen.lt.md" v-model="activeColumn" animated swipeable class="bg-transparent">
-        <q-tab-panel v-for="col in crmStore.columns" :key="col.name" :name="col.name" class="q-pa-sm">
+      <!-- Контент колонки (в рамке) -->
+      <div v-if="$q.screen.lt.md" style="border: 1px solid #d9d9d9; border-top: none; border-radius: 0 0 4px 4px; margin: 0 4px; min-height: 200px">
+        <div v-for="col in crmStore.columns" :key="col.name" v-show="activeColumn === col.name" class="q-pa-sm">
           <div v-if="col.cards.length === 0" class="text-center q-py-xl" style="color: #999">
             <q-icon name="inbox" size="40px" class="q-mb-sm" />
             <div class="text-caption">Нет карточек</div>
           </div>
           <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
-        </q-tab-panel>
-      </q-tab-panels>
+        </div>
+      </div>
 
       <!-- Планшет — колонки рядом -->
       <div v-if="$q.screen.gt.sm" class="row q-pa-sm q-col-gutter-sm" style="overflow-x: auto">

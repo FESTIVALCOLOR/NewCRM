@@ -197,7 +197,7 @@
               <q-btn outline color="grey-7" :icon="btn.icon" :label="btn.label" no-caps class="full-width q-mb-xs" dense style="font-size: 10px; border-radius: 4px" @click="uploadFor(btn.stage)" />
             </div>
           </div>
-          <input ref="fileInput" type="file" style="display: none" @change="handleFileUpload" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg" />
+          <input ref="fileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" @change="handleFileUpload" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg" />
         </q-tab-panel>
       </q-tab-panels>
     </template>

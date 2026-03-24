@@ -91,25 +91,38 @@ body {
   height: 2px;
 }
 
-// ===== BUTTONS =====
-// Primary (жёлтый) — ТОЛЬКО для "Добавить", "Сохранить"
+// ===== BUTTONS — СТАНДАРТ 32px =====
+// Все прямоугольные кнопки: 32px высота, border-radius 4px, font-size 12px
+.q-btn:not(.q-btn--fab):not(.q-btn--round) {
+  min-height: 32px !important;
+  max-height: 32px !important;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 0 14px;
+  line-height: 30px;
+}
+
+// Кнопки в toolbars (заголовки диалогов) — допускаем чуть выше
+.q-toolbar .q-btn:not(.q-btn--round) {
+  min-height: 28px !important;
+  max-height: 28px !important;
+}
+
+// Primary (жёлтый)
 .q-btn--unelevated.bg-accent,
 .btn-primary {
   background: var(--fc-accent) !important;
   color: var(--fc-text) !important;
   border: 1px solid var(--fc-accent-border);
-  border-radius: 4px;
-  font-size: 12px;
   font-weight: 600;
-
-  &:hover, &:active {
-    background: var(--fc-accent-hover) !important;
-  }
 }
 
-// Default button
-.q-btn--flat {
-  font-size: 12px;
+// Dense кнопки внутри списков (маленькие)
+.q-btn--dense {
+  min-height: 24px !important;
+  max-height: 24px !important;
+  font-size: 11px;
+  padding: 0 8px;
 }
 
 // ===== DIALOGS (border-radius: 10px) =====

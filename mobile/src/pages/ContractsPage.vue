@@ -16,7 +16,20 @@
         </template>
       </q-input>
 
-      <div class="text-caption text-grey-7 q-mb-sm" v-if="!loading">
+      <!-- Фильтры -->
+      <div class="row q-col-gutter-xs q-mb-sm">
+        <div class="col-4">
+          <q-select v-model="statusFilter" :options="statusOpts" label="Статус" outlined dense emit-value map-options clearable />
+        </div>
+        <div class="col-4">
+          <q-select v-model="typeFilter" :options="typeOpts" label="Тип" outlined dense emit-value map-options clearable />
+        </div>
+        <div class="col-4">
+          <q-select v-model="agentFilter" :options="agentOpts" label="Агент" outlined dense clearable />
+        </div>
+      </div>
+
+      <div class="text-caption" style="color: #888" v-if="!loading">
         Договоров: {{ filtered.length }}
       </div>
 
@@ -84,6 +97,24 @@ const contracts = ref([])
 const loading = ref(false)
 const search = ref('')
 const showForm = ref(false)
+const statusFilter = ref(null)
+const typeFilter = ref(null)
+const agentFilter = ref(null)
+
+const statusOpts = [
+  { label: 'В работе', value: 'В работе' },
+  { label: 'Новый заказ', value: 'Новый заказ' },
+  { label: 'СДАН', value: 'СДАН' },
+  { label: 'РАСТОРГНУТ', value: 'РАСТОРГНУТ' },
+  { label: 'АВТ. НАДЗОР', value: 'АВТОРСКИЙ НАДЗОР' }
+]
+
+const typeOpts = [
+  { label: 'Индивидуальный', value: 'Индивидуальный' },
+  { label: 'Шаблонный', value: 'Шаблонный' }
+]
+
+const agentOpts = computed(() => refs.agentNames())
 
 function agentColor(agentName) {
   const agent = refs.agentByName(agentName)
@@ -98,13 +129,19 @@ function cardBgStyle(contract) {
 }
 
 const filtered = computed(() => {
-  if (!search.value) return contracts.value
-  const q = search.value.toLowerCase()
-  return contracts.value.filter(c =>
-    (c.contract_number || '').toLowerCase().includes(q) ||
-    (c.address || '').toLowerCase().includes(q) ||
-    (c.city || '').toLowerCase().includes(q)
-  )
+  let result = contracts.value
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    result = result.filter(c =>
+      (c.contract_number || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q) ||
+      (c.city || '').toLowerCase().includes(q)
+    )
+  }
+  if (statusFilter.value) result = result.filter(c => c.status === statusFilter.value)
+  if (typeFilter.value) result = result.filter(c => c.project_type === typeFilter.value)
+  if (agentFilter.value) result = result.filter(c => c.agent_type === agentFilter.value)
+  return result
 })
 
 function statusColor(status) {
