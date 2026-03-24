@@ -2475,7 +2475,7 @@ class EmployeeDialog(QDialog):
         # ========== TELEGRAM ПОДКЛЮЧЕНИЕ (одна строка) ==========
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
             tg_widget = QWidget()
-            tg_widget.setMinimumHeight(36)
+            tg_widget.setFixedHeight(28)
             tg_row = QHBoxLayout(tg_widget)
             tg_row.setContentsMargins(8, 0, 8, 0)
             tg_row.setSpacing(8)
