@@ -23,19 +23,18 @@
           @click="crmStore.setProjectType('Шаблонный')"
         />
         <q-space />
-        <!-- Обновить -->
-        <q-btn flat dense round icon="refresh" size="sm" color="grey-7" @click="crmStore.loadCards()">
-          <q-tooltip>Обновить</q-tooltip>
-        </q-btn>
-        <!-- Активные / Архив -->
+        <!-- Активные / Архив — toggle как индивидуальные/шаблонные -->
         <q-btn
-          :flat="!crmStore.showArchive"
-          :outline="crmStore.showArchive"
-          dense no-caps size="sm"
-          :label="crmStore.showArchive ? 'Архив' : 'Активные'"
-          :color="crmStore.showArchive ? 'warning' : 'positive'"
-          @click="crmStore.toggleArchive()"
-          style="font-size: 11px"
+          :style="!crmStore.showArchive ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
+          label="Активные" dense no-caps size="sm"
+          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 10px"
+          @click="crmStore.showArchive && crmStore.toggleArchive()"
+        />
+        <q-btn
+          :style="crmStore.showArchive ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
+          label="Архив" dense no-caps size="sm"
+          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 10px"
+          @click="!crmStore.showArchive && crmStore.toggleArchive()"
         />
       </div>
     </div>

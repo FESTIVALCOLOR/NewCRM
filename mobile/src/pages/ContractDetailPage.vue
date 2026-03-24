@@ -5,16 +5,20 @@
       <q-card class="is-card q-mb-md">
         <q-card-section>
           <div class="row items-center justify-between q-mb-xs">
-            <div class="text-subtitle1 text-weight-bold">{{ contract.contract_number }}</div>
-            <q-badge :color="statusColor(contract.status)" :label="contract.status" />
+            <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ contract.contract_number }}</div>
+            <div class="text-right">
+              <q-badge :color="statusColor(contract.status)" :label="contract.status" />
+              <div v-if="contract.agent_type" class="q-mt-xs">
+                <span class="agent-badge" :style="{ background: agentColor }">{{ contract.agent_type }}</span>
+              </div>
+            </div>
           </div>
-          <div class="text-body2 q-mb-xs">{{ contract.address }}</div>
+          <div class="text-body2 q-mb-xs" style="color: #333">{{ contract.address }}</div>
           <div class="row q-gutter-sm text-caption" style="color: #888">
             <span>{{ contract.project_type }}</span>
             <span v-if="contract.area">{{ contract.area }} м²</span>
             <span v-if="contract.city">{{ contract.city }}</span>
             <span v-if="contract.floors">{{ contract.floors }} эт.</span>
-            <span v-if="contract.agent_type" class="agent-badge" :style="{ background: agentColor }">{{ contract.agent_type }}</span>
           </div>
         </q-card-section>
       </q-card>
@@ -77,8 +81,15 @@
             </q-list>
           </q-card>
 
-          <!-- Кнопка редактирования -->
-          <q-btn color="accent" text-color="dark" label="Редактировать" icon="edit" no-caps unelevated class="full-width q-mb-md" @click="showEdit = true" />
+          <!-- Кнопки редактирования и удаления -->
+          <div class="row q-col-gutter-sm q-mb-md">
+            <div class="col">
+              <q-btn color="accent" text-color="dark" label="Редактировать" icon="edit" no-caps unelevated class="full-width" style="border-radius: 4px" @click="showEdit = true" />
+            </div>
+            <div class="col-auto">
+              <q-btn outline color="negative" icon="delete" no-caps @click="deleteContract" style="border-radius: 4px" />
+            </div>
+          </div>
           <contract-form-dialog v-model="showEdit" :contract="contract" @saved="reload" />
         </q-tab-panel>
 
@@ -273,6 +284,23 @@ async function handleFileUpload(event) {
     $q.loading.hide()
     event.target.value = ''
   }
+}
+
+async function deleteContract() {
+  $q.dialog({
+    title: 'Удалить договор?',
+    message: contract.value?.contract_number || '',
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      await contractsApi.delete(contract.value.id)
+      $q.notify({ type: 'positive', message: 'Договор удалён' })
+      window.history.back()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка удаления' })
+    }
+  })
 }
 
 async function reload() {

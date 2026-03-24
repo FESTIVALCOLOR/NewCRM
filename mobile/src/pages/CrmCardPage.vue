@@ -28,9 +28,9 @@
           <div v-if="card.revision_count > 0" class="q-mt-xs">
             <q-badge color="negative" :label="`Правки: ${card.revision_count}`" />
           </div>
-          <!-- Агент -->
+          <!-- Агент (цвет из справочника) -->
           <div v-if="card.agent_type" class="q-mt-xs">
-            <span class="agent-badge" :style="{ background: '#95A5A6' }">{{ card.agent_type }}</span>
+            <span class="agent-badge" :style="{ background: agentColor }">{{ card.agent_type }}</span>
           </div>
         </q-card-section>
       </q-card>
@@ -42,7 +42,6 @@
         <q-tab name="files" label="Файлы" />
         <q-tab name="payments" label="Оплаты" />
         <q-tab name="history" label="История" />
-        <q-tab name="actions" label="Действия" />
       </q-tabs>
 
       <!-- Команда -->
@@ -82,6 +81,67 @@
                 <q-badge :color="deadlineColor(card.deadline)" :label="daysLeft(card.deadline)" />
               </div>
             </q-card-section>
+          </q-card>
+
+          <!-- Workflow действия -->
+          <q-card class="is-card q-mt-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div>
+            </q-card-section>
+            <q-list dense>
+              <q-item v-if="card.workflow_status === 'in_progress'" clickable v-ripple @click="doAction('submit')">
+                <q-item-section avatar><q-icon name="send" color="positive" /></q-item-section>
+                <q-item-section>Сдать работу</q-item-section>
+              </q-item>
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('accept')">
+                <q-item-section avatar><q-icon name="check" color="positive" /></q-item-section>
+                <q-item-section>Принять работу</q-item-section>
+              </q-item>
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('reject')">
+                <q-item-section avatar><q-icon name="close" color="negative" /></q-item-section>
+                <q-item-section>На исправление</q-item-section>
+              </q-item>
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('client-send')">
+                <q-item-section avatar><q-icon name="forward_to_inbox" style="color: #3498DB" /></q-item-section>
+                <q-item-section>Отправить клиенту</q-item-section>
+              </q-item>
+              <q-item v-if="card.workflow_status === 'client_approval'" clickable v-ripple @click="doAction('client-approved')">
+                <q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section>
+                <q-item-section>Клиент согласовал</q-item-section>
+              </q-item>
+              <q-item v-if="card.workflow_status === 'act_signing'" clickable v-ripple @click="doAction('sign-act')">
+                <q-item-section avatar><q-icon name="draw" style="color: #333" /></q-item-section>
+                <q-item-section>Акт подписан</q-item-section>
+              </q-item>
+            </q-list>
+          </q-card>
+
+          <!-- Назначить исполнителя -->
+          <q-card class="is-card q-mt-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">Назначить исполнителя</div>
+            </q-card-section>
+            <q-card-section>
+              <q-select v-model="assignForm.stage_name" :options="stageOptions" label="Стадия" outlined dense class="q-mb-sm" />
+              <q-select v-model="assignForm.executor_id" :options="employeeOptions" option-value="id" option-label="label" label="Исполнитель" outlined dense emit-value map-options class="q-mb-sm" />
+              <q-input v-model="assignForm.deadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
+              <q-btn color="accent" text-color="dark" label="Назначить" no-caps unelevated class="full-width" @click="assignExecutor" :loading="actionLoading" style="border-radius: 4px" />
+            </q-card-section>
+          </q-card>
+
+          <!-- Перемещение -->
+          <q-card class="is-card q-mt-md">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">Переместить</div>
+            </q-card-section>
+            <q-list dense>
+              <q-item v-for="col in crmStore.columnOrder" :key="col" clickable @click="moveToColumn(col)" :disable="col === card.column_name">
+                <q-item-section>
+                  <q-item-label :style="{ color: col === card.column_name ? '#ccc' : '#333' }">{{ col }}</q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="col === card.column_name"><q-icon name="check" color="positive" /></q-item-section>
+              </q-item>
+            </q-list>
           </q-card>
         </q-tab-panel>
 
@@ -175,60 +235,7 @@
         </q-tab-panel>
 
         <!-- Действия -->
-        <q-tab-panel name="actions" class="q-pa-none">
-          <q-card class="is-card">
-            <q-list>
-              <!-- Workflow actions -->
-              <q-item clickable v-ripple @click="doAction('submit')" v-if="card.workflow_status === 'in_progress'">
-                <q-item-section avatar><q-icon name="send" color="positive" /></q-item-section>
-                <q-item-section>Сдать работу</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="doAction('accept')" v-if="card.workflow_status === 'pending_review'">
-                <q-item-section avatar><q-icon name="check" color="positive" /></q-item-section>
-                <q-item-section>Принять работу</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="doAction('reject')" v-if="card.workflow_status === 'pending_review'">
-                <q-item-section avatar><q-icon name="close" color="negative" /></q-item-section>
-                <q-item-section>На исправление</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="doAction('client-send')" v-if="card.workflow_status === 'pending_review'">
-                <q-item-section avatar><q-icon name="forward_to_inbox" color="info" /></q-item-section>
-                <q-item-section>Отправить клиенту</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="doAction('client-approved')" v-if="card.workflow_status === 'client_approval'">
-                <q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section>
-                <q-item-section>Клиент согласовал</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="doAction('sign-act')" v-if="card.workflow_status === 'act_signing'">
-                <q-item-section avatar><q-icon name="draw" color="primary" /></q-item-section>
-                <q-item-section>Акт подписан</q-item-section>
-              </q-item>
-
-              <q-separator />
-
-              <!-- Перемещение -->
-              <q-expansion-item icon="swap_horiz" label="Переместить в колонку" dense>
-                <q-list dense class="q-pl-md">
-                  <q-item v-for="col in crmStore.columnOrder" :key="col" clickable @click="moveToColumn(col)" :disable="col === card.column_name">
-                    <q-item-section>
-                      <q-item-label :class="{ 'text-grey-5': col === card.column_name }">{{ col }}</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                </q-list>
-              </q-expansion-item>
-
-              <!-- Назначить исполнителя -->
-              <q-expansion-item icon="person_add" label="Назначить исполнителя" dense>
-                <div class="q-pa-md">
-                  <q-select v-model="assignForm.stage_name" :options="stageOptions" label="Стадия" outlined dense class="q-mb-sm" />
-                  <q-select v-model="assignForm.executor_id" :options="employeeOptions" option-value="id" option-label="label" label="Исполнитель" outlined dense emit-value map-options class="q-mb-sm" />
-                  <q-input v-model="assignForm.deadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
-                  <q-btn color="positive" label="Назначить" no-caps unelevated class="full-width" @click="assignExecutor" :loading="actionLoading" />
-                </div>
-              </q-expansion-item>
-            </q-list>
-          </q-card>
-        </q-tab-panel>
+        <!-- Вкладка "Действия" убрана — действия теперь в каждой вкладке -->
       </q-tab-panels>
     </template>
 
@@ -245,12 +252,19 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
+import { useReferencesStore } from 'src/stores/references'
 import { crmApi, employeesApi } from 'src/services/api'
 
 const route = useRoute()
 const $q = useQuasar()
 const crmStore = useCrmStore()
+const refs = useReferencesStore()
 const card = computed(() => crmStore.selectedCard)
+
+const agentColor = computed(() => {
+  const agent = refs.agentByName(card.value?.agent_type)
+  return agent?.color || '#95A5A6'
+})
 const activeTab = ref('team')
 const actionLoading = ref(false)
 const employeeOptions = ref([])

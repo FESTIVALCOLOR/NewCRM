@@ -47,18 +47,20 @@
               {{ authStore.error }}
             </q-banner>
 
-            <!-- Кнопка — белая с чёрной рамкой -->
-            <q-btn
-              type="submit"
-              label="Войти"
-              :loading="authStore.loading"
-              class="full-width"
-              size="lg"
-              no-caps
-              outline
-              color="dark"
-              style="border-radius: 8px; font-weight: 600"
-            />
+            <!-- Кнопка — белая с чёрной рамкой, по ширине полей -->
+            <div>
+              <q-btn
+                type="submit"
+                label="Войти"
+                :loading="authStore.loading"
+                class="full-width"
+                size="lg"
+                no-caps
+                outline
+                color="dark"
+                style="border-radius: 8px; font-weight: 600"
+              />
+            </div>
           </q-form>
         </q-card-section>
 

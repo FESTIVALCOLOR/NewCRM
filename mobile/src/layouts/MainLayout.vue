@@ -2,20 +2,28 @@
   <q-layout view="hHh lpR fFf">
     <!-- Header: лого + текст + кнопки (инструкция, настройки, выход) -->
     <q-header class="bg-white text-dark" style="border-bottom: 1px solid #E0E0E0">
-      <q-toolbar style="min-height: 44px">
-        <q-btn flat dense round icon="menu" @click="toggleDrawer" class="lt-md" />
-        <img src="/logo.png" alt="" style="height: 24px; width: auto" class="q-mr-xs" />
-        <div class="text-weight-bold ellipsis" style="font-size: 12px; color: #333; max-width: 180px">
+      <q-toolbar style="min-height: 44px; padding: 0 4px">
+        <q-btn flat dense round icon="menu" @click="toggleDrawer" class="lt-md" size="sm" />
+        <img src="/logo.png" alt="" style="height: 22px; width: auto" class="q-mr-xs" />
+        <!-- На мобильном: CRM FESTIVAL COLOR, на планшете: полный текст -->
+        <div class="text-weight-bold ellipsis gt-xs" style="font-size: 11px; color: #333">
           Система управления заказами FESTIVAL COLOR
         </div>
+        <div class="text-weight-bold ellipsis lt-sm" style="font-size: 11px; color: #333">
+          CRM FESTIVAL COLOR
+        </div>
         <q-space />
-        <!-- Инструкция -->
-        <q-btn flat dense round icon="help_outline" size="sm" color="grey-7">
+        <!-- Обновить сервер (первая) -->
+        <q-btn flat dense round icon="refresh" size="sm" color="grey-7" @click="refreshData">
+          <q-tooltip>Обновить</q-tooltip>
+        </q-btn>
+        <!-- Инструкция (иконка как в десктопе — файл) -->
+        <q-btn flat dense round icon="menu_book" size="sm" color="grey-7" @click="openManual">
           <q-tooltip>Инструкция</q-tooltip>
         </q-btn>
-        <!-- Настройки уведомлений -->
-        <q-btn flat dense round icon="settings" size="sm" color="grey-7" @click="$router.push('/admin?tab=notifications')">
-          <q-tooltip>Настройки</q-tooltip>
+        <!-- Настройки уведомлений (шестерёнка) -->
+        <q-btn flat dense round icon="settings" size="sm" color="grey-7" @click="openNotifSettings">
+          <q-tooltip>Настройки уведомлений</q-tooltip>
         </q-btn>
         <!-- Уведомления -->
         <q-btn flat dense round icon="notifications" size="sm" color="grey-7" @click="$router.push('/notifications')">
@@ -24,7 +32,7 @@
           </q-badge>
         </q-btn>
         <!-- Выход -->
-        <q-btn flat dense round icon="logout" size="sm" color="grey-7" @click="handleLogout">
+        <q-btn flat dense round icon="logout" size="sm" style="color: #ccc" @click="handleLogout">
           <q-tooltip>Выйти</q-tooltip>
         </q-btn>
       </q-toolbar>
@@ -137,6 +145,29 @@ const bottomTabs = [
 ]
 
 function toggleDrawer() { drawerOpen.value = !drawerOpen.value }
+
+function refreshData() {
+  window.location.reload()
+}
+
+function openManual() {
+  // Инструкция на Яндекс.Диске (зависит от роли — пока общая ссылка)
+  window.open('https://disk.yandex.ru/client/disk/CRM/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D0%B8', '_blank')
+}
+
+function openNotifSettings() {
+  const empId = authStore.user?.id
+  if (empId) {
+    // Открываем страницу настроек уведомлений
+    import('src/boot/axios').then(({ api }) => {
+      api.get(`/api/v1/notifications/settings/${empId}`).then(({ data }) => {
+        // TODO: открыть диалог настроек уведомлений
+      })
+    })
+  }
+  // Пока редирект на админку → вкладка уведомлений
+  window.location.href = '/admin'
+}
 
 async function handleLogout() { await authStore.logout() }
 </script>

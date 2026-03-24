@@ -77,10 +77,10 @@
             <div class="text-subtitle2 text-weight-bold q-mt-md">Паспортные данные</div>
 
             <div class="row q-col-gutter-sm">
-              <div class="col-4">
+              <div class="col-6">
                 <q-input v-model="form.passport_series" label="Серия" outlined dense />
               </div>
-              <div class="col-8">
+              <div class="col-6">
                 <q-input v-model="form.passport_number" label="Номер" outlined dense />
               </div>
             </div>

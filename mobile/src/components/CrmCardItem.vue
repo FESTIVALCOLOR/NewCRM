@@ -12,9 +12,14 @@
         </q-chip>
       </div>
 
-      <!-- Адрес (жирный, как десктоп) -->
-      <div class="text-weight-bold ellipsis-2-lines q-mb-xs" style="font-size: 14px; color: #222">
-        {{ card.address || 'Без адреса' }}
+      <!-- Адрес + Агент (агент справа, над линией) -->
+      <div class="row items-start justify-between q-mb-xs">
+        <div class="text-weight-bold ellipsis-2-lines" style="font-size: 14px; color: #222; flex: 1">
+          {{ card.address || 'Без адреса' }}
+        </div>
+        <span v-if="card.agent_type" class="agent-badge q-ml-xs" :style="{ background: agentBadgeColor }" style="white-space: nowrap; flex-shrink: 0">
+          {{ card.agent_type }}
+        </span>
       </div>
 
       <!-- Разделитель -->
@@ -30,19 +35,21 @@
         Правки: {{ card.revision_count }}
       </div>
 
-      <!-- Площадь, Город, Агент -->
+      <!-- Площадь, Город -->
       <div class="row items-center q-gutter-xs q-mb-xs" style="font-size: 11px; color: #888">
         <span v-if="card.area">{{ card.area }} м²</span>
         <span v-if="card.city">{{ card.city }}</span>
-        <span v-if="card.agent_type" class="agent-badge" :style="{ background: agentBadgeColor }">
-          {{ card.agent_type }}
-        </span>
       </div>
 
-      <!-- Команда (раскрывающийся) -->
-      <q-expansion-item v-if="teamNames.length > 0" dense label="Команда" header-style="font-size: 10px; color: #888; padding: 0; min-height: 24px">
-        <div v-for="m in teamNames" :key="m" style="font-size: 10px; color: #666; padding-left: 8px">{{ m }}</div>
-      </q-expansion-item>
+      <!-- Команда (в рамке, не проваливается — stopPropagation) -->
+      <div v-if="teamNames.length > 0" style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px" @click.stop>
+        <div style="font-size: 10px; color: #888; font-weight: bold; margin-bottom: 2px; cursor: pointer" @click="showTeam = !showTeam">
+          Команда {{ showTeam ? '▲' : '▼' }}
+        </div>
+        <div v-if="showTeam">
+          <div v-for="m in teamNames" :key="m" style="font-size: 10px; color: #666">{{ m }}</div>
+        </div>
+      </div>
 
       <!-- Теги -->
       <div v-if="card.tags" class="q-mt-xs">
@@ -61,11 +68,13 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useReferencesStore } from 'src/stores/references'
 
 const props = defineProps({ card: { type: Object, required: true } })
 defineEmits(['click'])
+
+const showTeam = ref(false)
 
 const refs = useReferencesStore()
 
