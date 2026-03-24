@@ -4750,9 +4750,8 @@ class MeasurementDialog(QDialog):
             self.files_table.setCellWidget(i, 2, dest_combo)
 
             # Кнопка удаления строки из списка
-            del_btn = QPushButton('✕')
-            del_btn.setFixedSize(24, 24)
-            del_btn.setStyleSheet('background: transparent; color: #E74C3C; border: none; font-size: 12px; font-weight: bold; padding: 0px; padding-bottom: 4px;')
+            del_btn = IconLoader.create_icon_button('delete-red', '', 'Убрать из загрузки', icon_size=12)
+            del_btn.setFixedSize(20, 20)
             del_btn.setCursor(Qt.PointingHandCursor)
             del_btn.setToolTip('Убрать из загрузки')
             row_idx = i
