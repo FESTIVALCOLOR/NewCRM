@@ -258,6 +258,96 @@ async def update_contract_files(
     }
 
 
+@router.post("/fix-all-folders")
+async def fix_all_contract_folders(
+    current_user: Employee = Depends(require_permission("contracts.update")),
+    db: Session = Depends(get_db)
+):
+    """Массовая починка папок ЯД для всех договоров без yandex_folder_path."""
+    import re
+    contracts = db.query(Contract).filter(
+        (Contract.yandex_folder_path == None) | (Contract.yandex_folder_path == '')
+    ).all()
+
+    if not contracts:
+        return {"status": "success", "message": "Все договоры имеют папки", "fixed": 0}
+
+    from yandex_disk_service import YandexDiskService
+    yd = YandexDiskService()
+    fixed = 0
+    errors = []
+
+    for contract in contracts:
+        try:
+            agent = contract.agent_type or 'ФЕСТИВАЛЬ'
+            ptype = contract.project_type or 'Индивидуальный'
+            city = contract.city or 'Москва'
+            address = contract.address or 'Без адреса'
+            area = contract.area or 0
+            type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
+            folder_name = f"{city}-{address}-{area}м2"
+            folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
+            folder_path = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
+
+            yd.create_folder(folder_path)
+            contract.yandex_folder_path = folder_path
+            fixed += 1
+        except Exception as e:
+            errors.append(f"Договор {contract.id}: {e}")
+
+    db.commit()
+    return {
+        "status": "success",
+        "message": f"Починено {fixed} из {len(contracts)} договоров",
+        "fixed": fixed,
+        "errors": errors[:10]
+    }
+
+
+@router.post("/{contract_id}/fix-folder", response_model=StatusResponse)
+async def fix_contract_folder(
+    contract_id: int,
+    current_user: Employee = Depends(require_permission("contracts.update")),
+    db: Session = Depends(get_db)
+):
+    """Диагностика и починка папки на Яндекс.Диске для договора.
+    Создаёт папку если не существует, обновляет yandex_folder_path в БД.
+    """
+    import re
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Договор не найден")
+
+    try:
+        from yandex_disk_service import YandexDiskService
+        yd = YandexDiskService()
+
+        # Генерируем путь
+        agent = contract.agent_type or 'ФЕСТИВАЛЬ'
+        ptype = contract.project_type or 'Индивидуальный'
+        city = contract.city or 'Москва'
+        address = contract.address or 'Без адреса'
+        area = contract.area or 0
+        type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
+        folder_name = f"{city}-{address}-{area}м2"
+        folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
+        folder_path = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
+
+        # Создаём папку рекурсивно
+        result = yd.create_folder(folder_path)
+        if result or (isinstance(result, dict)):
+            # Обновляем в БД
+            contract.yandex_folder_path = folder_path
+            db.commit()
+            logger.info(f"Папка починена для договора {contract_id}: {folder_path}")
+            return {"status": "success", "message": f"Папка создана: {folder_path}"}
+        else:
+            return {"status": "error", "message": "Не удалось создать папку на Яндекс.Диске"}
+    except Exception as e:
+        logger.exception(f"Ошибка починки папки для договора {contract_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/{contract_id}", response_model=StatusResponse)
 async def delete_contract(
     contract_id: int,
