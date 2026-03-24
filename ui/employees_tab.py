@@ -2475,7 +2475,7 @@ class EmployeeDialog(QDialog):
         # ========== TELEGRAM ПОДКЛЮЧЕНИЕ (одна строка) ==========
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
             tg_row = QHBoxLayout()
-            tg_row.setContentsMargins(8, 12, 8, 12)
+            tg_row.setContentsMargins(8, 0, 8, 0)
             _tg_title = QLabel('Telegram:')
             _tg_title.setStyleSheet('font-weight: bold; color: #333; font-size: 12px;')
             _tg_title.setFixedWidth(80)
