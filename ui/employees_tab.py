@@ -1090,7 +1090,7 @@ class EmployeeDialog(QDialog):
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(20, 20, 20, 30)
         
         # Основная информация
         main_group = QGroupBox('Основная информация')
