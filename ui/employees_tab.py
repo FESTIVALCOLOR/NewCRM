@@ -2608,9 +2608,8 @@ class EmployeeDialog(QDialog):
         # ==========================================================
 
 
-        # Telegram блок убран отсюда — добавляется в init_ui через scroll_content
-
         self.setMinimumWidth(650)
+        self.adjustSize()
     
     def format_phone(self, text):
         """Форматирование телефона +7 (XXX) XXX-XX-XX"""
