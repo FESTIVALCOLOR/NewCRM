@@ -1309,6 +1309,14 @@ class CardEditDialog(QDialog):
                 """)
                 self.invite_client_btn.setFixedSize(36, 36)
                 self.invite_client_btn.setEnabled(False)  # Активна только если есть чат
+                self.invite_client_btn.setToolTip(
+                    "Пригласить клиента — отправить email со ссылкой на чат.\n\n"
+                    "Если клиент не может перейти по ссылке:\n"
+                    "1. Откройте групповой чат в Telegram\n"
+                    "2. Нажмите название чата → Добавить участника\n"
+                    "3. Введите номер телефона или @username клиента\n"
+                    "4. Нажмите Добавить"
+                )
                 self.invite_client_btn.clicked.connect(self._on_invite_client)
                 buttons_layout.addWidget(self.invite_client_btn)
 

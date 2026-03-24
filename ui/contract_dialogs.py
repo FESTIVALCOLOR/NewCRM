@@ -1380,6 +1380,29 @@ class ContractDialog(QDialog):
                 }
             """)
 
+            # Кнопка диагностики ЯД (только при редактировании, для руководителя/СМ)
+            if self.contract_data and self._is_superuser():
+                fix_btn = QPushButton("🔧 Починить")
+                fix_btn.setToolTip("Проверить/создать папку на ЯД и загрузить найденные файлы")
+                fix_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E8F4F8;
+                        color: #333333;
+                        border: 1px solid #85C1E9;
+                        border-radius: 4px;
+                        padding: 0px 12px;
+                        font-size: 11px;
+                        max-height: 36px;
+                        min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #D4EDFB; }
+                """)
+                fix_btn.setCursor(Qt.PointingHandCursor)
+                fix_btn.clicked.connect(self._fix_contract_folder)
+                buttons_layout.addWidget(fix_btn)
+
+            buttons_layout.addStretch()
+
             if hasattr(self, 'create_btn'):
                 buttons_layout.addWidget(self.create_btn)
             buttons_layout.addWidget(self.save_btn)
@@ -4164,6 +4187,48 @@ class ContractDialog(QDialog):
         """Создать договор без закрытия диалога — для продолжения заполнения."""
         self._create_and_stay_mode = True
         self.save_contract()
+
+    def _is_superuser(self):
+        """Проверка: текущий пользователь — суперюзер"""
+        emp = getattr(self, 'employee', None)
+        if not emp:
+            parent = self.parent()
+            emp = getattr(parent, 'employee', None)
+        if not emp:
+            return False
+        return emp.get('role') in ('admin', 'director') or emp.get('position') in ('Руководитель студии', 'Старший менеджер проектов')
+
+    def _fix_contract_folder(self):
+        """Диагностика и починка папки ЯД + сканирование файлов"""
+        if not self.contract_data or not self.contract_data.get('id'):
+            CustomMessageBox(self, "Ошибка", "Сначала сохраните договор", "warning").exec_()
+            return
+
+        contract_id = self.contract_data['id']
+        try:
+            # 1. Починка папки
+            result = self.api_client.post("/contracts/" + str(contract_id) + "/fix-folder")
+            msg = "Папка: " + (result.get('message', '?') if result else 'Ошибка')
+
+            # 2. Сканирование файлов в папке
+            scan_result = self.api_client.post("/files/scan/" + str(contract_id))
+            if scan_result:
+                new_files = scan_result.get('new_files_added', 0)
+                msg += "\nФайлов найдено: " + str(scan_result.get('total_on_disk', 0))
+                msg += "\nНовых подгружено: " + str(new_files)
+            else:
+                msg += "\nСканирование файлов: не удалось"
+
+            CustomMessageBox(self, "Диагностика", msg, "info").exec_()
+
+            # 3. Обновляем данные карточки
+            fresh = self.api_client.get("/contracts/" + str(contract_id))
+            if fresh:
+                self.contract_data = fresh
+                self.fill_data()
+
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка", str(e), "error").exec_()
 
     @debounce_click(delay_ms=2000)
     def save_contract(self):
