@@ -94,7 +94,7 @@
     </q-pull-to-refresh>
 
     <!-- Круглая жёлтая кнопка добавления (если есть право) -->
-    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 70]">
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 18]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 

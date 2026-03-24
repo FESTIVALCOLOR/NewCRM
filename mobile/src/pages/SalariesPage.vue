@@ -100,7 +100,7 @@
     </q-pull-to-refresh>
 
     <!-- FAB создания -->
-    <q-page-sticky position="bottom-right" :offset="[18, 70]">
+    <q-page-sticky position="bottom-right" :offset="[18, 18]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreateDialog = true" />
     </q-page-sticky>
 

@@ -95,8 +95,17 @@ export const crmApi = {
   getPayments: (cardId) =>
     api.get('/api/v1/payments', { params: { crm_card_id: cardId } }),
 
-  getHistory: (cardId) =>
-    api.get(`/api/v1/crm/cards/${cardId}/stage-history`)
+  getStageHistory: (cardId) =>
+    api.get(`/api/v1/crm/cards/${cardId}/stage-history`),
+
+  getActionHistory: (cardId) =>
+    api.get(`/api/v1/crm/cards/${cardId}/action-history`),
+
+  getAcceptedStages: (cardId) =>
+    api.get(`/api/v1/crm/cards/${cardId}/accepted-stages`),
+
+  getSubmittedStages: (cardId) =>
+    api.get(`/api/v1/crm/cards/${cardId}/submitted-stages`)
 }
 
 // === Clients ===

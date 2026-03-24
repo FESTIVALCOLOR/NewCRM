@@ -67,10 +67,10 @@
               </q-item-label>
             </q-item-section>
             <q-item-section side>
-              <div class="row q-gutter-xs">
-                <q-btn v-if="!contract.advance_payment_paid_date" flat dense size="xs" icon="check_circle" color="positive" @click="markClientPaid('advance')"><q-tooltip>Оплачено</q-tooltip></q-btn>
-                <q-btn flat dense size="xs" icon="upload_file" style="color: #ffd93c" @click="uploadReceipt('advance')"><q-tooltip>Загрузить чек</q-tooltip></q-btn>
-                <q-btn v-if="contract.advance_receipt_link" flat dense size="xs" icon="visibility" color="grey-7" @click="openLink(contract.advance_receipt_link)"><q-tooltip>Просмотр чека</q-tooltip></q-btn>
+              <div class="column q-gutter-xs">
+                <q-btn v-if="!contract.advance_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('advance')" style="border-radius: 4px" />
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px" @click="uploadReceipt('advance')" />
+                <q-btn v-if="contract.advance_receipt_link" flat dense size="sm" icon="visibility" label="Просмотр" color="grey-7" no-caps @click="openLink(contract.advance_receipt_link)" />
               </div>
             </q-item-section>
           </q-item>
@@ -84,9 +84,9 @@
               </q-item-label>
             </q-item-section>
             <q-item-section side>
-              <div class="row q-gutter-xs">
-                <q-btn v-if="!contract.additional_payment_paid_date" flat dense size="xs" icon="check_circle" color="positive" @click="markClientPaid('additional')"><q-tooltip>Оплачено</q-tooltip></q-btn>
-                <q-btn flat dense size="xs" icon="upload_file" style="color: #ffd93c" @click="uploadReceipt('additional')"><q-tooltip>Загрузить чек</q-tooltip></q-btn>
+              <div class="column q-gutter-xs">
+                <q-btn v-if="!contract.additional_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('additional')" style="border-radius: 4px" />
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px" @click="uploadReceipt('additional')" />
               </div>
             </q-item-section>
           </q-item>
@@ -100,9 +100,9 @@
               </q-item-label>
             </q-item-section>
             <q-item-section side>
-              <div class="row q-gutter-xs">
-                <q-btn v-if="!contract.third_payment_paid_date" flat dense size="xs" icon="check_circle" color="positive" @click="markClientPaid('third')"><q-tooltip>Оплачено</q-tooltip></q-btn>
-                <q-btn flat dense size="xs" icon="upload_file" style="color: #ffd93c" @click="uploadReceipt('third')"><q-tooltip>Загрузить чек</q-tooltip></q-btn>
+              <div class="column q-gutter-xs">
+                <q-btn v-if="!contract.third_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('third')" style="border-radius: 4px" />
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px" @click="uploadReceipt('third')" />
               </div>
             </q-item-section>
           </q-item>
@@ -194,7 +194,7 @@
       <q-btn flat color="negative" icon="delete" label="Удалить договор" no-caps class="full-width q-mb-md" @click="deleteContract" />
 
       <!-- FAB редактирования -->
-      <q-page-sticky position="bottom-right" :offset="[18, 70]">
+      <q-page-sticky position="bottom-right" :offset="[18, 18]">
         <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
       </q-page-sticky>
 
