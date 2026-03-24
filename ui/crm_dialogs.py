@@ -4184,14 +4184,16 @@ class MeasurementDialog(QDialog):
 
         # Таблица файлов с распределением
         self.files_table = QTableWidget()
-        self.files_table.setColumnCount(3)
-        self.files_table.setHorizontalHeaderLabels(['Файл', 'Размер', 'Назначение'])
+        self.files_table.setColumnCount(4)
+        self.files_table.setHorizontalHeaderLabels(['Файл', 'Размер', 'Назначение', ''])
         self.files_table.horizontalHeader().setStretchLastSection(False)
         self.files_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.files_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.files_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.files_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
         self.files_table.setColumnWidth(1, 80)
         self.files_table.setColumnWidth(2, 130)
+        self.files_table.setColumnWidth(3, 30)
         self.files_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.files_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.files_table.verticalHeader().setVisible(False)
@@ -4654,6 +4656,27 @@ class MeasurementDialog(QDialog):
                 'Поддерживаются ссылки Яндекс.Диска и Google Drive', 'warning').exec_()
             self.link_status.setText('')
 
+    def _remove_file_row(self, row):
+        """Удалить файл из списка загрузки"""
+        if 0 <= row < self.files_table.rowCount():
+            self.files_table.removeRow(row)
+            # Переподключаем кнопки удаления с обновлёнными индексами
+            for r in range(self.files_table.rowCount()):
+                btn = self.files_table.cellWidget(r, 3)
+                if btn:
+                    try:
+                        btn.clicked.disconnect()
+                    except Exception:
+                        pass
+                    btn.clicked.connect(lambda checked, idx=r: self._remove_file_row(idx))
+            # Обновляем статус
+            count = self.files_table.rowCount()
+            if count > 0:
+                self.link_status.setText('Файлов для загрузки: ' + str(count))
+            else:
+                self.link_status.setText('Список пуст')
+                self.link_upload_btn.setEnabled(False)
+
     def _fetch_yandex_files(self, public_url):
         """Получить файлы из публичной папки ЯД."""
         def fetch_thread():
@@ -4725,6 +4748,16 @@ class MeasurementDialog(QDialog):
             dest_combo.currentTextChanged.connect(
                 lambda text, cb=dest_combo: _apply_dest_style(cb, text))
             self.files_table.setCellWidget(i, 2, dest_combo)
+
+            # Кнопка удаления строки из списка
+            del_btn = QPushButton('✕')
+            del_btn.setFixedSize(22, 22)
+            del_btn.setStyleSheet('background: transparent; color: #E74C3C; border: none; font-size: 14px; font-weight: bold;')
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.setToolTip('Убрать из загрузки')
+            row_idx = i
+            del_btn.clicked.connect(lambda checked, r=row_idx: self._remove_file_row(r))
+            self.files_table.setCellWidget(i, 3, del_btn)
 
         if files:
             self.link_upload_btn.setEnabled(True)
