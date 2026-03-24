@@ -97,7 +97,7 @@
                 <q-item-section avatar><q-icon name="check" color="positive" /></q-item-section>
                 <q-item-section>Принять работу</q-item-section>
               </q-item>
-              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('reject')">
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="showRejectDialog = true">
                 <q-item-section avatar><q-icon name="close" color="negative" /></q-item-section>
                 <q-item-section>На исправление</q-item-section>
               </q-item>
@@ -235,8 +235,32 @@
         </q-tab-panel>
 
         <!-- Действия -->
-        <!-- Вкладка "Действия" убрана — действия теперь в каждой вкладке -->
       </q-tab-panels>
+
+      <!-- Диалог отправки на исправление (с причиной и файлом) -->
+      <q-dialog v-model="showRejectDialog">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #E74C3C; color: white">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title>
+            <q-btn flat round dense icon="close" color="white" @click="showRejectDialog = false" />
+          </q-toolbar>
+          <q-card-section>
+            <q-input v-model="rejectReason" label="Причина *" outlined dense type="textarea" autogrow class="q-mb-sm" :rules="[v => !!v || 'Укажите причину']" />
+            <q-file v-model="rejectFile" label="Файл с правками" outlined dense accept=".pdf,.jpg,.png,.doc,.docx" class="q-mb-sm">
+              <template v-slot:prepend><q-icon name="attach_file" /></template>
+            </q-file>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" v-close-popup no-caps />
+            <q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitReject" :loading="actionLoading" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- FAB редактирования -->
+      <q-page-sticky position="bottom-right" :offset="[18, 70]">
+        <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEditCard = true" />
+      </q-page-sticky>
     </template>
 
     <div v-else class="text-center q-pa-xl text-grey-5">
@@ -271,6 +295,10 @@ const employeeOptions = ref([])
 const assignForm = ref({ stage_name: '', executor_id: null, deadline: '' })
 const cardPayments = ref([])
 const cardHistory = ref([])
+const showRejectDialog = ref(false)
+const showEditCard = ref(false)
+const rejectReason = ref('')
+const rejectFile = ref(null)
 
 const stageOptions = [
   'Стадия 1: планировочные решения',
@@ -339,6 +367,35 @@ function formatMoney(v) {
 }
 
 function openLink(url) { if (url) window.open(url, '_blank') }
+
+async function submitReject() {
+  if (!rejectReason.value) {
+    $q.notify({ type: 'warning', message: 'Укажите причину' })
+    return
+  }
+  actionLoading.value = true
+  try {
+    // Если есть файл — загружаем на ЯД
+    let filePath = null
+    if (rejectFile.value) {
+      const { filesApi } = await import('src/services/api')
+      const yandexPath = `/CRM/Правки/${card.value.contract_number || card.value.id}/${rejectFile.value.name}`
+      const { data } = await filesApi.upload(rejectFile.value, yandexPath)
+      filePath = data.yandex_path || yandexPath
+    }
+    await crmApi.rejectWork(card.value.id, {
+      reason: rejectReason.value,
+      revision_file_path: filePath
+    })
+    $q.notify({ type: 'positive', message: 'Отправлено на исправление' })
+    showRejectDialog.value = false
+    rejectReason.value = ''
+    rejectFile.value = null
+    crmStore.loadCard(card.value.id)
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { actionLoading.value = false }
+}
 
 async function doAction(action) {
   actionLoading.value = true
