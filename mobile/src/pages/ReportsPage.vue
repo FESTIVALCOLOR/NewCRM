@@ -100,10 +100,23 @@
             </div>
             <!-- По городам -->
             <div class="q-mt-md" v-if="cityChart">
-              <div class="text-caption text-weight-bold q-mb-xs">По городам</div>
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">По городам</div>
               <bar-chart :labels="cityChart.labels" :datasets="cityChart.datasets" horizontal />
             </div>
+            <!-- По агентам -->
+            <div class="q-mt-md" v-if="agentChart">
+              <div class="text-caption text-weight-bold q-mb-xs" style="color: #333">По агентам</div>
+              <bar-chart :labels="agentChart.labels" :datasets="agentChart.datasets" horizontal />
+            </div>
           </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Секция: Динамика договоров по месяцам -->
+      <q-card class="is-card q-mb-md" v-if="contractsDynamics">
+        <q-card-section>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Договоры по месяцам</div>
+          <bar-chart :labels="contractsDynamics.labels" :datasets="contractsDynamics.datasets" />
         </q-card-section>
       </q-card>
 
@@ -232,6 +245,23 @@ const cityChart = computed(() => {
     labels: entries.map(([k]) => k),
     datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: '#85C1E9' }]
   }
+})
+
+const agentChart = computed(() => {
+  const p = projectStats.value
+  if (!p?.by_agents) return null
+  const entries = Object.entries(p.by_agents).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  return {
+    labels: entries.map(([k]) => k),
+    datasets: [{ label: 'Проектов', data: entries.map(([, v]) => v), color: '#ffd93c' }]
+  }
+})
+
+const contractsDynamics = computed(() => {
+  const s = summary.value
+  if (!s) return null
+  // Используем данные из summary — если есть monthly_data
+  return null // Пока нет monthly_data в summary, будет добавлено при наличии API
 })
 
 const supervisionMini = computed(() => {
