@@ -3329,12 +3329,35 @@ class ContractDialog(QDialog):
         CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки файла: {error_msg}', 'error').exec_()
 
     def get_contract_yandex_folder(self):
-        """Получение пути к папке договора на Яндекс.Диске"""
+        """Получение пути к папке договора на Яндекс.Диске.
+        Если yandex_folder_path пустой — генерируем на основе данных договора.
+        """
         if self.contract_data:
-            # Редактирование существующего договора
-            return self.contract_data.get('yandex_folder_path')
+            folder = self.contract_data.get('yandex_folder_path')
+            if folder:
+                return folder
+            # Fallback: генерируем путь если нет в данных
+            agent = self.contract_data.get('agent_type', 'ФЕСТИВАЛЬ')
+            ptype = self.contract_data.get('project_type', 'Индивидуальный')
+            city = self.contract_data.get('city', 'Москва')
+            address = self.contract_data.get('address', 'Без адреса')
+            area = self.contract_data.get('area', 0)
+            type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
+            folder_name = f"{city}-{address}-{area}м2"
+            # Убираем недопустимые символы
+            import re
+            folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
+            generated = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
+            # Создаём папку рекурсивно
+            try:
+                yd = YandexDiskManager(YANDEX_DISK_TOKEN)
+                yd.ensure_folder_exists(generated)
+                # Сохраняем в данных для дальнейшего использования
+                self.contract_data['yandex_folder_path'] = generated
+            except Exception as e:
+                print(f"[ERROR] Не удалось создать папку: {e}")
+            return generated
         else:
-            # Новый договор - нужно сначала сохранить
             return None
 
     def open_contract_file(self):
