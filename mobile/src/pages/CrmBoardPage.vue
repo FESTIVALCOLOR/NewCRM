@@ -46,10 +46,20 @@
       </q-card>
     </div>
 
-    <!-- Колонки — табы сверху (мобиль) -->
+    <!-- Колонки -->
     <template v-if="!crmStore.loading">
-      <!-- Столбцы-кнопки (как в десктопе — серые, с подчёркиванием активного) -->
-      <div v-if="$q.screen.lt.md" class="q-pa-xs" style="overflow-x: auto; white-space: nowrap; border: 1px solid #d9d9d9; border-radius: 4px; margin: 4px">
+
+      <!-- АРХИВ — просто список без столбцов -->
+      <div v-if="crmStore.showArchive" class="q-pa-sm">
+        <div v-if="crmStore.cards.length === 0" class="text-center q-py-xl" style="color: #999">
+          <q-icon name="archive" size="40px" class="q-mb-sm" />
+          <div class="text-caption">Архив пуст</div>
+        </div>
+        <crm-card-item v-for="card in crmStore.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
+      </div>
+
+      <!-- АКТИВНЫЕ — столбцы-кнопки -->
+      <div v-if="!crmStore.showArchive && $q.screen.lt.md" class="q-pa-xs" style="overflow-x: auto; white-space: nowrap; border: 1px solid #d9d9d9; border-radius: 4px; margin: 4px">
         <q-btn
           v-for="col in crmStore.columns"
           :key="col.name"
@@ -63,8 +73,8 @@
         />
       </div>
 
-      <!-- Контент колонки (в рамке) -->
-      <div v-if="$q.screen.lt.md" style="border: 1px solid #d9d9d9; border-top: none; border-radius: 0 0 4px 4px; margin: 0 4px; min-height: 200px">
+      <!-- Контент колонки (в рамке) — только для активных -->
+      <div v-if="!crmStore.showArchive && $q.screen.lt.md" style="border: 1px solid #d9d9d9; border-top: none; border-radius: 0 0 4px 4px; margin: 0 4px; min-height: 200px">
         <div v-for="col in crmStore.columns" :key="col.name" v-show="activeColumn === col.name" class="q-pa-sm">
           <div v-if="col.cards.length === 0" class="text-center q-py-xl" style="color: #999">
             <q-icon name="inbox" size="40px" class="q-mb-sm" />
@@ -74,8 +84,8 @@
         </div>
       </div>
 
-      <!-- Планшет — колонки рядом -->
-      <div v-if="$q.screen.gt.sm" class="row q-pa-sm q-col-gutter-sm" style="overflow-x: auto">
+      <!-- Планшет — колонки рядом (только для активных) -->
+      <div v-if="$q.screen.gt.sm && !crmStore.showArchive" class="row q-pa-sm q-col-gutter-sm" style="overflow-x: auto">
         <div v-for="col in crmStore.columns" :key="col.name" class="col-3" style="min-width: 280px">
           <q-card class="is-card">
             <q-card-section class="q-pb-xs">

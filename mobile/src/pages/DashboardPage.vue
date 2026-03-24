@@ -39,6 +39,29 @@
         </div>
       </div>
 
+      <!-- Мои задачи (ближайшие дедлайны) -->
+      <q-card class="is-card q-mb-md" v-if="myTasks.length > 0">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">Мои задачи</div>
+        </q-card-section>
+        <q-list dense separator>
+          <q-item v-for="task in myTasks" :key="task.id" clickable v-ripple @click="$router.push(`/crm/${task.id}`)">
+            <q-item-section avatar>
+              <q-icon name="assignment" :color="taskColor(task)" size="20px" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label style="font-size: 12px; color: #333">{{ task.address || task.contract_number }}</q-item-label>
+              <q-item-label caption style="color: #888">{{ task.column_name }}</q-item-label>
+            </q-item-section>
+            <q-item-section side v-if="task.deadline">
+              <div class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline) }">
+                {{ fmtDeadline(task.deadline) }}
+              </div>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+
       <!-- Уведомления -->
       <q-card class="is-card">
         <q-card-section class="q-pb-none">
@@ -69,7 +92,9 @@
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
+import { ref } from 'vue'
 import { useDashboardStore } from 'src/stores/dashboard'
+import { crmApi } from 'src/services/api'
 import { useNotificationsStore } from 'src/stores/notifications'
 import InstallBanner from 'src/components/InstallBanner.vue'
 
@@ -104,10 +129,46 @@ const quickActions = [
   { label: 'СРМ надзора', icon: 'engineering', to: '/supervision' }
 ]
 
+const myTasks = ref([])
+
 const recentNotifications = computed(() => notificationsStore.items.slice(0, 5))
+
+function taskColor(task) {
+  if (!task.deadline) return 'grey-5'
+  const days = Math.ceil((new Date(task.deadline) - new Date()) / 86400000)
+  if (days < 0) return 'negative'
+  if (days <= 2) return 'warning'
+  return 'grey-7'
+}
+
+function dlColor(d) {
+  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+  if (days < 0) return '#E74C3C'
+  if (days <= 2) return '#F39C12'
+  return '#888'
+}
+
+function fmtDeadline(d) {
+  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+  if (days < 0) return `${Math.abs(days)} дн. просрочено`
+  if (days === 0) return 'Сегодня'
+  if (days === 1) return 'Завтра'
+  return `${days} дн.`
+}
 function notificationIcon(t) { return { assigned: 'assignment_ind', deadline: 'schedule', payment: 'payments', crm_stage: 'swap_horiz', supervision: 'engineering' }[t] || 'notifications' }
 function handleNotificationClick(n) { if (!n.is_read) notificationsStore.markRead(n.id); if (n.related_entity_type === 'crm_card') router.push(`/crm/${n.related_entity_id}`) }
-function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load()]).finally(done) }
+async function loadMyTasks() {
+  try {
+    const { data } = await crmApi.getCards('Индивидуальный', false)
+    // Сортируем по дедлайну — ближайшие первыми
+    myTasks.value = (data || [])
+      .filter(c => c.deadline)
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+      .slice(0, 5)
+  } catch {}
+}
 
-onMounted(() => dashboard.loadAll())
+function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()]).finally(done) }
+
+onMounted(() => { dashboard.loadAll(); loadMyTasks() })
 </script>

@@ -81,16 +81,8 @@
             </q-list>
           </q-card>
 
-          <!-- Кнопки редактирования и удаления -->
-          <div class="row q-col-gutter-sm q-mb-md">
-            <div class="col">
-              <q-btn color="accent" text-color="dark" label="Редактировать" icon="edit" no-caps unelevated class="full-width" style="border-radius: 4px" @click="showEdit = true" />
-            </div>
-            <div class="col-auto">
-              <q-btn outline color="negative" icon="delete" no-caps @click="deleteContract" style="border-radius: 4px" />
-            </div>
-          </div>
-          <contract-form-dialog v-model="showEdit" :contract="contract" @saved="reload" />
+          <!-- Кнопка удаления -->
+          <q-btn flat color="negative" icon="delete" label="Удалить договор" no-caps class="full-width q-mt-md" @click="deleteContract" />
         </q-tab-panel>
 
         <!-- Финансы -->
@@ -105,13 +97,16 @@
                   </div>
                 </div>
               </div>
-              <!-- Кнопки: редактировать финансы и провести оплату -->
-              <div class="row q-col-gutter-sm">
-                <div class="col-6">
-                  <q-btn outline color="grey-7" icon="edit" label="Редактировать" no-caps class="full-width" dense style="border-radius: 4px; font-size: 11px" @click="showEdit = true" />
+              <!-- Кнопки финансов -->
+              <div class="row q-col-gutter-xs">
+                <div class="col-4">
+                  <q-btn outline color="grey-7" icon="edit" label="Редакт." no-caps class="full-width" @click="showEdit = true" />
                 </div>
-                <div class="col-6">
-                  <q-btn unelevated icon="payments" label="Провести оплату" no-caps class="full-width" dense style="background: #27AE60; color: white; border-radius: 4px; font-size: 11px" @click="conductPayment" />
+                <div class="col-4">
+                  <q-btn unelevated icon="check_circle" label="Оплата" no-caps class="full-width" style="background: #27AE60; color: white" @click="conductPayment" />
+                </div>
+                <div class="col-4">
+                  <q-btn outline icon="add" label="Платёж" no-caps class="full-width" color="grey-7" @click="showCreatePayment = true" />
                 </div>
               </div>
             </q-card-section>
@@ -200,6 +195,34 @@
           <input ref="fileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" @change="handleFileUpload" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg" />
         </q-tab-panel>
       </q-tab-panels>
+
+      <!-- Диалоги вне tab-panels -->
+      <contract-form-dialog v-model="showEdit" :contract="contract" @saved="reload" />
+
+      <!-- Диалог создания платежа -->
+      <q-dialog v-model="showCreatePayment">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #ffd93c; color: #333">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Новый платёж</q-toolbar-title>
+            <q-btn flat round dense icon="close" @click="showCreatePayment = false" />
+          </q-toolbar>
+          <q-card-section>
+            <q-select v-model="newPayment.employee_id" :options="employeeOpts" label="Исполнитель *" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-select v-model="newPayment.payment_subtype" :options="['Аванс', 'Доплата', 'Полная оплата']" label="Тип выплаты" outlined dense class="q-mb-sm" />
+            <q-input v-model.number="newPayment.amount" label="Сумма *" outlined dense type="number" prefix="₽" class="q-mb-sm" />
+            <q-input v-model="newPayment.report_month" label="Отчётный месяц" outlined dense type="month" class="q-mb-sm" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" v-close-popup no-caps />
+            <q-btn unelevated label="Создать" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="createPayment" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- FAB редактирования (круглый жёлтый как стандарт) -->
+      <q-page-sticky position="bottom-right" :offset="[18, 70]">
+        <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
+      </q-page-sticky>
     </template>
 
     <div v-else-if="!loading" class="text-center q-pa-xl" style="color: #999">
@@ -214,7 +237,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, paymentsApi, crmApi } from 'src/services/api'
+import { contractsApi, filesApi, paymentsApi, crmApi, employeesApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
@@ -230,6 +253,9 @@ const showEdit = ref(false)
 const tab = ref('info')
 const fileInput = ref(null)
 const uploadStage = ref('')
+const showCreatePayment = ref(false)
+const employeeOpts = ref([])
+const newPayment = ref({ employee_id: null, payment_subtype: 'Аванс', amount: null, report_month: '' })
 
 const agentColor = computed(() => {
   const agent = refs.agentByName(contract.value?.agent_type)
@@ -301,14 +327,14 @@ async function handleFileUpload(event) {
 }
 
 function conductPayment() {
-  $q.dialog({
-    title: 'Провести оплату',
-    message: 'Отметить аванс как оплаченный?',
-    cancel: true
-  }).onOk(async () => {
-    // Ищем неоплаченный платёж по этому договору и отмечаем
-    const unpaid = payments.value.find(p => !p.is_paid && p.id)
-    if (unpaid) {
+  // Если есть неоплаченные — отмечаем первый. Иначе — создаём новый
+  const unpaid = payments.value.find(p => !p.is_paid && p.id)
+  if (unpaid) {
+    $q.dialog({
+      title: 'Провести оплату',
+      message: `Отметить «${unpaid.employee_name || ''}» ${fmtMoney(unpaid.final_amount || unpaid.amount)} как оплаченный?`,
+      cancel: true
+    }).onOk(async () => {
       try {
         await paymentsApi.markPaid(unpaid.id)
         unpaid.is_paid = true
@@ -316,10 +342,36 @@ function conductPayment() {
       } catch (err) {
         $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
       }
-    } else {
-      $q.notify({ type: 'info', message: 'Нет неоплаченных платежей' })
-    }
-  })
+    })
+  } else {
+    // Открываем диалог создания платежа
+    showCreatePayment.value = true
+  }
+}
+
+async function createPayment() {
+  if (!newPayment.value.employee_id || !newPayment.value.amount) {
+    $q.notify({ type: 'warning', message: 'Заполните исполнителя и сумму' })
+    return
+  }
+  try {
+    await paymentsApi.create({
+      contract_id: contract.value.id,
+      employee_id: newPayment.value.employee_id,
+      payment_subtype: newPayment.value.payment_subtype,
+      amount: newPayment.value.amount,
+      final_amount: newPayment.value.amount,
+      report_month: newPayment.value.report_month || null,
+      is_paid: false
+    })
+    $q.notify({ type: 'positive', message: 'Платёж создан' })
+    showCreatePayment.value = false
+    // Перезагрузить платежи
+    const { data } = await paymentsApi.getList({ contract_id: contract.value.id })
+    payments.value = data
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
 }
 
 async function deleteContract() {
@@ -348,16 +400,20 @@ async function reload() {
 onMounted(async () => {
   const id = route.params.id
   try {
-    const [cRes, fRes, pRes, tRes] = await Promise.allSettled([
+    const [cRes, fRes, pRes, tRes, empRes] = await Promise.allSettled([
       contractsApi.getById(id),
       filesApi.getContractFiles(id),
       paymentsApi.getList({ contract_id: id }),
-      crmApi.getTimeline(id)
+      crmApi.getTimeline(id),
+      employeesApi.getList()
     ])
     if (cRes.status === 'fulfilled') contract.value = cRes.value.data
     if (fRes.status === 'fulfilled') files.value = fRes.value.data || []
     if (pRes.status === 'fulfilled') payments.value = pRes.value.data || []
     if (tRes.status === 'fulfilled') timeline.value = tRes.value.data || []
+    if (empRes.status === 'fulfilled') {
+      employeeOpts.value = empRes.value.data.filter(e => e.status === 'активный').map(e => ({ label: e.full_name, value: e.id }))
+    }
   } finally { loading.value = false }
 })
 </script>

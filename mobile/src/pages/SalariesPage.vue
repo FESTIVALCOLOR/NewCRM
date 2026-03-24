@@ -98,6 +98,32 @@
         </div>
       </template>
     </q-pull-to-refresh>
+
+    <!-- FAB создания -->
+    <q-page-sticky position="bottom-right" :offset="[18, 70]">
+      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreateDialog = true" />
+    </q-page-sticky>
+
+    <!-- Диалог создания платежа/оклада -->
+    <q-dialog v-model="showCreateDialog">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #ffd93c; color: #333">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Новый платёж</q-toolbar-title>
+          <q-btn flat round dense icon="close" @click="showCreateDialog = false" />
+        </q-toolbar>
+        <q-card-section>
+          <q-select v-model="newPay.employee_id" :options="employeeOpts" label="Исполнитель *" outlined dense emit-value map-options class="q-mb-sm" />
+          <q-select v-model="newPay.payment_subtype" :options="['Аванс', 'Доплата', 'Полная оплата', 'Оклад']" label="Тип" outlined dense class="q-mb-sm" />
+          <q-input v-model.number="newPay.amount" label="Сумма *" outlined dense type="number" prefix="₽" class="q-mb-sm" />
+          <q-input v-model="newPay.report_month" label="Месяц" outlined dense type="month" class="q-mb-sm" />
+          <q-input v-model="newPay.comments" label="Комментарий" outlined dense class="q-mb-sm" />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" v-close-popup no-caps />
+          <q-btn unelevated label="Создать" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="createNewPayment" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -112,6 +138,8 @@ const loading = ref(false)
 const paymentTab = ref('all')
 const employeeOpts = ref([])
 const currentYear = new Date().getFullYear()
+const showCreateDialog = ref(false)
+const newPay = ref({ employee_id: null, payment_subtype: 'Аванс', amount: null, report_month: '', comments: '' })
 
 const filters = ref({
   period: 'all',
@@ -200,6 +228,39 @@ async function deletePayment(p) {
       $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
     }
   })
+}
+
+async function createNewPayment() {
+  if (!newPay.value.employee_id || !newPay.value.amount) {
+    $q.notify({ type: 'warning', message: 'Заполните исполнителя и сумму' })
+    return
+  }
+  try {
+    if (newPay.value.payment_subtype === 'Оклад') {
+      // Создаём зарплату (salary)
+      const { salariesApi } = await import('src/services/api')
+      await salariesApi.create({
+        employee_id: newPay.value.employee_id,
+        amount: newPay.value.amount,
+        report_month: newPay.value.report_month || null,
+        comments: newPay.value.comments
+      })
+    } else {
+      await paymentsApi.create({
+        employee_id: newPay.value.employee_id,
+        payment_subtype: newPay.value.payment_subtype,
+        amount: newPay.value.amount,
+        final_amount: newPay.value.amount,
+        report_month: newPay.value.report_month || null,
+        is_paid: false
+      })
+    }
+    $q.notify({ type: 'positive', message: 'Платёж создан' })
+    showCreateDialog.value = false
+    loadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
 }
 
 watch(paymentTab, () => loadData())

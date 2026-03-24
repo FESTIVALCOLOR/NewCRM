@@ -20,8 +20,18 @@
         </template>
       </q-input>
 
+      <!-- Фильтры -->
+      <div class="row q-col-gutter-xs q-mb-sm">
+        <div class="col-6">
+          <q-select v-model="clientType" :options="['Все', 'Физическое лицо', 'Юридическое лицо']" label="Тип" outlined dense @update:model-value="applyFilters" />
+        </div>
+        <div class="col-6">
+          <q-select v-model="sortBy" :options="sortOpts" label="Сортировка" outlined dense emit-value map-options @update:model-value="applyFilters" />
+        </div>
+      </div>
+
       <!-- Счётчик -->
-      <div class="text-caption text-grey-7 q-mb-sm" v-if="!clientsStore.loading">
+      <div class="text-caption" style="color: #888" v-if="!clientsStore.loading">
         Найдено: {{ clientsStore.filteredItems.length }}
         <span v-if="clientsStore.totalCount"> из {{ clientsStore.totalCount }}</span>
       </div>
@@ -102,6 +112,17 @@ import { useClientsStore } from 'src/stores/clients'
 const router = useRouter()
 const clientsStore = useClientsStore()
 const showForm = ref(false)
+const clientType = ref('Все')
+const sortBy = ref('name')
+
+const sortOpts = [
+  { label: 'По имени', value: 'name' },
+  { label: 'По дате', value: 'date' }
+]
+
+function applyFilters() {
+  // Фильтрация через computed в store
+}
 
 function openClient(clientId) {
   router.push(`/clients/${clientId}`)
