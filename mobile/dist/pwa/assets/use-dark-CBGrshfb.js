@@ -1,0 +1,1 @@
+import{s as e}from"./runtime-core.esm-bundler-DYzv5_0-.js";var t={dark:{type:Boolean,default:null}};function n(t,n){return e(()=>t.dark===null?n.dark.isActive:t.dark)}export{n,t};

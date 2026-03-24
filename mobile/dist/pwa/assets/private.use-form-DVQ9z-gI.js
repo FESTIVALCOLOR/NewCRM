@@ -1,1 +1,0 @@
-import{F as e,q as t}from"./dom-C3Zb804p.js";var n={name:String};function r(e={}){return(n,r,i)=>{n[r](t(`input`,{class:`hidden`+(i||``),...e.value}))}}function i(t){return e(()=>t.name||t.for)}export{i as n,n as r,r as t};

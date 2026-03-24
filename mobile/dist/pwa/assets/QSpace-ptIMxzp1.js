@@ -1,1 +1,0 @@
-import{T as e,q as t}from"./dom-C3Zb804p.js";var n=e({name:`QSpace`,setup(){let e=t(`div`,{class:`q-space`});return()=>e}});export{n as t};

@@ -169,8 +169,27 @@ function refreshData() {
 }
 
 function openManual() {
-  // Инструкция на Яндекс.Диске (зависит от роли — пока общая ссылка)
-  window.open('https://disk.yandex.ru/client/disk/CRM/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D0%B8', '_blank')
+  // Публичные ссылки на инструкции по должности (yadi.sk)
+  const MANUAL_URLS = {
+    'Руководитель студии': 'https://yadi.sk/i/ri0ccGzd1hixUg',
+    'Старший менеджер проектов': 'https://yadi.sk/i/jc_MLORFQJYw8g',
+    'Менеджер': 'https://yadi.sk/i/_b3QKB0cxD1RIQ',
+    'СДП': 'https://yadi.sk/i/VWlLjErSrnk_Kw',
+    'ГАП': 'https://yadi.sk/i/lAhXe7-DNrtcuw',
+    'Дизайнер': 'https://yadi.sk/i/FuD7OjI9qGpThg',
+    'Чертёжник': 'https://yadi.sk/i/ByeUw6h0erkLuQ',
+    'Замерщик': 'https://yadi.sk/i/H4MJFHmKIu0zdQ',
+    'ДАН': 'https://yadi.sk/i/LAkkj1h3f5Bv7g'
+  }
+  const position = authStore.user?.position || ''
+  const url = MANUAL_URLS[position] || MANUAL_URLS[position.split('/')[0]?.trim()]
+  if (url) {
+    window.open(url, '_blank')
+  } else {
+    import('quasar').then(({ Notify }) => {
+      Notify.create({ type: 'info', message: `Инструкция для «${position}» пока не доступна` })
+    })
+  }
 }
 
 function openNotifSettings() {
