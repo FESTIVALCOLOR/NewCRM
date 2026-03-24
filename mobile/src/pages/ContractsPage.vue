@@ -36,17 +36,21 @@
           v-for="contract in filtered"
           :key="contract.id"
           class="is-card q-mb-sm cursor-pointer"
+          :style="cardBgStyle(contract)"
           @click="$router.push(`/contracts/${contract.id}`)"
         >
           <q-card-section class="q-pa-md">
             <div class="row items-center justify-between q-mb-xs">
-              <div class="text-subtitle2 text-weight-bold text-primary">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
                 {{ contract.contract_number }}
               </div>
-              <q-badge :color="statusColor(contract.status)" :label="contract.status" dense />
+              <div class="row q-gutter-xs">
+                <q-badge v-if="contract.agent_type" :style="{ background: agentColor(contract.agent_type) }" :label="contract.agent_type" dense text-color="white" />
+                <q-badge :color="statusColor(contract.status)" :label="contract.status" dense />
+              </div>
             </div>
-            <div class="text-body2 q-mb-xs">{{ contract.address || 'Без адреса' }}</div>
-            <div class="row q-gutter-md text-caption text-grey-7">
+            <div class="text-body2 q-mb-xs" style="color: #333">{{ contract.address || 'Без адреса' }}</div>
+            <div class="row q-gutter-md text-caption" style="color: #888">
               <span>{{ contract.project_type }}</span>
               <span v-if="contract.area">{{ contract.area }} м²</span>
               <span v-if="contract.city">{{ contract.city }}</span>
@@ -72,12 +76,26 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { contractsApi } from 'src/services/api'
+import { useReferencesStore } from 'src/stores/references'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
+const refs = useReferencesStore()
 const contracts = ref([])
 const loading = ref(false)
 const search = ref('')
 const showForm = ref(false)
+
+function agentColor(agentName) {
+  const agent = refs.agentByName(agentName)
+  return agent?.color || '#95A5A6'
+}
+
+// Фон карточки: зелёный если оплачен, оранжевый если нет
+function cardBgStyle(contract) {
+  if (contract.status?.includes('СДАН')) return { background: '#E8F5E9' }
+  if (contract.status === 'В работе') return { background: '#FFF8E1' }
+  return {}
+}
 
 const filtered = computed(() => {
   if (!search.value) return contracts.value
