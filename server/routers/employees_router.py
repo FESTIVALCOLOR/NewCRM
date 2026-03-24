@@ -102,6 +102,35 @@ async def get_employee_telegram_info(
     return result
 
 
+@router.post("/employees/{employee_id}/create-telegram-token")
+async def create_telegram_token(
+    employee_id: int,
+    current_user: Employee = Depends(require_permission("employees.update")),
+    db: Session = Depends(get_db)
+):
+    """Создать Telegram токен для сотрудника (без отправки email).
+    Токен можно скопировать и отправить сотруднику вручную.
+    """
+    import secrets
+    from datetime import datetime, timedelta
+
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    token = secrets.token_hex(16)
+    employee.telegram_link_token = token
+    employee.telegram_link_token_expires = datetime.utcnow() + timedelta(days=30)
+    db.commit()
+
+    return {
+        "status": "success",
+        "token_command": f"/start {token}",
+        "tg_link": f"tg://resolve?domain=festival_color_crm_bot&start={token}",
+        "message": "Токен создан. Скопируйте команду и отправьте сотруднику."
+    }
+
+
 @router.post("/employees", response_model=EmployeeResponse, status_code=201)
 async def create_employee(
     employee_data: EmployeeCreate,

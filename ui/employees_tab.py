@@ -2505,6 +2505,7 @@ class EmployeeDialog(QDialog):
                 _cb = QPushButton('Копировать команду')
                 _cb.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 4px; padding: 4px 12px; font-size: 11px;')
                 _cb.setFixedHeight(28)
+                _cb.setFixedWidth(160)
                 _cb.setCursor(Qt.PointingHandCursor)
                 _tcmd = str(tg_token_cmd)
                 _cb.clicked.connect(lambda ch=False, c=_tcmd: __import__('PyQt5.QtWidgets', fromlist=['QApplication']).QApplication.clipboard().setText(c))
@@ -2514,23 +2515,22 @@ class EmployeeDialog(QDialog):
                 _sl.setStyleSheet('color: #E74C3C; font-size: 12px; font-weight: bold;')
                 tg_lay.addWidget(_sl)
                 _ctb = QPushButton('Создать токен')
-                _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 11px; font-weight: bold;')
+                _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 4px; padding: 4px 12px; font-size: 11px;')
                 _ctb.setFixedHeight(28)
+                _ctb.setFixedWidth(140)
                 _ctb.setCursor(Qt.PointingHandCursor)
                 _meid = self.employee_data.get('id')
                 def _mk_tok(ch=False, eid=_meid):
                     try:
-                        _r = self.api_client._request('POST', self.api_client.base_url + '/api/v1/employees/' + str(eid) + '/send-invite')
+                        _r = self.api_client._request('POST', self.api_client.base_url + '/api/v1/employees/' + str(eid) + '/create-telegram-token')
                         if _r.status_code == 200:
-                            _r2 = self.api_client._request('GET', self.api_client.base_url + '/api/v1/employees/' + str(eid) + '/telegram-info')
-                            if _r2.status_code == 200:
-                                _cmd = _r2.json().get('token_command', '')
-                                if _cmd:
-                                    from PyQt5.QtWidgets import QApplication
-                                    QApplication.clipboard().setText(_cmd)
-                                    CustomMessageBox(self, 'Токен создан', 'Команда скопирована: ' + _cmd, 'info').exec_()
+                            _cmd = _r.json().get('token_command', '')
+                            if _cmd:
+                                from PyQt5.QtWidgets import QApplication
+                                QApplication.clipboard().setText(_cmd)
+                                CustomMessageBox(self, 'Токен создан', 'Команда скопирована: ' + _cmd, 'info').exec_()
                         else:
-                            CustomMessageBox(self, 'Ошибка', str(_r.status_code), 'error').exec_()
+                            CustomMessageBox(self, 'Ошибка', str(_r.status_code) + ' ' + _r.text[:100], 'error').exec_()
                     except Exception as _ex:
                         CustomMessageBox(self, 'Ошибка', str(_ex), 'error').exec_()
                 _ctb.clicked.connect(_mk_tok)
