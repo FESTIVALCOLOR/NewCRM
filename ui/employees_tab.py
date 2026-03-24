@@ -2541,7 +2541,7 @@ class EmployeeDialog(QDialog):
 
 
         # ========== TELEGRAM-ИНФОРМАЦИЯ (только для руководителя) ==========
-        if self.employee_data and hasattr(self, 'is_superuser') and self.is_superuser:
+        if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
             try:
                 tg_group = QGroupBox('Telegram подключение')
                 tg_group.setStyleSheet('QGroupBox { font-weight: bold; color: #333; }')
