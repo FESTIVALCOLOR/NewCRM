@@ -268,11 +268,25 @@ async function handleFileUpload(event) {
   try {
     $q.loading.show({ message: 'Загрузка...' })
     const yandexPath = `/CRM/Проекты/${contract.value.contract_number}/${uploadStage.value}/${file.name}`
-    await filesApi.upload(file, yandexPath)
+    const uploadRes = await filesApi.upload(file, yandexPath)
+    const publicLink = uploadRes.data?.public_link || ''
+    // Создаём запись в БД ProjectFile
+    const { api: apiInst } = await import('src/boot/axios')
+    await apiInst.post('/api/v1/files/', {
+      contract_id: contract.value.id,
+      stage: uploadStage.value,
+      file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
+      public_link: publicLink,
+      yandex_path: yandexPath,
+      file_name: file.name,
+      file_order: files.value.length + 1,
+      variation: 1
+    })
     $q.notify({ type: 'positive', message: 'Файл загружен' })
+    // Перезагрузить список файлов
     const { data } = await filesApi.getContractFiles(contract.value.id)
     files.value = data || []
-  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка загрузки' }) }
   finally { $q.loading.hide(); event.target.value = '' }
 }
 

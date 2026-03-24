@@ -51,8 +51,9 @@ export const useClientsStore = defineStore('clients', () => {
 
   async function loadClientContracts(clientId) {
     try {
-      const { data } = await contractsApi.getList({ client_id: clientId })
-      clientContracts.value = data
+      // API не поддерживает client_id фильтр — фильтруем на клиенте
+      const { data } = await contractsApi.getList({ limit: 500 })
+      clientContracts.value = (data || []).filter(c => c.client_id === parseInt(clientId))
     } catch {
       clientContracts.value = []
     }
