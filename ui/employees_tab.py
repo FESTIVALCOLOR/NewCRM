@@ -2476,7 +2476,7 @@ class EmployeeDialog(QDialog):
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
             tg_widget = QWidget()
             tg_row = QHBoxLayout(tg_widget)
-            tg_row.setContentsMargins(8, 8, 8, 8)
+            tg_row.setContentsMargins(8, 2, 8, 8)
             tg_row.setSpacing(8)
             _tg_title = QLabel('Telegram:')
             _tg_title.setStyleSheet('font-weight: bold; color: #333; font-size: 12px;')
