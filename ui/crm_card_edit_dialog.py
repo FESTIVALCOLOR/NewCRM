@@ -6661,7 +6661,7 @@ class CardEditDialog(QDialog):
         try:
             result = self.data.workflow_repair(card_id)
             if not result:
-                CustomMessageBox(self, 'Ошибка', 'Не удалось выполнить диагностику карточки', 'error').exec_()
+                CustomMessageBox(self, 'Диагностика', 'Карточка в порядке — восстановление не требуется.\n\nЕсли карточка ещё не начата (стадия не назначена),\nдиагностика станет доступна после назначения исполнителя.', 'info').exec_()
                 return
 
             old_status = result.get('old_status', '?')
