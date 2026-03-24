@@ -2475,7 +2475,7 @@ class EmployeeDialog(QDialog):
         # ========== TELEGRAM ПОДКЛЮЧЕНИЕ (одна строка) ==========
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
             tg_widget = QWidget()
-            tg_widget.setFixedHeight(28)
+            tg_widget.setFixedHeight(32)
             tg_row = QHBoxLayout(tg_widget)
             tg_row.setContentsMargins(8, 0, 8, 0)
             tg_row.setSpacing(8)
@@ -2537,9 +2537,9 @@ class EmployeeDialog(QDialog):
                 _ctb.clicked.connect(_mk_tok)
                 tg_row.addWidget(_ctb)
             layout.addWidget(tg_widget)
+            layout.addSpacing(5)
         # ==================================================================================
 
-        
         # Кнопка "Администрирование" — по праву access.admin
         if not self.view_only:
             from utils.permissions import _has_perm
