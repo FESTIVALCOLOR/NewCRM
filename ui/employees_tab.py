@@ -2472,13 +2472,15 @@ class EmployeeDialog(QDialog):
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
 
-        # ========== TELEGRAM ПОДКЛЮЧЕНИЕ ==========
+        # ========== TELEGRAM ПОДКЛЮЧЕНИЕ (одна строка) ==========
         if self.employee_data and (getattr(self, '_is_director', False) or self.current_user.get('role') in ('admin', 'director')):
-            tg_group = QGroupBox('Telegram подключение')
-            tg_group.setStyleSheet('QGroupBox { font-weight: bold; color: #333; } QGroupBox::title { padding-top: -2px; }')
-            tg_lay = QVBoxLayout()
-            tg_lay.setContentsMargins(8, 2, 8, 2)
-            tg_lay.setSpacing(2)
+            tg_row = QHBoxLayout()
+            tg_row.setContentsMargins(0, 4, 0, 4)
+            _tg_title = QLabel('Telegram:')
+            _tg_title.setStyleSheet('font-weight: bold; color: #333; font-size: 12px;')
+            _tg_title.setFixedWidth(80)
+            tg_row.addWidget(_tg_title)
+
             tg_id = self.employee_data.get('telegram_user_id')
             tg_token_cmd = None
             try:
@@ -2491,35 +2493,26 @@ class EmployeeDialog(QDialog):
             except Exception:
                 pass
             if tg_id:
-                _sl = QLabel('Telegram подключён')
-                _sl.setStyleSheet('color: #27AE60; font-size: 12px; font-weight: bold;')
-                tg_lay.addWidget(_sl)
-                tg_lay.addWidget(QLabel('Telegram ID: ' + str(tg_id)))
+                _sl = QLabel('Подключён (ID: ' + str(tg_id) + ')')
+                _sl.setStyleSheet('color: #27AE60; font-size: 11px;')
+                tg_row.addWidget(_sl)
             elif tg_token_cmd:
-                _row2 = QHBoxLayout()
-                _sl = QLabel('Telegram НЕ подключён')
+                _sl = QLabel('НЕ подключён')
                 _sl.setStyleSheet('color: #E74C3C; font-size: 11px;')
-                _row2.addWidget(_sl)
-                _row2.addStretch()
+                tg_row.addWidget(_sl)
+                tg_row.addStretch()
                 _cb = QPushButton('Копировать команду')
                 _cb.setStyleSheet('background: #ffd93c; color: #333; border: 1px solid #e6c235; border-radius: 3px; padding: 2px 10px; font-size: 10px;')
                 _cb.setFixedHeight(22)
                 _cb.setCursor(Qt.PointingHandCursor)
                 _tcmd = str(tg_token_cmd)
                 _cb.clicked.connect(lambda ch=False, c=_tcmd: __import__('PyQt5.QtWidgets', fromlist=['QApplication']).QApplication.clipboard().setText(c))
-                _row2.addWidget(_cb)
-                tg_lay.addLayout(_row2)
-                _il = QLabel('@festival_color_crm_bot: ' + str(tg_token_cmd))
-                _il.setStyleSheet('color: #555; font-size: 10px; background: #F5F5F5; padding: 4px 8px; border-radius: 3px;')
-                _il.setWordWrap(True)
-                _il.setTextInteractionFlags(Qt.TextSelectableByMouse)
-                tg_lay.addWidget(_il)
+                tg_row.addWidget(_cb)
             else:
-                _row = QHBoxLayout()
-                _sl = QLabel('Telegram НЕ подключён')
+                _sl = QLabel('НЕ подключён')
                 _sl.setStyleSheet('color: #E74C3C; font-size: 11px;')
-                _row.addWidget(_sl)
-                _row.addStretch()
+                tg_row.addWidget(_sl)
+                tg_row.addStretch()
                 _ctb = QPushButton('Создать токен')
                 _ctb.setStyleSheet('background: #2AABEE; color: white; border: none; border-radius: 3px; padding: 2px 10px; font-size: 10px;')
                 _ctb.setFixedHeight(22)
@@ -2539,10 +2532,8 @@ class EmployeeDialog(QDialog):
                     except Exception as _ex:
                         CustomMessageBox(self, 'Ошибка', str(_ex), 'error').exec_()
                 _ctb.clicked.connect(_mk_tok)
-                _row.addWidget(_ctb)
-                tg_lay.addLayout(_row)
-            tg_group.setLayout(tg_lay)
-            layout.addWidget(tg_group)
+                tg_row.addWidget(_ctb)
+            layout.addLayout(tg_row)
         # ==================================================================================
 
         
