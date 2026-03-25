@@ -32,7 +32,7 @@
           <q-icon name="archive" size="40px" class="q-mb-sm" />
           <div class="text-caption">Архив пуст</div>
         </div>
-        <crm-card-item v-for="card in crmStore.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
+        <crm-card-item v-for="card in crmStore.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
       </div>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
@@ -63,10 +63,10 @@
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
-                <q-badge color="grey-7" :label="col.count" />
+                <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" />
@@ -77,24 +77,52 @@
         </q-carousel>
       </template>
 
-      <!-- Планшет — колонки рядом -->
-      <div v-if="$q.screen.gt.sm && !crmStore.showArchive" class="row q-pa-sm q-col-gutter-sm" style="overflow-x: auto">
-        <div v-for="col in crmStore.columns" :key="col.name" class="col-3" style="min-width: 280px">
-          <q-card class="is-card">
-            <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between">
-                <div class="text-weight-bold" style="font-size: 12px; color: #333">{{ col.shortName }}</div>
-                <q-badge color="grey-7" :label="col.count" />
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-xs">
-              <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" />
-              <div v-if="col.cards.length === 0" class="text-center q-py-md" style="color: #bbb; font-size: 11px">Нет карточек</div>
-            </q-card-section>
-          </q-card>
+      <!-- Планшет — тоже свайп (карусель) -->
+      <template v-if="$q.screen.gt.sm && !crmStore.showArchive">
+        <div class="column-nav">
+          <button v-for="(col, idx) in crmStore.columns" :key="col.name" :class="{ active: currentSlide === idx }" @click="currentSlide = idx">
+            {{ col.shortName }} <span class="count">{{ col.count }}</span>
+          </button>
         </div>
-      </div>
+        <q-carousel v-model="currentSlide" swipeable animated transition-prev="slide-right" transition-next="slide-left" style="min-height: calc(100vh - 220px); background: transparent">
+          <q-carousel-slide v-for="(col, idx) in crmStore.columns" :key="col.name" :name="idx" class="q-pa-none">
+            <div class="column-frame">
+              <div class="column-header">
+                <span class="column-title">{{ col.name }}</span>
+                <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
+              </div>
+              <div class="column-body" v-if="col.cards.length > 0">
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
+              </div>
+              <div v-else class="column-empty">
+                <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
+              </div>
+            </div>
+          </q-carousel-slide>
+        </q-carousel>
+      </template>
     </template>
+    <!-- Диалог перемещения карточки (long-press) -->
+    <q-dialog v-model="moveDialogVisible">
+      <q-card style="min-width: 300px; border-radius: 10px">
+        <q-toolbar style="background: #ffd93c; color: #333">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Переместить карточку</q-toolbar-title>
+          <q-btn flat round dense icon="close" @click="moveDialogVisible = false" />
+        </q-toolbar>
+        <q-card-section v-if="moveCard" class="q-pb-none">
+          <div class="text-weight-bold" style="font-size: 12px">{{ moveCard.contract_number }} — {{ moveCard.address }}</div>
+          <div class="text-caption q-mt-xs" style="color: #888">Текущая: {{ moveCard.column_name }}</div>
+        </q-card-section>
+        <q-list separator>
+          <q-item v-for="col in crmStore.columnOrder" :key="col" clickable v-ripple @click="doMoveCard(col)" :disable="moveCard?.column_name === col">
+            <q-item-section>
+              <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">{{ col }}</q-item-label>
+            </q-item-section>
+            <q-item-section side v-if="moveCard?.column_name === col"><q-icon name="check" color="positive" /></q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -103,12 +131,15 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
+import { crmApi } from 'src/services/api'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 
 const $q = useQuasar()
 const router = useRouter()
 const crmStore = useCrmStore()
 const currentSlide = ref(0)
+const moveDialogVisible = ref(false)
+const moveCard = ref(null)
 
 // При смене данных сбрасываем слайд на первый непустой столбец
 watch(() => crmStore.columns, (cols) => {
@@ -119,6 +150,23 @@ watch(() => crmStore.columns, (cols) => {
 })
 
 function openCard(cardId) { router.push(`/crm/${cardId}`) }
+
+function showMoveDialog(card) {
+  moveCard.value = card
+  moveDialogVisible.value = true
+}
+
+async function doMoveCard(colName) {
+  if (!moveCard.value || moveCard.value.column_name === colName) return
+  try {
+    await crmApi.moveCard(moveCard.value.id, colName)
+    $q.notify({ type: 'positive', message: `Перемещено: ${colName}` })
+    moveDialogVisible.value = false
+    crmStore.loadCards()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка перемещения' })
+  }
+}
 
 onMounted(() => { crmStore.loadCards() })
 </script>

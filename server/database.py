@@ -348,6 +348,9 @@ class Client(Base):
     passport_issued_date = Column(String)
     registration_address = Column(String)
 
+    # Telegram аккаунт клиента
+    telegram_account = Column(String(100), nullable=True)
+
     # Для организаций
     organization_type = Column(String)
     organization_name = Column(String)

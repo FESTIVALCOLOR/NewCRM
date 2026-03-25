@@ -184,6 +184,7 @@ class ClientBase(BaseModel):
     passport_issued_by: Optional[str] = None
     passport_issued_date: Optional[str] = None
     registration_address: Optional[str] = None
+    telegram_account: Optional[str] = None
     organization_type: Optional[str] = None
     organization_name: Optional[str] = None
     inn: Optional[str] = None
@@ -206,6 +207,7 @@ class ClientUpdate(BaseModel):
     passport_issued_by: Optional[str] = None
     passport_issued_date: Optional[str] = None
     registration_address: Optional[str] = None
+    telegram_account: Optional[str] = None
     organization_type: Optional[str] = None
     organization_name: Optional[str] = None
     inn: Optional[str] = None

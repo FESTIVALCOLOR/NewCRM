@@ -7,7 +7,10 @@
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ contract.contract_number }}</div>
-              <div class="text-body2 q-mt-xs" style="color: #333">{{ contract.address }}</div>
+              <div class="row items-center q-mt-xs">
+            <div class="text-body2" style="color: #333; flex: 1">{{ contract.address }}</div>
+            <q-btn v-if="contract.address" flat round dense size="sm" icon="location_on" style="color: #333" @click="openMap(contract.address)"><q-tooltip>На карте</q-tooltip></q-btn>
+          </div>
             </div>
             <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
               <q-badge :color="statusColor(contract.status)" :label="contract.status" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
@@ -24,13 +27,13 @@
         </q-card-section>
       </q-card>
 
-      <!-- Клиент (ссылка на страницу клиента) -->
+      <!-- Клиент (ФИО со ссылкой) -->
       <q-card class="is-card q-mb-md" v-if="contract.client_name || contract.client_id">
         <q-item clickable v-ripple @click="goToClient">
           <q-item-section avatar><q-icon name="person" color="grey-7" /></q-item-section>
           <q-item-section>
             <q-item-label caption>Клиент</q-item-label>
-            <q-item-label class="text-weight-bold" style="color: #333">{{ contract.client_name || `Клиент #${contract.client_id}` }}</q-item-label>
+            <q-item-label class="text-weight-bold" style="color: #333">{{ clientDisplayName }}</q-item-label>
           </q-item-section>
           <q-item-section side><q-icon name="chevron_right" color="grey-5" /></q-item-section>
         </q-item>
@@ -249,7 +252,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, crmApi } from 'src/services/api'
+import { contractsApi, filesApi, crmApi, clientsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
@@ -268,6 +271,14 @@ const uploadStage = ref('')
 const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
+
+// ФИО клиента — из contract.client_name или загрузим отдельно
+const clientName = ref(null)
+const clientDisplayName = computed(() => {
+  if (contract.value?.client_name) return contract.value.client_name
+  if (clientName.value) return clientName.value
+  return contract.value?.client_id ? `Клиент #${contract.value.client_id}` : 'Неизвестен'
+})
 
 // Платежи клиента (массив для удобства итерации)
 const clientPayments = computed(() => {
@@ -326,6 +337,7 @@ function fileColorByName(name) {
 
 function openFile(f) { if (f.public_link) window.open(f.public_link, '_blank') }
 function goToClient() { if (contract.value?.client_id) router.push(`/clients/${contract.value.client_id}`) }
+function openMap(address) { window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(address)}`, '_blank') }
 
 function uploadFor(stage) { uploadStage.value = stage; fileInput.value?.click() }
 function uploadReceipt(type) { receiptType.value = type; receiptInput.value?.click() }
@@ -336,7 +348,9 @@ function pickPayDate(payKey) {
     title: 'Дата оплаты',
     message: 'Выберите дату оплаты:',
     prompt: { model: new Date().toISOString().split('T')[0], type: 'date' },
-    cancel: true, persistent: true
+    cancel: { label: 'Отмена', flat: true, noCaps: true },
+    ok: { label: 'Подтвердить', noCaps: true, color: 'positive' },
+    persistent: true
   }).onOk(async (date) => {
     try {
       const update = {}
@@ -352,7 +366,7 @@ function pickPayDate(payKey) {
 
 // Снять оплату
 async function cancelPayment(payKey) {
-  $q.dialog({ title: 'Снять оплату?', message: 'Отменить дату оплаты?', cancel: true }).onOk(async () => {
+  $q.dialog({ title: 'Снять оплату?', message: 'Отменить дату оплаты?', cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да, снять', noCaps: true, color: 'negative' } }).onOk(async () => {
     try {
       const update = {}
       update[`${payKey}_payment_paid_date`] = null
@@ -423,6 +437,13 @@ onMounted(async () => {
     if (cRes.status === 'fulfilled') contract.value = cRes.value.data
     if (fRes.status === 'fulfilled') files.value = fRes.value.data || []
     if (tRes.status === 'fulfilled') timeline.value = tRes.value.data || []
+    // Загрузим ФИО клиента если нет в данных договора
+    if (contract.value?.client_id && !contract.value.client_name) {
+      try {
+        const { data: cl } = await clientsApi.getById(contract.value.client_id)
+        if (cl?.full_name) clientName.value = cl.full_name
+      } catch {}
+    }
   } finally { loading.value = false }
 })
 </script>

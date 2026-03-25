@@ -1,68 +1,61 @@
 <template>
   <q-page padding>
     <template v-if="client">
-      <!-- Шапка с аватаром -->
+      <!-- Шапка -->
       <q-card class="is-card q-mb-md">
-        <q-card-section>
-          <div class="row items-center q-gutter-md">
-            <q-avatar size="56px" :color="client.organization_name ? 'blue-2' : 'green-2'" :text-color="client.organization_name ? 'blue-8' : 'green-8'">
-              <q-icon :name="client.organization_name ? 'business' : 'person'" size="28px" />
-            </q-avatar>
-            <div style="flex: 1">
-              <div class="text-h6 text-weight-bold" style="color: #333">{{ client.full_name }}</div>
-              <div class="text-body2" style="color: #888" v-if="client.organization_name">{{ client.organization_name }}</div>
-            </div>
-            <!-- Кнопки контактов справа -->
-            <div class="row q-gutter-xs">
-              <q-btn flat round dense size="sm" :icon="client.phone ? 'phone' : 'phone_disabled'" :style="{ color: client.phone ? '#333' : '#ccc' }" @click="client.phone && callPhone(client.phone)">
-                <q-tooltip v-if="client.phone">Позвонить</q-tooltip>
-              </q-btn>
-              <q-btn flat round dense size="sm" :icon="client.email ? 'email' : 'mail_outline'" :style="{ color: client.email ? '#333' : '#ccc' }" @click="client.email && sendEmail(client.email)">
-                <q-tooltip v-if="client.email">Написать</q-tooltip>
-              </q-btn>
-              <q-btn flat round dense size="sm" icon="send" :style="{ color: telegramLink ? '#333' : '#ccc' }" @click="telegramLink && openLink(telegramLink)">
-                <q-tooltip>Telegram</q-tooltip>
-              </q-btn>
-              <q-btn flat round dense size="sm" :icon="client.registration_address ? 'location_on' : 'location_off'" :style="{ color: client.registration_address ? '#333' : '#ccc' }" @click="client.registration_address && openMap(client.registration_address)">
-                <q-tooltip v-if="client.registration_address">На карте</q-tooltip>
-              </q-btn>
-            </div>
-          </div>
+        <q-card-section class="text-center">
+          <q-avatar size="56px" :color="client.organization_name ? 'blue-2' : 'green-2'" :text-color="client.organization_name ? 'blue-8' : 'green-8'" class="q-mb-sm">
+            <q-icon :name="client.organization_name ? 'business' : 'person'" size="28px" />
+          </q-avatar>
+          <div class="text-h6 text-weight-bold" style="color: #333">{{ client.full_name }}</div>
+          <div class="text-body2" style="color: #888" v-if="client.organization_name">{{ client.organization_name }}</div>
         </q-card-section>
       </q-card>
 
-      <!-- Контактные данные -->
+      <!-- Контакты: кнопки СЛЕВА вертикально, данные справа -->
       <q-card class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">Контакты</div>
         </q-card-section>
-        <q-list dense>
-          <q-item v-if="client.phone">
-            <q-item-section avatar><q-icon name="phone" color="grey-7" /></q-item-section>
+        <q-list>
+          <!-- Телефон -->
+          <q-item>
+            <q-item-section avatar>
+              <q-btn flat round dense :icon="client.phone ? 'phone' : 'phone_disabled'" :style="{ color: client.phone ? '#333' : '#ccc' }" @click="client.phone && callPhone(client.phone)" />
+            </q-item-section>
             <q-item-section>
               <q-item-label caption>Телефон</q-item-label>
-              <q-item-label>{{ client.phone }}</q-item-label>
+              <q-item-label :style="{ color: client.phone ? '#333' : '#bbb' }">{{ client.phone || 'Не указан' }}</q-item-label>
             </q-item-section>
           </q-item>
-          <q-item v-if="client.email">
-            <q-item-section avatar><q-icon name="email" color="grey-7" /></q-item-section>
+          <!-- Email -->
+          <q-item>
+            <q-item-section avatar>
+              <q-btn flat round dense :icon="client.email ? 'email' : 'mail_outline'" :style="{ color: client.email ? '#333' : '#ccc' }" @click="client.email && sendEmail(client.email)" />
+            </q-item-section>
             <q-item-section>
               <q-item-label caption>Email</q-item-label>
-              <q-item-label>{{ client.email }}</q-item-label>
+              <q-item-label :style="{ color: client.email ? '#333' : '#bbb' }">{{ client.email || 'Не указан' }}</q-item-label>
             </q-item-section>
           </q-item>
-          <q-item v-if="client.telegram_account">
-            <q-item-section avatar><q-icon name="send" color="grey-7" /></q-item-section>
+          <!-- Telegram -->
+          <q-item>
+            <q-item-section avatar>
+              <q-btn flat round dense icon="send" :style="{ color: telegramLink ? '#333' : '#ccc' }" @click="telegramLink && openLink(telegramLink)" />
+            </q-item-section>
             <q-item-section>
               <q-item-label caption>Telegram</q-item-label>
-              <q-item-label>{{ client.telegram_account }}</q-item-label>
+              <q-item-label :style="{ color: client.telegram_account ? '#333' : '#bbb' }">{{ client.telegram_account || 'Не указан' }}</q-item-label>
             </q-item-section>
           </q-item>
-          <q-item v-if="client.registration_address">
-            <q-item-section avatar><q-icon name="location_on" color="grey-7" /></q-item-section>
+          <!-- Адрес / Геоточка -->
+          <q-item>
+            <q-item-section avatar>
+              <q-btn flat round dense :icon="client.registration_address ? 'location_on' : 'location_off'" :style="{ color: client.registration_address ? '#333' : '#ccc' }" @click="client.registration_address && openMap(client.registration_address)" />
+            </q-item-section>
             <q-item-section>
               <q-item-label caption>Адрес</q-item-label>
-              <q-item-label>{{ client.registration_address }}</q-item-label>
+              <q-item-label :style="{ color: client.registration_address ? '#333' : '#bbb' }">{{ client.registration_address || 'Не указан' }}</q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
@@ -84,17 +77,11 @@
       <q-card class="is-card">
         <q-card-section class="q-pb-none">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">
-            Договоры
-            <q-badge v-if="clientsStore.clientContracts.length" :label="clientsStore.clientContracts.length" class="q-ml-xs" />
+            Договоры <q-badge v-if="clientsStore.clientContracts.length" :label="clientsStore.clientContracts.length" class="q-ml-xs" />
           </div>
         </q-card-section>
-
         <q-list v-if="clientsStore.clientContracts.length > 0" separator>
-          <q-item
-            v-for="c in clientsStore.clientContracts" :key="c.id"
-            clickable v-ripple
-            @click="$router.push(`/contracts/${c.id}`)"
-          >
+          <q-item v-for="c in clientsStore.clientContracts" :key="c.id" clickable v-ripple @click="$router.push(`/contracts/${c.id}`)">
             <q-item-section>
               <q-item-label class="text-weight-medium">{{ c.contract_number }}</q-item-label>
               <q-item-label caption>{{ c.address }}</q-item-label>
@@ -108,10 +95,7 @@
             </q-item-section>
           </q-item>
         </q-list>
-
-        <q-card-section v-else class="text-center" style="color: #999">
-          Нет договоров
-        </q-card-section>
+        <q-card-section v-else class="text-center" style="color: #999">Нет договоров</q-card-section>
       </q-card>
 
       <!-- FAB редактирования -->
@@ -125,8 +109,7 @@
     <div v-else class="text-center q-pa-xl" style="color: #999">
       <q-spinner v-if="!loaded" size="40px" color="accent" />
       <template v-else>
-        <q-icon name="person_off" size="48px" class="q-mb-sm" />
-        <div>Клиент не найден</div>
+        <q-icon name="person_off" size="48px" class="q-mb-sm" /><div>Клиент не найден</div>
       </template>
     </div>
   </q-page>
@@ -147,32 +130,20 @@ const showEdit = ref(false)
 
 const client = computed(() => clientsStore.selectedClient)
 
-// Telegram ссылка из telegram_account
 const telegramLink = computed(() => {
   const tg = client.value?.telegram_account
   if (!tg) return null
   const clean = tg.replace('@', '').trim()
   if (!clean) return null
-  // Если номер телефона
   if (/^\+?\d+$/.test(clean)) return `https://t.me/+${clean.replace('+', '')}`
   return `https://t.me/${clean}`
 })
 
-function callPhone(phone) {
-  window.location.href = `tel:${phone.replace(/[^\d+]/g, '')}`
-}
-function sendEmail(email) {
-  window.location.href = `mailto:${email}`
-}
-function openLink(url) {
-  if (url) window.open(url, '_blank')
-}
-function openMap(address) {
-  window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(address)}`, '_blank')
-}
-function agentColor(name) {
-  return refs.agentByName(name)?.color || '#95A5A6'
-}
+function callPhone(phone) { window.location.href = `tel:${phone.replace(/[^\d+]/g, '')}` }
+function sendEmail(email) { window.location.href = `mailto:${email}` }
+function openLink(url) { if (url) window.open(url, '_blank') }
+function openMap(address) { window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(address)}`, '_blank') }
+function agentColor(name) { return refs.agentByName(name)?.color || '#95A5A6' }
 function contractStatusColor(status) {
   if (!status) return 'grey'
   if (status === 'В работе') return 'orange'
@@ -193,10 +164,7 @@ async function reloadClient() {
 onMounted(async () => {
   const clientId = route.params.id
   if (clientId) {
-    await Promise.all([
-      clientsStore.loadClient(clientId),
-      clientsStore.loadClientContracts(clientId)
-    ])
+    await Promise.all([clientsStore.loadClient(clientId), clientsStore.loadClientContracts(clientId)])
   }
   loaded.value = true
 })

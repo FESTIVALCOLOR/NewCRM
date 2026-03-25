@@ -1,5 +1,5 @@
 <template>
-  <q-card flat bordered class="crm-card q-mb-sm cursor-pointer" @click="$emit('click')">
+  <q-card flat bordered class="crm-card q-mb-sm cursor-pointer" @click="$emit('click')" @long-press.prevent="$emit('longpress')">
     <q-card-section class="q-pa-sm">
       <!-- Верхняя строка: номер + workflow status -->
       <div class="row items-center justify-between q-mb-xs">
@@ -12,12 +12,12 @@
         </q-chip>
       </div>
 
-      <!-- Адрес + Агент (агент справа, над линией) -->
+      <!-- Адрес + Агент (агент справа, крупный) -->
       <div class="row items-start justify-between q-mb-xs">
         <div class="text-weight-bold ellipsis-2-lines" style="font-size: 14px; color: #222; flex: 1">
           {{ card.address || 'Без адреса' }}
         </div>
-        <span v-if="card.agent_type" class="agent-badge q-ml-xs" :style="{ background: agentBadgeColor }" style="white-space: nowrap; flex-shrink: 0">
+        <span v-if="card.agent_type" class="agent-badge q-ml-xs" :style="{ background: agentBadgeColor, padding: '4px 10px', fontSize: '11px', lineHeight: '16px' }" style="white-space: nowrap; flex-shrink: 0">
           {{ card.agent_type }}
         </span>
       </div>
@@ -51,9 +51,9 @@
         </div>
       </div>
 
-      <!-- Теги -->
-      <div v-if="card.tags" class="q-mt-xs">
-        <q-badge v-for="tag in card.tags.split(',')" :key="tag" color="red-2" text-color="red-8" :label="tag.trim()" dense class="q-mr-xs" style="font-size: 9px" />
+      <!-- Теги (крупные, как блок Команда) -->
+      <div v-if="card.tags" class="q-mt-xs" style="border: 1px solid #FFCDD2; border-radius: 4px; padding: 4px 6px; background: #FFF5F5">
+        <q-badge v-for="tag in card.tags.split(',')" :key="tag" color="red-2" text-color="red-8" :label="tag.trim()" class="q-mr-xs" style="font-size: 11px; padding: 3px 8px" />
       </div>
 
       <!-- Дедлайн -->
@@ -72,7 +72,7 @@ import { ref, computed } from 'vue'
 import { useReferencesStore } from 'src/stores/references'
 
 const props = defineProps({ card: { type: Object, required: true } })
-defineEmits(['click'])
+defineEmits(['click', 'longpress'])
 
 const showTeam = ref(false)
 
