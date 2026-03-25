@@ -176,9 +176,24 @@ const agentOpts = computed(() => refsStore.agentNames())
 
 function filterEmployees(val, update) {
   const all = allEmployees.value.filter(e => e.status === 'активный')
-  if (!val) { update(() => { employeeOpts.value = all.map(e => ({ label: `${e.full_name} (${e.position})`, value: e.id })) }); return }
+  const makeOpts = (list) => {
+    // Группируем по должности
+    const byPos = {}
+    for (const e of list) {
+      const pos = e.position || 'Прочие'
+      if (!byPos[pos]) byPos[pos] = []
+      byPos[pos].push(e)
+    }
+    const opts = []
+    for (const [pos, emps] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
+      opts.push({ label: `— ${pos} —`, value: null, disable: true })
+      for (const e of emps) opts.push({ label: e.full_name, value: e.id, caption: pos })
+    }
+    return opts
+  }
+  if (!val) { update(() => { employeeOpts.value = makeOpts(all) }); return }
   const q = val.toLowerCase()
-  update(() => { employeeOpts.value = all.filter(e => (e.full_name || '').toLowerCase().includes(q)).map(e => ({ label: `${e.full_name} (${e.position})`, value: e.id })) })
+  update(() => { employeeOpts.value = makeOpts(all.filter(e => (e.full_name || '').toLowerCase().includes(q))) })
 }
 
 const periodOptions = [{ label: 'Все', value: 'all' }, { label: 'Месяц', value: 'month' }, { label: 'Квартал', value: 'quarter' }, { label: 'Год', value: 'year' }]
@@ -213,7 +228,8 @@ function payRowStyle(p) { if (p.is_paid) return { background: '#E8F5E9' }; if (p
 async function loadData() {
   loading.value = true
   try {
-    const params = {}; const pt = paymentTypeMap[paymentTab.value]; if (pt) params.payment_type = pt
+    const params = {}
+    // НЕ передаём payment_type на сервер — фильтруем на клиенте для корректной работы вкладок
     if (filters.value.period !== 'all') {
       params.year = filters.value.year
       if (filters.value.period === 'month') params.month = filters.value.month
@@ -297,8 +313,15 @@ async function setPayStatus(p, status) {
 
 async function deletePayment(p) {
   $q.dialog({ title: 'Удалить?', message: `${p.employee_name} — ${formatMoney(p.final_amount || p.amount)}`, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
-    try { await paymentsApi.delete(p.id); payments.value = payments.value.filter(x => x.id !== p.id); $q.notify({ type: 'positive', message: 'Удалено' }) }
-    catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+    try {
+      if (p.salary_id) await salariesApi.delete(p.salary_id)
+      else if (p.id) await paymentsApi.delete(p.id)
+      payments.value = payments.value.filter(x => (x.id || x.salary_id) !== (p.id || p.salary_id))
+      $q.notify({ type: 'positive', message: 'Удалено' })
+    } catch (err) {
+      const d = err.response?.data?.detail
+      $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка удаления' })
+    }
   })
 }
 

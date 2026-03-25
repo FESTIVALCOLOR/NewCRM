@@ -159,8 +159,12 @@ const telegramSearchLink = computed(() => {
   if (!tg) return null
   const clean = tg.replace('@', '').trim()
   if (!clean) return null
-  // tg:// протокол для открытия в приложении Telegram
-  if (/^\+?\d{7,}$/.test(clean.replace(/\s/g, ''))) return `tg://resolve?phone=${clean.replace(/[^\d]/g, '')}`
+  // Для номера: tg://msg?to=+номер (открывает чат)
+  if (/^\+?\d{7,}$/.test(clean.replace(/\s/g, ''))) {
+    const phone = clean.replace(/[^\d+]/g, '')
+    return `tg://msg?to=${phone.startsWith('+') ? phone : '+' + phone}`
+  }
+  // Для username: tg://resolve?domain=username
   return `tg://resolve?domain=${clean}`
 })
 

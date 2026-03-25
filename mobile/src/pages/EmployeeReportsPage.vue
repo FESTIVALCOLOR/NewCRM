@@ -7,7 +7,7 @@
           <div class="col"><q-select v-model="filters.year" :options="years" label="Год" outlined dense @update:model-value="loadData" /></div>
           <div class="col"><q-select v-model="filters.quarter" :options="quarters" label="Квартал" outlined dense emit-value map-options @update:model-value="loadData" /></div>
           <div class="col"><q-select v-model="filters.month" :options="monthOpts" label="Месяц" outlined dense emit-value map-options @update:model-value="loadData" /></div>
-          <div class="col-auto"><q-btn unelevated icon="refresh" label="Сброс" no-caps style="background: #ffd93c; color: #333; height: 40px; border-radius: 4px" @click="resetFilters" /></div>
+          <div class="col-auto" style="display: flex; align-items: stretch"><q-btn unelevated icon="refresh" label="Сброс" no-caps style="background: #ffd93c; color: #333; border-radius: 4px; min-height: 100%" @click="resetFilters" /></div>
         </div>
       </q-card-section>
     </q-card>

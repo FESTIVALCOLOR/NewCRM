@@ -135,8 +135,10 @@ const telegramLink = computed(() => {
   if (!tg) return null
   const clean = tg.replace('@', '').trim()
   if (!clean) return null
-  // tg:// для открытия в приложении (обход блокировки t.me)
-  if (/^\+?\d+$/.test(clean.replace(/\s/g, ''))) return `tg://resolve?phone=${clean.replace(/[^\d]/g, '')}`
+  if (/^\+?\d+$/.test(clean.replace(/\s/g, ''))) {
+    const phone = clean.replace(/[^\d+]/g, '')
+    return `tg://msg?to=${phone.startsWith('+') ? phone : '+' + phone}`
+  }
   return `tg://resolve?domain=${clean}`
 })
 
