@@ -187,18 +187,38 @@
             <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('references')" /></q-card-section>
           </q-card>
 
-          <!-- Стадии проекта (зависят от типа) -->
+          <!-- Стадии проекта с вкладками вариаций (как в десктопе) -->
           <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md" :style="isCurrentStage(stage.code) ? 'border: 2px solid #27AE60' : ''">
-            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div></q-card-section>
-            <q-list dense v-if="filesByStage(stage.code).length > 0">
-              <q-item v-for="f in filesByStage(stage.code)" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}<span v-if="f.variation > 1" class="text-caption q-ml-xs" style="color: #888">вар. {{ f.variation }}</span></q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
-            </q-list>
-            <q-card-section class="q-pt-xs">
-              <div class="row q-gutter-xs">
-                <q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile(stage.code)" />
-                <q-btn outline color="grey-7" icon="create_new_folder" label="+ Вариант" no-caps dense @click="createVariation(stage.code)" />
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div>
+                <div class="row q-gutter-xs">
+                  <q-btn outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px" @click="uploadToVariation(stage.code)" />
+                  <q-btn outline dense size="xs" icon="create_new_folder" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="addVariationTab(stage.code)"><q-tooltip>Добавить вариацию</q-tooltip></q-btn>
+                  <q-btn v-if="getVariations(stage.code).length > 1" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteVariationTab(stage.code)"><q-tooltip>Удалить текущую вариацию</q-tooltip></q-btn>
+                </div>
               </div>
             </q-card-section>
+
+            <!-- Вкладки вариаций -->
+            <q-tabs v-if="getVariations(stage.code).length > 1" v-model="activeVariation[stage.code]" dense active-color="dark" indicator-color="accent" no-caps style="font-size: 11px" align="left">
+              <q-tab v-for="v in getVariations(stage.code)" :key="v" :name="v" :label="`Вариация ${v}`" />
+            </q-tabs>
+
+            <!-- Файлы текущей вариации -->
+            <q-list dense v-if="filesForVariation(stage.code).length > 0">
+              <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
+                <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
+                <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-xs">
+                    <q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" />
+                    <q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" />
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
           </q-card>
 
           <input ref="crmFileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" multiple @change="handleCrmFileUpload" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg" />
@@ -428,6 +448,63 @@ const completedStages = computed(() => stageExecutors.value.filter(se => se.comp
 
 function filesByStage(stage) { return projectFiles.value.filter(f => f.stage === stage) }
 
+// Вариации — вкладки как в десктопе
+const activeVariation = ref({}) // { stage_code: active_variation_number }
+
+function getVariations(stageCode) {
+  const files = filesByStage(stageCode)
+  const vars = new Set(files.map(f => f.variation || 1))
+  if (vars.size === 0) vars.add(1)
+  // Инициализируем активную вкладку
+  if (!activeVariation.value[stageCode]) activeVariation.value[stageCode] = Math.min(...vars)
+  return [...vars].sort((a, b) => a - b)
+}
+
+function filesForVariation(stageCode) {
+  const v = activeVariation.value[stageCode] || 1
+  return projectFiles.value.filter(f => f.stage === stageCode && (f.variation || 1) === v)
+}
+
+function uploadToVariation(stageCode) {
+  const v = activeVariation.value[stageCode] || 1
+  crmUploadStage.value = stageCode
+  crmUploadVariation.value = v
+  crmFileInput.value?.click()
+}
+
+function addVariationTab(stageCode) {
+  const vars = getVariations(stageCode)
+  const nextVar = vars.length > 0 ? Math.max(...vars) + 1 : 2
+  activeVariation.value[stageCode] = nextVar
+  $q.notify({ type: 'positive', message: `Вариация ${nextVar} создана. Загрузите файлы.` })
+  // Открываем file picker для новой вариации
+  crmUploadStage.value = stageCode
+  crmUploadVariation.value = nextVar
+  crmFileInput.value?.click()
+}
+
+function deleteVariationTab(stageCode) {
+  const v = activeVariation.value[stageCode] || 1
+  const varFiles = projectFiles.value.filter(f => f.stage === stageCode && (f.variation || 1) === v)
+  $q.dialog({
+    title: `Удалить Вариацию ${v}?`,
+    message: `${varFiles.length} файлов будет удалено`,
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Да, удалить', noCaps: true, color: 'negative' }
+  }).onOk(async () => {
+    for (const f of varFiles) {
+      try {
+        const { api: ax } = await import('src/boot/axios')
+        await ax.delete(`/api/v1/files/${f.id}`)
+      } catch {}
+    }
+    projectFiles.value = projectFiles.value.filter(f => !(f.stage === stageCode && (f.variation || 1) === v))
+    // Переключиться на Вариацию 1
+    activeVariation.value[stageCode] = 1
+    $q.notify({ type: 'positive', message: `Вариация ${v} удалена` })
+  })
+}
+
 // Текущая стадия карточки (по column_name)
 function isCurrentStage(stageCode) {
   const col = (card.value?.column_name || '').toLowerCase()
@@ -645,38 +722,9 @@ async function deleteFile(f) {
   })
 }
 
-async function createVariation(stageCode) {
-  // Создаём папку вариации на ЯД и запись-заглушку
-  const existingVars = projectFiles.value.filter(f => f.stage === stageCode).map(f => f.variation || 1)
-  const nextVar = existingVars.length > 0 ? Math.max(...existingVars) + 1 : 2
-  const contractNum = card.value?.contract_number || card.value?.id
-  const ydPath = `/CRM/Проекты/${contractNum}/${stageCode}/var${nextVar}`
-  try {
-    // Создаём папку на ЯД
-    const { api: ax } = await import('src/boot/axios')
-    try { await ax.post('/api/v1/files/create-folder', { folder_path: ydPath }) } catch {}
-    $q.notify({ type: 'positive', message: `Вариант ${nextVar} создан` })
-    // После создания — предложить загрузить файл
-    crmUploadStage.value = stageCode
-    crmUploadVariation.value = nextVar
-    crmFileInput.value?.click()
-  } catch (e) {
-    $q.notify({ type: 'negative', message: e.message || 'Ошибка создания варианта' })
-  }
-}
-
 function uploadCrmFile(stage) {
-  if (stage.endsWith('_var')) {
-    // Вариация — сначала выбор файла с номером вариации
-    const baseStage = stage.replace('_var', '')
-    const existingVariations = projectFiles.value.filter(f => f.stage === baseStage).map(f => f.variation || 1)
-    const nextVar = existingVariations.length > 0 ? Math.max(...existingVariations) + 1 : 2
-    crmUploadStage.value = baseStage
-    crmUploadVariation.value = nextVar
-  } else {
-    crmUploadStage.value = stage
-    crmUploadVariation.value = 1
-  }
+  crmUploadStage.value = stage
+  crmUploadVariation.value = 1
   crmFileInput.value?.click()
 }
 
