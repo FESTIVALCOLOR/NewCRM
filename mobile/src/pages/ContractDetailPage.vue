@@ -384,11 +384,21 @@ async function handleFileUpload(event) {
   if (!file || !contract.value) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
-    // Используем yandex_folder_path контракта (как десктоп), без disk: в пути
-    const contractFolder = (contract.value.yandex_folder_path || '').replace(/^disk:/, '')
+    // Если yandex_folder_path нет — создаём через fix-folder
+    let contractFolder = (contract.value.yandex_folder_path || '').replace(/^disk:/, '')
+    if (!contractFolder) {
+      try {
+        const { api: ax } = await import('src/boot/axios')
+        await ax.post(`/api/v1/contracts/${contract.value.id}/fix-folder`)
+        const { data: fresh } = await contractsApi.getById(contract.value.id)
+        contract.value = fresh
+        contractFolder = (fresh.yandex_folder_path || '').replace(/^disk:/, '')
+      } catch {}
+    }
     const STAGE_FOLDERS = { documents: 'Договор', tech_task: 'ТЗ', measurement: 'Замер', stage1: '1 стадия - Планировочное решение', stage1_signed: 'Акты подписанные/ПР', stage2_concept: '2 стадия - Концепция дизайна', stage2_signed: 'Акты подписанные/КД', stage3: '3 стадия - Чертежный проект', stage3_signed: 'Акты подписанные/РЧ', references: 'Референсы', photo_documentation: 'Фотофиксация', supervision: 'Доп. соглашения' }
     const stageFolder = STAGE_FOLDERS[uploadStage.value] || uploadStage.value
-    const ydPath = contractFolder ? `${contractFolder}/${stageFolder}/${file.name}` : `/CRM/Проекты/${contract.value.contract_number}/${stageFolder}/${file.name}`
+    if (!contractFolder) { $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана' }); return }
+    const ydPath = `${contractFolder}/${stageFolder}/${file.name}`
     const uploadRes = await filesApi.upload(file, ydPath)
     const publicLink = uploadRes.data?.public_link || ''
     const { api: apiInst } = await import('src/boot/axios')

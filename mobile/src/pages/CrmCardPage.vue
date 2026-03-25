@@ -760,14 +760,32 @@ async function handleCrmFileUpload(event) {
     const contractNum = card.value.contract_number || card.value.id
     const contractId = card.value.contract_id
 
+    // Если yandex_folder_path отсутствует — создаём папку через fix-folder
+    let contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
+    if (!contractFolder && contractId) {
+      try {
+        const { api: ax } = await import('src/boot/axios')
+        const fixRes = await ax.post(`/api/v1/contracts/${contractId}/fix-folder`)
+        if (fixRes.data?.message) {
+          // Перезагружаем контракт для получения нового yandex_folder_path
+          const { data: freshContract } = await contractsApi.getById(contractId)
+          contractData.value = freshContract
+          contractFolder = (freshContract.yandex_folder_path || '').replace(/^disk:/, '')
+        }
+      } catch (e) { $q.notify({ type: 'warning', message: 'Не удалось создать папку на ЯД' }) }
+    }
+
+    const STAGE_FOLDERS = { stage1: '1 стадия - Планировочное решение', stage2_concept: '2 стадия - Концепция дизайна/Концепция-коллажи', stage2_3d: '2 стадия - Концепция дизайна/3D визуализация', stage3: '3 стадия - Чертежный проект', measurement: 'Замер', references: 'Референсы', photo_documentation: 'Фотофиксация', tech_task: 'ТЗ' }
+
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i]
-      // Используем yandex_folder_path контракта (как десктоп) + stage subfolder
-      const STAGE_FOLDERS = { stage1: '1 стадия - Планировочное решение', stage2_concept: '2 стадия - Концепция дизайна/Концепция-коллажи', stage2_3d: '2 стадия - Концепция дизайна/3D визуализация', stage3: '3 стадия - Чертежный проект', measurement: 'Замер', references: 'Референсы', photo_documentation: 'Фотофиксация', tech_task: 'ТЗ' }
-      const contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
       const stageFolder = STAGE_FOLDERS[stage] || stage
       const varSuffix = variation > 1 ? `/Вариация ${variation}` : ''
-      const yp = contractFolder ? `${contractFolder}/${stageFolder}${varSuffix}/${file.name}` : `/CRM/Проекты/${contractNum}/${stageFolder}${varSuffix}/${file.name}`
+      if (!contractFolder) {
+        $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана. Обратитесь к администратору.' })
+        break
+      }
+      const yp = `${contractFolder}/${stageFolder}${varSuffix}/${file.name}`
 
       // Путь без disk: для upload API И для записи в БД (как десктоп)
       const ypClean = yp.replace(/^disk:/, '')
