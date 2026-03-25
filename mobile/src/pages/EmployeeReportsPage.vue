@@ -4,10 +4,10 @@
     <q-card class="is-card q-mb-md">
       <q-card-section class="q-pa-sm">
         <div class="row q-col-gutter-xs items-center">
-          <div class="col-3"><q-select v-model="filters.year" :options="years" label="Год" outlined dense @update:model-value="loadData" /></div>
-          <div class="col-3"><q-select v-model="filters.quarter" :options="quarters" label="Кв." outlined dense emit-value map-options @update:model-value="loadData" /></div>
-          <div class="col-3"><q-select v-model="filters.month" :options="monthOpts" label="Мес." outlined dense emit-value map-options @update:model-value="loadData" /></div>
-          <div class="col-3"><q-btn unelevated icon="refresh" style="background: #ffd93c; color: #333" class="full-width" @click="loadData" /></div>
+          <div class="col"><q-select v-model="filters.year" :options="years" label="Год" outlined dense @update:model-value="loadData" /></div>
+          <div class="col"><q-select v-model="filters.quarter" :options="quarters" label="Квартал" outlined dense emit-value map-options @update:model-value="loadData" /></div>
+          <div class="col"><q-select v-model="filters.month" :options="monthOpts" label="Месяц" outlined dense emit-value map-options @update:model-value="loadData" /></div>
+          <div class="col-auto"><q-btn unelevated icon="refresh" label="Сброс" no-caps style="background: #ffd93c; color: #333; height: 40px; border-radius: 4px" @click="resetFilters" /></div>
         </div>
       </q-card-section>
     </q-card>
@@ -136,10 +136,28 @@ async function loadData() {
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
+
+  // Сотрудники — фильтрация по roleTab
   if (empR.status === 'fulfilled' && Array.isArray(empR.value.data)) {
-    roleEmployees.value = empR.value.data.sort((a, b) => b.completion_rate - a.completion_rate)
-    executorLoad.value = empR.value.data.filter(e => e.total_stages > 0).sort((a, b) => b.total_stages - a.total_stages).slice(0, 10).map(e => ({ name: e.full_name, active_stages: e.total_stages - e.completed_stages }))
+    const allEmps = empR.value.data
+    // Фильтруем по роли
+    const rt = roleTab.value
+    let filtered = allEmps
+    if (rt === 'sdp') filtered = allEmps.filter(e => e.position?.includes('СДП'))
+    else if (rt === 'gap') filtered = allEmps.filter(e => e.position?.includes('ГАП') || e.position?.includes('руководитель'))
+    else if (rt === 'manager') filtered = allEmps.filter(e => e.position?.toLowerCase().includes('менеджер'))
+    else if (rt === 'executor') filtered = allEmps.filter(e => e.position?.includes('Дизайнер') || e.position?.includes('Чертёжник') || e.position?.includes('дизайнер') || e.position?.includes('чертёжник'))
+    else if (rt === 'supervisor') filtered = allEmps.filter(e => e.position?.includes('ДАН') || e.position?.includes('надзор'))
+
+    roleEmployees.value = filtered.sort((a, b) => b.completion_rate - a.completion_rate)
+
+    // Нагрузка — все сотрудники с назначенными стадиями
+    executorLoad.value = allEmps.filter(e => e.total_stages > 0)
+      .sort((a, b) => (b.total_stages - b.completed_stages) - (a.total_stages - a.completed_stages))
+      .slice(0, 10)
+      .map(e => ({ name: e.full_name, active_stages: e.total_stages - e.completed_stages }))
   }
+
   if (projR.status === 'fulfilled') {
     const data = projR.value.data
     if (data?.by_stages && executorLoad.value.length === 0) {
@@ -148,6 +166,11 @@ async function loadData() {
   }
 
   loading.value = false
+}
+
+function resetFilters() {
+  filters.value = { year: currentYear, quarter: null, month: null }
+  loadData()
 }
 
 watch([projectTab, roleTab], () => loadData())

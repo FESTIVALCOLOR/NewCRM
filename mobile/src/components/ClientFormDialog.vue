@@ -54,12 +54,12 @@
           <q-input v-model="form.telegram_account" label="Telegram (имя или телефон)" outlined dense placeholder="@username или +79001234567">
             <template v-slot:prepend><q-icon name="send" /></template>
             <template v-slot:append>
-              <q-btn v-if="telegramSearchLink" flat round dense size="sm" icon="open_in_new" @click="window.open(telegramSearchLink, '_blank')">
+              <q-btn v-if="telegramSearchLink" flat round dense size="sm" icon="open_in_new" @click="openTelegram">
                 <q-tooltip>Открыть в Telegram</q-tooltip>
               </q-btn>
             </template>
           </q-input>
-          <div v-if="telegramSearchLink" class="text-caption q-mt-xs" style="color: #3498DB; cursor: pointer" @click="window.open(telegramSearchLink, '_blank')">
+          <div v-if="telegramSearchLink" class="text-caption q-mt-xs" style="color: #3498DB; cursor: pointer" @click="openTelegram">
             Найти в Telegram →
           </div>
 
@@ -159,8 +159,9 @@ const telegramSearchLink = computed(() => {
   if (!tg) return null
   const clean = tg.replace('@', '').trim()
   if (!clean) return null
-  if (/^\+?\d{7,}$/.test(clean.replace(/\s/g, ''))) return `https://t.me/+${clean.replace(/[^\d]/g, '')}`
-  return `https://t.me/${clean}`
+  // tg:// протокол для открытия в приложении Telegram
+  if (/^\+?\d{7,}$/.test(clean.replace(/\s/g, ''))) return `tg://resolve?phone=${clean.replace(/[^\d]/g, '')}`
+  return `tg://resolve?domain=${clean}`
 })
 
 watch(() => props.modelValue, (val) => {
@@ -176,8 +177,10 @@ watch(() => props.modelValue, (val) => {
 
 watch(show, (val) => emit('update:modelValue', val))
 
-function close() {
-  show.value = false
+function close() { show.value = false }
+
+function openTelegram() {
+  if (telegramSearchLink.value) window.open(telegramSearchLink.value, '_blank')
 }
 
 async function deleteClient() {

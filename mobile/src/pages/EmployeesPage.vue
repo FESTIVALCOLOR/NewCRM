@@ -6,9 +6,12 @@
         <template v-slot:prepend><q-icon name="search" /></template>
         <template v-slot:append v-if="search"><q-icon name="close" class="cursor-pointer" @click="search = ''" /></template>
       </q-input>
-      <!-- Фильтры по отделам -->
-      <div class="row q-gutter-xs q-mb-md" style="overflow-x: auto; flex-wrap: nowrap">
+      <!-- Фильтры: отделы + роль -->
+      <div class="row q-gutter-xs q-mb-xs" style="overflow-x: auto; flex-wrap: nowrap">
         <q-btn v-for="dept in departments" :key="dept" :label="dept" :outline="activeDept !== dept" :unelevated="activeDept === dept" :color="activeDept === dept ? 'accent' : 'grey-7'" :text-color="activeDept === dept ? 'dark' : undefined" dense no-caps size="sm" @click="filterByDept(dept)" />
+      </div>
+      <div class="row q-col-gutter-xs q-mb-md">
+        <div class="col"><q-select v-model="roleFilter" :options="roleOptions" label="Роль" outlined dense clearable emit-value map-options style="font-size: 11px" /></div>
       </div>
       <div class="text-caption text-grey-7 q-mb-sm">Сотрудников: {{ filtered.length }}</div>
 
@@ -235,6 +238,12 @@ const loading = ref(false)
 const saving = ref(false)
 const activeDept = ref('Все отделы')
 const search = ref('')
+const roleFilter = ref(null)
+
+const roleOptions = computed(() => {
+  const roles = new Set(employees.value.map(e => e.position).filter(Boolean))
+  return [...roles].sort().map(r => ({ label: r, value: r }))
+})
 const selected = ref(null)
 const showDetail = ref(false)
 const showCreate = ref(false)
@@ -259,6 +268,7 @@ const departments = computed(() => {
 const filtered = computed(() => {
   let result = employees.value
   if (activeDept.value !== 'Все отделы') result = result.filter(e => e.department === activeDept.value)
+  if (roleFilter.value) result = result.filter(e => e.position === roleFilter.value || e.secondary_position === roleFilter.value)
   if (search.value) {
     const q = search.value.toLowerCase()
     result = result.filter(e => (e.full_name || '').toLowerCase().includes(q) || (e.position || '').toLowerCase().includes(q) || (e.phone || '').includes(q))

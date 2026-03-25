@@ -178,13 +178,13 @@ export const employeesApi = {
     api.delete(`/api/v1/employees/${id}`),
 
   getTelegramInfo: (id) =>
-    api.get(`/api/v1/employees/employees/${id}/telegram-info`),
+    api.get(`/api/v1/employees/${id}/telegram-info`),
 
   createTelegramToken: (id) =>
-    api.post(`/api/v1/employees/employees/${id}/create-telegram-token`),
+    api.post(`/api/v1/employees/${id}/create-telegram-token`),
 
   sendInvite: (id) =>
-    api.post(`/api/v1/notifications/employees/${id}/send-invite`)
+    api.post(`/api/v1/employees/${id}/send-invite`)
 }
 
 // === Payments ===

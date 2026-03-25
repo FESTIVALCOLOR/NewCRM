@@ -604,17 +604,27 @@ async function handleCrmFileUpload(event) {
 async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) }
 
 async function loadAdditionalData(cardId) {
-  const [payRes, actRes, empRes] = await Promise.allSettled([crmApi.getPayments(cardId), crmApi.getActionHistory(cardId), employeesApi.getList()])
-  if (payRes.status === 'fulfilled') cardPayments.value = payRes.value.data || []
-  if (actRes.status === 'fulfilled') actionHistory.value = actRes.value.data || []
-  if (empRes.status === 'fulfilled') employeeOptions.value = empRes.value.data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
-  if (card.value?.contract_id) {
-    const [cRes, fRes, tRes] = await Promise.allSettled([contractsApi.getById(card.value.contract_id), filesApi.getContractFiles(card.value.contract_id), crmApi.getTimeline(card.value.contract_id)])
-    if (cRes.status === 'fulfilled') contractData.value = cRes.value.data
-    if (fRes.status === 'fulfilled') projectFiles.value = fRes.value.data || []
-    if (tRes.status === 'fulfilled') timelineEntries.value = tRes.value.data || []
-  }
+  try {
+    const [payRes, actRes, empRes] = await Promise.allSettled([crmApi.getPayments(cardId), crmApi.getActionHistory(cardId), employeesApi.getList()])
+    if (payRes.status === 'fulfilled') cardPayments.value = payRes.value.data || []
+    if (actRes.status === 'fulfilled') actionHistory.value = actRes.value.data || []
+    if (empRes.status === 'fulfilled') employeeOptions.value = (empRes.value.data || []).filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+  } catch (e) { console.warn('Ошибка загрузки доп. данных:', e) }
+  try {
+    if (card.value?.contract_id) {
+      const [cRes, fRes, tRes] = await Promise.allSettled([contractsApi.getById(card.value.contract_id), filesApi.getContractFiles(card.value.contract_id), crmApi.getTimeline(card.value.contract_id)])
+      if (cRes.status === 'fulfilled') contractData.value = cRes.value.data
+      if (fRes.status === 'fulfilled') projectFiles.value = fRes.value.data || []
+      if (tRes.status === 'fulfilled') timelineEntries.value = Array.isArray(tRes.value.data) ? tRes.value.data : []
+    }
+  } catch (e) { console.warn('Ошибка загрузки контракта:', e) }
 }
 
-onMounted(async () => { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) })
+onMounted(async () => {
+  try {
+    const id = route.params.id
+    await crmStore.loadCard(id)
+    await loadAdditionalData(id)
+  } catch (e) { console.error('Ошибка загрузки карточки:', e) }
+})
 </script>

@@ -138,7 +138,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { reportsApi, statisticsApi } from 'src/services/api'
+import { reportsApi, statisticsApi, dashboardApi } from 'src/services/api'
 import PieChart from 'src/components/charts/PieChart.vue'
 import BarChart from 'src/components/charts/BarChart.vue'
 import LineChart from 'src/components/charts/LineChart.vue'
@@ -148,6 +148,7 @@ const filters = ref({ year: currentYear, quarter: null, month: null })
 const summary = ref(null)
 const funnel = ref(null)
 const projectStats = ref(null)
+const contractsDashboard = ref(null)
 const supervisionStats = ref(null)
 const clientsDynamicsRaw = ref(null)
 const projectTab = ref('individual')
@@ -224,17 +225,12 @@ const clientsDynamics = computed(() => {
 })
 
 const projectTypePie = computed(() => {
-  const s = summary.value
-  if (!s || !s.total_contracts) return null
-  const ind = s.individual_contracts || s.total_contracts || 0
-  const tmpl = s.template_contracts || 0
-  // Если нет разбивки — пробуем by_project_type
-  if (s.by_project_type) {
-    const labels = Object.keys(s.by_project_type)
-    return { labels, values: labels.map(k => s.by_project_type[k]) }
+  // Берём данные из /dashboard/contracts
+  const d = contractsDashboard.value
+  if (d && (d.individual_orders || d.template_orders)) {
+    return { labels: ['Индивидуальные', 'Шаблонные'], values: [d.individual_orders || 0, d.template_orders || 0] }
   }
-  if (ind === 0 && tmpl === 0) return null
-  return { labels: ['Индивидуальные', 'Шаблонные'], values: [ind, tmpl] }
+  return null
 })
 
 const funnelChart = computed(() => {
@@ -301,12 +297,13 @@ async function loadData() {
 
   const pt = projectTab.value === 'template' ? 'Шаблонный' : 'Индивидуальный'
 
-  const [sumR, funnelR, projR, dynR, supR] = await Promise.allSettled([
+  const [sumR, funnelR, projR, dynR, supR, contR] = await Promise.allSettled([
     reportsApi.getSummary(params),
     reportsApi.getFunnel(params),
     reportsApi.getCrmAnalytics({ ...params, project_type: pt }),
     reportsApi.getClientsDynamics({ year: filters.value.year }),
-    statisticsApi.getProjects({ ...params, project_type: 'Авторский надзор' })
+    statisticsApi.getProjects({ ...params, project_type: 'Авторский надзор' }),
+    dashboardApi.getContracts(params)
   ])
 
   if (sumR.status === 'fulfilled') summary.value = sumR.value.data
@@ -314,6 +311,7 @@ async function loadData() {
   if (projR.status === 'fulfilled') projectStats.value = projR.value.data
   if (dynR.status === 'fulfilled') clientsDynamicsRaw.value = dynR.value.data
   if (supR.status === 'fulfilled') supervisionStats.value = supR.value.data
+  if (contR.status === 'fulfilled') contractsDashboard.value = contR.value.data
 }
 
 function exportPDF() {
