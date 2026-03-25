@@ -16,8 +16,8 @@
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
-      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense emit-value map-options clearable placeholder="Роль" style="font-size: 12px" @update:model-value="loadData" /></div>
-      <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable placeholder="Агент" style="font-size: 12px" @update:model-value="loadData" /></div>
+      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable placeholder="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData" /></div>
+      <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable placeholder="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData" /></div>
     </div>
 
     <!-- Период -->
@@ -247,15 +247,15 @@ async function loadData() {
     const { data } = await paymentsApi.getList(params)
     let filtered = data || []
 
-    // Фильтр по вкладкам (тип проекта / оклад)
+    // Фильтр по вкладкам — по project_type (не payment_type!)
     if (paymentTab.value === 'salary') {
-      filtered = filtered.filter(p => p.source === 'Оклад' || p.payment_subtype === 'Оклад')
+      filtered = filtered.filter(p => p.source === 'Оклад')
     } else if (paymentTab.value === 'individual') {
-      filtered = filtered.filter(p => p.payment_type === 'Индивидуальный' && p.source !== 'Оклад')
+      filtered = filtered.filter(p => p.project_type === 'Индивидуальный' && p.source !== 'Оклад')
     } else if (paymentTab.value === 'template') {
-      filtered = filtered.filter(p => p.payment_type === 'Шаблонный' && p.source !== 'Оклад')
+      filtered = filtered.filter(p => p.project_type === 'Шаблонный' && p.source !== 'Оклад')
     } else if (paymentTab.value === 'supervision') {
-      filtered = filtered.filter(p => (p.payment_type === 'Авторский надзор' || p.payment_type === 'Надзор') && p.source !== 'Оклад')
+      filtered = filtered.filter(p => (p.project_type === 'Авторский надзор' || p.project_type === 'Надзор') && p.source !== 'Оклад')
     }
 
     // Фильтр по адресу
@@ -263,8 +263,8 @@ async function loadData() {
       const q = filters.value.address.toLowerCase()
       filtered = filtered.filter(p => (p.address || '').toLowerCase().includes(q))
     }
-    // Фильтр по роли
-    if (filters.value.role) filtered = filtered.filter(p => p.role === filters.value.role)
+    // Фильтр по роли (сравниваем с role и position)
+    if (filters.value.role) filtered = filtered.filter(p => (p.role || '').includes(filters.value.role) || (p.position || '').includes(filters.value.role))
     // Фильтр по агенту
     if (filters.value.agent_type) filtered = filtered.filter(p => (p.agent_type || '').includes(filters.value.agent_type))
     // Фильтр по статусу
@@ -282,7 +282,7 @@ async function markPaid(p) {
     if (p.salary_id) {
       await salariesApi.update(p.salary_id, { payment_status: 'paid' })
     } else if (p.id) {
-      await paymentsApi.markPaid(p.id)
+      await paymentsApi.markPaid(p.id, p.employee_id)
     }
     p.is_paid = true
     $q.notify({ type: 'positive', message: 'Оплачено' })
@@ -292,19 +292,22 @@ async function markPaid(p) {
   }
 }
 
-async function setPayStatus(p, status) {
+async function setPayStatus(p) {
   try {
-    if (!p.report_month) {
+    // Toggle: если уже к оплате (есть report_month) → снять (убрать report_month)
+    if (p.report_month) {
+      if (p.salary_id) await salariesApi.update(p.salary_id, { report_month: '', payment_status: 'pending' })
+      else if (p.id) await paymentsApi.update(p.id, { report_month: '' })
+      p.report_month = null
+      $q.notify({ type: 'info', message: 'Статус снят' })
+    } else {
       const now = new Date()
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      if (p.salary_id) {
-        await salariesApi.update(p.salary_id, { report_month: month, payment_status: 'to_pay' })
-      } else if (p.id) {
-        await paymentsApi.update(p.id, { report_month: month })
-      }
+      if (p.salary_id) await salariesApi.update(p.salary_id, { report_month: month, payment_status: 'to_pay' })
+      else if (p.id) await paymentsApi.update(p.id, { report_month: month })
       p.report_month = month
+      $q.notify({ type: 'positive', message: 'К оплате' })
     }
-    $q.notify({ type: 'positive', message: 'К оплате' })
   } catch (err) {
     const d = err.response?.data?.detail
     $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка' })

@@ -205,8 +205,8 @@ export const paymentsApi = {
   delete: (id) =>
     api.delete(`/api/v1/payments/${id}`),
 
-  markPaid: (id) =>
-    api.patch(`/api/v1/payments/${id}/mark-paid`)
+  markPaid: (id, employeeId) =>
+    api.patch(`/api/v1/payments/${id}/mark-paid`, null, { params: { employee_id: employeeId || 0 } })
 }
 
 // === Salaries ===

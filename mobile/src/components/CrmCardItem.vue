@@ -1,5 +1,5 @@
 <template>
-  <q-card flat bordered class="crm-card q-mb-sm cursor-pointer" @click="$emit('click')" @long-press.prevent="$emit('longpress')">
+  <q-card flat bordered class="crm-card q-mb-sm cursor-pointer" @click="onClick" @touchstart.passive="startLongPress" @touchend="cancelLongPress" @touchmove="cancelLongPress">
     <q-card-section class="q-pa-sm">
       <!-- Верхняя строка: номер + workflow status -->
       <div class="row items-center justify-between q-mb-xs">
@@ -75,6 +75,15 @@ const props = defineProps({ card: { type: Object, required: true } })
 defineEmits(['click', 'longpress'])
 
 const showTeam = ref(false)
+let longPressTimer = null
+let longPressed = false
+
+function startLongPress() {
+  longPressed = false
+  longPressTimer = setTimeout(() => { longPressed = true; emit('longpress') }, 500)
+}
+function cancelLongPress() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null } }
+function onClick() { if (!longPressed) emit('click') }
 
 const refs = useReferencesStore()
 

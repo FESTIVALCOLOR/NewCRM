@@ -86,8 +86,20 @@
             </q-list>
           </q-card>
 
-          <!-- Workflow действия -->
-          <q-card class="is-card q-mb-md" v-if="hasWorkflowActions">
+          <!-- Прогресс стадий -->
+          <q-card class="is-card q-mb-md" v-if="stageExecutors.length > 0">
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Прогресс стадий</div></q-card-section>
+            <q-list dense>
+              <q-item v-for="se in stageExecutors" :key="se.id">
+                <q-item-section avatar><q-icon :name="se.completed ? 'check_circle' : 'radio_button_unchecked'" :color="se.completed ? 'positive' : 'grey-5'" size="18px" /></q-item-section>
+                <q-item-section><q-item-label style="font-size: 11px">{{ se.stage_name }}</q-item-label><q-item-label caption>{{ se.executor_name || 'Не назначен' }}</q-item-label></q-item-section>
+                <q-item-section side v-if="se.completed_date"><div class="text-caption" style="color: #27AE60">{{ fmtDateShort(se.completed_date) }}</div></q-item-section>
+              </q-item>
+            </q-list>
+          </q-card>
+
+          <!-- Workflow действия (всегда видимы) -->
+          <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
             <q-list dense>
               <q-item v-if="card.workflow_status === 'in_progress'" clickable v-ripple @click="doAction('submit')"><q-item-section avatar><q-icon name="send" color="positive" /></q-item-section><q-item-section>Сдать работу</q-item-section></q-item>
@@ -96,6 +108,7 @@
               <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('client-send')"><q-item-section avatar><q-icon name="forward_to_inbox" style="color: #3498DB" /></q-item-section><q-item-section>Отправить клиенту</q-item-section></q-item>
               <q-item v-if="card.workflow_status === 'client_approval'" clickable v-ripple @click="doAction('client-approved')"><q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section><q-item-section>Клиент согласовал</q-item-section></q-item>
               <q-item v-if="card.workflow_status === 'act_signing'" clickable v-ripple @click="doAction('sign-act')"><q-item-section avatar><q-icon name="draw" style="color: #333" /></q-item-section><q-item-section>Акт подписан</q-item-section></q-item>
+              <q-item v-if="!card.workflow_status"><q-item-section class="text-center" style="color: #999; font-size: 12px">Нет активного рабочего процесса</q-item-section></q-item>
             </q-list>
           </q-card>
         </q-tab-panel>
@@ -175,7 +188,7 @@
           </q-card>
 
           <!-- Стадии проекта (зависят от типа) -->
-          <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md">
+          <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md" :style="isCurrentStage(stage.code) ? 'border: 2px solid #27AE60' : ''">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div></q-card-section>
             <q-list dense v-if="filesByStage(stage.code).length > 0">
               <q-item v-for="f in filesByStage(stage.code)" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}<span v-if="f.variation > 1" class="text-caption q-ml-xs" style="color: #888">вар. {{ f.variation }}</span></q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-icon name="open_in_new" color="grey-5" /><q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
@@ -274,7 +287,7 @@
           <q-toolbar style="background: #ffd93c; color: #333"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">{{ assignDialogTitle }}</q-toolbar-title><q-btn flat round dense icon="close" @click="assignDialogVisible = false" /></q-toolbar>
           <q-card-section>
             <div class="text-caption q-mb-sm" style="color: #888">Роль: {{ assignRole }}</div>
-            <q-select v-model="assignEmployeeId" :options="employeeOptions" option-value="id" option-label="label" label="Сотрудник" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-select v-model="assignEmployeeId" :options="employeeOptions" option-value="id" option-label="label" label="Сотрудник" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterAssignEmployees" class="q-mb-sm" />
             <q-input v-if="assignNeedsDeadline" v-model="assignDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
           </q-card-section>
           <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Назначить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doAssign" :loading="actionLoading" /></q-card-actions>
@@ -335,6 +348,24 @@ const assignNeedsDeadline = ref(false)
 const assignStageName = ref('')
 
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
+const allEmployeesList = ref([])
+
+function filterAssignEmployees(val, update) {
+  const all = allEmployeesList.value
+  const makeOpts = (list) => {
+    const byPos = {}
+    for (const e of list) { const pos = e.position || 'Прочие'; if (!byPos[pos]) byPos[pos] = []; byPos[pos].push(e) }
+    const opts = []
+    for (const [pos, emps] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
+      opts.push({ id: null, label: `— ${pos} —`, disable: true })
+      for (const e of emps) opts.push({ id: e.id, label: `${e.full_name}` })
+    }
+    return opts
+  }
+  if (!val) { update(() => { employeeOptions.value = makeOpts(all) }); return }
+  const q = val.toLowerCase()
+  update(() => { employeeOptions.value = makeOpts(all.filter(e => (e.full_name || '').toLowerCase().includes(q))) })
+}
 
 // Стадии файлов (зависят от типа)
 const projectStages = computed(() => {
@@ -377,6 +408,16 @@ const stageExecutors = computed(() => card.value?.stage_executors || [])
 const completedStages = computed(() => stageExecutors.value.filter(se => se.completed))
 
 function filesByStage(stage) { return projectFiles.value.filter(f => f.stage === stage) }
+
+// Текущая стадия карточки (по column_name)
+function isCurrentStage(stageCode) {
+  const col = (card.value?.column_name || '').toLowerCase()
+  if (stageCode === 'stage1' && col.includes('планировочн')) return true
+  if (stageCode === 'stage2_concept' && col.includes('концепция')) return true
+  if (stageCode === 'stage2_3d' && col.includes('визуализац')) return true
+  if (stageCode === 'stage3' && col.includes('чертеж')) return true
+  return false
+}
 
 const hasWorkflowActions = computed(() => {
   const s = card.value?.workflow_status
@@ -445,8 +486,10 @@ function actionColor(t) { if (!t) return 'grey-5'; const l=t.toLowerCase(); if (
 
 // === ACTIONS ===
 function editCard() {
-  // Открыть страницу договора для редактирования (FAB)
-  if (card.value?.contract_id) router.push(`/contracts/${card.value.contract_id}`)
+  if (card.value?.contract_id) {
+    $q.notify({ type: 'info', message: 'Переход к карточке договора', icon: 'open_in_new', timeout: 1500 })
+    setTimeout(() => router.push(`/contracts/${card.value.contract_id}`), 300)
+  }
 }
 
 async function doAction(action) {
@@ -606,9 +649,17 @@ async function reloadCard() { const id = route.params.id; await crmStore.loadCar
 async function loadAdditionalData(cardId) {
   try {
     const [payRes, actRes, empRes] = await Promise.allSettled([crmApi.getPayments(cardId), crmApi.getActionHistory(cardId), employeesApi.getList()])
-    if (payRes.status === 'fulfilled') cardPayments.value = payRes.value.data || []
+    if (payRes.status === 'fulfilled') {
+      // Фильтруем: только платежи этой карточки (исключаем оклады и чужие)
+      const cid = parseInt(cardId)
+      cardPayments.value = (payRes.value.data || []).filter(p => p.crm_card_id === cid && p.source !== 'Оклад')
+    }
     if (actRes.status === 'fulfilled') actionHistory.value = actRes.value.data || []
-    if (empRes.status === 'fulfilled') employeeOptions.value = (empRes.value.data || []).filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+    if (empRes.status === 'fulfilled') {
+      const all = (empRes.value.data || []).filter(e => e.status === 'активный')
+      allEmployeesList.value = all
+      employeeOptions.value = all.map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+    }
   } catch (e) { console.warn('Ошибка загрузки доп. данных:', e) }
   try {
     if (card.value?.contract_id) {
