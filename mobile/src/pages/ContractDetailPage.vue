@@ -384,14 +384,18 @@ async function handleFileUpload(event) {
   if (!file || !contract.value) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
-    const ydPath = `/CRM/Проекты/${contract.value.contract_number}/${uploadStage.value}/${file.name}`
+    // Используем yandex_folder_path контракта (как десктоп), без disk: в пути
+    const contractFolder = (contract.value.yandex_folder_path || '').replace(/^disk:/, '')
+    const STAGE_FOLDERS = { documents: 'Договор', tech_task: 'ТЗ', measurement: 'Замер', stage1: '1 стадия - Планировочное решение', stage1_signed: 'Акты подписанные/ПР', stage2_concept: '2 стадия - Концепция дизайна', stage2_signed: 'Акты подписанные/КД', stage3: '3 стадия - Чертежный проект', stage3_signed: 'Акты подписанные/РЧ', references: 'Референсы', photo_documentation: 'Фотофиксация', supervision: 'Доп. соглашения' }
+    const stageFolder = STAGE_FOLDERS[uploadStage.value] || uploadStage.value
+    const ydPath = contractFolder ? `${contractFolder}/${stageFolder}/${file.name}` : `/CRM/Проекты/${contract.value.contract_number}/${stageFolder}/${file.name}`
     const uploadRes = await filesApi.upload(file, ydPath)
     const publicLink = uploadRes.data?.public_link || ''
     const { api: apiInst } = await import('src/boot/axios')
     await apiInst.post('/api/v1/files/', {
       contract_id: contract.value.id, stage: uploadStage.value,
       file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-      public_link: publicLink, yandex_path: `disk:${ydPath}`, file_name: file.name,
+      public_link: publicLink, yandex_path: ydPath, file_name: file.name,
       file_order: files.value.length + 1, variation: 1
     })
     $q.notify({ type: 'positive', message: 'Файл загружен' })

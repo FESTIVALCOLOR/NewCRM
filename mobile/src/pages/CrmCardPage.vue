@@ -632,8 +632,8 @@ function showAssignDialog(member, mode) {
   assignDialogVisible.value = true
 }
 
-// Маппинг roleKey → название роли для оплат
-const ROLE_NAMES = { senior_manager: 'Старший менеджер', sdp: 'СДП', gap: 'ГАП', manager: 'Менеджер', surveyor: 'Замерщик', designer: 'Дизайнер', draftsman: 'Чертёжник' }
+// Маппинг roleKey → ТОЧНЫЕ названия ролей как в десктопе (crm_card_edit_dialog.py line 1091-1106)
+const ROLE_NAMES = { senior_manager: 'Старший менеджер проектов', sdp: 'СДП', gap: 'ГАП', manager: 'Менеджер', surveyor: 'Замерщик', designer: 'Дизайнер', draftsman: 'Чертёжник' }
 
 async function doAssign() {
   if (!assignEmployeeId.value) return
@@ -662,19 +662,38 @@ async function doAssign() {
       await crmApi.updateCard(card.value.id, update)
     }
 
-    // 3. Рассчитываем и создаём новую оплату
+    // 3. Рассчитываем и создаём оплату (как десктоп — crm_card_edit_dialog.py line 6331-6476)
+    // Для шаблонных проектов СМ и Менеджер не получают оплату
+    const isTemplate = card.value?.project_type === 'Шаблонный'
+    const skipPayment = isTemplate && ['senior_manager', 'manager'].includes(roleKey)
+
+    if (!skipPayment) {
+      try {
+        const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
+        const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+
+        if (fullAmount > 0) {
+          if (roleKey === 'sdp') {
+            // СДП: два платежа — Аванс (50%) + Доплата (50%)
+            const advance = Math.round(fullAmount / 2)
+            const balance = fullAmount - advance
+            const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+            await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+            await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+          } else {
+            // Остальные: один платёж — Полная оплата
+            await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+          }
+        }
+      } catch (e) { console.warn('Ошибка расчёта/создания оплаты:', e) }
+    }
+
+    // 4. Записываем в историю действий (как десктоп)
     try {
-      const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
-      const amount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
-      if (amount > 0) {
-        await paymentsApi.create({
-          contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName,
-          payment_type: card.value.project_type || 'Индивидуальный', payment_subtype: 'Полная оплата',
-          crm_card_id: card.value.id, calculated_amount: amount, final_amount: amount, amount,
-          report_month: null, is_paid: false
-        })
-      }
-    } catch (e) { console.warn('Ошибка расчёта/создания оплаты:', e) }
+      const empName = allEmployeesList.value.find(e => e.id === assignEmployeeId.value)?.full_name || ''
+      const { api: ax } = await import('src/boot/axios')
+      await ax.post('/api/v1/action-history', { action_type: 'executor_assigned', entity_type: 'crm_card', entity_id: card.value.id, description: `Назначен ${roleName}: ${empName}` })
+    } catch {}
 
     $q.notify({ type: 'positive', message: 'Назначен + оплата обновлена' })
     assignDialogVisible.value = false
@@ -743,17 +762,20 @@ async function handleCrmFileUpload(event) {
 
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i]
-      const ydFolder = `disk:/CRM/Проекты/${contractNum}/${stage}${variation > 1 ? '/var' + variation : ''}`
-      const yp = `${ydFolder}/${file.name}`
+      // Используем yandex_folder_path контракта (как десктоп) + stage subfolder
+      const STAGE_FOLDERS = { stage1: '1 стадия - Планировочное решение', stage2_concept: '2 стадия - Концепция дизайна/Концепция-коллажи', stage2_3d: '2 стадия - Концепция дизайна/3D визуализация', stage3: '3 стадия - Чертежный проект', measurement: 'Замер', references: 'Референсы', photo_documentation: 'Фотофиксация', tech_task: 'ТЗ' }
+      const contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
+      const stageFolder = STAGE_FOLDERS[stage] || stage
+      const varSuffix = variation > 1 ? `/Вариация ${variation}` : ''
+      const yp = contractFolder ? `${contractFolder}/${stageFolder}${varSuffix}/${file.name}` : `/CRM/Проекты/${contractNum}/${stageFolder}${varSuffix}/${file.name}`
 
-      // Путь без disk: для upload API, с disk: для записи в БД
-      const ypUpload = yp.replace(/^disk:/, '')
-      const ypDb = yp.startsWith('disk:') ? yp : `disk:${yp}`
+      // Путь без disk: для upload API И для записи в БД (как десктоп)
+      const ypClean = yp.replace(/^disk:/, '')
 
       // Шаг 1: загрузка на ЯД
       let publicLink = ''
       try {
-        const uploadRes = await filesApi.upload(file, ypUpload)
+        const uploadRes = await filesApi.upload(file, ypClean)
         publicLink = uploadRes.data?.public_link || ''
       } catch (uploadErr) {
         $q.notify({ type: 'warning', message: `ЯД: ${uploadErr.response?.status || 'ошибка'}` })
@@ -765,7 +787,7 @@ async function handleCrmFileUpload(event) {
         await ax.post('/api/v1/files/', {
           contract_id: contractId, stage, file_name: file.name,
           file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-          public_link: publicLink, yandex_path: ypDb,
+          public_link: publicLink, yandex_path: ypClean,
           file_order: projectFiles.value.length + i + 1, variation
         })
       } catch (dbErr) {
