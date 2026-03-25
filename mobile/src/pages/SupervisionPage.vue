@@ -1,98 +1,82 @@
 <template>
   <q-page>
-    <!-- Тулбар -->
-    <div class="q-pa-sm" style="border-bottom: 1px solid #E0E0E0">
-      <div class="row items-center q-gutter-xs">
-        <!-- Активные / Архив -->
-        <q-btn
-          :style="!showArchive ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
-          label="Активные" dense no-caps size="sm"
-          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 10px"
-          @click="showArchive = false; loadCards()"
-        />
-        <q-btn
-          :style="showArchive ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold' : 'background: #E8E8E8'"
-          label="Архив" dense no-caps size="sm"
-          style="border: 1px solid #d9d9d9; border-radius: 4px; color: #333; font-size: 11px; padding: 4px 10px"
-          @click="showArchive = true; loadCards()"
-        />
+    <!-- Тулбар — pill toggle как в CRM -->
+    <div style="border-bottom: 1px solid #E0E0E0; padding: 6px 8px">
+      <div class="row items-center no-wrap">
+        <div class="toggle-pills">
+          <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">Активные</button>
+          <button :class="{ active: showArchive }" @click="showArchive = true; loadCards()">Архив</button>
+        </div>
         <q-space />
         <div class="text-caption" style="color: #888">{{ cards.length }} объектов</div>
       </div>
     </div>
 
     <div v-if="loading" class="q-pa-md">
-      <q-card class="is-card q-mb-sm" v-for="n in 4" :key="n">
-        <q-card-section><q-skeleton type="text" width="50%" /><q-skeleton type="text" width="70%" /></q-card-section>
-      </q-card>
+      <q-card class="is-card q-mb-sm" v-for="n in 4" :key="n"><q-card-section><q-skeleton type="text" width="50%" /><q-skeleton type="text" width="70%" /></q-card-section></q-card>
     </div>
 
     <template v-else>
-      <!-- Архив — просто список -->
+      <!-- Архив -->
       <div v-if="showArchive" class="q-pa-sm">
         <q-card v-for="card in cards" :key="card.id" class="is-card q-mb-sm cursor-pointer" @click="openCard(card)">
           <q-card-section class="q-pa-md">
             <div class="row items-center justify-between q-mb-xs">
               <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.contract_number || `#${card.id}` }}</div>
-              <q-badge :color="sColor(card)" :label="card.column_name || card.status || 'Архив'" dense />
+              <q-badge :color="sColor(card)" :label="card.column_name || 'Архив'" dense />
             </div>
             <div class="text-body2" style="color: #333">{{ card.address || 'Без адреса' }}</div>
             <div class="row q-gutter-sm text-caption" style="color: #888">
-              <span v-if="card.area">{{ card.area }} м²</span>
-              <span v-if="card.city">{{ card.city }}</span>
+              <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
             </div>
           </q-card-section>
         </q-card>
         <div v-if="cards.length === 0" class="text-center q-py-xl" style="color: #999">Архив пуст</div>
       </div>
 
-      <!-- Активные — kanban (как CRM) -->
+      <!-- Активные — QCarousel свайп как CRM -->
       <template v-else>
-        <!-- Столбцы стадий -->
-        <div class="q-pa-xs" style="overflow-x: auto; white-space: nowrap; border: 1px solid #d9d9d9; border-radius: 4px; margin: 4px">
-          <q-btn
-            v-for="col in columns" :key="col.name"
-            dense no-caps size="sm"
-            :label="`${col.shortName} (${col.count})`"
-            :style="activeCol === col.name
-              ? 'background: white; border-bottom: 2px solid #ffd93c; font-weight: bold; color: #333'
-              : 'background: #E8E8E8; color: #666'"
-            style="border: 1px solid #d9d9d9; border-radius: 4px 4px 0 0; font-size: 10px; padding: 4px 8px; margin-right: 2px"
-            @click="activeCol = col.name"
-          />
+        <div class="column-nav">
+          <button v-for="(col, idx) in columns" :key="col.name" :class="{ active: currentSlide === idx }" @click="currentSlide = idx">
+            {{ col.shortName }} <span class="count">{{ col.count }}</span>
+          </button>
         </div>
-        <div style="border: 1px solid #d9d9d9; border-top: none; border-radius: 0 0 4px 4px; margin: 0 4px; min-height: 200px">
-          <div v-for="col in columns" :key="col.name" v-show="activeCol === col.name" class="q-pa-sm">
-            <div v-if="col.cards.length === 0" class="text-center q-py-xl" style="color: #999">
-              <q-icon name="inbox" size="40px" class="q-mb-sm" />
-              <div class="text-caption">Нет карточек</div>
+        <q-carousel v-model="currentSlide" swipeable animated transition-prev="slide-right" transition-next="slide-left" style="min-height: calc(100vh - 220px); background: transparent">
+          <q-carousel-slide v-for="(col, idx) in columns" :key="col.name" :name="idx" class="q-pa-none">
+            <div class="column-frame">
+              <div class="column-header">
+                <span class="column-title">{{ col.name }}</span>
+                <span style="color: #888; font-size: 11px">Карточек: {{ col.count }}</span>
+              </div>
+              <div class="column-body" v-if="col.cards.length > 0">
+                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm cursor-pointer" @click="openCard(card)">
+                  <q-card-section class="q-pa-sm">
+                    <div class="row items-center justify-between q-mb-xs">
+                      <div class="text-caption" style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
+                      <q-badge v-if="card.is_paused" color="warning" label="Приостановлено" dense />
+                    </div>
+                    <div class="text-weight-bold" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
+                    <div class="row q-gutter-xs text-caption q-mt-xs" style="color: #888">
+                      <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
+                      <span v-if="card.dan_name">ДАН: {{ card.dan_name }}</span>
+                    </div>
+                    <div v-if="card.deadline" class="text-caption q-mt-xs" :style="{ color: dlColor(card.deadline), fontWeight: 'bold' }">
+                      Дедлайн: {{ new Date(card.deadline).toLocaleDateString('ru-RU') }}
+                    </div>
+                  </q-card-section>
+                </q-card>
+              </div>
+              <div v-else class="column-empty"><q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div></div>
             </div>
-            <q-card v-for="card in col.cards" :key="card.id" class="is-card q-mb-sm cursor-pointer" @click="openCard(card)">
-              <q-card-section class="q-pa-sm">
-                <div class="row items-center justify-between q-mb-xs">
-                  <div class="text-caption" style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
-                  <q-badge v-if="card.is_paused" color="warning" label="Приостановлено" dense />
-                </div>
-                <div class="text-weight-bold" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
-                <div class="row q-gutter-xs text-caption" style="color: #888">
-                  <span v-if="card.area">{{ card.area }} м²</span>
-                  <span v-if="card.city">{{ card.city }}</span>
-                  <span v-if="card.dan_name">ДАН: {{ card.dan_name }}</span>
-                </div>
-                <div v-if="card.deadline" class="text-caption q-mt-xs" :style="{ color: dlColor(card.deadline) }">
-                  Дедлайн: {{ new Date(card.deadline).toLocaleDateString('ru-RU') }}
-                </div>
-              </q-card-section>
-            </q-card>
-          </div>
-        </div>
+          </q-carousel-slide>
+        </q-carousel>
       </template>
     </template>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { supervisionApi } from 'src/services/api'
 
@@ -100,7 +84,7 @@ const router = useRouter()
 const cards = ref([])
 const loading = ref(false)
 const showArchive = ref(false)
-const activeCol = ref('Новый заказ')
+const currentSlide = ref(0)
 
 const SUPERVISION_COLUMNS = [
   'Новый заказ', 'В ожидании',
@@ -116,44 +100,39 @@ const SUPERVISION_COLUMNS = [
 const columns = computed(() => {
   const grouped = {}
   for (const col of SUPERVISION_COLUMNS) grouped[col] = []
-  for (const card of cards.value) {
-    const col = card.column_name || 'Новый заказ'
-    if (!grouped[col]) grouped[col] = []
-    grouped[col].push(card)
-  }
-  return SUPERVISION_COLUMNS.filter(c => grouped[c]).map(c => ({
-    name: c,
-    shortName: c.replace(/^Стадия \d+: /, '').substring(0, 15),
-    cards: grouped[c],
-    count: grouped[c].length
-  }))
+  for (const card of cards.value) { const col = card.column_name || 'Новый заказ'; if (!grouped[col]) grouped[col] = []; grouped[col].push(card) }
+  return SUPERVISION_COLUMNS.filter(c => grouped[c]).map(c => ({ name: c, shortName: c.replace(/^Стадия \d+: (Закупка )?/, '').substring(0, 15), cards: grouped[c], count: grouped[c].length }))
 })
 
-function sColor(card) {
-  const s = card.column_name || card.status || ''
-  if (s.includes('работе') || s.includes('Стадия')) return 'orange'
-  if (s.includes('Сдан') || s.includes('Выполненный')) return 'positive'
-  if (s.includes('Приостановлено')) return 'warning'
-  return 'blue'
-}
+watch(columns, (cols) => { if (cols.length > 0) { const idx = cols.findIndex(c => c.count > 0); currentSlide.value = idx >= 0 ? idx : 0 } })
 
-function dlColor(d) {
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
-  if (days < 0) return '#8B0000'
-  if (days <= 2) return '#F39C12'
-  return '#888'
-}
-
+function sColor(card) { const s = card.column_name || ''; if (s.includes('Стадия')) return 'orange'; if (s.includes('Выполненный')) return 'positive'; return 'blue' }
+function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
 
 async function loadCards() {
   loading.value = true
-  try {
-    const { data } = await supervisionApi.getCards({ status: showArchive.value ? 'archived' : 'active' })
-    cards.value = data
-  } catch { cards.value = [] }
-  finally { loading.value = false }
+  try { const { data } = await supervisionApi.getCards({ status: showArchive.value ? 'archived' : 'active' }); cards.value = data }
+  catch { cards.value = [] } finally { loading.value = false }
 }
 
 onMounted(() => loadCards())
 </script>
+
+<style scoped>
+.toggle-pills { display: inline-flex; border: 1px solid #d9d9d9; border-radius: 6px; overflow: hidden }
+.toggle-pills button { border: none; background: #F0F0F0; color: #666; font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.2s; font-family: inherit }
+.toggle-pills button.active { background: white; color: #333; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.08) }
+.toggle-pills button + button { border-left: 1px solid #d9d9d9 }
+.column-nav { display: flex; overflow-x: auto; padding: 6px 8px; gap: 4px; border-bottom: 1px solid #E0E0E0; -webkit-overflow-scrolling: touch; scrollbar-width: none }
+.column-nav::-webkit-scrollbar { display: none }
+.column-nav button { border: 1px solid #d9d9d9; border-radius: 16px; background: #F5F5F5; color: #888; font-size: 10px; padding: 3px 10px; white-space: nowrap; cursor: pointer; font-family: inherit; transition: all 0.2s; flex-shrink: 0 }
+.column-nav button.active { background: #333; color: white; border-color: #333; font-weight: bold }
+.column-nav button .count { display: inline-block; background: rgba(255,255,255,0.2); border-radius: 8px; padding: 0 4px; margin-left: 3px; font-size: 9px }
+.column-nav button.active .count { background: rgba(255,255,255,0.3) }
+.column-frame { border: 1px solid #d9d9d9; border-radius: 8px; margin: 8px; background: #FAFAFA; min-height: calc(100vh - 260px); display: flex; flex-direction: column }
+.column-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #E0E0E0; background: white; border-radius: 8px 8px 0 0 }
+.column-title { font-size: 13px; font-weight: bold; color: #333 }
+.column-body { padding: 8px; flex: 1; overflow-y: auto }
+.column-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; font-size: 12px; padding: 40px 0 }
+</style>

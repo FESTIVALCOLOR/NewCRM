@@ -198,13 +198,27 @@ const contractMini = computed(() => {
 const clientsDynamics = computed(() => {
   const raw = clientsDynamicsRaw.value
   if (!raw || typeof raw !== 'object') return null
+  // Может быть массив или объект
+  const isArr = Array.isArray(raw)
+  if (isArr) {
+    if (raw.length === 0) return null
+    const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек']
+    return {
+      labels: raw.map(item => { const m = item.month || item.period || ''; const parts = String(m).split('-'); return parts.length >= 2 ? months[parseInt(parts[1]) - 1] || m : m }),
+      datasets: [
+        { label: 'Новые', data: raw.map(item => item.new_clients || item.new || 0), color: '#27AE60' },
+        { label: 'Повторные', data: raw.map(item => item.returning_clients || item.returning || 0), color: '#85C1E9' }
+      ]
+    }
+  }
   const keys = Object.keys(raw).sort()
   if (keys.length === 0) return null
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек']
   return {
-    labels: keys.map(k => { const [, m] = k.split('-'); return new Date(2000, parseInt(m) - 1).toLocaleDateString('ru-RU', { month: 'short' }) }),
+    labels: keys.map(k => { const parts = k.split('-'); if (parts.length >= 2) { const mi = parseInt(parts[1]) - 1; return mi >= 0 && mi < 12 ? months[mi] : k } return k }),
     datasets: [
-      { label: 'Новые', data: keys.map(k => raw[k]?.new || 0), color: '#27AE60' },
-      { label: 'Повторные', data: keys.map(k => raw[k]?.returning || 0), color: '#85C1E9' }
+      { label: 'Новые', data: keys.map(k => raw[k]?.new || raw[k]?.new_clients || 0), color: '#27AE60' },
+      { label: 'Повторные', data: keys.map(k => raw[k]?.returning || raw[k]?.returning_clients || 0), color: '#85C1E9' }
     ]
   }
 })
@@ -212,8 +226,14 @@ const clientsDynamics = computed(() => {
 const projectTypePie = computed(() => {
   const s = summary.value
   if (!s || !s.total_contracts) return null
-  const ind = s.total_contracts - (s.returning_clients || 0)
-  const tmpl = s.returning_clients || 0
+  const ind = s.individual_contracts || s.total_contracts || 0
+  const tmpl = s.template_contracts || 0
+  // Если нет разбивки — пробуем by_project_type
+  if (s.by_project_type) {
+    const labels = Object.keys(s.by_project_type)
+    return { labels, values: labels.map(k => s.by_project_type[k]) }
+  }
+  if (ind === 0 && tmpl === 0) return null
   return { labels: ['Индивидуальные', 'Шаблонные'], values: [ind, tmpl] }
 })
 

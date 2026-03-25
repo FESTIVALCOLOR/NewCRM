@@ -90,7 +90,7 @@ export const crmApi = {
     api.post(`/api/v1/crm/cards/${cardId}/workflow/sign-act`),
 
   getTimeline: (contractId) =>
-    api.get(`/api/v1/contracts/${contractId}/timeline`),
+    api.get(`/api/v1/timeline/${contractId}`),
 
   getPayments: (cardId) =>
     api.get('/api/v1/payments', { params: { crm_card_id: cardId } }),

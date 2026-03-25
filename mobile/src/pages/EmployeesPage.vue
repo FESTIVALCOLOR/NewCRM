@@ -1,23 +1,15 @@
 <template>
   <q-page padding>
     <q-pull-to-refresh @refresh="onRefresh">
+      <!-- Поиск -->
+      <q-input v-model="search" placeholder="Поиск сотрудников..." outlined dense rounded class="q-mb-sm">
+        <template v-slot:prepend><q-icon name="search" /></template>
+        <template v-slot:append v-if="search"><q-icon name="close" class="cursor-pointer" @click="search = ''" /></template>
+      </q-input>
       <!-- Фильтры по отделам -->
       <div class="row q-gutter-xs q-mb-md" style="overflow-x: auto; flex-wrap: nowrap">
-        <q-btn
-          v-for="dept in departments"
-          :key="dept"
-          :label="dept"
-          :outline="activeDept !== dept"
-          :unelevated="activeDept === dept"
-          :color="activeDept === dept ? 'accent' : 'grey-7'"
-          :text-color="activeDept === dept ? 'dark' : undefined"
-          dense
-          no-caps
-          size="sm"
-          @click="filterByDept(dept)"
-        />
+        <q-btn v-for="dept in departments" :key="dept" :label="dept" :outline="activeDept !== dept" :unelevated="activeDept === dept" :color="activeDept === dept ? 'accent' : 'grey-7'" :text-color="activeDept === dept ? 'dark' : undefined" dense no-caps size="sm" @click="filterByDept(dept)" />
       </div>
-
       <div class="text-caption text-grey-7 q-mb-sm">Сотрудников: {{ filtered.length }}</div>
 
       <div v-if="loading">
@@ -115,28 +107,28 @@
             <q-badge :color="statusColor(selected.status)" :label="selected.status" class="q-mt-xs" />
           </div>
 
-          <!-- Контакты -->
+          <!-- Контакты (ч/б иконки как у клиентов) -->
           <q-card flat bordered class="q-mb-md" style="border-radius: 10px">
-            <q-list dense>
-              <q-item v-if="selected.phone" clickable @click="call(selected.phone)">
-                <q-item-section avatar><q-icon name="phone" color="positive" /></q-item-section>
-                <q-item-section><q-item-label caption>Телефон</q-item-label><q-item-label>{{ selected.phone }}</q-item-label></q-item-section>
+            <q-list>
+              <q-item>
+                <q-item-section avatar><q-btn flat round dense :icon="selected.phone ? 'phone' : 'phone_disabled'" :style="{ color: selected.phone ? '#333' : '#ccc' }" @click="selected.phone && call(selected.phone)" /></q-item-section>
+                <q-item-section><q-item-label caption>Телефон</q-item-label><q-item-label :style="{ color: selected.phone ? '#333' : '#bbb' }">{{ selected.phone || 'Не указан' }}</q-item-label></q-item-section>
               </q-item>
-              <q-item v-if="selected.email">
-                <q-item-section avatar><q-icon name="email" color="info" /></q-item-section>
-                <q-item-section><q-item-label caption>Email</q-item-label><q-item-label>{{ selected.email }}</q-item-label></q-item-section>
+              <q-item>
+                <q-item-section avatar><q-btn flat round dense :icon="selected.email ? 'email' : 'mail_outline'" :style="{ color: selected.email ? '#333' : '#ccc' }" @click="selected.email && sendEmail(selected.email)" /></q-item-section>
+                <q-item-section><q-item-label caption>Email</q-item-label><q-item-label :style="{ color: selected.email ? '#333' : '#bbb' }">{{ selected.email || 'Не указан' }}</q-item-label></q-item-section>
+              </q-item>
+              <q-item>
+                <q-item-section avatar><q-btn flat round dense icon="send" :style="{ color: selected.telegram_user_id ? '#333' : '#ccc' }" /></q-item-section>
+                <q-item-section><q-item-label caption>Telegram</q-item-label><q-item-label :style="{ color: selected.telegram_user_id ? '#27AE60' : '#bbb' }">{{ selected.telegram_user_id ? `Подключён (ID: ${selected.telegram_user_id})` : 'Не подключён' }}</q-item-label></q-item-section>
               </q-item>
               <q-item v-if="selected.department">
-                <q-item-section avatar><q-icon name="business" color="grey-7" /></q-item-section>
+                <q-item-section avatar><q-icon name="business" style="color: #333" /></q-item-section>
                 <q-item-section><q-item-label caption>Отдел</q-item-label><q-item-label>{{ selected.department }}</q-item-label></q-item-section>
               </q-item>
               <q-item v-if="selected.birth_date">
-                <q-item-section avatar><q-icon name="cake" color="warning" /></q-item-section>
+                <q-item-section avatar><q-icon name="cake" style="color: #333" /></q-item-section>
                 <q-item-section><q-item-label caption>Дата рождения</q-item-label><q-item-label>{{ formatDate(selected.birth_date) }}</q-item-label></q-item-section>
-              </q-item>
-              <q-item v-if="selected.is_online !== undefined">
-                <q-item-section avatar><q-icon :name="selected.is_online ? 'circle' : 'radio_button_unchecked'" :color="selected.is_online ? 'positive' : 'grey-5'" size="16px" /></q-item-section>
-                <q-item-section><q-item-label caption>Статус</q-item-label><q-item-label>{{ selected.is_online ? 'Онлайн' : 'Не в сети' }}</q-item-label></q-item-section>
               </q-item>
             </q-list>
           </q-card>
@@ -222,6 +214,7 @@ const employees = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const activeDept = ref('Все отделы')
+const search = ref('')
 const selected = ref(null)
 const showDetail = ref(false)
 const showCreate = ref(false)
@@ -244,8 +237,13 @@ const departments = computed(() => {
 })
 
 const filtered = computed(() => {
-  if (activeDept.value === 'Все отделы') return employees.value
-  return employees.value.filter(e => e.department === activeDept.value)
+  let result = employees.value
+  if (activeDept.value !== 'Все отделы') result = result.filter(e => e.department === activeDept.value)
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    result = result.filter(e => (e.full_name || '').toLowerCase().includes(q) || (e.position || '').toLowerCase().includes(q) || (e.phone || '').includes(q))
+  }
+  return result
 })
 
 function statusColor(status) {
@@ -260,6 +258,7 @@ function formatDate(d) {
 }
 
 function call(phone) { window.location.href = `tel:${phone.replace(/[^\d+]/g, '')}` }
+function sendEmail(email) { window.location.href = `mailto:${email}` }
 
 function filterByDept(dept) { activeDept.value = dept }
 

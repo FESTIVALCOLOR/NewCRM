@@ -3,23 +3,25 @@
     <div v-if="crmStore.cardLoading" class="q-pa-md">
       <q-skeleton type="rect" height="120px" class="q-mb-md" />
       <q-skeleton type="text" width="80%" />
-      <q-skeleton type="text" width="60%" />
     </div>
 
     <template v-else-if="card">
-      <!-- Шапка — как в десктопе -->
+      <!-- Шапка -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="row items-center justify-between q-mb-xs">
-            <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
-            <q-badge :color="statusColor(card.column_name)" :label="card.column_name" />
-          </div>
-          <div class="row items-start justify-between">
-            <div class="text-body2" style="color: #333; flex: 1">{{ card.address }}</div>
-            <span v-if="card.agent_type" class="agent-badge q-ml-xs" :style="{ background: agentColor }">{{ card.agent_type }}</span>
+          <div class="row items-start justify-between q-mb-xs">
+            <div style="flex: 1">
+              <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
+              <div class="text-body2 q-mt-xs" style="color: #333">{{ card.address }}</div>
+            </div>
+            <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
+              <q-badge :color="statusColor(card.column_name)" :label="card.column_name" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
+              <q-badge v-if="card.agent_type" text-color="white" :style="{ background: agentColor, minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="card.agent_type" />
+            </div>
           </div>
           <div class="row q-gutter-sm text-caption q-mt-xs" style="color: #888">
             <span v-if="card.project_type">{{ card.project_type }}</span>
+            <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
             <span v-if="card.area">{{ card.area }} м²</span>
             <span v-if="card.city">{{ card.city }}</span>
           </div>
@@ -32,7 +34,7 @@
         </q-card-section>
       </q-card>
 
-      <!-- Вкладки — 5 как в десктопе -->
+      <!-- Вкладки -->
       <q-tabs v-model="activeTab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-md" style="color: #666" align="left" :breakpoint="0">
         <q-tab name="executors" label="Исполнители" />
         <q-tab name="timeline" label="Сроки" />
@@ -45,61 +47,26 @@
 
         <!-- ====== ВКЛАДКА 1: Исполнители и дедлайн ====== -->
         <q-tab-panel name="executors" class="q-pa-none">
-          <!-- Информация проекта -->
+          <!-- Информация -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Информация</div>
-            </q-card-section>
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Информация</div></q-card-section>
             <q-list dense>
-              <q-item>
-                <q-item-section avatar><q-icon name="description" color="grey-7" /></q-item-section>
-                <q-item-section>
-                  <q-item-label caption>Договор</q-item-label>
-                  <q-item-label>{{ card.contract_number }}</q-item-label>
-                </q-item-section>
-              </q-item>
-              <q-item v-if="card.project_type">
-                <q-item-section avatar><q-icon name="category" color="grey-7" /></q-item-section>
-                <q-item-section>
-                  <q-item-label caption>Тип проекта</q-item-label>
-                  <q-item-label>{{ card.project_type }}<span v-if="card.project_subtype"> / {{ card.project_subtype }}</span></q-item-label>
-                </q-item-section>
-              </q-item>
-              <q-item v-if="card.deadline">
-                <q-item-section avatar><q-icon name="event" color="grey-7" /></q-item-section>
-                <q-item-section>
-                  <q-item-label caption>Дедлайн проекта</q-item-label>
-                  <q-item-label :style="{ color: dlHex(card.deadline) }">{{ fmtDate(card.deadline) }} ({{ daysLeft(card.deadline) }})</q-item-label>
-                </q-item-section>
-              </q-item>
-              <q-item v-if="card.contract_period">
-                <q-item-section avatar><q-icon name="schedule" color="grey-7" /></q-item-section>
-                <q-item-section>
-                  <q-item-label caption>Срок выполнения</q-item-label>
-                  <q-item-label>{{ card.contract_period }} раб. дней</q-item-label>
-                </q-item-section>
-              </q-item>
-              <q-item v-if="card.tags">
-                <q-item-section avatar><q-icon name="label" color="grey-7" /></q-item-section>
-                <q-item-section>
-                  <q-item-label caption>Теги</q-item-label>
-                  <q-item-label>{{ card.tags }}</q-item-label>
-                </q-item-section>
-              </q-item>
+              <q-item><q-item-section avatar><q-icon name="description" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Договор</q-item-label><q-item-label>{{ card.contract_number }}</q-item-label></q-item-section></q-item>
+              <q-item v-if="card.project_type"><q-item-section avatar><q-icon name="category" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Тип проекта</q-item-label><q-item-label>{{ card.project_type }}<span v-if="card.project_subtype"> / {{ card.project_subtype }}</span></q-item-label></q-item-section></q-item>
+              <q-item v-if="card.contract_period"><q-item-section avatar><q-icon name="schedule" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Срок выполнения</q-item-label><q-item-label>{{ card.contract_period }} раб. дней</q-item-label></q-item-section></q-item>
+              <q-item v-if="contractData?.contract_date"><q-item-section avatar><q-icon name="play_arrow" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дата начала работ</q-item-label><q-item-label>{{ fmtDate(contractData.contract_date) }}</q-item-label></q-item-section></q-item>
+              <q-item v-if="card.deadline"><q-item-section avatar><q-icon name="flag" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дедлайн проекта</q-item-label><q-item-label :style="{ color: dlHex(card.deadline) }">{{ fmtDate(card.deadline) }} ({{ daysLeft(card.deadline) }})</q-item-label></q-item-section></q-item>
+              <q-item v-if="card.tags"><q-item-section avatar><q-icon name="label" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Теги</q-item-label><q-item-label>{{ card.tags }}</q-item-label></q-item-section></q-item>
             </q-list>
           </q-card>
 
-          <!-- Команда проекта — все 7 ролей как в десктопе -->
+          <!-- Команда проекта с кнопками управления -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Команда проекта</div>
-            </q-card-section>
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Команда проекта</div></q-card-section>
             <q-list dense separator>
               <q-item v-for="m in allTeamMembers" :key="m.roleKey">
                 <q-item-section avatar>
-                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'">
-                    {{ m.name ? m.name[0] : '?' }}
-                  </q-avatar>
+                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'">{{ m.name ? m.name[0] : '?' }}</q-avatar>
                 </q-item-section>
                 <q-item-section>
                   <q-item-label style="font-size: 12px" :style="{ color: m.name ? '#333' : '#bbb' }">{{ m.name || 'Не назначен' }}</q-item-label>
@@ -108,362 +75,229 @@
                 <q-item-section side v-if="m.deadline">
                   <q-badge :color="dlBadgeColor(m.deadline)" :label="fmtDateShort(m.deadline)" dense />
                 </q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-xs">
+                    <q-btn v-if="m.name && m.canManage" flat round dense size="xs" icon="edit" color="grey-7" @click="showAssignDialog(m, 'change')"><q-tooltip>Изменить</q-tooltip></q-btn>
+                    <q-btn v-if="m.name && m.canManage" flat round dense size="xs" icon="person_remove" color="negative" @click="removeTeamMember(m)"><q-tooltip>Удалить</q-tooltip></q-btn>
+                    <q-btn v-if="!m.name && m.canManage" flat round dense size="xs" icon="person_add" color="positive" @click="showAssignDialog(m, 'assign')"><q-tooltip>Назначить</q-tooltip></q-btn>
+                  </div>
+                </q-item-section>
               </q-item>
             </q-list>
           </q-card>
 
           <!-- Workflow действия -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div>
-            </q-card-section>
-            <q-list dense v-if="hasWorkflowActions">
-              <q-item v-if="card.workflow_status === 'in_progress'" clickable v-ripple @click="doAction('submit')">
-                <q-item-section avatar><q-icon name="send" color="positive" /></q-item-section>
-                <q-item-section>Сдать работу</q-item-section>
-              </q-item>
-              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('accept')">
-                <q-item-section avatar><q-icon name="check_circle" color="positive" /></q-item-section>
-                <q-item-section>Принять</q-item-section>
-              </q-item>
-              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="showRejectDialog = true">
-                <q-item-section avatar><q-icon name="replay" color="negative" /></q-item-section>
-                <q-item-section>На исправление</q-item-section>
-              </q-item>
-              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('client-send')">
-                <q-item-section avatar><q-icon name="forward_to_inbox" style="color: #3498DB" /></q-item-section>
-                <q-item-section>Отправить клиенту</q-item-section>
-              </q-item>
-              <q-item v-if="card.workflow_status === 'client_approval'" clickable v-ripple @click="doAction('client-approved')">
-                <q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section>
-                <q-item-section>Клиент согласовал</q-item-section>
-              </q-item>
-              <q-item v-if="card.workflow_status === 'act_signing'" clickable v-ripple @click="doAction('sign-act')">
-                <q-item-section avatar><q-icon name="draw" style="color: #333" /></q-item-section>
-                <q-item-section>Акт подписан</q-item-section>
-              </q-item>
-            </q-list>
-            <q-card-section v-else class="q-pt-sm">
-              <div class="text-caption" style="color: #999">
-                {{ card.workflow_status ? workflowLabel(card.workflow_status) : 'Нет активного рабочего процесса' }}
-              </div>
-            </q-card-section>
-          </q-card>
-
-          <!-- Назначить исполнителя -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Назначить исполнителя</div>
-            </q-card-section>
-            <q-card-section>
-              <q-select v-model="assignForm.stage_name" :options="stageOptions" label="Стадия" outlined dense class="q-mb-sm" />
-              <q-select v-model="assignForm.executor_id" :options="employeeOptions" option-value="id" option-label="label" label="Исполнитель" outlined dense emit-value map-options class="q-mb-sm" />
-              <q-input v-model="assignForm.deadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
-              <q-btn unelevated label="Назначить" no-caps class="full-width" style="background: #ffd93c; color: #333; border-radius: 4px" @click="assignExecutor" :loading="actionLoading" />
-            </q-card-section>
-          </q-card>
-
-          <!-- Переместить -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Переместить в колонку</div>
-            </q-card-section>
+          <q-card class="is-card q-mb-md" v-if="hasWorkflowActions">
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
             <q-list dense>
-              <q-item v-for="col in crmStore.columnOrder" :key="col" clickable @click="moveToColumn(col)" :disable="col === card.column_name">
-                <q-item-section>
-                  <q-item-label :style="{ color: col === card.column_name ? '#ccc' : '#333', fontSize: '12px' }">{{ col }}</q-item-label>
-                </q-item-section>
-                <q-item-section side v-if="col === card.column_name">
-                  <q-icon name="check" color="positive" size="16px" />
-                </q-item-section>
-              </q-item>
+              <q-item v-if="card.workflow_status === 'in_progress'" clickable v-ripple @click="doAction('submit')"><q-item-section avatar><q-icon name="send" color="positive" /></q-item-section><q-item-section>Сдать работу</q-item-section></q-item>
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('accept')"><q-item-section avatar><q-icon name="check_circle" color="positive" /></q-item-section><q-item-section>Принять</q-item-section></q-item>
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="showRejectDialog = true"><q-item-section avatar><q-icon name="replay" color="negative" /></q-item-section><q-item-section>На исправление</q-item-section></q-item>
+              <q-item v-if="card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('client-send')"><q-item-section avatar><q-icon name="forward_to_inbox" style="color: #3498DB" /></q-item-section><q-item-section>Отправить клиенту</q-item-section></q-item>
+              <q-item v-if="card.workflow_status === 'client_approval'" clickable v-ripple @click="doAction('client-approved')"><q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section><q-item-section>Клиент согласовал</q-item-section></q-item>
+              <q-item v-if="card.workflow_status === 'act_signing'" clickable v-ripple @click="doAction('sign-act')"><q-item-section avatar><q-icon name="draw" style="color: #333" /></q-item-section><q-item-section>Акт подписан</q-item-section></q-item>
             </q-list>
           </q-card>
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА 2: Таблица сроков ====== -->
+        <!-- ====== ВКЛАДКА 2: Таблица сроков (из timeline API) ====== -->
         <q-tab-panel name="timeline" class="q-pa-none">
           <q-card class="is-card">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков проекта</div>
-            </q-card-section>
-            <q-list dense separator v-if="stageExecutors.length > 0">
-              <q-item v-for="se in stageExecutors" :key="se.id" :class="{ 'bg-green-1': se.completed }">
-                <q-item-section avatar>
-                  <q-icon
-                    :name="se.completed ? 'check_circle' : se.submitted_date ? 'hourglass_top' : 'radio_button_unchecked'"
-                    :color="se.completed ? 'positive' : se.submitted_date ? 'warning' : 'grey-5'"
-                    size="20px"
-                  />
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div></q-card-section>
+            <q-list dense separator v-if="timelineEntries.length > 0">
+              <q-item v-for="e in timelineEntries" :key="e.id" :class="{ 'bg-green-1': e.actual_date }" :style="e.executor_role === 'header' ? 'background: #F5F5F5' : ''">
+                <q-item-section avatar v-if="e.executor_role !== 'header'">
+                  <q-icon :name="e.actual_date ? 'check_circle' : 'radio_button_unchecked'" :color="e.actual_date ? 'positive' : 'grey-5'" size="18px" />
                 </q-item-section>
-                <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">{{ se.stage_name }}</q-item-label>
-                  <q-item-label caption style="color: #888">
-                    {{ se.executor_name || 'Не назначен' }}
-                    <span v-if="se.deadline"> | до {{ fmtDateShort(se.deadline) }}</span>
-                  </q-item-label>
-                  <q-item-label caption v-if="se.assigned_date" style="color: #aaa">
-                    Назначен: {{ fmtDateShort(se.assigned_date) }}
-                    <span v-if="se.submitted_date"> | Сдано: {{ fmtDateShort(se.submitted_date) }}</span>
+                <q-item-section :style="e.executor_role === 'header' ? 'padding-left: 4px' : ''">
+                  <q-item-label :style="{ fontSize: e.executor_role === 'header' ? '13px' : '11px', color: '#333', fontWeight: e.executor_role === 'header' ? 'bold' : 'normal' }">{{ e.stage_name }}</q-item-label>
+                  <q-item-label v-if="e.executor_role !== 'header'" caption style="color: #888">
+                    <span v-if="e.norm_days">Норма: {{ e.custom_norm_days || e.norm_days }} дн.</span>
+                    <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
+                    <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side>
-                  <div v-if="se.completed_date" class="text-caption" style="color: #27AE60">
-                    {{ fmtDateShort(se.completed_date) }}
-                  </div>
-                  <q-badge v-else-if="se.deadline" :color="dlBadgeColor(se.deadline)" dense>
-                    {{ daysLeftShort(se.deadline) }}
-                  </q-badge>
+                <q-item-section side v-if="e.actual_date">
+                  <div class="text-caption" style="color: #27AE60">{{ fmtDateShort(e.actual_date) }}</div>
                 </q-item-section>
               </q-item>
             </q-list>
             <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
-              <q-icon name="timeline" size="32px" color="grey-4" class="q-mb-sm" />
-              <div>Исполнители ещё не назначены</div>
+              <q-icon name="timeline" size="32px" color="grey-4" class="q-mb-sm" /><div>Таблица сроков не инициализирована</div>
             </q-card-section>
           </q-card>
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА 3: Данные по проекту ====== -->
+        <!-- ====== ВКЛАДКА 3: Данные по проекту (блоки) ====== -->
         <q-tab-panel name="data" class="q-pa-none">
-          <!-- ТЗ и Замер -->
+          <!-- ТЗ -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">ТЗ и Замер</div>
-            </q-card-section>
-            <q-list dense>
-              <!-- Техническое задание -->
-              <q-item :clickable="!!contractData?.tech_task_link" @click="openLink(contractData?.tech_task_link)">
-                <q-item-section avatar><q-icon name="description" color="orange" /></q-item-section>
-                <q-item-section>
-                  <q-item-label>Техническое задание</q-item-label>
-                  <q-item-label caption v-if="card.tech_task_date">{{ fmtDateShort(card.tech_task_date) }}</q-item-label>
-                  <q-item-label caption v-else style="color: #bbb">Не загружено</q-item-label>
-                </q-item-section>
-                <q-item-section side v-if="contractData?.tech_task_link"><q-icon name="open_in_new" color="grey-5" /></q-item-section>
-              </q-item>
-              <!-- Замер -->
-              <q-item :clickable="!!contractData?.measurement_image_link" @click="openLink(contractData?.measurement_image_link)">
-                <q-item-section avatar><q-icon name="straighten" color="blue" /></q-item-section>
-                <q-item-section>
-                  <q-item-label>Замер</q-item-label>
-                  <q-item-label caption v-if="card.survey_date">{{ fmtDateShort(card.survey_date) }}</q-item-label>
-                  <q-item-label caption v-else style="color: #bbb">Не загружен</q-item-label>
-                </q-item-section>
-                <q-item-section side v-if="contractData?.measurement_image_link"><q-icon name="open_in_new" color="grey-5" /></q-item-section>
-              </q-item>
-            </q-list>
-          </q-card>
-
-          <!-- Референсы / Шаблоны + Фотофиксация -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                {{ card.project_type === 'Шаблонный' ? 'Шаблоны и Фотофиксация' : 'Референсы и Фотофиксация' }}
-              </div>
-            </q-card-section>
-            <q-list dense>
-              <q-item :clickable="!!referencesLink" @click="openLink(referencesLink)">
-                <q-item-section avatar><q-icon name="collections" color="purple" /></q-item-section>
-                <q-item-section>
-                  <q-item-label>{{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}</q-item-label>
-                </q-item-section>
-                <q-item-section side v-if="referencesLink"><q-icon name="open_in_new" color="grey-5" /></q-item-section>
-              </q-item>
-              <q-item :clickable="!!photoDocLink" @click="openLink(photoDocLink)">
-                <q-item-section avatar><q-icon name="photo_camera" color="teal" /></q-item-section>
-                <q-item-section><q-item-label>Фотофиксация</q-item-label></q-item-section>
-                <q-item-section side v-if="photoDocLink"><q-icon name="open_in_new" color="grey-5" /></q-item-section>
-              </q-item>
-              <q-item v-if="card.project_data_link" clickable @click="openLink(card.project_data_link)">
-                <q-item-section avatar><q-icon name="folder_open" color="amber-8" /></q-item-section>
-                <q-item-section><q-item-label>Папка проекта на ЯД</q-item-label></q-item-section>
+            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Техническое задание</div></q-card-section>
+            <q-list dense v-if="filesByStage('tech_task').length > 0">
+              <q-item v-for="f in filesByStage('tech_task')" :key="f.id" clickable @click="openFile(f)">
+                <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
+                <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
                 <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
               </q-item>
             </q-list>
+            <q-card-section class="q-pt-xs"><div class="row q-gutter-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('tech_task')" /><q-btn v-if="contractData?.tech_task_link" flat color="grey-7" icon="open_in_new" label="ЯД" no-caps dense @click="openLink(contractData.tech_task_link)" /></div></q-card-section>
           </q-card>
 
-          <!-- Файлы стадий проекта -->
-          <q-card class="is-card q-mb-md" v-if="stageFiles.length > 0">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Файлы проекта</div>
-            </q-card-section>
-            <q-list dense separator>
-              <q-item v-for="file in stageFiles" :key="file.id" clickable @click="openFile(file)">
-                <q-item-section avatar>
-                  <q-icon :name="fileIcon(file)" :color="fileColor(file)" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label style="font-size: 12px">{{ file.file_name }}</q-item-label>
-                  <q-item-label caption>{{ stageLabel(file.stage) }}<span v-if="file.variation > 1"> — вариант {{ file.variation }}</span></q-item-label>
-                </q-item-section>
+          <!-- Замер -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Замер</div></q-card-section>
+            <q-list dense v-if="filesByStage('measurement').length > 0">
+              <q-item v-for="f in filesByStage('measurement')" :key="f.id" clickable @click="openFile(f)">
+                <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
+                <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
                 <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
               </q-item>
             </q-list>
+            <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('measurement')" /></q-card-section>
           </q-card>
 
-          <!-- Кнопки загрузки файлов -->
+          <!-- Фотофиксация -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Загрузить файлы</div>
-            </q-card-section>
-            <q-card-section>
-              <div class="row q-col-gutter-xs">
-                <div class="col-6"><q-btn outline color="grey-7" icon="description" label="ТЗ" no-caps class="full-width" dense @click="uploadCrmFile('tech_task')" /></div>
-                <div class="col-6"><q-btn outline color="grey-7" icon="straighten" label="Замер" no-caps class="full-width" dense @click="uploadCrmFile('measurement')" /></div>
-                <div class="col-6"><q-btn outline color="grey-7" icon="collections" label="Референсы" no-caps class="full-width q-mt-xs" dense @click="uploadCrmFile('references')" /></div>
-                <div class="col-6"><q-btn outline color="grey-7" icon="photo_camera" label="Фотофикс." no-caps class="full-width q-mt-xs" dense @click="uploadCrmFile('photo_documentation')" /></div>
-                <div class="col-6"><q-btn outline color="grey-7" icon="architecture" label="Стадия 1" no-caps class="full-width q-mt-xs" dense @click="uploadCrmFile('stage1')" /></div>
-                <div class="col-6"><q-btn outline color="grey-7" icon="palette" label="Стадия 2" no-caps class="full-width q-mt-xs" dense @click="uploadCrmFile('stage2_concept')" /></div>
-                <div class="col-6"><q-btn outline color="grey-7" icon="engineering" label="Чертежи" no-caps class="full-width q-mt-xs" dense @click="uploadCrmFile('stage3')" /></div>
+            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Фотофиксация</div></q-card-section>
+            <q-list dense v-if="filesByStage('photo_documentation').length > 0">
+              <q-item v-for="f in filesByStage('photo_documentation')" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section></q-item>
+            </q-list>
+            <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('photo_documentation')" /></q-card-section>
+          </q-card>
+
+          <!-- Референсы -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны' : 'Референсы' }}</div></q-card-section>
+            <q-list dense v-if="filesByStage('references').length > 0">
+              <q-item v-for="f in filesByStage('references')" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section></q-item>
+            </q-list>
+            <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('references')" /></q-card-section>
+          </q-card>
+
+          <!-- Стадии проекта (зависят от типа) -->
+          <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div></q-card-section>
+            <q-list dense v-if="filesByStage(stage.code).length > 0">
+              <q-item v-for="f in filesByStage(stage.code)" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}<span v-if="f.variation > 1" class="text-caption q-ml-xs" style="color: #888">вар. {{ f.variation }}</span></q-item-label></q-item-section><q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section></q-item>
+            </q-list>
+            <q-card-section class="q-pt-xs">
+              <div class="row q-gutter-xs">
+                <q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile(stage.code)" />
+                <q-btn outline color="grey-7" icon="create_new_folder" label="Вариация" no-caps dense @click="uploadCrmFile(stage.code + '_var')" />
               </div>
-              <input ref="crmFileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" multiple @change="handleCrmFileUpload" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg" />
             </q-card-section>
           </q-card>
+
+          <input ref="crmFileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" multiple @change="handleCrmFileUpload" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg" />
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 4: История ====== -->
         <q-tab-panel name="history" class="q-pa-none">
-          <!-- Фильтр по типу действия -->
-          <q-select
-            v-model="historyFilter"
-            :options="historyFilterOptions"
-            outlined dense
-            class="q-mb-md"
-            style="font-size: 12px"
-            emit-value map-options
-          />
-
-          <!-- Выполненные стадии (зелёные) -->
+          <q-select v-model="historyFilter" :options="historyFilterOptions" outlined dense class="q-mb-md" style="font-size: 12px" emit-value map-options />
           <q-card v-if="completedStages.length > 0" class="is-card q-mb-md" style="border-left: 3px solid #27AE60">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #27AE60">Выполненные стадии</div>
-            </q-card-section>
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #27AE60">Выполненные стадии</div></q-card-section>
             <q-list dense>
-              <q-item v-for="se in completedStages" :key="'c-'+se.id">
-                <q-item-section avatar><q-icon name="check_circle" color="positive" size="18px" /></q-item-section>
-                <q-item-section>
-                  <q-item-label style="font-size: 12px">{{ se.stage_name }}</q-item-label>
-                  <q-item-label caption>{{ se.executor_name }} | {{ fmtDateShort(se.completed_date) }}</q-item-label>
-                </q-item-section>
-              </q-item>
+              <q-item v-for="se in completedStages" :key="'c-'+se.id"><q-item-section avatar><q-icon name="check_circle" color="positive" size="18px" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ se.stage_name }}</q-item-label><q-item-label caption>{{ se.executor_name }} | {{ fmtDateShort(se.completed_date) }}</q-item-label></q-item-section></q-item>
             </q-list>
           </q-card>
-
-          <!-- История действий -->
           <q-card class="is-card">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Лог действий</div>
-            </q-card-section>
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Лог действий</div></q-card-section>
             <q-list dense separator v-if="filteredHistory.length > 0">
-              <q-item v-for="h in filteredHistory" :key="h.id">
-                <q-item-section avatar>
-                  <q-icon :name="actionIcon(h.action_type)" :color="actionColor(h.action_type)" size="18px" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label style="font-size: 11px; color: #333">{{ h.description || h.action_type }}</q-item-label>
-                  <q-item-label caption style="color: #888">{{ h.user_name }}</q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <div class="text-caption" style="color: #888">{{ fmtDateTime(h.action_date) }}</div>
-                </q-item-section>
-              </q-item>
+              <q-item v-for="h in filteredHistory" :key="h.id"><q-item-section avatar><q-icon :name="actionIcon(h.action_type)" :color="actionColor(h.action_type)" size="18px" /></q-item-section><q-item-section><q-item-label style="font-size: 11px; color: #333">{{ h.description || h.action_type }}</q-item-label><q-item-label caption style="color: #888">{{ h.user_name }}</q-item-label></q-item-section><q-item-section side><div class="text-caption" style="color: #888">{{ fmtDateTime(h.action_date) }}</div></q-item-section></q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
-              <q-icon name="history" size="32px" color="grey-4" class="q-mb-sm" />
-              <div>Нет записей</div>
-            </q-card-section>
+            <q-card-section v-else class="text-center" style="color: #999; padding: 24px"><q-icon name="history" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет записей</div></q-card-section>
           </q-card>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 5: Оплаты исполнителям ====== -->
         <q-tab-panel name="payments" class="q-pa-none">
-          <q-card class="is-card">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Оплаты исполнителям</div>
-              <div v-if="paymentTotal > 0" class="text-caption" style="color: #888">
-                Итого: {{ fmtMoney(paymentTotal) }}
-              </div>
+          <q-card class="is-card q-mb-md" v-for="group in paymentGroups" :key="group.role">
+            <q-card-section class="q-pb-xs">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ group.role }}</div>
             </q-card-section>
-            <q-list dense separator v-if="cardPayments.length > 0">
-              <q-item v-for="p in cardPayments" :key="p.id">
-                <q-item-section avatar>
-                  <q-avatar size="28px" :color="p.is_paid ? 'green-1' : 'orange-1'" :text-color="p.is_paid ? 'green-8' : 'orange-8'">
-                    {{ p.employee_name ? p.employee_name[0] : '?' }}
-                  </q-avatar>
-                </q-item-section>
+            <q-list dense separator>
+              <q-item v-for="p in group.items" :key="p.id" :style="paymentRowStyle(p)">
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">{{ p.employee_name || 'Не указан' }}</q-item-label>
-                  <q-item-label caption style="color: #888">
-                    {{ p.role || '' }}
-                    <span v-if="p.stage_name || p.payment_subtype"> | {{ p.stage_name || p.payment_subtype }}</span>
+                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">
+                    {{ p.employee_name || 'Не указан' }}
+                    <span class="text-caption q-ml-xs" style="color: #888">{{ p.payment_subtype || 'Полная оплата' }}</span>
                   </q-item-label>
-                  <q-item-label caption v-if="p.report_month" style="color: #aaa">{{ p.report_month }}</q-item-label>
+                  <q-item-label caption style="color: #888">{{ p.stage_name || '' }}</q-item-label>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-right">
                     <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ fmtMoney(p.final_amount || p.amount) }}</div>
-                    <div class="row items-center q-gutter-xs justify-end">
-                      <q-badge :color="p.is_paid ? 'positive' : 'warning'" :label="p.is_paid ? 'Оплачено' : 'К оплате'" dense />
-                      <q-btn v-if="!p.is_paid" flat dense round size="xs" icon="check" color="positive" @click.stop="markPaymentPaid(p)">
-                        <q-tooltip>Отметить как оплачено</q-tooltip>
-                      </q-btn>
-                    </div>
+                    <div class="text-caption" :style="{ color: p.report_month ? '#333' : '#bbb' }">{{ formatReportMonth(p.report_month) }}</div>
                   </div>
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
-              <q-icon name="payments" size="32px" color="grey-4" class="q-mb-sm" />
-              <div>Нет платежей</div>
+          </q-card>
+
+          <!-- Итого -->
+          <q-card v-if="cardPayments.length > 0" class="is-card" style="border-left: 3px solid #ffd93c">
+            <q-card-section class="q-pa-md">
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Итого по карточке</div>
+                <div class="text-h6 text-weight-bold" style="color: #333">{{ fmtMoney(paymentTotal) }}</div>
+              </div>
             </q-card-section>
           </q-card>
+
+          <q-card-section v-if="cardPayments.length === 0" class="text-center" style="color: #999; padding: 24px">
+            <q-icon name="payments" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет платежей</div>
+          </q-card-section>
         </q-tab-panel>
       </q-tab-panels>
 
       <!-- Диалог ревизии -->
       <q-dialog v-model="showRejectDialog">
         <q-card style="min-width: 320px; border-radius: 10px">
-          <q-toolbar style="background: #E74C3C; color: white">
-            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title>
-            <q-btn flat round dense icon="close" color="white" @click="showRejectDialog = false" />
-          </q-toolbar>
+          <q-toolbar style="background: #E74C3C; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title><q-btn flat round dense icon="close" color="white" @click="showRejectDialog = false" /></q-toolbar>
           <q-card-section>
             <q-input v-model="rejectReason" label="Причина *" outlined dense type="textarea" autogrow class="q-mb-sm" />
-            <q-file v-model="rejectFile" label="Файл с правками" outlined dense accept=".pdf,.jpg,.png,.doc" class="q-mb-sm">
-              <template v-slot:prepend><q-icon name="attach_file" /></template>
-            </q-file>
+            <q-file v-model="rejectFile" label="Файл с правками" outlined dense accept=".pdf,.jpg,.png,.doc" class="q-mb-sm"><template v-slot:prepend><q-icon name="attach_file" /></template></q-file>
           </q-card-section>
-          <q-card-actions align="right">
-            <q-btn flat label="Отмена" v-close-popup no-caps />
-            <q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitReject" :loading="actionLoading" />
-          </q-card-actions>
+          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitReject" :loading="actionLoading" /></q-card-actions>
         </q-card>
       </q-dialog>
 
-      <!-- FAB редактирования -->
+      <!-- Диалог назначения исполнителя -->
+      <q-dialog v-model="assignDialogVisible">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #ffd93c; color: #333"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">{{ assignDialogTitle }}</q-toolbar-title><q-btn flat round dense icon="close" @click="assignDialogVisible = false" /></q-toolbar>
+          <q-card-section>
+            <div class="text-caption q-mb-sm" style="color: #888">Роль: {{ assignRole }}</div>
+            <q-select v-model="assignEmployeeId" :options="employeeOptions" option-value="id" option-label="label" label="Сотрудник" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-input v-if="assignNeedsDeadline" v-model="assignDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
+          </q-card-section>
+          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Назначить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doAssign" :loading="actionLoading" /></q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- FAB -->
       <q-page-sticky position="bottom-right" :offset="[18, 18]">
-        <q-btn fab icon="edit" style="background: #ffd93c; color: #333" />
+        <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="editCard" />
       </q-page-sticky>
     </template>
 
     <div v-else class="text-center q-pa-xl" style="color: #999">
-      <q-icon name="search_off" size="48px" class="q-mb-sm" />
-      <div>Карточка не найдена</div>
+      <q-icon name="search_off" size="48px" class="q-mb-sm" /><div>Карточка не найдена</div>
       <q-btn flat label="Назад" @click="$router.back()" class="q-mt-md" no-caps style="color: #333" />
     </div>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { useReferencesStore } from 'src/stores/references'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi } from 'src/services/api'
 
 const route = useRoute()
+const router = useRouter()
 const $q = useQuasar()
 const crmStore = useCrmStore()
 const refs = useReferencesStore()
@@ -472,12 +306,11 @@ const card = computed(() => crmStore.selectedCard)
 const activeTab = ref('executors')
 const actionLoading = ref(false)
 const employeeOptions = ref([])
-const assignForm = ref({ stage_name: '', executor_id: null, deadline: '' })
 const cardPayments = ref([])
 const actionHistory = ref([])
-const stageHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
+const timelineEntries = ref([])
 const showRejectDialog = ref(false)
 const rejectReason = ref('')
 const rejectFile = ref(null)
@@ -485,405 +318,237 @@ const crmFileInput = ref(null)
 const crmUploadStage = ref('')
 const historyFilter = ref('all')
 
-// Цвет агента
+// Диалог назначения
+const assignDialogVisible = ref(false)
+const assignDialogTitle = ref('')
+const assignRole = ref('')
+const assignRoleKey = ref('')
+const assignEmployeeId = ref(null)
+const assignDeadline = ref('')
+const assignNeedsDeadline = ref(false)
+const assignStageName = ref('')
+
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 
-// Стадии для назначения (зависят от типа проекта)
-const stageOptions = computed(() => {
+// Стадии файлов (зависят от типа)
+const projectStages = computed(() => {
   if (card.value?.project_type === 'Шаблонный') {
     return [
-      'Стадия 1: планировочные решения',
-      'Стадия 2: рабочие чертежи',
-      'Стадия 3: 3д визуализация'
+      { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
+      { code: 'stage3', label: 'Стадия 2: Чертёжная документация' },
+      { code: 'stage2_3d', label: 'Стадия 3: 3D визуализация (Доп.)' }
     ]
   }
   return [
-    'Стадия 1: планировочные решения',
-    'Стадия 2: концепция дизайна',
-    'Стадия 2: 3д визуализация',
-    'Стадия 3: рабочие чертежи'
+    { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
+    { code: 'stage2_concept', label: 'Стадия 2: Концепция дизайна' },
+    { code: 'stage3', label: 'Стадия 3: Чертёжная документация' }
   ]
 })
 
-// Команда проекта — все 7 ролей (как в десктопе), включая незаполненные
+// Команда
 const allTeamMembers = computed(() => {
   if (!card.value) return []
-  // Дизайнер и чертёжник из stage_executors
   const se = card.value.stage_executors || []
-  const designerSe = se.find(s => s.stage_name?.includes('концепция') || s.stage_name?.includes('дизайн'))
+  const designerSe = se.find(s => s.stage_name?.includes('концепция') || s.stage_name?.includes('дизайн') || s.stage_name?.includes('визуализац'))
   const draftsmanSe = se.find(s => s.stage_name?.includes('чертеж') || s.stage_name?.includes('чертёж'))
 
   const members = [
-    { roleKey: 'senior_manager', role: 'Ст. менеджер', name: card.value.senior_manager_name },
-    { roleKey: 'gap', role: 'ГАП', name: card.value.gap_name },
-    { roleKey: 'manager', role: 'Менеджер', name: card.value.manager_name },
-    { roleKey: 'surveyor', role: 'Замерщик', name: card.value.surveyor_name },
-    { roleKey: 'designer', role: 'Дизайнер', name: designerSe?.executor_name || null, deadline: designerSe?.deadline },
-    { roleKey: 'draftsman', role: 'Чертёжник', name: draftsmanSe?.executor_name || null, deadline: draftsmanSe?.deadline }
+    { roleKey: 'senior_manager', role: 'Ст. менеджер', name: card.value.senior_manager_name, canManage: true },
+    { roleKey: 'gap', role: 'ГАП', name: card.value.gap_name, canManage: true },
+    { roleKey: 'manager', role: 'Менеджер', name: card.value.manager_name, canManage: true },
+    { roleKey: 'surveyor', role: 'Замерщик', name: card.value.surveyor_name, canManage: true },
+    { roleKey: 'designer', role: 'Дизайнер', name: designerSe?.executor_name || null, deadline: designerSe?.deadline, canManage: true, stageName: designerSe?.stage_name },
+    { roleKey: 'draftsman', role: 'Чертёжник', name: draftsmanSe?.executor_name || null, deadline: draftsmanSe?.deadline, canManage: true, stageName: draftsmanSe?.stage_name }
   ]
-  // СДП только для индивидуальных
   if (card.value.project_type === 'Индивидуальный') {
-    members.splice(1, 0, { roleKey: 'sdp', role: 'СДП', name: card.value.sdp_name })
+    members.splice(1, 0, { roleKey: 'sdp', role: 'СДП', name: card.value.sdp_name, canManage: true })
   }
   return members
 })
 
-// Stage executors (вкладка 2)
 const stageExecutors = computed(() => card.value?.stage_executors || [])
-
-// Выполненные стадии (вкладка 4)
 const completedStages = computed(() => stageExecutors.value.filter(se => se.completed))
 
-// Файлы проекта по стадиям (вкладка 3)
-const stageFiles = computed(() => projectFiles.value.filter(f =>
-  ['stage1', 'stage2_concept', 'stage2_3d', 'stage3', 'tech_task', 'measurement', 'references', 'photo_documentation'].includes(f.stage)
-))
+function filesByStage(stage) { return projectFiles.value.filter(f => f.stage === stage) }
 
-// Ссылки на ЯД из контракта
-const referencesLink = computed(() => {
-  if (!contractData.value) return null
-  return ydLink(contractData.value.references_yandex_path)
-})
-const photoDocLink = computed(() => {
-  if (!contractData.value) return null
-  return ydLink(contractData.value.photo_documentation_yandex_path)
-})
-
-// Есть ли workflow действия
 const hasWorkflowActions = computed(() => {
   const s = card.value?.workflow_status
   return s && ['in_progress', 'pending_review', 'client_approval', 'act_signing'].includes(s)
 })
 
-// Фильтр истории
-const historyFilterOptions = [
-  { label: 'Все действия', value: 'all' },
-  { label: 'Перемещение карточки', value: 'move' },
-  { label: 'Назначение исполнителей', value: 'assign' },
-  { label: 'Сдача / приёмка работы', value: 'workflow' },
-  { label: 'Оплаты', value: 'payment' },
-  { label: 'Изменение дедлайна', value: 'deadline' },
-  { label: 'Загрузка файлов', value: 'file' },
-  { label: 'Прочее', value: 'other' }
-]
-
-const filteredHistory = computed(() => {
-  if (historyFilter.value === 'all') return actionHistory.value
-  const filterMap = {
-    move: ['card_moved', 'column_change'],
-    assign: ['executor_assigned', 'executor_changed', 'assign'],
-    workflow: ['submit', 'accept', 'reject', 'client_send', 'client_ok', 'sign_act', 'stage_completed'],
-    payment: ['payment'],
-    deadline: ['deadline'],
-    file: ['file_upload', 'file_delete'],
-    other: []
+// Оплаты группами по роли
+const paymentGroups = computed(() => {
+  const map = {}
+  for (const p of cardPayments.value) {
+    const role = p.role || p.stage_name || 'Прочее'
+    if (!map[role]) map[role] = { role, items: [] }
+    map[role].items.push(p)
   }
-  const types = filterMap[historyFilter.value] || []
-  if (types.length === 0 && historyFilter.value === 'other') {
-    const allTypes = Object.values(filterMap).flat()
-    return actionHistory.value.filter(h => !allTypes.some(t => (h.action_type || '').toLowerCase().includes(t)))
-  }
-  return actionHistory.value.filter(h => types.some(t => (h.action_type || '').toLowerCase().includes(t)))
+  return Object.values(map)
 })
-
-// Итого по оплатам
 const paymentTotal = computed(() => cardPayments.value.reduce((sum, p) => sum + (p.final_amount || p.amount || 0), 0))
 
-// Ссылки YD → URL
-function ydLink(ydPath) {
-  if (!ydPath) return null
-  let path = ydPath.replace(/^disk:/, '')
-  return 'https://disk.yandex.ru/client/disk' + encodeURI(path)
+function paymentRowStyle(p) {
+  if (p.is_paid) return { background: '#E8F5E9' }
+  if (p.report_month) return { background: '#FFF8E1' }
+  return {}
 }
 
-// Стили
-function statusColor(col) {
-  if (!col) return 'grey'
-  if (col.includes('Новый')) return 'info'
-  if (col.includes('ожидании')) return 'warning'
-  if (col.includes('Стадия')) return 'accent'
-  if (col.includes('Выполненный')) return 'positive'
-  return 'grey'
-}
-function substepColor(s) {
-  return { pending_review: 'purple', revision: 'negative', client_approval: 'info', act_signing: 'purple', stage_completed: 'positive' }[s] || 'orange'
-}
-function workflowLabel(s) {
-  return { in_progress: 'В работе', pending_review: 'На проверке', revision: 'Исправление', client_approval: 'У клиента', pending_decision: 'Решение', act_signing: 'Подписание акта', stage_completed: 'Завершено' }[s] || s || ''
-}
-function dlHex(d) {
-  if (!d) return '#888'
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
-  if (days < 0) return '#E74C3C'
-  if (days <= 2) return '#F39C12'
-  return '#888'
-}
-function dlBadgeColor(d) {
-  if (!d) return 'grey'
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
-  if (days < 0) return 'negative'
-  if (days <= 2) return 'warning'
-  return 'positive'
-}
-function daysLeft(d) {
-  if (!d) return ''
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
-  if (days < 0) return `${Math.abs(days)} дн. просрочено`
-  if (days === 0) return 'сегодня'
-  return `${days} дн.`
-}
-function daysLeftShort(d) {
-  if (!d) return ''
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
-  if (days < 0) return `−${Math.abs(days)}`
-  if (days === 0) return '0'
-  return `${days}`
-}
-function fmtDate(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-function fmtDateShort(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-}
-function fmtDateTime(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
-function fmtMoney(v) {
-  if (!v) return '0 ₽'
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v)
-}
-function openLink(url) {
-  if (url) window.open(url, '_blank')
-}
-function openFile(f) {
-  if (f.public_link) window.open(f.public_link, '_blank')
+function formatReportMonth(m) {
+  if (!m) return 'в работе'
+  try {
+    const [y, mo] = m.split('-')
+    const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']
+    return `${months[parseInt(mo) - 1]} ${y}`
+  } catch { return m }
 }
 
-// Иконки файлов
-function fileIcon(f) {
-  const name = (f.file_name || '').toLowerCase()
-  if (name.endsWith('.pdf')) return 'picture_as_pdf'
-  if (name.match(/\.(jpg|jpeg|png|webp|heic|bmp)$/)) return 'image'
-  if (name.match(/\.(doc|docx)$/)) return 'article'
-  if (name.match(/\.(xls|xlsx)$/)) return 'table_chart'
-  if (name.endsWith('.dwg')) return 'architecture'
-  return 'insert_drive_file'
-}
-function fileColor(f) {
-  const name = (f.file_name || '').toLowerCase()
-  if (name.endsWith('.pdf')) return 'red'
-  if (name.match(/\.(jpg|jpeg|png|webp|heic|bmp)$/)) return 'green'
-  if (name.match(/\.(doc|docx)$/)) return 'blue'
-  if (name.match(/\.(xls|xlsx)$/)) return 'teal'
-  if (name.endsWith('.dwg')) return 'purple'
-  return 'grey-7'
-}
+// Фильтр истории
+const historyFilterOptions = [
+  { label: 'Все действия', value: 'all' }, { label: 'Перемещение', value: 'move' },
+  { label: 'Назначения', value: 'assign' }, { label: 'Workflow', value: 'workflow' },
+  { label: 'Оплаты', value: 'payment' }, { label: 'Дедлайны', value: 'deadline' },
+  { label: 'Файлы', value: 'file' }, { label: 'Прочее', value: 'other' }
+]
+const filteredHistory = computed(() => {
+  if (historyFilter.value === 'all') return actionHistory.value
+  const map = { move: ['card_moved','column'], assign: ['executor_assigned','assign'], workflow: ['submit','accept','reject','client','sign_act','stage_completed'], payment: ['payment'], deadline: ['deadline'], file: ['file'] }
+  const types = map[historyFilter.value] || []
+  if (types.length === 0) { const all = Object.values(map).flat(); return actionHistory.value.filter(h => !all.some(t => (h.action_type||'').toLowerCase().includes(t))) }
+  return actionHistory.value.filter(h => types.some(t => (h.action_type||'').toLowerCase().includes(t)))
+})
 
-const STAGE_LABELS = {
-  stage1: 'Планировочное решение',
-  stage2_concept: 'Концепция дизайна',
-  stage2_3d: '3D визуализация',
-  stage3: 'Рабочие чертежи',
-  references: 'Референсы',
-  photo_documentation: 'Фотофиксация',
-  tech_task: 'Тех. задание',
-  measurement: 'Замер'
-}
-function stageLabel(s) { return STAGE_LABELS[s] || s || '' }
-
-// Иконки для типов действий
-function actionIcon(type) {
-  if (!type) return 'history'
-  const t = type.toLowerCase()
-  if (t.includes('move') || t.includes('column')) return 'swap_horiz'
-  if (t.includes('assign')) return 'person_add'
-  if (t.includes('submit')) return 'send'
-  if (t.includes('accept')) return 'check_circle'
-  if (t.includes('reject')) return 'replay'
-  if (t.includes('client')) return 'person'
-  if (t.includes('payment')) return 'payments'
-  if (t.includes('deadline')) return 'event'
-  if (t.includes('file')) return 'attach_file'
-  return 'history'
-}
-function actionColor(type) {
-  if (!type) return 'grey-5'
-  const t = type.toLowerCase()
-  if (t.includes('accept') || t.includes('complete')) return 'positive'
-  if (t.includes('reject')) return 'negative'
-  if (t.includes('submit')) return 'info'
-  if (t.includes('payment')) return 'warning'
-  return 'grey-7'
-}
+// Форматирование
+function statusColor(col) { if (!col) return 'grey'; if (col.includes('Новый')) return 'info'; if (col.includes('ожидании')) return 'warning'; if (col.includes('Стадия')) return 'accent'; if (col.includes('Выполненный')) return 'positive'; return 'grey' }
+function substepColor(s) { return { pending_review: 'purple', revision: 'negative', client_approval: 'info', act_signing: 'purple', stage_completed: 'positive' }[s] || 'orange' }
+function workflowLabel(s) { return { in_progress: 'В работе', pending_review: 'На проверке', revision: 'Исправление', client_approval: 'У клиента', act_signing: 'Подписание акта', stage_completed: 'Завершено' }[s] || s || '' }
+function dlHex(d) { if (!d) return '#888'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return '#E74C3C'; if (days<=2) return '#F39C12'; return '#888' }
+function dlBadgeColor(d) { if (!d) return 'grey'; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return 'negative'; if (days<=2) return 'warning'; return 'positive' }
+function daysLeft(d) { if (!d) return ''; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return `${Math.abs(days)} дн. просрочено`; if (days===0) return 'сегодня'; return `${days} дн.` }
+function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) }
+function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
+function fmtDateTime(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }
+function fmtMoney(v) { if (!v) return '0 ₽'; return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v) }
+function openLink(url) { if (url) window.open(url, '_blank') }
+function openFile(f) { if (f.public_link) window.open(f.public_link, '_blank') }
+function fileIcon(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'picture_as_pdf'; if (n.match(/\.(jpg|jpeg|png|webp)$/)) return 'image'; return 'insert_drive_file' }
+function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'red'; if (n.match(/\.(jpg|jpeg|png|webp)$/)) return 'green'; return 'grey-7' }
+function actionIcon(t) { if (!t) return 'history'; const l=t.toLowerCase(); if (l.includes('move')||l.includes('column')) return 'swap_horiz'; if (l.includes('assign')) return 'person_add'; if (l.includes('submit')) return 'send'; if (l.includes('accept')) return 'check_circle'; if (l.includes('reject')) return 'replay'; if (l.includes('payment')) return 'payments'; if (l.includes('deadline')) return 'event'; if (l.includes('file')) return 'attach_file'; return 'history' }
+function actionColor(t) { if (!t) return 'grey-5'; const l=t.toLowerCase(); if (l.includes('accept')||l.includes('complete')) return 'positive'; if (l.includes('reject')) return 'negative'; if (l.includes('submit')) return 'info'; return 'grey-7' }
 
 // === ACTIONS ===
+function editCard() {
+  // Открыть страницу договора для редактирования (FAB)
+  if (card.value?.contract_id) router.push(`/contracts/${card.value.contract_id}`)
+}
 
 async function doAction(action) {
   actionLoading.value = true
   try {
     const id = card.value.id
-    const actions = {
-      submit: () => crmApi.submitWork(id),
-      accept: () => crmApi.acceptWork(id),
-      'client-send': () => crmApi.sendToClient(id),
-      'client-approved': () => crmApi.clientApproved(id),
-      'sign-act': () => crmApi.signAct(id)
-    }
+    const actions = { submit: () => crmApi.submitWork(id), accept: () => crmApi.acceptWork(id), 'client-send': () => crmApi.sendToClient(id), 'client-approved': () => crmApi.clientApproved(id), 'sign-act': () => crmApi.signAct(id) }
     await actions[action]()
     $q.notify({ type: 'positive', message: 'Выполнено' })
     await reloadCard()
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  } finally {
-    actionLoading.value = false
-  }
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
 }
 
 async function submitReject() {
-  if (!rejectReason.value) {
-    $q.notify({ type: 'warning', message: 'Укажите причину' })
-    return
-  }
+  if (!rejectReason.value) { $q.notify({ type: 'warning', message: 'Укажите причину' }); return }
   actionLoading.value = true
   try {
     let filePath = null
     if (rejectFile.value) {
-      const yp = `/CRM/Правки/${card.value.contract_number || card.value.id}/${rejectFile.value.name}`
-      await filesApi.upload(rejectFile.value, yp)
-      filePath = yp
+      const yp = `/CRM/Правки/${card.value.contract_number||card.value.id}/${rejectFile.value.name}`
+      await filesApi.upload(rejectFile.value, yp); filePath = yp
     }
     await crmApi.rejectWork(card.value.id, { reason: rejectReason.value, revision_file_path: filePath })
-    $q.notify({ type: 'positive', message: 'Отправлено на исправление' })
-    showRejectDialog.value = false
-    rejectReason.value = ''
-    rejectFile.value = null
-    await reloadCard()
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  } finally {
-    actionLoading.value = false
-  }
+    $q.notify({ type: 'positive', message: 'Отправлено на исправление' }); showRejectDialog.value = false; rejectReason.value = ''; rejectFile.value = null; await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
 }
 
-async function moveToColumn(col) {
+// Назначение / изменение члена команды
+function showAssignDialog(member, mode) {
+  assignRole.value = member.role
+  assignRoleKey.value = member.roleKey
+  assignStageName.value = member.stageName || ''
+  assignNeedsDeadline.value = ['designer', 'draftsman'].includes(member.roleKey)
+  assignDialogTitle.value = mode === 'assign' ? `Назначить ${member.role}` : `Изменить ${member.role}`
+  assignEmployeeId.value = null
+  assignDeadline.value = ''
+  assignDialogVisible.value = true
+}
+
+async function doAssign() {
+  if (!assignEmployeeId.value) return
   actionLoading.value = true
   try {
-    await crmApi.moveCard(card.value.id, col)
-    $q.notify({ type: 'positive', message: `Перемещено: ${col}` })
-    await reloadCard()
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  } finally {
-    actionLoading.value = false
-  }
+    const roleKey = assignRoleKey.value
+    if (['designer', 'draftsman'].includes(roleKey)) {
+      // Назначение через stage_executor
+      let stageName = assignStageName.value
+      if (!stageName) {
+        const isTemplate = card.value?.project_type === 'Шаблонный'
+        if (roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация' : 'Стадия 2: концепция дизайна'
+        else stageName = isTemplate ? 'Стадия 2: рабочие чертежи' : 'Стадия 3: рабочие чертежи'
+      }
+      await crmApi.assignExecutor(card.value.id, { stage_name: stageName, executor_id: assignEmployeeId.value, deadline: assignDeadline.value || null })
+    } else {
+      const update = {}; update[`${roleKey}_id`] = assignEmployeeId.value
+      await crmApi.updateCard(card.value.id, update)
+    }
+    $q.notify({ type: 'positive', message: 'Назначен' }); assignDialogVisible.value = false; await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
 }
 
-async function assignExecutor() {
-  if (!assignForm.value.stage_name || !assignForm.value.executor_id) return
-  actionLoading.value = true
-  try {
-    await crmApi.assignExecutor(card.value.id, assignForm.value)
-    $q.notify({ type: 'positive', message: 'Исполнитель назначен' })
-    await reloadCard()
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  } finally {
-    actionLoading.value = false
-  }
+async function removeTeamMember(member) {
+  $q.dialog({ title: 'Убрать исполнителя?', message: `${member.role}: ${member.name}`, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
+    try {
+      const update = {}; update[`${member.roleKey}_id`] = null
+      await crmApi.updateCard(card.value.id, update)
+      $q.notify({ type: 'positive', message: 'Убран' }); await reloadCard()
+    } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  })
 }
 
-async function markPaymentPaid(payment) {
-  try {
-    await paymentsApi.markPaid(payment.id)
-    payment.is_paid = true
-    $q.notify({ type: 'positive', message: 'Оплата проведена' })
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  }
-}
-
-function uploadCrmFile(stage) {
-  crmUploadStage.value = stage
-  crmFileInput.value?.click()
-}
+function uploadCrmFile(stage) { crmUploadStage.value = stage.replace('_var', ''); crmFileInput.value?.click() }
 
 async function handleCrmFileUpload(event) {
-  const files = event.target.files
-  if (!files?.length || !card.value) return
+  const files = event.target.files; if (!files?.length || !card.value) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
+    const variation = crmUploadStage.value.endsWith('_var') ? (projectFiles.value.filter(f => f.stage === crmUploadStage.value).length + 2) : 1
     for (const file of files) {
       const yp = `/CRM/Проекты/${card.value.contract_number}/${crmUploadStage.value}/${file.name}`
-      const uploadRes = await filesApi.upload(file, yp)
-      const publicLink = uploadRes.data?.public_link || ''
-      // Сохраняем в БД ProjectFile
+      const res = await filesApi.upload(file, yp)
       const { api: apiInst } = await import('src/boot/axios')
-      await apiInst.post('/api/v1/files/', {
-        contract_id: card.value.contract_id,
-        stage: crmUploadStage.value,
-        file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-        public_link: publicLink,
-        yandex_path: yp,
-        file_name: file.name,
-        file_order: projectFiles.value.length + 1,
-        variation: 1
-      })
+      await apiInst.post('/api/v1/files/', { contract_id: card.value.contract_id, stage: crmUploadStage.value, file_type: file.type?.includes('image') ? 'image' : 'other', public_link: res.data?.public_link || '', yandex_path: yp, file_name: file.name, file_order: projectFiles.value.length + 1, variation })
     }
-    $q.notify({ type: 'positive', message: `Загружено файлов: ${files.length}` })
-    // Обновляем список файлов
-    if (card.value.contract_id) {
-      const { data } = await filesApi.getContractFiles(card.value.contract_id)
-      projectFiles.value = data || []
-    }
-  } catch (err) {
-    $q.notify({ type: 'negative', message: 'Ошибка загрузки' })
-  } finally {
-    $q.loading.hide()
-    event.target.value = ''
-  }
+    $q.notify({ type: 'positive', message: `Загружено: ${files.length}` })
+    if (card.value.contract_id) { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data || [] }
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
+  finally { $q.loading.hide(); event.target.value = '' }
 }
 
-// === ЗАГРУЗКА ДАННЫХ ===
-
-async function reloadCard() {
-  const cardId = route.params.id
-  await crmStore.loadCard(cardId)
-  await loadAdditionalData(cardId)
-}
+// === ЗАГРУЗКА ===
+async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) }
 
 async function loadAdditionalData(cardId) {
-  // Загружаем всё параллельно: оплаты, историю действий, историю стадий, сотрудников
-  const [payRes, actHistRes, empRes] = await Promise.allSettled([
-    crmApi.getPayments(cardId),
-    crmApi.getActionHistory(cardId),
-    employeesApi.getList()
-  ])
-
+  const [payRes, actRes, empRes] = await Promise.allSettled([crmApi.getPayments(cardId), crmApi.getActionHistory(cardId), employeesApi.getList()])
   if (payRes.status === 'fulfilled') cardPayments.value = payRes.value.data || []
-  if (actHistRes.status === 'fulfilled') actionHistory.value = actHistRes.value.data || []
-  if (empRes.status === 'fulfilled') {
-    employeeOptions.value = empRes.value.data
-      .filter(e => e.status === 'активный')
-      .map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
-  }
-
-  // Данные контракта и файлы проекта (зависят от card.contract_id)
+  if (actRes.status === 'fulfilled') actionHistory.value = actRes.value.data || []
+  if (empRes.status === 'fulfilled') employeeOptions.value = empRes.value.data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
   if (card.value?.contract_id) {
-    const [contractRes, filesRes] = await Promise.allSettled([
-      contractsApi.getById(card.value.contract_id),
-      filesApi.getContractFiles(card.value.contract_id)
-    ])
-    if (contractRes.status === 'fulfilled') contractData.value = contractRes.value.data
-    if (filesRes.status === 'fulfilled') projectFiles.value = filesRes.value.data || []
+    const [cRes, fRes, tRes] = await Promise.allSettled([contractsApi.getById(card.value.contract_id), filesApi.getContractFiles(card.value.contract_id), crmApi.getTimeline(card.value.contract_id)])
+    if (cRes.status === 'fulfilled') contractData.value = cRes.value.data
+    if (fRes.status === 'fulfilled') projectFiles.value = fRes.value.data || []
+    if (tRes.status === 'fulfilled') timelineEntries.value = tRes.value.data || []
   }
 }
 
-onMounted(async () => {
-  const cardId = route.params.id
-  await crmStore.loadCard(cardId)
-  await loadAdditionalData(cardId)
-})
+onMounted(async () => { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) })
 </script>
