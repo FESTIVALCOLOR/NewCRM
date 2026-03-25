@@ -450,18 +450,17 @@ function filesByStage(stage) { return projectFiles.value.filter(f => f.stage ===
 
 // Вариации — вкладки как в десктопе
 const activeVariation = ref({}) // { stage_code: active_variation_number }
-const createdVariations = ref({}) // { stage_code: Set of created variation numbers }
+const createdVariations = ref({}) // { stage_code: [variation_numbers] }
 
 function getVariations(stageCode) {
   const files = filesByStage(stageCode)
-  const vars = new Set(files.map(f => f.variation || 1))
+  const varsSet = new Set(files.map(f => f.variation || 1))
   // Добавляем вручную созданные вариации (которые ещё без файлов)
-  if (createdVariations.value[stageCode]) {
-    for (const v of createdVariations.value[stageCode]) vars.add(v)
-  }
-  if (vars.size === 0) vars.add(1)
-  if (!activeVariation.value[stageCode]) activeVariation.value[stageCode] = Math.min(...vars)
-  return [...vars].sort((a, b) => a - b)
+  const created = createdVariations.value[stageCode] || []
+  for (const v of created) varsSet.add(v)
+  if (varsSet.size === 0) varsSet.add(1)
+  if (!activeVariation.value[stageCode]) activeVariation.value[stageCode] = Math.min(...varsSet)
+  return [...varsSet].sort((a, b) => a - b)
 }
 
 function filesForVariation(stageCode) {
@@ -479,9 +478,9 @@ function uploadToVariation(stageCode) {
 function addVariationTab(stageCode) {
   const vars = getVariations(stageCode)
   const nextVar = vars.length > 0 ? Math.max(...vars) + 1 : 2
-  // Регистрируем вариацию + переключаемся на неё
-  if (!createdVariations.value[stageCode]) createdVariations.value[stageCode] = new Set()
-  createdVariations.value[stageCode].add(nextVar)
+  // Регистрируем вариацию (массив для реактивности Vue) + переключаемся
+  const existing = createdVariations.value[stageCode] || []
+  createdVariations.value = { ...createdVariations.value, [stageCode]: [...existing, nextVar] }
   activeVariation.value = { ...activeVariation.value, [stageCode]: nextVar }
   $q.notify({ type: 'positive', message: `Вариация ${nextVar} создана. Загрузите в неё файлы.` })
 }

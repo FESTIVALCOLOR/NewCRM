@@ -303,8 +303,8 @@ async function markPaid(p) {
     if (p.source === 'Оклад') {
       await salariesApi.update(p.id, { payment_status: 'paid' })
     } else if (p.id) {
-      // Как десктоп: PUT /payments/{id} с payment_status + is_paid
-      await paymentsApi.update(p.id, { payment_status: 'paid', is_paid: true })
+      // PATCH /mark-paid — заполняет paid_date и paid_by на сервере (как десктоп)
+      await paymentsApi.markPaid(p.id, p.employee_id)
     }
     p.is_paid = true
     p.payment_status = 'paid'

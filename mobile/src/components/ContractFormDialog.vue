@@ -82,6 +82,7 @@
 import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { contractsApi, clientsApi } from 'src/services/api'
+import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
 
 const PROJECT_SUBTYPES = ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный']
@@ -223,7 +224,11 @@ async function save() {
       await contractsApi.update(props.contract.id, form.value)
       $q.notify({ type: 'positive', message: 'Договор обновлён' })
     } else {
-      await contractsApi.create(form.value)
+      const { data: newContract } = await contractsApi.create(form.value)
+      // Создаём папку на ЯД сразу (как десктоп)
+      if (newContract?.id) {
+        try { await api.post(`/api/v1/contracts/${newContract.id}/fix-folder`) } catch {}
+      }
       $q.notify({ type: 'positive', message: 'Договор создан' })
     }
     emit('saved')
