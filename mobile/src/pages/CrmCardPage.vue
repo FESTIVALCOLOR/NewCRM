@@ -233,8 +233,8 @@
                 <q-item-section>
                   <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">{{ p.employee_name || 'Не указан' }}</q-item-label>
                   <q-item-label caption style="color: #888">{{ p.stage_name || '' }}</q-item-label>
-                  <q-item-label v-if="p.is_paid" caption style="color: #aaa; font-size: 10px">оплачено</q-item-label>
-                  <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #aaa; font-size: 10px">к оплате</q-item-label>
+                  <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #aaa; font-size: 10px">оплачено</q-item-label>
+                  <q-item-label v-else-if="p.report_month || p.payment_status === 'to_pay'" caption style="color: #aaa; font-size: 10px">к оплате</q-item-label>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-right">
@@ -547,6 +547,8 @@ function showAssignDialog(member, mode) {
   assignDialogTitle.value = mode === 'assign' ? `Назначить ${member.role}` : `Изменить ${member.role}`
   assignEmployeeId.value = null
   assignDeadline.value = ''
+  // Предзаполняем список сотрудников с фильтром по роли
+  filterAssignEmployees('', (fn) => fn())
   assignDialogVisible.value = true
 }
 

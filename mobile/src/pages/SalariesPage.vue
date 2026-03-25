@@ -85,14 +85,14 @@
                         <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">{{ fmtMonth(p.report_month) }}</div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                        <!-- Статус (кликабельный) — по payment_status -->
+                        <!-- Статус -->
                         <q-btn v-if="p.is_paid || p.payment_status === 'paid'" unelevated dense size="xs" label="Оплачено" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="undoPaid(p)" />
-                        <q-btn v-else-if="p.payment_status === 'to_pay'" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn v-else-if="p.report_month || p.payment_status === 'to_pay'" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
                         <q-btn v-else unelevated dense size="xs" label="В работе" no-caps color="grey-3" text-color="grey-7" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" disable />
                         <!-- Действия -->
-                        <q-btn v-if="p.payment_status === 'to_pay' && !p.is_paid" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
-                        <q-btn v-if="!p.is_paid && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
-                        <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deletePayment(p)" />
+                        <q-btn v-if="!p.is_paid && (p.report_month || p.payment_status === 'to_pay')" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
+                        <q-btn v-if="!p.is_paid && !p.report_month && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
                   </div>
@@ -231,7 +231,7 @@ function fmtMonth(m) {
 }
 function payRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
-  if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
+  if (p.report_month || p.payment_status === 'to_pay') return { background: '#FFF8E1' }
   return {}
 }
 
