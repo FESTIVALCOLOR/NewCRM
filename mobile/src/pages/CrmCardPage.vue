@@ -661,74 +661,82 @@ function uploadCrmFile(stage) {
 }
 
 async function handleCrmFileUpload(event) {
-  const files = event.target.files; if (!files?.length || !card.value) return
+  const fileList = event.target.files
+  if (!fileList?.length || !card.value) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
+    const stage = crmUploadStage.value
     const variation = crmUploadVariation.value
-    for (const file of files) {
-      const yp = `/CRM/Проекты/${card.value.contract_number}/${crmUploadStage.value}/${file.name}`
-      const res = await filesApi.upload(file, yp)
-      const { api: apiInst } = await import('src/boot/axios')
-      await apiInst.post('/api/v1/files/', { contract_id: card.value.contract_id, stage: crmUploadStage.value, file_type: file.type?.includes('image') ? 'image' : 'other', public_link: res.data?.public_link || '', yandex_path: yp, file_name: file.name, file_order: projectFiles.value.length + 1, variation })
+    const contractNum = card.value.contract_number || card.value.id
+    const contractId = card.value.contract_id
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i]
+      const yp = `/CRM/Проекты/${contractNum}/${stage}/${variation > 1 ? 'var' + variation + '/' : ''}${file.name}`
+
+      // Шаг 1: загрузка на ЯД
+      let publicLink = ''
+      try {
+        const uploadRes = await filesApi.upload(file, yp)
+        publicLink = uploadRes.data?.public_link || ''
+      } catch (uploadErr) {
+        $q.notify({ type: 'warning', message: `Загрузка на ЯД: ${uploadErr.response?.status || 'ошибка'}. Сохраняю запись.` })
+      }
+
+      // Шаг 2: создание записи в БД
+      try {
+        const { api: ax } = await import('src/boot/axios')
+        await ax.post('/api/v1/files/', {
+          contract_id: contractId, stage, file_name: file.name,
+          file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
+          public_link: publicLink, yandex_path: yp,
+          file_order: projectFiles.value.length + i + 1, variation
+        })
+      } catch (dbErr) {
+        const d = dbErr.response?.data?.detail
+        $q.notify({ type: 'negative', message: `Запись в БД: ${typeof d === 'string' ? d : JSON.stringify(d || dbErr.message)}` })
+      }
     }
-    $q.notify({ type: 'positive', message: `Загружено: ${files.length}` })
-    if (card.value.contract_id) { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data || [] }
+    $q.notify({ type: 'positive', message: `Загружено: ${fileList.length}` })
+    // Перезагрузить файлы
+    try { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data || [] } catch {}
   } catch (err) {
-    console.error('File upload error:', err)
-    const d = err.response?.data?.detail
-    $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка загрузки файла' })
-  }
-  finally { $q.loading.hide(); event.target.value = '' }
+    $q.notify({ type: 'negative', message: err.message || 'Ошибка' })
+  } finally { $q.loading.hide(); event.target.value = '' }
 }
 
 // === ЗАГРУЗКА ===
 async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) }
 
 async function loadAdditionalData(cardId) {
+  // Оплаты
   try {
-    const [payRes, actRes, empRes] = await Promise.allSettled([crmApi.getPayments(cardId), crmApi.getActionHistory(cardId), employeesApi.getList()])
-    if (payRes.status === 'fulfilled') {
-      // Фильтруем: только платежи этой карточки (исключаем оклады и чужие)
-      const cid = parseInt(cardId)
-      cardPayments.value = (payRes.value.data || []).filter(p => p.crm_card_id === cid && p.source !== 'Оклад')
-    }
-    if (actRes.status === 'fulfilled') {
-      actionHistory.value = actRes.value.data || []
-      console.log(`Action history loaded: ${actionHistory.value.length} entries`)
-    } else { console.warn('Action history error:', actRes.reason?.message) }
-    if (empRes.status === 'fulfilled') {
-      const all = (empRes.value.data || []).filter(e => e.status === 'активный')
-      allEmployeesList.value = all
-      employeeOptions.value = all.map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
-    }
-  } catch (e) { console.warn('Ошибка загрузки доп. данных:', e) }
+    const { data } = await crmApi.getPayments(cardId)
+    const cid = parseInt(cardId)
+    cardPayments.value = (data || []).filter(p => p.crm_card_id === cid && p.source !== 'Оклад')
+  } catch (e) { cardPayments.value = [] }
+
+  // История действий
   try {
-    const cid = card.value?.contract_id
-    if (cid) {
-      // Загружаем параллельно: контракт, файлы, timeline
-      const contractP = contractsApi.getById(cid)
-      const filesP = filesApi.getContractFiles(cid)
-      const timelineP = crmApi.getTimeline(cid)
-      const [cRes, fRes, tRes] = await Promise.allSettled([contractP, filesP, timelineP])
-      if (cRes.status === 'fulfilled') contractData.value = cRes.value.data
-      else console.warn('Contract load error:', cRes.reason?.message)
-      if (fRes.status === 'fulfilled') projectFiles.value = fRes.value.data || []
-      else console.warn('Files load error:', fRes.reason?.message)
-      if (tRes.status === 'fulfilled') {
-        const td = tRes.value.data
-        timelineEntries.value = Array.isArray(td) ? td : []
-        console.log(`Timeline loaded: ${timelineEntries.value.length} entries for contract ${cid}`)
-      } else {
-        console.warn('Timeline load error:', tRes.reason?.message)
-        // Fallback: загрузим напрямую
-        try {
-          const { data } = await crmApi.getTimeline(cid)
-          timelineEntries.value = Array.isArray(data) ? data : []
-          console.log(`Timeline fallback loaded: ${timelineEntries.value.length}`)
-        } catch (e2) { console.error('Timeline fallback failed:', e2) }
-      }
-    }
-  } catch (e) { console.warn('Ошибка загрузки контракта:', e) }
+    const { data } = await crmApi.getActionHistory(cardId)
+    actionHistory.value = data || []
+  } catch (e) { actionHistory.value = [] }
+
+  // Сотрудники
+  try {
+    const { data } = await employeesApi.getList()
+    const all = (data || []).filter(e => e.status === 'активный')
+    allEmployeesList.value = all
+    employeeOptions.value = all.map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+  } catch (e) { /* ignore */ }
+
+  // Данные контракта + файлы + timeline
+  const cid = card.value?.contract_id
+  if (!cid) return
+
+  try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch (e) { /* ignore */ }
+  try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch (e) { projectFiles.value = [] }
+  try { const { data } = await crmApi.getTimeline(cid); timelineEntries.value = Array.isArray(data) ? data : [] } catch (e) { timelineEntries.value = [] }
 }
 
 onMounted(async () => {
