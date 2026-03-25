@@ -292,6 +292,7 @@ async function undoPaid(p) {
       if (p.source === 'Оклад') await salariesApi.update(p.id, { payment_status: 'pending' })
       else if (p.id) await paymentsApi.update(p.id, { is_paid: false, payment_status: 'pending' })
       p.is_paid = false
+      p.payment_status = 'pending'
       $q.notify({ type: 'info', message: 'Статус оплаты снят' })
     } catch (err) { const d = err.response?.data?.detail; $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка' }) }
   })

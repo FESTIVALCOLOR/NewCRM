@@ -147,10 +147,10 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Техническое задание</div></q-card-section>
             <q-list dense v-if="filesByStage('tech_task').length > 0">
-              <q-item v-for="f in filesByStage('tech_task')" :key="f.id" clickable @click="openFile(f)">
+              <q-item v-for="f in filesByStage('tech_task')" :key="f.id" >
                 <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
                 <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-                <q-item-section side><div class="row q-gutter-xs"><q-icon name="open_in_new" color="grey-5" /><q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteFile(f)" /></div></q-item-section>
+                <q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
               </q-item>
             </q-list>
             <q-card-section class="q-pt-xs"><div class="row q-gutter-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('tech_task')" /><q-btn v-if="contractData?.tech_task_link" flat color="grey-7" icon="open_in_new" label="ЯД" no-caps dense @click="openLink(contractData.tech_task_link)" /></div></q-card-section>
@@ -160,10 +160,10 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Замер</div></q-card-section>
             <q-list dense v-if="filesByStage('measurement').length > 0">
-              <q-item v-for="f in filesByStage('measurement')" :key="f.id" clickable @click="openFile(f)">
+              <q-item v-for="f in filesByStage('measurement')" :key="f.id" >
                 <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
                 <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-                <q-item-section side><div class="row q-gutter-xs"><q-icon name="open_in_new" color="grey-5" /><q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteFile(f)" /></div></q-item-section>
+                <q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
               </q-item>
             </q-list>
             <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('measurement')" /></q-card-section>
@@ -173,7 +173,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Фотофиксация</div></q-card-section>
             <q-list dense v-if="filesByStage('photo_documentation').length > 0">
-              <q-item v-for="f in filesByStage('photo_documentation')" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-icon name="open_in_new" color="grey-5" /><q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
+              <q-item v-for="f in filesByStage('photo_documentation')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
             </q-list>
             <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('photo_documentation')" /></q-card-section>
           </q-card>
@@ -182,7 +182,7 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны' : 'Референсы' }}</div></q-card-section>
             <q-list dense v-if="filesByStage('references').length > 0">
-              <q-item v-for="f in filesByStage('references')" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-icon name="open_in_new" color="grey-5" /><q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
+              <q-item v-for="f in filesByStage('references')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
             </q-list>
             <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('references')" /></q-card-section>
           </q-card>
@@ -191,7 +191,7 @@
           <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md" :style="isCurrentStage(stage.code) ? 'border: 2px solid #27AE60' : ''">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div></q-card-section>
             <q-list dense v-if="filesByStage(stage.code).length > 0">
-              <q-item v-for="f in filesByStage(stage.code)" :key="f.id" clickable @click="openFile(f)"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}<span v-if="f.variation > 1" class="text-caption q-ml-xs" style="color: #888">вар. {{ f.variation }}</span></q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-icon name="open_in_new" color="grey-5" /><q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
+              <q-item v-for="f in filesByStage(stage.code)" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}<span v-if="f.variation > 1" class="text-caption q-ml-xs" style="color: #888">вар. {{ f.variation }}</span></q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
             </q-list>
             <q-card-section class="q-pt-xs">
               <div class="row q-gutter-xs">
@@ -738,14 +738,11 @@ async function loadAdditionalData(cardId) {
 
   // История действий
   try {
-    const resp = await crmApi.getActionHistory(cardId)
+    const { api: ax } = await import('src/boot/axios')
+    const resp = await ax.get(`/api/v1/crm/cards/${cardId}/action-history?_t=${Date.now()}`)
     actionHistory.value = resp.data || []
-    if (actionHistory.value.length === 0) {
-      $q.notify({ type: 'info', message: `История: 0 записей`, timeout: 2000 })
-    }
   } catch (e) {
     actionHistory.value = []
-    $q.notify({ type: 'negative', message: `История ошибка: ${e.message}`, timeout: 3000 })
   }
 
   // Сотрудники
@@ -766,14 +763,12 @@ async function loadAdditionalData(cardId) {
   try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch (e) { /* ignore */ }
   try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch (e) { projectFiles.value = [] }
   try {
-    const resp = await crmApi.getTimeline(cid)
+    // Прямой вызов с cache-bust чтобы обойти Service Worker кэш
+    const { api: ax } = await import('src/boot/axios')
+    const resp = await ax.get(`/api/v1/timeline/${cid}?_t=${Date.now()}`)
     timelineEntries.value = Array.isArray(resp.data) ? resp.data : []
-    if (timelineEntries.value.length === 0) {
-      $q.notify({ type: 'info', message: `Timeline: 0 записей (contract ${cid})`, timeout: 3000 })
-    }
   } catch (e) {
     timelineEntries.value = []
-    $q.notify({ type: 'negative', message: `Timeline ошибка: ${e.message}`, timeout: 5000 })
   }
 }
 
