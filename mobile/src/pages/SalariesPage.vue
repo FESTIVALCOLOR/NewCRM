@@ -192,10 +192,19 @@ async function loadData() {
   loading.value = true
   try {
     const params = {}; const pt = paymentTypeMap[paymentTab.value]; if (pt) params.payment_type = pt
-    if (filters.value.period !== 'all') { params.year = filters.value.year; if (filters.value.period === 'month') params.month = filters.value.month }
+    if (filters.value.period !== 'all') {
+      params.year = filters.value.year
+      if (filters.value.period === 'month') params.month = filters.value.month
+    } else {
+      // При "Все" — загружаем за текущий год + без месяца
+      params.year = currentYear
+      params.include_null_month = true
+    }
     if (filters.value.employee_id) params.employee_id = filters.value.employee_id
     if (filters.value.status === 'paid') params.is_paid = true
     else if (filters.value.status === 'to_pay') params.is_paid = false
+    // Всегда включаем платежи без месяца (в работе)
+    if (!params.include_null_month) params.include_null_month = true
     const { data } = await paymentsApi.getList(params)
     // Фильтрация по статусу «в работе» (без report_month) на клиенте
     if (filters.value.status === 'in_work') payments.value = data.filter(p => !p.is_paid && !p.report_month)

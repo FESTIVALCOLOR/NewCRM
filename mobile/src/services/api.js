@@ -35,7 +35,10 @@ export const statisticsApi = {
     api.get('/api/v1/statistics/funnel', { params }),
 
   getProjects: (params = {}) =>
-    api.get('/api/v1/statistics/projects', { params })
+    api.get('/api/v1/statistics/projects', { params }),
+
+  getEmployees: (params = {}) =>
+    api.get('/api/v1/statistics/employees', { params })
 }
 
 // === CRM ===
@@ -172,7 +175,16 @@ export const employeesApi = {
     api.put(`/api/v1/employees/${id}`, data),
 
   delete: (id) =>
-    api.delete(`/api/v1/employees/${id}`)
+    api.delete(`/api/v1/employees/${id}`),
+
+  getTelegramInfo: (id) =>
+    api.get(`/api/v1/employees/employees/${id}/telegram-info`),
+
+  createTelegramToken: (id) =>
+    api.post(`/api/v1/employees/employees/${id}/create-telegram-token`),
+
+  sendInvite: (id) =>
+    api.post(`/api/v1/notifications/employees/${id}/send-invite`)
 }
 
 // === Payments ===

@@ -222,3 +222,33 @@ html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
   height: 24px;
   width: auto;
 }
+
+// ===== PRINT / PDF EXPORT =====
+@media print {
+  // Скрываем навигацию
+  .q-header, .q-footer, .q-drawer, .q-page-sticky,
+  .q-fab, .q-btn[fab], .q-pull-to-refresh__puller,
+  .toggle-pills, .toggle-pills-wide, .column-nav { display: none !important; }
+
+  // Убираем отступы
+  .q-page { padding: 8px !important; }
+  body { padding: 0 !important; }
+
+  // Карточки без теней и рамок
+  .q-card, .is-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // Графики и таблицы не обрезаются
+  canvas { max-width: 100% !important; height: auto !important; }
+
+  // Текст чёрный
+  * { color: #333 !important; }
+  .q-badge { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+
+  // Размер страницы
+  @page { size: A4 portrait; margin: 10mm; }
+}

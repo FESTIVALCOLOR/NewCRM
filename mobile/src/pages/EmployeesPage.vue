@@ -120,7 +120,13 @@
               </q-item>
               <q-item>
                 <q-item-section avatar><q-btn flat round dense icon="send" :style="{ color: selected.telegram_user_id ? '#333' : '#ccc' }" /></q-item-section>
-                <q-item-section><q-item-label caption>Telegram</q-item-label><q-item-label :style="{ color: selected.telegram_user_id ? '#27AE60' : '#bbb' }">{{ selected.telegram_user_id ? `Подключён (ID: ${selected.telegram_user_id})` : 'Не подключён' }}</q-item-label></q-item-section>
+                <q-item-section>
+                  <q-item-label caption>Telegram</q-item-label>
+                  <q-item-label :style="{ color: selected.telegram_user_id ? '#27AE60' : '#bbb' }">{{ selected.telegram_user_id ? `Подключён (ID: ${selected.telegram_user_id})` : 'Не подключён' }}</q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="!selected.telegram_user_id">
+                  <q-btn outline dense size="xs" label="Создать токен" no-caps color="grey-7" style="border-radius: 4px; font-size: 10px" @click="createTgToken(selected)" />
+                </q-item-section>
               </q-item>
               <q-item v-if="selected.department">
                 <q-item-section avatar><q-icon name="business" style="color: #333" /></q-item-section>
@@ -152,14 +158,17 @@
             </q-list>
           </q-card>
 
-          <!-- Круглая кнопка редактирования (внизу) -->
-          <div class="text-center q-mt-md">
-            <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="startEdit" />
+          <!-- Действия -->
+          <div class="row q-gutter-sm q-mt-md justify-center">
+            <q-btn unelevated icon="edit" label="Редактировать" no-caps style="background: #ffd93c; color: #333; border-radius: 8px" @click="startEdit" />
+            <q-btn v-if="selected.email" outline icon="email" label="Пригласить" no-caps color="grey-7" style="border-radius: 8px" @click="sendInvite(selected)" />
           </div>
           </template>
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <page-dashboard :items="dashItems" />
 
     <!-- Диалог создания -->
     <q-dialog v-model="showCreate" maximized transition-show="slide-up" transition-hide="slide-down">
@@ -203,6 +212,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { employeesApi } from 'src/services/api'
+import PageDashboard from 'src/components/PageDashboard.vue'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 
@@ -210,6 +220,16 @@ const $q = useQuasar()
 const refs = useReferencesStore()
 const { can } = usePermission()
 const canCreate = computed(() => can('employees.create'))
+
+const dashItems = computed(() => {
+  const all = employees.value
+  const active = all.filter(e => e.status === 'активный').length
+  return [
+    { label: 'Всего', value: all.length },
+    { label: 'Активных', value: active, color: '#27AE60' },
+    { label: 'Отделов', value: departments.value.length - 1, color: '#3498DB' }
+  ]
+})
 const employees = ref([])
 const loading = ref(false)
 const saving = ref(false)
@@ -259,6 +279,20 @@ function formatDate(d) {
 
 function call(phone) { window.location.href = `tel:${phone.replace(/[^\d+]/g, '')}` }
 function sendEmail(email) { window.location.href = `mailto:${email}` }
+
+async function createTgToken(emp) {
+  try {
+    const { data } = await employeesApi.createTelegramToken(emp.id)
+    $q.notify({ type: 'positive', message: data?.token ? `Токен: ${data.token}` : 'Токен создан' })
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+}
+
+async function sendInvite(emp) {
+  try {
+    await employeesApi.sendInvite(emp.id)
+    $q.notify({ type: 'positive', message: 'Приглашение отправлено' })
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+}
 
 function filterByDept(dept) { activeDept.value = dept }
 

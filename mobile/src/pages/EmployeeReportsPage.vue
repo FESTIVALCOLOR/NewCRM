@@ -129,32 +129,23 @@ async function loadData() {
 
   const pt = projectTab.value === 'template' ? 'Шаблонный' : projectTab.value === 'supervision' ? 'Авторский надзор' : 'Индивидуальный'
 
-  const [dashR, projR] = await Promise.allSettled([
+  const [dashR, empR, projR] = await Promise.allSettled([
     statisticsApi.getDashboard(params),
+    statisticsApi.getEmployees(params),
     statisticsApi.getProjects({ ...params, project_type: pt })
   ])
 
   if (dashR.status === 'fulfilled') dashboard.value = dashR.value.data
+  if (empR.status === 'fulfilled' && Array.isArray(empR.value.data)) {
+    roleEmployees.value = empR.value.data.sort((a, b) => b.completion_rate - a.completion_rate)
+    executorLoad.value = empR.value.data.filter(e => e.total_stages > 0).sort((a, b) => b.total_stages - a.total_stages).slice(0, 10).map(e => ({ name: e.full_name, active_stages: e.total_stages - e.completed_stages }))
+  }
   if (projR.status === 'fulfilled') {
     const data = projR.value.data
-    if (Array.isArray(data)) {
-      roleEmployees.value = data
-    } else if (data?.by_stages) {
-      executorLoad.value = Object.entries(data.by_stages).map(([name, count]) => ({
-        name, active_stages: count
-      })).sort((a, b) => b.active_stages - a.active_stages).slice(0, 10)
+    if (data?.by_stages && executorLoad.value.length === 0) {
+      executorLoad.value = Object.entries(data.by_stages).map(([name, count]) => ({ name, active_stages: count })).sort((a, b) => b.active_stages - a.active_stages).slice(0, 10)
     }
   }
-
-  // Загрузка сотрудников (если статистика — не массив)
-  try {
-    const { data } = await statisticsApi.getProjects({ year: filters.value.year, project_type: pt })
-    if (data?.by_stages) {
-      executorLoad.value = Object.entries(data.by_stages).map(([name, count]) => ({
-        name, active_stages: count
-      })).sort((a, b) => b.active_stages - a.active_stages).slice(0, 10)
-    }
-  } catch {}
 
   loading.value = false
 }

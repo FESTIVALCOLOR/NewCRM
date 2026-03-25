@@ -100,6 +100,9 @@
 
     <!-- Форма создания/редактирования -->
     <client-form-dialog v-model="showForm" @saved="onSaved" />
+
+    <!-- Дашборд внизу -->
+    <page-dashboard :items="dashItems" />
   </q-page>
 </template>
 
@@ -107,6 +110,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { usePermission } from 'src/composables/usePermission'
 import ClientFormDialog from 'src/components/ClientFormDialog.vue'
+import PageDashboard from 'src/components/PageDashboard.vue'
 import { useRouter } from 'vue-router'
 import { useClientsStore } from 'src/stores/clients'
 
@@ -115,6 +119,12 @@ const clientsStore = useClientsStore()
 const { can } = usePermission()
 const canCreate = computed(() => can('clients.create'))
 const showForm = ref(false)
+
+const dashItems = computed(() => [
+  { label: 'Всего клиентов', value: clientsStore.items?.length || 0, color: '#333' },
+  { label: 'Физ. лица', value: clientsStore.items?.filter(c => !c.organization_name).length || 0, color: '#27AE60' },
+  { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.organization_name).length || 0, color: '#3498DB' }
+])
 const clientType = ref('Все')
 const sortBy = ref('name')
 

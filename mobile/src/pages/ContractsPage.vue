@@ -84,6 +84,9 @@
     </q-page-sticky>
 
     <contract-form-dialog v-model="showForm" @saved="loadContracts" />
+
+    <!-- Дашборд внизу -->
+    <page-dashboard :items="dashItems" />
   </q-page>
 </template>
 
@@ -93,10 +96,22 @@ import { contractsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
+import PageDashboard from 'src/components/PageDashboard.vue'
 
 const refs = useReferencesStore()
 const { can } = usePermission()
 const canCreate = computed(() => can('contracts.create'))
+
+const dashItems = computed(() => {
+  const all = contracts.value
+  const active = all.filter(c => c.status === 'В работе').length
+  const done = all.filter(c => c.status?.includes('СДАН')).length
+  return [
+    { label: 'Всего', value: all.length },
+    { label: 'В работе', value: active, color: '#F39C12' },
+    { label: 'Сдано', value: done, color: '#27AE60' }
+  ]
+})
 const contracts = ref([])
 const loading = ref(false)
 const search = ref('')

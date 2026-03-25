@@ -104,7 +104,7 @@
     </template>
     <!-- Диалог перемещения карточки (long-press) -->
     <q-dialog v-model="moveDialogVisible">
-      <q-card style="min-width: 300px; border-radius: 10px">
+      <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
           <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Переместить карточку</q-toolbar-title>
           <q-btn flat round dense icon="close" @click="moveDialogVisible = false" />
@@ -113,14 +113,32 @@
           <div class="text-weight-bold" style="font-size: 12px">{{ moveCard.contract_number }} — {{ moveCard.address }}</div>
           <div class="text-caption q-mt-xs" style="color: #888">Текущая: {{ moveCard.column_name }}</div>
         </q-card-section>
-        <q-list separator>
-          <q-item v-for="col in crmStore.columnOrder" :key="col" clickable v-ripple @click="doMoveCard(col)" :disable="moveCard?.column_name === col">
-            <q-item-section>
-              <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">{{ col }}</q-item-label>
-            </q-item-section>
-            <q-item-section side v-if="moveCard?.column_name === col"><q-icon name="check" color="positive" /></q-item-section>
-          </q-item>
-        </q-list>
+
+        <!-- Шаг 1: выбор стадии -->
+        <template v-if="moveStep === 1">
+          <q-list separator>
+            <q-item v-for="col in crmStore.columnOrder" :key="col" clickable v-ripple @click="selectMoveColumn(col)" :disable="moveCard?.column_name === col">
+              <q-item-section>
+                <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">{{ col }}</q-item-label>
+              </q-item-section>
+              <q-item-section side v-if="moveCard?.column_name === col"><q-icon name="check" color="positive" /></q-item-section>
+              <q-item-section side v-else-if="stageNeedsExecutor(col)"><q-icon name="person_add" color="grey-5" size="16px" /></q-item-section>
+            </q-item>
+          </q-list>
+        </template>
+
+        <!-- Шаг 2: назначение сотрудника (если стадия требует) -->
+        <template v-if="moveStep === 2">
+          <q-card-section>
+            <div class="text-caption q-mb-sm" style="color: #888">Стадия: {{ moveTargetCol }}</div>
+            <q-select v-model="moveExecutorId" :options="employeeOpts" option-value="id" option-label="label" label="Исполнитель *" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-input v-model="moveDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
+            <q-btn unelevated label="Переместить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doMoveWithAssign" :loading="moveLoading" />
+          </q-card-actions>
+        </template>
       </q-card>
     </q-dialog>
   </q-page>
@@ -131,7 +149,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
-import { crmApi } from 'src/services/api'
+import { crmApi, employeesApi } from 'src/services/api'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 
 const $q = useQuasar()
@@ -140,6 +158,16 @@ const crmStore = useCrmStore()
 const currentSlide = ref(0)
 const moveDialogVisible = ref(false)
 const moveCard = ref(null)
+const moveStep = ref(1)
+const moveTargetCol = ref('')
+const moveExecutorId = ref(null)
+const moveDeadline = ref('')
+const moveLoading = ref(false)
+const employeeOpts = ref([])
+
+// Стадии, требующие назначения исполнителя
+const STAGES_WITH_EXECUTOR = ['Стадия 1:', 'Стадия 2:', 'Стадия 3:']
+function stageNeedsExecutor(colName) { return STAGES_WITH_EXECUTOR.some(s => colName.includes(s)) }
 
 // При смене данных сбрасываем слайд на первый непустой столбец
 watch(() => crmStore.columns, (cols) => {
@@ -153,11 +181,24 @@ function openCard(cardId) { router.push(`/crm/${cardId}`) }
 
 function showMoveDialog(card) {
   moveCard.value = card
+  moveStep.value = 1
+  moveExecutorId.value = null
+  moveDeadline.value = ''
   moveDialogVisible.value = true
 }
 
-async function doMoveCard(colName) {
+function selectMoveColumn(colName) {
   if (!moveCard.value || moveCard.value.column_name === colName) return
+  moveTargetCol.value = colName
+  if (stageNeedsExecutor(colName)) {
+    moveStep.value = 2
+  } else {
+    doMoveCard(colName)
+  }
+}
+
+async function doMoveCard(colName) {
+  moveLoading.value = true
   try {
     await crmApi.moveCard(moveCard.value.id, colName)
     $q.notify({ type: 'positive', message: `Перемещено: ${colName}` })
@@ -165,10 +206,36 @@ async function doMoveCard(colName) {
     crmStore.loadCards()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка перемещения' })
-  }
+  } finally { moveLoading.value = false }
 }
 
-onMounted(() => { crmStore.loadCards() })
+async function doMoveWithAssign() {
+  if (!moveExecutorId.value) { $q.notify({ type: 'warning', message: 'Выберите исполнителя' }); return }
+  moveLoading.value = true
+  try {
+    // Сначала перемещаем
+    await crmApi.moveCard(moveCard.value.id, moveTargetCol.value)
+    // Потом назначаем исполнителя на стадию
+    await crmApi.assignExecutor(moveCard.value.id, {
+      stage_name: moveTargetCol.value,
+      executor_id: moveExecutorId.value,
+      deadline: moveDeadline.value || null
+    })
+    $q.notify({ type: 'positive', message: `Перемещено + исполнитель назначен` })
+    moveDialogVisible.value = false
+    crmStore.loadCards()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { moveLoading.value = false }
+}
+
+onMounted(async () => {
+  crmStore.loadCards()
+  try {
+    const { data } = await employeesApi.getList()
+    employeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ id: e.id, label: `${e.full_name} (${e.position})` }))
+  } catch {}
+})
 </script>
 
 <style scoped>
