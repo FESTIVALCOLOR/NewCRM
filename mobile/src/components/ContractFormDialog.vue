@@ -37,7 +37,7 @@
           <q-input v-model="form.address" label="Адрес объекта" outlined dense />
 
           <!-- Город -->
-          <q-select v-model="form.city" :options="cityOptions" label="Город" outlined dense use-input new-value-mode="add" />
+          <q-select v-model="form.city" :options="cityOptions" label="Город *" outlined dense />
 
           <!-- Тип агента -->
           <q-select v-model="form.agent_type" :options="agentOptions" label="Тип агента" outlined dense use-input new-value-mode="add" />
