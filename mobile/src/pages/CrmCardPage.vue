@@ -196,7 +196,7 @@
             <q-card-section class="q-pt-xs">
               <div class="row q-gutter-xs">
                 <q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile(stage.code)" />
-                <q-btn outline color="grey-7" icon="create_new_folder" label="Вариация" no-caps dense @click="uploadCrmFile(stage.code + '_var')" />
+                <q-btn outline color="grey-7" icon="create_new_folder" label="+ Вариант" no-caps dense @click="createVariation(stage.code)" />
               </div>
             </q-card-section>
           </q-card>
@@ -645,6 +645,26 @@ async function deleteFile(f) {
   })
 }
 
+async function createVariation(stageCode) {
+  // Создаём папку вариации на ЯД и запись-заглушку
+  const existingVars = projectFiles.value.filter(f => f.stage === stageCode).map(f => f.variation || 1)
+  const nextVar = existingVars.length > 0 ? Math.max(...existingVars) + 1 : 2
+  const contractNum = card.value?.contract_number || card.value?.id
+  const ydPath = `/CRM/Проекты/${contractNum}/${stageCode}/var${nextVar}`
+  try {
+    // Создаём папку на ЯД
+    const { api: ax } = await import('src/boot/axios')
+    try { await ax.post('/api/v1/files/create-folder', { folder_path: ydPath }) } catch {}
+    $q.notify({ type: 'positive', message: `Вариант ${nextVar} создан` })
+    // После создания — предложить загрузить файл
+    crmUploadStage.value = stageCode
+    crmUploadVariation.value = nextVar
+    crmFileInput.value?.click()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.message || 'Ошибка создания варианта' })
+  }
+}
+
 function uploadCrmFile(stage) {
   if (stage.endsWith('_var')) {
     // Вариация — сначала выбор файла с номером вариации
@@ -718,9 +738,15 @@ async function loadAdditionalData(cardId) {
 
   // История действий
   try {
-    const { data } = await crmApi.getActionHistory(cardId)
-    actionHistory.value = data || []
-  } catch (e) { actionHistory.value = [] }
+    const resp = await crmApi.getActionHistory(cardId)
+    actionHistory.value = resp.data || []
+    if (actionHistory.value.length === 0) {
+      $q.notify({ type: 'info', message: `История: 0 записей`, timeout: 2000 })
+    }
+  } catch (e) {
+    actionHistory.value = []
+    $q.notify({ type: 'negative', message: `История ошибка: ${e.message}`, timeout: 3000 })
+  }
 
   // Сотрудники
   try {
@@ -732,11 +758,23 @@ async function loadAdditionalData(cardId) {
 
   // Данные контракта + файлы + timeline
   const cid = card.value?.contract_id
-  if (!cid) return
+  if (!cid) {
+    $q.notify({ type: 'warning', message: `contract_id не найден (card loaded: ${!!card.value})`, timeout: 5000 })
+    return
+  }
 
   try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch (e) { /* ignore */ }
   try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch (e) { projectFiles.value = [] }
-  try { const { data } = await crmApi.getTimeline(cid); timelineEntries.value = Array.isArray(data) ? data : [] } catch (e) { timelineEntries.value = [] }
+  try {
+    const resp = await crmApi.getTimeline(cid)
+    timelineEntries.value = Array.isArray(resp.data) ? resp.data : []
+    if (timelineEntries.value.length === 0) {
+      $q.notify({ type: 'info', message: `Timeline: 0 записей (contract ${cid})`, timeout: 3000 })
+    }
+  } catch (e) {
+    timelineEntries.value = []
+    $q.notify({ type: 'negative', message: `Timeline ошибка: ${e.message}`, timeout: 5000 })
+  }
 }
 
 onMounted(async () => {
