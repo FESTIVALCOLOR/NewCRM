@@ -231,21 +231,22 @@
             <q-list dense separator>
               <q-item v-for="p in group.items" :key="p.id" :style="paymentRowStyle(p)">
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">
-                    {{ p.employee_name || 'Не указан' }}
-                    <span class="text-caption q-ml-xs" style="color: #888">{{ p.payment_subtype || 'Полная оплата' }}</span>
-                  </q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">{{ p.employee_name || 'Не указан' }}</q-item-label>
                   <q-item-label caption style="color: #888">{{ p.stage_name || '' }}</q-item-label>
+                  <q-item-label v-if="p.is_paid" caption style="color: #aaa; font-size: 10px">оплачено</q-item-label>
+                  <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #aaa; font-size: 10px">к оплате</q-item-label>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-right">
-                    <div class="row items-center justify-end q-gutter-xs">
+                    <div class="row items-center justify-end no-wrap">
                       <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ fmtMoney(p.final_amount || p.amount) }}</div>
+                      <span class="text-caption q-ml-xs" style="color: #888">{{ p.payment_subtype || '' }}</span>
+                      <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px"></div>
                       <div class="text-caption" :style="{ color: p.report_month ? '#333' : '#bbb' }">{{ formatReportMonth(p.report_month) }}</div>
                     </div>
                     <div class="row items-center justify-end q-gutter-xs q-mt-xs">
-                      <q-btn flat round dense size="xs" icon="edit" color="grey-7" @click.stop="editPaymentAmount(p)"><q-tooltip>Изменить сумму</q-tooltip></q-btn>
-                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deletePayment(p)"><q-tooltip>Удалить</q-tooltip></q-btn>
+                      <q-btn flat round dense size="xs" icon="edit" color="grey-7" @click.stop="editPaymentAmount(p)" />
+                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deletePayment(p)" />
                     </div>
                   </div>
                 </q-item-section>

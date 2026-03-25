@@ -131,7 +131,7 @@
         <template v-if="moveStep === 2">
           <q-card-section>
             <div class="text-caption q-mb-sm" style="color: #888">Стадия: {{ moveTargetCol }}</div>
-            <q-select v-model="moveExecutorId" :options="employeeOpts" option-value="id" option-label="label" label="Исполнитель *" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-select v-model="moveExecutorId" :options="filteredMoveEmployees" option-value="id" option-label="label" label="Исполнитель *" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterMoveEmps" class="q-mb-sm" />
             <q-input v-model="moveDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
           </q-card-section>
           <q-card-actions align="right">
@@ -170,6 +170,27 @@ const employeeOpts = ref([])
 // Стадии, требующие назначения исполнителя
 const STAGES_WITH_EXECUTOR = ['Стадия 1:', 'Стадия 2:', 'Стадия 3:']
 function stageNeedsExecutor(colName) { return STAGES_WITH_EXECUTOR.some(s => colName.includes(s)) }
+
+const filteredMoveEmployees = ref([])
+
+// Фильтр исполнителей по роли стадии
+function getStageRole(colName) {
+  const col = colName.toLowerCase()
+  if (col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) return 'Чертёжник'
+  if (col.includes('концепция') || col.includes('дизайн') || col.includes('визуализац')) return 'Дизайнер'
+  return null
+}
+
+function filterMoveEmps(val, update) {
+  const role = getStageRole(moveTargetCol.value)
+  let list = employeeOpts.value
+  if (role) {
+    list = employeeOpts.value.filter(e => e.label.includes(role) || e.label.includes(role.toLowerCase()))
+    if (list.length === 0) list = employeeOpts.value // fallback на всех
+  }
+  if (val) { const q = val.toLowerCase(); list = list.filter(e => e.label.toLowerCase().includes(q)) }
+  update(() => { filteredMoveEmployees.value = list })
+}
 
 const dashItems = computed(() => {
   const total = crmStore.cards.length

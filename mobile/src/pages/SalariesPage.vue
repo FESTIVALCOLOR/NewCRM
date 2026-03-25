@@ -16,8 +16,8 @@
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
-      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable placeholder="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData" /></div>
-      <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable placeholder="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData" /></div>
+      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
+      <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
     </div>
 
     <!-- Период -->
@@ -79,19 +79,20 @@
                       <div v-if="p.address" class="text-caption ellipsis" style="color: #aaa; font-size: 10px">{{ p.address }}</div>
                     </div>
                     <div class="text-right q-ml-sm" style="flex-shrink: 0">
-                      <div class="row items-center justify-end q-gutter-xs">
+                      <div class="row items-center justify-end no-wrap">
                         <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ formatMoney(p.final_amount || p.amount) }}</div>
+                        <div style="width: 1px; height: 16px; background: #ddd; margin: 0 6px"></div>
                         <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">{{ fmtMonth(p.report_month) }}</div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                        <!-- Статус badge (кликабельный для снятия) -->
-                        <q-btn v-if="p.is_paid" unelevated dense size="xs" label="Оплачено" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="undoPaid(p)" />
-                        <q-btn v-else-if="p.report_month" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <!-- Статус (кликабельный) — по payment_status -->
+                        <q-btn v-if="p.is_paid || p.payment_status === 'paid'" unelevated dense size="xs" label="Оплачено" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="undoPaid(p)" />
+                        <q-btn v-else-if="p.payment_status === 'to_pay'" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
                         <q-btn v-else unelevated dense size="xs" label="В работе" no-caps color="grey-3" text-color="grey-7" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" disable />
                         <!-- Действия -->
-                        <q-btn v-if="!p.is_paid && p.report_month" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
-                        <q-btn v-if="!p.is_paid && !p.report_month" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
-                        <q-btn outline dense size="xs" icon="delete_outline" label="Удалить" no-caps color="negative" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="deletePayment(p)" />
+                        <q-btn v-if="p.payment_status === 'to_pay' && !p.is_paid" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
+                        <q-btn v-if="!p.is_paid && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
                   </div>
@@ -228,7 +229,11 @@ function fmtMonth(m) {
   if (!m) return 'в работе'
   try { const [y, mo] = m.split('-'); const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']; return `${months[parseInt(mo)-1]} ${y}` } catch { return m }
 }
-function payRowStyle(p) { if (p.is_paid) return { background: '#E8F5E9' }; if (p.report_month && !p.is_paid) return { background: '#FFF8E1' }; return {} }
+function payRowStyle(p) {
+  if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
+  if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
+  return {}
+}
 
 async function loadData() {
   loading.value = true
