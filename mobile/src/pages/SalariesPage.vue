@@ -290,7 +290,7 @@ async function undoPaid(p) {
   $q.dialog({ title: 'Снять статус оплаты?', message: p.employee_name, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
     try {
       if (p.source === 'Оклад') await salariesApi.update(p.id, { payment_status: 'pending' })
-      else if (p.id) await paymentsApi.update(p.id, { is_paid: false, payment_status: 'pending' })
+      else if (p.id) await paymentsApi.update(p.id, { payment_status: 'pending', is_paid: false })
       p.is_paid = false
       p.payment_status = 'pending'
       $q.notify({ type: 'info', message: 'Статус оплаты снят' })
@@ -301,11 +301,10 @@ async function undoPaid(p) {
 async function markPaid(p) {
   try {
     if (p.source === 'Оклад') {
-      // Оклад — обновляем через salaries API (id = salary id)
       await salariesApi.update(p.id, { payment_status: 'paid' })
     } else if (p.id) {
-      // Платёж — используем mark-paid с employee_id
-      await paymentsApi.markPaid(p.id, p.employee_id)
+      // Как десктоп: PUT /payments/{id} с payment_status + is_paid
+      await paymentsApi.update(p.id, { payment_status: 'paid', is_paid: true })
     }
     p.is_paid = true
     p.payment_status = 'paid'
@@ -321,15 +320,17 @@ async function setPayStatus(p) {
     // Toggle: если уже к оплате (есть report_month) → снять (убрать report_month)
     if (p.report_month) {
       if (p.source === 'Оклад') await salariesApi.update(p.id, { report_month: '', payment_status: 'pending' })
-      else if (p.id) await paymentsApi.update(p.id, { report_month: '' })
+      else if (p.id) await paymentsApi.update(p.id, { payment_status: 'pending', report_month: '' })
       p.report_month = null
+      p.payment_status = 'pending'
       $q.notify({ type: 'info', message: 'Статус снят' })
     } else {
       const now = new Date()
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
       if (p.source === 'Оклад') await salariesApi.update(p.id, { report_month: month, payment_status: 'to_pay' })
-      else if (p.id) await paymentsApi.update(p.id, { report_month: month })
+      else if (p.id) await paymentsApi.update(p.id, { payment_status: 'to_pay', report_month: month })
       p.report_month = month
+      p.payment_status = 'to_pay'
       $q.notify({ type: 'positive', message: 'К оплате' })
     }
   } catch (err) {

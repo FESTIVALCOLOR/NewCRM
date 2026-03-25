@@ -692,24 +692,29 @@ async function handleCrmFileUpload(event) {
 
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i]
-      const yp = `/CRM/Проекты/${contractNum}/${stage}/${variation > 1 ? 'var' + variation + '/' : ''}${file.name}`
+      const ydFolder = `disk:/CRM/Проекты/${contractNum}/${stage}${variation > 1 ? '/var' + variation : ''}`
+      const yp = `${ydFolder}/${file.name}`
+
+      // Путь без disk: для upload API, с disk: для записи в БД
+      const ypUpload = yp.replace(/^disk:/, '')
+      const ypDb = yp.startsWith('disk:') ? yp : `disk:${yp}`
 
       // Шаг 1: загрузка на ЯД
       let publicLink = ''
       try {
-        const uploadRes = await filesApi.upload(file, yp)
+        const uploadRes = await filesApi.upload(file, ypUpload)
         publicLink = uploadRes.data?.public_link || ''
       } catch (uploadErr) {
-        $q.notify({ type: 'warning', message: `Загрузка на ЯД: ${uploadErr.response?.status || 'ошибка'}. Сохраняю запись.` })
+        $q.notify({ type: 'warning', message: `ЯД: ${uploadErr.response?.status || 'ошибка'}` })
       }
 
-      // Шаг 2: создание записи в БД
+      // Шаг 2: создание записи в БД (как десктоп — с disk: в yandex_path)
       try {
         const { api: ax } = await import('src/boot/axios')
         await ax.post('/api/v1/files/', {
           contract_id: contractId, stage, file_name: file.name,
           file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-          public_link: publicLink, yandex_path: yp,
+          public_link: publicLink, yandex_path: ypDb,
           file_order: projectFiles.value.length + i + 1, variation
         })
       } catch (dbErr) {
