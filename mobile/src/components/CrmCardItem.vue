@@ -1,5 +1,5 @@
 <template>
-  <q-card flat bordered class="crm-card q-mb-sm" @touchstart.passive="startLongPress" @touchend="cancelLongPress" @touchmove="cancelLongPress">
+  <q-card flat bordered class="crm-card q-mb-sm">
     <q-card-section class="q-pa-sm">
       <!-- Верхняя строка: номер + workflow status -->
       <div class="row items-center justify-between q-mb-xs">
@@ -64,9 +64,10 @@
         </span>
       </div>
 
-      <!-- Кнопка входа в карточку (как в десктопе "Данные проекта") -->
-      <div class="q-mt-sm" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
-        <q-btn flat dense no-caps size="sm" icon="open_in_new" label="Данные проекта" style="color: #333; font-size: 10px; width: 100%" @click.stop="emit('click')" />
+      <!-- Кнопки действий -->
+      <div class="q-mt-sm row q-gutter-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+        <q-btn flat dense no-caps size="sm" icon="open_in_new" label="Данные проекта" style="color: #333; font-size: 10px; flex: 1" @click="emit('click')" />
+        <q-btn flat dense no-caps size="sm" icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px" @click="emit('longpress')" />
       </div>
     </q-card-section>
   </q-card>
@@ -80,14 +81,6 @@ const props = defineProps({ card: { type: Object, required: true } })
 defineEmits(['click', 'longpress'])
 
 const showTeam = ref(false)
-let longPressTimer = null
-let longPressed = false
-
-function startLongPress() {
-  longPressed = false
-  longPressTimer = setTimeout(() => { longPressed = true; emit('longpress') }, 3000)
-}
-function cancelLongPress() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null } }
 
 const refs = useReferencesStore()
 

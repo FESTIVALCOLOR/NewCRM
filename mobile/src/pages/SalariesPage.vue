@@ -83,15 +83,15 @@
                         <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ formatMoney(p.final_amount || p.amount) }}</div>
                         <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">{{ fmtMonth(p.report_month) }}</div>
                       </div>
-                      <div class="row items-center justify-end q-gutter-xs q-mt-xs">
-                        <!-- Статус: в работе / к оплате / оплачено -->
-                        <q-badge v-if="p.is_paid" color="positive" label="Оплачено" dense style="font-size: 9px; cursor: pointer" @click.stop="undoPaid(p)" />
-                        <q-badge v-else-if="p.report_month" color="warning" label="К оплате" dense style="font-size: 9px; cursor: pointer" @click.stop="setPayStatus(p)" />
-                        <q-badge v-else color="grey-4" text-color="grey-7" label="В работе" dense style="font-size: 9px" />
-                        <!-- Действия -->
-                        <q-btn v-if="!p.is_paid && p.report_month" flat round dense size="xs" icon="check" color="positive" @click.stop="markPaid(p)"><q-tooltip>Оплатить</q-tooltip></q-btn>
-                        <q-btn v-if="!p.is_paid && !p.report_month" flat round dense size="xs" icon="schedule" color="warning" @click.stop="setPayStatus(p)"><q-tooltip>К оплате</q-tooltip></q-btn>
-                        <q-btn v-if="(p.id || p.salary_id)" flat round dense size="xs" icon="delete_outline" color="grey-5" @click.stop="deletePayment(p)" />
+                      <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
+                        <!-- Статус badge -->
+                        <q-badge v-if="p.is_paid" color="positive" label="Оплачено" style="font-size: 10px; padding: 3px 8px; cursor: pointer" @click.stop="undoPaid(p)" />
+                        <q-badge v-else-if="p.report_month" color="warning" label="К оплате" style="font-size: 10px; padding: 3px 8px; cursor: pointer" @click.stop="setPayStatus(p)" />
+                        <q-badge v-else color="grey-4" text-color="grey-7" label="В работе" style="font-size: 10px; padding: 3px 8px" />
+                        <!-- Действия с текстом -->
+                        <q-btn v-if="!p.is_paid && p.report_month" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
+                        <q-btn v-if="!p.is_paid && !p.report_month" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn v-if="(p.id || p.salary_id)" flat dense size="xs" icon="delete_outline" color="grey-5" style="min-width: 28px" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
                   </div>
@@ -186,21 +186,7 @@ function onEmployeeFilter(val) {
 
 function filterEmployees(val, update) {
   const all = allEmployees.value.filter(e => e.status === 'активный')
-  const makeOpts = (list) => {
-    // Группируем по должности
-    const byPos = {}
-    for (const e of list) {
-      const pos = e.position || 'Прочие'
-      if (!byPos[pos]) byPos[pos] = []
-      byPos[pos].push(e)
-    }
-    const opts = []
-    for (const [pos, emps] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
-      opts.push({ label: `— ${pos} —`, value: null, disable: true })
-      for (const e of emps) opts.push({ label: e.full_name, value: e.id, caption: pos })
-    }
-    return opts
-  }
+  const makeOpts = (list) => list.map(e => ({ label: `${e.full_name} — ${e.position || ''}`, value: e.id }))
   if (!val) { update(() => { employeeOpts.value = makeOpts(all) }); return }
   const q = val.toLowerCase()
   update(() => { employeeOpts.value = makeOpts(all.filter(e => (e.full_name || '').toLowerCase().includes(q))) })
@@ -299,17 +285,19 @@ async function undoPaid(p) {
 
 async function markPaid(p) {
   try {
-    // Для окладов (salary) используем salariesApi, для платежей — paymentsApi
-    if (p.salary_id) {
+    if (p.salary_id && !p.id) {
+      // Оклад — обновляем через salaries API
       await salariesApi.update(p.salary_id, { payment_status: 'paid' })
     } else if (p.id) {
+      // Платёж — используем mark-paid с employee_id
       await paymentsApi.markPaid(p.id, p.employee_id)
     }
     p.is_paid = true
+    p.payment_status = 'paid'
     $q.notify({ type: 'positive', message: 'Оплачено' })
   } catch (err) {
     const d = err.response?.data?.detail
-    $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка' })
+    $q.notify({ type: 'negative', message: typeof d === 'string' ? d : JSON.stringify(d || 'Ошибка') })
   }
 }
 
