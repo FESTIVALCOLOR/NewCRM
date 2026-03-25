@@ -53,18 +53,19 @@
           @click="$router.push(`/contracts/${contract.id}`)"
         >
           <q-card-section class="q-pa-md">
-            <div class="row items-center justify-between q-mb-xs">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                {{ contract.contract_number }}
+            <div class="row items-start justify-between q-mb-xs">
+              <div style="flex: 1">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ contract.contract_number }}</div>
+                <div class="text-body2 q-mt-xs" style="color: #333">{{ contract.address || 'Без адреса' }}</div>
               </div>
-              <div class="row q-gutter-xs">
-                <q-badge v-if="contract.agent_type" :style="{ background: agentColor(contract.agent_type) }" :label="contract.agent_type" dense text-color="white" />
-                <q-badge :color="statusColor(contract.status)" :label="contract.status" dense />
+              <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
+                <q-badge :color="statusColor(contract.status)" :label="contract.status" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
+                <q-badge v-if="contract.agent_type" text-color="white" :style="{ background: agentColor(contract.agent_type), minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="contract.agent_type" />
               </div>
             </div>
-            <div class="text-body2 q-mb-xs" style="color: #333">{{ contract.address || 'Без адреса' }}</div>
             <div class="row q-gutter-md text-caption" style="color: #888">
               <span>{{ contract.project_type }}</span>
+              <span v-if="contract.project_subtype"> · {{ contract.project_subtype }}</span>
               <span v-if="contract.area">{{ contract.area }} м²</span>
               <span v-if="contract.city">{{ contract.city }}</span>
             </div>

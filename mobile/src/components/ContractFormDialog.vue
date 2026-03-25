@@ -16,41 +16,22 @@
             v-if="!isEdit"
             v-model="form.client_id"
             :options="clientOptions"
-            option-value="id"
-            option-label="label"
-            label="Клиент *"
-            outlined
-            dense
-            emit-value
-            map-options
-            use-input
-            input-debounce="200"
-            @filter="filterClients"
+            option-value="id" option-label="label"
+            label="Клиент *" outlined dense emit-value map-options
+            use-input input-debounce="200" @filter="filterClients"
             :rules="[val => !!val || 'Выберите клиента']"
           >
-            <template v-slot:no-option>
-              <q-item><q-item-section class="text-grey">Не найдено</q-item-section></q-item>
-            </template>
+            <template v-slot:no-option><q-item><q-item-section class="text-grey">Не найдено</q-item-section></q-item></template>
           </q-select>
 
           <!-- Номер договора -->
-          <q-input
-            v-model="form.contract_number"
-            label="Номер договора *"
-            outlined
-            dense
-            :rules="[val => !!val || 'Обязательное поле']"
-          />
+          <q-input v-model="form.contract_number" label="Номер договора *" outlined dense :rules="[val => !!val || 'Обязательное поле']" />
 
           <!-- Тип проекта -->
-          <q-select
-            v-model="form.project_type"
-            :options="['Индивидуальный', 'Шаблонный', 'Авторский надзор']"
-            label="Тип проекта *"
-            outlined
-            dense
-            :rules="[val => !!val || 'Выберите тип']"
-          />
+          <q-select v-model="form.project_type" :options="['Индивидуальный', 'Шаблонный', 'Авторский надзор']" label="Тип проекта *" outlined dense :rules="[val => !!val || 'Выберите тип']" @update:model-value="onProjectTypeChange" />
+
+          <!-- Подтип проекта -->
+          <q-select v-model="form.project_subtype" :options="subtypeOptions" label="Подтип проекта" outlined dense />
 
           <!-- Адрес -->
           <q-input v-model="form.address" label="Адрес объекта" outlined dense />
@@ -65,25 +46,25 @@
           <q-select v-if="isEdit" v-model="form.status" :options="statusOptions" label="Статус" outlined dense />
 
           <!-- Площадь -->
-          <q-input
-            v-model.number="form.area"
-            label="Площадь (м²) *"
-            outlined
-            dense
-            type="number"
-            :rules="[val => val > 0 || 'Укажите площадь']"
-          />
+          <q-input v-model.number="form.area" label="Площадь (м²) *" outlined dense type="number" :rules="[val => val > 0 || 'Укажите площадь']" @update:model-value="recalcPeriod" />
 
-          <!-- Этажность -->
-          <q-input v-model.number="form.floors" label="Этажей" outlined dense type="number" />
+          <!-- Этажность (только для шаблонных) -->
+          <q-input v-if="form.project_type === 'Шаблонный'" v-model.number="form.floors" label="Этажей" outlined dense type="number" @update:model-value="recalcPeriod" />
 
           <!-- Дата договора -->
           <q-input v-model="form.contract_date" label="Дата договора" outlined dense type="date" />
 
-          <!-- Срок выполнения -->
-          <q-input v-model.number="form.contract_period" label="Срок выполнения (дней)" outlined dense type="number" />
+          <!-- Срок выполнения (авторасчёт / ручной) -->
+          <div>
+            <div class="row items-center q-gutter-xs q-mb-xs">
+              <div class="text-caption text-weight-bold" style="color: #333">Срок выполнения (раб. дней)</div>
+              <q-badge :color="manualPeriod ? 'orange' : 'positive'" :label="manualPeriod ? 'Ручной' : 'Авто'" dense style="font-size: 9px" />
+              <q-btn flat dense size="xs" :label="manualPeriod ? 'Авто' : 'Вручную'" no-caps style="font-size: 10px; color: #666" @click="toggleManualPeriod" />
+            </div>
+            <q-input v-model.number="form.contract_period" outlined dense type="number" :disable="!manualPeriod" />
+          </div>
 
-          <div class="text-subtitle2 text-weight-bold q-mt-md">Финансы</div>
+          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: #333">Финансы</div>
 
           <q-input v-model.number="form.total_amount" label="Общая сумма" outlined dense type="number" prefix="₽" />
           <q-input v-model.number="form.advance_payment" label="Аванс" outlined dense type="number" prefix="₽" />
@@ -98,16 +79,15 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { contractsApi, clientsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 
-const props = defineProps({
-  modelValue: Boolean,
-  contract: { type: Object, default: null }
-})
+const PROJECT_SUBTYPES = ['Полный (с 3д визуализацией)', 'Эскизный (с коллажами)', 'Планировочный']
+const TEMPLATE_SUBTYPES = ['Стандарт', 'Стандарт с визуализацией', 'Проект ванной комнаты', 'Проект ванной комнаты с визуализацией']
 
+const props = defineProps({ modelValue: Boolean, contract: { type: Object, default: null } })
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const $q = useQuasar()
@@ -117,26 +97,16 @@ const saving = ref(false)
 const formRef = ref(null)
 const isEdit = ref(false)
 const clientOptions = ref([])
+const manualPeriod = ref(false)
 
 const today = new Date().toISOString().split('T')[0]
 
 const emptyForm = () => ({
-  client_id: null,
-  contract_number: '',
-  project_type: 'Индивидуальный',
-  address: '',
-  city: 'Москва',
-  area: null,
-  floors: 1,
-  agent_type: '',
-  contract_date: today,
-  contract_period: 45,
-  total_amount: null,
-  advance_payment: null,
-  additional_payment: null,
-  third_payment: null,
-  status: 'Новый заказ',
-  comments: ''
+  client_id: null, contract_number: '', project_type: 'Индивидуальный', project_subtype: '',
+  address: '', city: 'Москва', area: null, floors: 1, agent_type: '',
+  contract_date: today, contract_period: 45,
+  total_amount: null, advance_payment: null, additional_payment: null, third_payment: null,
+  status: 'Новый заказ', comments: ''
 })
 
 const form = ref(emptyForm())
@@ -145,21 +115,91 @@ const statusOptions = refs.contractStatuses
 const cityOptions = refs.cities
 const agentOptions = refs.agentNames()
 
+// Подтипы зависят от типа проекта
+const subtypeOptions = computed(() => {
+  if (form.value.project_type === 'Шаблонный') return TEMPLATE_SUBTYPES
+  return PROJECT_SUBTYPES
+})
+
 watch(() => props.modelValue, (val) => {
   show.value = val
   if (val && props.contract) {
     isEdit.value = true
     form.value = { ...emptyForm(), ...props.contract }
+    manualPeriod.value = false
   } else if (val) {
     isEdit.value = false
     form.value = emptyForm()
+    manualPeriod.value = false
   }
 })
-
 watch(show, (val) => emit('update:modelValue', val))
 
-function close() {
-  show.value = false
+function close() { show.value = false }
+
+function onProjectTypeChange() {
+  // Сброс подтипа при смене типа
+  form.value.project_subtype = subtypeOptions.value[0] || ''
+  recalcPeriod()
+}
+
+function toggleManualPeriod() {
+  manualPeriod.value = !manualPeriod.value
+  if (!manualPeriod.value) recalcPeriod()
+}
+
+function recalcPeriod() {
+  if (manualPeriod.value) return
+  const area = form.value.area
+  if (!area || area <= 0) return
+
+  let term = 0
+  if (form.value.project_type === 'Шаблонный') {
+    term = calcTemplateTerm(form.value.project_subtype || '', area, form.value.floors || 1)
+  } else {
+    const ptCode = getPtCode(form.value.project_subtype || '')
+    term = calcIndividualTerm(ptCode, area)
+  }
+  if (term > 0) form.value.contract_period = term
+}
+
+function getPtCode(subtype) {
+  if (subtype.includes('Полный')) return 1
+  if (subtype.includes('Планировочный')) return 3
+  return 2
+}
+
+function calcIndividualTerm(ptCode, area) {
+  const tables = {
+    1: [[70,50],[100,60],[130,70],[160,80],[190,90],[220,100],[250,110],[300,120],[350,130],[400,140],[450,150],[500,160]],
+    3: [[70,10],[100,15],[130,20],[160,25],[190,30],[220,35],[250,40],[300,45],[350,50],[400,55],[450,60],[500,65]],
+    2: [[70,30],[100,35],[130,40],[160,45],[190,50],[220,55],[250,60],[300,65],[350,70],[400,75],[450,80],[500,85]]
+  }
+  const thresholds = tables[ptCode] || tables[2]
+  for (const [maxArea, days] of thresholds) {
+    if (area <= maxArea) return days
+  }
+  return thresholds[thresholds.length - 1][1]
+}
+
+function calcTemplateTerm(subtype, area, floors) {
+  const sub = subtype.toLowerCase()
+  const hasViz = sub.includes('визуализац')
+  if (sub.includes('ванн')) return hasViz ? 20 : 10
+
+  let baseDays = 20
+  if (area > 90) {
+    const extra = Math.floor((area - 91) / 50) + 1
+    baseDays = 20 + extra * 10
+  }
+  if (floors > 1) {
+    baseDays += (floors - 1) * (hasViz ? 20 : 10)
+  }
+  if (hasViz) {
+    if (area <= 90) baseDays += 25
+    else baseDays += 25 + (Math.floor((area - 91) / 50) + 1) * 15
+  }
+  return Math.round(baseDays)
 }
 
 async function filterClients(val, update) {
@@ -168,19 +208,15 @@ async function filterClients(val, update) {
     const { data } = await clientsApi.getList(params)
     update(() => {
       clientOptions.value = data.map(c => ({
-        id: c.id,
-        label: `${c.full_name}${c.organization_name ? ' (' + c.organization_name + ')' : ''}`
+        id: c.id, label: `${c.full_name}${c.organization_name ? ' (' + c.organization_name + ')' : ''}`
       }))
     })
-  } catch {
-    update(() => { clientOptions.value = [] })
-  }
+  } catch { update(() => { clientOptions.value = [] }) }
 }
 
 async function save() {
   const valid = await formRef.value?.validate()
   if (!valid) return
-
   saving.value = true
   try {
     if (isEdit.value) {
@@ -193,10 +229,7 @@ async function save() {
     emit('saved')
     close()
   } catch (err) {
-    const msg = err.response?.data?.detail || 'Ошибка сохранения'
-    $q.notify({ type: 'negative', message: msg })
-  } finally {
-    saving.value = false
-  }
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка сохранения' })
+  } finally { saving.value = false }
 }
 </script>

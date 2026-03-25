@@ -50,6 +50,11 @@
           <!-- Email (обязательный) -->
           <q-input v-model="form.email" label="Email *" outlined dense type="email" :rules="[val => !!val || 'Введите email']" />
 
+          <!-- Telegram -->
+          <q-input v-model="form.telegram_account" label="Telegram (имя или телефон)" outlined dense placeholder="@username или +79001234567">
+            <template v-slot:prepend><q-icon name="send" /></template>
+          </q-input>
+
           <!-- Адрес регистрации -->
           <q-input v-model="form.registration_address" label="Адрес регистрации" outlined dense />
 
@@ -125,6 +130,7 @@ const emptyForm = () => ({
   full_name: '',
   phone: '',
   email: '',
+  telegram_account: '',
   registration_address: '',
   organization_type: '',
   organization_name: '',

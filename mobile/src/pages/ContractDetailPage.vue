@@ -1,24 +1,22 @@
 <template>
   <q-page padding>
     <template v-if="contract">
-      <!-- ОДИН СКРОЛЛ — как в десктопе, НЕ вкладки -->
-
-      <!-- Блок: Шапка -->
+      <!-- Шапка -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="row items-center justify-between q-mb-xs">
-            <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ contract.contract_number }}</div>
-            <div class="text-right">
-              <q-badge :color="statusColor(contract.status)" :label="contract.status" />
-              <div v-if="contract.agent_type" class="q-mt-xs">
-                <span class="agent-badge" :style="{ background: agentColor }">{{ contract.agent_type }}</span>
-              </div>
+          <div class="row items-start justify-between q-mb-xs">
+            <div style="flex: 1">
+              <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ contract.contract_number }}</div>
+              <div class="text-body2 q-mt-xs" style="color: #333">{{ contract.address }}</div>
+            </div>
+            <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
+              <q-badge :color="statusColor(contract.status)" :label="contract.status" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
+              <q-badge v-if="contract.agent_type" text-color="white" :style="{ background: agentColor, minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="contract.agent_type" />
             </div>
           </div>
-          <div class="text-body2" style="color: #333">{{ contract.address }}</div>
-          <div class="row q-gutter-sm text-caption" style="color: #888">
+          <div class="row q-gutter-sm text-caption q-mt-xs" style="color: #888">
             <span>{{ contract.project_type }}</span>
-            <span v-if="contract.project_subtype">{{ contract.project_subtype }}</span>
+            <span v-if="contract.project_subtype"> · {{ contract.project_subtype }}</span>
             <span v-if="contract.area">{{ contract.area }} м²</span>
             <span v-if="contract.city">{{ contract.city }}</span>
             <span v-if="contract.floors">{{ contract.floors }} эт.</span>
@@ -26,85 +24,73 @@
         </q-card-section>
       </q-card>
 
-      <!-- Блок: Клиент -->
+      <!-- Клиент (ссылка на страницу клиента) -->
       <q-card class="is-card q-mb-md" v-if="contract.client_name || contract.client_id">
-        <q-card-section>
-          <div class="text-caption" style="color: #888">Клиент</div>
-          <div class="text-weight-bold" style="color: #333">{{ contract.client_name || `ID: ${contract.client_id}` }}</div>
-        </q-card-section>
+        <q-item clickable v-ripple @click="goToClient">
+          <q-item-section avatar><q-icon name="person" color="grey-7" /></q-item-section>
+          <q-item-section>
+            <q-item-label caption>Клиент</q-item-label>
+            <q-item-label class="text-weight-bold" style="color: #333">{{ contract.client_name || `Клиент #${contract.client_id}` }}</q-item-label>
+          </q-item-section>
+          <q-item-section side><q-icon name="chevron_right" color="grey-5" /></q-item-section>
+        </q-item>
       </q-card>
 
-      <!-- Блок: Основные данные -->
+      <!-- Основные данные (порядок: дата, срок, сумма, город, площадь, комментарий) -->
       <q-card class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">Основные данные</div>
         </q-card-section>
         <q-list dense>
-          <q-item v-if="contract.contract_date"><q-item-section avatar><q-icon name="event" color="grey-7" /></q-item-section>
-            <q-item-section><q-item-label caption>Дата договора</q-item-label><q-item-label>{{ fmtDate(contract.contract_date) }}</q-item-label></q-item-section></q-item>
-          <q-item v-if="contract.total_amount"><q-item-section avatar><q-icon name="payments" color="grey-7" /></q-item-section>
-            <q-item-section><q-item-label caption>Сумма договора</q-item-label><q-item-label class="text-weight-bold">{{ fmtMoney(contract.total_amount) }}</q-item-label></q-item-section></q-item>
-          <q-item v-if="contract.contract_period"><q-item-section avatar><q-icon name="schedule" color="grey-7" /></q-item-section>
-            <q-item-section><q-item-label caption>Срок выполнения</q-item-label><q-item-label>{{ contract.contract_period }} рабочих дней</q-item-label></q-item-section></q-item>
-          <q-item v-if="contract.comments"><q-item-section avatar><q-icon name="comment" color="grey-7" /></q-item-section>
-            <q-item-section><q-item-label caption>Комментарий</q-item-label><q-item-label>{{ contract.comments }}</q-item-label></q-item-section></q-item>
+          <q-item v-if="contract.contract_date">
+            <q-item-section avatar><q-icon name="event" color="grey-7" /></q-item-section>
+            <q-item-section><q-item-label caption>Дата договора</q-item-label><q-item-label>{{ fmtDate(contract.contract_date) }}</q-item-label></q-item-section>
+          </q-item>
+          <q-item v-if="contract.contract_period">
+            <q-item-section avatar><q-icon name="schedule" color="grey-7" /></q-item-section>
+            <q-item-section><q-item-label caption>Срок договора</q-item-label><q-item-label>{{ contract.contract_period }} рабочих дней</q-item-label></q-item-section>
+          </q-item>
+          <q-item v-if="contract.total_amount">
+            <q-item-section avatar><q-icon name="payments" color="grey-7" /></q-item-section>
+            <q-item-section><q-item-label caption>Сумма договора</q-item-label><q-item-label class="text-weight-bold">{{ fmtMoney(contract.total_amount) }}</q-item-label></q-item-section>
+          </q-item>
+          <q-item v-if="contract.city">
+            <q-item-section avatar><q-icon name="location_city" color="grey-7" /></q-item-section>
+            <q-item-section><q-item-label caption>Город</q-item-label><q-item-label>{{ contract.city }}</q-item-label></q-item-section>
+          </q-item>
+          <q-item v-if="contract.area">
+            <q-item-section avatar><q-icon name="square_foot" color="grey-7" /></q-item-section>
+            <q-item-section><q-item-label caption>Площадь</q-item-label><q-item-label>{{ contract.area }} м²</q-item-label></q-item-section>
+          </q-item>
+          <q-item v-if="contract.comments">
+            <q-item-section avatar><q-icon name="comment" color="grey-7" /></q-item-section>
+            <q-item-section><q-item-label caption>Комментарий</q-item-label><q-item-label>{{ contract.comments }}</q-item-label></q-item-section>
+          </q-item>
         </q-list>
       </q-card>
 
-      <!-- Блок: Платежи от клиента (аванс / доплата / третий платёж) -->
+      <!-- Платежи от клиента (индивидуальный) -->
       <q-card class="is-card q-mb-md" v-if="contract.project_type === 'Индивидуальный'">
         <q-card-section class="q-pb-none">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">Платежи от клиента</div>
         </q-card-section>
         <q-list dense separator>
-          <!-- 1 платёж (Аванс) -->
-          <q-item>
+          <q-item v-for="pay in clientPayments" :key="pay.key">
             <q-item-section>
-              <q-item-label class="text-weight-medium">1 платёж (Аванс)</q-item-label>
-              <q-item-label class="text-weight-bold" style="color: #333">{{ fmtMoney(contract.advance_payment) }}</q-item-label>
-              <q-item-label caption :style="{ color: contract.advance_payment_paid_date ? '#27AE60' : '#888' }">
-                {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
+              <q-item-label class="text-weight-medium">{{ pay.label }}</q-item-label>
+              <q-item-label class="text-weight-bold" style="color: #333">{{ fmtMoney(pay.amount) }}</q-item-label>
+              <q-item-label caption :style="{ color: pay.paidDate ? '#27AE60' : '#888' }">
+                {{ pay.paidDate ? `Оплачено ${fmtDate(pay.paidDate)}` : 'Не оплачено' }}
               </q-item-label>
             </q-item-section>
             <q-item-section side style="min-width: 110px">
               <div class="column q-gutter-xs items-stretch">
-                <q-btn v-if="!contract.advance_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('advance')" style="border-radius: 4px; min-width: 105px" />
-                <q-badge v-else color="positive" label="Оплачено" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center" />
-                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px" @click="uploadReceipt('advance')" />
-              </div>
-            </q-item-section>
-          </q-item>
-          <!-- 2 платёж (Доплата) -->
-          <q-item>
-            <q-item-section>
-              <q-item-label class="text-weight-medium">2 платёж (Доплата)</q-item-label>
-              <q-item-label class="text-weight-bold" style="color: #333">{{ fmtMoney(contract.additional_payment) }}</q-item-label>
-              <q-item-label caption :style="{ color: contract.additional_payment_paid_date ? '#27AE60' : '#888' }">
-                {{ contract.additional_payment_paid_date ? `Оплачено ${fmtDate(contract.additional_payment_paid_date)}` : 'Не оплачено' }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side style="min-width: 110px">
-              <div class="column q-gutter-xs items-stretch">
-                <q-btn v-if="!contract.additional_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('additional')" style="border-radius: 4px; min-width: 105px" />
-                <q-badge v-else color="positive" label="Оплачено" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center" />
-                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px" @click="uploadReceipt('additional')" />
-              </div>
-            </q-item-section>
-          </q-item>
-          <!-- 3 платёж -->
-          <q-item>
-            <q-item-section>
-              <q-item-label class="text-weight-medium">3 платёж (Доплата)</q-item-label>
-              <q-item-label class="text-weight-bold" style="color: #333">{{ fmtMoney(contract.third_payment) }}</q-item-label>
-              <q-item-label caption :style="{ color: contract.third_payment_paid_date ? '#27AE60' : '#888' }">
-                {{ contract.third_payment_paid_date ? `Оплачено ${fmtDate(contract.third_payment_paid_date)}` : 'Не оплачено' }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side style="min-width: 110px">
-              <div class="column q-gutter-xs items-stretch">
-                <q-btn v-if="!contract.third_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплачено" color="positive" no-caps @click="markClientPaid('third')" style="border-radius: 4px; min-width: 105px" />
-                <q-badge v-else color="positive" label="Оплачено" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center" />
-                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px" @click="uploadReceipt('third')" />
+                <q-btn v-if="!pay.paidDate" outline dense size="sm" icon="check_circle" label="Оплатить" color="positive" no-caps @click="pickPayDate(pay.key)" style="border-radius: 4px; min-width: 105px; height: 30px" />
+                <q-badge v-else color="positive" style="padding: 6px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center; height: 30px; display: flex; align-items: center">
+                  Оплачено
+                  <q-btn flat round dense size="xs" icon="close" color="white" class="q-ml-xs" @click.stop="cancelPayment(pay.key)" style="margin: -4px -4px -4px 0" />
+                </q-badge>
+                <q-btn outline dense size="sm" icon="upload_file" label="Чек" no-caps style="color: #333; border-color: #ffd93c; border-radius: 4px; min-width: 105px; height: 30px" @click="uploadReceipt(pay.key)" />
               </div>
             </q-item-section>
           </q-item>
@@ -124,14 +110,18 @@
                 {{ contract.advance_payment_paid_date ? `Оплачено ${fmtDate(contract.advance_payment_paid_date)}` : 'Не оплачено' }}
               </q-item-label>
             </q-item-section>
-            <q-item-section side>
-              <q-btn v-if="!contract.advance_payment_paid_date" flat dense size="xs" icon="check_circle" color="positive" @click="markClientPaid('advance')"><q-tooltip>Оплачено</q-tooltip></q-btn>
+            <q-item-section side style="min-width: 110px">
+              <q-btn v-if="!contract.advance_payment_paid_date" outline dense size="sm" icon="check_circle" label="Оплатить" color="positive" no-caps @click="pickPayDate('advance')" style="border-radius: 4px; min-width: 105px" />
+              <q-badge v-else color="positive" style="padding: 5px 12px; font-size: 11px; border-radius: 4px; min-width: 105px; justify-content: center">
+                Оплачено
+                <q-btn flat round dense size="xs" icon="close" color="white" class="q-ml-xs" @click.stop="cancelPayment('advance')" />
+              </q-badge>
             </q-item-section>
           </q-item>
         </q-list>
       </q-card>
 
-      <!-- Блок: Таблица сроков -->
+      <!-- Таблица сроков -->
       <q-card class="is-card q-mb-md" v-if="timeline.length > 0">
         <q-card-section class="q-pb-none">
           <div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div>
@@ -156,40 +146,81 @@
         </q-list>
       </q-card>
 
-      <!-- Блок: Файл договора + Акты -->
+      <!-- Файлы: Договор -->
       <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Файлы и акты</div>
-        </q-card-section>
-        <!-- Существующие файлы -->
-        <q-list dense v-if="files.length > 0">
-          <q-item v-for="file in files" :key="file.id" clickable @click="openFile(file)">
-            <q-item-section avatar><q-icon :name="fileIcon(file.file_type)" :color="fileColor(file.file_type)" /></q-item-section>
-            <q-item-section><q-item-label style="font-size: 12px">{{ file.file_name }}</q-item-label><q-item-label caption>{{ stageLabel(file.stage) }}</q-item-label></q-item-section>
+        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Договор</div></q-card-section>
+        <q-list dense v-if="filesByGroup.documents.length > 0">
+          <q-item v-for="f in filesByGroup.documents" :key="f.id" clickable @click="openFile(f)">
+            <q-item-section avatar><q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" /></q-item-section>
+            <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
             <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
           </q-item>
         </q-list>
-        <!-- Кнопки загрузки -->
-        <q-card-section>
-          <div class="row q-col-gutter-xs">
-            <div class="col-6" v-for="btn in fileUploadButtons" :key="btn.stage">
-              <q-btn outline color="grey-7" :icon="btn.icon" :label="btn.label" no-caps class="full-width q-mb-xs" dense @click="uploadFor(btn.stage)" />
-            </div>
-          </div>
-        </q-card-section>
-        <input ref="fileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" @change="handleFileUpload" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg" />
-        <input ref="receiptInput" type="file" style="position: absolute; left: -9999px; opacity: 0" @change="handleReceiptUpload" accept=".pdf,.jpg,.jpeg,.png" />
+        <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="gavel" label="Загрузить договор" no-caps class="full-width" dense @click="uploadFor('documents')" /></q-card-section>
       </q-card>
 
-      <!-- Блок: ТЗ и Комментарий -->
-      <q-card class="is-card q-mb-md" v-if="contract.tech_task_link || contract.comments">
-        <q-list dense>
-          <q-item v-if="contract.tech_task_link" clickable @click="openLink(contract.tech_task_link)">
-            <q-item-section avatar><q-icon name="description" color="orange" /></q-item-section>
-            <q-item-section><q-item-label>Техническое задание</q-item-label></q-item-section>
+      <!-- Файлы: ТЗ -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Техническое задание</div></q-card-section>
+        <q-list dense v-if="filesByGroup.tech_task.length > 0">
+          <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
+            <q-item-section avatar><q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" /></q-item-section>
+            <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
             <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
           </q-item>
         </q-list>
+        <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="description" label="Загрузить ТЗ" no-caps class="full-width" dense @click="uploadFor('tech_task')" /></q-card-section>
+      </q-card>
+
+      <!-- Файлы: Доп. соглашения -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Доп. соглашения</div></q-card-section>
+        <q-list dense v-if="filesByGroup.supervision.length > 0">
+          <q-item v-for="f in filesByGroup.supervision" :key="f.id" clickable @click="openFile(f)">
+            <q-item-section avatar><q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" /></q-item-section>
+            <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
+            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="handshake" label="Загрузить доп. соглашение" no-caps class="full-width" dense @click="uploadFor('supervision')" /></q-card-section>
+      </q-card>
+
+      <!-- Файлы: Акты без подписи -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Акты (без подписи)</div></q-card-section>
+        <q-list dense v-if="filesByGroup.acts.length > 0">
+          <q-item v-for="f in filesByGroup.acts" :key="f.id" clickable @click="openFile(f)">
+            <q-item-section avatar><q-icon name="verified" color="orange" /></q-item-section>
+            <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label><q-item-label caption>{{ stageLabel(f.stage) }}</q-item-label></q-item-section>
+            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section class="q-pt-xs">
+          <div class="row q-col-gutter-xs">
+            <div class="col-4"><q-btn outline color="grey-7" label="Акт ПР" no-caps class="full-width" dense @click="uploadFor('stage1')" /></div>
+            <div class="col-4"><q-btn outline color="grey-7" label="Акт КД" no-caps class="full-width" dense @click="uploadFor('stage2_concept')" /></div>
+            <div class="col-4"><q-btn outline color="grey-7" label="Акт РЧ" no-caps class="full-width" dense @click="uploadFor('stage3')" /></div>
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Файлы: Акты с подписью -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Акты (с подписью)</div></q-card-section>
+        <q-list dense v-if="filesByGroup.actsSigned.length > 0">
+          <q-item v-for="f in filesByGroup.actsSigned" :key="f.id" clickable @click="openFile(f)">
+            <q-item-section avatar><q-icon name="verified_user" color="positive" /></q-item-section>
+            <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label><q-item-label caption>{{ stageLabel(f.stage) }}</q-item-label></q-item-section>
+            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section class="q-pt-xs">
+          <div class="row q-col-gutter-xs">
+            <div class="col-4"><q-btn outline color="grey-7" label="ПР подп." no-caps class="full-width" dense @click="uploadFor('stage1_signed')" /></div>
+            <div class="col-4"><q-btn outline color="grey-7" label="КД подп." no-caps class="full-width" dense @click="uploadFor('stage2_signed')" /></div>
+            <div class="col-4"><q-btn outline color="grey-7" label="РЧ подп." no-caps class="full-width" dense @click="uploadFor('stage3_signed')" /></div>
+          </div>
+        </q-card-section>
       </q-card>
 
       <!-- Кнопка удаления -->
@@ -201,6 +232,10 @@
       </q-page-sticky>
 
       <contract-form-dialog v-model="showEdit" :contract="contract" @saved="reload" />
+
+      <!-- Скрытые инпуты для загрузки -->
+      <input ref="fileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" @change="handleFileUpload" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg" />
+      <input ref="receiptInput" type="file" style="position: absolute; left: -9999px; opacity: 0" @change="handleReceiptUpload" accept=".pdf,.jpg,.jpeg,.png" />
     </template>
 
     <div v-else-if="!loading" class="text-center q-pa-xl" style="color: #999">
@@ -212,13 +247,14 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { contractsApi, filesApi, crmApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
 
 const route = useRoute()
+const router = useRouter()
 const $q = useQuasar()
 const refs = useReferencesStore()
 const contract = ref(null)
@@ -233,44 +269,101 @@ const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
 
-const fileUploadButtons = [
-  { stage: 'documents', label: 'Договор', icon: 'gavel' },
-  { stage: 'tech_task', label: 'ТЗ', icon: 'description' },
-  { stage: 'measurement', label: 'Замер', icon: 'straighten' },
-  { stage: 'stage1', label: 'Акт ПР', icon: 'verified' },
-  { stage: 'stage1_signed', label: 'Акт ПР подп.', icon: 'verified_user' },
-  { stage: 'stage2_concept', label: 'Акт КД', icon: 'verified' },
-  { stage: 'stage2_signed', label: 'Акт КД подп.', icon: 'verified_user' },
-  { stage: 'stage3', label: 'Акт РЧ', icon: 'verified' },
-  { stage: 'stage3_signed', label: 'Акт РЧ подп.', icon: 'verified_user' },
-  { stage: 'references', label: 'Референсы', icon: 'collections' },
-  { stage: 'photo_documentation', label: 'Фотофикс.', icon: 'photo_camera' },
-  { stage: 'supervision', label: 'Доп.согл.', icon: 'handshake' }
-]
+// Платежи клиента (массив для удобства итерации)
+const clientPayments = computed(() => {
+  if (!contract.value) return []
+  return [
+    { key: 'advance', label: '1 платёж (Аванс)', amount: contract.value.advance_payment, paidDate: contract.value.advance_payment_paid_date },
+    { key: 'additional', label: '2 платёж (Доплата)', amount: contract.value.additional_payment, paidDate: contract.value.additional_payment_paid_date },
+    { key: 'third', label: '3 платёж (Доплата)', amount: contract.value.third_payment, paidDate: contract.value.third_payment_paid_date }
+  ]
+})
+
+// Файлы, сгруппированные по блокам
+const filesByGroup = computed(() => {
+  const groups = { documents: [], tech_task: [], supervision: [], acts: [], actsSigned: [] }
+  for (const f of files.value) {
+    if (f.stage === 'documents') groups.documents.push(f)
+    else if (f.stage === 'tech_task') groups.tech_task.push(f)
+    else if (f.stage === 'supervision') groups.supervision.push(f)
+    else if (['stage1_signed', 'stage2_signed', 'stage3_signed'].includes(f.stage)) groups.actsSigned.push(f)
+    else if (['stage1', 'stage2_concept', 'stage3'].includes(f.stage)) groups.acts.push(f)
+  }
+  return groups
+})
 
 const STAGE_LABELS = {
-  stage1: 'Планировочное решение', stage1_signed: 'Акт ПР (подписанный)',
-  stage2_concept: 'Концепция дизайна', stage2_signed: 'Акт КД (подписанный)',
-  stage2_3d: '3D визуализация',
-  stage3: 'Рабочие чертежи', stage3_signed: 'Акт РЧ (подписанный)',
-  references: 'Референсы', photo_documentation: 'Фотофиксация',
-  tech_task: 'Тех. задание', documents: 'Договор', measurement: 'Замер',
+  stage1: 'Акт ПР', stage1_signed: 'Акт ПР (подписанный)',
+  stage2_concept: 'Акт КД', stage2_signed: 'Акт КД (подписанный)',
+  stage3: 'Акт РЧ', stage3_signed: 'Акт РЧ (подписанный)',
+  tech_task: 'Тех. задание', documents: 'Договор',
   supervision: 'Доп. соглашение'
 }
-
 function stageLabel(s) { return STAGE_LABELS[s] || s || '' }
 function statusColor(s) { if (!s) return 'grey'; if (s === 'В работе') return 'orange'; if (s.includes('СДАН')) return 'positive'; if (s.includes('РАСТОРГНУТ')) return 'negative'; if (s.includes('НАДЗОР')) return 'purple'; return 'blue' }
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }
 function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
 function fmtMoney(v) { if (!v) return '0 ₽'; return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v) }
-function fileIcon(t) { return { image: 'image', pdf: 'picture_as_pdf', excel: 'table_chart', word: 'article', cad: 'architecture' }[t] || 'insert_drive_file' }
-function fileColor(t) { return { image: 'green', pdf: 'red', excel: 'teal', word: 'blue', cad: 'purple' }[t] || 'grey-7' }
+
+function fileIconByName(name) {
+  if (!name) return 'insert_drive_file'
+  const n = name.toLowerCase()
+  if (n.endsWith('.pdf')) return 'picture_as_pdf'
+  if (n.match(/\.(jpg|jpeg|png|webp)$/)) return 'image'
+  if (n.match(/\.(doc|docx)$/)) return 'article'
+  if (n.match(/\.(xls|xlsx)$/)) return 'table_chart'
+  return 'insert_drive_file'
+}
+function fileColorByName(name) {
+  if (!name) return 'grey-7'
+  const n = name.toLowerCase()
+  if (n.endsWith('.pdf')) return 'red'
+  if (n.match(/\.(jpg|jpeg|png|webp)$/)) return 'green'
+  if (n.match(/\.(doc|docx)$/)) return 'blue'
+  if (n.match(/\.(xls|xlsx)$/)) return 'teal'
+  return 'grey-7'
+}
+
 function openFile(f) { if (f.public_link) window.open(f.public_link, '_blank') }
-function openLink(url) { if (url) window.open(url, '_blank') }
+function goToClient() { if (contract.value?.client_id) router.push(`/clients/${contract.value.client_id}`) }
 
 function uploadFor(stage) { uploadStage.value = stage; fileInput.value?.click() }
-
 function uploadReceipt(type) { receiptType.value = type; receiptInput.value?.click() }
+
+// Оплата с выбором даты через календарь
+function pickPayDate(payKey) {
+  $q.dialog({
+    title: 'Дата оплаты',
+    message: 'Выберите дату оплаты:',
+    prompt: { model: new Date().toISOString().split('T')[0], type: 'date' },
+    cancel: true, persistent: true
+  }).onOk(async (date) => {
+    try {
+      const update = {}
+      update[`${payKey}_payment_paid_date`] = date
+      await contractsApi.update(contract.value.id, update)
+      contract.value[`${payKey}_payment_paid_date`] = date
+      $q.notify({ type: 'positive', message: 'Оплата проведена' })
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
+}
+
+// Снять оплату
+async function cancelPayment(payKey) {
+  $q.dialog({ title: 'Снять оплату?', message: 'Отменить дату оплаты?', cancel: true }).onOk(async () => {
+    try {
+      const update = {}
+      update[`${payKey}_payment_paid_date`] = null
+      await contractsApi.update(contract.value.id, update)
+      contract.value[`${payKey}_payment_paid_date`] = null
+      $q.notify({ type: 'positive', message: 'Оплата снята' })
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
+}
 
 async function handleFileUpload(event) {
   const file = event.target.files?.[0]
@@ -280,20 +373,14 @@ async function handleFileUpload(event) {
     const yandexPath = `/CRM/Проекты/${contract.value.contract_number}/${uploadStage.value}/${file.name}`
     const uploadRes = await filesApi.upload(file, yandexPath)
     const publicLink = uploadRes.data?.public_link || ''
-    // Создаём запись в БД ProjectFile
     const { api: apiInst } = await import('src/boot/axios')
     await apiInst.post('/api/v1/files/', {
-      contract_id: contract.value.id,
-      stage: uploadStage.value,
+      contract_id: contract.value.id, stage: uploadStage.value,
       file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
-      public_link: publicLink,
-      yandex_path: yandexPath,
-      file_name: file.name,
-      file_order: files.value.length + 1,
-      variation: 1
+      public_link: publicLink, yandex_path: yandexPath, file_name: file.name,
+      file_order: files.value.length + 1, variation: 1
     })
     $q.notify({ type: 'positive', message: 'Файл загружен' })
-    // Перезагрузить список файлов
     const { data } = await filesApi.getContractFiles(contract.value.id)
     files.value = data || []
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка загрузки' }) }
@@ -312,28 +399,13 @@ async function handleReceiptUpload(event) {
   finally { $q.loading.hide(); event.target.value = '' }
 }
 
-async function markClientPaid(type) {
-  const today = new Date().toISOString().split('T')[0]
-  try {
-    const update = {}
-    update[`${type}_payment_paid_date`] = today
-    await contractsApi.update(contract.value.id, update)
-    contract.value[`${type}_payment_paid_date`] = today
-    $q.notify({ type: 'positive', message: 'Оплата проведена' })
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-  }
-}
-
 async function deleteContract() {
   $q.dialog({ title: 'Удалить договор?', message: contract.value?.contract_number || '', cancel: true, persistent: true }).onOk(async () => {
     try {
       await contractsApi.delete(contract.value.id)
       $q.notify({ type: 'positive', message: 'Договор удалён' })
       window.history.back()
-    } catch (err) {
-      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-    }
+    } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   })
 }
 
@@ -346,9 +418,7 @@ onMounted(async () => {
   const id = route.params.id
   try {
     const [cRes, fRes, tRes] = await Promise.allSettled([
-      contractsApi.getById(id),
-      filesApi.getContractFiles(id),
-      crmApi.getTimeline(id)
+      contractsApi.getById(id), filesApi.getContractFiles(id), crmApi.getTimeline(id)
     ])
     if (cRes.status === 'fulfilled') contract.value = cRes.value.data
     if (fRes.status === 'fulfilled') files.value = fRes.value.data || []
