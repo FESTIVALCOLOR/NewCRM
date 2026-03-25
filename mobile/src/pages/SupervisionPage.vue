@@ -72,6 +72,7 @@
         </q-carousel>
       </template>
     </template>
+    <page-dashboard :items="dashItems" />
   </q-page>
 </template>
 
@@ -79,6 +80,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { supervisionApi } from 'src/services/api'
+import PageDashboard from 'src/components/PageDashboard.vue'
 
 const router = useRouter()
 const cards = ref([])
@@ -109,6 +111,12 @@ watch(columns, (cols) => { if (cols.length > 0) { const idx = cols.findIndex(c =
 function sColor(card) { const s = card.column_name || ''; if (s.includes('Стадия')) return 'orange'; if (s.includes('Выполненный')) return 'positive'; return 'blue' }
 function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
+
+const dashItems = computed(() => [
+  { label: 'Всего', value: cards.value.length },
+  { label: 'В работе', value: cards.value.filter(c => (c.column_name || '').includes('Стадия')).length, color: '#F39C12' },
+  { label: 'Приостановлено', value: cards.value.filter(c => c.is_paused).length, color: '#E74C3C' }
+])
 
 async function loadCards() {
   loading.value = true

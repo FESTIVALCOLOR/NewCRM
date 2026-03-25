@@ -206,10 +206,15 @@ async function loadData() {
     // Всегда включаем платежи без месяца (в работе)
     if (!params.include_null_month) params.include_null_month = true
     const { data } = await paymentsApi.getList(params)
-    // Фильтрация по статусу «в работе» (без report_month) на клиенте
-    if (filters.value.status === 'in_work') payments.value = data.filter(p => !p.is_paid && !p.report_month)
-    else if (filters.value.status === 'to_pay') payments.value = data.filter(p => !p.is_paid && p.report_month)
-    else payments.value = data
+    let filtered = data
+    // Для вкладки "Оклады" — только записи с source=Оклад
+    if (paymentTab.value === 'salary') {
+      filtered = data.filter(p => p.source === 'Оклад' || p.payment_subtype === 'Оклад')
+    }
+    // Фильтрация по статусу на клиенте
+    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && !p.report_month)
+    else if (filters.value.status === 'to_pay') filtered = filtered.filter(p => !p.is_paid && p.report_month)
+    payments.value = filtered
   } catch { payments.value = [] } finally { loading.value = false }
 }
 

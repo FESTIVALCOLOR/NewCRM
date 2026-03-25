@@ -488,13 +488,24 @@ function showAssignDialog(member, mode) {
   assignDialogVisible.value = true
 }
 
+// Маппинг roleKey → название роли для оплат
+const ROLE_NAMES = { senior_manager: 'Старший менеджер', sdp: 'СДП', gap: 'ГАП', manager: 'Менеджер', surveyor: 'Замерщик', designer: 'Дизайнер', draftsman: 'Чертёжник' }
+
 async function doAssign() {
   if (!assignEmployeeId.value) return
   actionLoading.value = true
   try {
     const roleKey = assignRoleKey.value
+    const roleName = ROLE_NAMES[roleKey] || assignRole.value
+
+    // 1. Удаляем старые оплаты для этой роли
+    const oldPayments = cardPayments.value.filter(p => p.role === roleName)
+    for (const op of oldPayments) {
+      try { await paymentsApi.delete(op.id) } catch {}
+    }
+
+    // 2. Назначаем исполнителя
     if (['designer', 'draftsman'].includes(roleKey)) {
-      // Назначение через stage_executor
       let stageName = assignStageName.value
       if (!stageName) {
         const isTemplate = card.value?.project_type === 'Шаблонный'
@@ -506,7 +517,24 @@ async function doAssign() {
       const update = {}; update[`${roleKey}_id`] = assignEmployeeId.value
       await crmApi.updateCard(card.value.id, update)
     }
-    $q.notify({ type: 'positive', message: 'Назначен' }); assignDialogVisible.value = false; await reloadCard()
+
+    // 3. Рассчитываем и создаём новую оплату
+    try {
+      const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
+      const amount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+      if (amount > 0) {
+        await paymentsApi.create({
+          contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName,
+          payment_type: card.value.project_type || 'Индивидуальный', payment_subtype: 'Полная оплата',
+          crm_card_id: card.value.id, calculated_amount: amount, final_amount: amount, amount,
+          report_month: null, is_paid: false
+        })
+      }
+    } catch (e) { console.warn('Ошибка расчёта/создания оплаты:', e) }
+
+    $q.notify({ type: 'positive', message: 'Назначен + оплата обновлена' })
+    assignDialogVisible.value = false
+    await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   finally { actionLoading.value = false }
 }
@@ -514,9 +542,16 @@ async function doAssign() {
 async function removeTeamMember(member) {
   $q.dialog({ title: 'Убрать исполнителя?', message: `${member.role}: ${member.name}`, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
     try {
+      // 1. Удаляем оплаты для этой роли
+      const roleName = ROLE_NAMES[member.roleKey] || member.role
+      const rolePayments = cardPayments.value.filter(p => p.role === roleName)
+      for (const rp of rolePayments) {
+        try { await paymentsApi.delete(rp.id) } catch {}
+      }
+      // 2. Убираем исполнителя
       const update = {}; update[`${member.roleKey}_id`] = null
       await crmApi.updateCard(card.value.id, update)
-      $q.notify({ type: 'positive', message: 'Убран' }); await reloadCard()
+      $q.notify({ type: 'positive', message: 'Убран + оплаты удалены' }); await reloadCard()
     } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   })
 }

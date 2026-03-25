@@ -53,7 +53,15 @@
           <!-- Telegram -->
           <q-input v-model="form.telegram_account" label="Telegram (имя или телефон)" outlined dense placeholder="@username или +79001234567">
             <template v-slot:prepend><q-icon name="send" /></template>
+            <template v-slot:append>
+              <q-btn v-if="telegramSearchLink" flat round dense size="sm" icon="open_in_new" @click="window.open(telegramSearchLink, '_blank')">
+                <q-tooltip>Открыть в Telegram</q-tooltip>
+              </q-btn>
+            </template>
           </q-input>
+          <div v-if="telegramSearchLink" class="text-caption q-mt-xs" style="color: #3498DB; cursor: pointer" @click="window.open(telegramSearchLink, '_blank')">
+            Найти в Telegram →
+          </div>
 
           <!-- Адрес регистрации -->
           <q-input v-model="form.registration_address" label="Адрес регистрации" outlined dense />
@@ -108,7 +116,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { clientsApi } from 'src/services/api'
 
@@ -145,6 +153,15 @@ const emptyForm = () => ({
 })
 
 const form = ref(emptyForm())
+
+const telegramSearchLink = computed(() => {
+  const tg = form.value.telegram_account
+  if (!tg) return null
+  const clean = tg.replace('@', '').trim()
+  if (!clean) return null
+  if (/^\+?\d{7,}$/.test(clean.replace(/\s/g, ''))) return `https://t.me/+${clean.replace(/[^\d]/g, '')}`
+  return `https://t.me/${clean}`
+})
 
 watch(() => props.modelValue, (val) => {
   show.value = val

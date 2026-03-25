@@ -141,6 +141,7 @@
         </template>
       </q-card>
     </q-dialog>
+    <page-dashboard :items="dashItems" />
   </q-page>
 </template>
 
@@ -151,6 +152,7 @@ import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { crmApi, employeesApi } from 'src/services/api'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
+import PageDashboard from 'src/components/PageDashboard.vue'
 
 const $q = useQuasar()
 const router = useRouter()
@@ -168,6 +170,17 @@ const employeeOpts = ref([])
 // Стадии, требующие назначения исполнителя
 const STAGES_WITH_EXECUTOR = ['Стадия 1:', 'Стадия 2:', 'Стадия 3:']
 function stageNeedsExecutor(colName) { return STAGES_WITH_EXECUTOR.some(s => colName.includes(s)) }
+
+const dashItems = computed(() => {
+  const total = crmStore.cards.length
+  const cols = crmStore.columns
+  const inWork = cols.filter(c => c.name.includes('Стадия')).reduce((s, c) => s + c.count, 0)
+  return [
+    { label: 'Всего карточек', value: total },
+    { label: 'В работе', value: inWork, color: '#F39C12' },
+    { label: 'Столбцов', value: cols.length, color: '#3498DB' }
+  ]
+})
 
 // При смене данных сбрасываем слайд на первый непустой столбец
 watch(() => crmStore.columns, (cols) => {
