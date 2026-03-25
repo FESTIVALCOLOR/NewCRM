@@ -336,6 +336,7 @@ const rejectReason = ref('')
 const rejectFile = ref(null)
 const crmFileInput = ref(null)
 const crmUploadStage = ref('')
+const crmUploadVariation = ref(1)
 const historyFilter = ref('all')
 
 // Диалог назначения
@@ -351,21 +352,38 @@ const assignStageName = ref('')
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 const allEmployeesList = ref([])
 
+// Маппинг roleKey → фильтр по должности
+const ROLE_POSITION_FILTER = {
+  senior_manager: ['Старший менеджер', 'Руководитель'],
+  sdp: ['Руководитель студии', 'СДП'],
+  gap: ['ГАП', 'руководитель'],
+  manager: ['Менеджер', 'Старший менеджер'],
+  surveyor: ['Замерщик'],
+  designer: ['Дизайнер'],
+  draftsman: ['Чертёжник', 'Чертежник']
+}
+
 function filterAssignEmployees(val, update) {
-  const all = allEmployeesList.value
-  const makeOpts = (list) => {
+  let list = allEmployeesList.value
+  // Фильтр по роли назначения
+  const posFilters = ROLE_POSITION_FILTER[assignRoleKey.value]
+  if (posFilters) {
+    const filtered = list.filter(e => posFilters.some(pf => (e.position || '').toLowerCase().includes(pf.toLowerCase())))
+    if (filtered.length > 0) list = filtered // fallback на всех если никто не подходит
+  }
+  const makeOpts = (emps) => {
     const byPos = {}
-    for (const e of list) { const pos = e.position || 'Прочие'; if (!byPos[pos]) byPos[pos] = []; byPos[pos].push(e) }
+    for (const e of emps) { const pos = e.position || 'Прочие'; if (!byPos[pos]) byPos[pos] = []; byPos[pos].push(e) }
     const opts = []
-    for (const [pos, emps] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
-      opts.push({ id: null, label: `— ${pos} —`, disable: true })
-      for (const e of emps) opts.push({ id: e.id, label: `${e.full_name}` })
+    for (const [pos, items] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
+      opts.push({ id: null, label: `── ${pos} ──`, disable: true })
+      for (const e of items) opts.push({ id: e.id, label: e.full_name })
     }
     return opts
   }
-  if (!val) { update(() => { employeeOptions.value = makeOpts(all) }); return }
+  if (!val) { update(() => { employeeOptions.value = makeOpts(list) }); return }
   const q = val.toLowerCase()
-  update(() => { employeeOptions.value = makeOpts(all.filter(e => (e.full_name || '').toLowerCase().includes(q))) })
+  update(() => { employeeOptions.value = makeOpts(list.filter(e => (e.full_name || '').toLowerCase().includes(q))) })
 }
 
 // Стадии файлов (зависят от типа)
@@ -625,13 +643,26 @@ async function deleteFile(f) {
   })
 }
 
-function uploadCrmFile(stage) { crmUploadStage.value = stage.replace('_var', ''); crmFileInput.value?.click() }
+function uploadCrmFile(stage) {
+  if (stage.endsWith('_var')) {
+    // Вариация — сначала выбор файла с номером вариации
+    const baseStage = stage.replace('_var', '')
+    const existingVariations = projectFiles.value.filter(f => f.stage === baseStage).map(f => f.variation || 1)
+    const nextVar = existingVariations.length > 0 ? Math.max(...existingVariations) + 1 : 2
+    crmUploadStage.value = baseStage
+    crmUploadVariation.value = nextVar
+  } else {
+    crmUploadStage.value = stage
+    crmUploadVariation.value = 1
+  }
+  crmFileInput.value?.click()
+}
 
 async function handleCrmFileUpload(event) {
   const files = event.target.files; if (!files?.length || !card.value) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
-    const variation = crmUploadStage.value.endsWith('_var') ? (projectFiles.value.filter(f => f.stage === crmUploadStage.value).length + 2) : 1
+    const variation = crmUploadVariation.value
     for (const file of files) {
       const yp = `/CRM/Проекты/${card.value.contract_number}/${crmUploadStage.value}/${file.name}`
       const res = await filesApi.upload(file, yp)
@@ -640,7 +671,11 @@ async function handleCrmFileUpload(event) {
     }
     $q.notify({ type: 'positive', message: `Загружено: ${files.length}` })
     if (card.value.contract_id) { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data || [] }
-  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
+  } catch (err) {
+    console.error('File upload error:', err)
+    const d = err.response?.data?.detail
+    $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка загрузки файла' })
+  }
   finally { $q.loading.hide(); event.target.value = '' }
 }
 
@@ -655,7 +690,10 @@ async function loadAdditionalData(cardId) {
       const cid = parseInt(cardId)
       cardPayments.value = (payRes.value.data || []).filter(p => p.crm_card_id === cid && p.source !== 'Оклад')
     }
-    if (actRes.status === 'fulfilled') actionHistory.value = actRes.value.data || []
+    if (actRes.status === 'fulfilled') {
+      actionHistory.value = actRes.value.data || []
+      console.log(`Action history loaded: ${actionHistory.value.length} entries`)
+    } else { console.warn('Action history error:', actRes.reason?.message) }
     if (empRes.status === 'fulfilled') {
       const all = (empRes.value.data || []).filter(e => e.status === 'активный')
       allEmployeesList.value = all
@@ -663,11 +701,30 @@ async function loadAdditionalData(cardId) {
     }
   } catch (e) { console.warn('Ошибка загрузки доп. данных:', e) }
   try {
-    if (card.value?.contract_id) {
-      const [cRes, fRes, tRes] = await Promise.allSettled([contractsApi.getById(card.value.contract_id), filesApi.getContractFiles(card.value.contract_id), crmApi.getTimeline(card.value.contract_id)])
+    const cid = card.value?.contract_id
+    if (cid) {
+      // Загружаем параллельно: контракт, файлы, timeline
+      const contractP = contractsApi.getById(cid)
+      const filesP = filesApi.getContractFiles(cid)
+      const timelineP = crmApi.getTimeline(cid)
+      const [cRes, fRes, tRes] = await Promise.allSettled([contractP, filesP, timelineP])
       if (cRes.status === 'fulfilled') contractData.value = cRes.value.data
+      else console.warn('Contract load error:', cRes.reason?.message)
       if (fRes.status === 'fulfilled') projectFiles.value = fRes.value.data || []
-      if (tRes.status === 'fulfilled') timelineEntries.value = Array.isArray(tRes.value.data) ? tRes.value.data : []
+      else console.warn('Files load error:', fRes.reason?.message)
+      if (tRes.status === 'fulfilled') {
+        const td = tRes.value.data
+        timelineEntries.value = Array.isArray(td) ? td : []
+        console.log(`Timeline loaded: ${timelineEntries.value.length} entries for contract ${cid}`)
+      } else {
+        console.warn('Timeline load error:', tRes.reason?.message)
+        // Fallback: загрузим напрямую
+        try {
+          const { data } = await crmApi.getTimeline(cid)
+          timelineEntries.value = Array.isArray(data) ? data : []
+          console.log(`Timeline fallback loaded: ${timelineEntries.value.length}`)
+        } catch (e2) { console.error('Timeline fallback failed:', e2) }
+      }
     }
   } catch (e) { console.warn('Ошибка загрузки контракта:', e) }
 }
