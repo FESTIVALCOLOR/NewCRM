@@ -316,8 +316,10 @@ export const filesApi = {
   upload: (file, yandexPath) => {
     const formData = new FormData()
     formData.append('file', file)
-    if (yandexPath) formData.append('yandex_path', yandexPath)
+    // yandex_path передаётся как query parameter (не form field!)
+    const params = yandexPath ? { yandex_path: yandexPath } : {}
     return api.post('/api/v1/files/upload', formData, {
+      params,
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   }
