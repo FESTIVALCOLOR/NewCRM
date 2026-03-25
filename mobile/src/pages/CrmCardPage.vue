@@ -450,12 +450,16 @@ function filesByStage(stage) { return projectFiles.value.filter(f => f.stage ===
 
 // Вариации — вкладки как в десктопе
 const activeVariation = ref({}) // { stage_code: active_variation_number }
+const createdVariations = ref({}) // { stage_code: Set of created variation numbers }
 
 function getVariations(stageCode) {
   const files = filesByStage(stageCode)
   const vars = new Set(files.map(f => f.variation || 1))
+  // Добавляем вручную созданные вариации (которые ещё без файлов)
+  if (createdVariations.value[stageCode]) {
+    for (const v of createdVariations.value[stageCode]) vars.add(v)
+  }
   if (vars.size === 0) vars.add(1)
-  // Инициализируем активную вкладку
   if (!activeVariation.value[stageCode]) activeVariation.value[stageCode] = Math.min(...vars)
   return [...vars].sort((a, b) => a - b)
 }
@@ -475,12 +479,11 @@ function uploadToVariation(stageCode) {
 function addVariationTab(stageCode) {
   const vars = getVariations(stageCode)
   const nextVar = vars.length > 0 ? Math.max(...vars) + 1 : 2
-  activeVariation.value[stageCode] = nextVar
-  $q.notify({ type: 'positive', message: `Вариация ${nextVar} создана. Загрузите файлы.` })
-  // Открываем file picker для новой вариации
-  crmUploadStage.value = stageCode
-  crmUploadVariation.value = nextVar
-  crmFileInput.value?.click()
+  // Регистрируем вариацию + переключаемся на неё
+  if (!createdVariations.value[stageCode]) createdVariations.value[stageCode] = new Set()
+  createdVariations.value[stageCode].add(nextVar)
+  activeVariation.value = { ...activeVariation.value, [stageCode]: nextVar }
+  $q.notify({ type: 'positive', message: `Вариация ${nextVar} создана. Загрузите в неё файлы.` })
 }
 
 function deleteVariationTab(stageCode) {
@@ -782,11 +785,12 @@ async function handleCrmFileUpload(event) {
 async function reloadCard() { const id = route.params.id; await crmStore.loadCard(id); await loadAdditionalData(id) }
 
 async function loadAdditionalData(cardId) {
-  // Оплаты
+  // Оплаты — загружаем ВСЕ и фильтруем по crm_card_id
   try {
     const { data } = await crmApi.getPayments(cardId)
-    const cid = parseInt(cardId)
-    cardPayments.value = (data || []).filter(p => p.crm_card_id === cid && p.source !== 'Оклад')
+    const cid = Number(cardId)
+    // Фильтр: только этой карточки, исключая оклады
+    cardPayments.value = (data || []).filter(p => Number(p.crm_card_id) === cid && p.source !== 'Оклад')
   } catch (e) { cardPayments.value = [] }
 
   // История действий
