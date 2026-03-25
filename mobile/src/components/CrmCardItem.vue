@@ -78,7 +78,7 @@ import { ref, computed } from 'vue'
 import { useReferencesStore } from 'src/stores/references'
 
 const props = defineProps({ card: { type: Object, required: true } })
-defineEmits(['click', 'longpress'])
+const emit = defineEmits(['click', 'longpress'])
 
 const showTeam = ref(false)
 

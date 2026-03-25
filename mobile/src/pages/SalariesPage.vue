@@ -84,14 +84,14 @@
                         <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">{{ fmtMonth(p.report_month) }}</div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                        <!-- Статус badge -->
-                        <q-badge v-if="p.is_paid" color="positive" label="Оплачено" style="font-size: 10px; padding: 3px 8px; cursor: pointer" @click.stop="undoPaid(p)" />
-                        <q-badge v-else-if="p.report_month" color="warning" label="К оплате" style="font-size: 10px; padding: 3px 8px; cursor: pointer" @click.stop="setPayStatus(p)" />
-                        <q-badge v-else color="grey-4" text-color="grey-7" label="В работе" style="font-size: 10px; padding: 3px 8px" />
-                        <!-- Действия с текстом -->
+                        <!-- Статус badge (кликабельный для снятия) -->
+                        <q-btn v-if="p.is_paid" unelevated dense size="xs" label="Оплачено" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="undoPaid(p)" />
+                        <q-btn v-else-if="p.report_month" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn v-else unelevated dense size="xs" label="В работе" no-caps color="grey-3" text-color="grey-7" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" disable />
+                        <!-- Действия -->
                         <q-btn v-if="!p.is_paid && p.report_month" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
                         <q-btn v-if="!p.is_paid && !p.report_month" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
-                        <q-btn v-if="(p.id || p.salary_id)" flat dense size="xs" icon="delete_outline" color="grey-5" style="min-width: 28px" @click.stop="deletePayment(p)" />
+                        <q-btn outline dense size="xs" icon="delete_outline" label="Удалить" no-caps color="negative" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
                   </div>
@@ -186,7 +186,16 @@ function onEmployeeFilter(val) {
 
 function filterEmployees(val, update) {
   const all = allEmployees.value.filter(e => e.status === 'активный')
-  const makeOpts = (list) => list.map(e => ({ label: `${e.full_name} — ${e.position || ''}`, value: e.id }))
+  const makeOpts = (list) => {
+    const byPos = {}
+    for (const e of list) { const pos = e.position || 'Прочие'; if (!byPos[pos]) byPos[pos] = []; byPos[pos].push(e) }
+    const opts = []
+    for (const [pos, emps] of Object.entries(byPos).sort((a, b) => a[0].localeCompare(b[0]))) {
+      opts.push({ label: `── ${pos} ──`, value: `__header_${pos}`, disable: true })
+      for (const e of emps) opts.push({ label: e.full_name, value: e.id })
+    }
+    return opts
+  }
   if (!val) { update(() => { employeeOpts.value = makeOpts(all) }); return }
   const q = val.toLowerCase()
   update(() => { employeeOpts.value = makeOpts(all.filter(e => (e.full_name || '').toLowerCase().includes(q))) })
@@ -275,7 +284,7 @@ async function loadData() {
 async function undoPaid(p) {
   $q.dialog({ title: 'Снять статус оплаты?', message: p.employee_name, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
     try {
-      if (p.salary_id) await salariesApi.update(p.salary_id, { payment_status: 'pending' })
+      if (p.source === 'Оклад') await salariesApi.update(p.id, { payment_status: 'pending' })
       else if (p.id) await paymentsApi.update(p.id, { is_paid: false, payment_status: 'pending' })
       p.is_paid = false
       $q.notify({ type: 'info', message: 'Статус оплаты снят' })
@@ -285,9 +294,9 @@ async function undoPaid(p) {
 
 async function markPaid(p) {
   try {
-    if (p.salary_id && !p.id) {
-      // Оклад — обновляем через salaries API
-      await salariesApi.update(p.salary_id, { payment_status: 'paid' })
+    if (p.source === 'Оклад') {
+      // Оклад — обновляем через salaries API (id = salary id)
+      await salariesApi.update(p.id, { payment_status: 'paid' })
     } else if (p.id) {
       // Платёж — используем mark-paid с employee_id
       await paymentsApi.markPaid(p.id, p.employee_id)
@@ -305,14 +314,14 @@ async function setPayStatus(p) {
   try {
     // Toggle: если уже к оплате (есть report_month) → снять (убрать report_month)
     if (p.report_month) {
-      if (p.salary_id) await salariesApi.update(p.salary_id, { report_month: '', payment_status: 'pending' })
+      if (p.source === 'Оклад') await salariesApi.update(p.id, { report_month: '', payment_status: 'pending' })
       else if (p.id) await paymentsApi.update(p.id, { report_month: '' })
       p.report_month = null
       $q.notify({ type: 'info', message: 'Статус снят' })
     } else {
       const now = new Date()
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      if (p.salary_id) await salariesApi.update(p.salary_id, { report_month: month, payment_status: 'to_pay' })
+      if (p.source === 'Оклад') await salariesApi.update(p.id, { report_month: month, payment_status: 'to_pay' })
       else if (p.id) await paymentsApi.update(p.id, { report_month: month })
       p.report_month = month
       $q.notify({ type: 'positive', message: 'К оплате' })
@@ -326,9 +335,9 @@ async function setPayStatus(p) {
 async function deletePayment(p) {
   $q.dialog({ title: 'Удалить?', message: `${p.employee_name} — ${formatMoney(p.final_amount || p.amount)}`, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
     try {
-      if (p.salary_id) await salariesApi.delete(p.salary_id)
+      if (p.source === 'Оклад') await salariesApi.delete(p.id)
       else if (p.id) await paymentsApi.delete(p.id)
-      payments.value = payments.value.filter(x => (x.id || x.salary_id) !== (p.id || p.salary_id))
+      payments.value = payments.value.filter(x => x.id !== p.id)
       $q.notify({ type: 'positive', message: 'Удалено' })
     } catch (err) {
       const d = err.response?.data?.detail
