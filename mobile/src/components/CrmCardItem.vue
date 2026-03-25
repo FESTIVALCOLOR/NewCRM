@@ -1,5 +1,5 @@
 <template>
-  <q-card flat bordered class="crm-card q-mb-sm cursor-pointer" @click="onClick" @touchstart.passive="startLongPress" @touchend="cancelLongPress" @touchmove="cancelLongPress">
+  <q-card flat bordered class="crm-card q-mb-sm" @touchstart.passive="startLongPress" @touchend="cancelLongPress" @touchmove="cancelLongPress">
     <q-card-section class="q-pa-sm">
       <!-- Верхняя строка: номер + workflow status -->
       <div class="row items-center justify-between q-mb-xs">
@@ -63,6 +63,11 @@
           {{ formatDate(card.deadline) }} ({{ daysLeftText }})
         </span>
       </div>
+
+      <!-- Кнопка входа в карточку (как в десктопе "Данные проекта") -->
+      <div class="q-mt-sm" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+        <q-btn flat dense no-caps size="sm" icon="open_in_new" label="Данные проекта" style="color: #333; font-size: 10px; width: 100%" @click.stop="emit('click')" />
+      </div>
     </q-card-section>
   </q-card>
 </template>
@@ -80,10 +85,9 @@ let longPressed = false
 
 function startLongPress() {
   longPressed = false
-  longPressTimer = setTimeout(() => { longPressed = true; emit('longpress') }, 500)
+  longPressTimer = setTimeout(() => { longPressed = true; emit('longpress') }, 3000)
 }
 function cancelLongPress() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null } }
-function onClick() { if (!longPressed) emit('click') }
 
 const refs = useReferencesStore()
 

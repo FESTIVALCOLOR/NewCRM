@@ -10,7 +10,7 @@
     <!-- Фильтры — расширенные как в десктопе -->
     <div class="row q-col-gutter-xs q-mb-xs">
       <div class="col"><q-select v-model="filters.period" :options="periodOptions" outlined dense emit-value map-options style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="date_range" size="16px" /></template></q-select></div>
-      <div class="col"><q-select v-model="filters.employee_id" :options="employeeOpts" outlined dense emit-value map-options clearable use-input input-debounce="200" @filter="filterEmployees" placeholder="Исполнитель" style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="person" size="16px" /></template></q-select></div>
+      <div class="col"><q-select v-model="filters.employee_id" :options="employeeOpts" outlined dense emit-value map-options clearable use-input input-debounce="200" @filter="filterEmployees" placeholder="Исполнитель" style="font-size: 12px" @update:model-value="onEmployeeFilter" @clear="filters.employee_id = null; loadData()"><template v-slot:prepend><q-icon name="person" size="16px" /></template></q-select></div>
       <div class="col-auto"><q-select v-model="filters.status" :options="statusOptions" outlined dense emit-value map-options style="font-size: 12px; min-width: 100px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="filter_list" size="16px" /></template></q-select></div>
     </div>
     <!-- Строка 2: адрес, роль, агент -->
@@ -84,10 +84,14 @@
                         <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">{{ fmtMonth(p.report_month) }}</div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs">
-                        <!-- Статусы: в работе → к оплате → оплачено -->
-                        <q-btn v-if="!p.is_paid && p.report_month && p.id" outline dense size="xs" label="К оплате" no-caps color="warning" style="font-size: 10px; border-radius: 3px" @click.stop="setPayStatus(p, 'to_pay')" />
-                        <q-btn v-if="!p.is_paid && p.id" outline dense size="xs" label="Оплачено" no-caps color="positive" style="font-size: 10px; border-radius: 3px" @click.stop="markPaid(p)" />
-                        <q-btn v-if="p.id" flat round dense size="xs" icon="delete_outline" color="grey-5" @click.stop="deletePayment(p)" />
+                        <!-- Статус: в работе / к оплате / оплачено -->
+                        <q-badge v-if="p.is_paid" color="positive" label="Оплачено" dense style="font-size: 9px; cursor: pointer" @click.stop="undoPaid(p)" />
+                        <q-badge v-else-if="p.report_month" color="warning" label="К оплате" dense style="font-size: 9px; cursor: pointer" @click.stop="setPayStatus(p)" />
+                        <q-badge v-else color="grey-4" text-color="grey-7" label="В работе" dense style="font-size: 9px" />
+                        <!-- Действия -->
+                        <q-btn v-if="!p.is_paid && p.report_month" flat round dense size="xs" icon="check" color="positive" @click.stop="markPaid(p)"><q-tooltip>Оплатить</q-tooltip></q-btn>
+                        <q-btn v-if="!p.is_paid && !p.report_month" flat round dense size="xs" icon="schedule" color="warning" @click.stop="setPayStatus(p)"><q-tooltip>К оплате</q-tooltip></q-btn>
+                        <q-btn v-if="(p.id || p.salary_id)" flat round dense size="xs" icon="delete_outline" color="grey-5" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
                   </div>
@@ -173,6 +177,12 @@ const roleOpts = computed(() => {
   return [...roles].sort().map(r => ({ label: r, value: r }))
 })
 const agentOpts = computed(() => refsStore.agentNames())
+
+function onEmployeeFilter(val) {
+  // При выборе null (сброс) или disable item — пропускаем
+  if (val === null || val === undefined) { filters.value.employee_id = null }
+  loadData()
+}
 
 function filterEmployees(val, update) {
   const all = allEmployees.value.filter(e => e.status === 'активный')
@@ -274,6 +284,17 @@ async function loadData() {
 
     payments.value = filtered
   } catch { payments.value = [] } finally { loading.value = false }
+}
+
+async function undoPaid(p) {
+  $q.dialog({ title: 'Снять статус оплаты?', message: p.employee_name, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
+    try {
+      if (p.salary_id) await salariesApi.update(p.salary_id, { payment_status: 'pending' })
+      else if (p.id) await paymentsApi.update(p.id, { is_paid: false, payment_status: 'pending' })
+      p.is_paid = false
+      $q.notify({ type: 'info', message: 'Статус оплаты снят' })
+    } catch (err) { const d = err.response?.data?.detail; $q.notify({ type: 'negative', message: typeof d === 'string' ? d : 'Ошибка' }) }
+  })
 }
 
 async function markPaid(p) {
