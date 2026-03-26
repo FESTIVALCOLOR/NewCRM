@@ -116,7 +116,7 @@ import { usePermission } from 'src/composables/usePermission'
 import { countWorkingDaysUntil } from 'src/composables/useDeadline'
 
 const props = defineProps({ card: { type: Object, required: true } })
-const emit = defineEmits(['click', 'longpress', 'submit-work', 'accept', 'reject', 'client-send', 'client-approved', 'sign-act', 'add-measurement', 'add-tech-task'])
+const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'add-measurement', 'add-tech-task'])
 
 const showTeam = ref(false)
 const refs = useReferencesStore()

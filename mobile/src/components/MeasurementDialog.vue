@@ -146,6 +146,11 @@ async function save() {
 
     $q.notify({ type: 'positive', message: 'Замер загружен' })
     emit('saved')
+    // Сброс полей
+    selectedFile.value = null
+    publicLink.value = ''
+    surveyorId.value = null
+    uploadMode.value = 'file'
     close()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка загрузки замера' })

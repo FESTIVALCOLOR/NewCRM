@@ -528,7 +528,7 @@ async function reassignDan() {
           await paymentsApi.update(op.id, { reassigned: true })
           await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: newDanId.value, role: 'ДАН', payment_type: op.payment_type, calculated_amount: op.final_amount, final_amount: op.final_amount, report_month: op.report_month })
         }
-      } catch {}
+      } catch (e) { console.warn('Ошибка переназначения оплат ДАН:', e) }
     }
 
     $q.notify({ type: 'positive', message: 'ДАН переназначен' })
