@@ -477,7 +477,7 @@ const allTeamMembers = computed(() => {
   const allStages = isTemplate ? [
     { stageName: 'Стадия 1: планировочные решения', roleKey: 'draftsman', role: 'Чертёжник' },
     { stageName: 'Стадия 2: рабочие чертежи', roleKey: 'draftsman', role: 'Чертёжник' },
-    { stageName: 'Стадия 3: 3д визуализация', roleKey: 'designer', role: 'Дизайнер' },
+    { stageName: 'Стадия 3: 3д визуализация (Дополнительная)', roleKey: 'designer', role: 'Дизайнер' },
   ] : [
     { stageName: 'Стадия 1: планировочные решения', roleKey: 'draftsman', role: 'Чертёжник' },
     { stageName: 'Стадия 2: концепция дизайна', roleKey: 'designer', role: 'Дизайнер' },
@@ -743,7 +743,7 @@ function showAssignDialog(member, mode) {
     let stageName = member.stageName || ''
     if (!stageName) {
       const isTemplate = card.value?.project_type === 'Шаблонный'
-      if (member.roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация' : 'Стадия 2: концепция дизайна'
+      if (member.roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация (Дополнительная)' : 'Стадия 2: концепция дизайна'
       else if (member.roleKey === 'draftsman') stageName = isTemplate ? 'Стадия 2: рабочие чертежи' : 'Стадия 3: рабочие чертежи'
     }
     const autoDeadline = calcDeadlineFromTimeline(timelineEntries.value, stageName)
@@ -774,7 +774,7 @@ async function doAssign() {
     // Определяем stageName для дизайнера/чертёжника
     let stageName = assignStageName.value
     if (['designer', 'draftsman'].includes(roleKey) && !stageName) {
-      if (roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация' : 'Стадия 2: концепция дизайна'
+      if (roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация (Дополнительная)' : 'Стадия 2: концепция дизайна'
       else stageName = isTemplate ? 'Стадия 2: рабочие чертежи' : 'Стадия 3: рабочие чертежи'
     }
 

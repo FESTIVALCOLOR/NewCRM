@@ -249,7 +249,7 @@ const canClientApproved = computed(() => ws.value === 'client_approval' && can('
 const canSignAct = computed(() => ws.value === 'act_signing' && can('crm_cards.complete_approval'))
 
 // Добавить замер: нет measurement_image_link И нет survey_date + (crm_cards.update ИЛИ замерщик)
-const isSurveyor = computed(() => empPosition.value === 'Замерщик')
+const isSurveyor = computed(() => empPos.value === 'Замерщик')
 const showAddMeasurement = computed(() => {
   const c = props.card
   const hasMeas = c.measurement_image_link || c.survey_date
