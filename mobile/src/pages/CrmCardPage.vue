@@ -159,35 +159,64 @@
             <q-card-section class="q-pt-xs"><div class="row q-gutter-xs"><q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('tech_task')" /><q-btn v-if="contractData?.tech_task_link" flat color="grey-7" icon="open_in_new" label="ЯД" no-caps dense @click="openLink(contractData.tech_task_link)" /></div></q-card-section>
           </q-card>
 
-          <!-- Замер -->
+          <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Замер</div></q-card-section>
-            <q-list dense v-if="filesByStage('measurement').length > 0">
-              <q-item v-for="f in filesByStage('measurement')" :key="f.id" >
-                <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
-                <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-                <q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
-              </q-item>
-            </q-list>
-            <q-card-section class="q-pt-xs"><q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('measurement')" /></q-card-section>
+            <q-card-section class="q-pt-xs">
+              <div v-if="contractData?.measurement_image_link" class="q-mb-xs">
+                <a :href="contractData.measurement_image_link" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с замером</a>
+              </div>
+              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружен</div>
+              <div class="text-caption q-mb-xs" style="color: #888">Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}</div>
+              <!-- Файлы из project_files -->
+              <q-list dense v-if="filesByStage('measurement').length > 0" class="q-mb-xs">
+                <q-item v-for="f in filesByStage('measurement')" :key="f.id">
+                  <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
+                  <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
+                  <q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
+                </q-item>
+              </q-list>
+              <div class="row q-gutter-xs">
+                <q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить файлы" no-caps dense @click="uploadCrmFile('measurement')" />
+                <q-btn v-if="contractData?.measurement_image_link && can('crm_cards.files_delete')" outline color="negative" icon="delete_outline" dense size="sm" @click="deleteFolderSection('measurement')"><q-tooltip>Удалить замер</q-tooltip></q-btn>
+              </div>
+            </q-card-section>
           </q-card>
 
-          <!-- Фотофиксация -->
+          <!-- Фотофиксация (как десктоп: ссылка на папку) -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Фотофиксация</div></q-card-section>
-            <q-list dense v-if="filesByStage('photo_documentation').length > 0">
-              <q-item v-for="f in filesByStage('photo_documentation')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
-            </q-list>
-            <q-card-section class="q-pt-xs"><q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('photo_documentation')" /></q-card-section>
+            <q-card-section class="q-pt-xs">
+              <div v-if="contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path" class="q-mb-xs">
+                <a :href="contractData.photo_folder_public_link || contractData.photo_documentation_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с фотофиксацией</a>
+              </div>
+              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружена</div>
+              <q-list dense v-if="filesByStage('photo_documentation').length > 0" class="q-mb-xs">
+                <q-item v-for="f in filesByStage('photo_documentation')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
+              </q-list>
+              <div class="row q-gutter-xs">
+                <q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить файлы" no-caps dense @click="uploadCrmFile('photo_documentation')" />
+                <q-btn v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete')" outline color="negative" icon="delete_outline" dense size="sm" @click="deleteFolderSection('photo_documentation')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
+              </div>
+            </q-card-section>
           </q-card>
 
-          <!-- Референсы -->
+          <!-- Референсы / Шаблоны (как десктоп: ссылка на папку) -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны' : 'Референсы' }}</div></q-card-section>
-            <q-list dense v-if="filesByStage('references').length > 0">
-              <q-item v-for="f in filesByStage('references')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
-            </q-list>
-            <q-card-section class="q-pt-xs"><q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('references')" /></q-card-section>
+            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}</div></q-card-section>
+            <q-card-section class="q-pt-xs">
+              <div v-if="contractData?.references_yandex_path" class="q-mb-xs">
+                <a :href="contractData.references_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">{{ card.project_type === 'Шаблонный' ? 'Открыть папку с шаблонами' : 'Открыть папку с референсами' }}</a>
+              </div>
+              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружена</div>
+              <q-list dense v-if="filesByStage('references').length > 0" class="q-mb-xs">
+                <q-item v-for="f in filesByStage('references')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
+              </q-list>
+              <div class="row q-gutter-xs">
+                <q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить файлы" no-caps dense @click="uploadCrmFile('references')" />
+                <q-btn v-if="contractData?.references_yandex_path && can('crm_cards.files_delete')" outline color="negative" icon="delete_outline" dense size="sm" @click="deleteFolderSection('references')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
+              </div>
+            </q-card-section>
           </q-card>
 
           <!-- Стадии проекта с вкладками вариаций (как в десктопе) -->
@@ -634,6 +663,41 @@ function daysLeft(d) { if (!d) return ''; const days = Math.ceil((new Date(d)-ne
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) }
 function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
 
+// Удаление папки секции (замер/фото/референсы) — как десктоп
+async function deleteFolderSection(section) {
+  const SECTION_FIELDS = {
+    measurement: { fields: ['measurement_image_link', 'measurement_yandex_path', 'measurement_file_name'], label: 'замера' },
+    photo_documentation: { fields: ['photo_documentation_yandex_path', 'photo_folder_public_link'], label: 'фотофиксации' },
+    references: { fields: ['references_yandex_path'], label: 'референсов' },
+  }
+  const cfg = SECTION_FIELDS[section]
+  if (!cfg) return
+  $q.dialog({
+    title: `Удалить папку ${cfg.label}?`,
+    message: 'Файлы будут удалены с Яндекс.Диска',
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Удалить', noCaps: true, color: 'negative' }
+  }).onOk(async () => {
+    try {
+      // Очищаем поля в contracts
+      const update = {}
+      for (const f of cfg.fields) update[f] = ''
+      if (contractData.value?.id) await contractsApi.update(contractData.value.id, update)
+      // Удаляем файлы из project_files
+      const stageFiles = projectFiles.value.filter(f => f.stage === section)
+      const { api: ax } = await import('src/boot/axios')
+      for (const f of stageFiles) { try { await ax.delete(`/api/v1/files/${f.id}`) } catch {} }
+      projectFiles.value = projectFiles.value.filter(f => f.stage !== section)
+      // Перезагружаем контракт
+      if (contractData.value?.id) {
+        const { data: fresh } = await contractsApi.getById(contractData.value.id)
+        contractData.value = fresh
+      }
+      $q.notify({ type: 'positive', message: `Папка ${cfg.label} удалена` })
+    } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  })
+}
+
 // Таймлайн: просрочен если actual_days > norm_days (как десктоп timeline_widget.py:828-834)
 function isOverdue(e) {
   if (!e.actual_date || e.executor_role === 'header') return false
@@ -1031,8 +1095,29 @@ async function handleCrmFileUpload(event) {
       }
     }
     $q.notify({ type: 'positive', message: `Загружено: ${fileList.length}` })
-    // Перезагрузить файлы
+
+    // Обновляем публичные ссылки на папки (как десктоп)
+    const FOLDER_LINK_FIELDS = {
+      measurement: 'measurement_image_link',
+      photo_documentation: 'photo_documentation_yandex_path',
+      references: 'references_yandex_path',
+    }
+    const linkField = FOLDER_LINK_FIELDS[stage]
+    if (linkField && contractFolder) {
+      try {
+        const folderPath = `${contractFolder}/${STAGE_FOLDERS[stage] || stage}`
+        const { data: linkData } = await filesApi.getPublicLink(folderPath)
+        if (linkData.public_link) {
+          const upd = {}; upd[linkField] = linkData.public_link
+          await contractsApi.update(card.value.contract_id, upd)
+        }
+      } catch {}
+    }
+
+    // Scan + перезагрузить файлы и контракт
+    try { const { api: ax } = await import('src/boot/axios'); await ax.post(`/api/v1/files/scan/${card.value.contract_id}`) } catch {}
     try { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data || [] } catch {}
+    try { const { data: fresh } = await contractsApi.getById(card.value.contract_id); contractData.value = fresh } catch {}
   } catch (err) {
     $q.notify({ type: 'negative', message: err.message || 'Ошибка' })
   } finally { $q.loading.hide(); event.target.value = '' }
