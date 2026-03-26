@@ -165,6 +165,115 @@ async def list_yandex_files(
         raise HTTPException(status_code=500, detail=f"Error listing files: {error_str}")
 
 
+@router.get("/public-folder")
+async def list_public_folder(
+    url: str,
+    current_user: Employee = Depends(get_current_user),
+):
+    """Получить список файлов из публичной ссылки Яндекс.Диска (как десктоп get_public_folder_contents)"""
+    import requests as req
+    try:
+        # ЯД Public API — не требует OAuth для чтения
+        resp = req.get(
+            'https://cloud-api.yandex.net/v1/disk/public/resources',
+            params={'public_key': url, 'limit': 1000},
+            timeout=15
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=f"ЯД API: {resp.text[:200]}")
+
+        data = resp.json()
+        items = data.get('_embedded', {}).get('items', [])
+        files = []
+        for item in items:
+            if item.get('type') == 'file':
+                name = item.get('name', '')
+                size = item.get('size', 0)
+                # Автоклассификация: замер vs фотофиксация (как десктоп _classify_file)
+                name_lower = name.lower()
+                dest = 'Замер' if any(w in name_lower for w in ['замер', 'зам_', 'обмер']) else 'Фотофиксация'
+                files.append({
+                    'name': name,
+                    'path': item.get('path', ''),
+                    'size': size,
+                    'size_display': f"{size / 1024 / 1024:.1f} МБ" if size >= 1024 * 1024 else f"{size / 1024:.0f} КБ",
+                    'mime_type': item.get('mime_type', ''),
+                    'destination': dest,
+                })
+        return {'status': 'success', 'files': files, 'total': len(files)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.post("/download-public")
+async def download_public_to_yd(
+    public_url: str,
+    file_path: str,
+    dest_path: str,
+    current_user: Employee = Depends(get_current_user),
+):
+    """Скачать файл из публичной ссылки ЯД и загрузить в свою папку (как десктоп download_public_file + upload)"""
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+    import requests as req
+    import tempfile, os
+    try:
+        yd_service = get_yandex_disk_service()
+        token = yd_service.token
+
+        # 1. Получить ссылку на скачивание из публичной папки
+        dl_resp = req.get(
+            'https://cloud-api.yandex.net/v1/disk/public/resources/download',
+            params={'public_key': public_url, 'path': file_path},
+            timeout=15
+        )
+        if dl_resp.status_code != 200:
+            raise HTTPException(status_code=dl_resp.status_code, detail=f"Download URL error: {dl_resp.text[:200]}")
+
+        download_url = dl_resp.json().get('href')
+        if not download_url:
+            raise HTTPException(status_code=500, detail="Не удалось получить ссылку на скачивание")
+
+        # 2. Скачать во временный файл
+        file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+        tmp_path = os.path.join(tempfile.gettempdir(), f'crm_upload_{file_name}')
+        try:
+            with req.get(download_url, stream=True, timeout=120) as r:
+                r.raise_for_status()
+                with open(tmp_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+            # 3. Загрузить на свой ЯД
+            # Создаём папку если нет
+            dest_folder = '/'.join(dest_path.replace('disk:', '').split('/')[:-1])
+            try:
+                yd_service.create_folder(dest_folder)
+            except Exception:
+                pass
+
+            yd_service.upload_file(tmp_path, dest_path.replace('disk:', ''))
+
+            # 4. Получить публичную ссылку
+            public_link = ''
+            try:
+                public_link = yd_service.get_public_link(dest_folder)
+            except Exception:
+                pass
+
+            return {'status': 'success', 'dest_path': dest_path, 'public_link': public_link, 'file_name': file_name}
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.post("/", response_model=ProjectFileResponse)
 async def create_file_record(
     file_data: ProjectFileCreate,
