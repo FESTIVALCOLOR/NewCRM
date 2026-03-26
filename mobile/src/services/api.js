@@ -197,7 +197,7 @@ export const employeesApi = {
 
 export const paymentsApi = {
   getList: (params = {}) =>
-    api.get('/api/v1/payments', { params }),
+    api.get('/api/v1/payments/', { params }),
 
   calculate: (params) =>
     api.get('/api/v1/payments/calculate', { params }),
