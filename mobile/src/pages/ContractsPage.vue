@@ -79,7 +79,7 @@
       </template>
     </q-pull-to-refresh>
     <!-- FAB создания (если есть право) -->
-    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 18]">
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 

@@ -195,8 +195,18 @@ class ClientsTab(QWidget):
         self.clients_table.setItem(row, 0, QTableWidgetItem(str(client['id'])))
         self.clients_table.setItem(row, 1, QTableWidgetItem(client['client_type']))
         
-        name = (client['full_name'] if client['client_type'] == 'Физическое лицо' 
-                else client['organization_name'])
+        org_type = client.get('organization_type', '')
+        if client['client_type'] == 'Физическое лицо':
+            if org_type == 'ИП':
+                name = f"ИП {client['full_name']}"
+            else:
+                name = client['full_name']
+        else:
+            org_name = client.get('organization_name', '')
+            if org_type and org_name:
+                name = f'{org_type} «{org_name}»'
+            else:
+                name = org_name or client['full_name']
         self.clients_table.setItem(row, 2, QTableWidgetItem(name or ''))
         
         self.clients_table.setItem(row, 3, QTableWidgetItem(client['phone']))

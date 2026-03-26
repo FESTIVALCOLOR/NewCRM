@@ -49,7 +49,7 @@
                 <span style="color: #888; font-size: 11px">Карточек: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm cursor-pointer" @click="openCard(card)">
+                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm cursor-pointer" @click="openCard(card)" @longpress="showMoveDialog(card)">
                   <q-card-section class="q-pa-sm">
                     <div class="row items-center justify-between q-mb-xs">
                       <div class="text-caption" style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
@@ -72,6 +72,28 @@
         </q-carousel>
       </template>
     </template>
+    <!-- Диалог перемещения надзорной карточки -->
+    <q-dialog v-model="moveDialogVisible">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #ffd93c; color: #333">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Переместить</q-toolbar-title>
+          <q-btn flat round dense icon="close" @click="moveDialogVisible = false" />
+        </q-toolbar>
+        <q-card-section v-if="moveCard" class="q-pb-none">
+          <div class="text-weight-bold" style="font-size: 12px">{{ moveCard.contract_number }} — {{ moveCard.address }}</div>
+          <div class="text-caption q-mt-xs" style="color: #888">Текущая: {{ moveCard.column_name }}</div>
+        </q-card-section>
+        <q-list separator>
+          <q-item v-for="col in SUPERVISION_COLUMNS" :key="col" clickable v-ripple @click="doMove(col)" :disable="moveCard?.column_name === col">
+            <q-item-section>
+              <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">{{ col }}</q-item-label>
+            </q-item-section>
+            <q-item-section side v-if="moveCard?.column_name === col"><q-icon name="check" color="positive" /></q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+    </q-dialog>
+
     <page-dashboard :items="dashItems" />
   </q-page>
 </template>
@@ -79,14 +101,20 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { supervisionApi } from 'src/services/api'
+import { usePermission } from 'src/composables/usePermission'
 import PageDashboard from 'src/components/PageDashboard.vue'
 
 const router = useRouter()
+const $q = useQuasar()
+const { can } = usePermission()
 const cards = ref([])
 const loading = ref(false)
 const showArchive = ref(false)
 const currentSlide = ref(0)
+const moveDialogVisible = ref(false)
+const moveCard = ref(null)
 
 const SUPERVISION_COLUMNS = [
   'Новый заказ', 'В ожидании',
@@ -117,6 +145,24 @@ const dashItems = computed(() => [
   { label: 'В работе', value: cards.value.filter(c => (c.column_name || '').includes('Стадия')).length, color: '#F39C12' },
   { label: 'Приостановлено', value: cards.value.filter(c => c.is_paused).length, color: '#E74C3C' }
 ])
+
+function showMoveDialog(card) {
+  if (!can('supervision.move')) return
+  moveCard.value = card
+  moveDialogVisible.value = true
+}
+
+async function doMove(colName) {
+  if (!moveCard.value || moveCard.value.column_name === colName) return
+  try {
+    await supervisionApi.moveCard(moveCard.value.id, colName)
+    $q.notify({ type: 'positive', message: `Перемещено: ${colName}` })
+    moveDialogVisible.value = false
+    loadCards()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка перемещения' })
+  }
+}
 
 async function loadCards() {
   loading.value = true

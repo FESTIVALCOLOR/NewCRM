@@ -177,8 +177,8 @@
           <div class="text-subtitle2 text-weight-bold">Фотофиксация</div>
         </q-card-section>
         <q-card-section>
-          <q-btn icon="photo_camera" label="Сделать фото" color="accent" text-color="dark" no-caps unelevated @click="takePhoto" class="q-mr-sm" />
-          <q-btn icon="upload_file" label="Загрузить" flat no-caps @click="uploadPhoto" />
+          <q-btn v-if="can('supervision.files_upload')" icon="photo_camera" label="Сделать фото" color="accent" text-color="dark" no-caps unelevated @click="takePhoto" class="q-mr-sm" />
+          <q-btn v-if="can('supervision.files_upload')" icon="upload_file" label="Загрузить" flat no-caps @click="uploadPhoto" />
           <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handlePhotoCapture" />
           <input ref="fileInput" type="file" accept="image/*,.pdf" style="display:none" @change="handleFileUpload" />
         </q-card-section>
@@ -227,15 +227,15 @@
           <div class="text-subtitle2 text-weight-bold">Действия</div>
         </q-card-section>
         <q-list>
-          <q-item v-if="!card.is_paused" clickable v-ripple @click="handlePause">
+          <q-item v-if="can('supervision.pause_resume') && !card.is_paused" clickable v-ripple @click="handlePause">
             <q-item-section avatar><q-icon name="pause_circle" color="warning" /></q-item-section>
             <q-item-section>Приостановить</q-item-section>
           </q-item>
-          <q-item v-else clickable v-ripple @click="handleResume">
+          <q-item v-else-if="can('supervision.pause_resume') && card.is_paused" clickable v-ripple @click="handleResume">
             <q-item-section avatar><q-icon name="play_circle" color="positive" /></q-item-section>
             <q-item-section>Возобновить</q-item-section>
           </q-item>
-          <q-item clickable v-ripple @click="handleCompleteStage">
+          <q-item v-if="can('supervision.complete_stage')" clickable v-ripple @click="handleCompleteStage">
             <q-item-section avatar><q-icon name="check_circle" color="primary" /></q-item-section>
             <q-item-section>Завершить текущую стадию</q-item-section>
           </q-item>
@@ -256,6 +256,9 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { supervisionApi, filesApi } from 'src/services/api'
+import { usePermission } from 'src/composables/usePermission'
+
+const { can } = usePermission()
 
 const route = useRoute()
 const $q = useQuasar()
@@ -442,7 +445,21 @@ async function uploadFile(file) {
   try {
     $q.loading.show({ message: 'Загрузка...' })
     const yandexPath = `/CRM/Надзор/${card.value.contract_number || card.value.id}/${file.name}`
-    await filesApi.upload(file, yandexPath)
+    const uploadRes = await filesApi.upload(file, yandexPath)
+    const publicLink = uploadRes.data?.public_link || ''
+    // Создаём запись в БД (привязка к contract_id)
+    if (card.value.contract_id) {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.post('/api/v1/files/', {
+        contract_id: card.value.contract_id,
+        stage: 'supervision',
+        file_type: file.type?.includes('image') ? 'image' : 'pdf',
+        public_link: publicLink,
+        yandex_path: yandexPath,
+        file_name: file.name,
+        file_order: 0, variation: 1
+      })
+    }
     $q.notify({ type: 'positive', message: 'Файл загружен' })
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки' })

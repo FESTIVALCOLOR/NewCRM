@@ -1217,6 +1217,16 @@ class CardEditDialog(QDialog):
                 repair_btn.clicked.connect(self.repair_workflow)
                 buttons_layout.addWidget(repair_btn)
 
+            # Кнопка синхронизации файлов с ЯД
+            if self.card_data.get('contract_id'):
+                sync_btn = IconLoader.create_action_button(
+                    'refresh-white', 'Синхронизировать файлы с Яндекс.Диском',
+                    bg_color='#27AE60', hover_color='#219A52',
+                    icon_color='#FFFFFF', icon_size=14, button_size=36
+                )
+                sync_btn.clicked.connect(self._sync_crm_files_with_yd)
+                buttons_layout.addWidget(sync_btn)
+
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
 
@@ -6643,6 +6653,31 @@ class CardEditDialog(QDialog):
 
         except Exception as e:
             CustomMessageBox(self, 'Ошибка', f'Ошибка при сбросе карточки: {e}', 'warning').exec_()
+
+    def _sync_crm_files_with_yd(self):
+        """Синхронизация файлов CRM карточки с Яндекс.Диском"""
+        contract_id = self.card_data.get('contract_id') if self.card_data else None
+        if not contract_id:
+            CustomMessageBox(self, "Ошибка", "Нет привязки к договору", "warning").exec_()
+            return
+        try:
+            base_url = self.api_client.base_url
+            # Убедимся что папка создана
+            try:
+                self.api_client._request("POST", base_url + "/api/v1/contracts/" + str(contract_id) + "/fix-folder")
+            except Exception:
+                pass
+            resp = self.api_client._request("POST", base_url + "/api/v1/files/scan/" + str(contract_id))
+            result = resp.json() if resp.status_code == 200 else None
+            if result:
+                added = result.get('new_files_added', 0)
+                total = result.get('total_on_disk', 0)
+                msg = f"Файлов на ЯД: {total}\nНовых загружено: {added}"
+                CustomMessageBox(self, "Синхронизация", msg, "info").exec_()
+            else:
+                CustomMessageBox(self, "Ошибка", f"Статус: {resp.status_code}", "error").exec_()
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка синхронизации", str(e), "error").exec_()
 
     def repair_workflow(self):
         """Диагностика и восстановление workflow карточки.

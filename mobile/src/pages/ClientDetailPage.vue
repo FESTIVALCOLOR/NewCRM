@@ -7,8 +7,13 @@
           <q-avatar size="56px" :color="client.organization_name ? 'blue-2' : 'green-2'" :text-color="client.organization_name ? 'blue-8' : 'green-8'" class="q-mb-sm">
             <q-icon :name="client.organization_name ? 'business' : 'person'" size="28px" />
           </q-avatar>
-          <div class="text-h6 text-weight-bold" style="color: #333">{{ client.full_name }}</div>
-          <div class="text-body2" style="color: #888" v-if="client.organization_name">{{ client.organization_name }}</div>
+          <div class="text-h6 text-weight-bold" style="color: #333">
+            <template v-if="client.organization_type === 'ИП'">ИП {{ client.full_name }}</template>
+            <template v-else-if="client.organization_type && client.organization_name">{{ client.organization_type }} «{{ client.organization_name }}»</template>
+            <template v-else>{{ client.organization_name || client.full_name }}</template>
+          </div>
+          <div class="text-body2" style="color: #888" v-if="client.organization_name && client.organization_type !== 'ИП'">{{ client.full_name }}</div>
+          <div class="text-body2" style="color: #888" v-if="client.responsible_person">Ответственное лицо: {{ client.responsible_person }}</div>
         </q-card-section>
       </q-card>
 
@@ -61,6 +66,16 @@
         </q-list>
       </q-card>
 
+      <!-- Паспорт (физ. лицо) -->
+      <q-card class="is-card q-mb-md" v-if="client.passport_series || client.passport_number">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">Паспорт</div>
+        </q-card-section>
+        <q-list dense>
+          <q-item><q-item-section><q-item-label caption>Серия и номер</q-item-label><q-item-label>{{ client.passport_series }} {{ client.passport_number }}</q-item-label></q-item-section></q-item>
+        </q-list>
+      </q-card>
+
       <!-- Реквизиты (юр. лицо) -->
       <q-card class="is-card q-mb-md" v-if="client.inn || client.ogrn">
         <q-card-section class="q-pb-none">
@@ -99,7 +114,7 @@
       </q-card>
 
       <!-- FAB редактирования -->
-      <q-page-sticky position="bottom-right" :offset="[18, 18]">
+      <q-page-sticky v-if="can('clients.update')" position="bottom-right" :offset="[18, 18]">
         <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
       </q-page-sticky>
 
@@ -120,7 +135,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useClientsStore } from 'src/stores/clients'
 import { useReferencesStore } from 'src/stores/references'
+import { usePermission } from 'src/composables/usePermission'
 import ClientFormDialog from 'src/components/ClientFormDialog.vue'
+
+const { can } = usePermission()
 
 const route = useRoute()
 const clientsStore = useClientsStore()

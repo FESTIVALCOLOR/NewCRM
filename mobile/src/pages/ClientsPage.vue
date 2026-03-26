@@ -70,10 +70,10 @@
             </q-item-section>
             <q-item-section>
               <q-item-label class="text-weight-medium">
-                {{ client.full_name }}
+                {{ clientDisplayName(client) }}
               </q-item-label>
-              <q-item-label caption v-if="client.organization_name">
-                {{ client.organization_name }}
+              <q-item-label caption v-if="client.organization_name && client.organization_type !== 'ИП'">
+                {{ client.full_name }}
               </q-item-label>
               <q-item-label caption v-if="client.phone">
                 {{ client.phone }}
@@ -94,7 +94,7 @@
     </q-pull-to-refresh>
 
     <!-- Круглая жёлтая кнопка добавления (если есть право) -->
-    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 18]">
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showForm = true" />
     </q-page-sticky>
 
@@ -135,6 +135,15 @@ const sortOpts = [
 
 function applyFilters() {
   // Фильтрация через computed в store
+}
+
+// Отображение имени клиента: ИП Иванов / ООО "Ромашка" / Просто ФИО
+function clientDisplayName(c) {
+  const orgType = c.organization_type || ''
+  if (orgType === 'ИП') return `ИП ${c.full_name}`
+  if (orgType && c.organization_name) return `${orgType} «${c.organization_name}»`
+  if (c.organization_name) return c.organization_name
+  return c.full_name
 }
 
 function openClient(clientId) {

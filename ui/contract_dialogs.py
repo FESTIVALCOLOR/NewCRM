@@ -1390,6 +1390,16 @@ class ContractDialog(QDialog):
                 fix_btn.clicked.connect(self._fix_contract_folder)
                 buttons_layout.addWidget(fix_btn)
 
+            # Кнопка синхронизации с ЯД
+            if self.contract_data:
+                sync_btn = IconLoader.create_action_button(
+                    'refresh-white', 'Синхронизировать файлы с Яндекс.Диском',
+                    bg_color='#27AE60', hover_color='#219A52',
+                    icon_color='#FFFFFF', icon_size=14, button_size=36
+                )
+                sync_btn.clicked.connect(self._sync_files_with_yd)
+                buttons_layout.addWidget(sync_btn)
+
             buttons_layout.addStretch()
 
             if hasattr(self, 'create_btn'):
@@ -4226,6 +4236,45 @@ class ContractDialog(QDialog):
 
         except Exception as e:
             CustomMessageBox(self, "Ошибка", str(e), "error").exec_()
+
+    def _sync_files_with_yd(self):
+        """Синхронизация файлов с Яндекс.Диском — обратная загрузка из ЯД в БД"""
+        if not self.contract_data or not self.contract_data.get('id'):
+            CustomMessageBox(self, "Ошибка", "Сначала сохраните договор", "warning").exec_()
+            return
+        contract_id = self.contract_data['id']
+        try:
+            base_url = self.api_client.base_url
+            # Убедимся что папка на ЯД создана
+            if not self.contract_data.get('yandex_folder_path'):
+                try:
+                    self.api_client._request("POST", base_url + "/api/v1/contracts/" + str(contract_id) + "/fix-folder")
+                    fresh = self.api_client.get_contract(contract_id)
+                    if fresh:
+                        self.contract_data = fresh
+                except Exception:
+                    pass
+            if not self.contract_data.get('yandex_folder_path'):
+                CustomMessageBox(self, "Ошибка", "Папка проекта на ЯД не создана", "warning").exec_()
+                return
+            resp = self.api_client._request("POST", base_url + "/api/v1/files/scan/" + str(contract_id))
+            result = resp.json() if resp.status_code == 200 else None
+            if result:
+                added = result.get('new_files_added', 0)
+                total = result.get('total_on_disk', 0)
+                msg = f"Файлов на ЯД: {total}\nНовых загружено: {added}"
+                CustomMessageBox(self, "Синхронизация", msg, "info").exec_()
+                try:
+                    fresh = self.api_client.get_contract(contract_id)
+                    if fresh:
+                        self.contract_data = fresh
+                        self.fill_data()
+                except Exception:
+                    pass
+            else:
+                CustomMessageBox(self, "Ошибка", f"Статус: {resp.status_code}", "error").exec_()
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка синхронизации", str(e), "error").exec_()
 
     @debounce_click(delay_ms=2000)
     def save_contract(self):

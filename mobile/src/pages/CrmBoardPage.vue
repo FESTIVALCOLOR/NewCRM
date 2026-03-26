@@ -26,13 +26,16 @@
 
     <template v-if="!crmStore.loading">
 
-      <!-- АРХИВ — список без столбцов -->
+      <!-- АРХИВ — список с фильтром -->
       <div v-if="crmStore.showArchive" class="q-pa-sm">
-        <div v-if="crmStore.cards.length === 0" class="text-center q-py-xl" style="color: #999">
+        <q-input v-model="archiveSearch" placeholder="Поиск по адресу, номеру..." dense outlined clearable class="q-mb-sm" style="font-size: 12px">
+          <template v-slot:prepend><q-icon name="search" size="18px" /></template>
+        </q-input>
+        <div v-if="archiveFiltered.length === 0" class="text-center q-py-xl" style="color: #999">
           <q-icon name="archive" size="40px" class="q-mb-sm" />
-          <div class="text-caption">Архив пуст</div>
+          <div class="text-caption">{{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}</div>
         </div>
-        <crm-card-item v-for="card in crmStore.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
+        <crm-card-item v-for="card in archiveFiltered" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
       </div>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
@@ -139,6 +142,23 @@
             <q-btn unelevated label="Переместить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doMoveWithAssign" :loading="moveLoading" />
           </q-card-actions>
         </template>
+
+        <!-- Шаг 3: Завершение проекта -->
+        <template v-if="moveStep === 3">
+          <q-card-section>
+            <div class="text-caption q-mb-sm" style="color: #888">Выберите статус завершения проекта</div>
+            <q-option-group v-model="completionStatus" :options="[
+              { label: 'Проект СДАН', value: 'СДАН' },
+              { label: 'Авторский надзор', value: 'АВТОРСКИЙ НАДЗОР' },
+              { label: 'Расторгнут', value: 'РАСТОРГНУТ' }
+            ]" color="accent" class="q-mb-sm" />
+            <q-input v-if="completionStatus === 'РАСТОРГНУТ'" v-model="terminationReason" label="Причина расторжения *" outlined dense type="textarea" autogrow class="q-mb-sm" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
+            <q-btn unelevated label="Завершить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doCompleteProject" :loading="moveLoading" />
+          </q-card-actions>
+        </template>
       </q-card>
     </q-dialog>
     <page-dashboard :items="dashItems" />
@@ -150,9 +170,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
-import { crmApi, employeesApi } from 'src/services/api'
+import { crmApi, employeesApi, contractsApi } from 'src/services/api'
+import { usePermission } from 'src/composables/usePermission'
+import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 import PageDashboard from 'src/components/PageDashboard.vue'
+
+const { can } = usePermission()
 
 const $q = useQuasar()
 const router = useRouter()
@@ -166,6 +190,21 @@ const moveExecutorId = ref(null)
 const moveDeadline = ref('')
 const moveLoading = ref(false)
 const employeeOpts = ref([])
+const completionStatus = ref('СДАН')
+const terminationReason = ref('')
+const archiveSearch = ref('')
+
+const archiveFiltered = computed(() => {
+  const list = crmStore.filteredCards
+  if (!archiveSearch.value) return list
+  const q = archiveSearch.value.toLowerCase()
+  return list.filter(c =>
+    (c.address || '').toLowerCase().includes(q) ||
+    (c.contract_number || '').toLowerCase().includes(q) ||
+    (c.city || '').toLowerCase().includes(q) ||
+    (c.agent_type || '').toLowerCase().includes(q)
+  )
+})
 
 // Стадии, требующие назначения исполнителя
 const STAGES_WITH_EXECUTOR = ['Стадия 1:', 'Стадия 2:', 'Стадия 3:']
@@ -193,7 +232,7 @@ function filterMoveEmps(val, update) {
 }
 
 const dashItems = computed(() => {
-  const total = crmStore.cards.length
+  const total = crmStore.filteredCards.length
   const cols = crmStore.columns
   const inWork = cols.filter(c => c.name.includes('Стадия')).reduce((s, c) => s + c.count, 0)
   return [
@@ -214,6 +253,7 @@ watch(() => crmStore.columns, (cols) => {
 function openCard(cardId) { router.push(`/crm/${cardId}`) }
 
 function showMoveDialog(card) {
+  if (!can('crm_cards.move')) return
   moveCard.value = card
   moveStep.value = 1
   moveExecutorId.value = null
@@ -221,11 +261,76 @@ function showMoveDialog(card) {
   moveDialogVisible.value = true
 }
 
-function selectMoveColumn(colName) {
+async function selectMoveColumn(colName) {
   if (!moveCard.value || moveCard.value.column_name === colName) return
+  const fromCol = moveCard.value.column_name
+
+  // === Правило: нельзя вернуть в «Новый заказ» ===
+  if (colName === 'Новый заказ' && fromCol !== 'Новый заказ') {
+    $q.notify({ type: 'warning', message: 'Нельзя вернуть карточку в "Новый заказ". Используйте "В ожидании".' })
+    return
+  }
+
+  // === Правило: из «В ожидании» — только в previous_column или «Выполненный проект» ===
+  if (fromCol === 'В ожидании' && colName !== 'В ожидании' && colName !== 'Выполненный проект') {
+    const prev = moveCard.value.previous_column
+    if (prev && prev !== 'Новый заказ' && colName !== prev) {
+      $q.notify({ type: 'warning', message: `Из "В ожидании" можно вернуть только в "${prev}" или "Выполненный проект".` })
+      return
+    }
+  }
+
+  // === Правило: запрет перемещения назад (кроме тех, у кого complete_approval) ===
+  if (fromCol !== 'Новый заказ' && fromCol !== 'В ожидании' && colName !== 'В ожидании' && colName !== 'Выполненный проект') {
+    if (!can('crm_cards.complete_approval')) {
+      const order = crmStore.columnOrder
+      const fromIdx = order.indexOf(fromCol)
+      const toIdx = order.indexOf(colName)
+      if (fromIdx >= 0 && toIdx >= 0 && toIdx < fromIdx) {
+        $q.notify({ type: 'warning', message: 'Нельзя переместить карточку назад. Используйте "В ожидании".' })
+        return
+      }
+    }
+  }
+
+  // === Правило: проверка оплаты аванса для индивидуальных (как в десктопе crm_tab.py:659-670) ===
+  if (moveCard.value.project_type === 'Индивидуальный' && colName.startsWith('Стадия')) {
+    const cid = moveCard.value.contract_id
+    if (cid) {
+      try {
+        const { data: contract } = await contractsApi.getById(cid)
+        if (!contract.advance_payment_paid_date) {
+          $q.notify({ type: 'warning', message: 'Перемещение невозможно: аванс (1-й платёж) не оплачен. Откройте договор и подтвердите оплату.' })
+          return
+        }
+      } catch { /* если не удалось загрузить — пропускаем проверку */ }
+    }
+  }
+
   moveTargetCol.value = colName
   if (stageNeedsExecutor(colName)) {
     moveStep.value = 2
+    moveDeadline.value = ''
+    // Автоподстановка дедлайна из timeline
+    const cid = moveCard.value.contract_id
+    if (cid) {
+      try {
+        const { api: ax } = await import('src/boot/axios')
+        const resp = await ax.get(`/api/v1/timeline/${cid}`)
+        const entries = Array.isArray(resp.data) ? resp.data : []
+        const auto = calcDeadlineFromTimeline(entries, colName)
+        if (auto) moveDeadline.value = auto
+      } catch { /* fallback ниже */ }
+    }
+    if (!moveDeadline.value) {
+      const d = new Date(); d.setDate(d.getDate() + 7)
+      moveDeadline.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
+  } else if (colName === 'Выполненный проект') {
+    // Показываем диалог завершения
+    completionStatus.value = 'СДАН'
+    terminationReason.value = ''
+    moveStep.value = 3
   } else {
     doMoveCard(colName)
   }
@@ -260,6 +365,34 @@ async function doMoveWithAssign() {
     crmStore.loadCards()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { moveLoading.value = false }
+}
+
+async function doCompleteProject() {
+  if (completionStatus.value === 'РАСТОРГНУТ' && !terminationReason.value.trim()) {
+    $q.notify({ type: 'warning', message: 'Укажите причину расторжения' })
+    return
+  }
+  moveLoading.value = true
+  try {
+    // 1. Перемещаем карточку в «Выполненный проект»
+    await crmApi.moveCard(moveCard.value.id, 'Выполненный проект')
+
+    // 2. Обновляем статус договора
+    const cid = moveCard.value.contract_id
+    if (cid) {
+      const update = { status: completionStatus.value }
+      if (completionStatus.value === 'РАСТОРГНУТ') {
+        update.termination_reason = terminationReason.value.trim()
+      }
+      await contractsApi.update(cid, update)
+    }
+
+    $q.notify({ type: 'positive', message: `Проект завершён: ${completionStatus.value}` })
+    moveDialogVisible.value = false
+    crmStore.loadCards()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка завершения' })
   } finally { moveLoading.value = false }
 }
 

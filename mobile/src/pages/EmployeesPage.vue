@@ -54,7 +54,7 @@
       </div>
     </q-pull-to-refresh>
 
-    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 18]">
+    <q-page-sticky v-if="canCreate" position="bottom-right" :offset="[18, 80]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreate = true" />
     </q-page-sticky>
 
@@ -80,10 +80,12 @@
               <q-input v-model="editForm.phone" label="Телефон" outlined dense type="tel" />
               <q-input v-model="editForm.email" label="Email" outlined dense type="email" />
               <q-input v-model="editForm.birth_date" label="Дата рождения" outlined dense type="date" />
+              <template v-if="isSuperuser">
               <q-separator />
               <div class="text-subtitle2 text-weight-bold">Данные входа</div>
               <q-input v-model="editForm.login" label="Логин" outlined dense />
               <q-input v-model="editForm.password" label="Новый пароль (если менять)" outlined dense type="password" />
+              </template>
               <q-separator />
               <div class="text-subtitle2 text-weight-bold">Способ оплаты</div>
               <q-select v-model="editForm.payment_type" :options="refs.paymentTypes" label="Тип оплаты" outlined dense />
@@ -94,7 +96,7 @@
                 <q-input v-model="editForm.payment_bik" label="БИК" outlined dense />
                 <q-input v-model="editForm.payment_corr_account" label="Кор. счёт" outlined dense />
               </template>
-              <q-btn label="Удалить сотрудника" icon="delete" color="negative" flat no-caps class="full-width q-mt-md" @click="deleteEmployee" />
+              <q-btn v-if="can('employees.delete')" label="Удалить сотрудника" icon="delete" color="negative" flat no-caps class="full-width q-mt-md" @click="deleteEmployee" />
             </q-form>
           </template>
 
@@ -163,8 +165,8 @@
 
           <!-- Действия -->
           <div class="row q-gutter-sm q-mt-md justify-center">
-            <q-btn unelevated icon="edit" label="Редактировать" no-caps style="background: #ffd93c; color: #333; border-radius: 8px" @click="startEdit" />
-            <q-btn v-if="selected.email" outline icon="email" label="Пригласить" no-caps color="grey-7" style="border-radius: 8px" @click="sendInvite(selected)" />
+            <q-btn v-if="can('employees.update')" unelevated icon="edit" label="Редактировать" no-caps style="background: #ffd93c; color: #333; border-radius: 8px" @click="startEdit" />
+            <q-btn v-if="can('employees.update') && selected.email" outline icon="email" label="Пригласить" no-caps color="grey-7" style="border-radius: 8px" @click="sendInvite(selected)" />
           </div>
           </template>
         </q-card-section>
@@ -221,7 +223,7 @@ import { usePermission } from 'src/composables/usePermission'
 
 const $q = useQuasar()
 const refs = useReferencesStore()
-const { can } = usePermission()
+const { can, isSuperuser } = usePermission()
 const canCreate = computed(() => can('employees.create'))
 
 const dashItems = computed(() => {

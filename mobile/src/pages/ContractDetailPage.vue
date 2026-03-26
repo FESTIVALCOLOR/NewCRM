@@ -156,7 +156,7 @@
           <q-item v-for="f in filesByGroup.documents" :key="f.id" clickable @click="openFile(f)">
             <q-item-section avatar><q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" /></q-item-section>
             <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+            <q-item-section side><div class="row q-gutter-xs items-center"><q-icon name="open_in_new" color="grey-5" /><q-btn v-if="canDeleteFiles" flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteContractFile(f)" /></div></q-item-section>
           </q-item>
         </q-list>
         <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="gavel" label="Загрузить договор" no-caps class="full-width" dense @click="uploadFor('documents')" /></q-card-section>
@@ -169,7 +169,7 @@
           <q-item v-for="f in filesByGroup.tech_task" :key="f.id" clickable @click="openFile(f)">
             <q-item-section avatar><q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" /></q-item-section>
             <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+            <q-item-section side><div class="row q-gutter-xs items-center"><q-icon name="open_in_new" color="grey-5" /><q-btn v-if="canDeleteFiles" flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteContractFile(f)" /></div></q-item-section>
           </q-item>
         </q-list>
         <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="description" label="Загрузить ТЗ" no-caps class="full-width" dense @click="uploadFor('tech_task')" /></q-card-section>
@@ -182,7 +182,7 @@
           <q-item v-for="f in filesByGroup.supervision" :key="f.id" clickable @click="openFile(f)">
             <q-item-section avatar><q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" /></q-item-section>
             <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+            <q-item-section side><div class="row q-gutter-xs items-center"><q-icon name="open_in_new" color="grey-5" /><q-btn v-if="canDeleteFiles" flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteContractFile(f)" /></div></q-item-section>
           </q-item>
         </q-list>
         <q-card-section class="q-pt-xs"><q-btn outline color="grey-7" icon="handshake" label="Загрузить доп. соглашение" no-caps class="full-width" dense @click="uploadFor('supervision')" /></q-card-section>
@@ -195,7 +195,7 @@
           <q-item v-for="f in filesByGroup.acts" :key="f.id" clickable @click="openFile(f)">
             <q-item-section avatar><q-icon name="verified" color="orange" /></q-item-section>
             <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label><q-item-label caption>{{ stageLabel(f.stage) }}</q-item-label></q-item-section>
-            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+            <q-item-section side><div class="row q-gutter-xs items-center"><q-icon name="open_in_new" color="grey-5" /><q-btn v-if="canDeleteFiles" flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteContractFile(f)" /></div></q-item-section>
           </q-item>
         </q-list>
         <q-card-section class="q-pt-xs">
@@ -214,7 +214,7 @@
           <q-item v-for="f in filesByGroup.actsSigned" :key="f.id" clickable @click="openFile(f)">
             <q-item-section avatar><q-icon name="verified_user" color="positive" /></q-item-section>
             <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label><q-item-label caption>{{ stageLabel(f.stage) }}</q-item-label></q-item-section>
-            <q-item-section side><q-icon name="open_in_new" color="grey-5" /></q-item-section>
+            <q-item-section side><div class="row q-gutter-xs items-center"><q-icon name="open_in_new" color="grey-5" /><q-btn v-if="canDeleteFiles" flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteContractFile(f)" /></div></q-item-section>
           </q-item>
         </q-list>
         <q-card-section class="q-pt-xs">
@@ -227,11 +227,16 @@
       </q-card>
 
       <!-- Кнопка удаления -->
-      <q-btn flat color="negative" icon="delete" label="Удалить договор" no-caps class="full-width q-mb-md" @click="deleteContract" />
+      <q-btn v-if="can('contracts.delete')" flat color="negative" icon="delete" label="Удалить договор" no-caps class="full-width q-mb-md" @click="deleteContract" />
 
-      <!-- FAB редактирования -->
+      <!-- FAB кнопки -->
       <q-page-sticky position="bottom-right" :offset="[18, 18]">
-        <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
+        <div class="column q-gutter-sm items-end">
+          <q-btn round icon="sync" size="md" style="background: #5DADE2; color: white" @click="syncWithYd" :loading="syncing">
+            <q-tooltip>Синхронизировать с ЯД</q-tooltip>
+          </q-btn>
+          <q-btn v-if="can('contracts.update')" fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
+        </div>
       </q-page-sticky>
 
       <contract-form-dialog v-model="showEdit" :contract="contract" @saved="reload" />
@@ -254,7 +259,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { contractsApi, filesApi, crmApi, clientsApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
+import { useAuthStore } from 'src/stores/auth'
+import { usePermission } from 'src/composables/usePermission'
 import ContractFormDialog from 'src/components/ContractFormDialog.vue'
+
+const { can, isSuperuser } = usePermission()
+const authStore = useAuthStore()
+
+// Удаление файлов видно только руководителю и старшему менеджеру
+const canDeleteFiles = computed(() => {
+  if (isSuperuser.value) return true
+  const pos = authStore.user?.position || ''
+  return ['Руководитель студии', 'Старший менеджер проектов'].includes(pos)
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -264,6 +281,7 @@ const contract = ref(null)
 const files = ref([])
 const timeline = ref([])
 const loading = ref(true)
+const syncing = ref(false)
 const showEdit = ref(false)
 const fileInput = ref(null)
 const receiptInput = ref(null)
@@ -335,7 +353,62 @@ function fileColorByName(name) {
   return 'grey-7'
 }
 
-function openFile(f) { if (f.public_link) window.open(f.public_link, '_blank') }
+async function openFile(f) {
+  if (!f.public_link && f.yandex_path) {
+    // Нет публичной ссылки — запросим
+    try {
+      const { data } = await filesApi.getPublicLink(f.yandex_path)
+      if (data.public_link) { window.open(data.public_link, '_blank'); return }
+    } catch {
+      // Файл не найден на ЯД — удалим запись из БД
+      try {
+        const { api: ax } = await import('src/boot/axios')
+        await ax.delete(`/api/v1/files/${f.id}`)
+        files.value = files.value.filter(x => x.id !== f.id)
+        $q.notify({ type: 'info', message: `Файл "${f.file_name}" удалён с ЯД — запись убрана` })
+      } catch {}
+      return
+    }
+  }
+  if (f.public_link) window.open(f.public_link, '_blank')
+}
+
+async function deleteContractFile(f) {
+  $q.dialog({
+    title: 'Удалить файл?',
+    message: f.file_name,
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Удалить', noCaps: true, color: 'negative' }
+  }).onOk(async () => {
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.delete(`/api/v1/files/${f.id}`)
+      files.value = files.value.filter(x => x.id !== f.id)
+      // Очищаем поля contracts для совместимости с десктопом
+      const FIELD_MAP = {
+        documents: ['contract_file_link', 'contract_file_yandex_path', 'contract_file_name'],
+        tech_task: ['tech_task_link', 'tech_task_yandex_path', 'tech_task_file_name'],
+        measurement: ['measurement_image_link', 'measurement_yandex_path', 'measurement_file_name'],
+        stage1: ['act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'],
+        stage2_concept: ['act_concept_link', 'act_concept_yandex_path', 'act_concept_file_name'],
+        stage3: ['act_final_link', 'act_final_yandex_path', 'act_final_file_name'],
+        stage1_signed: ['act_planning_signed_link', 'act_planning_signed_yandex_path', 'act_planning_signed_file_name'],
+        stage2_signed: ['act_concept_signed_link', 'act_concept_signed_yandex_path', 'act_concept_signed_file_name'],
+        stage3_signed: ['act_final_signed_link', 'act_final_signed_yandex_path', 'act_final_signed_file_name'],
+        supervision: ['additional_agreement_link', 'additional_agreement_yandex_path', 'additional_agreement_file_name'],
+      }
+      const CLEAR_MAP = {}
+      for (const [stage, fields] of Object.entries(FIELD_MAP)) {
+        const obj = {}; for (const fld of fields) obj[fld] = ''; CLEAR_MAP[stage] = obj
+      }
+      const clearFields = CLEAR_MAP[f.stage]
+      if (clearFields) { try { await contractsApi.update(contract.value.id, clearFields) } catch {} }
+      $q.notify({ type: 'positive', message: 'Файл удалён' })
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка удаления' })
+    }
+  })
+}
 function goToClient() { if (contract.value?.client_id) router.push(`/clients/${contract.value.client_id}`) }
 function openMap(address) { window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(address)}`, '_blank') }
 
@@ -379,23 +452,90 @@ async function cancelPayment(payKey) {
   })
 }
 
+// Генерация пути ЯД на клиенте (как в десктопе yandex_disk.py build_contract_folder_path)
+function buildYdFolderPath(c) {
+  const agent = c.agent_type || 'ФЕСТИВАЛЬ'
+  const ptype = c.project_type || 'Индивидуальный'
+  const city = c.city || 'МСК'
+  const address = (c.address || 'Без адреса').replace(/[/\\<>:"|?*]/g, '-')
+  // area как Python float (100 → "100.0", 100.5 → "100.5") — совпадает с серверным fix-folder
+  const rawArea = c.area || 0
+  const area = Number.isInteger(Number(rawArea)) ? Number(rawArea).toFixed(1) : rawArea
+  const typeFolder = ptype.includes('ндивид') ? 'Индивидуальные' : 'Шаблонные'
+  const folderName = `${city}-${address}-${area}м2`
+  return `disk:/CRM/Проекты/${agent}/${typeFolder}/${city}/${folderName}`
+}
+
+// Создание полной структуры подпапок (как десктоп yandex_disk.py create_contract_folder_structure)
+async function createYdSubfolders(basePath) {
+  const { api: ax } = await import('src/boot/axios')
+  const subfolders = [
+    'Документы',
+    'Документы/Акты',
+    'Документы/Информационные письма',
+    'Документы/Доп. соглашения',
+    'Анкета',
+    'Замер',
+    'Референсы',
+    'Фотофиксация',
+    '1 стадия - Планировочное решение',
+    '2 стадия - Концепция дизайна',
+    '2 стадия - Концепция дизайна/Концепция-коллажи',
+    '2 стадия - Концепция дизайна/3D визуализация',
+    '3 стадия - Чертежный проект',
+  ]
+  for (const sub of subfolders) {
+    try { await ax.post('/api/v1/files/folder', null, { params: { folder_path: `${basePath}/${sub}` } }) } catch {}
+  }
+}
+
+async function ensureYdFolder(c) {
+  // Всегда загружаем свежие данные из БД (yandex_folder_path мог измениться)
+  try {
+    const { data: fresh } = await contractsApi.getById(c.id)
+    if (fresh.yandex_folder_path) {
+      contract.value = fresh
+      return fresh.yandex_folder_path.replace(/^disk:/, '')
+    }
+  } catch {}
+  let folder = (c.yandex_folder_path || '').replace(/^disk:/, '')
+  if (!folder) {
+    // Генерируем правильный путь и обновляем в БД
+    const path = buildYdFolderPath(c)
+    folder = path.replace(/^disk:/, '')
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      // Создаём папку на ЯД
+      await ax.post('/api/v1/files/folder', null, { params: { folder_path: path } })
+      // Обновляем yandex_folder_path в БД
+      await contractsApi.update(c.id, { yandex_folder_path: path })
+      contract.value.yandex_folder_path = path
+    } catch {}
+  }
+  return folder
+}
+
 async function handleFileUpload(event) {
   const file = event.target.files?.[0]
   if (!file || !contract.value) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
-    // Если yandex_folder_path нет — создаём через fix-folder
-    let contractFolder = (contract.value.yandex_folder_path || '').replace(/^disk:/, '')
-    if (!contractFolder) {
-      try {
-        const { api: ax } = await import('src/boot/axios')
-        await ax.post(`/api/v1/contracts/${contract.value.id}/fix-folder`)
-        const { data: fresh } = await contractsApi.getById(contract.value.id)
-        contract.value = fresh
-        contractFolder = (fresh.yandex_folder_path || '').replace(/^disk:/, '')
-      } catch {}
+    const contractFolder = await ensureYdFolder(contract.value)
+    // Маппинг stage → подпапка на ЯД (как в десктопе contract_dialogs.py)
+    const STAGE_FOLDERS = {
+      documents: 'Документы',                         // Файл договора
+      tech_task: 'Анкета',                            // Техническое задание
+      measurement: 'Замер',                           // Замер
+      stage1: 'Документы/Акты',                       // Акт ПР (без подписи)
+      stage2_concept: 'Документы/Акты',               // Акт КД (без подписи)
+      stage3: 'Документы/Акты',                       // Акт РЧ (без подписи)
+      stage1_signed: 'Документы/Акты',                // Акт ПР (с подписью)
+      stage2_signed: 'Документы/Акты',                // Акт КД (с подписью)
+      stage3_signed: 'Документы/Акты',                // Акт РЧ (с подписью)
+      supervision: 'Документы/Доп. соглашения',       // Доп. соглашения
+      references: 'Референсы',
+      photo_documentation: 'Фотофиксация'
     }
-    const STAGE_FOLDERS = { documents: 'Договор', tech_task: 'ТЗ', measurement: 'Замер', stage1: '1 стадия - Планировочное решение', stage1_signed: 'Акты подписанные/ПР', stage2_concept: '2 стадия - Концепция дизайна', stage2_signed: 'Акты подписанные/КД', stage3: '3 стадия - Чертежный проект', stage3_signed: 'Акты подписанные/РЧ', references: 'Референсы', photo_documentation: 'Фотофиксация', supervision: 'Доп. соглашения' }
     const stageFolder = STAGE_FOLDERS[uploadStage.value] || uploadStage.value
     if (!contractFolder) { $q.notify({ type: 'negative', message: 'Папка проекта на ЯД не создана' }); return }
     const ydPath = `${contractFolder}/${stageFolder}/${file.name}`
@@ -408,6 +548,27 @@ async function handleFileUpload(event) {
       public_link: publicLink, yandex_path: ydPath, file_name: file.name,
       file_order: files.value.length + 1, variation: 1
     })
+    // Обновляем поля contracts для совместимости с десктопом (все 19 типов файлов)
+    const CONTRACT_FIELD_MAP = {
+      documents: { link: 'contract_file_link', path: 'contract_file_yandex_path', name: 'contract_file_name' },
+      tech_task: { link: 'tech_task_link', path: 'tech_task_yandex_path', name: 'tech_task_file_name' },
+      measurement: { link: 'measurement_image_link', path: 'measurement_yandex_path', name: 'measurement_file_name' },
+      stage1: { link: 'act_planning_link', path: 'act_planning_yandex_path', name: 'act_planning_file_name' },
+      stage2_concept: { link: 'act_concept_link', path: 'act_concept_yandex_path', name: 'act_concept_file_name' },
+      stage3: { link: 'act_final_link', path: 'act_final_yandex_path', name: 'act_final_file_name' },
+      stage1_signed: { link: 'act_planning_signed_link', path: 'act_planning_signed_yandex_path', name: 'act_planning_signed_file_name' },
+      stage2_signed: { link: 'act_concept_signed_link', path: 'act_concept_signed_yandex_path', name: 'act_concept_signed_file_name' },
+      stage3_signed: { link: 'act_final_signed_link', path: 'act_final_signed_yandex_path', name: 'act_final_signed_file_name' },
+      supervision: { link: 'additional_agreement_link', path: 'additional_agreement_yandex_path', name: 'additional_agreement_file_name' },
+    }
+    const fieldMap = CONTRACT_FIELD_MAP[uploadStage.value]
+    if (fieldMap) {
+      const update = {}
+      update[fieldMap.link] = publicLink
+      update[fieldMap.path] = ydPath
+      update[fieldMap.name] = file.name
+      try { await contractsApi.update(contract.value.id, update) } catch {}
+    }
     $q.notify({ type: 'positive', message: 'Файл загружен' })
     const { data } = await filesApi.getContractFiles(contract.value.id)
     files.value = data || []
@@ -442,6 +603,83 @@ async function reload() {
   contract.value = data
 }
 
+// Синхронизация файлов с ЯД — проверяем существование, удаляем мёртвые записи
+async function syncFilesWithYd() {
+  if (!files.value.length) return
+  const { api: ax } = await import('src/boot/axios')
+  const toRemove = []
+  for (const f of files.value) {
+    const path = f.yandex_path || ''
+    if (!path) continue
+    try {
+      await filesApi.getPublicLink(path.replace(/^disk:/, ''))
+    } catch {
+      // Файл не найден на ЯД — удаляем запись
+      try { await ax.delete(`/api/v1/files/${f.id}`) } catch {}
+      toRemove.push(f.id)
+    }
+  }
+  if (toRemove.length > 0) {
+    files.value = files.value.filter(f => !toRemove.includes(f.id))
+    $q.notify({ type: 'info', message: `Удалено ${toRemove.length} файл(ов) — отсутствуют на ЯД` })
+  }
+}
+
+// Обратная синхронизация: сканирование ЯД → БД (новые файлы)
+async function syncWithYd() {
+  if (!contract.value?.id) return
+  syncing.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    // 1. Загружаем свежие данные договора
+    const { data: fresh } = await contractsApi.getById(contract.value.id)
+    contract.value = fresh
+
+    // 2. Проверяем/создаём/переименовываем папку
+    const correctPath = buildYdFolderPath(fresh)
+    const currentPath = fresh.yandex_folder_path || ''
+
+    if (currentPath !== correctPath) {
+      // Путь не совпадает — пробуем переименовать старую, иначе создаём новую
+      if (currentPath) {
+        try {
+          await ax.post('/api/v1/files/move-folder', null, { params: { from_path: currentPath, to_path: correctPath } })
+        } catch {
+          // move не удался — создаём новую
+          try { await ax.post('/api/v1/files/folder', null, { params: { folder_path: correctPath } }) } catch {}
+        }
+      } else {
+        try { await ax.post('/api/v1/files/folder', null, { params: { folder_path: correctPath } }) } catch {}
+      }
+      await contractsApi.update(fresh.id, { yandex_folder_path: correctPath })
+      contract.value.yandex_folder_path = correctPath
+    }
+    // Всегда убеждаемся что папка + подпапки физически существуют на ЯД
+    const folderPath = contract.value.yandex_folder_path || correctPath
+    try { await ax.post('/api/v1/files/folder', null, { params: { folder_path: folderPath } }) } catch {}
+    await createYdSubfolders(folderPath)
+
+    // 3. Сканируем файлы на ЯД → БД
+    const { data } = await ax.post(`/api/v1/files/scan/${contract.value.id}`)
+    const added = data.new_files_added || 0
+
+    // 4. Перезагружаем файлы
+    const { data: freshFiles } = await filesApi.getContractFiles(contract.value.id)
+    files.value = freshFiles || []
+
+    // 5. Удаляем мёртвые записи
+    await syncFilesWithYd()
+
+    if (added > 0) {
+      $q.notify({ type: 'positive', message: `Синхронизация: +${added} файл(ов) с ЯД` })
+    } else {
+      $q.notify({ type: 'info', message: 'Синхронизировано — новых файлов не найдено' })
+    }
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка синхронизации' })
+  } finally { syncing.value = false }
+}
+
 onMounted(async () => {
   const id = route.params.id
   try {
@@ -458,6 +696,8 @@ onMounted(async () => {
         if (cl?.full_name) clientName.value = cl.full_name
       } catch {}
     }
+    // Фоновая синхронизация файлов с ЯД
+    syncFilesWithYd()
   } finally { loading.value = false }
 })
 </script>

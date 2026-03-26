@@ -90,9 +90,9 @@
                         <q-btn v-else-if="p.report_month || p.payment_status === 'to_pay'" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
                         <q-btn v-else unelevated dense size="xs" label="В работе" no-caps color="grey-3" text-color="grey-7" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" disable />
                         <!-- Действия -->
-                        <q-btn v-if="!p.is_paid && (p.report_month || p.payment_status === 'to_pay')" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
-                        <q-btn v-if="!p.is_paid && !p.report_month && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
-                        <q-btn outline dense size="xs" icon="delete_outline" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="deletePayment(p)" />
+                        <q-btn v-if="can('salaries.mark_paid') && !p.is_paid && (p.report_month || p.payment_status === 'to_pay')" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
+                        <q-btn v-if="can('salaries.mark_to_pay') && !p.is_paid && !p.report_month && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn v-if="can('salaries.delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
                   </div>
@@ -123,7 +123,7 @@
     </q-pull-to-refresh>
 
     <!-- FAB создания (только для окладов) -->
-    <q-page-sticky v-if="paymentTab === 'salary'" position="bottom-right" :offset="[18, 18]">
+    <q-page-sticky v-if="paymentTab === 'salary' && can('salaries.create')" position="bottom-right" :offset="[18, 18]">
       <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreateDialog = true" />
     </q-page-sticky>
 
@@ -153,6 +153,9 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { paymentsApi, salariesApi, employeesApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
+import { usePermission } from 'src/composables/usePermission'
+
+const { can } = usePermission()
 
 const $q = useQuasar()
 const refsStore = useReferencesStore()

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
+import { usePermissionsStore } from 'src/stores/permissions'
 import routes from './routes'
 
 const router = createRouter({
@@ -10,7 +11,7 @@ const router = createRouter({
 
 let sessionRestored = false
 
-// Auth guard
+// Auth + Permission guard
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
@@ -28,6 +29,19 @@ router.beforeEach(async (to) => {
 
   if (to.path === '/login' && authStore.isAuthenticated) {
     return { path: '/' }
+  }
+
+  // Проверка прав доступа к странице
+  const requiredPerm = to.meta.requiresPermission
+  if (requiredPerm && authStore.isAuthenticated) {
+    const permsStore = usePermissionsStore()
+    // Дождаться загрузки прав если ещё не загружены
+    if (!permsStore.loaded && !permsStore.isSuperuser) {
+      await permsStore.load()
+    }
+    if (!permsStore.has(requiredPerm)) {
+      return { path: '/' }
+    }
   }
 })
 

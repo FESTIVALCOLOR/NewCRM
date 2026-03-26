@@ -306,6 +306,66 @@ async def create_yandex_folder(
         raise HTTPException(status_code=500, detail=f"Folder creation error: {error_str}")
 
 
+@router.post("/move-folder")
+async def move_yandex_folder(
+    from_path: str,
+    to_path: str,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Переименовать/переместить папку на Яндекс.Диске (как десктоп move_folder)"""
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+    if ".." in from_path or ".." in to_path:
+        raise HTTPException(status_code=400, detail="Недопустимый путь")
+    try:
+        yd_service = get_yandex_disk_service()
+        import requests as req
+        token = yd_service.token
+        resp = req.post(
+            'https://cloud-api.yandex.net/v1/disk/resources/move',
+            params={'from': from_path, 'path': to_path, 'overwrite': 'false'},
+            headers={'Authorization': f'OAuth {token}'},
+            timeout=15
+        )
+        if resp.status_code in [201, 202]:
+            # Обновляем пути в project_files и contracts
+            try:
+                from_clean = from_path.replace('disk:', '')
+                to_clean = to_path.replace('disk:', '')
+                # Обновляем yandex_path во всех project_files
+                affected = db.query(ProjectFile).filter(
+                    ProjectFile.yandex_path.like(f'%{from_clean}%')
+                ).all()
+                for pf in affected:
+                    pf.yandex_path = pf.yandex_path.replace(from_clean, to_clean)
+                # Обновляем поля contracts (все *_yandex_path)
+                contracts = db.query(Contract).filter(
+                    Contract.yandex_folder_path.in_([from_path, f'disk:{from_clean}'])
+                ).all()
+                for c in contracts:
+                    # Обновляем все поля с путями
+                    for attr in dir(c):
+                        if attr.endswith('_yandex_path') and attr != 'yandex_folder_path':
+                            val = getattr(c, attr, '')
+                            if val and from_clean in val:
+                                setattr(c, attr, val.replace(from_clean, to_clean))
+                    c.yandex_folder_path = to_path
+                db.commit()
+                logger.info(f"Move: обновлено {len(affected)} файлов, {len(contracts)} контрактов")
+            except Exception as update_err:
+                logger.warning(f"Move: ошибка обновления путей в БД: {update_err}")
+            return {"status": "success", "from": from_path, "to": to_path}
+        elif resp.status_code == 409:
+            return {"status": "exists", "message": "Целевая папка уже существует"}
+        else:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text[:200])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.post("/validate")
 async def validate_files(
     request: dict,
@@ -471,6 +531,9 @@ async def scan_contract_files_on_yandex(
             'Анкета': 'questionnaire',
             'Анкеты': 'questionnaire',
             'Документы': 'documents',
+            'Акты': 'acts',
+            'Информационные письма': 'info_letters',
+            'Доп. соглашения': 'supervision',
             'Техническое задание': 'tech_task',
             'ТЗ': 'tech_task',
             'Авторский надзор': 'supervision',
@@ -513,6 +576,45 @@ async def scan_contract_files_on_yandex(
                     return stage_id
             return None
 
+        def classify_document_by_name(file_name, parent_stage):
+            """Определяет точный stage файла по его имени (для актов, писем, соглашений).
+            Если не удалось — возвращает parent_stage."""
+            name = file_name.lower()
+            is_signed = any(w in name for w in ['подпис', 'signed', 'с подпис'])
+
+            # Акты
+            if parent_stage in ('acts', 'documents'):
+                if any(w in name for w in ['планировоч', ' пр', 'акт_пр', 'акт пр', 'stage1', 'стадия 1', 'стадия1']):
+                    return 'stage1_signed' if is_signed else 'stage1'
+                if any(w in name for w in ['концепц', 'дизайн', ' кд', 'акт_кд', 'акт кд', 'stage2', 'стадия 2', 'стадия2']):
+                    return 'stage2_signed' if is_signed else 'stage2_concept'
+                if any(w in name for w in ['чертеж', 'чертёж', 'рабоч', ' рч', 'акт_рч', 'акт рч', 'финал', 'stage3', 'стадия 3', 'стадия3']):
+                    return 'stage3_signed' if is_signed else 'stage3'
+                # Общее: если есть слово "акт" но тип не определён
+                if 'акт' in name:
+                    return 'stage1_signed' if is_signed else 'stage1'
+
+            # Информационные письма
+            if parent_stage == 'info_letters':
+                return 'info_letter_signed' if is_signed else 'info_letter'
+
+            # Доп. соглашения
+            if parent_stage == 'supervision':
+                return 'additional_agreement_signed' if is_signed else 'supervision'
+
+            # Договор vs ТЗ в папке Документы
+            if parent_stage == 'documents':
+                if any(w in name for w in ['договор', 'contract', 'контракт']):
+                    return 'documents'
+                if any(w in name for w in ['тз', 'техническ', 'задани', 'анкет']):
+                    return 'tech_task'
+                if any(w in name for w in ['доп', 'соглашен', 'дополнит']):
+                    return 'supervision'
+                if any(w in name for w in ['информ', 'письм']):
+                    return 'info_letter'
+
+            return parent_stage
+
         def detect_file_type(name):
             ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
             if ext in ('png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg'):
@@ -535,7 +637,7 @@ async def scan_contract_files_on_yandex(
 
         found_files = []
 
-        def scan_folder(path, stage=None):
+        def scan_folder(path, stage=None, variation=1):
             try:
                 items = yd_service.list_files(path)
                 for item in items:
@@ -548,24 +650,36 @@ async def scan_contract_files_on_yandex(
                         if item_name.lower() == 'правки':
                             continue
                         child_stage = match_folder_to_stage(item_name)
+                        child_variation = variation
                         if child_stage is None:
                             child_stage = stage  # наследуем стадию от родителя
                         # Внутри Авторского надзора подпапки "Стадия ..." остаются supervision
                         if stage == 'supervision' and item_name.startswith('Стадия'):
                             child_stage = 'supervision'
-                        # Подпапки "Вариация N" наследуют стадию от родителя
-                        if item_name.startswith('Вариация') or item_name.startswith('вариация'):
+                        # Подпапки "Вариация N" — извлекаем номер вариации
+                        if item_name.lower().startswith('вариация'):
                             child_stage = stage
-                        scan_folder(item_path, child_stage)
+                            import re
+                            m = re.search(r'(\d+)', item_name)
+                            child_variation = int(m.group(1)) if m else 1
+                        # Валидация: пропускаем папки с нераспознанным stage и нестандартными именами
+                        # (пользователь мог создать произвольную папку)
+                        if child_stage is None and stage is None:
+                            logger.info(f"Скан: пропуск нераспознанной папки '{item_name}'")
+                            continue
+                        scan_folder(item_path, child_stage, child_variation)
                     elif item_type == 'file':
                         # Файлы с определённой стадией добавляем
                         # Файлы в корне (stage=None) — пропускаем
                         if stage:
+                            # Классифицируем файл по имени (акты, письма, соглашения)
+                            classified_stage = classify_document_by_name(item_name, stage)
                             found_files.append({
                                 'yandex_path': item_path,
                                 'file_name': item_name,
-                                'stage': stage,
+                                'stage': classified_stage,
                                 'file_type': detect_file_type(item_name),
+                                'variation': variation,
                             })
             except Exception as e:
                 logger.warning(f"Ошибка сканирования {path}: {e}")
@@ -634,7 +748,8 @@ async def scan_contract_files_on_yandex(
                 file_type=file_type_val,
                 yandex_path=yp,
                 public_link=public_link,
-                file_name=f['file_name']
+                file_name=f['file_name'],
+                variation=f.get('variation', 1)
             )
             try:
                 # Используем savepoint чтобы rollback не затронул предыдущие записи
@@ -653,14 +768,37 @@ async def scan_contract_files_on_yandex(
                 'public_link': public_link,
             })
 
-        # Для файлов из "Анкета" (questionnaire/tech_task): обновляем contract.tech_task_link
-        tech_task_files = [f for f in new_files if f['stage'] in ('questionnaire', 'tech_task')]
-        if tech_task_files and not contract.tech_task_link:
-            first_tt = tech_task_files[0]
-            contract.tech_task_link = first_tt.get('public_link', '')
-            contract.tech_task_yandex_path = first_tt.get('yandex_path', '')
-            contract.tech_task_file_name = first_tt.get('file_name', '')
-            logger.info(f"Scan: обновлён tech_task_link для contract {contract_id}")
+        # Синхронизация полей contracts с project_files (для совместимости с десктопом)
+        # Десктоп читает файлы из полей contracts, мобиль — из project_files
+        all_db_files = db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id).all()
+
+        # Полный маппинг stage → поля contracts (link, yandex_path, file_name)
+        STAGE_CONTRACT_FIELDS = {
+            'documents': ('contract_file_link', 'contract_file_yandex_path', 'contract_file_name'),
+            'tech_task': ('tech_task_link', 'tech_task_yandex_path', 'tech_task_file_name'),
+            'questionnaire': ('tech_task_link', 'tech_task_yandex_path', 'tech_task_file_name'),
+            'measurement': ('measurement_image_link', 'measurement_yandex_path', 'measurement_file_name'),
+            'stage1': ('act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'),
+            'stage2_concept': ('act_concept_link', 'act_concept_yandex_path', 'act_concept_file_name'),
+            'stage3': ('act_final_link', 'act_final_yandex_path', 'act_final_file_name'),
+            'stage1_signed': ('act_planning_signed_link', 'act_planning_signed_yandex_path', 'act_planning_signed_file_name'),
+            'stage2_signed': ('act_concept_signed_link', 'act_concept_signed_yandex_path', 'act_concept_signed_file_name'),
+            'stage3_signed': ('act_final_signed_link', 'act_final_signed_yandex_path', 'act_final_signed_file_name'),
+            'supervision': ('additional_agreement_link', 'additional_agreement_yandex_path', 'additional_agreement_file_name'),
+            'acts': ('act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'),
+            'info_letter': ('info_letter_link', 'info_letter_yandex_path', 'info_letter_file_name'),
+            'info_letters': ('info_letter_link', 'info_letter_yandex_path', 'info_letter_file_name'),
+            'info_letter_signed': ('info_letter_signed_link', 'info_letter_signed_yandex_path', 'info_letter_signed_file_name'),
+            'additional_agreement_signed': ('additional_agreement_signed_link', 'additional_agreement_signed_yandex_path', 'additional_agreement_signed_file_name'),
+        }
+        for stage_key, (link_field, path_field, name_field) in STAGE_CONTRACT_FIELDS.items():
+            if not getattr(contract, link_field, None):
+                pf = next((f for f in all_db_files if f.stage == stage_key), None)
+                if pf:
+                    setattr(contract, link_field, pf.public_link or '')
+                    setattr(contract, path_field, pf.yandex_path or '')
+                    setattr(contract, name_field, pf.file_name or '')
+                    logger.info(f"Scan: обновлён {link_field} для contract {contract_id}")
 
         # Обновляем references_yandex_path и photo_documentation_yandex_path
         # Логика: файлы есть → создать ссылку; файлов нет → очистить ссылку

@@ -104,7 +104,7 @@ const today = new Date().toISOString().split('T')[0]
 
 const emptyForm = () => ({
   client_id: null, contract_number: '', project_type: 'Индивидуальный', project_subtype: '',
-  address: '', city: 'Москва', area: null, floors: 1, agent_type: '',
+  address: '', city: 'МСК', area: null, floors: 1, agent_type: '',
   contract_date: today, contract_period: 45,
   total_amount: null, advance_payment: null, additional_payment: null, third_payment: null,
   status: 'Новый заказ', comments: ''
@@ -222,6 +222,49 @@ async function save() {
   try {
     if (isEdit.value) {
       await contractsApi.update(props.contract.id, form.value)
+
+      // Всегда пересчитываем yandex_folder_path из текущих данных формы
+      // (как десктоп contract_dialogs.py:4460-4474)
+      const c = form.value
+      const agent = c.agent_type || 'ФЕСТИВАЛЬ'
+      const ptype = c.project_type || 'Индивидуальный'
+      const city = c.city || 'МСК'
+      const addr = (c.address || '').replace(/[/\\<>:"|?*]/g, '-')
+      const rawArea = c.area || 0
+      const area = Number.isInteger(Number(rawArea)) ? Number(rawArea).toFixed(1) : rawArea
+      const typeFolder = ptype.includes('ндивид') ? 'Индивидуальные' : 'Шаблонные'
+      const newPath = `disk:/CRM/Проекты/${agent}/${typeFolder}/${city}/${city}-${addr}-${area}м2`
+
+      // Загружаем свежие данные из БД (yandex_folder_path мог измениться)
+      let oldPath = ''
+      try {
+        const { data: fresh } = await contractsApi.getById(props.contract.id)
+        oldPath = fresh.yandex_folder_path || ''
+      } catch {}
+
+      if (oldPath !== newPath) {
+        try {
+          if (oldPath) {
+            // Пробуем переименовать
+            await api.post('/api/v1/files/move-folder', null, { params: { from_path: oldPath, to_path: newPath } })
+          } else {
+            // Папки не было — создаём
+            await api.post('/api/v1/files/folder', null, { params: { folder_path: newPath } })
+          }
+        } catch {
+          // move не удался — создаём новую
+          try { await api.post('/api/v1/files/folder', null, { params: { folder_path: newPath } }) } catch {}
+        }
+        // Обновляем путь в БД
+        try { await contractsApi.update(props.contract.id, { yandex_folder_path: newPath }) } catch {}
+        // Создаём подпапки (как десктоп create_document_subfolders + create_stage_folders)
+        const subs = ['Документы', 'Документы/Акты', 'Документы/Информационные письма', 'Документы/Доп. соглашения',
+          'Анкета', 'Замер', 'Референсы', 'Фотофиксация',
+          '1 стадия - Планировочное решение', '2 стадия - Концепция дизайна',
+          '2 стадия - Концепция дизайна/Концепция-коллажи', '2 стадия - Концепция дизайна/3D визуализация',
+          '3 стадия - Чертежный проект']
+        for (const s of subs) { try { await api.post('/api/v1/files/folder', null, { params: { folder_path: `${newPath}/${s}` } }) } catch {} }
+      }
       $q.notify({ type: 'positive', message: 'Договор обновлён' })
     } else {
       const { data: newContract } = await contractsApi.create(form.value)

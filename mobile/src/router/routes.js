@@ -28,79 +28,79 @@ export default [
         path: 'crm',
         name: 'crm',
         component: () => import('src/pages/CrmBoardPage.vue'),
-        meta: { title: 'CRM', icon: 'view_kanban' }
+        meta: { title: 'CRM', icon: 'view_kanban', requiresPermission: 'access.crm' }
       },
       {
         path: 'crm/:id',
         name: 'crm-card',
         component: () => import('src/pages/CrmCardPage.vue'),
-        meta: { title: 'Карточка проекта' }
+        meta: { title: 'Карточка проекта', requiresPermission: 'access.crm' }
       },
       {
         path: 'clients',
         name: 'clients',
         component: () => import('src/pages/ClientsPage.vue'),
-        meta: { title: 'Клиенты', icon: 'people' }
+        meta: { title: 'Клиенты', icon: 'people', requiresPermission: 'access.clients' }
       },
       {
         path: 'clients/:id',
         name: 'client-detail',
         component: () => import('src/pages/ClientDetailPage.vue'),
-        meta: { title: 'Клиент' }
+        meta: { title: 'Клиент', requiresPermission: 'access.clients' }
       },
       {
         path: 'contracts',
         name: 'contracts',
         component: () => import('src/pages/ContractsPage.vue'),
-        meta: { title: 'Договоры', icon: 'description' }
+        meta: { title: 'Договоры', icon: 'description', requiresPermission: 'access.contracts' }
       },
       {
         path: 'contracts/:id',
         name: 'contract-detail',
         component: () => import('src/pages/ContractDetailPage.vue'),
-        meta: { title: 'Договор' }
+        meta: { title: 'Договор', requiresPermission: 'access.contracts' }
       },
       {
         path: 'supervision',
         name: 'supervision',
         component: () => import('src/pages/SupervisionPage.vue'),
-        meta: { title: 'Надзор', icon: 'engineering' }
+        meta: { title: 'Надзор', icon: 'engineering', requiresPermission: 'access.supervision' }
       },
       {
         path: 'supervision/:id',
         name: 'supervision-detail',
         component: () => import('src/pages/SupervisionDetailPage.vue'),
-        meta: { title: 'Карточка надзора' }
+        meta: { title: 'Карточка надзора', requiresPermission: 'access.supervision' }
       },
       {
         path: 'employees',
         name: 'employees',
         component: () => import('src/pages/EmployeesPage.vue'),
-        meta: { title: 'Сотрудники', icon: 'badge' }
+        meta: { title: 'Сотрудники', icon: 'badge', requiresPermission: 'access.employees' }
       },
       {
         path: 'salaries',
         name: 'salaries',
         component: () => import('src/pages/SalariesPage.vue'),
-        meta: { title: 'Зарплаты', icon: 'payments' }
+        meta: { title: 'Зарплаты', icon: 'payments', requiresPermission: 'access.salaries' }
       },
       {
         path: 'reports',
         name: 'reports',
         component: () => import('src/pages/ReportsPage.vue'),
-        meta: { title: 'Отчёты и Статистика', icon: 'bar_chart' }
+        meta: { title: 'Отчёты и Статистика', icon: 'bar_chart', requiresPermission: 'access.reports' }
       },
       {
         path: 'employee-reports',
         name: 'employee-reports',
         component: () => import('src/pages/EmployeeReportsPage.vue'),
-        meta: { title: 'Отчёты по сотрудникам', icon: 'assessment' }
+        meta: { title: 'Отчёты по сотрудникам', icon: 'assessment', requiresPermission: 'access.employee_reports' }
       },
       {
         path: 'admin',
         name: 'admin',
         component: () => import('src/pages/AdminPage.vue'),
-        meta: { title: 'Администрирование', icon: 'admin_panel_settings' }
+        meta: { title: 'Администрирование', icon: 'admin_panel_settings', requiresPermission: 'access.admin' }
       },
       {
         path: 'notifications',

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { crmApi } from 'src/services/api'
+import { useAuthStore } from './auth'
 
 // Колонки CRM доски — ТОЧНЫЕ названия из десктопа
 const COLUMNS_INDIVIDUAL = [
@@ -43,7 +44,7 @@ export const useCrmStore = defineStore('crm', () => {
       grouped[col] = []
     }
 
-    for (const card of cards.value) {
+    for (const card of filteredCards.value) {
       const col = card.column_name || 'Новый заказ'
       if (!grouped[col]) {
         grouped[col] = []
@@ -61,7 +62,62 @@ export const useCrmStore = defineStore('crm', () => {
       }))
   })
 
-  const totalCards = computed(() => cards.value.length)
+  const totalCards = computed(() => filteredCards.value.length)
+
+  // Фильтрация карточек по роли текущего пользователя (как в десктопе crm_tab.py:1473-1525)
+  function hasPos(...positions) {
+    const auth = useAuthStore()
+    const pos = auth.user?.position || ''
+    const secPos = auth.user?.secondary_position || ''
+    return positions.includes(pos) || positions.includes(secPos)
+  }
+
+  const filteredCards = computed(() => {
+    const auth = useAuthStore()
+    if (!auth.user) return cards.value
+
+    // Руководитель и старший менеджер видят всё
+    if (hasPos('Руководитель студии', 'Старший менеджер проектов')) return cards.value
+
+    const empId = auth.user.id
+    const empName = auth.user.full_name || ''
+
+    return cards.value.filter(card => {
+      // Менеджер — по manager_id
+      if (hasPos('Менеджер') && card.manager_id === empId) return true
+
+      // ГАП — по gap_id
+      if (hasPos('ГАП') && card.gap_id === empId) return true
+
+      // СДП — по sdp_id
+      if (hasPos('СДП') && card.sdp_id === empId) return true
+
+      // Дизайнер — только на Стадии 2 по designer_name
+      if (hasPos('Дизайнер')) {
+        const col = card.column_name || ''
+        if (col.includes('Стадия 2') || col.includes('концепция') || col.includes('визуализац')) {
+          if (card.designer_name === empName) return true
+        }
+      }
+
+      // Чертёжник — по draftsman_name на допустимых стадиях
+      if (hasPos('Чертёжник')) {
+        const col = card.column_name || ''
+        const isTemplate = card.project_type === 'Шаблонный'
+        const allowed = isTemplate
+          ? ['Стадия 1', 'Стадия 2']
+          : ['Стадия 1', 'Стадия 3']
+        if (allowed.some(s => col.includes(s)) && card.draftsman_name === empName) return true
+      }
+
+      // Замерщик — по surveyor_id, если замер не загружен
+      if (hasPos('Замерщик') && card.surveyor_id === empId) {
+        if (!card.measurement_image_link && !card.survey_date) return true
+      }
+
+      return false
+    })
+  })
 
   async function loadCards() {
     loading.value = true
@@ -98,7 +154,7 @@ export const useCrmStore = defineStore('crm', () => {
   }
 
   return {
-    cards, loading, projectType, showArchive, selectedCard, cardLoading,
+    cards, filteredCards, loading, projectType, showArchive, selectedCard, cardLoading,
     columns, totalCards,
     loadCards, loadCard, setProjectType, toggleArchive,
     columnOrder, COLUMNS_INDIVIDUAL, COLUMNS_TEMPLATE

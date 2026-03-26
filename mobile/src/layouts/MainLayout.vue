@@ -13,6 +13,10 @@
           CRM FESTIVAL COLOR
         </div>
         <q-space />
+        <!-- Глобальный поиск -->
+        <q-btn flat dense round icon="search" size="sm" color="grey-7" @click="showGlobalSearch = true">
+          <q-tooltip>Поиск</q-tooltip>
+        </q-btn>
         <!-- Обновить сервер (первая) -->
         <q-btn flat dense round icon="refresh" size="sm" color="grey-7" @click="refreshData">
           <q-tooltip>Обновить</q-tooltip>
@@ -108,6 +112,9 @@
             <q-separator class="q-my-xs" />
             <q-item tag="label"><q-item-section>Индивидуальные</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_individual" color="accent" /></q-item-section></q-item>
             <q-item tag="label"><q-item-section>Шаблонные</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_template" color="accent" /></q-item-section></q-item>
+            <q-separator class="q-my-xs" />
+            <q-item tag="label"><q-item-section>Дублирование (подчинённые)</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_duplicates" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Исправления подчинённых</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_subordinate_revisions" color="accent" /></q-item-section></q-item>
           </q-list>
         </q-card-section>
         <q-card-actions align="center">
@@ -115,12 +122,36 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Глобальный поиск -->
+    <q-dialog v-model="showGlobalSearch" position="top" seamless>
+      <q-card style="width: 100%; max-width: 500px; border-radius: 0 0 10px 10px">
+        <q-card-section class="q-pb-none">
+          <q-input v-model="globalQuery" placeholder="Клиент, договор, адрес..." dense outlined autofocus @keyup.enter="doGlobalSearch" class="q-mb-sm">
+            <template v-slot:prepend><q-icon name="search" /></template>
+            <template v-slot:append><q-btn v-if="globalQuery" flat round dense icon="close" size="xs" @click="globalQuery = ''" /></template>
+          </q-input>
+        </q-card-section>
+        <q-list v-if="globalResults.length > 0" separator style="max-height: 400px; overflow-y: auto">
+          <q-item v-for="r in globalResults" :key="`${r.type}-${r.id}`" clickable v-ripple @click="goToResult(r)">
+            <q-item-section avatar><q-icon :name="r.type === 'client' ? 'person' : r.type === 'contract' ? 'description' : 'view_kanban'" :color="r.type === 'client' ? 'green' : r.type === 'contract' ? 'blue' : 'orange'" /></q-item-section>
+            <q-item-section>
+              <q-item-label>{{ r.title }}</q-item-label>
+              <q-item-label caption>{{ r.subtitle }}</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else-if="globalSearched && globalQuery" class="text-center" style="color: #999; font-size: 12px">
+          Ничего не найдено
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-layout>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 import { useNotificationsStore } from 'src/stores/notifications'
@@ -129,6 +160,7 @@ import { usePermissionsStore } from 'src/stores/permissions'
 
 const $q = useQuasar()
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
 const referencesStore = useReferencesStore()
@@ -136,6 +168,40 @@ const permsStore = usePermissionsStore()
 
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
+
+// Глобальный поиск
+const showGlobalSearch = ref(false)
+const globalQuery = ref('')
+const globalResults = ref([])
+const globalSearched = ref(false)
+
+async function doGlobalSearch() {
+  if (!globalQuery.value || globalQuery.value.length < 2) return
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const { data } = await ax.get('/api/v1/search/global', { params: { q: globalQuery.value } })
+    globalResults.value = (data.results || data || []).map(r => ({
+      type: r.type || 'client',
+      id: r.id,
+      title: r.title || r.name || r.full_name || r.contract_number || '',
+      subtitle: r.subtitle || r.address || r.phone || ''
+    }))
+    globalSearched.value = true
+  } catch {
+    globalResults.value = []
+    globalSearched.value = true
+  }
+}
+
+function goToResult(r) {
+  showGlobalSearch.value = false
+  globalQuery.value = ''
+  globalResults.value = []
+  globalSearched.value = false
+  if (r.type === 'client') router.push(`/clients/${r.id}`)
+  else if (r.type === 'contract') router.push(`/contracts/${r.id}`)
+  else if (r.type === 'crm_card') router.push(`/crm/${r.id}`)
+}
 
 onMounted(() => {
   notificationsStore.load()

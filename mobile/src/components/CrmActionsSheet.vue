@@ -8,7 +8,7 @@
 
       <q-list>
         <!-- Переместить в колонку -->
-        <q-expansion-item icon="swap_horiz" label="Переместить" dense>
+        <q-expansion-item v-if="can('crm_cards.move')" icon="swap_horiz" label="Переместить" dense>
           <q-list dense class="q-pl-md">
             <q-item
               v-for="col in availableColumns"
@@ -31,7 +31,7 @@
         </q-expansion-item>
 
         <!-- Назначить исполнителя -->
-        <q-expansion-item icon="person_add" label="Назначить исполнителя" dense>
+        <q-expansion-item v-if="can('crm_cards.assign_executor')" icon="person_add" label="Назначить исполнителя" dense>
           <div class="q-pa-md">
             <q-select
               v-model="assignForm.stage_name"
@@ -74,7 +74,7 @@
         </q-expansion-item>
 
         <!-- Изменить дедлайн -->
-        <q-expansion-item icon="event" label="Изменить дедлайн" dense>
+        <q-expansion-item v-if="can('crm_cards.deadlines')" icon="event" label="Изменить дедлайн" dense>
           <div class="q-pa-md">
             <q-input
               v-model="newDeadline"
@@ -108,6 +108,9 @@
 import { ref, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { crmApi, employeesApi } from 'src/services/api'
+import { usePermission } from 'src/composables/usePermission'
+
+const { can } = usePermission()
 
 const props = defineProps({
   modelValue: Boolean,
