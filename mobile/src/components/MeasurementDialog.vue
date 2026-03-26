@@ -36,13 +36,14 @@
             class="q-mb-sm" style="max-height: 200px" :pagination="{ rowsPerPage: 0 }" hide-pagination>
             <template v-slot:body-cell-destination="props">
               <q-td :props="props">
-                <q-select v-model="props.row.destination" :options="['Замер', 'Фотофиксация']" dense outlined
-                  :style="{ color: props.row.destination === 'Замер' ? '#1677FF' : '#52C41A', fontSize: '11px', width: '130px' }" />
+                <q-select v-model="props.row.destination" :options="['Замер', 'Фотофиксация']" dense outlined options-dense
+                  :style="{ color: props.row.destination === 'Замер' ? '#1677FF' : '#52C41A', fontSize: '11px', width: '130px' }"
+                  popup-content-style="font-size: 12px" />
               </q-td>
             </template>
             <template v-slot:body-cell-remove="props">
               <q-td :props="props">
-                <q-btn flat round dense size="xs" icon="delete" color="negative" @click="fetchedFiles.splice(props.rowIndex, 1)" />
+                <q-btn flat round dense size="sm" icon="delete_outline" color="negative" style="border: 1px solid #E57373; width: 28px; height: 28px" @click="fetchedFiles.splice(props.rowIndex, 1)" />
               </q-td>
             </template>
           </q-table>
@@ -202,10 +203,24 @@ async function uploadFromLink() {
       uploadProgress.value = (i + 1) / total
     }
 
+    // Получаем публичные ссылки на папки Замер и Фотофиксация
+    const hasMeas = fetchedFiles.value.some(f => f.destination === 'Замер')
+    const hasPhoto = fetchedFiles.value.some(f => f.destination === 'Фотофиксация')
+    try {
+      if (hasMeas) {
+        const { data: ml } = await filesApi.getPublicLink(`${cfClean}/Замер`)
+        measLink = ml.public_link || ''
+      }
+      if (hasPhoto) {
+        const { data: pl } = await filesApi.getPublicLink(`${cfClean}/Фотофиксация`)
+        photoLink = pl.public_link || ''
+      }
+    } catch {}
+
     uploadedMeasLink.value = measLink
     uploadedPhotoLink.value = photoLink
 
-    // Обновляем contracts
+    // Обновляем contracts (как десктоп)
     if (props.contractId) {
       const update = {}
       if (measLink) {
@@ -216,6 +231,11 @@ async function uploadFromLink() {
       if (Object.keys(update).length > 0) {
         await contractsApi.update(props.contractId, update)
       }
+    }
+
+    // Автоматический scan — чтобы файлы появились в project_files (синхронизация)
+    if (props.contractId) {
+      try { await ax.post(`/api/v1/files/scan/${props.contractId}`) } catch {}
     }
 
     $q.notify({ type: 'positive', message: `Загружено ${total} файл(ов) на ЯД` })
@@ -245,6 +265,16 @@ async function save() {
             measurement_yandex_path: ydPath,
             measurement_file_name: selectedFile.value.name,
           })
+          // Создаём запись в project_files + scan для синхронизации
+          try {
+            await ax.post('/api/v1/files/', {
+              contract_id: props.contractId, stage: 'measurement',
+              file_type: selectedFile.value.type?.includes('image') ? 'image' : 'pdf',
+              public_link: pubLink, yandex_path: ydPath, file_name: selectedFile.value.name,
+              file_order: 0, variation: 1
+            })
+          } catch {}
+          try { await ax.post(`/api/v1/files/scan/${props.contractId}`) } catch {}
         }
       }
     }
