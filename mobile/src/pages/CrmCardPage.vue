@@ -87,30 +87,30 @@
             </q-list>
           </q-card>
 
-          <!-- Прогресс стадий -->
-          <q-card class="is-card q-mb-md" v-if="stageExecutors.length > 0">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Прогресс стадий</div></q-card-section>
-            <q-list dense>
-              <q-item v-for="se in stageExecutors" :key="se.id">
-                <q-item-section avatar><q-icon :name="se.completed ? 'check_circle' : 'radio_button_unchecked'" :color="se.completed ? 'positive' : 'grey-5'" size="18px" /></q-item-section>
-                <q-item-section><q-item-label style="font-size: 11px">{{ se.stage_name }}</q-item-label><q-item-label caption>{{ se.executor_name || 'Не назначен' }}</q-item-label></q-item-section>
-                <q-item-section side v-if="se.completed_date"><div class="text-caption" style="color: #27AE60">{{ fmtDateShort(se.completed_date) }}</div></q-item-section>
-              </q-item>
-            </q-list>
-          </q-card>
-
           <!-- Workflow действия (всегда видимы) -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
-            <q-list dense>
-              <q-item v-if="card.workflow_status === 'in_progress'" clickable v-ripple @click="doAction('submit')"><q-item-section avatar><q-icon name="send" color="positive" /></q-item-section><q-item-section>Сдать работу</q-item-section></q-item>
-              <q-item v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('accept')"><q-item-section avatar><q-icon name="check_circle" color="positive" /></q-item-section><q-item-section>Принять</q-item-section></q-item>
-              <q-item v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" clickable v-ripple @click="showRejectDialog = true"><q-item-section avatar><q-icon name="replay" color="negative" /></q-item-section><q-item-section>На исправление</q-item-section></q-item>
-              <q-item v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" clickable v-ripple @click="doAction('client-send')"><q-item-section avatar><q-icon name="forward_to_inbox" style="color: #3498DB" /></q-item-section><q-item-section>Отправить клиенту</q-item-section></q-item>
-              <q-item v-if="can('crm_cards.complete_approval') && card.workflow_status === 'client_approval'" clickable v-ripple @click="doAction('client-approved')"><q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section><q-item-section>Клиент согласовал</q-item-section></q-item>
-              <q-item v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" clickable v-ripple @click="doAction('sign-act')"><q-item-section avatar><q-icon name="draw" style="color: #333" /></q-item-section><q-item-section>Акт подписан</q-item-section></q-item>
-              <q-item v-if="!card.workflow_status"><q-item-section class="text-center" style="color: #999; font-size: 12px">Нет активного рабочего процесса</q-item-section></q-item>
-            </q-list>
+            <q-card-section>
+              <!-- Сдать работу -->
+              <q-btn v-if="card.workflow_status === 'in_progress'" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('submit')" :loading="actionLoading" />
+
+              <!-- Проверяющий: Клиенту + На исправление -->
+              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" class="row q-gutter-sm q-mb-sm">
+                <q-btn unelevated dense no-caps icon="forward_to_inbox" label="Отправить клиенту" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('client-send')" :loading="actionLoading" />
+                <q-btn unelevated dense no-caps icon="replay" label="На исправление" style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="showRejectDialog = true" />
+              </div>
+
+              <!-- Клиент согласовал -->
+              <q-btn v-if="can('crm_cards.complete_approval') && card.workflow_status === 'client_approval'" unelevated dense no-caps icon="thumb_up" label="Клиент согласовал" class="full-width q-mb-sm" style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('client-approved')" :loading="actionLoading" />
+
+              <!-- Акт -->
+              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" class="row q-gutter-sm q-mb-sm">
+                <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('client-send')" :loading="actionLoading" />
+                <q-btn unelevated dense no-caps icon="draw" label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('sign-act')" :loading="actionLoading" />
+              </div>
+
+              <div v-if="!card.workflow_status" class="text-center" style="color: #999; font-size: 12px; padding: 8px 0">Нет активного рабочего процесса</div>
+            </q-card-section>
           </q-card>
         </q-tab-panel>
 
@@ -119,20 +119,22 @@
           <q-card class="is-card">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div></q-card-section>
             <q-list dense separator v-if="timelineEntries.length > 0">
-              <q-item v-for="e in timelineEntries" :key="e.id" :class="{ 'bg-green-1': e.actual_date }" :style="e.executor_role === 'header' ? 'background: #F5F5F5' : ''">
-                <q-item-section avatar v-if="e.executor_role !== 'header'">
-                  <q-icon :name="e.actual_date ? 'check_circle' : 'radio_button_unchecked'" :color="e.actual_date ? 'positive' : 'grey-5'" size="18px" />
+              <q-item v-for="e in timelineEntries" :key="e.id" :style="timelineRowStyle(e)">
+                <q-item-section avatar v-if="e.executor_role !== 'header'" style="min-width: 24px">
+                  <q-icon :name="timelineIcon(e)" :color="timelineIconColor(e)" size="18px" />
                 </q-item-section>
                 <q-item-section :style="e.executor_role === 'header' ? 'padding-left: 4px' : ''">
-                  <q-item-label :style="{ fontSize: e.executor_role === 'header' ? '13px' : '11px', color: '#333', fontWeight: e.executor_role === 'header' ? 'bold' : 'normal' }">{{ e.stage_name }}</q-item-label>
-                  <q-item-label v-if="e.executor_role !== 'header'" caption style="color: #888">
+                  <q-item-label :style="{ fontSize: e.executor_role === 'header' ? '12px' : '11px', color: '#333', fontWeight: e.executor_role === 'header' || isActiveSubstep(e) ? 'bold' : 'normal' }">{{ e.stage_name }}</q-item-label>
+                  <q-item-label v-if="e.executor_role !== 'header'" caption :style="{ color: isOverdue(e) ? '#E74C3C' : '#888' }">
                     <span v-if="e.norm_days">Норма: {{ e.custom_norm_days || e.norm_days }} дн.</span>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
                     <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
+                    <span v-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
+                    <span v-else-if="e.actual_date && !isOverdue(e)" style="color: #27AE60"> | В срок</span>
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side v-if="e.actual_date">
-                  <div class="text-caption" style="color: #27AE60">{{ fmtDateShort(e.actual_date) }}</div>
+                  <div class="text-caption" :style="{ color: isOverdue(e) ? '#E74C3C' : '#27AE60' }">{{ fmtDateShort(e.actual_date) }}</div>
                 </q-item-section>
               </q-item>
             </q-list>
@@ -220,8 +222,10 @@
               </q-item>
             </q-list>
             <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
+            <div class="q-pb-sm" />
           </q-card>
 
+          <div class="q-mb-xl" />
           <input ref="crmFileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" multiple @change="handleCrmFileUpload" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg" />
         </q-tab-panel>
 
@@ -599,6 +603,39 @@ function dlBadgeColor(d) { if (!d) return 'grey'; const days = Math.ceil((new Da
 function daysLeft(d) { if (!d) return ''; const days = Math.ceil((new Date(d)-new Date())/86400000); if (days<0) return `${Math.abs(days)} дн. просрочено`; if (days===0) return 'сегодня'; return `${days} дн.` }
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) }
 function fmtDateShort(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
+
+// Таймлайн: просрочен если actual_days > norm_days (как десктоп timeline_widget.py:828-834)
+function isOverdue(e) {
+  if (!e.actual_date || e.executor_role === 'header') return false
+  const norm = e.custom_norm_days || e.norm_days || 0
+  return norm > 0 && (e.actual_days || 0) > norm
+}
+// Текущий активный подэтап (current_substep_code)
+function isActiveSubstep(e) {
+  return e.stage_code && card.value?.current_substep_code === e.stage_code && !e.actual_date
+}
+function timelineRowStyle(e) {
+  if (e.executor_role === 'header') return 'background: #F5F5F5'
+  if (isActiveSubstep(e)) return 'border: 2px solid #4CAF50; border-radius: 4px'
+  if (e.actual_date && isOverdue(e)) return 'background: #FFEBEE'
+  if (e.actual_date && !isOverdue(e)) return 'background: #E8F5E9'
+  if (e.status === 'skipped') return 'background: #F5F5F5; opacity: 0.6'
+  return ''
+}
+function timelineIcon(e) {
+  if (e.executor_role === 'header') return ''
+  if (isActiveSubstep(e)) return 'play_circle'
+  if (e.actual_date) return 'check_circle'
+  if (e.status === 'skipped') return 'skip_next'
+  return 'radio_button_unchecked'
+}
+function timelineIconColor(e) {
+  if (isActiveSubstep(e)) return 'positive'
+  if (e.actual_date && isOverdue(e)) return 'negative'
+  if (e.actual_date) return 'positive'
+  if (e.status === 'skipped') return 'grey-4'
+  return 'grey-5'
+}
 function fmtDateTime(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }
 function fmtMoney(v) { if (!v) return '0 ₽'; return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v) }
 function openLink(url) { if (url) window.open(url, '_blank') }

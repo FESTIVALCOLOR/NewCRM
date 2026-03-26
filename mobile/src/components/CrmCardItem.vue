@@ -107,6 +107,7 @@ import { ref, computed } from 'vue'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
+import { countWorkingDaysUntil } from 'src/composables/useDeadline'
 
 const props = defineProps({ card: { type: Object, required: true } })
 const emit = defineEmits(['click', 'longpress', 'submit-work', 'accept', 'reject', 'client-send', 'client-approved', 'sign-act'])
@@ -173,9 +174,10 @@ const stageDeadline = computed(() => {
   return c.deadline
 })
 
+// Рабочие дни (как десктоп — без выходных и праздников РФ)
 const deadlineDays = computed(() => {
   if (!stageDeadline.value) return null
-  return Math.ceil((new Date(stageDeadline.value) - new Date()) / 86400000)
+  return countWorkingDaysUntil(stageDeadline.value)
 })
 const deadlineText = computed(() => {
   if (deadlineDays.value === null) return null
@@ -183,7 +185,7 @@ const deadlineText = computed(() => {
   const days = deadlineDays.value
   if (days < 0) return `${d} ПРОСРОЧЕН (${Math.abs(days)} раб.дн.)`
   if (days === 0) return `${d} СЕГОДНЯ!`
-  return `${d} (${days} дн.)`
+  return `${d} (${days} раб.дн.)`
 })
 const deadlineBg = computed(() => {
   const days = deadlineDays.value

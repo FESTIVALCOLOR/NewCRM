@@ -26,6 +26,36 @@ function isWorkingDay(date) {
 }
 
 /**
+ * Подсчитать рабочие дни между сегодня и датой дедлайна.
+ * Положительное = дней осталось, отрицательное = просрочка.
+ * @param {string} deadlineDateStr - 'YYYY-MM-DD'
+ * @returns {number} рабочих дней (+ или -)
+ */
+export function countWorkingDaysUntil(deadlineDateStr) {
+  if (!deadlineDateStr) return 0
+  const parts = deadlineDateStr.split('-')
+  if (parts.length !== 3) return 0
+  const deadline = new Date(+parts[0], +parts[1] - 1, +parts[2])
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  deadline.setHours(0, 0, 0, 0)
+
+  if (deadline.getTime() === today.getTime()) return 0
+
+  const forward = deadline > today
+  const start = forward ? new Date(today) : new Date(deadline)
+  const end = forward ? deadline : today
+  let count = 0
+  const current = new Date(start)
+  current.setDate(current.getDate() + 1)
+  while (current <= end) {
+    if (isWorkingDay(current)) count++
+    current.setDate(current.getDate() + 1)
+  }
+  return forward ? count : -count
+}
+
+/**
  * Добавить рабочие дни к дате (пропуская выходные и праздники РФ).
  * @param {string} startDateStr - 'YYYY-MM-DD'
  * @param {number} workingDays - количество рабочих дней

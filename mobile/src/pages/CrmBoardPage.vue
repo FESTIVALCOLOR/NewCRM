@@ -170,7 +170,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
-import { crmApi, employeesApi, contractsApi } from 'src/services/api'
+import { crmApi, employeesApi, contractsApi, paymentsApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
@@ -380,6 +380,33 @@ async function doMoveWithAssign() {
       executor_id: moveExecutorId.value,
       deadline: moveDeadline.value || null
     })
+    // Создаём оплату исполнителю (как десктоп ExecutorSelectionDialog + CrmCardPage.doAssign)
+    try {
+      const roleName = getStageRole(moveTargetCol.value) || 'Чертёжник'
+      const isTemplate = moveCard.value.project_type === 'Шаблонный'
+      // Шаблонные: СМ и Менеджер не получают оплату
+      if (!(isTemplate && ['Старший менеджер проектов', 'Менеджер'].includes(roleName))) {
+        const calcRes = await paymentsApi.calculate({
+          contract_id: moveCard.value.contract_id,
+          employee_id: moveExecutorId.value,
+          role: roleName
+        })
+        const fullAmount = calcRes.data?.amount || calcRes.data?.full_amount || 0
+        if (fullAmount > 0) {
+          const month = new Date().toISOString().slice(0, 7)
+          await paymentsApi.create({
+            contract_id: moveCard.value.contract_id,
+            employee_id: moveExecutorId.value,
+            role: roleName,
+            payment_type: 'Полная оплата',
+            crm_card_id: moveCard.value.id,
+            calculated_amount: fullAmount,
+            final_amount: fullAmount,
+            report_month: null
+          })
+        }
+      }
+    } catch { /* оплата опциональна */ }
     $q.notify({ type: 'positive', message: `Перемещено + исполнитель назначен` })
     moveDialogVisible.value = false
     crmStore.loadCards()
