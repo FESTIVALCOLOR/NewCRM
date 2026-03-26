@@ -88,12 +88,18 @@
           <q-btn unelevated dense no-caps label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('sign-act')" />
         </div>
 
-        <!-- Строка 2: Данные карточки -->
+        <!-- Строка 2: Добавить замер / ТЗ (как десктоп crm_tab.py:2754-2826) -->
+        <div v-if="showAddMeasurement || showAddTechTask" class="row q-gutter-xs q-mb-xs">
+          <q-btn v-if="showAddMeasurement" unelevated dense no-caps icon="photo_camera" label="Добавить замер" style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1" @click.stop="emit('add-measurement')" />
+          <q-btn v-if="showAddTechTask" unelevated dense no-caps icon="description" label="Добавить ТЗ" style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1" @click.stop="emit('add-tech-task')" />
+        </div>
+
+        <!-- Строка 3: Данные карточки -->
         <div class="q-mb-xs">
           <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" @click="emit('click')" />
         </div>
 
-        <!-- Строка 3: Переместить -->
+        <!-- Строка 4: Переместить -->
         <div>
           <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; width: 100%" @click="emit('longpress')" />
         </div>
@@ -110,7 +116,7 @@ import { usePermission } from 'src/composables/usePermission'
 import { countWorkingDaysUntil } from 'src/composables/useDeadline'
 
 const props = defineProps({ card: { type: Object, required: true } })
-const emit = defineEmits(['click', 'longpress', 'submit-work', 'accept', 'reject', 'client-send', 'client-approved', 'sign-act'])
+const emit = defineEmits(['click', 'longpress', 'submit-work', 'accept', 'reject', 'client-send', 'client-approved', 'sign-act', 'add-measurement', 'add-tech-task'])
 
 const showTeam = ref(false)
 const refs = useReferencesStore()
@@ -241,6 +247,20 @@ const showWaitReview = computed(() => {
 const canApprove = computed(() => ws.value === 'pending_review' && can('crm_cards.complete_approval'))
 const canClientApproved = computed(() => ws.value === 'client_approval' && can('crm_cards.complete_approval'))
 const canSignAct = computed(() => ws.value === 'act_signing' && can('crm_cards.complete_approval'))
+
+// Добавить замер: нет measurement_image_link И нет survey_date + (crm_cards.update ИЛИ замерщик)
+const isSurveyor = computed(() => empPosition.value === 'Замерщик')
+const showAddMeasurement = computed(() => {
+  const c = props.card
+  const hasMeas = c.measurement_image_link || c.survey_date
+  return !hasMeas && (can('crm_cards.update') || isSurveyor.value)
+})
+// Добавить ТЗ: нет tech_task_link И нет tech_task_file + crm_cards.update + не замерщик
+const showAddTechTask = computed(() => {
+  const c = props.card
+  const hasTT = c.tech_task_link || c.tech_task_file
+  return !hasTT && can('crm_cards.update') && !isSurveyor.value
+})
 </script>
 
 <style scoped>

@@ -35,7 +35,7 @@
           <q-icon name="archive" size="40px" class="q-mb-sm" />
           <div class="text-caption">{{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}</div>
         </div>
-        <crm-card-item v-for="card in archiveFiltered" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" />
+        <crm-card-item v-for="card in archiveFiltered" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openCard(card.id)" />
       </div>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
@@ -69,7 +69,7 @@
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openCard(card.id)" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" />
@@ -95,7 +95,7 @@
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openCard(card.id)" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
@@ -161,6 +161,7 @@
         </template>
       </q-card>
     </q-dialog>
+    <measurement-dialog v-model="showMeasDialog" :card-id="measCardId" :contract-id="measContractId" :contract-data="measContractData" @saved="onMeasurementSaved" />
     <page-dashboard :items="dashItems" />
   </q-page>
 </template>
@@ -175,6 +176,7 @@ import { usePermission } from 'src/composables/usePermission'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 import PageDashboard from 'src/components/PageDashboard.vue'
+import MeasurementDialog from 'src/components/MeasurementDialog.vue'
 
 const { can } = usePermission()
 
@@ -191,6 +193,10 @@ const moveDeadline = ref('')
 const moveLoading = ref(false)
 const employeeOpts = ref([])
 const completionStatus = ref('СДАН')
+const showMeasDialog = ref(false)
+const measCardId = ref(null)
+const measContractId = ref(null)
+const measContractData = ref(null)
 const terminationReason = ref('')
 const archiveSearch = ref('')
 
@@ -251,6 +257,17 @@ watch(() => crmStore.columns, (cols) => {
 })
 
 function openCard(cardId) { router.push(`/crm/${cardId}`) }
+
+async function openMeasurementDialog(card) {
+  measCardId.value = card.id
+  measContractId.value = card.contract_id
+  try {
+    const { data } = await contractsApi.getById(card.contract_id)
+    measContractData.value = data
+  } catch { measContractData.value = null }
+  showMeasDialog.value = true
+}
+function onMeasurementSaved() { crmStore.loadCards() }
 
 async function doCardAction(cardId, action) {
   try {

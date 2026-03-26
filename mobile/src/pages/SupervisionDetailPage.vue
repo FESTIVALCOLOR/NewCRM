@@ -31,25 +31,31 @@
           <div class="text-subtitle2 text-weight-bold">Команда</div>
         </q-card-section>
         <q-list dense>
-          <q-item v-if="card.dan_name">
+          <q-item v-if="card.dan_name || can('supervision.assign_executor')">
             <q-item-section avatar>
-              <q-avatar size="32px" color="orange-2" text-color="orange-8">{{ card.dan_name[0] }}</q-avatar>
+              <q-avatar size="32px" color="orange-2" text-color="orange-8">{{ card.dan_name ? card.dan_name[0] : '?' }}</q-avatar>
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ card.dan_name }}</q-item-label>
+              <q-item-label>{{ card.dan_name || 'Не назначен' }}</q-item-label>
               <q-item-label caption>ДАН</q-item-label>
             </q-item-section>
-            <q-item-section side v-if="card.dan_completed">
-              <q-icon name="check_circle" color="positive" />
+            <q-item-section side>
+              <div class="row q-gutter-xs">
+                <q-icon v-if="card.dan_completed" name="check_circle" color="positive" />
+                <q-btn v-if="can('supervision.assign_executor')" flat round dense size="xs" icon="edit" color="grey-7" @click="showReassignDan = true"><q-tooltip>Переназначить</q-tooltip></q-btn>
+              </div>
             </q-item-section>
           </q-item>
-          <q-item v-if="card.senior_manager_name">
+          <q-item v-if="card.senior_manager_name || can('supervision.assign_executor')">
             <q-item-section avatar>
-              <q-avatar size="32px" color="blue-2" text-color="blue-8">{{ card.senior_manager_name[0] }}</q-avatar>
+              <q-avatar size="32px" color="blue-2" text-color="blue-8">{{ card.senior_manager_name ? card.senior_manager_name[0] : '?' }}</q-avatar>
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ card.senior_manager_name }}</q-item-label>
+              <q-item-label>{{ card.senior_manager_name || 'Не назначен' }}</q-item-label>
               <q-item-label caption>Ст. менеджер</q-item-label>
+            </q-item-section>
+            <q-item-section side v-if="can('supervision.assign_executor')">
+              <q-btn flat round dense size="xs" icon="edit" color="grey-7" @click="showReassignSM = true"><q-tooltip>Переназначить</q-tooltip></q-btn>
             </q-item-section>
           </q-item>
           <q-item v-if="card.studio_director_name">
@@ -221,6 +227,30 @@
         </q-card>
       </q-dialog>
 
+      <!-- Диалог переназначения ДАН -->
+      <q-dialog v-model="showReassignDan" @show="loadReassignOptions">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #F39C12; color: white"><q-toolbar-title style="font-size: 14px">Переназначить ДАН</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+          <q-card-section>
+            <div v-if="card.dan_name" class="q-mb-sm" style="background: #FFF3CD; padding: 8px; border-radius: 4px; font-size: 12px">Текущий: <b>{{ card.dan_name }}</b></div>
+            <q-select v-model="newDanId" :options="danOptions" option-value="id" option-label="label" label="Новый ДАН" outlined dense emit-value map-options />
+          </q-card-section>
+          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Переназначить" no-caps style="background: #F39C12; color: white; border-radius: 4px" @click="reassignDan" /></q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- Диалог переназначения Ст. менеджера -->
+      <q-dialog v-model="showReassignSM" @show="loadReassignOptions">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #3498DB; color: white"><q-toolbar-title style="font-size: 14px">Переназначить Ст. менеджера</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+          <q-card-section>
+            <div v-if="card.senior_manager_name" class="q-mb-sm" style="background: #D6EAF8; padding: 8px; border-radius: 4px; font-size: 12px">Текущий: <b>{{ card.senior_manager_name }}</b></div>
+            <q-select v-model="newSMId" :options="smOptions" option-value="id" option-label="label" label="Новый Ст. менеджер" outlined dense emit-value map-options />
+          </q-card-section>
+          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Переназначить" no-caps style="background: #3498DB; color: white; border-radius: 4px" @click="reassignSM" /></q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <!-- Действия -->
       <q-card class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
@@ -255,7 +285,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { supervisionApi, filesApi } from 'src/services/api'
+import { supervisionApi, filesApi, employeesApi, paymentsApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 
 const { can } = usePermission()
@@ -268,6 +298,12 @@ const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
 const showAddVisit = ref(false)
+const showReassignDan = ref(false)
+const showReassignSM = ref(false)
+const newDanId = ref(null)
+const newSMId = ref(null)
+const danOptions = ref([])
+const smOptions = ref([])
 const showEditEntry = ref(false)
 const editEntry = ref(null)
 const cameraInput = ref(null)
@@ -465,6 +501,53 @@ async function uploadFile(file) {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки' })
   } finally {
     $q.loading.hide()
+  }
+}
+
+async function loadReassignOptions() {
+  try {
+    const { data } = await employeesApi.getList()
+    const active = (data || []).filter(e => e.status === 'активный')
+    danOptions.value = active.filter(e => e.position === 'ДАН' || e.position === 'Руководитель студии').map(e => ({ id: e.id, label: e.full_name }))
+    smOptions.value = active.filter(e => e.position === 'Старший менеджер проектов' || e.position === 'Руководитель студии').map(e => ({ id: e.id, label: e.full_name }))
+  } catch {}
+}
+
+async function reassignDan() {
+  if (!newDanId.value || !card.value?.id) return
+  try {
+    const oldDanId = card.value.dan_id
+    await supervisionApi.updateCard(card.value.id, { dan_id: newDanId.value })
+
+    // Двойная запись оплат ДАН (как десктоп SupervisionReassignDANDialog)
+    if (oldDanId && oldDanId !== newDanId.value && card.value.contract_id) {
+      try {
+        const { data: payments } = await paymentsApi.getList({ contract_id: card.value.contract_id })
+        const oldPayments = (payments || []).filter(p => p.employee_id === oldDanId && p.role === 'ДАН' && !p.reassigned)
+        for (const op of oldPayments) {
+          await paymentsApi.update(op.id, { reassigned: true })
+          await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: newDanId.value, role: 'ДАН', payment_type: op.payment_type, calculated_amount: op.final_amount, final_amount: op.final_amount, report_month: op.report_month })
+        }
+      } catch {}
+    }
+
+    $q.notify({ type: 'positive', message: 'ДАН переназначен' })
+    showReassignDan.value = false
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+async function reassignSM() {
+  if (!newSMId.value || !card.value?.id) return
+  try {
+    await supervisionApi.updateCard(card.value.id, { senior_manager_id: newSMId.value })
+    $q.notify({ type: 'positive', message: 'Ст. менеджер переназначен' })
+    showReassignSM.value = false
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
 }
 
