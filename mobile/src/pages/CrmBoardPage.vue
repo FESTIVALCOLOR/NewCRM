@@ -35,7 +35,7 @@
           <q-icon name="archive" size="40px" class="q-mb-sm" />
           <div class="text-caption">{{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}</div>
         </div>
-        <crm-card-item v-for="card in archiveFiltered" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
+        <crm-card-item v-for="card in archiveFiltered" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" />
       </div>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
@@ -69,7 +69,7 @@
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" />
@@ -95,7 +95,7 @@
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
@@ -251,6 +251,26 @@ watch(() => crmStore.columns, (cols) => {
 })
 
 function openCard(cardId) { router.push(`/crm/${cardId}`) }
+
+async function doCardAction(cardId, action) {
+  try {
+    const actions = {
+      submit: () => crmApi.submitWork(cardId),
+      accept: () => crmApi.acceptWork(cardId),
+      reject: () => crmApi.rejectWork(cardId, { reason: 'Требуются правки' }),
+      'client-send': () => crmApi.sendToClient(cardId),
+      'client-approved': () => crmApi.clientApproved(cardId),
+      'sign-act': () => crmApi.signAct(cardId),
+    }
+    if (actions[action]) {
+      await actions[action]()
+      $q.notify({ type: 'positive', message: 'Действие выполнено' })
+      crmStore.loadCards()
+    }
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
 
 function showMoveDialog(card) {
   if (!can('crm_cards.move')) return

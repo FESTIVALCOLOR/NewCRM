@@ -37,6 +37,9 @@ export const statisticsApi = {
   getProjects: (params = {}) =>
     api.get('/api/v1/statistics/projects', { params }),
 
+  getContractsByPeriod: (params = {}) =>
+    api.get('/api/v1/statistics/contracts-by-period', { params }),
+
   getEmployees: (params = {}) =>
     api.get('/api/v1/statistics/employees', { params })
 }
@@ -239,6 +242,9 @@ export const reportsApi = {
 
   getCrmAnalytics: (params = {}) =>
     api.get('/api/v1/statistics/projects', { params }),
+
+  getCrmAnalyticsDetailed: (params = {}) =>
+    api.get('/api/v1/dashboard/reports/crm-analytics', { params }),
 
   getFunnel: (params = {}) =>
     api.get('/api/v1/statistics/funnel', { params }),

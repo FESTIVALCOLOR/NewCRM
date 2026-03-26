@@ -125,19 +125,21 @@ async def get_contracts_dashboard(
 ):
     """Получить статистику для дашборда страницы Договора"""
     try:
-        # 1-2. Индивидуальные заказы и площадь
+        # 1-3. Индивидуальные заказы, площадь, сумма
         individual_query = db.query(
             func.count(Contract.id),
-            func.coalesce(func.sum(Contract.area), 0)
+            func.coalesce(func.sum(Contract.area), 0),
+            func.coalesce(func.sum(Contract.total_amount), 0)
         ).filter(Contract.project_type == 'Индивидуальный')
-        individual_orders, individual_area = individual_query.first()
+        individual_orders, individual_area, individual_amount = individual_query.first()
 
-        # 3-4. Шаблонные заказы и площадь
+        # 4-6. Шаблонные заказы, площадь, сумма
         template_query = db.query(
             func.count(Contract.id),
-            func.coalesce(func.sum(Contract.area), 0)
+            func.coalesce(func.sum(Contract.area), 0),
+            func.coalesce(func.sum(Contract.total_amount), 0)
         ).filter(Contract.project_type == 'Шаблонный')
-        template_orders, template_area = template_query.first()
+        template_orders, template_area, template_amount = template_query.first()
 
         # 5. Заказы агента за год
         # contract_date хранится как VARCHAR, используем LIKE для поиска года
@@ -164,8 +166,10 @@ async def get_contracts_dashboard(
         return {
             'individual_orders': individual_orders,
             'individual_area': float(individual_area),
+            'individual_amount': float(individual_amount),
             'template_orders': template_orders,
             'template_area': float(template_area),
+            'template_amount': float(template_amount),
             'agent_orders_by_year': agent_orders_by_year,
             'agent_area_by_year': agent_area_by_year
         }

@@ -7,8 +7,9 @@ import re
 import threading
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QProgressBar,
-                             QFileDialog, QTextEdit, QGroupBox, QFrame, QWidget)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+                             QFileDialog, QTextEdit, QGroupBox, QFrame,
+                             QWidget)
+from PyQt5.QtCore import Qt, pyqtSignal
 from config import APP_VERSION
 from ui.custom_title_bar import CustomTitleBar
 from ui.custom_message_box import CustomMessageBox
@@ -23,17 +24,24 @@ class VersionDialog(QDialog):
     # Сигналы для межпоточного общения (надёжнее QTimer.singleShot)
     _sig_upload_ok = pyqtSignal(str)
     _sig_upload_err = pyqtSignal(str)
+    _sig_build_progress = pyqtSignal(str)   # текст прогресса сборки
+    _sig_build_ok = pyqtSignal(str)         # путь к собранному EXE
+    _sig_build_err = pyqtSignal(str)        # ошибка сборки
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setMinimumSize(560, 600)
+        self.setMinimumSize(560, 850)
         self.selected_exe_path = None
         self._is_uploading = False
         self._upload_lock = threading.Lock()
         self._sig_upload_ok.connect(self._upload_success)
         self._sig_upload_err.connect(self._upload_error)
+        self._sig_build_progress.connect(self._on_build_progress)
+        self._sig_build_ok.connect(self._on_build_ok)
+        self._sig_build_err.connect(self._on_build_err)
+        self._is_building = False
         self.init_ui()
 
     def init_ui(self):
@@ -171,6 +179,65 @@ class VersionDialog(QDialog):
         version_group.setLayout(version_layout_inner)
         layout.addWidget(version_group)
 
+        # === Блок сборки EXE ===
+        build_group = QGroupBox("Сборка EXE")
+        build_group.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                font-size: 12px;
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 14px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+            }}
+        """)
+        build_layout = QVBoxLayout()
+        build_layout.setContentsMargins(12, 8, 12, 12)
+
+        self.build_status_label = QLabel("EXE будет собран автоматически после сохранения версии")
+        self.build_status_label.setStyleSheet("color: #666; font-size: 11px; padding: 3px; border: none;")
+        build_layout.addWidget(self.build_status_label)
+
+        self.build_progress = QProgressBar()
+        self.build_progress.setVisible(False)
+        self.build_progress.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                text-align: center;
+                height: 20px;
+            }
+            QProgressBar::chunk {
+                background-color: #2196F3;
+                border-radius: 3px;
+            }
+        """)
+        build_layout.addWidget(self.build_progress)
+
+        self.build_btn = QPushButton("Собрать EXE вручную")
+        self.build_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 6px 15px;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+            QPushButton:disabled { background-color: #cccccc; }
+        """)
+        self.build_btn.clicked.connect(self._start_build)
+        build_layout.addWidget(self.build_btn)
+
+        build_group.setLayout(build_layout)
+        layout.addWidget(build_group)
+
         # === Блок загрузки обновления на Яндекс.Диск ===
         upload_group = QGroupBox("Загрузка обновления на Яндекс.Диск")
         upload_group.setStyleSheet(f"""
@@ -214,12 +281,29 @@ class VersionDialog(QDialog):
         upload_layout.addLayout(file_row)
 
         # Описание изменений
+        changelog_header = QHBoxLayout()
         changelog_label = QLabel("Описание изменений:")
         changelog_label.setStyleSheet("border: none;")
-        upload_layout.addWidget(changelog_label)
+        changelog_header.addWidget(changelog_label)
+        changelog_header.addStretch()
+
+        import_btn = QPushButton("Вставить из changelog")
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f5f5f5; color: #555;
+                padding: 3px 10px; border: 1px solid #d9d9d9;
+                border-radius: 4px; font-size: 10px;
+            }
+            QPushButton:hover { background-color: #e8e8e8; }
+        """)
+        import_btn.clicked.connect(self._import_from_changelog)
+        changelog_header.addWidget(import_btn)
+        upload_layout.addLayout(changelog_header)
+
         self.changelog_input = QTextEdit()
         self.changelog_input.setPlaceholderText("Что нового в этой версии...")
-        self.changelog_input.setMaximumHeight(60)
+        self.changelog_input.setMinimumHeight(120)
+        self.changelog_input.setMaximumHeight(200)
         self.changelog_input.setStyleSheet("font-size: 11px; padding: 3px; border: 1px solid #d9d9d9; border-radius: 4px;")
         upload_layout.addWidget(self.changelog_input)
 
@@ -410,8 +494,64 @@ class VersionDialog(QDialog):
 
         CustomMessageBox(self, "Ошибка", f"Не удалось загрузить обновление:\n{error}", "error").exec_()
 
+    def _import_from_changelog(self):
+        """Импорт описания из docs/changelog.md с очисткой markdown-разметки"""
+        try:
+            changelog_path = resource_path('docs/changelog.md')
+            if not os.path.exists(changelog_path):
+                CustomMessageBox(self, "Ошибка", "Файл docs/changelog.md не найден", "warning").exec_()
+                return
+
+            with open(changelog_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Извлекаем секцию текущей версии (от ## vX.Y.Z до следующего ## или конца)
+            version = self.version_input.text().strip() or APP_VERSION
+            # Ищем секцию версии
+            import re as _re
+            pattern = _re.compile(
+                r'^## v?' + _re.escape(version) + r'.*?\n(.*?)(?=^## |\Z)',
+                _re.MULTILINE | _re.DOTALL
+            )
+            match = pattern.search(content)
+            if not match:
+                # Если точную версию не нашли — берём первую секцию ##
+                pattern2 = _re.compile(r'^## .+?\n(.*?)(?=^## |\Z)', _re.MULTILINE | _re.DOTALL)
+                match = pattern2.search(content)
+
+            if not match:
+                CustomMessageBox(self, "Ошибка", "Не найдена секция версии в changelog.md", "warning").exec_()
+                return
+
+            text = match.group(1).strip()
+
+            # Очистка markdown:
+            # ### Заголовок → Заголовок:
+            text = _re.sub(r'^#{1,4}\s+(.+)$', r'\1:', text, flags=_re.MULTILINE)
+            # **текст** → текст
+            text = _re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+            # - пункт → пункт (убираем маркеры списка)
+            text = _re.sub(r'^(\s*)- ', r'\1', text, flags=_re.MULTILINE)
+            # Убираем лишние пустые строки (более 2 подряд)
+            text = _re.sub(r'\n{3,}', '\n\n', text)
+
+            self.changelog_input.setPlainText(text.strip())
+
+        except Exception as e:
+            CustomMessageBox(self, "Ошибка", f"Не удалось прочитать changelog:\n{e}", "error").exec_()
+
     def save_version(self):
         """Сохранение новой версии в config.py, server/config.py и docker-compose.yml"""
+        import sys
+        if getattr(sys, 'frozen', False):
+            CustomMessageBox(
+                self, "Недоступно",
+                "Изменение версии недоступно из EXE.\n"
+                "Используйте main.py для обновления версии.",
+                "warning"
+            ).exec_()
+            return
+
         new_version = self.version_input.text().strip()
 
         if not re.match(r'^\d+\.\d+\.\d+$', new_version):
@@ -466,7 +606,6 @@ class VersionDialog(QDialog):
             try:
                 from config import API_BASE_URL
                 import requests as _req
-                # Получаем токен из parent (MainWindow)
                 api_client = getattr(self.parent(), 'api_client', None)
                 token = getattr(api_client, 'token', None) if api_client else None
                 if token:
@@ -485,9 +624,12 @@ class VersionDialog(QDialog):
                 msg += "\nСервер обновлён."
             else:
                 msg += "\nСервер будет обновлён после Docker rebuild."
-            msg += "\n\nПерезапустите приложение для применения изменений."
+            msg += "\n\nСборка EXE запущена..."
 
             CustomMessageBox(self, "Успех", msg, "info").exec_()
+
+            # Автоматически запускаем сборку EXE
+            self._start_build()
 
         except Exception as e:
             CustomMessageBox(
@@ -496,9 +638,111 @@ class VersionDialog(QDialog):
                 "error"
             ).exec_()
 
+    def _start_build(self):
+        """Запуск сборки EXE через PyInstaller"""
+        import sys as _sys
+        if getattr(_sys, 'frozen', False):
+            CustomMessageBox(
+                self, "Недоступно",
+                "Сборка EXE недоступна из EXE.\nИспользуйте main.py.",
+                "warning"
+            ).exec_()
+            return
+
+        if self._is_building:
+            return
+
+        self._is_building = True
+        self.build_btn.setEnabled(False)
+        self.build_progress.setVisible(True)
+        self.build_progress.setRange(0, 0)  # indeterminate
+        self.build_status_label.setText("Сборка EXE... (это займёт 1-2 минуты)")
+        self.build_status_label.setStyleSheet("color: #2196F3; font-size: 11px; padding: 3px; border: none;")
+
+        def build_thread():
+            import subprocess as sp
+            try:
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                spec_path = os.path.join(base_dir, 'InteriorStudio.spec')
+                venv_pyinstaller = os.path.join(base_dir, '.venv', 'Scripts', 'pyinstaller.exe')
+
+                if not os.path.exists(venv_pyinstaller):
+                    self._sig_build_err.emit("pyinstaller.exe не найден в .venv")
+                    return
+
+                if not os.path.exists(spec_path):
+                    self._sig_build_err.emit("InteriorStudio.spec не найден")
+                    return
+
+                self._sig_build_progress.emit("Запуск PyInstaller...")
+
+                result = sp.run(
+                    [venv_pyinstaller, spec_path, '--clean', '--noconfirm'],
+                    cwd=base_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=600
+                )
+
+                exe_path = os.path.join(base_dir, 'dist', 'InteriorStudio.exe')
+
+                if result.returncode == 0 and os.path.exists(exe_path):
+                    size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+                    self._sig_build_ok.emit(exe_path)
+                else:
+                    error = result.stderr[-500:] if result.stderr else "Неизвестная ошибка"
+                    self._sig_build_err.emit(f"PyInstaller вернул код {result.returncode}\n{error}")
+
+            except sp.TimeoutExpired:
+                self._sig_build_err.emit("Таймаут сборки (>10 минут)")
+            except Exception as e:
+                self._sig_build_err.emit(str(e))
+
+        thread = threading.Thread(target=build_thread, daemon=True)
+        thread.start()
+
+    def _on_build_progress(self, text):
+        """Обновление статуса сборки"""
+        self.build_status_label.setText(text)
+
+    def _on_build_ok(self, exe_path):
+        """Сборка завершена успешно"""
+        self._is_building = False
+        self.build_btn.setEnabled(True)
+        self.build_progress.setRange(0, 100)
+        self.build_progress.setValue(100)
+
+        size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+        self.build_status_label.setText(f"EXE собран: {size_mb:.0f} МБ")
+        self.build_status_label.setStyleSheet("color: green; font-size: 11px; padding: 3px; border: none;")
+
+        # Автоматически подставляем собранный EXE в секцию загрузки
+        self.selected_exe_path = exe_path
+        self.file_label.setText(f"{os.path.basename(exe_path)} ({size_mb:.1f} МБ)")
+        self.file_label.setStyleSheet("color: #333; font-size: 11px; padding: 3px; border: none;")
+        self.upload_btn.setEnabled(True)
+
+    def _on_build_err(self, error):
+        """Ошибка сборки"""
+        self._is_building = False
+        self.build_btn.setEnabled(True)
+        self.build_progress.setRange(0, 100)
+        self.build_progress.setValue(0)
+        self.build_progress.setVisible(False)
+        self.build_status_label.setText(f"Ошибка сборки")
+        self.build_status_label.setStyleSheet("color: red; font-size: 11px; padding: 3px; border: none;")
+
+        CustomMessageBox(self, "Ошибка сборки", f"Не удалось собрать EXE:\n{error}", "error").exec_()
+
 
 class UpdateDialog(QDialog):
     """Диалог обновления программы"""
+
+    # Сигналы для межпоточного обновления UI
+    _sig_progress = pyqtSignal(int, str)    # progress%, status_text
+    _sig_status = pyqtSignal(str)           # status_text
+    _sig_error = pyqtSignal(str)            # error_msg
+    _sig_indeterminate = pyqtSignal(str)    # status_text (indeterminate progress)
 
     def __init__(self, update_info, parent=None):
         super().__init__(parent)
@@ -506,6 +750,12 @@ class UpdateDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumSize(560, 380)
+
+        self._sig_progress.connect(self._on_progress)
+        self._sig_status.connect(self._on_status)
+        self._sig_error.connect(self._on_error)
+        self._sig_indeterminate.connect(self._on_indeterminate)
+
         self.init_ui()
 
     def init_ui(self):
@@ -552,23 +802,34 @@ class UpdateDialog(QDialog):
         version = self.update_info["version"]
         details = self.update_info.get("details", {})
 
-        info_html = f"""
-        <div style="padding: 10px;">
-            <h2 style="color: #2196F3; margin-bottom: 10px;">Доступна новая версия: {version}</h2>
-            <p style="margin: 5px 0;"><b>Дата выпуска:</b> {details.get('release_date', 'Неизвестно')}</p>
-            <p style="margin: 5px 0;"><b>Размер:</b> {details.get('size_mb', '?')} МБ</p>
-            <br>
-            <p style="margin: 5px 0;"><b>Что нового:</b></p>
-            <p style="margin: 5px 0; padding: 10px; background-color: #f5f5f5; border-left: 3px solid #2196F3;">
-                {details.get('changelog', 'Нет описания изменений')}
-            </p>
-        </div>
+        # Заголовок (версия, дата, размер) — вне скролла
+        header_html = f"""
+        <h2 style="color: #2196F3; margin-bottom: 10px;">Доступна новая версия: {version}</h2>
+        <p style="margin: 5px 0;"><b>Дата выпуска:</b> {details.get('release_date', 'Неизвестно')}</p>
+        <p style="margin: 5px 0;"><b>Размер:</b> {details.get('size_mb', '?')} МБ</p>
         """
+        header_label = QLabel(header_html)
+        header_label.setWordWrap(True)
+        header_label.setStyleSheet("font-size: 12px; border: none;")
+        layout.addWidget(header_label)
 
-        info_label = QLabel(info_html)
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("font-size: 12px; border: none;")
-        layout.addWidget(info_label)
+        # Changelog в скроллируемом read-only поле
+        changelog_text = details.get('changelog', 'Нет описания изменений')
+        whats_new_label = QLabel("<b>Что нового:</b>")
+        whats_new_label.setStyleSheet("font-size: 12px; border: none; margin-top: 5px;")
+        layout.addWidget(whats_new_label)
+
+        changelog_view = QTextEdit()
+        changelog_view.setPlainText(changelog_text)
+        changelog_view.setReadOnly(True)
+        changelog_view.setMinimumHeight(120)
+        changelog_view.setMaximumHeight(300)
+        changelog_view.setStyleSheet(
+            "QTextEdit { font-size: 12px; padding: 8px; "
+            "background-color: #f5f5f5; border: 1px solid #E0E0E0; "
+            "border-left: 3px solid #2196F3; border-radius: 4px; }"
+        )
+        layout.addWidget(changelog_view)
 
         # Прогресс-бар для загрузки
         self.progress_bar = QProgressBar()
@@ -639,6 +900,27 @@ class UpdateDialog(QDialog):
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
 
+    # ── Слоты для сигналов (выполняются в UI-потоке) ──
+
+    def _on_progress(self, percent, text):
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(percent)
+        self.status_label.setText(text)
+
+    def _on_status(self, text):
+        self.status_label.setText(text)
+
+    def _on_indeterminate(self, text):
+        self.progress_bar.setRange(0, 0)
+        self.status_label.setText(text)
+
+    def _on_error(self, msg):
+        self.download_btn.setEnabled(True)
+        self.later_btn.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        self.status_label.setVisible(False)
+        CustomMessageBox(self, "Ошибка", f"Не удалось загрузить обновление:\n{msg}", "error").exec_()
+
     def download_and_install(self):
         """Загрузка и установка обновления"""
         self.download_btn.setEnabled(False)
@@ -650,26 +932,18 @@ class UpdateDialog(QDialog):
         self.progress_bar.setRange(0, 100)
 
         def progress_callback(current, total):
-            """Обновление прогресс-бара"""
             if total > 0:
                 progress = min(int((current / total) * 100), 100)
-                QTimer.singleShot(0, lambda p=progress: self.progress_bar.setValue(p))
-                QTimer.singleShot(0, lambda: self.status_label.setText(
-                    f"Загружено: {current // 1024 // 1024} МБ из {total // 1024 // 1024} МБ"
-                ))
+                self._sig_progress.emit(progress, f"Загружено: {current // 1024 // 1024} МБ из {total // 1024 // 1024} МБ")
             else:
-                QTimer.singleShot(0, lambda: self.progress_bar.setRange(0, 0))
-                QTimer.singleShot(0, lambda: self.status_label.setText(
-                    f"Загружено: {current // 1024 // 1024} МБ"
-                ))
+                self._sig_indeterminate.emit(f"Загружено: {current // 1024 // 1024} МБ")
 
         def download_thread():
-            """Поток загрузки обновления"""
             from utils.update_manager import UpdateManager
             manager = UpdateManager()
 
             try:
-                QTimer.singleShot(0, lambda: self.status_label.setText("Загрузка обновления..."))
+                self._sig_status.emit("Загрузка обновления...")
 
                 update_path = manager.download_update(
                     self.update_info["version"],
@@ -679,8 +953,7 @@ class UpdateDialog(QDialog):
                 if not update_path:
                     raise Exception("Не удалось загрузить обновление")
 
-                QTimer.singleShot(0, lambda: self.status_label.setText("Установка обновления..."))
-                QTimer.singleShot(0, lambda: self.progress_bar.setValue(100))
+                self._sig_progress.emit(100, "Установка обновления...")
 
                 import time
                 time.sleep(0.5)
@@ -688,16 +961,7 @@ class UpdateDialog(QDialog):
                 manager.install_update(update_path)
 
             except Exception as e:
-                error_msg = str(e)
-                QTimer.singleShot(0, lambda: CustomMessageBox(
-                    self, "Ошибка",
-                    f"Не удалось загрузить обновление:\n{error_msg}",
-                    "error"
-                ).exec_())
-                QTimer.singleShot(0, lambda: self.download_btn.setEnabled(True))
-                QTimer.singleShot(0, lambda: self.later_btn.setEnabled(True))
-                QTimer.singleShot(0, lambda: self.progress_bar.setVisible(False))
-                QTimer.singleShot(0, lambda: self.status_label.setVisible(False))
+                self._sig_error.emit(str(e))
 
         thread = threading.Thread(target=download_thread, daemon=True)
         thread.start()

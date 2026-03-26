@@ -389,7 +389,7 @@ class ReportsTab(QWidget):
         grid.setSpacing(12)
 
         self.chart_clients_dynamics = LineChartWidget("Динамика новых клиентов")
-        self.chart_clients_types = ProjectTypePieChart()
+        self.chart_clients_types = ProjectTypePieChart(title="Тип клиентов")
         self.chart_clients_by_agent = HorizontalBarWidget("Клиенты по агентам")
         self.chart_clients_new_vs_returning = StackedBarChartWidget("Новые vs Повторные")
 
@@ -424,6 +424,8 @@ class ReportsTab(QWidget):
             ("individual", "Индивидуальных", "#F57C00"),
             ("template", "Шаблонных", "#C62828"),
             ("amount", "Стоимость", "#F57C00"),
+            ("individual_amount", "Сумма инд.", "#F57C00"),
+            ("template_amount", "Сумма шабл.", "#C62828"),
             ("avg", "Средний чек", "#E91E63"),
         ]
         for key, title, color in items:
@@ -791,6 +793,8 @@ class ReportsTab(QWidget):
                 lambda: self.data_access.get_reports_distribution("agent", **time_filters), [])
             dist_city = _safe_call("dist_city",
                 lambda: self.data_access.get_reports_distribution("city", **time_filters), [])
+            contracts_dash = _safe_call("contracts_dashboard",
+                lambda: self.data_access.get_contracts_dashboard_stats(year=year_filter), {})
 
             self._cache = {
                 "summary": summary or {},
@@ -801,6 +805,7 @@ class ReportsTab(QWidget):
                 "supervision": sv or {},
                 "dist_agent": dist_agent or [],
                 "dist_city": dist_city or [],
+                "contracts_dashboard": contracts_dash or {},
             }
 
             # Обновить UI строго в главном потоке
@@ -1027,6 +1032,7 @@ class ReportsTab(QWidget):
         dynamics = self._cache.get("contracts_dynamics", [])
         dist_agent = self._cache.get("dist_agent", [])
         dist_city = self._cache.get("dist_city", [])
+        self._contracts_dashboard = self._cache.get("contracts_dashboard", {})
 
         # Мини-дашборд
         self._mini_contracts["total"].set_value(str(s.get("total_contracts", 0)))
@@ -1043,6 +1049,16 @@ class ReportsTab(QWidget):
         )
         self._mini_contracts["avg"].set_value(
             f"{avg:,.0f}\u00a0руб".replace(",", "\u00a0")
+        )
+
+        # Суммы инд/шабл (из dashboard/contracts API)
+        ind_amt = self._contracts_dashboard.get("individual_amount", 0) or 0
+        tmpl_amt = self._contracts_dashboard.get("template_amount", 0) or 0
+        self._mini_contracts["individual_amount"].set_value(
+            f"{ind_amt:,.0f}\u00a0руб".replace(",", "\u00a0")
+        )
+        self._mini_contracts["template_amount"].set_value(
+            f"{tmpl_amt:,.0f}\u00a0руб".replace(",", "\u00a0")
         )
 
         # Графики

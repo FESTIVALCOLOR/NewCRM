@@ -325,8 +325,8 @@ class ProjectTypePieChart(ChartBase):
 
     _AXIS_LEFT = None
 
-    def __init__(self, parent=None):
-        super().__init__("Типы проектов", parent)
+    def __init__(self, title="Типы проектов", parent=None):
+        super().__init__(title, parent)
 
     def set_data(self, individual_count, template_count, supervision_count=0):
         if not self.canvas:

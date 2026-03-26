@@ -1,5 +1,5 @@
 <template>
-  <div style="position: relative; height: 220px">
+  <div :style="{ position: 'relative', height: height + 'px' }">
     <Bar :data="chartData" :options="chartOptions" />
   </div>
 </template>
@@ -15,7 +15,9 @@ const props = defineProps({
   labels: { type: Array, required: true },
   datasets: { type: Array, required: true },
   horizontal: { type: Boolean, default: false },
-  stacked: { type: Boolean, default: false }
+  stacked: { type: Boolean, default: false },
+  rotateLabels: { type: Number, default: 0 },
+  height: { type: Number, default: 220 }
 })
 
 const chartData = computed(() => ({
@@ -37,7 +39,15 @@ const chartOptions = computed(() => ({
     legend: { display: props.datasets.length > 1, position: 'bottom', labels: { font: { size: 11 } } }
   },
   scales: {
-    x: { stacked: props.stacked, grid: { display: false }, ticks: { font: { size: 10 } } },
+    x: {
+      stacked: props.stacked,
+      grid: { display: false },
+      ticks: {
+        font: { size: props.rotateLabels ? 8 : 10 },
+        maxRotation: props.rotateLabels || 0,
+        minRotation: props.rotateLabels || 0
+      }
+    },
     y: { stacked: props.stacked, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } }
   }
 }))

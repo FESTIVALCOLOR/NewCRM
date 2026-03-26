@@ -96,7 +96,7 @@
                 <q-input v-model="editForm.payment_bik" label="БИК" outlined dense />
                 <q-input v-model="editForm.payment_corr_account" label="Кор. счёт" outlined dense />
               </template>
-              <q-btn v-if="can('employees.delete')" label="Удалить сотрудника" icon="delete" color="negative" flat no-caps class="full-width q-mt-md" @click="deleteEmployee" />
+              <q-btn v-if="can('employees.delete') && canEditSelected" label="Удалить сотрудника" icon="delete" color="negative" flat no-caps class="full-width q-mt-md" @click="deleteEmployee" />
             </q-form>
           </template>
 
@@ -165,8 +165,8 @@
 
           <!-- Действия -->
           <div class="row q-gutter-sm q-mt-md justify-center">
-            <q-btn v-if="can('employees.update')" unelevated icon="edit" label="Редактировать" no-caps style="background: #ffd93c; color: #333; border-radius: 8px" @click="startEdit" />
-            <q-btn v-if="can('employees.update') && selected.email" outline icon="email" label="Пригласить" no-caps color="grey-7" style="border-radius: 8px" @click="sendInvite(selected)" />
+            <q-btn v-if="canEditSelected" unelevated icon="edit" label="Редактировать" no-caps style="background: #ffd93c; color: #333; border-radius: 8px" @click="startEdit" />
+            <q-btn v-if="canEditSelected && selected.email" outline icon="email" label="Пригласить" no-caps color="grey-7" style="border-radius: 8px" @click="sendInvite(selected)" />
           </div>
           </template>
         </q-card-section>
@@ -225,6 +225,18 @@ const $q = useQuasar()
 const refs = useReferencesStore()
 const { can, isSuperuser } = usePermission()
 const canCreate = computed(() => can('employees.create'))
+
+// Админ. отдел может редактировать только Руководитель студии (как десктоп employees_tab.py:866-882)
+const ADMIN_POSITIONS = ['Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП']
+const canEditSelected = computed(() => {
+  if (!can('employees.update')) return false
+  if (!selected.value) return false
+  // Если сотрудник из админ.отдела — нужно право access.admin
+  if (ADMIN_POSITIONS.includes(selected.value.position)) {
+    return isSuperuser.value // Только руководитель студии
+  }
+  return true
+})
 
 const dashItems = computed(() => {
   const all = employees.value

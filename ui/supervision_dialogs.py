@@ -2180,10 +2180,11 @@ class SupervisionStartDateDialog(QDialog):
         self.selected_date = current_date or QDate.currentDate()
 
         border_widget = QFrame(self)
+        border_widget.setObjectName("borderFrame")
         border_widget.setStyleSheet("""
-            QFrame {
+            QFrame#borderFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #E0E0E0;
+                border: none;
                 border-radius: 10px;
             }
         """)
@@ -2238,37 +2239,35 @@ class SupervisionStartDateDialog(QDialog):
         layout.addLayout(date_layout)
 
         # Кнопки
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        cancel_btn = QPushButton('Отмена')
-        cancel_btn.setFixedSize(100, 32)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95A5A6; color: white;
-                border-radius: 4px; font-weight: bold;
-                padding: 0px 20px;
-            }
-            QPushButton:hover { background-color: #7F8C8D; }
-        """)
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(cancel_btn)
-
         save_btn = QPushButton('Сохранить')
-        save_btn.setFixedSize(100, 32)
+        save_btn.setFixedHeight(36)
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #16A085; color: white;
+                background-color: #ffd93c; color: #333333;
                 border-radius: 4px; font-weight: bold;
-                padding: 0px 20px;
+                padding: 0px 30px; border: none;
+                max-height: 36px; min-height: 36px;
             }
-            QPushButton:hover { background-color: #138D75; }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
         save_btn.clicked.connect(self._save)
-        btn_layout.addWidget(save_btn)
+        layout.addWidget(save_btn)
 
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
+        cancel_btn = QPushButton('Отмена')
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E0E0E0; color: #333333;
+                border-radius: 4px; font-weight: bold;
+                padding: 0px 30px; border: none;
+                max-height: 36px; min-height: 36px;
+            }
+            QPushButton:hover { background-color: #CCCCCC; }
+            QPushButton:pressed { background-color: #BBBBBB; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
 
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)

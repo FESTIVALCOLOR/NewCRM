@@ -1437,12 +1437,21 @@ class SupervisionCard(QFrame):
                 sep_label.setStyleSheet('color: #666; font-size: 11px; background-color: transparent;')
                 info_layout.addWidget(sep_label)
 
+        info_layout.addStretch()
+        info_container.setLayout(info_layout)
+
+        # info_row: area/city слева (stretch=1), бейдж агента справа (stretch=0)
+        info_row = QHBoxLayout()
+        info_row.setContentsMargins(0, 0, 0, 0)
+        info_row.setSpacing(4)
+        info_row.addWidget(info_container, 1)
+
         if self.card_data.get('agent_type'):
-            # Тип агента с цветом
             agent_type = self.card_data['agent_type']
             agent_color = self.data.get_agent_color(agent_type)
             agent_label = QLabel(agent_type)
             agent_label.setFixedHeight(24)
+            agent_label.setAlignment(Qt.AlignCenter)
             if agent_color:
                 agent_label.setStyleSheet(f'''
                     background-color: {agent_color};
@@ -1461,12 +1470,11 @@ class SupervisionCard(QFrame):
                     font-weight: bold;
                     padding: 3px 8px;
                     border-radius: 4px;
+                    border: 2px solid #95A5A6;
                 ''')
-            info_layout.addWidget(agent_label)
+            info_row.addWidget(agent_label, 0)
 
-        info_layout.addStretch()
-        info_container.setLayout(info_layout)
-        layout.addWidget(info_container, 0)
+        layout.addLayout(info_row)
         
         # Команда (сворачиваемая)
         team_widget = self.create_team_section()
@@ -1475,17 +1483,27 @@ class SupervisionCard(QFrame):
         
         # Индикатор приостановки
         if self.card_data.get('is_paused'):
-            pause_label = QLabel('⏸ ПРИОСТАНОВЛЕНО')
-            pause_label.setStyleSheet('''
-                color: white;
+            pause_container = QWidget()
+            pause_container.setStyleSheet('''
                 background-color: #F39C12;
-                padding: 5px;
                 border-radius: 4px;
-                font-size: 10px;
-                font-weight: bold;
             ''')
-            pause_label.setFixedHeight(28)
-            layout.addWidget(pause_label, 0)
+            pause_container.setFixedHeight(28)
+            pause_h = QHBoxLayout(pause_container)
+            pause_h.setContentsMargins(8, 0, 8, 0)
+            pause_h.setSpacing(4)
+            pause_h.setAlignment(Qt.AlignCenter)
+            pause_icon_lbl = QLabel()
+            pause_icon = IconLoader.load_colored('pause', '#FFFFFF', 14)
+            if pause_icon and not pause_icon.isNull():
+                pause_icon_lbl.setPixmap(pause_icon.pixmap(14, 14))
+            pause_icon_lbl.setFixedSize(14, 14)
+            pause_icon_lbl.setStyleSheet('background: transparent;')
+            pause_h.addWidget(pause_icon_lbl)
+            pause_text_lbl = QLabel('ПРИОСТАНОВЛЕНО')
+            pause_text_lbl.setStyleSheet('color: white; font-size: 10px; font-weight: bold; background: transparent;')
+            pause_h.addWidget(pause_text_lbl)
+            layout.addWidget(pause_container, 0)
         
         # Дедлайн
         if self.card_data.get('deadline'):
@@ -1566,24 +1584,30 @@ class SupervisionCard(QFrame):
             add_note_btn = IconLoader.create_icon_button('note', 'Добавить запись', 'Добавить запись в историю', icon_size=12)
             add_note_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #95A5A6;
-                    color: white;
+                    background-color: #FFFFFF;
+                    color: #27AE60;
                     padding: 0px 10px;
+                    border: 1px solid #27AE60;
                     border-radius: 6px;
                     font-size: 10px;
                     font-weight: bold;
                     min-height: 28px;
                     max-height: 28px;
                 }
-                QPushButton:hover { background-color: #7F8C8D; }
+                QPushButton:hover { background-color: #E8F5E9; }
             """)
             add_note_btn.setFixedHeight(28)
             add_note_btn.clicked.connect(self.add_project_note)
             layout.addWidget(add_note_btn, 0)
-            
+
             # ========== 2. ПРИОСТАНОВИТЬ/ВОЗОБНОВИТЬ (SVG) ==========
             if self.card_data.get('is_paused'):
-                pause_btn = IconLoader.create_icon_button('play', 'Возобновить', 'Возобновить работу над проектом', icon_size=12)
+                pause_btn = QPushButton('Возобновить')
+                play_icon = IconLoader.load_colored('play', '#FFFFFF', 14)
+                if play_icon and not play_icon.isNull():
+                    pause_btn.setIcon(play_icon)
+                    pause_btn.setIconSize(QSize(12, 12))
+                pause_btn.setToolTip('Возобновить работу над проектом')
                 pause_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #27AE60;
@@ -1647,16 +1671,17 @@ class SupervisionCard(QFrame):
             add_note_btn = IconLoader.create_icon_button('note', 'Добавить запись', 'Добавить запись в историю', icon_size=12)
             add_note_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #95A5A6;
-                    color: white;
+                    background-color: #FFFFFF;
+                    color: #27AE60;
                     padding: 0px 10px;
+                    border: 1px solid #27AE60;
                     border-radius: 6px;
                     font-size: 10px;
                     font-weight: bold;
                     min-height: 28px;
                     max-height: 28px;
                 }
-                QPushButton:hover { background-color: #7F8C8D; }
+                QPushButton:hover { background-color: #E8F5E9; }
             """)
             add_note_btn.setFixedHeight(28)
             add_note_btn.clicked.connect(self.add_project_note)
@@ -1900,56 +1925,112 @@ class SupervisionCard(QFrame):
         if not _has_perm(self.employee, self.api_client, 'supervision.pause_resume'):
             CustomMessageBox(self, 'Ошибка', 'У вас нет прав на возобновление карточки', 'error').exec_()
             return
+
         dialog = QDialog(self)
-        dialog.setWindowTitle('Подтверждение')
-        dialog.setMinimumWidth(450)
-        
+        dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: none;
+                border-radius: 10px;
+            }
+        """)
+
+        border_layout = QVBoxLayout()
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(dialog, 'Возобновление проекта', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        content_widget = QWidget()
+        content_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
+
         question = QLabel('Возобновить работу над проектом?')
-        question.setStyleSheet('font-size: 13px; font-weight: bold; color: #333;')
+        question.setStyleSheet('font-size: 14px; font-weight: bold; color: #333;')
         question.setAlignment(Qt.AlignCenter)
         layout.addWidget(question)
-        
+
         info = QLabel('Статус "Приостановлено" будет снят.')
-        info.setStyleSheet('font-size: 11px; color: #666;')
+        info.setStyleSheet('font-size: 11px; color: #27AE60;')
         info.setWordWrap(True)
         info.setAlignment(Qt.AlignCenter)
         layout.addWidget(info)
-        
-        yes_btn = IconLoader.create_icon_button('play', 'Возобновить', '', icon_size=14)
+
+        yes_btn = QPushButton('Возобновить')
+        play_icon = IconLoader.load_colored('play', '#333333', 16)
+        if play_icon and not play_icon.isNull():
+            yes_btn.setIcon(play_icon)
+            yes_btn.setIconSize(QSize(14, 14))
+        yes_btn.setFixedHeight(36)
         yes_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27AE60;
-                color: white;
-                padding: 12px;
-                border-radius: 4px;
-                font-size: 12px;
+                background-color: #ffd93c;
+                color: #333333;
+                padding: 0px 30px;
                 font-weight: bold;
+                border-radius: 4px;
+                border: none;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover { background-color: #229954; }
+            QPushButton:hover { background-color: #f0c929; }
+            QPushButton:pressed { background-color: #e0b919; }
         """)
         yes_btn.clicked.connect(dialog.accept)
         layout.addWidget(yes_btn)
-        
+
         no_btn = QPushButton('Отмена')
+        no_btn.setFixedHeight(36)
         no_btn.setStyleSheet("""
             QPushButton {
-                background-color: #95A5A6;
-                color: white;
-                padding: 12px;
+                background-color: #E0E0E0;
+                color: #333333;
+                padding: 0px 30px;
                 border-radius: 4px;
-                font-size: 12px;
+                border: none;
                 font-weight: bold;
+                max-height: 36px;
+                min-height: 36px;
             }
-            QPushButton:hover { background-color: #7F8C8D; }
+            QPushButton:hover { background-color: #CCCCCC; }
+            QPushButton:pressed { background-color: #BBBBBB; }
         """)
         no_btn.clicked.connect(dialog.reject)
         layout.addWidget(no_btn)
-        
-        dialog.setLayout(layout)
+
+        content_widget.setLayout(layout)
+        border_layout.addWidget(content_widget)
+        border_frame.setLayout(border_layout)
+        main_layout.addWidget(border_frame)
+        dialog.setLayout(main_layout)
+        dialog.setMinimumWidth(450)
 
         if dialog.exec_() == QDialog.Accepted:
             self.data.resume_supervision_card(

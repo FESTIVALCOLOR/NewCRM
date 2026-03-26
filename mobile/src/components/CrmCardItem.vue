@@ -1,73 +1,102 @@
 <template>
   <q-card flat bordered class="crm-card q-mb-sm">
     <q-card-section class="q-pa-sm">
-      <!-- Верхняя строка: номер + workflow status -->
+      <!-- 1. Верхняя строка: номер + статус работы -->
       <div class="row items-center justify-between q-mb-xs">
-        <div class="text-caption" style="color: #888; font-size: 10px">
-          Договор: {{ card.contract_number || `#${card.id}` }}
+        <div style="color: #888; font-size: 10px">Договор: {{ card.contract_number || `#${card.id}` }}</div>
+        <div v-if="workStatusText" :style="{ fontSize: '8px', fontWeight: 'bold', color: workStatusColor, border: `1px solid ${workStatusColor}`, borderRadius: '3px', padding: '1px 6px' }">
+          {{ workStatusText }}
         </div>
-        <q-chip v-if="card.workflow_status && card.workflow_status !== 'active'" dense size="xs"
-          :color="substepColor" text-color="white" style="font-size: 9px">
-          {{ workflowLabel }}
-        </q-chip>
       </div>
 
-      <!-- Адрес + Агент (агент справа, крупный) -->
-      <div class="row items-start justify-between q-mb-xs">
-        <div class="text-weight-bold ellipsis-2-lines" style="font-size: 14px; color: #222; flex: 1">
-          {{ card.address || 'Без адреса' }}
-        </div>
-        <span v-if="card.agent_type" class="agent-badge q-ml-xs" :style="{ background: agentBadgeColor, padding: '4px 10px', fontSize: '11px', lineHeight: '16px' }" style="white-space: nowrap; flex-shrink: 0">
-          {{ card.agent_type }}
-        </span>
+      <!-- 2. Адрес -->
+      <div class="text-weight-bold q-mb-xs" style="font-size: 14px; color: #222; word-wrap: break-word; max-height: 50px; overflow: hidden">
+        {{ card.address || 'Без адреса' }}
       </div>
 
-      <!-- Разделитель -->
-      <div style="height: 1px; background: #DDDDDD" class="q-mb-xs" />
+      <!-- 3. Разделитель -->
+      <div style="height: 1px; background: #DDD" class="q-mb-xs" />
 
-      <!-- Подэтап -->
-      <div v-if="card.current_substep_name" class="q-mb-xs" :style="{ color: substepTextColor, fontSize: '9px', fontWeight: 'bold' }">
-        {{ card.current_substep_name }}
+      <!-- 4. Подэтап (ВСЕГДА если есть) -->
+      <div v-if="card.current_substep_name" class="q-mb-xs" :style="{ color: substepColor, fontSize: '9px', fontWeight: 'bold', wordWrap: 'break-word' }">
+        {{ substepPrefix }}{{ card.current_substep_name }}
       </div>
 
-      <!-- Правки -->
+      <!-- 5. Счётчик правок -->
       <div v-if="card.revision_count > 0" style="font-size: 9px; color: #E74C3C; font-weight: bold" class="q-mb-xs">
         Правки: {{ card.revision_count }}
       </div>
 
-      <!-- Площадь, Город -->
-      <div class="row items-center q-gutter-xs q-mb-xs" style="font-size: 11px; color: #888">
-        <span v-if="card.area">{{ card.area }} м²</span>
-        <span v-if="card.city">{{ card.city }}</span>
-      </div>
-
-      <!-- Команда (в рамке, не проваливается — stopPropagation) -->
-      <div v-if="teamNames.length > 0" style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px" @click.stop>
-        <div style="font-size: 10px; color: #888; font-weight: bold; margin-bottom: 2px; cursor: pointer" @click="showTeam = !showTeam">
-          Команда {{ showTeam ? '▲' : '▼' }}
+      <!-- 6. Площадь + Город | Агент -->
+      <div class="row items-center justify-between q-mb-xs">
+        <div style="font-size: 11px; color: #888">
+          <span v-if="card.area">{{ card.area }} м²</span>
+          <span v-if="card.area && card.city"> | </span>
+          <span v-if="card.city">{{ card.city }}</span>
         </div>
-        <div v-if="showTeam">
-          <div v-for="m in teamNames" :key="m" style="font-size: 10px; color: #666">{{ m }}</div>
-        </div>
-      </div>
-
-      <!-- Теги (крупные, как блок Команда) -->
-      <div v-if="card.tags" class="q-mt-xs" style="border: 1px solid #FFCDD2; border-radius: 4px; padding: 4px 6px; background: #FFF5F5">
-        <q-badge v-for="tag in card.tags.split(',')" :key="tag" color="red-2" text-color="red-8" :label="tag.trim()" class="q-mr-xs" style="font-size: 11px; padding: 3px 8px" />
-      </div>
-
-      <!-- Дедлайн -->
-      <div v-if="card.deadline" class="q-mt-xs row items-center q-gutter-xs">
-        <q-icon name="schedule" size="12px" :color="deadlineColor" />
-        <span :style="{ fontSize: '10px', color: deadlineHexColor, fontWeight: 'bold' }">
-          {{ formatDate(card.deadline) }} ({{ daysLeftText }})
+        <span v-if="card.agent_type" :style="{ background: agentColor, color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px', lineHeight: '16px' }">
+          {{ card.agent_type }}
         </span>
       </div>
 
-      <!-- Кнопки действий -->
-      <div class="q-mt-sm row q-gutter-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
-        <q-btn flat dense no-caps size="sm" icon="open_in_new" label="Данные проекта" style="color: #333; font-size: 10px; flex: 1" @click="emit('click')" />
-        <q-btn flat dense no-caps size="sm" icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px" @click="emit('longpress')" />
+      <!-- 7. Команда (сворачиваемая) -->
+      <div v-if="teamMembers.length > 0" style="border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; background: #F8F9FA" @click.stop>
+        <div style="font-size: 10px; color: #888; font-weight: bold; cursor: pointer" @click="showTeam = !showTeam">
+          Команда ({{ teamMembers.length }}) {{ showTeam ? '▲' : '▼' }}
+        </div>
+        <div v-if="showTeam">
+          <div v-for="m in teamMembers" :key="m.text" style="font-size: 10px; padding: 1px 4px; border-radius: 2px; margin-top: 1px" :style="{ background: m.bg, color: '#333' }">
+            {{ m.text }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. Теги -->
+      <div v-if="card.tags" class="q-mb-xs" style="background: #FF6B6B; border-radius: 4px; padding: 3px 8px">
+        <span style="color: white; font-size: 10px">{{ card.tags }}</span>
+      </div>
+
+      <!-- 9. Дедлайн (исполнителя по колонке, или общий) -->
+      <div v-if="deadlineText" class="q-mb-xs row items-center q-gutter-xs" :style="{ background: deadlineBg, borderRadius: '4px', padding: '3px 8px', height: '28px' }">
+        <q-icon name="schedule" size="10px" :style="{ color: deadlineTextColor }" />
+        <span :style="{ fontSize: '10px', color: deadlineTextColor, fontWeight: 'bold' }">{{ deadlineText }}</span>
+      </div>
+
+      <!-- 10. Индикатор "Работа сдана" (для проверяющих) -->
+      <div v-if="workSubmittedText" class="q-mb-xs" style="background: #27AE60; color: white; font-size: 10px; padding: 4px 8px; border-radius: 4px">
+        {{ workSubmittedText }}
+      </div>
+
+      <!-- 11-15. Кнопки действий по ролям -->
+      <div class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+        <!-- Строка 1: Workflow кнопки (сдать/принять/отклонить) -->
+        <div v-if="canSubmitWork" class="q-mb-xs">
+          <q-btn unelevated dense no-caps label="Сдать работу" icon="check" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; padding: 4px 12px; height: 32px; border-radius: 4px; width: 100%" @click.stop="emit('submit-work')" />
+        </div>
+        <div v-if="showWaitReview" class="q-mb-xs" style="background: #FFF3E0; color: #E67E22; font-size: 11px; font-weight: bold; padding: 6px 12px; border-radius: 4px; text-align: center; border: 1px solid #F39C12">
+          Ожидайте проверку
+        </div>
+        <div v-if="canApprove" class="row q-gutter-xs q-mb-xs">
+          <q-btn unelevated dense no-caps label="Клиенту" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('client-send')" />
+          <q-btn unelevated dense no-caps label="Исправление" style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('reject')" />
+        </div>
+        <div v-if="canClientApproved" class="q-mb-xs">
+          <q-btn unelevated dense no-caps label="Клиент согласовал" style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; width: 100%" @click.stop="emit('client-approved')" />
+        </div>
+        <div v-if="canSignAct" class="row q-gutter-xs q-mb-xs">
+          <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('client-send')" />
+          <q-btn unelevated dense no-caps label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('sign-act')" />
+        </div>
+
+        <!-- Строка 2: Данные карточки -->
+        <div class="q-mb-xs">
+          <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" @click="emit('click')" />
+        </div>
+
+        <!-- Строка 3: Переместить -->
+        <div>
+          <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; width: 100%" @click="emit('longpress')" />
+        </div>
       </div>
     </q-card-section>
   </q-card>
@@ -76,86 +105,143 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useReferencesStore } from 'src/stores/references'
+import { useAuthStore } from 'src/stores/auth'
+import { usePermission } from 'src/composables/usePermission'
 
 const props = defineProps({ card: { type: Object, required: true } })
-const emit = defineEmits(['click', 'longpress'])
+const emit = defineEmits(['click', 'longpress', 'submit-work', 'accept', 'reject', 'client-send', 'client-approved', 'sign-act'])
 
 const showTeam = ref(false)
-
 const refs = useReferencesStore()
+const auth = useAuthStore()
+const { can } = usePermission()
 
-const agentBadgeColor = computed(() => {
-  const agent = refs.agentByName(props.card.agent_type)
-  return agent?.color || '#95A5A6'
+const agentColor = computed(() => refs.agentByName(props.card.agent_type)?.color || '#95A5A6')
+
+// === Workflow status → текст + цвет ===
+const ws = computed(() => props.card.workflow_status)
+const workStatusText = computed(() => {
+  const m = { pending_review: 'Ожидает проверки', revision: 'На исправлении', client_approval: 'Клиент согласовывает', act_signing: 'Подписание акта', stage_completed: 'Стадия завершена', in_progress: 'В работе' }
+  return m[ws.value] || null
+})
+const workStatusColor = computed(() => {
+  const m = { pending_review: '#8E44AD', revision: '#E74C3C', client_approval: '#3498DB', act_signing: '#9B59B6', stage_completed: '#27AE60', in_progress: '#F39C12' }
+  return m[ws.value] || '#888'
 })
 
-const teamNames = computed(() => {
-  const c = props.card
-  return [
-    c.senior_manager_name && `СМ: ${c.senior_manager_name}`,
-    c.sdp_name && `СДП: ${c.sdp_name}`,
-    c.gap_name && `ГАП: ${c.gap_name}`,
-    c.manager_name && `Менеджер: ${c.manager_name}`,
-    c.designer_name && `Дизайнер: ${c.designer_name}`,
-    c.draftsman_name && `Чертёжник: ${c.draftsman_name}`
-  ].filter(Boolean)
+// === Подэтап: ВСЕГДА показывается если есть ===
+const substepPrefix = computed(() => {
+  const m = { pending_review: 'Проверка: ', revision: 'Исправление: ', client_approval: 'Согласование: ', act_signing: 'Акт: ', stage_completed: 'Завершено: ' }
+  return m[ws.value] || ''
 })
-
 const substepColor = computed(() => {
-  const m = { pending_review: 'purple', revision: 'negative', client_approval: 'info', act_signing: 'purple', stage_completed: 'positive' }
-  return m[props.card.workflow_status] || 'orange'
-})
-
-const substepTextColor = computed(() => {
   const m = { pending_review: '#8E44AD', revision: '#E74C3C', client_approval: '#3498DB', act_signing: '#9B59B6', stage_completed: '#27AE60' }
-  return m[props.card.workflow_status] || '#E67E22'
+  return m[ws.value] || '#E67E22'
 })
 
-const workflowLabel = computed(() => {
-  const m = { pending_review: 'Проверка', revision: 'Исправление', client_approval: 'У клиента', act_signing: 'Акт', stage_completed: 'Завершено' }
-  return m[props.card.workflow_status] || ''
+// === Команда с подсветкой ===
+const teamMembers = computed(() => {
+  const c = props.card
+  const empName = auth.user?.full_name || ''
+  const items = []
+  const add = (role, name, completed) => {
+    if (!name) return
+    const isCurrent = name === empName
+    const bg = completed ? '#C8E6C9' : isCurrent ? '#FFE082' : 'transparent'
+    items.push({ text: `${role}: ${name}${completed ? ' ✓' : ''}`, bg })
+  }
+  add('СМ', c.senior_manager_name)
+  if (c.sdp_name) add('СДП', c.sdp_name)
+  add('ГАП', c.gap_name)
+  add('Менеджер', c.manager_name)
+  add('Замерщик', c.surveyor_name)
+  add('Дизайнер', c.designer_name, c.designer_completed)
+  add('Чертёжник', c.draftsman_name, c.draftsman_completed)
+  return items
 })
 
-const deadlineColor = computed(() => {
-  if (!props.card.deadline) return 'grey'
-  const days = Math.ceil((new Date(props.card.deadline) - new Date()) / 86400000)
-  if (days < 0) return 'negative'
-  if (days <= 2) return 'warning'
-  return 'grey-5'
+// === Дедлайн: исполнителя стадии (как десктоп crm_tab.py:2306-2314) ===
+const stageDeadline = computed(() => {
+  const c = props.card
+  const col = (c.column_name || '').toLowerCase()
+  // Дизайнер — стадия 2 (концепция/визуализация)
+  if ((col.includes('концепция') || col.includes('визуализац')) && c.designer_deadline)
+    return c.designer_deadline
+  // Чертёжник — стадия 1 (планировочные) или 3 (чертежи)
+  if ((col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) && c.draftsman_deadline)
+    return c.draftsman_deadline
+  return c.deadline
 })
 
-const deadlineHexColor = computed(() => {
-  if (!props.card.deadline) return '#E0E0E0'
-  const days = Math.ceil((new Date(props.card.deadline) - new Date()) / 86400000)
+const deadlineDays = computed(() => {
+  if (!stageDeadline.value) return null
+  return Math.ceil((new Date(stageDeadline.value) - new Date()) / 86400000)
+})
+const deadlineText = computed(() => {
+  if (deadlineDays.value === null) return null
+  const d = new Date(stageDeadline.value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const days = deadlineDays.value
+  if (days < 0) return `${d} ПРОСРОЧЕН (${Math.abs(days)} раб.дн.)`
+  if (days === 0) return `${d} СЕГОДНЯ!`
+  return `${d} (${days} дн.)`
+})
+const deadlineBg = computed(() => {
+  const days = deadlineDays.value
+  if (days === null) return 'transparent'
+  if (days < 0) return '#FFEBEE'
+  if (days <= 2) return '#FFF8E1'
+  return '#F5F5F5'
+})
+const deadlineTextColor = computed(() => {
+  const days = deadlineDays.value
+  if (days === null) return '#888'
   if (days < 0) return '#8B0000'
   if (days === 0) return '#DC143C'
   if (days <= 1) return '#E74C3C'
   if (days <= 2) return '#F39C12'
-  return '#E0E0E0'
+  return '#888'
 })
 
-const daysLeftText = computed(() => {
-  if (!props.card.deadline) return ''
-  const days = Math.ceil((new Date(props.card.deadline) - new Date()) / 86400000)
-  if (days < 0) return `${Math.abs(days)} дн. просрочено`
-  if (days === 0) return 'сегодня'
-  return `${days} дн.`
+// === Индикатор "Работа сдана" (для проверяющих) ===
+const workSubmittedText = computed(() => {
+  if (!can('crm_cards.complete_approval')) return null
+  if (ws.value === 'act_signing' || ws.value === 'stage_completed') return null
+  const c = props.card
+  const col = (c.column_name || '').toLowerCase()
+  const parts = []
+  if (col.includes('концепция') || col.includes('визуализац')) {
+    if (c.designer_completed) parts.push(`Дизайнер ${c.designer_name}`)
+  }
+  if (col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) {
+    if (c.draftsman_completed) parts.push(`Чертёжник ${c.draftsman_name}`)
+  }
+  return parts.length > 0 ? `Работа сдана: ${parts.join(', ')}` : null
 })
 
-function formatDate(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
+// === Кнопки по ролям ===
+const empName = computed(() => auth.user?.full_name || '')
+const empPos = computed(() => auth.user?.position || '')
+
+const canSubmitWork = computed(() => {
+  if (ws.value && ws.value !== 'in_progress' && ws.value !== 'active') return false
+  const c = props.card
+  if (empPos.value === 'Дизайнер' && c.designer_name === empName.value && !c.designer_completed) return true
+  if ((empPos.value === 'Чертёжник' || auth.user?.secondary_position === 'Чертёжник') && c.draftsman_name === empName.value && !c.draftsman_completed) return true
+  return false
+})
+const showWaitReview = computed(() => {
+  if (ws.value !== 'pending_review') return false
+  const c = props.card
+  if (empPos.value === 'Дизайнер' && c.designer_name === empName.value) return true
+  if (empPos.value === 'Чертёжник' && c.draftsman_name === empName.value) return true
+  return false
+})
+const canApprove = computed(() => ws.value === 'pending_review' && can('crm_cards.complete_approval'))
+const canClientApproved = computed(() => ws.value === 'client_approval' && can('crm_cards.complete_approval'))
+const canSignAct = computed(() => ws.value === 'act_signing' && can('crm_cards.complete_approval'))
 </script>
 
 <style scoped>
-.crm-card {
-  border: 2px solid #CCCCCC;
-  border-radius: 8px;
-  background: white;
-}
-.crm-card:active {
-  border-color: #909090;
-  background: #f5f5f5;
-}
+.crm-card { border: 2px solid #CCCCCC; border-radius: 8px; background: white; }
+.crm-card:active { border-color: #909090; background: #f5f5f5; }
 </style>
