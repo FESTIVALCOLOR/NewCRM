@@ -330,8 +330,23 @@ async function selectMoveColumn(colName) {
   moveTargetCol.value = colName
   if (stageNeedsExecutor(colName)) {
     moveStep.value = 2
+    moveExecutorId.value = null
     moveDeadline.value = ''
-    // Автоподстановка дедлайна из timeline
+
+    // Подстановка уже назначенного исполнителя из stage_executors
+    // (если назначили заранее через команду проекта)
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      const { data: cardDetail } = await crmApi.getCard(moveCard.value.id)
+      const seList = cardDetail?.stage_executors || []
+      const existing = seList.filter(s => s.stage_name === colName).sort((a, b) => b.id - a.id)[0]
+      if (existing?.executor_id) {
+        moveExecutorId.value = existing.executor_id
+        if (existing.deadline) moveDeadline.value = existing.deadline
+      }
+    } catch {}
+
+    // Автоподстановка дедлайна из timeline (если не подставлен из stage_executors)
     const cid = moveCard.value.contract_id
     if (cid) {
       try {
@@ -372,38 +387,49 @@ async function doMoveWithAssign() {
   if (!moveExecutorId.value) { $q.notify({ type: 'warning', message: 'Выберите исполнителя' }); return }
   moveLoading.value = true
   try {
-    // Сначала перемещаем
+    // 1. Перемещаем карточку
     await crmApi.moveCard(moveCard.value.id, moveTargetCol.value)
-    // Потом назначаем исполнителя на стадию
+
+    // 2. Назначаем исполнителя (upsert — сервер обновит если уже есть)
     await crmApi.assignExecutor(moveCard.value.id, {
       stage_name: moveTargetCol.value,
       executor_id: moveExecutorId.value,
       deadline: moveDeadline.value || null
     })
-    // Создаём оплату исполнителю (как десктоп ExecutorSelectionDialog + CrmCardPage.doAssign)
+
+    // 3. Создаём оплату при перемещении (как десктоп ExecutorSelectionDialog)
     try {
       const roleName = getStageRole(moveTargetCol.value) || 'Чертёжник'
       const isTemplate = moveCard.value.project_type === 'Шаблонный'
-      // Шаблонные: СМ и Менеджер не получают оплату
-      if (!(isTemplate && ['Старший менеджер проектов', 'Менеджер'].includes(roleName))) {
+      const isStage1 = moveTargetCol.value.includes('Стадия 1')
+
+      // Проверяем нет ли уже оплаты для этого исполнителя на этой роли
+      const { data: existingPayments } = await crmApi.getPayments(moveCard.value.id)
+      const alreadyPaid = (existingPayments || []).some(p =>
+        p.employee_id === moveExecutorId.value && p.role === roleName && !p.reassigned
+      )
+
+      if (!alreadyPaid) {
         const calcRes = await paymentsApi.calculate({
           contract_id: moveCard.value.contract_id,
           employee_id: moveExecutorId.value,
           role: roleName
         })
         const fullAmount = calcRes.data?.amount || calcRes.data?.full_amount || 0
-        if (fullAmount > 0) {
-          const month = new Date().toISOString().slice(0, 7)
-          await paymentsApi.create({
-            contract_id: moveCard.value.contract_id,
-            employee_id: moveExecutorId.value,
-            role: roleName,
-            payment_type: 'Полная оплата',
-            crm_card_id: moveCard.value.id,
-            calculated_amount: fullAmount,
-            final_amount: fullAmount,
-            report_month: null
-          })
+
+        if (isTemplate) {
+          // Шаблонный: Полная оплата (Стадия 1 = 0)
+          const amount = isStage1 ? 0 : fullAmount
+          await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: moveCard.value.id, calculated_amount: amount, final_amount: amount, report_month: '' })
+        } else {
+          // Индивидуальный: Аванс 50% + Доплата 50%
+          if (fullAmount > 0) {
+            const advance = Math.round(fullAmount / 2)
+            const balance = fullAmount - advance
+            const month = new Date().toISOString().slice(0, 7)
+            await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, payment_type: 'Аванс', crm_card_id: moveCard.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+            await paymentsApi.create({ contract_id: moveCard.value.contract_id, employee_id: moveExecutorId.value, role: roleName, payment_type: 'Доплата', crm_card_id: moveCard.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+          }
         }
       }
     } catch { /* оплата опциональна */ }

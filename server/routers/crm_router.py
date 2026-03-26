@@ -1024,28 +1024,38 @@ async def assign_stage_executor(
                     detail=f"Недопустимая стадия '{executor_data.stage_name}' для типа проекта '{contract.project_type}'"
                 )
 
-        # Проверка дубликата: тот же исполнитель на ту же стадию
+        # Upsert: если запись для этой стадии уже существует — обновить, иначе создать
         existing = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
-            StageExecutor.stage_name == executor_data.stage_name,
-            StageExecutor.executor_id == executor_data.executor_id
-        ).first()
+            StageExecutor.stage_name == executor_data.stage_name
+        ).order_by(StageExecutor.id.desc()).first()
+
         if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Исполнитель {executor.full_name} уже назначен на стадию '{executor_data.stage_name}'"
+            if existing.executor_id == executor_data.executor_id:
+                # Тот же исполнитель — обновляем только дедлайн
+                if executor_data.deadline:
+                    existing.deadline = executor_data.deadline
+                stage_executor = existing
+            else:
+                # Другой исполнитель — обновляем запись (переназначение)
+                existing.executor_id = executor_data.executor_id
+                existing.deadline = executor_data.deadline
+                existing.assigned_by = current_user.id
+                existing.assigned_date = datetime.utcnow()
+                existing.completed = False
+                existing.completed_date = None
+                stage_executor = existing
+        else:
+            # Новая запись
+            stage_executor = StageExecutor(
+                crm_card_id=card_id,
+                stage_name=executor_data.stage_name,
+                executor_id=executor_data.executor_id,
+                assigned_by=current_user.id,
+                deadline=executor_data.deadline,
+                assigned_date=datetime.utcnow()
             )
-
-        stage_executor = StageExecutor(
-            crm_card_id=card_id,
-            stage_name=executor_data.stage_name,
-            executor_id=executor_data.executor_id,
-            assigned_by=current_user.id,
-            deadline=executor_data.deadline,
-            assigned_date=datetime.utcnow()
-        )
-
-        db.add(stage_executor)
+            db.add(stage_executor)
 
         # Аудит-лог назначения исполнителя
         activity = ActivityLog(

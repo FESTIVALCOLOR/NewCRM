@@ -384,6 +384,7 @@ const assignEmployeeId = ref(null)
 const assignDeadline = ref('')
 const assignNeedsDeadline = ref(false)
 const assignStageName = ref('')
+const assignMode = ref('assign') // 'assign' или 'change'
 
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 
@@ -448,28 +449,57 @@ const projectStages = computed(() => {
   ]
 })
 
-// Команда
+// Команда — руководство + исполнители ПО СТАДИЯМ из stage_executors
 const allTeamMembers = computed(() => {
   if (!card.value) return []
-  const se = card.value.stage_executors || []
-  const designerSe = se.find(s => s.stage_name?.includes('концепция') || s.stage_name?.includes('дизайн') || s.stage_name?.includes('визуализац'))
-  const draftsmanSe = se.find(s => s.stage_name?.includes('чертеж') || s.stage_name?.includes('чертёж'))
-
   const canAssign = can('crm_cards.assign_executor')
   const canRemove = can('crm_cards.delete_executor')
   const canManageTeam = canAssign || canRemove
 
+  // Руководство проекта (единые для всего проекта)
   const members = [
     { roleKey: 'senior_manager', role: 'Ст. менеджер', name: card.value.senior_manager_name, canManage: canManageTeam },
+  ]
+  if (card.value.project_type === 'Индивидуальный') {
+    members.push({ roleKey: 'sdp', role: 'СДП', name: card.value.sdp_name, canManage: canManageTeam })
+  }
+  members.push(
     { roleKey: 'gap', role: 'ГАП', name: card.value.gap_name, canManage: canManageTeam },
     { roleKey: 'manager', role: 'Менеджер', name: card.value.manager_name, canManage: canManageTeam },
     { roleKey: 'surveyor', role: 'Замерщик', name: card.value.surveyor_name, canManage: canManageTeam },
-    { roleKey: 'designer', role: 'Дизайнер', name: designerSe?.executor_name || null, deadline: designerSe?.deadline, canManage: canManageTeam, stageName: designerSe?.stage_name },
-    { roleKey: 'draftsman', role: 'Чертёжник', name: draftsmanSe?.executor_name || null, deadline: draftsmanSe?.deadline, canManage: canManageTeam, stageName: draftsmanSe?.stage_name }
+  )
+
+  // Исполнители ПО СТАДИЯМ — определяем все стадии проекта и показываем назначенных
+  const se = card.value.stage_executors || []
+  const isTemplate = card.value.project_type === 'Шаблонный'
+
+  // Все стадии проекта с ролями (порядок как в десктопе)
+  const allStages = isTemplate ? [
+    { stageName: 'Стадия 1: планировочные решения', roleKey: 'draftsman', role: 'Чертёжник' },
+    { stageName: 'Стадия 2: рабочие чертежи', roleKey: 'draftsman', role: 'Чертёжник' },
+    { stageName: 'Стадия 3: 3д визуализация', roleKey: 'designer', role: 'Дизайнер' },
+  ] : [
+    { stageName: 'Стадия 1: планировочные решения', roleKey: 'draftsman', role: 'Чертёжник' },
+    { stageName: 'Стадия 2: концепция дизайна', roleKey: 'designer', role: 'Дизайнер' },
+    { stageName: 'Стадия 3: рабочие чертежи', roleKey: 'draftsman', role: 'Чертёжник' },
   ]
-  if (card.value.project_type === 'Индивидуальный') {
-    members.splice(1, 0, { roleKey: 'sdp', role: 'СДП', name: card.value.sdp_name, canManage: canManageTeam })
+
+  for (const stage of allStages) {
+    // Ищем последнего назначенного на эту стадию (max id)
+    const candidates = se.filter(s => s.stage_name === stage.stageName)
+    const executor = candidates.length ? candidates.reduce((a, b) => a.id > b.id ? a : b) : null
+
+    members.push({
+      roleKey: stage.roleKey,
+      role: `${stage.role} — ${stage.stageName}`,
+      name: executor?.executor_name || null,
+      deadline: executor?.deadline,
+      canManage: canManageTeam,
+      stageName: stage.stageName,
+      isStageExecutor: true,
+    })
   }
+
   return members
 })
 
@@ -701,6 +731,7 @@ function showAssignDialog(member, mode) {
   assignRole.value = member.role
   assignRoleKey.value = member.roleKey
   assignStageName.value = member.stageName || ''
+  assignMode.value = mode
   assignNeedsDeadline.value = ['designer', 'draftsman'].includes(member.roleKey)
   assignDialogTitle.value = mode === 'assign' ? `Назначить ${member.role}` : `Изменить ${member.role}`
   assignEmployeeId.value = null
@@ -737,61 +768,131 @@ async function doAssign() {
   try {
     const roleKey = assignRoleKey.value
     const roleName = ROLE_NAMES[roleKey] || assignRole.value
-
-    // 1. Удаляем старые оплаты для этой роли
-    const oldPayments = cardPayments.value.filter(p => p.role === roleName)
-    for (const op of oldPayments) {
-      try { await paymentsApi.delete(op.id) } catch {}
-    }
-
-    // 2. Назначаем исполнителя
-    if (['designer', 'draftsman'].includes(roleKey)) {
-      let stageName = assignStageName.value
-      if (!stageName) {
-        const isTemplate = card.value?.project_type === 'Шаблонный'
-        if (roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация' : 'Стадия 2: концепция дизайна'
-        else stageName = isTemplate ? 'Стадия 2: рабочие чертежи' : 'Стадия 3: рабочие чертежи'
-      }
-      await crmApi.assignExecutor(card.value.id, { stage_name: stageName, executor_id: assignEmployeeId.value, deadline: assignDeadline.value || null })
-    } else {
-      const update = {}; update[`${roleKey}_id`] = assignEmployeeId.value
-      await crmApi.updateCard(card.value.id, update)
-    }
-
-    // 3. Рассчитываем и создаём оплату (как десктоп — crm_card_edit_dialog.py line 6331-6476)
-    // Для шаблонных проектов СМ и Менеджер не получают оплату
+    const isReassign = assignMode.value === 'change'
     const isTemplate = card.value?.project_type === 'Шаблонный'
-    const skipPayment = isTemplate && ['senior_manager', 'manager'].includes(roleKey)
 
-    if (!skipPayment) {
-      try {
-        const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
-        const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+    // Определяем stageName для дизайнера/чертёжника
+    let stageName = assignStageName.value
+    if (['designer', 'draftsman'].includes(roleKey) && !stageName) {
+      if (roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация' : 'Стадия 2: концепция дизайна'
+      else stageName = isTemplate ? 'Стадия 2: рабочие чертежи' : 'Стадия 3: рабочие чертежи'
+    }
 
-        if (fullAmount > 0) {
-          if (roleKey === 'sdp') {
-            // СДП: два платежа — Аванс (50%) + Доплата (50%)
-            const advance = Math.round(fullAmount / 2)
-            const balance = fullAmount - advance
+    // === ПЕРЕНАЗНАЧЕНИЕ (как десктоп ReassignExecutorDialog) ===
+    if (isReassign && ['designer', 'draftsman'].includes(roleKey) && stageName) {
+      // Находим старого исполнителя
+      const se = card.value.stage_executors || []
+      const oldSe = se.filter(s => (s.stage_name || '').toLowerCase().includes(stageName.toLowerCase().split(':')[1]?.trim().substring(0, 10) || ''))
+        .sort((a, b) => b.id - a.id)[0]
+      const oldExecutorId = oldSe?.executor_id
+
+      // 1. PATCH stage_executor — обновляем исполнителя, сбрасываем completed
+      await crmApi.reassignExecutor(card.value.id, stageName, {
+        executor_id: assignEmployeeId.value,
+        deadline: assignDeadline.value || null,
+        completed: false
+      })
+
+      // 2. Двойная запись оплат (как десктоп _reassign_payments_via_api)
+      if (oldExecutorId && oldExecutorId !== assignEmployeeId.value) {
+        // Помечаем старые оплаты как reassigned
+        const oldPayments = cardPayments.value.filter(p =>
+          p.employee_id === oldExecutorId && p.role === roleName && !p.reassigned
+        )
+        for (const op of oldPayments) {
+          try {
             const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-            await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
-            await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
-          } else {
-            // Остальные: один платёж — Полная оплата
+            await paymentsApi.update(op.id, { reassigned: true, report_month: op.report_month || month })
+          } catch {}
+        }
+
+        // Создаём новые оплаты для нового исполнителя
+        try {
+          const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
+          const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+          if (fullAmount > 0) {
+            const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+            if (isTemplate) {
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+            } else {
+              const advance = Math.round(fullAmount / 2)
+              const balance = fullAmount - advance
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+              await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+            }
+          }
+        } catch (e) { console.warn('Ошибка создания оплат при переназначении:', e) }
+
+        // История
+        try {
+          const oldName = allEmployeesList.value.find(e => e.id === oldExecutorId)?.full_name || ''
+          const newName = allEmployeesList.value.find(e => e.id === assignEmployeeId.value)?.full_name || ''
+          const { api: ax } = await import('src/boot/axios')
+          await ax.post('/api/v1/action-history', { action_type: 'reassign', entity_type: 'crm_card', entity_id: card.value.id, description: `Переназначен ${roleName}: ${oldName} → ${newName} (${stageName})` })
+        } catch {}
+      }
+
+      $q.notify({ type: 'positive', message: 'Исполнитель переназначен' })
+
+    // === НОВОЕ НАЗНАЧЕНИЕ ===
+    } else {
+      // Назначаем
+      if (['designer', 'draftsman'].includes(roleKey) && stageName) {
+        // Дизайнер/Чертёжник — upsert в stage_executors (сервер сам обновит если есть)
+        await crmApi.assignExecutor(card.value.id, { stage_name: stageName, executor_id: assignEmployeeId.value, deadline: assignDeadline.value || null })
+        // Оплата НЕ создаётся здесь — только при ПЕРЕМЕЩЕНИИ на стадию
+      } else if (roleKey === 'surveyor') {
+        // Замерщик — назначаем без оплаты (оплата при загрузке замера)
+        await crmApi.updateCard(card.value.id, { surveyor_id: assignEmployeeId.value })
+        // Создаём запись оплаты БЕЗ report_month (будет заполнен при загрузке замера)
+        try {
+          const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
+          const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+          if (fullAmount > 0) {
             await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
           }
+        } catch {}
+      } else {
+        // Руководство (СМ, СДП, ГАП, Менеджер) — назначение + оплата сразу
+        const update = {}; update[`${roleKey}_id`] = assignEmployeeId.value
+        await crmApi.updateCard(card.value.id, update)
+
+        // Удаляем старые оплаты для этой роли
+        const oldPayments = cardPayments.value.filter(p => p.role === roleName)
+        for (const op of oldPayments) { try { await paymentsApi.delete(op.id) } catch {} }
+
+        // Создаём оплату (шаблонные: СМ и Менеджер без оплаты)
+        const skipPayment = isTemplate && ['senior_manager', 'manager'].includes(roleKey)
+        if (!skipPayment) {
+          try {
+            const calcRes = await paymentsApi.calculate({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName })
+            const fullAmount = typeof calcRes.data === 'number' ? calcRes.data : (calcRes.data?.amount || 0)
+            if (fullAmount > 0) {
+              if (roleKey === 'sdp') {
+                // СДП: Аванс 50% + Доплата 50%
+                const advance = Math.round(fullAmount / 2)
+                const balance = fullAmount - advance
+                const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+                await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Аванс', crm_card_id: card.value.id, calculated_amount: advance, final_amount: advance, report_month: month })
+                await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Доплата', crm_card_id: card.value.id, calculated_amount: balance, final_amount: balance, report_month: null })
+              } else {
+                await paymentsApi.create({ contract_id: card.value.contract_id, employee_id: assignEmployeeId.value, role: roleName, payment_type: 'Полная оплата', crm_card_id: card.value.id, calculated_amount: fullAmount, final_amount: fullAmount, report_month: null })
+              }
+            }
+          } catch (e) { console.warn('Ошибка оплаты:', e) }
         }
-      } catch (e) { console.warn('Ошибка расчёта/создания оплаты:', e) }
+      }
+
+      // История
+      try {
+        const empName = allEmployeesList.value.find(e => e.id === assignEmployeeId.value)?.full_name || ''
+        const { api: ax } = await import('src/boot/axios')
+        await ax.post('/api/v1/action-history', { action_type: 'executor_assigned', entity_type: 'crm_card', entity_id: card.value.id, description: `Назначен ${roleName}: ${empName}` })
+      } catch {}
+
+      $q.notify({ type: 'positive', message: 'Назначен' })
     }
 
-    // 4. Записываем в историю действий (как десктоп)
-    try {
-      const empName = allEmployeesList.value.find(e => e.id === assignEmployeeId.value)?.full_name || ''
-      const { api: ax } = await import('src/boot/axios')
-      await ax.post('/api/v1/action-history', { action_type: 'executor_assigned', entity_type: 'crm_card', entity_id: card.value.id, description: `Назначен ${roleName}: ${empName}` })
-    } catch {}
-
-    $q.notify({ type: 'positive', message: 'Назначен + оплата обновлена' })
     assignDialogVisible.value = false
     await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }

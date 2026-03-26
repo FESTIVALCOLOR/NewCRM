@@ -70,6 +70,9 @@ export const crmApi = {
   assignExecutor: (cardId, data) =>
     api.post(`/api/v1/crm/cards/${cardId}/stage-executor`, data),
 
+  reassignExecutor: (cardId, stageName, data) =>
+    api.patch(`/api/v1/crm/cards/${cardId}/stage-executor/${encodeURIComponent(stageName)}`, data),
+
   completeStage: (cardId, stageName, executorId) =>
     api.patch(`/api/v1/crm/cards/${cardId}/stage-executor/${encodeURIComponent(stageName)}/complete`, { executor_id: executorId }),
 
