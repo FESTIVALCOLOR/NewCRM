@@ -142,6 +142,11 @@ async def update_notification_settings(
     settings.notify_template = data.notify_template
     settings.notify_duplicate_info = data.notify_duplicate_info
     settings.notify_revision_info = data.notify_revision_info
+    # Web Push поля
+    if data.push_enabled is not None:
+        settings.push_enabled = data.push_enabled
+    if data.notification_channel is not None:
+        settings.notification_channel = data.notification_channel
     settings.updated_at = datetime.utcnow()
 
     db.commit()

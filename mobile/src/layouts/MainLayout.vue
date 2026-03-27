@@ -18,7 +18,7 @@
           <q-tooltip>Поиск</q-tooltip>
         </q-btn>
         <!-- Offline-очередь: badge с количеством ожидающих операций -->
-        <q-btn v-if="offlinePending > 0" flat dense round icon="cloud_upload" size="sm" color="orange-7" @click="refreshData">
+        <q-btn v-if="offlinePending > 0" flat dense round icon="cloud_upload" size="sm" color="orange-7" @click="handleOfflineQueue">
           <q-badge color="orange" floating style="font-size: 9px">{{ offlinePending }}</q-badge>
           <q-tooltip>{{ offlinePending }} операций ожидают отправки</q-tooltip>
         </q-btn>
@@ -226,7 +226,7 @@ import { useNotificationsStore } from 'src/stores/notifications'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermissionsStore } from 'src/stores/permissions'
 import { useWebSocket } from 'src/composables/useWebSocket'
-import { pendingCount as getOfflinePendingCount } from 'src/services/offlineQueue'
+import { pendingCount as getOfflinePendingCount, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -243,6 +243,35 @@ const unreadCount = computed(() => notificationsStore.unreadCount)
 // Offline-очередь: количество ожидающих операций
 const offlinePending = ref(0)
 let offlinePendingTimer = null
+
+async function handleOfflineQueue() {
+  $q.dialog({
+    title: `${offlinePending.value} операций в очереди`,
+    message: 'Эти операции были сохранены при отсутствии сети.',
+    options: {
+      type: 'radio',
+      model: 'sync',
+      items: [
+        { label: 'Отправить сейчас', value: 'sync' },
+        { label: 'Очистить очередь (удалить)', value: 'clear' }
+      ]
+    },
+    cancel: true,
+    persistent: false
+  }).onOk(async (action) => {
+    if (action === 'clear') {
+      await clearOfflineAll()
+      offlinePending.value = 0
+      $q.notify({ type: 'info', message: 'Очередь очищена' })
+    } else {
+      try {
+        const result = await syncOfflineAll()
+        $q.notify({ type: 'positive', message: `Отправлено: ${result.sent}, осталось: ${result.remaining}` })
+      } catch { $q.notify({ type: 'negative', message: 'Ошибка синхронизации' }) }
+    }
+    await refreshOfflinePending()
+  })
+}
 
 async function refreshOfflinePending() {
   try { offlinePending.value = await getOfflinePendingCount() } catch { offlinePending.value = 0 }

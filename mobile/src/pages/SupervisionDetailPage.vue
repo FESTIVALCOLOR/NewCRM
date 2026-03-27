@@ -814,10 +814,10 @@ async function openVoiceOnYd(path) {
 }
 
 function extractVoiceUrl(h) {
-  // Извлечь URL голосовой заметки из message (путь к .webm файлу на ЯД)
+  // Извлечь путь голосовой из message — формат: "Голосовая заметка (0:02) — /CRM/.../file.webm"
   const msg = h.message || h.description || ''
-  const match = msg.match(/\/CRM\/[^\s]+\.webm/)
-  return match ? `https://disk.yandex.ru/client${encodeURI(match[0])}` : ''
+  const match = msg.match(/— (\/CRM\/[^\s]+\.webm)/)
+  return match ? match[1] : ''
 }
 
 function formatDate(dateStr) {

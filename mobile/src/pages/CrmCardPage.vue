@@ -386,7 +386,7 @@
                   <q-icon :name="n.action_type === 'voice_note' ? 'mic' : 'comment'" :color="n.action_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">{{ n.description || 'Заметка' }}</q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333">{{ (n.description || 'Заметка').replace(/\[voice:[^\]]*\]\s*/, '') }}</q-item-label>
                   <q-item-label caption style="color: #888">{{ n.user_name || 'Неизвестный' }}</q-item-label>
                   <!-- Голосовая заметка — кнопка открыть на ЯД -->
                   <div v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" class="q-mt-xs">
@@ -1082,13 +1082,11 @@ async function openVoiceNote(path) {
   }
 }
 
-// Извлечь URL голосовой записи из new_values
+// Извлечь путь голосовой записи из description [voice:/path/file.webm]
 function noteVoiceUrl(n) {
-  if (!n.new_values) return ''
-  try {
-    const parsed = typeof n.new_values === 'string' ? JSON.parse(n.new_values) : n.new_values
-    return parsed.voice_url || ''
-  } catch { return '' }
+  const desc = n.description || ''
+  const match = desc.match(/\[voice:([^\]]+)\]/)
+  return match ? match[1] : ''
 }
 
 // Отправить текстовую заметку
@@ -1116,12 +1114,12 @@ async function onVoiceRecorded({ url, duration, path }) {
   try {
     const { api: ax } = await import('src/boot/axios')
     const durationStr = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`
+    const voicePath = url || path || ''
     await ax.post('/api/v1/action-history', {
       action_type: 'voice_note',
       entity_type: 'crm_card',
       entity_id: card.value.id,
-      description: `Голосовая заметка (${durationStr})`,
-      new_values: JSON.stringify({ voice_url: url || path })
+      description: `[voice:${voicePath}] Голосовая заметка (${durationStr})`
     })
     $q.notify({ type: 'positive', message: 'Голосовая заметка сохранена' })
     await reloadCard()
