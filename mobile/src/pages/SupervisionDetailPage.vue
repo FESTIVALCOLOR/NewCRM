@@ -231,7 +231,7 @@
 
             <!-- Список выездов -->
             <div v-if="visits.length > 0" class="q-pa-sm">
-              <q-card v-for="visit in visits" :key="'data-visit-' + visit.id" flat bordered class="q-mb-sm" style="border-radius: 6px">
+              <q-card v-for="visit in visits" :key="'data-visit-' + visit.id" flat bordered class="q-mb-sm" :style="Object.assign({ borderRadius: '6px' }, visit.actual_date ? { background: '#E8F5E9', borderColor: '#A5D6A7' } : {})">
                 <q-card-section class="q-pa-sm">
                   <div class="row items-center q-mb-xs">
                     <q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense class="q-mr-xs" />
@@ -265,6 +265,7 @@
                   <div class="row q-gutter-xs q-mt-sm justify-end">
                     <q-btn outline dense size="xs" icon="description" label="Отчёт" no-caps color="orange" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click="uploadVisitReport(visit)" />
                     <q-btn outline dense size="xs" icon="photo_camera" label="Фото" no-caps color="blue" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click="uploadVisitPhoto(visit)" />
+                    <q-btn v-if="!visit.actual_date" outline dense size="xs" icon="event_available" label="Факт. выезд" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click="setActualDate(visit)" />
                     <q-btn outline dense size="xs" icon="edit" no-caps color="grey-7" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click="editVisit(visit)" />
                     <q-btn outline dense size="xs" icon="delete" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click="deleteVisit(visit)" />
                   </div>
@@ -888,6 +889,7 @@ async function reloadData() {
   if (timelineRes.status === 'fulfilled') timeline.value = timelineRes.value.data?.entries || timelineRes.value.data || []
   if (summaryRes.status === 'fulfilled') summary.value = summaryRes.value.data
   if (visitsRes.status === 'fulfilled') visits.value = visitsRes.value.data || []
+  console.log('[Supervision] Visits loaded:', visits.value.length, visits.value.map(v => v.visit_type))
 
   // Оплаты надзора
   try {
@@ -1067,8 +1069,12 @@ async function saveTimelineEntry() {
 }
 
 async function saveVisit() {
-  if (!visitForm.value.visit_date || !visitForm.value.stage_code) {
-    $q.notify({ type: 'warning', message: 'Заполните дату и стадию' })
+  if (!visitForm.value.visit_date) {
+    $q.notify({ type: 'warning', message: 'Заполните дату выезда' })
+    return
+  }
+  if (visitForm.value.visit_type === 'К поставщику' && !visitForm.value.stage_code) {
+    $q.notify({ type: 'warning', message: 'Для выезда к поставщику укажите стадию' })
     return
   }
   try {
@@ -1095,6 +1101,26 @@ async function saveVisit() {
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
+}
+
+async function setActualDate(visit) {
+  const today = new Date().toISOString().split('T')[0]
+  $q.dialog({
+    title: 'Фактическая дата выезда',
+    prompt: { model: today, type: 'date' },
+    cancel: { label: 'Отмена', flat: true, noCaps: true },
+    ok: { label: 'Сохранить', noCaps: true, color: 'positive' },
+  }).onOk(async (val) => {
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.patch(`/api/v1/supervision-visits/${visit.id}`, { actual_date: val })
+      visit.actual_date = val
+      $q.notify({ type: 'positive', message: 'Факт. дата установлена' })
+      await reloadData()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
 }
 
 function editVisit(visit) {

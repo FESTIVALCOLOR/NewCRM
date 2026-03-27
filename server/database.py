@@ -820,6 +820,7 @@ class ProjectFile(Base):
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
 
     stage = Column(String, nullable=False)
+    stage_code = Column(String, nullable=True)  # Код стадии закупки (для надзора)
     file_type = Column(String, nullable=False)  # image, pdf, excel
 
     public_link = Column(String)

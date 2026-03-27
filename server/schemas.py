@@ -943,6 +943,7 @@ class SalaryResponse(SalaryBase):
 class ProjectFileBase(BaseModel):
     contract_id: int
     stage: str
+    stage_code: Optional[str] = None
     file_type: str
     public_link: Optional[str] = None
     yandex_path: str

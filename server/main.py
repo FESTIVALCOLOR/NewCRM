@@ -151,6 +151,16 @@ async def startup_event():
         if "already" not in str(e).lower() and "no such" not in str(e).lower():
             logger.debug(f"activity_log migration note: {e}")
 
+    # Миграция project_files: добавить stage_code
+    try:
+        from sqlalchemy import text as _text2
+        with engine.begin() as conn:
+            conn.execute(_text2("ALTER TABLE project_files ADD COLUMN IF NOT EXISTS stage_code VARCHAR"))
+            logger.info("Migrated project_files: added stage_code column")
+    except Exception as e:
+        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+            logger.debug(f"project_files migration note: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from database import SessionLocal, Employee
     from auth import get_password_hash

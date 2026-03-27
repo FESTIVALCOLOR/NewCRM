@@ -51,34 +51,42 @@
               <div class="column-body" v-if="col.cards.length > 0">
                 <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
                   <q-card-section class="q-pa-sm">
+                    <!-- 1. Номер договора (слева) + Стадия (справа) -->
                     <div class="row items-center justify-between q-mb-xs">
-                      <div class="text-caption" style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
-                      <q-badge v-if="card.is_paused" color="warning" label="Приостановлено" dense />
-                      <q-badge v-if="card.is_paused && card.pause_reason" color="orange-2" text-color="orange-9" :label="card.pause_reason" dense style="font-size: 9px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" />
+                      <div style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
+                      <q-badge v-if="!card.is_paused" color="blue-grey-3" text-color="blue-grey-9" :label="card.column_name" dense style="font-size: 9px" />
+                      <q-badge v-else color="warning" label="Приостановлено" dense style="font-size: 9px" />
                     </div>
-                    <div class="text-weight-bold" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
-                    <div class="row items-center q-gutter-xs text-caption q-mt-xs" style="color: #888">
-                      <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
-                      <span v-if="card.dan_name">ДАН: {{ card.dan_name }}</span>
+                    <!-- Причина паузы -->
+                    <div v-if="card.is_paused && card.pause_reason" class="q-mb-xs">
+                      <q-badge color="orange-2" text-color="orange-9" :label="card.pause_reason" dense style="font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" />
                     </div>
-                    <!-- Тип агента badge (как в CRM) -->
-                    <q-badge v-if="card.agent_type" text-color="white" class="q-mt-xs" :style="{ background: agentColorFor(card.agent_type), padding: '3px 8px', fontSize: '10px', borderRadius: '4px' }" :label="card.agent_type" />
-                    <!-- Дедлайн стадии -->
-                    <div v-if="card.deadline" class="q-mt-xs row items-center" style="background: #FFF3CD; border-radius: 4px; padding: 3px 8px; width: 100%">
+                    <!-- 2. Адрес -->
+                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
+                    <!-- 3. Площадь/город (слева) + Тип агента badge (справа) -->
+                    <div class="row items-center justify-between q-mb-xs">
+                      <div style="font-size: 11px; color: #888">
+                        <span v-if="card.area">{{ card.area }} м²</span>
+                        <span v-if="card.area && card.city"> | </span>
+                        <span v-if="card.city">{{ card.city }}</span>
+                        <span v-if="card.dan_name"> | ДАН: {{ card.dan_name }}</span>
+                      </div>
+                      <span v-if="card.agent_type" :style="{ background: agentColorFor(card.agent_type), color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }">{{ card.agent_type }}</span>
+                    </div>
+                    <!-- 4. Дедлайн -->
+                    <div v-if="card.deadline" class="q-mb-xs row items-center" style="background: #FFF3CD; border-radius: 4px; padding: 3px 8px; width: 100%">
                       <q-icon name="schedule" size="12px" style="color: #856404" class="q-mr-xs" />
                       <span style="font-size: 10px; color: #856404; font-weight: bold">{{ new Date(card.deadline).toLocaleDateString('ru-RU') }}</span>
                     </div>
-                    <!-- Пауза/Возобновить НАД данными карточки -->
-                    <div class="row q-gutter-xs q-mt-xs">
+                    <!-- 5. Пауза/Возобновить -->
+                    <div class="row q-gutter-xs q-mb-xs">
                       <q-btn v-if="!card.is_paused" flat dense no-caps icon="pause" label="Пауза" style="color: #F39C12; font-size: 10px; height: 24px; flex: 1; border: 1px solid #F39C12; border-radius: 4px" @click.stop="quickPause(card)" />
                       <q-btn v-else flat dense no-caps icon="play_arrow" label="Возобновить" style="color: #27AE60; font-size: 10px; height: 24px; flex: 1; border: 1px solid #27AE60; border-radius: 4px" @click.stop="quickResume(card)" />
                     </div>
-                    <!-- Кнопки действий -->
-                    <div class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                    <!-- 6. Кнопки -->
+                    <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
                       <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" class="q-mb-xs" @click="openCard(card)" />
-                      <div class="row q-gutter-xs">
-                        <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; flex: 1" @click.stop="showMoveDialog(card)" />
-                      </div>
+                      <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; width: 100%" @click.stop="showMoveDialog(card)" />
                     </div>
                   </q-card-section>
                 </q-card>

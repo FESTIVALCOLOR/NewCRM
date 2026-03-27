@@ -475,7 +475,9 @@ const supervisionByAgentChart = computed(() => {
 
 // ========== ЗАГРУЗКА ДАННЫХ ==========
 async function loadData() {
-  console.log('[Reports] Loading data with filters:', JSON.stringify(filters.value))
+  console.log('[Reports] Loading... filters:', JSON.stringify(filters.value))
+  const { api: axCheck } = await import('src/boot/axios')
+  console.log('[Reports] Token:', !!axCheck.defaults.headers.common['Authorization'])
   const params = { year: filters.value.year }
   if (filters.value.quarter) params.quarter = filters.value.quarter
   if (filters.value.month) params.month = filters.value.month

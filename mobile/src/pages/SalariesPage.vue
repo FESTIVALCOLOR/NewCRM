@@ -20,7 +20,7 @@
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
       <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable emit-value map-options label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
-      <div class="col-auto"><q-btn outlined dense no-caps label="Сбросить" color="grey-7" @click="resetFilters" style="font-size: 12px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; min-width: 100px" /></div>
+      <div class="col-auto"><q-btn outlined dense no-caps label="Сбросить" color="grey-7" @click="resetFilters" style="font-size: 12px; height: 40px; min-height: 40px; border: 1px solid #bdbdbd; border-radius: 4px; min-width: 90px; padding: 0 12px" /></div>
     </div>
 
     <!-- Период -->
