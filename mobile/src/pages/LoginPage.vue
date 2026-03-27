@@ -65,7 +65,7 @@
         </q-card-section>
 
         <q-card-section class="text-center q-pt-none">
-          <div class="text-caption" style="color: #ccc">v1.0.1</div>
+          <div class="text-caption" style="color: #ccc">v1.2.0</div>
         </q-card-section>
       </q-card>
     </div>
