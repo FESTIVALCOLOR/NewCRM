@@ -1,5 +1,6 @@
 import { boot } from 'quasar/wrappers'
 import axios from 'axios'
+import { isNetworkError, enqueue } from 'src/services/offlineQueue'
 
 const api = axios.create({
   baseURL: 'https://crm.festivalcolor.ru',
@@ -88,6 +89,41 @@ api.interceptors.response.use(
       }
     }
 
+    return Promise.reject(error)
+  }
+)
+
+// Interceptor для offline-очереди:
+// При сетевой ошибке на записывающих операциях (POST/PUT/PATCH/DELETE) —
+// предлагаем сохранить в очередь. НЕ сохраняем бизнес-ошибки (400, 409 и т.д.)
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config
+    // Только записывающие операции
+    const writeMethods = ['post', 'put', 'patch', 'delete']
+    const method = (config?.method || '').toLowerCase()
+    if (!writeMethods.includes(method)) return Promise.reject(error)
+    // Только сетевые ошибки (не бизнес-ошибки)
+    if (!isNetworkError(error)) return Promise.reject(error)
+    // Не сохраняем auth-запросы в очередь
+    if (config?.url?.includes('/auth/')) return Promise.reject(error)
+    // Не сохраняем heartbeat
+    if (config?.url?.includes('/heartbeat')) return Promise.reject(error)
+    // Не дублируем уже сохранённые
+    if (config?._offlineQueued) return Promise.reject(error)
+
+    try {
+      await enqueue({
+        method: method.toUpperCase(),
+        url: config.url,
+        data: config.data ? JSON.parse(typeof config.data === 'string' ? config.data : JSON.stringify(config.data)) : null,
+        description: `${method.toUpperCase()} ${config.url}`
+      })
+      console.info(`[OfflineQueue] Операция сохранена: ${method.toUpperCase()} ${config.url}`)
+    } catch (queueErr) {
+      console.warn('[OfflineQueue] Не удалось сохранить в очередь:', queueErr)
+    }
     return Promise.reject(error)
   }
 )

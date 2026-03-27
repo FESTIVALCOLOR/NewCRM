@@ -19,19 +19,19 @@
               <q-badge v-if="card.agent_type" text-color="white" :style="{ background: agentColor, minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="card.agent_type" />
             </div>
           </div>
-          <div class="row items-center q-gutter-sm text-caption q-mt-xs" style="color: #888">
+          <div class="row items-center q-gutter-xs text-caption q-mt-xs" style="color: #888">
             <span v-if="card.project_type">{{ card.project_type }}</span>
             <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
             <span v-if="card.area">{{ card.area }} м²</span>
             <span v-if="card.city">{{ card.city }}</span>
-            <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense size="xs" icon="folder_open" label="ЯД" no-caps style="color: #F39C12; font-size: 10px" @click="openYdFolder" />
+            <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense round size="xs" icon="folder_open" no-caps style="color: #F39C12" @click="openYdFolder"><q-tooltip>Яндекс.Диск</q-tooltip></q-btn>
           </div>
-          <div v-if="card.current_substep_name" class="q-mt-xs">
-            <q-chip dense size="sm" :color="substepColor(card.workflow_status)" text-color="white">
+          <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
+            <q-chip v-if="card.current_substep_name" dense size="sm" :color="substepColor(card.workflow_status)" text-color="white" style="flex: 1; justify-content: center">
               {{ workflowLabel(card.workflow_status) }}: {{ card.current_substep_name }}
             </q-chip>
+            <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" />
           </div>
-          <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" class="q-mt-xs" />
         </q-card-section>
       </q-card>
 
@@ -42,6 +42,7 @@
         <q-tab name="data" label="Данные" />
         <q-tab name="history" label="История" />
         <q-tab v-if="can('crm_cards.payments')" name="payments" label="Оплаты" />
+        <q-tab name="chat" icon="chat" label="Чат" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent">
@@ -56,7 +57,7 @@
               <q-item v-if="card.project_type"><q-item-section avatar><q-icon name="category" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Тип проекта</q-item-label><q-item-label>{{ card.project_type }}<span v-if="card.project_subtype"> / {{ card.project_subtype }}</span></q-item-label></q-item-section></q-item>
               <q-item v-if="card.contract_period"><q-item-section avatar><q-icon name="schedule" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Срок выполнения</q-item-label><q-item-label>{{ card.contract_period }} раб. дней</q-item-label></q-item-section></q-item>
               <q-item v-if="contractData?.contract_date"><q-item-section avatar><q-icon name="play_arrow" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дата начала работ</q-item-label><q-item-label>{{ fmtDate(contractData.contract_date) }}</q-item-label></q-item-section></q-item>
-              <q-item v-if="card.deadline"><q-item-section avatar><q-icon name="flag" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дедлайн проекта</q-item-label><q-item-label :style="{ color: dlHex(card.deadline) }">{{ fmtDate(card.deadline) }} ({{ daysLeft(card.deadline) }})</q-item-label></q-item-section></q-item>
+              <q-item v-if="card.deadline"><q-item-section avatar><q-icon name="flag" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дедлайн проекта</q-item-label><q-item-label :style="{ color: dlHex(card.deadline) }">{{ fmtDate(card.deadline) }} ({{ daysLeft(card.deadline) }})</q-item-label></q-item-section><q-item-section side><q-btn flat round dense size="xs" icon="event" color="grey-7" @click="addDeadlineToCalendar"><q-tooltip>В календарь</q-tooltip></q-btn></q-item-section></q-item>
               <q-item v-if="card.tags"><q-item-section avatar><q-icon name="label" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Теги</q-item-label><q-item-label>{{ card.tags }}</q-item-label></q-item-section></q-item>
             </q-list>
           </q-card>
@@ -76,7 +77,7 @@
                 <q-item-section side v-if="m.deadline">
                   <q-badge :color="dlBadgeColor(m.deadline)" :label="fmtDateShort(m.deadline)" dense />
                 </q-item-section>
-                <q-item-section side>
+                <q-item-section side v-if="!isArchived">
                   <div class="row q-gutter-xs">
                     <q-btn v-if="m.name && m.canManage" flat round dense size="xs" icon="edit" color="grey-7" @click="showAssignDialog(m, 'change')"><q-tooltip>Изменить</q-tooltip></q-btn>
                     <q-btn v-if="m.name && m.canManage" flat round dense size="xs" icon="person_remove" color="negative" @click="removeTeamMember(m)"><q-tooltip>Удалить</q-tooltip></q-btn>
@@ -87,12 +88,12 @@
             </q-list>
           </q-card>
 
-          <!-- Workflow действия (всегда видимы) -->
+          <!-- Workflow действия -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
-            <q-card-section>
+            <q-card-section v-if="!isArchived">
               <!-- Сдать работу -->
-              <q-btn v-if="card.workflow_status === 'in_progress'" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('submit')" :loading="actionLoading" />
+              <q-btn v-if="card.workflow_status === 'in_progress' || card.workflow_status === 'revision'" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('submit')" :loading="actionLoading" />
 
               <!-- Проверяющий: Клиенту + На исправление -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" class="row q-gutter-sm q-mb-sm">
@@ -103,6 +104,15 @@
               <!-- Клиент согласовал -->
               <q-btn v-if="can('crm_cards.complete_approval') && card.workflow_status === 'client_approval'" unelevated dense no-caps icon="thumb_up" label="Клиент согласовал" class="full-width q-mb-sm" style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('client-approved')" :loading="actionLoading" />
 
+              <!-- Решение после согласования клиента (pending_decision) -->
+              <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_decision'" class="q-mb-sm">
+                <div class="text-caption q-mb-xs" style="color: #888; text-align: center">Клиент согласовал. Выберите действие:</div>
+                <div class="row q-gutter-sm q-mb-xs">
+                  <q-btn unelevated dense no-caps icon="skip_next" label="Следующий круг" style="background: #5DADE2; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAdvanceRound" :loading="actionLoading" />
+                  <q-btn unelevated dense no-caps icon="done_all" label="Закрыть этап" style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doCloseStage" :loading="actionLoading" />
+                </div>
+              </div>
+
               <!-- Акт -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" class="row q-gutter-sm q-mb-sm">
                 <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('client-send')" :loading="actionLoading" />
@@ -110,6 +120,14 @@
               </div>
 
               <div v-if="!card.workflow_status" class="text-center" style="color: #999; font-size: 12px; padding: 8px 0">Нет активного рабочего процесса</div>
+
+            </q-card-section>
+
+            <!-- Архивные действия -->
+            <q-card-section v-else>
+              <q-btn v-if="canRestore" unelevated dense no-caps icon="replay" label="Вернуть в активные" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="showRestoreDialog = true" :loading="actionLoading" />
+              <q-btn v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР'" unelevated dense no-caps icon="engineering" label="В авторский надзор" class="full-width q-mb-sm" style="background: #F39C12; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="transferToSupervision" :loading="actionLoading" />
+              <div class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">Карточка в архиве</div>
             </q-card-section>
           </q-card>
         </q-tab-panel>
@@ -124,7 +142,9 @@
                   <q-icon :name="timelineIcon(e)" :color="timelineIconColor(e)" size="18px" />
                 </q-item-section>
                 <q-item-section :style="e.executor_role === 'header' ? 'padding-left: 4px' : ''">
-                  <q-item-label :style="{ fontSize: e.executor_role === 'header' ? '12px' : '11px', color: '#333', fontWeight: e.executor_role === 'header' || isActiveSubstep(e) ? 'bold' : 'normal' }">{{ e.stage_name }}</q-item-label>
+                  <q-item-label :style="{ fontSize: e.executor_role === 'header' ? '12px' : '11px', color: '#333', fontWeight: e.executor_role === 'header' || isActiveSubstep(e) ? 'bold' : 'normal' }">
+                    {{ e.stage_name }}
+                  </q-item-label>
                   <q-item-label v-if="e.executor_role !== 'header'" caption :style="{ color: isOverdue(e) ? '#E74C3C' : '#888' }">
                     <span v-if="e.norm_days">Норма: {{ e.custom_norm_days || e.norm_days }} дн.</span>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
@@ -132,6 +152,11 @@
                     <span v-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
                     <span v-else-if="e.actual_date && !isOverdue(e)" style="color: #27AE60"> | В срок</span>
                   </q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="e.stage_code === 'START'" style="min-width: auto; padding-right: 0">
+                  <q-icon name="info_outline" size="16px" color="grey-6" class="cursor-pointer">
+                    <q-tooltip style="font-size: 12px; white-space: pre-line">{{ startTooltip }}</q-tooltip>
+                  </q-icon>
                 </q-item-section>
                 <q-item-section side v-if="e.actual_date">
                   <div class="text-caption" :style="{ color: isOverdue(e) ? '#E74C3C' : '#27AE60' }">{{ fmtDateShort(e.actual_date) }}</div>
@@ -148,86 +173,93 @@
         <q-tab-panel name="data" class="q-pa-none">
           <!-- ТЗ -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Техническое задание</div></q-card-section>
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Техническое задание</div>
+                <div class="row q-gutter-xs">
+                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadCrmFile('tech_task')" />
+                  <q-btn v-if="contractData?.tech_task_link" outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="openLink(contractData.tech_task_link)"><q-tooltip>Открыть в ЯД</q-tooltip></q-btn>
+                </div>
+              </div>
+            </q-card-section>
             <q-list dense v-if="filesByStage('tech_task').length > 0">
               <q-item v-for="f in filesByStage('tech_task')" :key="f.id" >
                 <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
-                <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-                <q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
+                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openFile(f)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+                <q-item-section v-if="!isArchived" side style="flex-shrink: 0"><div class="row q-gutter-xs no-wrap"><q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
               </q-item>
             </q-list>
-            <q-card-section class="q-pt-xs"><div class="row q-gutter-xs"><q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить" no-caps dense @click="uploadCrmFile('tech_task')" /><q-btn v-if="contractData?.tech_task_link" flat color="grey-7" icon="open_in_new" label="ЯД" no-caps dense @click="openLink(contractData.tech_task_link)" /></div></q-card-section>
+            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
           </q-card>
 
           <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Замер</div></q-card-section>
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Замер</div>
+                <div class="row q-gutter-xs">
+                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="showMeasurementDlg = true" />
+                  <q-btn v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteFolderSection('measurement')"><q-tooltip>Удалить замер</q-tooltip></q-btn>
+                </div>
+              </div>
+            </q-card-section>
             <q-card-section class="q-pt-xs">
               <div v-if="contractData?.measurement_image_link" class="q-mb-xs">
                 <a :href="contractData.measurement_image_link" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с замером</a>
               </div>
               <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружен</div>
-              <div class="text-caption q-mb-xs" style="color: #888">Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}</div>
-              <!-- Файлы из project_files -->
-              <q-list dense v-if="filesByStage('measurement').length > 0" class="q-mb-xs">
-                <q-item v-for="f in filesByStage('measurement')" :key="f.id">
-                  <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
-                  <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-                  <q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
-                </q-item>
-              </q-list>
-              <div class="row q-gutter-xs">
-                <q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить файлы" no-caps dense @click="uploadCrmFile('measurement')" />
-                <q-btn v-if="contractData?.measurement_image_link && can('crm_cards.files_delete')" outline color="negative" icon="delete_outline" dense size="sm" @click="deleteFolderSection('measurement')"><q-tooltip>Удалить замер</q-tooltip></q-btn>
-              </div>
+              <div class="text-caption" style="color: #888">Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}</div>
             </q-card-section>
           </q-card>
 
           <!-- Фотофиксация (как десктоп: ссылка на папку) -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">Фотофиксация</div></q-card-section>
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Фотофиксация</div>
+                <div class="row q-gutter-xs">
+                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadCrmFile('photo_documentation')" />
+                  <q-btn v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteFolderSection('photo_documentation')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
+                </div>
+              </div>
+            </q-card-section>
             <q-card-section class="q-pt-xs">
               <div v-if="contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path" class="q-mb-xs">
                 <a :href="contractData.photo_folder_public_link || contractData.photo_documentation_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с фотофиксацией</a>
               </div>
-              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружена</div>
-              <q-list dense v-if="filesByStage('photo_documentation').length > 0" class="q-mb-xs">
-                <q-item v-for="f in filesByStage('photo_documentation')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
-              </q-list>
-              <div class="row q-gutter-xs">
-                <q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить файлы" no-caps dense @click="uploadCrmFile('photo_documentation')" />
-                <q-btn v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete')" outline color="negative" icon="delete_outline" dense size="sm" @click="deleteFolderSection('photo_documentation')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
-              </div>
+              <div v-else style="color: #999; font-size: 12px">Не загружена</div>
             </q-card-section>
           </q-card>
 
           <!-- Референсы / Шаблоны (как десктоп: ссылка на папку) -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs"><div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}</div></q-card-section>
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}</div>
+                <div class="row q-gutter-xs">
+                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadCrmFile('references')" />
+                  <q-btn v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteFolderSection('references')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
+                </div>
+              </div>
+            </q-card-section>
             <q-card-section class="q-pt-xs">
               <div v-if="contractData?.references_yandex_path" class="q-mb-xs">
                 <a :href="contractData.references_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">{{ card.project_type === 'Шаблонный' ? 'Открыть папку с шаблонами' : 'Открыть папку с референсами' }}</a>
               </div>
-              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружена</div>
-              <q-list dense v-if="filesByStage('references').length > 0" class="q-mb-xs">
-                <q-item v-for="f in filesByStage('references')" :key="f.id"><q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section><q-item-section side><div class="row q-gutter-xs"><q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section></q-item>
-              </q-list>
-              <div class="row q-gutter-xs">
-                <q-btn v-if="can('crm_cards.files_upload')" outline color="grey-7" icon="upload" label="Загрузить файлы" no-caps dense @click="uploadCrmFile('references')" />
-                <q-btn v-if="contractData?.references_yandex_path && can('crm_cards.files_delete')" outline color="negative" icon="delete_outline" dense size="sm" @click="deleteFolderSection('references')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
-              </div>
+              <div v-else style="color: #999; font-size: 12px">Не загружена</div>
             </q-card-section>
           </q-card>
 
           <!-- Стадии проекта с вкладками вариаций (как в десктопе) -->
           <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md" :style="isCurrentStage(stage.code) ? 'border: 2px solid #27AE60' : ''">
             <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between">
+              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div>
                 <div class="row q-gutter-xs">
-                  <q-btn v-if="can('crm_cards.files_upload')" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px" @click="uploadToVariation(stage.code)" />
-                  <q-btn v-if="can('crm_cards.files_upload')" outline dense size="xs" icon="create_new_folder" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="addVariationTab(stage.code)"><q-tooltip>Добавить вариацию</q-tooltip></q-btn>
-                  <q-btn v-if="getVariations(stage.code).length > 1" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteVariationTab(stage.code)"><q-tooltip>Удалить текущую вариацию</q-tooltip></q-btn>
+                  <q-btn v-if="revisionPathForStage(stage.code)" outline dense size="xs" label="Правки" no-caps color="negative" style="border-radius: 4px; padding: 2px 8px; font-weight: bold" @click="openRevisionFolder(stage.code)"><q-tooltip>Открыть папку с правками</q-tooltip></q-btn>
+                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadToVariation(stage.code)" />
+                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="create_new_folder" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="addVariationTab(stage.code)"><q-tooltip>Добавить вариацию</q-tooltip></q-btn>
+                  <q-btn v-if="getVariations(stage.code).length > 1 && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteVariationTab(stage.code)"><q-tooltip>Удалить текущую вариацию</q-tooltip></q-btn>
                 </div>
               </div>
             </q-card-section>
@@ -241,10 +273,10 @@
             <q-list dense v-if="filesForVariation(stage.code).length > 0">
               <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
                 <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
-                <q-item-section><q-item-label style="font-size: 12px">{{ f.file_name }}</q-item-label></q-item-section>
-                <q-item-section side>
-                  <div class="row q-gutter-xs">
-                    <q-btn outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="padding: 2px 6px; border-radius: 4px" @click.stop="openFile(f)" />
+                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openFile(f)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+                <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
+                  <div class="row q-gutter-xs no-wrap">
+                    <q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openFile(f)" />
                     <q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" />
                   </div>
                 </q-item-section>
@@ -260,7 +292,10 @@
 
         <!-- ====== ВКЛАДКА 4: История ====== -->
         <q-tab-panel name="history" class="q-pa-none">
-          <q-select v-model="historyFilter" :options="historyFilterOptions" outlined dense class="q-mb-md" style="font-size: 12px" emit-value map-options />
+          <div class="row items-center q-mb-md q-gutter-sm">
+            <q-select v-model="historyFilter" :options="historyFilterOptions" outlined dense style="font-size: 12px; flex: 1" emit-value map-options />
+            <VoiceRecorder :yandex-folder-path="contractData?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
+          </div>
           <q-card v-if="completedStages.length > 0" class="is-card q-mb-md" style="border-left: 3px solid #27AE60">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #27AE60">Выполненные стадии</div></q-card-section>
             <q-list dense>
@@ -287,18 +322,20 @@
                 <q-item-section>
                   <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">{{ p.employee_name || 'Не указан' }}</q-item-label>
                   <q-item-label caption style="color: #888">{{ p.stage_name || '' }}</q-item-label>
-                  <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #aaa; font-size: 10px">оплачено</q-item-label>
-                  <q-item-label v-else-if="p.report_month || p.payment_status === 'to_pay'" caption style="color: #aaa; font-size: 10px">к оплате</q-item-label>
+                  <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #27AE60; font-size: 10px">оплачено</q-item-label>
+                  <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">к оплате</q-item-label>
+                  <q-item-label v-else caption style="color: #bbb; font-size: 10px">в работе</q-item-label>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-right">
                     <div class="row items-center justify-end no-wrap">
-                      <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ fmtMoney(p.final_amount || p.amount) }}</div>
-                      <span class="text-caption q-ml-xs" style="color: #888">{{ p.payment_subtype || '' }}</span>
+                      <span class="text-caption" style="color: #888">{{ p.payment_subtype || '' }}</span>
                       <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px"></div>
                       <div class="text-caption" :style="{ color: p.report_month ? '#333' : '#bbb' }">{{ formatReportMonth(p.report_month) }}</div>
+                      <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px"></div>
+                      <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ fmtMoney(p.final_amount || p.amount) }}</div>
                     </div>
-                    <div class="row items-center justify-end q-gutter-xs q-mt-xs">
+                    <div v-if="!isArchived" class="row items-center justify-end q-gutter-xs q-mt-xs">
                       <q-btn flat round dense size="xs" icon="edit" color="grey-7" @click.stop="editPaymentAmount(p)" />
                       <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deletePayment(p)" />
                     </div>
@@ -311,7 +348,7 @@
           <!-- Итого -->
           <q-card v-if="cardPayments.length > 0" class="is-card" style="border-left: 3px solid #ffd93c">
             <q-card-section class="q-pa-md">
-              <div class="row items-center justify-between">
+              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">Итого по карточке</div>
                 <div class="text-h6 text-weight-bold" style="color: #333">{{ fmtMoney(paymentTotal) }}</div>
               </div>
@@ -322,7 +359,98 @@
             <q-icon name="payments" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет платежей</div>
           </q-card-section>
         </q-tab-panel>
+
+        <!-- ====== ВКЛАДКА: Telegram-чат ====== -->
+        <q-tab-panel name="chat" class="q-pa-none">
+          <!-- Загрузка -->
+          <div v-if="chatLoading" class="q-pa-md text-center">
+            <q-spinner color="grey-5" size="24px" />
+          </div>
+
+          <!-- Чат существует -->
+          <template v-else-if="chatData">
+            <q-card class="is-card q-mb-md">
+              <q-card-section>
+                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">{{ chatData.title || 'Проектный чат' }}</div>
+                <div v-if="chatData.invite_link" class="q-mb-sm">
+                  <a :href="chatData.invite_link" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 13px">
+                    <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
+                  </a>
+                </div>
+                <div class="text-caption" style="color: #888">
+                  {{ chatMembers.length }} участник(ов)
+                </div>
+              </q-card-section>
+            </q-card>
+
+            <!-- Участники -->
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Участники</div></q-card-section>
+              <q-list dense separator>
+                <q-item v-for="member in chatMembers" :key="member.id || member.user_id">
+                  <q-item-section avatar>
+                    <q-avatar size="28px" color="grey-3" text-color="grey-8">{{ (member.name || member.username || '?')[0] }}</q-avatar>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label style="font-size: 12px; color: #333">{{ member.name || member.username || 'Неизвестный' }}</q-item-label>
+                    <q-item-label caption>{{ member.role || 'участник' }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <q-card-section v-if="chatMembers.length === 0" class="text-center" style="color: #999; font-size: 12px">Нет участников</q-card-section>
+            </q-card>
+
+            <!-- Действия с чатом -->
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
+              <q-card-section>
+                <q-btn unelevated dense no-caps icon="send" label="Отправить сообщение" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showSendMessageDlg = true" />
+                <q-btn unelevated dense no-caps icon="smart_toy" label="Запустить скрипт" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="loadScriptsAndShow" />
+                <q-btn outline dense no-caps icon="delete" label="Удалить чат" class="full-width" color="negative" style="font-size: 12px; height: 36px; border-radius: 4px" @click="confirmDeleteChat" />
+              </q-card-section>
+            </q-card>
+          </template>
+
+          <!-- Чат не создан -->
+          <template v-else>
+            <q-card class="is-card q-mb-md">
+              <q-card-section class="text-center q-pa-lg">
+                <q-icon name="chat_bubble_outline" size="48px" color="grey-4" class="q-mb-sm" />
+                <div style="color: #999; font-size: 13px" class="q-mb-md">Telegram-чат не создан</div>
+                <q-btn unelevated dense no-caps icon="add" label="Создать чат" style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px" @click="createProjectChat" :loading="chatCreating" />
+              </q-card-section>
+            </q-card>
+          </template>
+        </q-tab-panel>
       </q-tab-panels>
+
+      <!-- Диалог отправки сообщения в чат -->
+      <q-dialog v-model="showSendMessageDlg">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #5DADE2; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Отправить сообщение</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+          <q-card-section>
+            <q-input v-model="chatMessageText" label="Текст сообщения" outlined dense type="textarea" autogrow />
+          </q-card-section>
+          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Отправить" style="background: #5DADE2; color: white; border-radius: 4px" no-caps @click="doSendMessage" :loading="chatActionLoading" :disable="!chatMessageText?.trim()" /></q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <!-- Диалог выбора скрипта -->
+      <q-dialog v-model="showScriptsDlg">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #58D68D; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Запустить скрипт</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+          <q-list v-if="chatScripts.length > 0" dense separator>
+            <q-item v-for="script in chatScripts" :key="script.id" clickable v-ripple @click="doTriggerScript(script)">
+              <q-item-section avatar><q-icon name="smart_toy" color="grey-7" /></q-item-section>
+              <q-item-section>
+                <q-item-label>{{ script.name || script.code }}</q-item-label>
+                <q-item-label caption>{{ script.description || '' }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-card-section v-else class="text-center" style="color: #999">Нет доступных скриптов</q-card-section>
+        </q-card>
+      </q-dialog>
 
       <!-- Диалог ревизии -->
       <q-dialog v-model="showRejectDialog">
@@ -349,15 +477,39 @@
         </q-card>
       </q-dialog>
 
-      <!-- FAB кнопки -->
-      <q-page-sticky position="bottom-right" :offset="[18, 18]">
+      <!-- Диалог замера -->
+      <MeasurementDialog v-model="showMeasurementDlg" :card-id="card?.id" :contract-id="card?.contract_id" :contract-data="contractData" @saved="onMeasurementSaved" />
+
+      <!-- FAB кнопки (скрыты в архиве) -->
+      <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 18]">
         <div class="column q-gutter-sm items-end">
+          <q-btn v-if="canRestore" round icon="build" size="md" style="background: #F39C12; color: white" @click="repairWorkflow" :loading="actionLoading">
+            <q-tooltip>Ремонт карточки</q-tooltip>
+          </q-btn>
           <q-btn round icon="sync" size="md" style="background: #5DADE2; color: white" @click="syncCrmWithYd" :loading="crmSyncing">
             <q-tooltip>Синхронизировать с ЯД</q-tooltip>
           </q-btn>
           <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="editCard" />
         </div>
       </q-page-sticky>
+
+      <!-- Диалог возврата в активные -->
+      <q-dialog v-model="showRestoreDialog">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #5DADE2; color: white">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Возврат в активные</q-toolbar-title>
+            <q-btn flat round dense icon="close" color="white" v-close-popup />
+          </q-toolbar>
+          <q-card-section>
+            <div class="text-caption q-mb-sm" style="color: #888">Выберите стадию, в которую нужно вернуть проект. Будет сброшена выбранная стадия и все последующие.</div>
+            <q-select v-model="restoreStage" :options="restoreStageOptions" label="Стадия" outlined dense emit-value map-options class="q-mb-sm" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" no-caps v-close-popup />
+            <q-btn unelevated label="Вернуть" no-caps style="background: #5DADE2; color: white; border-radius: 4px" @click="doRestore" :loading="actionLoading" :disable="!restoreStage" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
     </template>
 
     <div v-else class="text-center q-pa-xl" style="color: #999">
@@ -368,7 +520,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
@@ -376,9 +528,13 @@ import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
-import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi } from 'src/services/api'
+import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
+import MeasurementDialog from 'src/components/MeasurementDialog.vue'
+import VoiceRecorder from 'src/components/VoiceRecorder.vue'
+import { addToCalendar } from 'src/composables/useCalendar'
 
 const { can, isSuperuser } = usePermission()
+const authStore = useAuthStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -387,6 +543,30 @@ const crmStore = useCrmStore()
 const refs = useReferencesStore()
 
 const card = computed(() => crmStore.selectedCard)
+const ARCHIVE_COLUMNS = ['Выполненный проект', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
+const isArchived = computed(() => {
+  if (!card.value) return false
+  if (ARCHIVE_COLUMNS.includes(card.value.column_name)) return true
+  // Также проверяем статус договора
+  const cs = contractData.value?.status || ''
+  return ['СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР', 'Выполненный проект'].includes(cs)
+})
+const canRestore = computed(() => {
+  const pos = authStore.user?.position || ''
+  return pos === 'Руководитель студии' || pos === 'Старший менеджер проектов' || isSuperuser.value
+})
+const restoreStageOptions = computed(() => {
+  const isTemplate = card.value?.project_type === 'Шаблонный'
+  return isTemplate ? [
+    { label: 'Стадия 1: планировочные решения', value: 'Стадия 1: планировочные решения' },
+    { label: 'Стадия 2: рабочие чертежи', value: 'Стадия 2: рабочие чертежи' },
+    { label: 'Стадия 3: 3д визуализация (Дополнительная)', value: 'Стадия 3: 3д визуализация (Дополнительная)' },
+  ] : [
+    { label: 'Стадия 1: планировочные решения', value: 'Стадия 1: планировочные решения' },
+    { label: 'Стадия 2: концепция дизайна', value: 'Стадия 2: концепция дизайна' },
+    { label: 'Стадия 3: рабочие чертежи', value: 'Стадия 3: рабочие чертежи' },
+  ]
+})
 const activeTab = ref('executors')
 const actionLoading = ref(false)
 const employeeOptions = ref([])
@@ -395,14 +575,35 @@ const actionHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
 const timelineEntries = ref([])
+const workflowStates = ref([])
 const showRejectDialog = ref(false)
+const showMeasurementDlg = ref(false)
+const showRestoreDialog = ref(false)
+const restoreStage = ref(null)
 const rejectReason = ref('')
 const rejectFile = ref(null)
+
+// === Telegram-чат ===
+const chatData = ref(null)
+const chatMembers = ref([])
+const chatLoading = ref(false)
+const chatCreating = ref(false)
+const chatActionLoading = ref(false)
+const showSendMessageDlg = ref(false)
+const showScriptsDlg = ref(false)
+const chatMessageText = ref('')
+const chatScripts = ref([])
+
 const crmFileInput = ref(null)
 const crmUploadStage = ref('')
 const crmSyncing = ref(false)
 const crmUploadVariation = ref(1)
 const historyFilter = ref('all')
+
+// Загрузка чата при переключении на вкладку
+watch(activeTab, (tab) => {
+  if (tab === 'chat' && !chatData.value && !chatLoading.value) loadChat()
+})
 
 // Диалог назначения
 const assignDialogVisible = ref(false)
@@ -526,6 +727,7 @@ const allTeamMembers = computed(() => {
       canManage: canManageTeam,
       stageName: stage.stageName,
       isStageExecutor: true,
+      executorId: executor?.id || null,
     })
   }
 
@@ -536,6 +738,20 @@ const stageExecutors = computed(() => card.value?.stage_executors || [])
 const completedStages = computed(() => stageExecutors.value.filter(se => se.completed))
 
 function filesByStage(stage) { return projectFiles.value.filter(f => f.stage === stage) }
+
+// Путь к файлу правок для стадии (из workflow state)
+// Показывать только для текущей стадии И при статусе revision
+function revisionPathForStage(stageCode) {
+  const stageMap = { stage1: 'Стадия 1', stage2: 'Стадия 2', stage3: 'Стадия 3' }
+  const prefix = stageMap[stageCode] || ''
+  const colName = card.value?.column_name || ''
+  if (!colName.startsWith(prefix)) return ''
+  const wf = workflowStates.value.find(w =>
+    w.stage_name && w.stage_name.startsWith(prefix) &&
+    w.revision_file_path && w.status === 'revision'
+  )
+  return wf?.revision_file_path || ''
+}
 
 // Вариации — вкладки как в десктопе
 const activeVariation = ref({}) // { stage_code: active_variation_number }
@@ -611,6 +827,17 @@ const hasWorkflowActions = computed(() => {
   return s && ['in_progress', 'pending_review', 'client_approval', 'act_signing'].includes(s)
 })
 
+// Подсказка для START (как десктоп timeline_widget.py:862-877)
+const startTooltip = computed(() => {
+  const fmt = (d) => {
+    if (!d) return 'не установлена'
+    try { const [y, m, dd] = d.split('-'); return `${dd}.${m}.${y}` } catch { return d }
+  }
+  const cd = contractData.value
+  const c = card.value
+  return `Дата договора: ${fmt(cd?.contract_date)}\nДата замера: ${fmt(c?.survey_date || cd?.measurement_date)}\nДата тех. задания: ${fmt(c?.tech_task_date || cd?.tech_task_date)}\nДата аванса: ${fmt(cd?.advance_payment_paid_date)}`
+})
+
 // Оплаты группами по роли
 const paymentGroups = computed(() => {
   const map = {}
@@ -624,8 +851,8 @@ const paymentGroups = computed(() => {
 const paymentTotal = computed(() => cardPayments.value.reduce((sum, p) => sum + (p.final_amount || p.amount || 0), 0))
 
 function paymentRowStyle(p) {
-  if (p.is_paid) return { background: '#E8F5E9' }
-  if (p.report_month) return { background: '#FFF8E1' }
+  if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
+  if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
   return {}
 }
 
@@ -693,7 +920,12 @@ async function deleteFolderSection(section) {
         const { data: fresh } = await contractsApi.getById(contractData.value.id)
         contractData.value = fresh
       }
+      // Если замер — очищаем survey_date в crm_card
+      if (section === 'measurement' && card.value?.id) {
+        try { await crmApi.updateCard(card.value.id, { survey_date: null }) } catch {}
+      }
       $q.notify({ type: 'positive', message: `Папка ${cfg.label} удалена` })
+      await reloadCard()
     } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   })
 }
@@ -755,6 +987,35 @@ function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWit
 function actionIcon(t) { if (!t) return 'history'; const l=t.toLowerCase(); if (l.includes('move')||l.includes('column')) return 'swap_horiz'; if (l.includes('assign')) return 'person_add'; if (l.includes('submit')) return 'send'; if (l.includes('accept')) return 'check_circle'; if (l.includes('reject')) return 'replay'; if (l.includes('payment')) return 'payments'; if (l.includes('deadline')) return 'event'; if (l.includes('file')) return 'attach_file'; return 'history' }
 function actionColor(t) { if (!t) return 'grey-5'; const l=t.toLowerCase(); if (l.includes('accept')||l.includes('complete')) return 'positive'; if (l.includes('reject')) return 'negative'; if (l.includes('submit')) return 'info'; return 'grey-7' }
 
+// === Голосовая заметка — добавление в историю CRM карточки ===
+async function onVoiceRecorded({ url, duration, path }) {
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const durationStr = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`
+    await ax.post('/api/v1/action-history', {
+      action_type: 'voice_note',
+      entity_type: 'crm_card',
+      entity_id: card.value.id,
+      description: `Голосовая заметка (${durationStr}) — ${path}`
+    })
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения записи в историю' })
+  }
+}
+
+// === Добавить дедлайн проекта в календарь ===
+function addDeadlineToCalendar() {
+  if (!card.value?.deadline) return
+  addToCalendar({
+    title: `CRM: ${card.value.address || card.value.contract_number} — ${card.value.column_name || 'проект'}`,
+    description: `Дедлайн проекта ${card.value.contract_number}. Стадия: ${card.value.column_name || ''}`,
+    startDate: card.value.deadline,
+    location: card.value.address || '',
+    reminder: 1440 // за 1 день
+  }, $q)
+}
+
 // === ACTIONS ===
 function editCard() {
   if (card.value?.contract_id) {
@@ -781,8 +1042,12 @@ async function submitReject() {
   try {
     let filePath = null
     if (rejectFile.value) {
-      const yp = `/CRM/Правки/${card.value.contract_number||card.value.id}/${rejectFile.value.name}`
-      await filesApi.upload(rejectFile.value, yp); filePath = yp
+      const contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
+      const stageName = card.value.column_name || 'Стадия'
+      const corrPath = contractFolder ? `${contractFolder}/${stageName}/правки` : `/CRM/Правки/${card.value.contract_number||card.value.id}`
+      const yp = `${corrPath}/${rejectFile.value.name}`
+      await filesApi.upload(rejectFile.value, yp)
+      filePath = corrPath
     }
     await crmApi.rejectWork(card.value.id, { reason: rejectReason.value, revision_file_path: filePath })
     $q.notify({ type: 'positive', message: 'Отправлено на исправление' }); showRejectDialog.value = false; rejectReason.value = ''; rejectFile.value = null; await reloadCard()
@@ -796,28 +1061,10 @@ function showAssignDialog(member, mode) {
   assignRoleKey.value = member.roleKey
   assignStageName.value = member.stageName || ''
   assignMode.value = mode
-  assignNeedsDeadline.value = ['designer', 'draftsman'].includes(member.roleKey)
+  assignNeedsDeadline.value = false  // Дедлайн устанавливается при перемещении (move), не при назначении в команду
   assignDialogTitle.value = mode === 'assign' ? `Назначить ${member.role}` : `Изменить ${member.role}`
   assignEmployeeId.value = null
   assignDeadline.value = ''
-
-  // Автоподстановка дедлайна из timeline (как в десктопе)
-  if (assignNeedsDeadline.value && timelineEntries.value.length > 0) {
-    // Определяем стадию: из stageName, или по roleKey (как в doAssign)
-    let stageName = member.stageName || ''
-    if (!stageName) {
-      const isTemplate = card.value?.project_type === 'Шаблонный'
-      if (member.roleKey === 'designer') stageName = isTemplate ? 'Стадия 3: 3д визуализация (Дополнительная)' : 'Стадия 2: концепция дизайна'
-      else if (member.roleKey === 'draftsman') stageName = isTemplate ? 'Стадия 2: рабочие чертежи' : 'Стадия 3: рабочие чертежи'
-    }
-    const autoDeadline = calcDeadlineFromTimeline(timelineEntries.value, stageName)
-    if (autoDeadline) assignDeadline.value = autoDeadline
-  }
-  // Fallback: today + 7 дней
-  if (assignNeedsDeadline.value && !assignDeadline.value) {
-    const d = new Date(); d.setDate(d.getDate() + 7)
-    assignDeadline.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
 
   filterAssignEmployees('', (fn) => fn())
   assignDialogVisible.value = true
@@ -966,15 +1213,23 @@ async function doAssign() {
 async function removeTeamMember(member) {
   $q.dialog({ title: 'Убрать исполнителя?', message: `${member.role}: ${member.name}`, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {
     try {
+      const { api: ax } = await import('src/boot/axios')
       // 1. Удаляем оплаты для этой роли
       const roleName = ROLE_NAMES[member.roleKey] || member.role
-      const rolePayments = cardPayments.value.filter(p => p.role === roleName)
+      const rolePayments = cardPayments.value.filter(p => p.role === roleName && !p.reassigned)
       for (const rp of rolePayments) {
         try { await paymentsApi.delete(rp.id) } catch {}
       }
       // 2. Убираем исполнителя
-      const update = {}; update[`${member.roleKey}_id`] = null
-      await crmApi.updateCard(card.value.id, update)
+      const cardFields = ['senior_manager', 'sdp', 'gap', 'manager', 'surveyor']
+      if (cardFields.includes(member.roleKey)) {
+        // Роли хранящиеся как поля crm_cards
+        const update = {}; update[`${member.roleKey}_id`] = null
+        await crmApi.updateCard(card.value.id, update)
+      } else if (member.executorId) {
+        // Стадийные роли (designer, draftsman) — удаляем из stage_executors по ID
+        await ax.delete(`/api/v1/crm/stage-executors/${member.executorId}`)
+      }
       $q.notify({ type: 'positive', message: 'Убран + оплаты удалены' }); await reloadCard()
     } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   })
@@ -1096,11 +1351,16 @@ async function handleCrmFileUpload(event) {
     }
     $q.notify({ type: 'positive', message: `Загружено: ${fileList.length}` })
 
-    // Обновляем публичные ссылки на папки (как десктоп)
+    // Обновляем публичные ссылки на папки (как десктоп — ВСЕ стадии включая stage1/2/3)
     const FOLDER_LINK_FIELDS = {
       measurement: 'measurement_image_link',
       photo_documentation: 'photo_documentation_yandex_path',
       references: 'references_yandex_path',
+      stage1: 'act_planning_link',
+      stage2_concept: 'act_concept_link',
+      stage2_3d: 'act_concept_link',
+      stage3: 'act_final_link',
+      tech_task: 'tech_task_link',
     }
     const linkField = FOLDER_LINK_FIELDS[stage]
     if (linkField && contractFolder) {
@@ -1160,6 +1420,7 @@ async function loadAdditionalData(cardId) {
   }
 
   try { const { data } = await contractsApi.getById(cid); contractData.value = data } catch (e) { /* ignore */ }
+  try { const { data } = await crmApi.getWorkflowState(card.value.id); workflowStates.value = Array.isArray(data) ? data : data ? [data] : [] } catch { workflowStates.value = [] }
   try { const { data } = await filesApi.getContractFiles(cid); projectFiles.value = data || [] } catch (e) { projectFiles.value = [] }
   try {
     const { api: ax } = await import('src/boot/axios')
@@ -1174,6 +1435,109 @@ async function loadAdditionalData(cardId) {
 }
 
 // Кнопка «Синхронизировать с ЯД» — обратная синхронизация
+// === Архивные действия ===
+async function doRestore() {
+  if (!restoreStage.value) return
+  actionLoading.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    // 1. Обновляем статус договора → В работе
+    if (card.value.contract_id) {
+      await contractsApi.update(card.value.contract_id, { status: 'В работе', termination_reason: null })
+    }
+    // 2. Перемещаем карточку на выбранную стадию
+    await crmApi.moveCard(card.value.id, restoreStage.value)
+    // 3. Сбрасываем стадии (выбранную и все последующие)
+    try { await ax.post(`/api/v1/crm/cards/${card.value.id}/reset-stages`, { stage_name: restoreStage.value }) } catch {}
+    $q.notify({ type: 'positive', message: 'Карточка возвращена в активные' })
+    showRestoreDialog.value = false
+    restoreStage.value = null
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка возврата' })
+  } finally { actionLoading.value = false }
+}
+
+async function transferToSupervision() {
+  $q.dialog({ title: 'Подтверждение', message: 'Перевести карточку в авторский надзор?', cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'warning' } }).onOk(async () => {
+    actionLoading.value = true
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      // 1. Обновляем статус → АВТОРСКИЙ НАДЗОР
+      if (card.value.contract_id) {
+        await contractsApi.update(card.value.contract_id, { status: 'АВТОРСКИЙ НАДЗОР' })
+      }
+      await crmApi.moveCard(card.value.id, 'АВТОРСКИЙ НАДЗОР')
+      // 2. Создаём карточку надзора (если нет)
+      try {
+        await ax.post('/api/v1/supervision/cards', {
+          contract_id: card.value.contract_id,
+          column_name: 'Новый заказ',
+          start_date: new Date().toISOString().slice(0, 10),
+          deadline: card.value.deadline || '',
+        })
+      } catch {}
+      $q.notify({ type: 'positive', message: 'Переведено в авторский надзор' })
+      await reloadCard()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    } finally { actionLoading.value = false }
+  })
+}
+
+async function doAdvanceRound() {
+  actionLoading.value = true
+  try {
+    await crmApi.advanceRound(card.value.id)
+    $q.notify({ type: 'positive', message: 'Переход на следующий круг' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+async function doCloseStage() {
+  actionLoading.value = true
+  try {
+    await crmApi.closeStage(card.value.id)
+    $q.notify({ type: 'positive', message: 'Этап закрыт, переход к подписанию акта' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+function openRevisionFolder(stageCode) {
+  const path = revisionPathForStage(stageCode)
+  if (!path) return
+  const clean = path.replace(/^disk:\/?/, '').replace(/^\//, '')
+  const encoded = encodeURIComponent(clean).replace(/%2F/g, '/')
+  window.open(`https://disk.yandex.ru/client/disk/${encoded}`, '_blank')
+}
+
+async function repairWorkflow() {
+  actionLoading.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const { data } = await ax.post(`/api/v1/crm/cards/${card.value.id}/workflow/repair`)
+    if (data.old_substep === data.new_substep && data.old_status === data.new_status) {
+      $q.notify({ type: 'info', message: 'Карточка в порядке — восстановление не требуется' })
+    } else {
+      $q.notify({ type: 'positive', message: `Восстановлено: ${data.old_substep || '?'} → ${data.new_substep || '?'}` })
+      await reloadCard()
+    }
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка ремонта' })
+  } finally { actionLoading.value = false }
+}
+
+async function onMeasurementSaved() {
+  // Перезагружаем данные карточки и файлы после сохранения замера
+  await crmStore.loadCard(card.value.id)
+  if (card.value?.contract_id) {
+    try { const { data } = await contractsApi.getById(card.value.contract_id); contractData.value = data } catch {}
+    try { const { data } = await filesApi.getContractFiles(card.value.contract_id); projectFiles.value = data } catch {}
+  }
+}
+
 async function syncCrmWithYd() {
   const cid = card.value?.contract_id
   if (!cid) return
@@ -1232,11 +1596,116 @@ async function syncCrmFilesWithYd() {
   }
 }
 
+// === Telegram-чат — загрузка и действия ===
+
+async function loadChat() {
+  if (!card.value?.id) return
+  chatLoading.value = true
+  try {
+    const { data } = await messengerApi.getChats({ crm_card_id: card.value.id })
+    chatData.value = data?.[0] || null
+    if (chatData.value) {
+      const { data: members } = await messengerApi.getChatMembers(chatData.value.id)
+      chatMembers.value = members || []
+    }
+  } catch { chatData.value = null }
+  chatLoading.value = false
+}
+
+async function createProjectChat() {
+  if (!card.value?.id) return
+  chatCreating.value = true
+  try {
+    const payload = {
+      crm_card_id: card.value.id,
+      title: card.value.contract_number || `Чат проекта #${card.value.id}`
+    }
+    const { data } = await messengerApi.createChat(payload)
+    chatData.value = data
+    $q.notify({ type: 'positive', message: 'Чат создан' })
+    await loadChat()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка создания чата' })
+  }
+  chatCreating.value = false
+}
+
+async function confirmDeleteChat() {
+  if (!chatData.value?.id) return
+  $q.dialog({ title: 'Удалить чат?', message: 'Telegram-группа будет удалена', cancel: true, persistent: false })
+    .onOk(async () => {
+      try {
+        await messengerApi.deleteChat(chatData.value.id)
+        chatData.value = null
+        chatMembers.value = []
+        $q.notify({ type: 'positive', message: 'Чат удалён' })
+      } catch { $q.notify({ type: 'negative', message: 'Ошибка удаления' }) }
+    })
+}
+
+async function doSendMessage() {
+  if (!chatData.value?.id || !chatMessageText.value?.trim()) return
+  chatActionLoading.value = true
+  try {
+    await messengerApi.sendMessage(chatData.value.id, { text: chatMessageText.value.trim() })
+    $q.notify({ type: 'positive', message: 'Сообщение отправлено' })
+    chatMessageText.value = ''
+    showSendMessageDlg.value = false
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка отправки' }) }
+  chatActionLoading.value = false
+}
+
+async function loadScriptsAndShow() {
+  try {
+    const { data } = await messengerApi.getScripts({ crm_card_id: card.value?.id })
+    chatScripts.value = data || []
+  } catch { chatScripts.value = [] }
+  showScriptsDlg.value = true
+}
+
+async function doTriggerScript(script) {
+  if (!chatData.value?.id) return
+  try {
+    await messengerApi.triggerScript(script.id, chatData.value.id)
+    $q.notify({ type: 'positive', message: `Скрипт «${script.name || script.code}» запущен` })
+    showScriptsDlg.value = false
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка запуска скрипта' }) }
+}
+
+// === Блокировки (locks) — защита от одновременного редактирования ===
+const currentLockId = ref(null)
+const lockedByUser = ref(null)
+
+async function acquireLock(cardId) {
+  try {
+    // Проверяем, не заблокирована ли уже
+    const { data: existing } = await locksApi.check('crm_card', cardId)
+    if (existing && existing.locked_by && existing.locked_by !== authStore.user?.id) {
+      lockedByUser.value = existing.locked_by_name || 'другой пользователь'
+      $q.notify({ type: 'warning', message: `Карточка редактируется: ${lockedByUser.value}`, timeout: 5000 })
+      return
+    }
+    // Захватываем блокировку
+    const { data } = await locksApi.lock('crm_card', cardId)
+    if (data?.lock_id || data?.id) currentLockId.value = data.lock_id || data.id
+  } catch { /* блокировки опциональны — не блокируем работу */ }
+}
+
+async function releaseLock() {
+  if (!currentLockId.value) return
+  try { await locksApi.unlock(currentLockId.value) } catch {}
+  currentLockId.value = null
+}
+
 onMounted(async () => {
   try {
     const id = route.params.id
+    if (route.query.tab) activeTab.value = route.query.tab
     await crmStore.loadCard(id)
     await loadAdditionalData(id)
+    await acquireLock(id)
   } catch (e) { console.error('Ошибка загрузки карточки:', e) }
 })
+
+onBeforeUnmount(() => { releaseLock() })
 </script>

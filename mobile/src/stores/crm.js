@@ -95,7 +95,7 @@ export const useCrmStore = defineStore('crm', () => {
       // Дизайнер — только на Стадии 2 по designer_name
       if (hasPos('Дизайнер')) {
         const col = card.column_name || ''
-        if (col.includes('Стадия 2') || col.includes('концепция') || col.includes('визуализац')) {
+        if (col.includes('Стадия 2')) {
           if (card.designer_name === empName) return true
         }
       }
@@ -131,6 +131,32 @@ export const useCrmStore = defineStore('crm', () => {
     }
   }
 
+  /**
+   * Оптимистичное перемещение карточки — UI обновляется мгновенно,
+   * откатывается при ошибке API
+   * @param {number} cardId
+   * @param {string} newColumn
+   * @returns {{ success: boolean, oldColumn: string|null }}
+   */
+  function moveCardOptimistic(cardId, newColumn) {
+    const card = cards.value.find(c => c.id === cardId)
+    if (!card) return { success: false, oldColumn: null }
+    const oldColumn = card.column_name
+    // Мгновенное обновление UI
+    card.column_name = newColumn
+    return { success: true, oldColumn }
+  }
+
+  /**
+   * Откат перемещения карточки
+   * @param {number} cardId
+   * @param {string} oldColumn
+   */
+  function rollbackMoveCard(cardId, oldColumn) {
+    const card = cards.value.find(c => c.id === cardId)
+    if (card) card.column_name = oldColumn
+  }
+
   async function loadCard(cardId) {
     cardLoading.value = true
     try {
@@ -157,6 +183,7 @@ export const useCrmStore = defineStore('crm', () => {
     cards, filteredCards, loading, projectType, showArchive, selectedCard, cardLoading,
     columns, totalCards,
     loadCards, loadCard, setProjectType, toggleArchive,
+    moveCardOptimistic, rollbackMoveCard,
     columnOrder, COLUMNS_INDIVIDUAL, COLUMNS_TEMPLATE
   }
 })

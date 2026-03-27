@@ -35,7 +35,11 @@
           <q-icon name="archive" size="40px" class="q-mb-sm" />
           <div class="text-caption">{{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}</div>
         </div>
-        <crm-card-item v-for="card in archiveFiltered" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openCard(card.id)" />
+        <div class="row q-gutter-sm">
+          <div v-for="card in archiveFiltered" :key="card.id" class="col-12 col-sm-5 col-md-3 col-lg-2">
+            <crm-card-item :card="card" @click="openCard(card.id)" />
+          </div>
+        </div>
       </div>
 
       <!-- АКТИВНЫЕ (мобильный) — свайпабельные колонки -->
@@ -69,7 +73,7 @@
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openCard(card.id)" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openTechTaskDialog(card)" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" />
@@ -95,7 +99,7 @@
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openCard(card.id)" />
+                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openTechTaskDialog(card)" />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
@@ -162,6 +166,7 @@
       </q-card>
     </q-dialog>
     <measurement-dialog v-model="showMeasDialog" :card-id="measCardId" :contract-id="measContractId" :contract-data="measContractData" @saved="onMeasurementSaved" />
+    <tech-task-dialog v-model="showTTDialog" :card-id="ttCardId" :contract-id="ttContractId" :contract-data="ttContractData" @saved="onTechTaskSaved" />
     <page-dashboard :items="dashItems" />
   </q-page>
 </template>
@@ -173,17 +178,20 @@ import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { crmApi, employeesApi, contractsApi, paymentsApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
+import { useOptimistic } from 'src/composables/useOptimistic'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import CrmCardItem from 'src/components/CrmCardItem.vue'
 import PageDashboard from 'src/components/PageDashboard.vue'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
+import TechTaskDialog from 'src/components/TechTaskDialog.vue'
 
 const { can } = usePermission()
+const { optimistic } = useOptimistic()
 
 const $q = useQuasar()
 const router = useRouter()
 const crmStore = useCrmStore()
-const currentSlide = ref(0)
+const currentSlide = ref(parseInt(sessionStorage.getItem('crm_slide') || '0'))
 const moveDialogVisible = ref(false)
 const moveCard = ref(null)
 const moveStep = ref(1)
@@ -248,13 +256,14 @@ const dashItems = computed(() => {
   ]
 })
 
-// При смене данных сбрасываем слайд на первый непустой столбец
+// При смене данных — сохраняем позицию (не сбрасываем если уже была)
 watch(() => crmStore.columns, (cols) => {
-  if (cols.length > 0) {
-    const firstNonEmpty = cols.findIndex(c => c.count > 0)
-    currentSlide.value = firstNonEmpty >= 0 ? firstNonEmpty : 0
+  if (cols.length > 0 && currentSlide.value >= cols.length) {
+    currentSlide.value = 0
   }
 })
+// Сохраняем позицию слайда в session
+watch(currentSlide, (v) => { sessionStorage.setItem('crm_slide', String(v)) })
 
 function openCard(cardId) { router.push(`/crm/${cardId}`) }
 
@@ -269,12 +278,29 @@ async function openMeasurementDialog(card) {
 }
 function onMeasurementSaved() { crmStore.loadCards() }
 
+// === TechTask Dialog ===
+const showTTDialog = ref(false)
+const ttCardId = ref(null)
+const ttContractId = ref(null)
+const ttContractData = ref(null)
+
+async function openTechTaskDialog(card) {
+  ttCardId.value = card.id
+  ttContractId.value = card.contract_id
+  try {
+    const { data } = await contractsApi.getById(card.contract_id)
+    ttContractData.value = data
+  } catch { ttContractData.value = null }
+  showTTDialog.value = true
+}
+function onTechTaskSaved() { crmStore.loadCards() }
+
 async function doCardAction(cardId, action) {
   try {
     const actions = {
       submit: () => crmApi.submitWork(cardId),
       accept: () => crmApi.acceptWork(cardId),
-      reject: () => crmApi.rejectWork(cardId, { reason: 'Требуются правки' }),
+      reject: () => { router.push(`/crm/${cardId}?tab=executors`); return Promise.resolve() },
       'client-send': () => crmApi.sendToClient(cardId),
       'client-approved': () => crmApi.clientApproved(cardId),
       'sign-act': () => crmApi.signAct(cardId),
@@ -389,15 +415,21 @@ async function selectMoveColumn(colName) {
 }
 
 async function doMoveCard(colName) {
-  moveLoading.value = true
-  try {
-    await crmApi.moveCard(moveCard.value.id, colName)
-    $q.notify({ type: 'positive', message: `Перемещено: ${colName}` })
-    moveDialogVisible.value = false
-    crmStore.loadCards()
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка перемещения' })
-  } finally { moveLoading.value = false }
+  const cardId = moveCard.value.id
+  moveDialogVisible.value = false
+
+  // Оптимистичное перемещение — UI обновляется мгновенно
+  await optimistic(
+    () => {
+      const { oldColumn } = crmStore.moveCardOptimistic(cardId, colName)
+      return oldColumn
+    },
+    () => crmApi.moveCard(cardId, colName),
+    (oldColumn) => crmStore.rollbackMoveCard(cardId, oldColumn),
+    `Перемещено: ${colName}`
+  )
+  // Перезагружаем для полной синхронизации (обновление счётчиков и т.д.)
+  crmStore.loadCards()
 }
 
 async function doMoveWithAssign() {

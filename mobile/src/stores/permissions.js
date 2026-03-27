@@ -14,7 +14,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
     const auth = useAuthStore()
     const user = auth.user
     if (!user) return false
-    return SUPERUSER_ROLES.includes(user.role) || SUPERUSER_POSITIONS.includes(user.position)
+    return SUPERUSER_ROLES.includes(user.role) || SUPERUSER_POSITIONS.includes(user.position) || SUPERUSER_POSITIONS.includes(user.secondary_position)
   })
 
   function has(permName) {

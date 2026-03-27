@@ -500,6 +500,9 @@ app.include_router(sync_messenger_router, prefix="/api/v1/sync")
 from routers.notifications_router import router as notifications_router
 app.include_router(notifications_router, prefix="/api/v1")
 
+from routers.websocket_router import router as websocket_router
+app.include_router(websocket_router, prefix="/api/v1")
+
 from routers.employee_analytics_router import router as employee_analytics_router
 from routers.survey_router import router as survey_router
 app.include_router(employee_analytics_router, prefix="/api/v1/employee-analytics")

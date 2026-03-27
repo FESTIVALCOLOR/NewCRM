@@ -90,20 +90,22 @@ export default configure(function (/* ctx */) {
         cfg.cleanupOutdatedCaches = true
         cfg.navigateFallback = '/index.html'
         cfg.navigateFallbackDenylist = [/^\/api/]
+
+        // Runtime caching для API
         cfg.runtimeCaching = [
           {
-            urlPattern: /^https:\/\/crm\.festivalcolor\.ru\/api\/v1\//,
+            urlPattern: /\/api\/v1\//,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 300
-              },
+              expiration: { maxEntries: 100, maxAgeSeconds: 300 },
               networkTimeoutSeconds: 5
             }
           }
         ]
+
+        // Инжектировать push обработчик в SW
+        cfg.importScripts = ['/custom-sw-push.js']
       },
 
       extendManifestJson(json) {

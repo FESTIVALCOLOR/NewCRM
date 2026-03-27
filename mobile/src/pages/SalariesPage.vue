@@ -92,6 +92,7 @@
                         <!-- Действия -->
                         <q-btn v-if="can('salaries.mark_paid') && !p.is_paid && (p.report_month || p.payment_status === 'to_pay')" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
                         <q-btn v-if="can('salaries.mark_to_pay') && !p.is_paid && !p.report_month && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
+                        <q-btn v-if="can('salaries.update')" outline dense size="xs" icon="edit" no-caps color="grey-7" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="openEditDialog(p)" />
                         <q-btn v-if="can('salaries.delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="deletePayment(p)" />
                       </div>
                     </div>
@@ -145,6 +146,27 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог редактирования платежа -->
+    <q-dialog v-model="showEditDialog">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #ffd93c; color: #333">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Редактировать платёж</q-toolbar-title>
+          <q-btn flat round dense icon="close" @click="showEditDialog = false" />
+        </q-toolbar>
+        <q-card-section>
+          <div class="text-caption q-mb-sm" style="color: #888">{{ editPay.employee_name }}</div>
+          <q-input v-model.number="editPay.final_amount" label="Сумма *" outlined dense type="number" prefix="₽" class="q-mb-sm" />
+          <q-input v-model="editPay.report_month" label="Месяц отчёта" outlined dense type="month" class="q-mb-sm" />
+          <q-select v-model="editPay.payment_type" :options="editPaymentTypeOpts" label="Тип" outlined dense emit-value map-options class="q-mb-sm" />
+          <q-input v-model="editPay.comment" label="Комментарий" outlined dense type="textarea" autogrow />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" v-close-popup no-caps />
+          <q-btn unelevated label="Сохранить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps :loading="editSaving" @click="saveEdit" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -154,8 +176,10 @@ import { useQuasar } from 'quasar'
 import { paymentsApi, salariesApi, employeesApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
+import { useOptimistic } from 'src/composables/useOptimistic'
 
 const { can } = usePermission()
+const { optimistic } = useOptimistic()
 
 const $q = useQuasar()
 const refsStore = useReferencesStore()
@@ -167,6 +191,15 @@ const employeeOpts = ref([])
 const currentYear = new Date().getFullYear()
 const showCreateDialog = ref(false)
 const newPay = ref({ employee_id: null, amount: null, report_month: '' })
+const showEditDialog = ref(false)
+const editSaving = ref(false)
+const editPay = ref({ id: null, employee_name: '', final_amount: null, report_month: '', payment_type: '', comment: '', source: '' })
+const editPaymentTypeOpts = [
+  { label: 'Индивидуальный', value: 'Индивидуальный' },
+  { label: 'Шаблонный', value: 'Шаблонный' },
+  { label: 'Авторский надзор', value: 'Авторский надзор' },
+  { label: 'Оклад', value: 'Оклад' }
+]
 
 const paymentTabs = [
   { label: 'Все', value: 'all' }, { label: 'Инд.', value: 'individual' },
@@ -214,8 +247,8 @@ const paymentTypeMap = { all: '', individual: 'Индивидуальный', te
 
 const totalAmount = computed(() => payments.value.reduce((sum, p) => sum + (p.final_amount || p.amount || 0), 0))
 const paidCount = computed(() => payments.value.filter(p => p.is_paid).length)
-const toPayCount = computed(() => payments.value.filter(p => !p.is_paid && p.report_month).length)
-const inWorkCount = computed(() => payments.value.filter(p => !p.is_paid && !p.report_month).length)
+const toPayCount = computed(() => payments.value.filter(p => !p.is_paid && p.payment_status === 'to_pay').length)
+const inWorkCount = computed(() => payments.value.filter(p => !p.is_paid && p.payment_status !== 'to_pay').length)
 
 const groupedPayments = computed(() => {
   const map = {}
@@ -234,7 +267,7 @@ function fmtMonth(m) {
 }
 function payRowStyle(p) {
   if (p.is_paid || p.payment_status === 'paid') return { background: '#E8F5E9' }
-  if (p.report_month || p.payment_status === 'to_pay') return { background: '#FFF8E1' }
+  if (p.payment_status === 'to_pay') return { background: '#FFF8E1' }
   return {}
 }
 
@@ -281,8 +314,8 @@ async function loadData() {
     // Фильтр по агенту
     if (filters.value.agent_type) filtered = filtered.filter(p => (p.agent_type || '').includes(filters.value.agent_type))
     // Фильтр по статусу
-    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && !p.report_month)
-    else if (filters.value.status === 'to_pay') filtered = filtered.filter(p => !p.is_paid && p.report_month)
+    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && p.payment_status !== 'to_pay')
+    else if (filters.value.status === 'to_pay') filtered = filtered.filter(p => !p.is_paid && p.payment_status === 'to_pay')
     else if (filters.value.status === 'paid') filtered = filtered.filter(p => p.is_paid)
 
     payments.value = filtered
@@ -302,20 +335,25 @@ async function undoPaid(p) {
 }
 
 async function markPaid(p) {
-  try {
-    if (p.source === 'Оклад') {
-      await salariesApi.update(p.id, { payment_status: 'paid' })
-    } else if (p.id) {
-      // PATCH /mark-paid — заполняет paid_date и paid_by на сервере (как десктоп)
-      await paymentsApi.markPaid(p.id, p.employee_id)
-    }
-    p.is_paid = true
-    p.payment_status = 'paid'
-    $q.notify({ type: 'positive', message: 'Оплачено' })
-  } catch (err) {
-    const d = err.response?.data?.detail
-    $q.notify({ type: 'negative', message: typeof d === 'string' ? d : JSON.stringify(d || 'Ошибка') })
-  }
+  // Оптимистичное обновление — мгновенно меняем статус и цвет
+  await optimistic(
+    () => {
+      const snapshot = { is_paid: p.is_paid, payment_status: p.payment_status }
+      p.is_paid = true
+      p.payment_status = 'paid'
+      return snapshot
+    },
+    () => {
+      if (p.source === 'Оклад') return salariesApi.update(p.id, { payment_status: 'paid' })
+      if (p.id) return paymentsApi.markPaid(p.id, p.employee_id)
+      return Promise.resolve()
+    },
+    (snapshot) => {
+      p.is_paid = snapshot.is_paid
+      p.payment_status = snapshot.payment_status
+    },
+    'Оплачено'
+  )
 }
 
 async function setPayStatus(p) {
@@ -373,6 +411,44 @@ async function createSalary() {
     const msg = typeof detail === 'string' ? detail : JSON.stringify(detail || 'Ошибка создания')
     $q.notify({ type: 'negative', message: msg })
   }
+}
+
+function openEditDialog(p) {
+  editPay.value = {
+    id: p.id || p.salary_id,
+    employee_name: p.employee_name || '',
+    final_amount: p.final_amount || p.amount || 0,
+    report_month: p.report_month || '',
+    payment_type: p.payment_type || p.source || '',
+    comment: p.comment || '',
+    source: p.source || ''
+  }
+  showEditDialog.value = true
+}
+
+async function saveEdit() {
+  if (!editPay.value.final_amount) { $q.notify({ type: 'warning', message: 'Укажите сумму' }); return }
+  editSaving.value = true
+  try {
+    const data = {
+      final_amount: parseFloat(editPay.value.final_amount),
+      amount: parseFloat(editPay.value.final_amount),
+      report_month: editPay.value.report_month || null,
+      payment_type: editPay.value.payment_type,
+      comment: editPay.value.comment || null
+    }
+    if (editPay.value.source === 'Оклад') {
+      await salariesApi.update(editPay.value.id, data)
+    } else {
+      await paymentsApi.update(editPay.value.id, data)
+    }
+    $q.notify({ type: 'positive', message: 'Платёж обновлён' })
+    showEditDialog.value = false
+    loadData()
+  } catch (err) {
+    const d = err.response?.data?.detail
+    $q.notify({ type: 'negative', message: typeof d === 'string' ? d : JSON.stringify(d || 'Ошибка сохранения') })
+  } finally { editSaving.value = false }
 }
 
 watch(paymentTab, () => loadData())

@@ -79,6 +79,7 @@
               <q-select v-model="editForm.status" :options="refs.employeeStatuses" label="Статус" outlined dense />
               <q-input v-model="editForm.phone" label="Телефон" outlined dense type="tel" />
               <q-input v-model="editForm.email" label="Email" outlined dense type="email" />
+              <q-input v-model="editForm.address" label="Адрес проживания" outlined dense />
               <q-input v-model="editForm.birth_date" label="Дата рождения" outlined dense type="date" />
               <template v-if="isSuperuser">
               <q-separator />
@@ -132,6 +133,10 @@
                 <q-item-section side v-if="!selected.telegram_user_id">
                   <q-btn outline dense size="xs" label="Создать токен" no-caps color="grey-7" style="border-radius: 4px; font-size: 10px" @click="createTgToken(selected)" />
                 </q-item-section>
+              </q-item>
+              <q-item v-if="selected.address">
+                <q-item-section avatar><q-icon name="home" style="color: #333" /></q-item-section>
+                <q-item-section><q-item-label caption>Адрес проживания</q-item-label><q-item-label>{{ selected.address }}</q-item-label></q-item-section>
               </q-item>
               <q-item v-if="selected.department">
                 <q-item-section avatar><q-icon name="business" style="color: #333" /></q-item-section>
@@ -191,6 +196,7 @@
             <q-select v-model="form.status" :options="['активный', 'уволен', 'в резерве']" label="Статус" outlined dense />
             <q-input v-model="form.phone" label="Телефон" outlined dense type="tel" />
             <q-input v-model="form.email" label="Email *" outlined dense type="email" :rules="[v => !!v || 'Обязательно']" />
+            <q-input v-model="form.address" label="Адрес проживания" outlined dense />
             <q-input v-model="form.birth_date" label="Дата рождения" outlined dense type="date" />
             <q-separator />
             <div class="text-subtitle2 text-weight-bold">Вход в систему</div>
@@ -269,7 +275,7 @@ const editForm = ref({})
 
 const form = ref({
   full_name: '', position: '', secondary_position: '', status: 'активный',
-  phone: '', email: '', birth_date: '', login: '', password: '',
+  phone: '', email: '', address: '', birth_date: '', login: '', password: '',
   payment_type: '', payment_phone: '', payment_account: '',
   payment_bank_name: '', payment_bik: '', payment_corr_account: ''
 })

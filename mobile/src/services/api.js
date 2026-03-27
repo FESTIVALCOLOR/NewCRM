@@ -93,13 +93,19 @@ export const crmApi = {
     api.post(`/api/v1/crm/cards/${cardId}/workflow/client-send`),
 
   clientApproved: (cardId) =>
-    api.post(`/api/v1/crm/cards/${cardId}/workflow/client-approved`),
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/client-ok`),
 
   signAct: (cardId) =>
     api.post(`/api/v1/crm/cards/${cardId}/workflow/sign-act`),
 
-  getTimeline: (contractId) =>
-    api.get(`/api/v1/timeline/${contractId}`),
+  advanceRound: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/advance-round`),
+
+  closeStage: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/close-stage`),
+
+  repairWorkflow: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/repair`),
 
   getPayments: (cardId) =>
     api.get('/api/v1/payments', { params: { crm_card_id: cardId } }),
@@ -152,7 +158,10 @@ export const contractsApi = {
     api.put(`/api/v1/contracts/${contractId}`, data),
 
   delete: (contractId) =>
-    api.delete(`/api/v1/contracts/${contractId}`)
+    api.delete(`/api/v1/contracts/${contractId}`),
+
+  updateFiles: (contractId, data) =>
+    api.patch(`/api/v1/contracts/${contractId}/files`, data)
 }
 
 // === Notifications ===
@@ -162,7 +171,32 @@ export const notificationsApi = {
     api.get('/api/v1/notifications', { params: { unread_only: unreadOnly } }),
 
   markRead: (notificationId) =>
-    api.put(`/api/v1/notifications/${notificationId}/read`)
+    api.put(`/api/v1/notifications/${notificationId}/read`),
+
+  getSettings: (empId) =>
+    api.get(`/api/v1/notifications/settings/${empId}`),
+
+  updateSettings: (empId, data) =>
+    api.put(`/api/v1/notifications/settings/${empId}`, data),
+
+  testNotification: () =>
+    api.post('/api/v1/notifications/test'),
+
+  markAllRead: (empId) =>
+    api.post('/api/v1/notifications/mark-all-read', { employee_id: empId })
+}
+
+// === Web Push ===
+
+export const pushApi = {
+  getVapidKey: () =>
+    api.get('/api/v1/notifications/push/vapid-public-key'),
+
+  subscribe: (subscription) =>
+    api.post('/api/v1/notifications/push/subscribe', subscription),
+
+  unsubscribe: () =>
+    api.post('/api/v1/notifications/push/unsubscribe')
 }
 
 // === Employees ===
@@ -190,7 +224,22 @@ export const employeesApi = {
     api.post(`/api/v1/employees/${id}/create-telegram-token`),
 
   sendInvite: (id) =>
-    api.post(`/api/v1/employees/${id}/send-invite`)
+    api.post(`/api/v1/employees/${id}/send-invite`),
+
+  getPermissions: (id) =>
+    api.get(`/api/v1/permissions/${id}`),
+
+  updatePermissions: (id, data) =>
+    api.put(`/api/v1/permissions/${id}`, data),
+
+  resetPermissions: (id) =>
+    api.post(`/api/v1/permissions/${id}/reset-to-defaults`),
+
+  getTelegramLink: (id) =>
+    api.get(`/api/v1/employees/${id}/telegram-link`),
+
+  connectTelegram: (id, code) =>
+    api.post(`/api/v1/employees/${id}/telegram-connect/${code}`)
 }
 
 // === Payments ===
@@ -212,7 +261,19 @@ export const paymentsApi = {
     api.delete(`/api/v1/payments/${id}`),
 
   markPaid: (id, employeeId) =>
-    api.patch(`/api/v1/payments/${id}/mark-paid`, null, { params: { employee_id: employeeId || 0 } })
+    api.patch(`/api/v1/payments/${id}/mark-paid`, null, { params: { employee_id: employeeId } }),
+
+  getById: (id) =>
+    api.get(`/api/v1/payments/${id}`),
+
+  getSummary: (params) =>
+    api.get('/api/v1/payments/summary', { params }),
+
+  getByType: (params) =>
+    api.get('/api/v1/payments/by-type', { params }),
+
+  markUnpaid: (id) =>
+    api.patch(`/api/v1/payments/${id}/mark-unpaid`)
 }
 
 // === Salaries ===
@@ -306,6 +367,81 @@ export const supervisionApi = {
 
   addHistory: (cardId, data) =>
     api.post(`/api/v1/supervision/cards/${cardId}/history`, data)
+}
+
+// === Timeline ===
+
+export const timelineApi = {
+  get: (contractId) =>
+    api.get(`/api/v1/timeline/${contractId}`),
+
+  init: (contractId, data) =>
+    api.post(`/api/v1/timeline/${contractId}/init`, data),
+
+  getSummary: (contractId) =>
+    api.get(`/api/v1/timeline/${contractId}/summary`),
+
+  exportExcel: (contractId) =>
+    api.get(`/api/v1/timeline/${contractId}/export/excel`, { responseType: 'blob' }),
+
+  exportPdf: (contractId) =>
+    api.get(`/api/v1/timeline/${contractId}/export/pdf`, { responseType: 'blob' })
+}
+
+// === Глобальный поиск ===
+
+export const searchApi = {
+  global: (params) =>
+    api.get('/api/v1/search', { params })
+}
+
+// === История действий ===
+
+export const actionHistoryApi = {
+  getList: (params) =>
+    api.get('/api/v1/action-history', { params }),
+
+  getByEntity: (entityType, entityId) =>
+    api.get(`/api/v1/action-history/${entityType}/${entityId}`)
+}
+
+// === Нормо-дни ===
+
+export const normDaysApi = {
+  get: (params) =>
+    api.get('/api/v1/norm-days', { params }),
+
+  preview: (params) =>
+    api.get('/api/v1/norm-days/preview', { params }),
+
+  save: (data) =>
+    api.post('/api/v1/norm-days', data)
+}
+
+// === Locks (Блокировки при редактировании) ===
+
+export const locksApi = {
+  lock: (entityType, entityId) =>
+    api.post('/api/v1/locks', { entity_type: entityType, entity_id: entityId }),
+
+  unlock: (lockId) =>
+    api.delete(`/api/v1/locks/${lockId}`),
+
+  check: (entityType, entityId) =>
+    api.get(`/api/v1/locks/${entityType}/${entityId}`)
+}
+
+// === Messenger (Telegram-чаты проектов) ===
+
+export const messengerApi = {
+  getChats: (params) => api.get('/api/v1/messenger/chats', { params }),
+  createChat: (data) => api.post('/api/v1/messenger/chats', data),
+  deleteChat: (chatId) => api.delete(`/api/v1/messenger/chats/${chatId}`),
+  getChatMembers: (chatId) => api.get(`/api/v1/messenger/chats/${chatId}/members`),
+  sendMessage: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/send-message`, data),
+  getScripts: (params) => api.get('/api/v1/messenger/scripts', { params }),
+  triggerScript: (scriptId, chatId) => api.post(`/api/v1/messenger/scripts/${scriptId}/trigger`, { chat_id: chatId }),
+  sendSurvey: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/send-survey`, data)
 }
 
 // === Files (Яндекс.Диск) ===

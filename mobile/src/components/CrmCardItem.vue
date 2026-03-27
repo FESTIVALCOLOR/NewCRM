@@ -1,5 +1,5 @@
 <template>
-  <q-card flat bordered class="crm-card q-mb-sm">
+  <q-card flat bordered class="crm-card q-mb-sm" :style="archiveCardStyle">
     <q-card-section class="q-pa-sm">
       <!-- 1. Верхняя строка: номер + статус работы -->
       <div class="row items-center justify-between q-mb-xs">
@@ -56,20 +56,20 @@
         <span style="color: white; font-size: 10px">{{ card.tags }}</span>
       </div>
 
-      <!-- 9. Дедлайн (исполнителя по колонке, или общий) -->
-      <div v-if="deadlineText" class="q-mb-xs row items-center q-gutter-xs" :style="{ background: deadlineBg, borderRadius: '4px', padding: '3px 8px', height: '28px' }">
+      <!-- 9. Дедлайн (скрыт в архиве) -->
+      <div v-if="deadlineText && !isArchived" class="q-mb-xs row items-center q-gutter-xs" :style="{ background: deadlineBg, borderRadius: '4px', padding: '3px 8px', height: '28px' }">
         <q-icon name="schedule" size="10px" :style="{ color: deadlineTextColor }" />
         <span :style="{ fontSize: '10px', color: deadlineTextColor, fontWeight: 'bold' }">{{ deadlineText }}</span>
       </div>
 
-      <!-- 10. Индикатор "Работа сдана" (для проверяющих) -->
-      <div v-if="workSubmittedText" class="q-mb-xs" style="background: #27AE60; color: white; font-size: 10px; padding: 4px 8px; border-radius: 4px">
+      <!-- 10. Индикатор "Работа сдана" (скрыт в архиве) -->
+      <div v-if="workSubmittedText && !isArchived" class="q-mb-xs" style="background: #27AE60; color: white; font-size: 10px; padding: 4px 8px; border-radius: 4px">
         {{ workSubmittedText }}
       </div>
 
-      <!-- 11-15. Кнопки действий по ролям -->
-      <div class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
-        <!-- Строка 1: Workflow кнопки (сдать/принять/отклонить) -->
+      <!-- Кнопки действий (скрыты в архиве) -->
+      <div v-if="!isArchived" class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+        <!-- Строка 1: Workflow кнопки -->
         <div v-if="canSubmitWork" class="q-mb-xs">
           <q-btn unelevated dense no-caps label="Сдать работу" icon="check" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; padding: 4px 12px; height: 32px; border-radius: 4px; width: 100%" @click.stop="emit('submit-work')" />
         </div>
@@ -88,7 +88,7 @@
           <q-btn unelevated dense no-caps label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('sign-act')" />
         </div>
 
-        <!-- Строка 2: Добавить замер / ТЗ (как десктоп crm_tab.py:2754-2826) -->
+        <!-- Строка 2: Добавить замер / ТЗ -->
         <div v-if="showAddMeasurement || showAddTechTask" class="row q-gutter-xs q-mb-xs">
           <q-btn v-if="showAddMeasurement" unelevated dense no-caps icon="photo_camera" label="Добавить замер" style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1" @click.stop="emit('add-measurement')" />
           <q-btn v-if="showAddTechTask" unelevated dense no-caps icon="description" label="Добавить ТЗ" style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1" @click.stop="emit('add-tech-task')" />
@@ -103,6 +103,11 @@
         <div>
           <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; width: 100%" @click="emit('longpress')" />
         </div>
+      </div>
+
+      <!-- Архив: только кнопка открытия -->
+      <div v-else class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+        <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" @click="emit('click')" />
       </div>
     </q-card-section>
   </q-card>
@@ -124,6 +129,17 @@ const auth = useAuthStore()
 const { can } = usePermission()
 
 const agentColor = computed(() => refs.agentByName(props.card.agent_type)?.color || '#95A5A6')
+
+// Архивный режим
+const ARCHIVE_COLUMNS = ['Выполненный проект', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']
+const isArchived = computed(() => ARCHIVE_COLUMNS.includes(props.card.column_name))
+const archiveCardStyle = computed(() => {
+  const col = props.card.column_name || ''
+  if (col === 'Выполненный проект' || col === 'СДАН') return { background: '#E8F8F5', borderColor: '#27AE60' }
+  if (col === 'РАСТОРГНУТ') return { background: '#FADBD8', borderColor: '#E74C3C' }
+  if (col.includes('НАДЗОР')) return { background: '#E3F2FD', borderColor: '#2196F3' }
+  return {}
+})
 
 // === Workflow status → текст + цвет ===
 const ws = computed(() => props.card.workflow_status)
@@ -231,7 +247,7 @@ const empName = computed(() => auth.user?.full_name || '')
 const empPos = computed(() => auth.user?.position || '')
 
 const canSubmitWork = computed(() => {
-  if (ws.value && ws.value !== 'in_progress' && ws.value !== 'active') return false
+  if (ws.value && ws.value !== 'in_progress' && ws.value !== 'active' && ws.value !== 'revision') return false
   const c = props.card
   if (empPos.value === 'Дизайнер' && c.designer_name === empName.value && !c.designer_completed) return true
   if ((empPos.value === 'Чертёжник' || auth.user?.secondary_position === 'Чертёжник') && c.draftsman_name === empName.value && !c.draftsman_completed) return true

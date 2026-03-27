@@ -10,17 +10,30 @@
       <!-- Шапка -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="row items-center justify-between q-mb-sm">
+          <div class="row items-center justify-between q-mb-xs">
             <div class="text-h6 text-weight-bold">{{ card.contract_number }}</div>
             <q-badge
               :color="card.is_paused ? 'warning' : 'positive'"
               :label="card.is_paused ? 'Приостановлено' : card.column_name"
+              style="padding: 5px 8px; font-size: 11px"
             />
           </div>
           <div class="text-body1 q-mb-xs">{{ card.address }}</div>
-          <div class="row q-gutter-md text-caption text-grey-7">
-            <span v-if="card.area"><q-icon name="square_foot" size="14px" /> {{ card.area }} м²</span>
-            <span v-if="card.city"><q-icon name="location_on" size="14px" /> {{ card.city }}</span>
+          <div class="row items-center q-gutter-xs text-caption q-mb-xs" style="color: #888">
+            <span v-if="card.area">{{ card.area }} м²</span>
+            <span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
+            <span v-if="card.project_type">{{ card.project_type }}</span>
+            <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
+          </div>
+          <div v-if="card.agent_type" class="q-mb-xs">
+            <q-badge :style="{ background: agentColor, padding: '4px 8px', fontSize: '11px' }" text-color="white" :label="card.agent_type" />
+          </div>
+          <div class="row q-gutter-md text-caption" style="color: #888">
+            <span v-if="card.start_date"><q-icon name="play_arrow" size="14px" /> Начало: {{ formatDate(card.start_date) }}</span>
+            <span v-if="card.deadline"><q-icon name="flag" size="14px" :style="{ color: dlColor(card.deadline) }" /> Дедлайн: {{ formatDate(card.deadline) }}</span>
+          </div>
+          <div v-if="card.dan_completed" class="q-mt-xs">
+            <q-badge color="positive" label="Работа сдана ДАН" style="padding: 4px 8px" />
           </div>
         </q-card-section>
       </q-card>
@@ -111,9 +124,13 @@
           </q-item>
         </q-list>
 
-        <q-card-section v-else class="text-center text-grey-5">
-          Стадии не инициализированы
-        </q-card-section>
+        <q-list v-else dense separator>
+          <q-item v-for="s in defaultStages" :key="s.code" clickable v-ripple @click="initAndEditStage(s)">
+            <q-item-section avatar><q-icon name="radio_button_unchecked" color="grey-4" size="20px" /></q-item-section>
+            <q-item-section><q-item-label class="text-weight-medium">{{ s.name }}</q-item-label></q-item-section>
+            <q-item-section side><q-badge color="grey-4" label="Не начато" dense /></q-item-section>
+          </q-item>
+        </q-list>
       </q-card>
 
       <!-- Бюджет -->
@@ -163,8 +180,11 @@
                 {{ visit.notes }}
               </q-item-label>
             </q-item-section>
-            <q-item-section side class="text-caption text-grey-7">
-              {{ visit.executor_name }}
+            <q-item-section side>
+              <div class="column items-end q-gutter-xs">
+                <span class="text-caption text-grey-7">{{ visit.executor_name }}</span>
+                <q-btn flat round dense size="xs" icon="event" color="grey-6" @click.stop="addVisitToCalendar(visit)"><q-tooltip>В календарь</q-tooltip></q-btn>
+              </div>
             </q-item-section>
           </q-item>
         </q-list>
@@ -175,19 +195,45 @@
         <q-card-actions>
           <q-btn flat color="positive" icon="add" label="Добавить выезд" no-caps @click="showAddVisit = true" />
         </q-card-actions>
+
+        <!-- Файлы отчётов выездов -->
+        <q-separator />
+        <q-card-section class="q-pb-xs q-pt-sm">
+          <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+            <div class="text-caption text-weight-bold" style="color: #555">Отчёты и фотофиксация</div>
+            <div class="row q-gutter-xs">
+              <q-btn v-if="can('supervision.files_upload')" outline dense size="xs" icon="description" label="Отчёт" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="uploadReport" />
+              <q-btn v-if="can('supervision.files_upload')" outline dense size="xs" icon="photo_camera" label="Фото" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="takePhoto" />
+            </div>
+          </div>
+        </q-card-section>
+        <q-list v-if="svFilesReports.length > 0" dense>
+          <q-item v-for="f in svFilesReports" :key="f.id">
+            <q-item-section avatar><q-icon :name="f.file_type === 'image' ? 'image' : 'description'" :color="f.file_type === 'image' ? 'blue' : 'orange'" size="18px" /></q-item-section>
+            <q-item-section style="min-width: 0"><q-item-label style="font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+          </q-item>
+        </q-list>
+        <input ref="reportFileInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" style="display:none" @change="handleReportUpload" />
+        <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handlePhotoCapture" />
+        <input ref="fileInput" type="file" accept="image/*,.pdf" style="display:none" @change="handleFileUpload" />
       </q-card>
 
-      <!-- Фото с камеры -->
+      <!-- Файлы закупок (счета) — рядом с таблицей закупок -->
       <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold">Фотофиксация</div>
+        <q-card-section class="q-pb-xs">
+          <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
+            <div class="text-subtitle2 text-weight-bold">Файлы закупок</div>
+            <q-btn v-if="can('supervision.files_upload')" outline dense size="xs" icon="upload" label="Загрузить счёт" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px" @click="uploadNadzorFile" />
+          </div>
         </q-card-section>
-        <q-card-section>
-          <q-btn v-if="can('supervision.files_upload')" icon="photo_camera" label="Сделать фото" color="accent" text-color="dark" no-caps unelevated @click="takePhoto" class="q-mr-sm" />
-          <q-btn v-if="can('supervision.files_upload')" icon="upload_file" label="Загрузить" flat no-caps @click="uploadPhoto" />
-          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handlePhotoCapture" />
-          <input ref="fileInput" type="file" accept="image/*,.pdf" style="display:none" @change="handleFileUpload" />
-        </q-card-section>
+        <q-list v-if="svFilesSupervision.length > 0" dense separator>
+          <q-item v-for="f in svFilesSupervision" :key="f.id">
+            <q-item-section avatar><q-icon name="receipt" color="blue" /></q-item-section>
+            <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
+        <input ref="nadzorFileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx" style="display:none" @change="handleNadzorFileUpload" />
       </q-card>
 
       <!-- Диалог добавления выезда -->
@@ -197,6 +243,7 @@
           <q-card-section>
             <q-input v-model="visitForm.visit_date" label="Дата выезда" outlined dense type="date" class="q-mb-sm" />
             <q-select v-model="visitForm.stage_code" :options="stageCodesForVisit" label="Стадия" outlined dense emit-value map-options class="q-mb-sm" />
+            <q-select v-model="visitForm.executor_name" :options="executorNameOptions" label="Исполнитель (ДАН)" outlined dense emit-value class="q-mb-sm" />
             <q-input v-model="visitForm.notes" label="Заметки" outlined dense type="textarea" autogrow />
           </q-card-section>
           <q-card-actions align="right">
@@ -218,7 +265,7 @@
             <q-input v-model="editEntry.supplier" label="Поставщик" outlined dense class="q-mb-sm" />
             <q-select v-model="editEntry.status" :options="['Не начато','В работе','Закуплено','Доставлено','Просрочено']" label="Статус" outlined dense class="q-mb-sm" />
             <q-input v-model="editEntry.notes" label="Заметки" outlined dense type="textarea" autogrow class="q-mb-sm" />
-            <q-input v-model="editEntry.executor" label="Исполнитель" outlined dense class="q-mb-sm" />
+            <q-select v-model="editEntry.executor" :options="executorNameOptions" label="Исполнитель" outlined dense emit-value class="q-mb-sm" />
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Отмена" v-close-popup no-caps />
@@ -251,6 +298,58 @@
         </q-card>
       </q-dialog>
 
+      <!-- Telegram-чат -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle2 text-weight-bold">Telegram-чат</div>
+            <q-btn v-if="!svChatLoading && !svChatData" flat dense size="xs" icon="add" color="grey-7" @click="createSvChat" :loading="svChatCreating"><q-tooltip>Создать чат</q-tooltip></q-btn>
+          </div>
+        </q-card-section>
+
+        <div v-if="svChatLoading" class="q-pa-sm text-center"><q-spinner color="grey-5" size="20px" /></div>
+
+        <template v-else-if="svChatData">
+          <q-list dense>
+            <q-item>
+              <q-item-section avatar><q-icon name="chat" color="blue" /></q-item-section>
+              <q-item-section>
+                <q-item-label style="font-size: 12px; color: #333">{{ svChatData.title || 'Проектный чат' }}</q-item-label>
+                <q-item-label caption v-if="svChatData.invite_link">
+                  <a :href="svChatData.invite_link" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">Открыть в Telegram</a>
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side><q-badge color="blue-2" text-color="blue-8" :label="`${svChatMembers.length} уч.`" dense /></q-item-section>
+            </q-item>
+          </q-list>
+
+          <!-- Участники чата -->
+          <q-list v-if="svChatMembers.length > 0" dense separator>
+            <q-item v-for="member in svChatMembers" :key="member.id || member.user_id">
+              <q-item-section avatar>
+                <q-avatar size="24px" color="grey-3" text-color="grey-8">{{ (member.name || member.username || '?')[0] }}</q-avatar>
+              </q-item-section>
+              <q-item-section>
+                <q-item-label style="font-size: 11px">{{ member.name || member.username || 'Неизвестный' }}</q-item-label>
+                <q-item-label caption style="font-size: 10px">{{ member.role || 'участник' }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+
+          <q-card-section class="q-pt-sm">
+            <div class="row q-gutter-sm">
+              <q-btn outline dense no-caps icon="send" label="Сообщение" size="xs" color="primary" style="border-radius: 4px; flex: 1" @click="showSvSendMsgDlg = true" />
+              <q-btn outline dense no-caps icon="smart_toy" label="Скрипт" size="xs" color="positive" style="border-radius: 4px; flex: 1" @click="loadSvScriptsAndShow" />
+              <q-btn outline dense no-caps icon="delete" size="xs" color="negative" style="border-radius: 4px" @click="confirmDeleteSvChat" />
+            </div>
+          </q-card-section>
+        </template>
+
+        <q-card-section v-else class="text-center q-py-sm" style="color: #bbb; font-size: 11px">
+          Чат не создан
+        </q-card-section>
+      </q-card>
+
       <!-- Действия -->
       <q-card class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
@@ -269,8 +368,72 @@
             <q-item-section avatar><q-icon name="check_circle" color="primary" /></q-item-section>
             <q-item-section>Завершить текущую стадию</q-item-section>
           </q-item>
+          <!-- Переместить на стадию -->
+          <q-item v-if="can('supervision.move')" clickable v-ripple @click="showMoveDialog = true">
+            <q-item-section avatar><q-icon name="swap_horiz" color="grey-7" /></q-item-section>
+            <q-item-section>Переместить на стадию</q-item-section>
+          </q-item>
+          <!-- Сдать работу (ДАН) -->
+          <q-item v-if="isDan && !card.dan_completed" clickable v-ripple @click="submitDanWork">
+            <q-item-section avatar><q-icon name="check" color="positive" /></q-item-section>
+            <q-item-section>Сдать работу</q-item-section>
+          </q-item>
+          <!-- Принять работу (менеджер) -->
+          <q-item v-if="can('supervision.complete_stage') && card.dan_completed" clickable v-ripple @click="acceptDanWork">
+            <q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section>
+            <q-item-section>Принять работу ДАН</q-item-section>
+          </q-item>
+          <!-- Добавить запись в историю -->
+          <q-item clickable v-ripple @click="showAddHistoryDlg = true">
+            <q-item-section avatar><q-icon name="note_add" color="grey-7" /></q-item-section>
+            <q-item-section>Добавить запись</q-item-section>
+          </q-item>
         </q-list>
       </q-card>
+
+      <!-- Оплаты надзора -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold">Оплаты надзора</div></q-card-section>
+        <q-list v-if="svPayments.length > 0" dense separator>
+          <q-item v-for="p in svPayments" :key="p.id" :style="p.is_paid ? { background: '#E8F5E9' } : {}">
+            <q-item-section>
+              <q-item-label style="font-size: 12px">{{ p.employee_name || 'Не указан' }}</q-item-label>
+              <q-item-label caption>{{ p.role || '' }} {{ p.stage_name ? `· ${p.stage_name}` : '' }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <div class="text-weight-bold" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ formatMoney(p.final_amount || p.amount || 0) }}</div>
+              <div class="text-caption" style="color: #888">{{ p.is_paid ? 'оплачено' : p.payment_status === 'to_pay' ? 'к оплате' : 'в работе' }}</div>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">Нет оплат</q-card-section>
+      </q-card>
+
+      <!-- История надзора -->
+      <q-card class="is-card q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle2 text-weight-bold">История</div>
+            <VoiceRecorder :yandex-folder-path="card?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
+          </div>
+        </q-card-section>
+        <q-list v-if="svHistory.length > 0" dense separator>
+          <q-item v-for="h in svHistory" :key="h.id">
+            <q-item-section avatar><q-icon :name="historyIcon(h.entry_type)" :color="historyColor(h.entry_type)" size="18px" /></q-item-section>
+            <q-item-section>
+              <q-item-label style="font-size: 12px; color: #333">{{ h.message || h.description || '' }}</q-item-label>
+              <q-item-label caption style="color: #888">
+                <span v-if="h.entry_type" style="font-weight: bold">{{ historyLabel(h.entry_type) }}</span>
+                <span v-if="h.created_by_name"> · {{ h.created_by_name }}</span>
+                <span> · {{ formatDate(h.created_at) }}</span>
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">Нет записей</q-card-section>
+      </q-card>
+
+      <div class="q-mb-xl" />
     </template>
 
     <div v-else class="text-center q-pa-xl text-grey-5">
@@ -278,17 +441,85 @@
       <div>Карточка не найдена</div>
       <q-btn flat color="primary" label="Назад" @click="$router.back()" class="q-mt-md" no-caps />
     </div>
+
+    <!-- Диалог перемещения на стадию -->
+    <q-dialog v-model="showMoveDialog">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #5DADE2; color: white">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Переместить на стадию</q-toolbar-title>
+          <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </q-toolbar>
+        <q-card-section>
+          <q-select v-model="moveTargetColumn" :options="supervisionColumns" label="Стадия" outlined dense emit-value map-options />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" no-caps v-close-popup />
+          <q-btn unelevated label="Переместить" no-caps style="background: #5DADE2; color: white; border-radius: 4px" @click="doMoveSupervision" :disable="!moveTargetColumn" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог добавления записи -->
+    <q-dialog v-model="showAddHistoryDlg">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #ffd93c; color: #333">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Добавить запись</q-toolbar-title>
+          <q-btn flat round dense icon="close" v-close-popup />
+        </q-toolbar>
+        <q-card-section>
+          <q-input v-model="historyNote" label="Описание" outlined dense type="textarea" autogrow />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" no-caps v-close-popup />
+          <q-btn unelevated label="Добавить" no-caps style="background: #ffd93c; color: #333; border-radius: 4px" @click="doAddHistory" :disable="!historyNote" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог отправки сообщения в чат надзора -->
+    <q-dialog v-model="showSvSendMsgDlg">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #5DADE2; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Отправить сообщение</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+        <q-card-section>
+          <q-input v-model="svChatMsgText" label="Текст сообщения" outlined dense type="textarea" autogrow />
+        </q-card-section>
+        <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Отправить" style="background: #5DADE2; color: white; border-radius: 4px" no-caps @click="doSendSvMessage" :loading="svChatActionLoading" :disable="!svChatMsgText?.trim()" /></q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог выбора скрипта надзора -->
+    <q-dialog v-model="showSvScriptsDlg">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #58D68D; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Запустить скрипт</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+        <q-list v-if="svChatScripts.length > 0" dense separator>
+          <q-item v-for="script in svChatScripts" :key="script.id" clickable v-ripple @click="doTriggerSvScript(script)">
+            <q-item-section avatar><q-icon name="smart_toy" color="grey-7" /></q-item-section>
+            <q-item-section>
+              <q-item-label>{{ script.name || script.code }}</q-item-label>
+              <q-item-label caption>{{ script.description || '' }}</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else class="text-center" style="color: #999">Нет доступных скриптов</q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { supervisionApi, filesApi, employeesApi, paymentsApi } from 'src/services/api'
+import { supervisionApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
+import VoiceRecorder from 'src/components/VoiceRecorder.vue'
+import { addToCalendar } from 'src/composables/useCalendar'
 import { usePermission } from 'src/composables/usePermission'
+import { useAuthStore } from 'src/stores/auth'
+import { useReferencesStore } from 'src/stores/references'
 
 const { can } = usePermission()
+const refs = useReferencesStore()
+const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 
 const route = useRoute()
 const $q = useQuasar()
@@ -308,7 +539,79 @@ const showEditEntry = ref(false)
 const editEntry = ref(null)
 const cameraInput = ref(null)
 const fileInput = ref(null)
-const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '' })
+const nadzorFileInput = ref(null)
+const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '' })
+const executorOptions = ref([])
+const executorNameOptions = ref([])
+const svPayments = ref([])
+const svHistory = ref([])
+const svFilesSupervision = ref([])
+const svFilesReports = ref([])
+const reportFileInput = ref(null)
+const showMoveDialog = ref(false)
+const moveTargetColumn = ref(null)
+const showAddHistoryDlg = ref(false)
+const historyNote = ref('')
+
+// === Telegram-чат надзора ===
+const svChatData = ref(null)
+const svChatMembers = ref([])
+const svChatLoading = ref(false)
+const svChatCreating = ref(false)
+const svChatActionLoading = ref(false)
+const showSvSendMsgDlg = ref(false)
+const showSvScriptsDlg = ref(false)
+const svChatMsgText = ref('')
+const svChatScripts = ref([])
+
+// ДАН ли текущий пользователь
+const isDan = computed(() => {
+  const auth = useAuthStore()
+  return card.value && card.value.dan_id === auth.user?.id
+})
+
+const defaultStages = [
+  { code: 'STAGE_1_CERAMIC', name: 'Закупка керамогранита' },
+  { code: 'STAGE_2_PLUMBING', name: 'Закупка сантехники' },
+  { code: 'STAGE_3_EQUIPMENT', name: 'Закупка оборудования' },
+  { code: 'STAGE_4_DOORS', name: 'Закупка дверей и окон' },
+  { code: 'STAGE_5_WALLS', name: 'Закупка настенных материалов' },
+  { code: 'STAGE_6_FLOORS', name: 'Закупка напольных материалов' },
+  { code: 'STAGE_7_STUCCO', name: 'Лепной декор' },
+  { code: 'STAGE_8_LIGHTING', name: 'Освещение' },
+  { code: 'STAGE_9_APPLIANCES', name: 'Бытовая техника' },
+  { code: 'STAGE_10_CUSTOM_FURNITURE', name: 'Закупка заказной мебели' },
+  { code: 'STAGE_11_FACTORY_FURNITURE', name: 'Закупка фабричной мебели' },
+  { code: 'STAGE_12_DECOR', name: 'Закупка декора' },
+]
+
+function initAndEditStage(s) {
+  // Создаём запись в timeline и открываем на редактирование
+  editEntry.value = {
+    stage_code: s.code,
+    stage_name: `Стадия: ${s.name}`,
+    plan_date: '', actual_date: '', budget_planned: 0, budget_actual: 0,
+    supplier: '', status: 'Не начато', notes: '', executor: ''
+  }
+  showEditEntry.value = true
+}
+
+const supervisionColumns = [
+  { label: 'Новый заказ', value: 'Новый заказ' },
+  { label: 'Стадия 1: Закупка керамогранита', value: 'Стадия 1: Закупка керамогранита' },
+  { label: 'Стадия 2: Закупка сантехники', value: 'Стадия 2: Закупка сантехники' },
+  { label: 'Стадия 3: Закупка оборудования', value: 'Стадия 3: Закупка оборудования' },
+  { label: 'Стадия 4: Двери и окна', value: 'Стадия 4: Двери и окна' },
+  { label: 'Стадия 5: Настенные материалы', value: 'Стадия 5: Настенные материалы' },
+  { label: 'Стадия 6: Напольные материалы', value: 'Стадия 6: Напольные материалы' },
+  { label: 'Стадия 7: Лепной декор', value: 'Стадия 7: Лепной декор' },
+  { label: 'Стадия 8: Освещение', value: 'Стадия 8: Освещение' },
+  { label: 'Стадия 9: Бытовая техника', value: 'Стадия 9: Бытовая техника' },
+  { label: 'Стадия 10: Закупка заказной мебели', value: 'Стадия 10: Закупка заказной мебели' },
+  { label: 'Стадия 11: Закупка фабричной мебели', value: 'Стадия 11: Закупка фабричной мебели' },
+  { label: 'Стадия 12: Закупка декора', value: 'Стадия 12: Закупка декора' },
+  { label: 'Выполненный проект', value: 'Выполненный проект' },
+]
 
 const stageCodesForVisit = [
   { label: 'Ст. 1: Закупка керамогранита', value: 'STAGE_1_CERAMIC' },
@@ -374,6 +677,31 @@ async function reloadData() {
   if (timelineRes.status === 'fulfilled') timeline.value = timelineRes.value.data?.entries || timelineRes.value.data || []
   if (summaryRes.status === 'fulfilled') summary.value = summaryRes.value.data
   if (visitsRes.status === 'fulfilled') visits.value = visitsRes.value.data || []
+
+  // Оплаты надзора — endpoint /payments/by-supervision-card/{id}
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const { data } = await ax.get(`/api/v1/payments/by-supervision-card/${cardId}`)
+    svPayments.value = data || []
+  } catch { svPayments.value = [] }
+
+  // История надзора
+  try { const { data } = await supervisionApi.getHistory(cardId); svHistory.value = data || [] } catch { svHistory.value = [] }
+
+  // Файлы: закупки (stage=supervision) и отчёты выездов (stage=supervision_reports)
+  const cid = card.value?.contract_id
+  if (cid) {
+    try { const { data } = await filesApi.getContractFiles(cid, 'supervision'); svFilesSupervision.value = data || [] } catch { svFilesSupervision.value = [] }
+    try { const { data } = await filesApi.getContractFiles(cid, 'supervision_reports'); svFilesReports.value = data || [] } catch { svFilesReports.value = [] }
+  }
+
+  // Исполнители — только 3 из карточки (ДАН, СМ, Руководитель)
+  const names = []
+  if (card.value?.dan_name) names.push({ label: `${card.value.dan_name} (ДАН)`, value: card.value.dan_id })
+  if (card.value?.senior_manager_name) names.push({ label: `${card.value.senior_manager_name} (Ст. менеджер)`, value: card.value.senior_manager_id })
+  if (card.value?.studio_director_name) names.push({ label: `${card.value.studio_director_name} (Руководитель)`, value: card.value.studio_director_id })
+  executorOptions.value = names
+  executorNameOptions.value = names.map(n => n.label.split(' (')[0])
 }
 
 async function handlePause() {
@@ -467,12 +795,14 @@ function takePhoto() { cameraInput.value?.click() }
 function uploadPhoto() { fileInput.value?.click() }
 
 async function handlePhotoCapture(event) {
-  await uploadFile(event.target.files?.[0])
+  const file = event.target.files?.[0]
+  if (file) await uploadFileWithStage(file, 'supervision_reports')
   event.target.value = ''
 }
 
 async function handleFileUpload(event) {
-  await uploadFile(event.target.files?.[0])
+  const file = event.target.files?.[0]
+  if (file) await uploadFileWithStage(file, 'supervision_reports')
   event.target.value = ''
 }
 
@@ -480,14 +810,28 @@ async function uploadFile(file) {
   if (!file) return
   try {
     $q.loading.show({ message: 'Загрузка...' })
-    const yandexPath = `/CRM/Надзор/${card.value.contract_number || card.value.id}/${file.name}`
+    const { api: ax } = await import('src/boot/axios')
+    const cid = card.value.contract_id
+
+    // Получаем папку договора
+    let contractFolder = ''
+    if (cid) {
+      try {
+        const { data: c } = await import('src/services/api').then(m => m.contractsApi.getById(cid))
+        contractFolder = (c?.yandex_folder_path || '').replace(/^disk:/, '')
+      } catch {}
+    }
+
+    const supervisionFolder = contractFolder ? `${contractFolder}/Авторский надзор` : `/CRM/Надзор/${card.value.contract_number || card.value.id}`
+    const yandexPath = `${supervisionFolder}/${file.name}`
+
     const uploadRes = await filesApi.upload(file, yandexPath)
     const publicLink = uploadRes.data?.public_link || ''
-    // Создаём запись в БД (привязка к contract_id)
-    if (card.value.contract_id) {
-      const { api: ax } = await import('src/boot/axios')
+
+    // Создаём запись в project_files
+    if (cid) {
       await ax.post('/api/v1/files/', {
-        contract_id: card.value.contract_id,
+        contract_id: cid,
         stage: 'supervision',
         file_type: file.type?.includes('image') ? 'image' : 'pdf',
         public_link: publicLink,
@@ -495,13 +839,78 @@ async function uploadFile(file) {
         file_name: file.name,
         file_order: 0, variation: 1
       })
+
+      // Обновляем поле contracts (для синхронизации с десктопом)
+      try {
+        const { data: folderLink } = await filesApi.getPublicLink(supervisionFolder)
+        if (folderLink.public_link) {
+          const { contractsApi: cApi } = await import('src/services/api')
+          await cApi.update(cid, { additional_agreement_link: folderLink.public_link })
+        }
+      } catch {}
+
+      // Scan для синхронизации
+      try { await ax.post(`/api/v1/files/scan/${cid}?scope=supervision`) } catch {}
     }
     $q.notify({ type: 'positive', message: 'Файл загружен' })
+    await reloadData()
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки' })
   } finally {
     $q.loading.hide()
   }
+}
+
+function historyIcon(type) {
+  const m = { pause: 'pause_circle', resume: 'play_circle', card_moved: 'swap_horiz', assignment_change: 'person', stage_completed: 'check_circle', payment_created: 'payments', auto_resume: 'refresh' }
+  return m[type] || 'history'
+}
+function historyColor(type) {
+  const m = { pause: 'warning', resume: 'positive', card_moved: 'primary', stage_completed: 'positive', payment_created: 'info' }
+  return m[type] || 'grey-6'
+}
+function historyLabel(type) {
+  const m = { pause: 'Пауза', resume: 'Возобновление', card_moved: 'Перемещение', assignment_change: 'Назначение', stage_completed: 'Стадия завершена', payment_created: 'Оплата', auto_resume: 'Авто-возобновление' }
+  return m[type] || type || ''
+}
+
+function uploadNadzorFile() { nadzorFileInput.value?.click() }
+async function handleNadzorFileUpload(event) {
+  const file = event.target.files?.[0]
+  if (file) await uploadFileWithStage(file, 'supervision')
+  event.target.value = ''
+}
+
+function uploadReport() { reportFileInput.value?.click() }
+async function handleReportUpload(event) {
+  const file = event.target.files?.[0]
+  if (file) await uploadFileWithStage(file, 'supervision_reports')
+  event.target.value = ''
+}
+
+async function uploadFileWithStage(file, stage) {
+  if (!file) return
+  try {
+    $q.loading.show({ message: 'Загрузка...' })
+    const { api: ax } = await import('src/boot/axios')
+    const cid = card.value.contract_id
+    let contractFolder = ''
+    if (cid) {
+      try { const { data: c } = await import('src/services/api').then(m => m.contractsApi.getById(cid)); contractFolder = (c?.yandex_folder_path || '').replace(/^disk:/, '') } catch {}
+    }
+    const subFolder = stage === 'supervision_reports' ? 'Авторский надзор/Отчёты' : 'Авторский надзор'
+    const folder = contractFolder ? `${contractFolder}/${subFolder}` : `/CRM/Надзор/${card.value.contract_number || card.value.id}`
+    const yp = `${folder}/${file.name}`
+    const uploadRes = await filesApi.upload(file, yp)
+    const publicLink = uploadRes.data?.public_link || ''
+    if (cid) {
+      await ax.post('/api/v1/files/', { contract_id: cid, stage, file_type: file.type?.includes('image') ? 'image' : 'pdf', public_link: publicLink, yandex_path: yp, file_name: file.name, file_order: 0, variation: 1 })
+      try { await ax.post(`/api/v1/files/scan/${cid}?scope=supervision`) } catch {}
+    }
+    $q.notify({ type: 'positive', message: 'Файл загружен' })
+    await reloadData()
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка загрузки' }) }
+  finally { $q.loading.hide() }
 }
 
 async function loadReassignOptions() {
@@ -561,6 +970,157 @@ async function handleCompleteStage() {
   }
 }
 
+// Переместить на стадию
+async function doMoveSupervision() {
+  if (!moveTargetColumn.value) return
+  try {
+    await supervisionApi.moveCard(card.value.id, moveTargetColumn.value)
+    $q.notify({ type: 'positive', message: `Перемещено: ${moveTargetColumn.value}` })
+    showMoveDialog.value = false
+    moveTargetColumn.value = null
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка перемещения' })
+  }
+}
+
+// Сдать работу ДАН
+async function submitDanWork() {
+  try {
+    await supervisionApi.updateCard(card.value.id, { dan_completed: true })
+    $q.notify({ type: 'positive', message: 'Работа сдана' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+// Принять работу ДАН (менеджер)
+async function acceptDanWork() {
+  try {
+    await supervisionApi.updateCard(card.value.id, { dan_completed: false })
+    // Завершаем стадию
+    await supervisionApi.completeStage(card.value.id)
+    $q.notify({ type: 'positive', message: 'Работа принята, стадия завершена' })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+// Голосовая заметка — добавление в историю надзора
+async function onVoiceRecorded({ url, duration, path }) {
+  try {
+    const durationStr = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`
+    await supervisionApi.addHistory(card.value.id, {
+      description: `Голосовая заметка (${durationStr}) — ${path}`
+    })
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения записи в историю' })
+  }
+}
+
+// Добавить выезд в календарь
+function addVisitToCalendar(visit) {
+  if (!visit?.visit_date) return
+  const stageName = visit.stage_name?.replace(/^Стадия \d+: /, '') || ''
+  addToCalendar({
+    title: `Надзор: ${card.value?.address || ''} — выезд`,
+    description: `Выезд на объект${stageName ? '. Стадия: ' + stageName : ''}${visit.notes ? '. ' + visit.notes : ''}`,
+    startDate: visit.visit_date,
+    location: card.value?.address || '',
+    reminder: 1440 // за 1 день
+  }, $q)
+}
+
+// Добавить запись в историю
+async function doAddHistory() {
+  if (!historyNote.value) return
+  try {
+    await supervisionApi.addHistory(card.value.id, { description: historyNote.value })
+    $q.notify({ type: 'positive', message: 'Запись добавлена' })
+    showAddHistoryDlg.value = false
+    historyNote.value = ''
+    await reloadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
+}
+
+// === Telegram-чат надзора — загрузка и действия ===
+
+async function loadSvChat() {
+  if (!card.value?.id) return
+  svChatLoading.value = true
+  try {
+    const { data } = await messengerApi.getChats({ supervision_card_id: card.value.id })
+    svChatData.value = data?.[0] || null
+    if (svChatData.value) {
+      const { data: members } = await messengerApi.getChatMembers(svChatData.value.id)
+      svChatMembers.value = members || []
+    }
+  } catch { svChatData.value = null }
+  svChatLoading.value = false
+}
+
+async function createSvChat() {
+  if (!card.value?.id) return
+  svChatCreating.value = true
+  try {
+    const payload = {
+      supervision_card_id: card.value.id,
+      title: card.value.contract_number || `Чат надзора #${card.value.id}`
+    }
+    await messengerApi.createChat(payload)
+    $q.notify({ type: 'positive', message: 'Чат создан' })
+    await loadSvChat()
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка создания чата' }) }
+  svChatCreating.value = false
+}
+
+async function confirmDeleteSvChat() {
+  if (!svChatData.value?.id) return
+  $q.dialog({ title: 'Удалить чат?', message: 'Telegram-группа будет удалена', cancel: true, persistent: false })
+    .onOk(async () => {
+      try {
+        await messengerApi.deleteChat(svChatData.value.id)
+        svChatData.value = null
+        svChatMembers.value = []
+        $q.notify({ type: 'positive', message: 'Чат удалён' })
+      } catch { $q.notify({ type: 'negative', message: 'Ошибка удаления' }) }
+    })
+}
+
+async function doSendSvMessage() {
+  if (!svChatData.value?.id || !svChatMsgText.value?.trim()) return
+  svChatActionLoading.value = true
+  try {
+    await messengerApi.sendMessage(svChatData.value.id, { text: svChatMsgText.value.trim() })
+    $q.notify({ type: 'positive', message: 'Сообщение отправлено' })
+    svChatMsgText.value = ''
+    showSvSendMsgDlg.value = false
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка отправки' }) }
+  svChatActionLoading.value = false
+}
+
+async function loadSvScriptsAndShow() {
+  try {
+    const { data } = await messengerApi.getScripts({ supervision_card_id: card.value?.id })
+    svChatScripts.value = data || []
+  } catch { svChatScripts.value = [] }
+  showSvScriptsDlg.value = true
+}
+
+async function doTriggerSvScript(script) {
+  if (!svChatData.value?.id) return
+  try {
+    await messengerApi.triggerScript(script.id, svChatData.value.id)
+    $q.notify({ type: 'positive', message: `Скрипт «${script.name || script.code}» запущен` })
+    showSvScriptsDlg.value = false
+  } catch { $q.notify({ type: 'negative', message: 'Ошибка запуска скрипта' }) }
+}
+
 onMounted(async () => {
   const cardId = route.params.id
   if (!cardId) return
@@ -581,6 +1141,27 @@ onMounted(async () => {
     if (visitsRes.status === 'fulfilled') visits.value = visitsRes.value.data || []
   } finally {
     loading.value = false
+  }
+
+  // Загружаем чат параллельно (не блокируя основную загрузку)
+  loadSvChat()
+
+  // Блокировка карточки при редактировании
+  try {
+    const { data: existing } = await locksApi.check('supervision_card', cardId)
+    if (existing?.locked_by && existing.locked_by !== authStore.user?.id) {
+      $q.notify({ type: 'warning', message: `Карточка редактируется: ${existing.locked_by_name || 'другой пользователь'}`, timeout: 5000 })
+    } else {
+      const { data } = await locksApi.lock('supervision_card', cardId)
+      if (data?.lock_id || data?.id) svLockId.value = data.lock_id || data.id
+    }
+  } catch { /* блокировки опциональны */ }
+})
+
+const svLockId = ref(null)
+onBeforeUnmount(async () => {
+  if (svLockId.value) {
+    try { await locksApi.unlock(svLockId.value) } catch {}
   }
 })
 </script>

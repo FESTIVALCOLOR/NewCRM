@@ -49,11 +49,12 @@
                 <span style="color: #888; font-size: 11px">Карточек: {{ col.count }}</span>
               </div>
               <div class="column-body" v-if="col.cards.length > 0">
-                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm cursor-pointer" @click="openCard(card)" @longpress="showMoveDialog(card)">
+                <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
                   <q-card-section class="q-pa-sm">
                     <div class="row items-center justify-between q-mb-xs">
                       <div class="text-caption" style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
                       <q-badge v-if="card.is_paused" color="warning" label="Приостановлено" dense />
+                      <q-badge v-else-if="card.dan_completed" color="positive" label="Работа сдана" dense />
                     </div>
                     <div class="text-weight-bold" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
                     <div class="row q-gutter-xs text-caption q-mt-xs" style="color: #888">
@@ -62,6 +63,15 @@
                     </div>
                     <div v-if="card.deadline" class="text-caption q-mt-xs" :style="{ color: dlColor(card.deadline), fontWeight: 'bold' }">
                       Дедлайн: {{ new Date(card.deadline).toLocaleDateString('ru-RU') }}
+                    </div>
+                    <!-- Кнопки действий -->
+                    <div class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
+                      <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" class="q-mb-xs" @click="openCard(card)" />
+                      <div class="row q-gutter-xs">
+                        <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; flex: 1" @click.stop="showMoveDialog(card)" />
+                        <q-btn v-if="!card.is_paused" flat dense no-caps icon="pause" label="Пауза" style="color: #F39C12; font-size: 10px; height: 24px" @click.stop="quickPause(card)" />
+                        <q-btn v-else flat dense no-caps icon="play_arrow" label="Возобновить" style="color: #27AE60; font-size: 10px; height: 24px" @click.stop="quickResume(card)" />
+                      </div>
                     </div>
                   </q-card-section>
                 </q-card>
@@ -112,7 +122,7 @@ const { can } = usePermission()
 const cards = ref([])
 const loading = ref(false)
 const showArchive = ref(false)
-const currentSlide = ref(0)
+const currentSlide = ref(parseInt(sessionStorage.getItem('sv_slide') || '0'))
 const moveDialogVisible = ref(false)
 const moveCard = ref(null)
 
@@ -134,11 +144,21 @@ const columns = computed(() => {
   return SUPERVISION_COLUMNS.filter(c => grouped[c]).map(c => ({ name: c, shortName: c.replace(/^Стадия \d+: (Закупка )?/, '').substring(0, 15), cards: grouped[c], count: grouped[c].length }))
 })
 
-watch(columns, (cols) => { if (cols.length > 0) { const idx = cols.findIndex(c => c.count > 0); currentSlide.value = idx >= 0 ? idx : 0 } })
+watch(columns, (cols) => { if (cols.length > 0 && currentSlide.value >= cols.length) currentSlide.value = 0 })
+watch(currentSlide, (v) => { sessionStorage.setItem('sv_slide', String(v)) })
 
 function sColor(card) { const s = card.column_name || ''; if (s.includes('Стадия')) return 'orange'; if (s.includes('Выполненный')) return 'positive'; return 'blue' }
 function dlColor(d) { const days = Math.ceil((new Date(d) - new Date()) / 86400000); if (days < 0) return '#8B0000'; if (days <= 2) return '#F39C12'; return '#888' }
 function openCard(card) { router.push(`/supervision/${card.id}`) }
+
+async function quickPause(card) {
+  $q.dialog({ title: 'Приостановить', message: 'Причина приостановки', prompt: { model: '', type: 'text' }, cancel: true }).onOk(async (reason) => {
+    try { await supervisionApi.pause(card.id, reason || 'Без причины'); $q.notify({ type: 'positive', message: 'Приостановлено' }); loadCards() } catch (e) { $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка' }) }
+  })
+}
+async function quickResume(card) {
+  try { await supervisionApi.resume(card.id); $q.notify({ type: 'positive', message: 'Возобновлено' }); loadCards() } catch (e) { $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка' }) }
+}
 
 const dashItems = computed(() => [
   { label: 'Всего', value: cards.value.length },

@@ -190,6 +190,66 @@ async def send_test_notification(
     return {"ok": True, "message": "Тестовое уведомление отправлено"}
 
 
+@router.post("/notifications/push/subscribe")
+async def subscribe_push(
+    subscription: dict,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Сохранить Web Push подписку пользователя"""
+    import json
+    settings = db.query(NotificationSettings).filter_by(employee_id=current_user.id).first()
+    if not settings:
+        settings = NotificationSettings(employee_id=current_user.id)
+        db.add(settings)
+    settings.push_subscription = json.dumps(subscription)
+    settings.push_enabled = True
+    # Если канал был только telegram — переключаем на both
+    if settings.notification_channel == 'telegram':
+        settings.notification_channel = 'both'
+    db.commit()
+    return {"status": "subscribed"}
+
+
+@router.post("/notifications/push/unsubscribe")
+async def unsubscribe_push(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Отписаться от Web Push уведомлений"""
+    settings = db.query(NotificationSettings).filter_by(employee_id=current_user.id).first()
+    if settings:
+        settings.push_enabled = False
+        settings.push_subscription = None
+        if settings.notification_channel == 'push':
+            settings.notification_channel = 'telegram'
+        elif settings.notification_channel == 'both':
+            settings.notification_channel = 'telegram'
+        db.commit()
+    return {"status": "unsubscribed"}
+
+
+@router.put("/notifications/channel/{employee_id}")
+async def update_notification_channel(
+    employee_id: int,
+    channel: str,  # 'telegram', 'push', 'both'
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Обновить канал уведомлений: telegram, push или both"""
+    if channel not in ('telegram', 'push', 'both'):
+        raise HTTPException(status_code=400, detail="Допустимые каналы: telegram, push, both")
+    if employee_id != current_user.id and current_user.role not in SUPERUSER_ROLES:
+        raise HTTPException(status_code=403, detail="Нет прав")
+    settings = db.query(NotificationSettings).filter_by(employee_id=employee_id).first()
+    if not settings:
+        settings = NotificationSettings(employee_id=employee_id)
+        db.add(settings)
+    settings.notification_channel = channel
+    db.commit()
+    return {"status": "ok", "channel": channel}
+
+
 # ── ДИНАМИЧЕСКИЕ ПУТИ ──
 
 @router.get("/notifications", response_model=List[NotificationResponse])

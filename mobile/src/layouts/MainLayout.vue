@@ -17,6 +17,11 @@
         <q-btn flat dense round icon="search" size="sm" color="grey-7" @click="showGlobalSearch = true">
           <q-tooltip>Поиск</q-tooltip>
         </q-btn>
+        <!-- Offline-очередь: badge с количеством ожидающих операций -->
+        <q-btn v-if="offlinePending > 0" flat dense round icon="cloud_upload" size="sm" color="orange-7" @click="refreshData">
+          <q-badge color="orange" floating style="font-size: 9px">{{ offlinePending }}</q-badge>
+          <q-tooltip>{{ offlinePending }} операций ожидают отправки</q-tooltip>
+        </q-btn>
         <!-- Обновить сервер (первая) -->
         <q-btn flat dense round icon="refresh" size="sm" color="grey-7" @click="refreshData">
           <q-tooltip>Обновить</q-tooltip>
@@ -62,6 +67,17 @@
         </q-item>
       </q-list>
       <q-separator />
+      <!-- Онлайн счётчик (как в десктопе — внизу бокового меню) -->
+      <q-item v-if="onlineCount > 0" clickable v-ripple @click="showOnlinePopup = true" style="color: #555">
+        <q-item-section avatar>
+          <q-icon name="circle" color="green" size="12px" />
+        </q-item-section>
+        <q-item-section style="font-size: 13px">{{ onlineCount }} онлайн</q-item-section>
+        <q-item-section side>
+          <q-icon name="info_outline" color="grey-5" size="16px" />
+        </q-item-section>
+      </q-item>
+      <q-separator />
       <q-list padding>
         <q-item clickable v-ripple @click="handleLogout">
           <q-item-section avatar><q-icon name="logout" color="negative" /></q-item-section>
@@ -92,6 +108,30 @@
         </q-btn>
       </div>
     </q-footer>
+
+    <!-- Popup онлайн пользователей -->
+    <q-dialog v-model="showOnlinePopup" position="bottom">
+      <q-card style="width: 100%; max-width: 360px; border-radius: 10px 10px 0 0">
+        <q-card-section class="q-pb-xs">
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">Пользователи онлайн: {{ onlineCount }}</div>
+        </q-card-section>
+        <q-list v-if="canSeeOnlineNames" dense separator style="max-height: 300px; overflow-y: auto">
+          <q-item v-for="u in onlineUsers" :key="u.id">
+            <q-item-section avatar><q-avatar size="28px" color="green-2" text-color="green-8">{{ u.full_name?.[0] || '?' }}</q-avatar></q-item-section>
+            <q-item-section>
+              <q-item-label style="font-size: 13px">{{ u.full_name }}</q-item-label>
+              <q-item-label caption>{{ u.position }}</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">
+          Список доступен только руководящему составу
+        </q-card-section>
+        <q-card-actions align="center">
+          <q-btn flat label="Закрыть" no-caps v-close-popup style="color: #888" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
     <!-- Диалог настроек уведомлений -->
     <q-dialog v-model="showNotifDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
@@ -101,6 +141,34 @@
         </q-toolbar>
         <q-card-section v-if="notifSettings" style="max-height: 70vh; overflow-y: auto">
           <q-list dense>
+            <!-- Канал уведомлений -->
+            <q-item-label header style="font-size: 12px; color: #666; padding-bottom: 2px">Канал уведомлений</q-item-label>
+            <q-item tag="label" clickable @click="setNotifChannel('telegram')">
+              <q-item-section avatar><q-radio v-model="notifSettings.notification_channel" val="telegram" color="accent" /></q-item-section>
+              <q-item-section>
+                <q-item-label>Telegram</q-item-label>
+                <q-item-label caption>Через Telegram бот</q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item tag="label" clickable @click="setNotifChannel('push')">
+              <q-item-section avatar><q-radio v-model="notifSettings.notification_channel" val="push" color="accent" /></q-item-section>
+              <q-item-section>
+                <q-item-label>Push-уведомления</q-item-label>
+                <q-item-label caption>Через браузер (PWA)</q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item tag="label" clickable @click="setNotifChannel('both')">
+              <q-item-section avatar><q-radio v-model="notifSettings.notification_channel" val="both" color="accent" /></q-item-section>
+              <q-item-section>
+                <q-item-label>Оба канала</q-item-label>
+                <q-item-label caption>Telegram + Push одновременно</q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-banner v-if="pushPermissionDenied" dense class="bg-orange-1 q-my-xs" rounded>
+              <template v-slot:avatar><q-icon name="warning" color="orange" /></template>
+              Push-уведомления заблокированы в настройках браузера
+            </q-banner>
+            <q-separator class="q-my-xs" />
             <q-item tag="label"><q-item-section>Telegram</q-item-section><q-item-section side><q-toggle v-model="notifSettings.telegram_enabled" color="accent" /></q-item-section></q-item>
             <q-item tag="label"><q-item-section>Email</q-item-section><q-item-section side><q-toggle v-model="notifSettings.email_enabled" color="accent" /></q-item-section></q-item>
             <q-separator class="q-my-xs" />
@@ -150,13 +218,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 import { useNotificationsStore } from 'src/stores/notifications'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermissionsStore } from 'src/stores/permissions'
+import { useWebSocket } from 'src/composables/useWebSocket'
+import { pendingCount as getOfflinePendingCount } from 'src/services/offlineQueue'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -165,9 +235,18 @@ const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
 const referencesStore = useReferencesStore()
 const permsStore = usePermissionsStore()
+const { connect: wsConnect, disconnect: wsDisconnect, isConnected: wsConnected } = useWebSocket()
 
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
+
+// Offline-очередь: количество ожидающих операций
+const offlinePending = ref(0)
+let offlinePendingTimer = null
+
+async function refreshOfflinePending() {
+  try { offlinePending.value = await getOfflinePendingCount() } catch { offlinePending.value = 0 }
+}
 
 // Глобальный поиск
 const showGlobalSearch = ref(false)
@@ -208,6 +287,9 @@ onMounted(() => {
   referencesStore.loadAll()
   permsStore.load()
   setInterval(() => notificationsStore.load(), 60000)
+
+  // WebSocket для real-time обновлений (дополняет polling, не заменяет)
+  _connectWebSocket()
 })
 
 // Фильтр меню по правам
@@ -287,6 +369,7 @@ function openManual() {
 
 const showNotifDialog = ref(false)
 const notifSettings = ref(null)
+const pushPermissionDenied = ref(false)
 
 async function openNotifSettings() {
   const empId = authStore.user?.id
@@ -294,11 +377,96 @@ async function openNotifSettings() {
   try {
     const { api } = await import('src/boot/axios')
     const { data } = await api.get(`/api/v1/notifications/settings/${empId}`)
+    // Дефолт для старых записей без notification_channel
+    if (!data.notification_channel) data.notification_channel = 'telegram'
     notifSettings.value = data
+    // Проверяем статус разрешения push
+    if ('Notification' in window) {
+      pushPermissionDenied.value = Notification.permission === 'denied'
+    }
     showNotifDialog.value = true
   } catch {
     import('quasar').then(({ Notify }) => Notify.create({ type: 'negative', message: 'Не удалось загрузить настройки' }))
   }
+}
+
+/**
+ * Переключение канала уведомлений.
+ * При выборе push/both — запрашиваем разрешение браузера и подписываемся.
+ */
+async function setNotifChannel(channel) {
+  if (!notifSettings.value) return
+  notifSettings.value.notification_channel = channel
+
+  // Если выбран push или both — нужно запросить разрешение и подписаться
+  if (channel === 'push' || channel === 'both') {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      import('quasar').then(({ Notify }) => Notify.create({
+        type: 'warning',
+        message: 'Push-уведомления не поддерживаются в этом браузере'
+      }))
+      notifSettings.value.notification_channel = 'telegram'
+      return
+    }
+
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      pushPermissionDenied.value = true
+      import('quasar').then(({ Notify }) => Notify.create({
+        type: 'warning',
+        message: 'Push-уведомления заблокированы. Разрешите в настройках браузера.'
+      }))
+      notifSettings.value.notification_channel = 'telegram'
+      return
+    }
+    pushPermissionDenied.value = false
+
+    // Подписка через Service Worker + отправка на сервер
+    try {
+      await subscribeToPush()
+      notifSettings.value.push_enabled = true
+    } catch (err) {
+      console.error('Ошибка подписки на push:', err)
+      import('quasar').then(({ Notify }) => Notify.create({
+        type: 'negative',
+        message: 'Не удалось подписаться на push-уведомления'
+      }))
+      notifSettings.value.notification_channel = 'telegram'
+    }
+  }
+}
+
+/**
+ * Подписаться на Web Push через Service Worker pushManager.
+ * Отправляет подписку на сервер.
+ */
+async function subscribeToPush() {
+  const { api } = await import('src/boot/axios')
+
+  // Получить VAPID public key с сервера
+  const { data: vapidData } = await api.get('/api/v1/notifications/push/vapid-public-key')
+  const vapidPublicKey = vapidData.public_key
+
+  // Конвертация base64 URL-safe в Uint8Array
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4)
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+    const rawData = window.atob(base64)
+    const outputArray = new Uint8Array(rawData.length)
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i)
+    }
+    return outputArray
+  }
+
+  const registration = await navigator.serviceWorker.ready
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+  })
+
+  // Отправить подписку на сервер
+  await api.post('/api/v1/notifications/push/subscribe', subscription.toJSON())
 }
 
 async function saveNotifSettings() {
@@ -306,6 +474,15 @@ async function saveNotifSettings() {
   if (!empId || !notifSettings.value) return
   try {
     const { api } = await import('src/boot/axios')
+
+    // Если push отключён — отписаться на сервере
+    if (notifSettings.value.notification_channel === 'telegram' && notifSettings.value.push_enabled) {
+      try {
+        await api.post('/api/v1/notifications/push/unsubscribe')
+        notifSettings.value.push_enabled = false
+      } catch { /* игнорируем ошибку отписки */ }
+    }
+
     await api.put(`/api/v1/notifications/settings/${empId}`, notifSettings.value)
     import('quasar').then(({ Notify }) => Notify.create({ type: 'positive', message: 'Настройки сохранены' }))
     showNotifDialog.value = false
@@ -315,6 +492,127 @@ async function saveNotifSettings() {
 }
 
 async function handleLogout() { await authStore.logout() }
+
+// === Онлайн счётчик (heartbeat как десктоп) ===
+const onlineUsers = ref([])
+const onlineCount = computed(() => onlineUsers.value.length)
+const showOnlinePopup = ref(false)
+const hiddenRoles = new Set(['Дизайнер', 'Чертёжник', 'Замерщик', 'ДАН'])
+const canSeeOnlineNames = computed(() => !hiddenRoles.has(authStore.user?.position || ''))
+
+let heartbeatTimer = null
+
+async function sendHeartbeat() {
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const { data } = await ax.post('/api/v1/heartbeat', { employee_id: authStore.user?.id || null }, { timeout: 10000 })
+    onlineUsers.value = data.online_users || []
+  } catch {}
+}
+
+// === Auto-refresh при возврате в приложение (visibilitychange) ===
+let lastRefreshTime = 0
+const MIN_REFRESH_INTERVAL = 30000 // 30 секунд — минимальный интервал между обновлениями
+
+// Маппинг путей к функциям обновления (lazy — загружаем store/api по необходимости)
+async function refreshCurrentPageData() {
+  const now = Date.now()
+  if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) return
+  lastRefreshTime = now
+
+  const path = route.path
+
+  // Уведомления обновляем всегда
+  notificationsStore.load()
+
+  try {
+    if (path === '/' || path === '/dashboard') {
+      // Дашборд — перезагружаем stores (страница сама подтянет)
+      referencesStore.loadAll()
+    } else if (path === '/crm' || path.startsWith('/crm/')) {
+      // CRM — страница сама обновится через onActivated/onMounted
+      // Но можно отправить событие для принудительного обновления
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else if (path === '/clients' || path.startsWith('/clients/')) {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else if (path === '/contracts' || path.startsWith('/contracts/')) {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else if (path === '/supervision' || path.startsWith('/supervision/')) {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else if (path === '/salaries') {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else if (path === '/employees' || path.startsWith('/employees/')) {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else if (path === '/notifications') {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    } else {
+      // Остальные страницы — общий refresh event
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    }
+  } catch {
+    // Ошибка обновления — игнорируем, не ломаем UX
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    refreshCurrentPageData()
+  }
+}
+
+onMounted(() => {
+  sendHeartbeat()
+  heartbeatTimer = setInterval(sendHeartbeat, 60000)
+
+  // Offline-очередь: проверяем количество ожидающих операций
+  refreshOfflinePending()
+  offlinePendingTimer = setInterval(refreshOfflinePending, 15000)
+
+  // Слушаем возврат в приложение
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+// === WebSocket подключение ===
+function _connectWebSocket() {
+  const token = authStore.accessToken
+  if (!token) return
+
+  wsConnect(token, {
+    // CRM карточка перемещена — обновляем CRM store
+    onCardMoved(data) {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    },
+    // CRM карточка обновлена — обновляем CRM store
+    onCardUpdated(data) {
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+    },
+    // Новое уведомление — обновляем store + показываем toast
+    onNotificationNew(data) {
+      notificationsStore.load()
+      import('quasar').then(({ Notify }) => {
+        Notify.create({
+          type: 'info',
+          message: data.title || 'Новое уведомление',
+          caption: data.message || '',
+          timeout: 5000,
+          position: 'top',
+          actions: [{ icon: 'close', color: 'white', round: true }],
+        })
+      })
+    },
+    // Пользователь online/offline — обновляем список
+    onUserOnline() {
+      sendHeartbeat()
+    },
+  })
+}
+
+onUnmounted(() => {
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
+  if (offlinePendingTimer) clearInterval(offlinePendingTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  wsDisconnect()
+})
 </script>
 
 <style scoped>

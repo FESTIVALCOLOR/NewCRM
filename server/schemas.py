@@ -1355,6 +1355,8 @@ class NotificationSettingsResponse(BaseModel):
     notify_duplicate_info: bool
     notify_revision_info: bool
     telegram_connected: bool  # вычисляемое: telegram_user_id is not None
+    push_enabled: bool = False
+    notification_channel: str = 'telegram'  # 'telegram', 'push', 'both'
 
     class Config:
         from_attributes = True
@@ -1372,3 +1374,5 @@ class NotificationSettingsUpdate(BaseModel):
     notify_template: bool = True
     notify_duplicate_info: bool = False
     notify_revision_info: bool = False
+    push_enabled: Optional[bool] = None
+    notification_channel: Optional[str] = None  # 'telegram', 'push', 'both'

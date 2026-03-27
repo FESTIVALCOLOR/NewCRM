@@ -652,7 +652,7 @@ async def update_crm_card(
             if field in update_data:
                 new_emp = update_data[field]
                 old_emp = old_values.get(field)
-                if new_emp != old_emp and card.contract_id:
+                if new_emp and new_emp != old_emp and card.contract_id:
                     try:
                         auto_create_employee_payment(
                             db, card.contract_id, card.id, new_emp, role
@@ -860,6 +860,27 @@ async def move_crm_card_to_column(
                     uf.updated_at = datetime.utcnow()
                 if unfilled:
                     logger.info(f"Card {card_id} move: {len(unfilled)} entries marked skipped in {old_stage_group}")
+
+        # Автосоздание workflow state при перемещении на рабочую стадию
+        if old_column != new_column and 'Стадия' in new_column and contract:
+            new_stage_group = _resolve_stage_group(new_column)
+            if new_stage_group:
+                existing_wf = db.query(StageWorkflowState).filter(
+                    StageWorkflowState.crm_card_id == card_id,
+                    StageWorkflowState.stage_name == new_column
+                ).first()
+                if not existing_wf:
+                    next_entry = _resolve_next_active_substep(db, contract.id, new_stage_group)
+                    if next_entry:
+                        new_wf = StageWorkflowState(
+                            crm_card_id=card_id,
+                            stage_name=new_column,
+                            status='in_progress',
+                            current_substep_code=next_entry.stage_code,
+                            current_substage_group=next_entry.substage_group,
+                        )
+                        db.add(new_wf)
+                        logger.info(f"Card {card_id} move: workflow state created for {new_column}, substep={next_entry.stage_code}")
 
         # K11: Запись перемещения в историю проекта
         if old_column != new_column:
@@ -1804,14 +1825,60 @@ async def workflow_repair(
     old_substage = wf.current_substage_group
 
     # Принудительная синхронизация (игнорируем protected statuses)
-    next_entry = _resolve_next_active_substep(db, contract_id, stage_group)
+    next_entry = None
+
+    if wf.status == 'revision' and wf.current_substep_code:
+        # При revision — ищем подэтап правки (исполнитель после текущего reviewer)
+        current_entry = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id == contract_id,
+            ProjectTimelineEntry.stage_code == wf.current_substep_code
+        ).first()
+        if current_entry:
+            current_substage = current_entry.substage_group
+            corr_q = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.executor_role.notin_(['header', 'Клиент', POSITION_SDP, POSITION_MANAGER, POSITION_GAP]),
+                ProjectTimelineEntry.sort_order > current_entry.sort_order,
+                (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
+            )
+            if current_substage and current_substage.strip():
+                corr_q = corr_q.filter(ProjectTimelineEntry.substage_group == current_substage)
+            next_entry = corr_q.order_by(ProjectTimelineEntry.sort_order).first()
+
+        # Также очищаем ошибочно заполненные даты после текущего подэтапа
+        if current_entry:
+            future_entries = db.query(ProjectTimelineEntry).filter(
+                ProjectTimelineEntry.contract_id == contract_id,
+                ProjectTimelineEntry.stage_group == stage_group,
+                ProjectTimelineEntry.sort_order > current_entry.sort_order,
+                ProjectTimelineEntry.actual_date.isnot(None),
+                ProjectTimelineEntry.actual_date != '',
+            ).all()
+            for fe in future_entries:
+                logger.info(f"[WorkflowRepair] Очистка даты у {fe.stage_code} ({fe.stage_name})")
+                fe.actual_date = None
+                fe.actual_days = None
+
+    if not next_entry:
+        next_entry = _resolve_next_active_substep(db, contract_id, stage_group)
+
     if next_entry:
         wf.current_substep_code = next_entry.stage_code
         wf.current_substage_group = next_entry.substage_group
-        # Если карточка была в pending_decision — переводим в in_progress
-        if wf.status == 'pending_decision':
+        # Определяем правильный status по роли подэтапа
+        reviewer_roles = {POSITION_SDP, POSITION_MANAGER, POSITION_GAP}
+        executor_roles = {'Чертежник', 'Дизайнер'}
+        if next_entry.executor_role in reviewer_roles:
+            wf.status = 'pending_review'
+        elif next_entry.executor_role in executor_roles:
+            wf.status = 'in_progress'
+        elif next_entry.executor_role == 'Клиент':
+            wf.status = 'client_approval'
+        elif wf.status == 'pending_decision':
             wf.status = 'in_progress'
         wf.updated_at = datetime.utcnow()
+        logger.info(f"[WorkflowRepair] status={wf.status}, substep={next_entry.stage_code} ({next_entry.executor_role})")
     else:
         # Все строки заполнены — стадия завершена, можно перевести в act_signing
         if wf.status not in ('act_signing', 'stage_completed'):
@@ -1821,17 +1888,17 @@ async def workflow_repair(
     # Пересчёт дедлайна
     _update_executor_deadline_for_next_substep(db, card_id, stage_name, contract_id)
 
-    # Сбросить executor state если карточка была stuck
-    if old_status == 'pending_decision':
+    # Сбросить executor state при ремонте (если status изменился на рабочий)
+    if wf.status in ('in_progress', 'revision'):
         executors = db.query(StageExecutor).filter(
             StageExecutor.crm_card_id == card_id,
             StageExecutor.stage_name == stage_name,
             StageExecutor.completed == True,
-            StageExecutor.submitted_date.is_(None),
         ).all()
         for ex in executors:
             ex.completed = False
             ex.completed_date = None
+            logger.info(f"[WorkflowRepair] Сброс completed для {ex.executor_name}")
 
     db.add(ActionHistory(
         user_id=current_user.id, action_type='workflow_repair',
@@ -2132,34 +2199,38 @@ async def workflow_reject_work(
                 ProjectTimelineEntry.stage_code == wf.current_substep_code
             ).first()
             if current_entry:
-                # Дата проверки reviewer (СДП/ГАП/Менеджер) — первая пустая после текущего исполнителя
+                # Дата проверки reviewer (отклонение = факт проверки)
                 reviewer_roles = REVIEWER_ROLES
                 current_substage = current_entry.substage_group
+                reviewer_entry = None
 
-                # Базовый фильтр для reviewer-строк
-                reviewer_base = db.query(ProjectTimelineEntry).filter(
-                    ProjectTimelineEntry.contract_id == contract_id,
-                    ProjectTimelineEntry.stage_group == stage_group,
-                    ProjectTimelineEntry.executor_role.in_(reviewer_roles),
-                    ProjectTimelineEntry.sort_order > current_entry.sort_order,
-                )
-                # Ограничиваем рамками substage_group (если иерархическая стадия)
-                if current_substage and current_substage.strip():
-                    reviewer_base = reviewer_base.filter(
-                        ProjectTimelineEntry.substage_group == current_substage
+                # Если текущий подэтап УЖЕ reviewer — ставим дату НА НЕГО
+                if current_entry.executor_role in reviewer_roles:
+                    if not current_entry.actual_date:
+                        reviewer_entry = current_entry
+                    elif wf.revision_count > 1:
+                        # Повторный reject — перезаписываем текущую дату
+                        reviewer_entry = current_entry
+                else:
+                    # Текущий = исполнитель — ищем первый reviewer ПОСЛЕ него
+                    reviewer_base = db.query(ProjectTimelineEntry).filter(
+                        ProjectTimelineEntry.contract_id == contract_id,
+                        ProjectTimelineEntry.stage_group == stage_group,
+                        ProjectTimelineEntry.executor_role.in_(reviewer_roles),
+                        ProjectTimelineEntry.sort_order > current_entry.sort_order,
                     )
-
-                # 1. Сначала ищем первую пустую строку reviewer
-                reviewer_entry = reviewer_base.filter(
-                    (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
-                ).order_by(ProjectTimelineEntry.sort_order).first()
-
-                # 2. Если пустой нет и это повторный reject — перезаписываем последнюю заполненную
-                if not reviewer_entry and wf.revision_count > 1:
+                    if current_substage and current_substage.strip():
+                        reviewer_base = reviewer_base.filter(
+                            ProjectTimelineEntry.substage_group == current_substage
+                        )
                     reviewer_entry = reviewer_base.filter(
-                        ProjectTimelineEntry.actual_date.isnot(None),
-                        ProjectTimelineEntry.actual_date != '',
-                    ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
+                        (ProjectTimelineEntry.actual_date.is_(None)) | (ProjectTimelineEntry.actual_date == ''),
+                    ).order_by(ProjectTimelineEntry.sort_order).first()
+                    if not reviewer_entry and wf.revision_count > 1:
+                        reviewer_entry = reviewer_base.filter(
+                            ProjectTimelineEntry.actual_date.isnot(None),
+                            ProjectTimelineEntry.actual_date != '',
+                        ).order_by(ProjectTimelineEntry.sort_order.desc()).first()
 
                 if reviewer_entry:
                     reviewer_entry.actual_date = datetime.utcnow().strftime('%Y-%m-%d')

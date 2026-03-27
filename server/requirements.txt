@@ -22,3 +22,6 @@ tgcrypto==1.2.5
 aiosmtplib==3.0.2
 # Склонение имён (дательный падеж для скриптов)
 pymorphy3==2.0.2
+# Web Push уведомления
+pywebpush==2.0.1
+py-vapid==1.9.2

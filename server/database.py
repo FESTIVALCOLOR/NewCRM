@@ -286,6 +286,11 @@ class NotificationSettings(Base):
     notify_duplicate_info = Column(Boolean, default=False)
     notify_revision_info = Column(Boolean, default=False)
 
+    # Web Push уведомления
+    push_enabled = Column(Boolean, default=False)
+    push_subscription = Column(Text, nullable=True)  # JSON Web Push subscription
+    notification_channel = Column(String(20), default='telegram')  # 'telegram', 'push', 'both'
+
     # Временные метки
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

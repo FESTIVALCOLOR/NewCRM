@@ -254,14 +254,22 @@ async function save() {
     if (uploadMode.value === 'file' && selectedFile.value) {
       const contractFolder = (props.contractData?.yandex_folder_path || '').replace(/^disk:/, '')
       if (contractFolder) {
-        const ydPath = `${contractFolder}/Замер/${selectedFile.value.name}`
-        const uploadRes = await filesApi.upload(selectedFile.value, ydPath)
-        const pubLink = uploadRes.data?.public_link || ''
+        const measFolder = `${contractFolder}/Замер`
+        const ydPath = `${measFolder}/${selectedFile.value.name}`
+        await filesApi.upload(selectedFile.value, ydPath)
 
-        // Обновляем contracts (как десктоп _on_image_uploaded)
+        // Получаем публичную ссылку на ПАПКУ (не на файл) — как десктоп
+        let folderLink = ''
+        try {
+          const { data: fl } = await filesApi.getPublicLink(measFolder)
+          folderLink = fl.public_link || ''
+        } catch {}
+
+        // Обновляем contracts — ссылка на папку
         if (props.contractId) {
           await contractsApi.update(props.contractId, {
-            measurement_image_link: pubLink,
+            measurement_image_link: folderLink,
+            measurement_folder_public_link: folderLink,
             measurement_yandex_path: ydPath,
             measurement_file_name: selectedFile.value.name,
           })
@@ -270,13 +278,20 @@ async function save() {
             await ax.post('/api/v1/files/', {
               contract_id: props.contractId, stage: 'measurement',
               file_type: selectedFile.value.type?.includes('image') ? 'image' : 'pdf',
-              public_link: pubLink, yandex_path: ydPath, file_name: selectedFile.value.name,
+              public_link: folderLink, yandex_path: ydPath, file_name: selectedFile.value.name,
               file_order: 0, variation: 1
             })
           } catch {}
           try { await ax.post(`/api/v1/files/scan/${props.contractId}`) } catch {}
         }
       }
+    }
+
+    // Обновляем contracts.measurement_date (как десктоп)
+    if (props.contractId && measurementDate.value) {
+      await contractsApi.update(props.contractId, {
+        measurement_date: measurementDate.value,
+      })
     }
 
     // Обновляем CRM карточку (surveyor_id + survey_date)

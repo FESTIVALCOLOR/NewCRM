@@ -195,11 +195,20 @@ async def dispatch_notification(
 
         db.commit()
 
-        # 4. Отправить через Telegram если включён
-        if settings.telegram_enabled:
-            employee = db.query(Employee).filter_by(id=employee_id).first()
+        # 4. Отправить через каналы в зависимости от настроек
+        channel = getattr(settings, 'notification_channel', 'telegram') or 'telegram'
+        employee = db.query(Employee).filter_by(id=employee_id).first()
+
+        # Telegram
+        if channel in ('telegram', 'both') and settings.telegram_enabled:
             if employee and employee.telegram_user_id:
                 await _send_telegram(employee.telegram_user_id, title, message)
+
+        # Web Push
+        if channel in ('push', 'both') and getattr(settings, 'push_enabled', False):
+            push_sub = getattr(settings, 'push_subscription', None)
+            if push_sub:
+                await _send_web_push(push_sub, title, message, related_entity_type, related_entity_id)
 
         # 5. Применить правила дублирования (только для основных уведомлений)
         if not is_duplicate and card_id:
@@ -296,6 +305,53 @@ async def _apply_duplication_rules(
 
     except Exception as e:
         logger.error(f"Ошибка _apply_duplication_rules для card_id={card_id}: {e}")
+
+
+async def _send_web_push(
+    push_subscription_json: str,
+    title: str,
+    message: str,
+    entity_type: str = None,
+    entity_id: int = None,
+) -> None:
+    """Отправить Web Push уведомление"""
+    try:
+        import json
+        from config import get_settings
+        _s = get_settings()
+        VAPID_PRIVATE_KEY = _s.vapid_private_key
+        VAPID_CLAIMS = {"sub": _s.vapid_claims_email}
+        if not VAPID_PRIVATE_KEY:
+            logger.debug("VAPID ключи не настроены, Web Push пропущен")
+            return
+        try:
+            from pywebpush import webpush, WebPushException
+        except ImportError:
+            logger.warning("pywebpush не установлен, Web Push пропущен")
+            return
+
+        subscription = json.loads(push_subscription_json)
+        # Формируем URL для перехода при клике
+        url = '/'
+        if entity_type == 'crm_card' and entity_id:
+            url = f'/crm/{entity_id}'
+        elif entity_type == 'supervision_card' and entity_id:
+            url = f'/supervision/{entity_id}'
+
+        payload = json.dumps({
+            "title": title,
+            "message": message,
+            "url": url,
+        })
+
+        webpush(
+            subscription_info=subscription,
+            data=payload,
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims=VAPID_CLAIMS,
+        )
+    except Exception as e:
+        logger.warning(f"Не удалось отправить Web Push: {e}")
 
 
 async def _send_telegram(telegram_user_id: int, title: str, message: str) -> None:
