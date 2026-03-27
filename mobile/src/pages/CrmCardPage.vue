@@ -390,9 +390,7 @@
                   <q-item-label caption style="color: #888">{{ n.user_name || 'Неизвестный' }}</q-item-label>
                 </q-item-section>
                 <q-item-section v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" side>
-                  <q-btn round flat icon="play_circle" color="primary" size="sm" @click="openVoiceNote(noteVoiceUrl(n))">
-                    <q-tooltip>Прослушать на ЯД</q-tooltip>
-                  </q-btn>
+                  <audio :src="voiceStreamUrl(noteVoiceUrl(n))" controls preload="none" style="height: 36px; width: 120px" />
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-caption" style="color: #888">{{ fmtDateTime(n.action_date) }}</div>
@@ -1067,11 +1065,11 @@ const notesList = computed(() => {
 })
 
 // Открыть голосовую заметку — получить публичную ссылку с ЯД
-async function openVoiceNote(path) {
-  // Открываем файл на Яндекс.Диске через клиент
+// URL для стриминга аудио через сервер
+function voiceStreamUrl(path) {
   const cleanPath = path.replace(/^disk:/, '')
-  const encoded = encodeURI(cleanPath)
-  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+  const token = localStorage.getItem('access_token') || ''
+  return `https://crm.festivalcolor.ru/api/v1/files/stream?yandex_path=${encodeURIComponent(cleanPath)}&token=${encodeURIComponent(token)}`
 }
 
 // Извлечь путь голосовой записи из description [voice:/path/file.webm]

@@ -389,9 +389,7 @@
                   <q-item-label style="font-size: 12px; color: #333">{{ h.message || h.description || '' }}</q-item-label>
                 </q-item-section>
                 <q-item-section v-if="h.entry_type === 'voice_note' && extractVoiceUrl(h)" side>
-                  <q-btn round flat icon="play_circle" color="primary" size="sm" @click="openVoiceOnYd(extractVoiceUrl(h))">
-                    <q-tooltip>Прослушать на ЯД</q-tooltip>
-                  </q-btn>
+                  <audio :src="voiceStreamUrl(extractVoiceUrl(h))" controls preload="none" style="height: 36px; width: 120px" />
                   <q-item-label caption style="color: #888">
                     <span v-if="h.created_by_name">{{ h.created_by_name }}</span>
                     <span> · {{ formatDate(h.created_at) }}</span>
@@ -803,10 +801,10 @@ function stageColor(status) {
   return colors[status] || 'grey'
 }
 
-function openVoiceOnYd(path) {
+function voiceStreamUrl(path) {
   const cleanPath = path.replace(/^disk:/, '')
-  const encoded = encodeURI(cleanPath)
-  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+  const token = localStorage.getItem('access_token') || ''
+  return `https://crm.festivalcolor.ru/api/v1/files/stream?yandex_path=${encodeURIComponent(cleanPath)}&token=${encodeURIComponent(token)}`
 }
 
 function extractVoiceUrl(h) {
@@ -1321,7 +1319,8 @@ async function loadSvChat() {
   if (!card.value?.id) return
   svChatLoading.value = true
   try {
-    const { data } = await messengerApi.getChats({ supervision_card_id: card.value.id })
+    const { api: ax } = await import('src/boot/axios')
+    const { data } = await ax.get(`/api/v1/messenger/chats/by-supervision/${card.value.id}`)
     svChatData.value = data?.[0] || null
     if (svChatData.value) {
       const { data: members } = await messengerApi.getChatMembers(svChatData.value.id)

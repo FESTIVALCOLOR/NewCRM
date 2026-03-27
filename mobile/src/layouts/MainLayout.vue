@@ -169,7 +169,7 @@
               Push-уведомления заблокированы в настройках браузера
             </q-banner>
             <q-separator class="q-my-xs" />
-            <q-item tag="label"><q-item-section>Telegram</q-item-section><q-item-section side><q-toggle v-model="notifSettings.telegram_enabled" color="accent" /></q-item-section></q-item>
+            <q-item tag="label"><q-item-section>Telegram бот</q-item-section><q-item-section side><q-toggle v-model="notifSettings.telegram_enabled" color="accent" /></q-item-section></q-item>
             <q-item tag="label"><q-item-section>Email</q-item-section><q-item-section side><q-toggle v-model="notifSettings.email_enabled" color="accent" /></q-item-section></q-item>
             <q-separator class="q-my-xs" />
             <q-item tag="label"><q-item-section>Смена стадии CRM</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_crm_stage" color="accent" /></q-item-section></q-item>
@@ -185,8 +185,9 @@
             <q-item tag="label"><q-item-section>Исправления подчинённых</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_subordinate_revisions" color="accent" /></q-item-section></q-item>
           </q-list>
         </q-card-section>
-        <q-card-actions align="center">
+        <q-card-actions align="center" class="column q-gutter-sm">
           <q-btn label="Сохранить" no-caps unelevated style="background: #ffd93c; color: #333; border-radius: 8px; width: 200px" @click="saveNotifSettings" />
+          <q-btn outline label="Тестовое уведомление" no-caps icon="notifications_active" size="sm" style="border-radius: 8px; width: 200px" @click="sendTestNotif" :loading="testNotifLoading" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -489,6 +490,18 @@ async function subscribeToPush() {
 
   // Отправить подписку на сервер
   await api.post('/api/v1/notifications/push/subscribe', subscription.toJSON())
+}
+
+const testNotifLoading = ref(false)
+async function sendTestNotif() {
+  testNotifLoading.value = true
+  try {
+    const { api } = await import('src/boot/axios')
+    await api.post('/api/v1/notifications/test')
+    $q.notify({ type: 'positive', message: 'Тестовое уведомление отправлено' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  } finally { testNotifLoading.value = false }
 }
 
 async function saveNotifSettings() {
