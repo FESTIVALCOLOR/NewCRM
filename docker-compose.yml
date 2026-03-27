@@ -63,11 +63,16 @@ services:
 
       # Приложение
       APP_NAME: Interior Studio CRM API
-      APP_VERSION: 1.0.1
+      APP_VERSION: 1.0.2
       DEBUG: false
 
       # CORS
       ALLOWED_ORIGINS: https://crm.festivalcolor.ru,http://localhost:3000
+
+      # Web Push VAPID
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL:-mailto:admin@festivalcolor.ru}
 
       # Файлы
       MAX_FILE_SIZE_MB: 50
