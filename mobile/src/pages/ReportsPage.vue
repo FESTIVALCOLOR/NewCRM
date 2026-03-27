@@ -475,6 +475,7 @@ const supervisionByAgentChart = computed(() => {
 
 // ========== ЗАГРУЗКА ДАННЫХ ==========
 async function loadData() {
+  console.log('[Reports] Loading data with filters:', JSON.stringify(filters.value))
   const params = { year: filters.value.year }
   if (filters.value.quarter) params.quarter = filters.value.quarter
   if (filters.value.month) params.month = filters.value.month
@@ -490,6 +491,15 @@ async function loadData() {
     statisticsApi.getContractsByPeriod({ year: filters.value.year }),
     reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: pt })
   ])
+
+  console.log('[Reports] Results:', {
+    sum: sumR?.status, funnel: funnelR?.status, proj: projR?.status,
+    dyn: dynR?.status, sup: supR?.status, cont: contR?.status,
+    cbyP: cbyPR?.status, crmDet: crmDetR?.status
+  })
+  ;[sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR].forEach((r, i) => {
+    if (r.status === 'rejected') console.error(`[Reports] Request ${i} failed:`, r.reason?.response?.status, r.reason?.message)
+  })
 
   if (sumR.status === 'fulfilled') summary.value = sumR.value.data
   else console.error('Reports summary error:', sumR.reason?.response?.status, sumR.reason?.message)

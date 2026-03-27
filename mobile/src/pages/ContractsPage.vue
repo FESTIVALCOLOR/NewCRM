@@ -28,6 +28,9 @@
           <q-select v-model="agentFilter" :options="agentOpts" label="Агент" outlined dense clearable />
         </div>
       </div>
+      <div class="row q-mb-sm">
+        <q-select v-model="sortBy" :options="sortOptions" label="Сортировка" outlined dense emit-value map-options clearable style="min-width: 140px; font-size: 12px" />
+      </div>
 
       <div class="text-caption" style="color: #888" v-if="!loading">
         Договоров: {{ filtered.length }}
@@ -119,6 +122,14 @@ const showForm = ref(false)
 const statusFilter = ref(null)
 const typeFilter = ref(null)
 const agentFilter = ref(null)
+const sortBy = ref(null)
+const sortOptions = [
+  { label: 'По дате', value: 'date' },
+  { label: 'По типу агента', value: 'agent' },
+  { label: 'По типу проекта', value: 'project_type' },
+  { label: 'По городу', value: 'city' },
+  { label: 'По площади', value: 'area' },
+]
 
 const statusOpts = [
   { label: 'В работе', value: 'В работе' },
@@ -163,7 +174,14 @@ const filtered = computed(() => {
   if (statusFilter.value) result = result.filter(c => c.status === statusFilter.value)
   if (typeFilter.value) result = result.filter(c => c.project_type === typeFilter.value)
   if (agentFilter.value) result = result.filter(c => c.agent_type === agentFilter.value)
-  return result
+  // Сортировка
+  let items = [...result]
+  if (sortBy.value === 'date') items.sort((a, b) => new Date(b.contract_date || 0) - new Date(a.contract_date || 0))
+  else if (sortBy.value === 'agent') items.sort((a, b) => (a.agent_type || '').localeCompare(b.agent_type || '', 'ru'))
+  else if (sortBy.value === 'project_type') items.sort((a, b) => (a.project_type || '').localeCompare(b.project_type || '', 'ru'))
+  else if (sortBy.value === 'city') items.sort((a, b) => (a.city || '').localeCompare(b.city || '', 'ru'))
+  else if (sortBy.value === 'area') items.sort((a, b) => (b.area || 0) - (a.area || 0))
+  return items
 })
 
 function statusColor(status) {

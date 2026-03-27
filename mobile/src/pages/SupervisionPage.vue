@@ -54,13 +54,14 @@
                     <div class="row items-center justify-between q-mb-xs">
                       <div class="text-caption" style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
                       <q-badge v-if="card.is_paused" color="warning" label="Приостановлено" dense />
+                      <q-badge v-if="card.is_paused && card.pause_reason" color="orange-2" text-color="orange-9" :label="card.pause_reason" dense style="font-size: 9px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" />
                       <q-badge v-else-if="card.dan_completed" color="positive" label="Работа сдана" dense />
                     </div>
                     <div class="text-weight-bold" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
                     <div class="row q-gutter-xs text-caption q-mt-xs" style="color: #888">
                       <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
                       <span v-if="card.dan_name">ДАН: {{ card.dan_name }}</span>
-                      <span v-if="card.agent_type" style="color: #666; font-weight: 500"> · {{ card.agent_type }}</span>
+                      <q-badge v-if="card.agent_type" text-color="white" :style="{ background: agentColorFor(card.agent_type), padding: '3px 8px', fontSize: '10px', borderRadius: '4px' }" :label="card.agent_type" />
                     </div>
                     <div v-if="card.deadline" class="text-caption q-mt-xs" :style="{ color: dlColor(card.deadline), fontWeight: 'bold' }">
                       Дедлайн: {{ new Date(card.deadline).toLocaleDateString('ru-RU') }}
@@ -115,11 +116,18 @@ import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { supervisionApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
+import { useReferencesStore } from 'src/stores/references'
 import PageDashboard from 'src/components/PageDashboard.vue'
 
 const router = useRouter()
 const $q = useQuasar()
 const { can } = usePermission()
+const refsStore = useReferencesStore()
+
+function agentColorFor(agentType) {
+  const agent = refsStore.agentByName?.(agentType)
+  return agent?.color || '#95A5A6'
+}
 const cards = ref([])
 const loading = ref(false)
 const showArchive = ref(false)

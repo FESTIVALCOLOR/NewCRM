@@ -60,6 +60,10 @@
                 <div class="text-caption" style="color: #999">Срок договора</div>
                 <div style="font-size: 13px; color: #333">{{ contract.contract_period }} раб. дней</div>
               </div>
+              <div v-if="contract.deadline" class="q-mb-sm">
+                <div class="text-caption" style="color: #999">Дедлайн проекта</div>
+                <div style="font-size: 13px; color: #333">{{ fmtDate(contract.deadline) }}</div>
+              </div>
             </div>
             <!-- Колонка 2: Сумма, Площадь, Город -->
             <div class="col-6" style="padding-left: 12px">
@@ -143,7 +147,7 @@
           <div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div>
         </q-card-section>
         <q-list dense separator>
-          <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date }">
+          <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' || !entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: 'bold' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {})">
             <q-item-section avatar>
               <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
             </q-item-section>

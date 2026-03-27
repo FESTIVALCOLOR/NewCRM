@@ -120,7 +120,6 @@
               <q-btn v-if="can('supervision.complete_stage')" unelevated dense no-caps icon="check_circle" label="Завершить стадию" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="handleCompleteStage" />
               <q-btn v-if="can('supervision.move')" unelevated dense no-caps icon="swap_horiz" label="Переместить" class="full-width q-mb-sm" style="background: #95A5A6; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="showMoveDialog = true" />
               <q-btn v-if="isDan && !card.dan_completed" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="submitDanWork" />
-              <q-btn v-if="can('supervision.complete_stage') && card.dan_completed" unelevated dense no-caps icon="thumb_up" label="Принять работу ДАН" class="full-width q-mb-sm" style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="acceptDanWork" />
             </q-card-section>
           </q-card>
         </q-tab-panel>
@@ -135,7 +134,7 @@
                 <div class="row q-gutter-xs items-center">
                   <q-btn flat dense size="xs" icon="picture_as_pdf" color="grey-7" @click="exportTimelinePDF"><q-tooltip>Экспорт PDF</q-tooltip></q-btn>
                   <q-btn flat dense size="xs" icon="table_chart" color="grey-7" @click="exportTimelineExcel"><q-tooltip>Экспорт Excel</q-tooltip></q-btn>
-                  <div class="text-caption text-grey-7" v-if="summary">{{ summary.total_site_visits }} выездов</div>
+                  <div class="text-caption text-grey-7" v-if="summary">{{ supplierVisitsCount }} выездов к поставщикам</div>
                 </div>
               </div>
             </q-card-section>
@@ -223,11 +222,68 @@
 
         <!-- ====== ВКЛАДКА 3: Данные (отчёты, фотофиксация, файлы) ====== -->
         <q-tab-panel name="data" class="q-pa-none">
-          <!-- Отчёты и фотофиксация -->
+          <!-- Таблица выездов -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Отчёты и фотофиксация</div>
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Выезды</div>
+                <q-btn unelevated dense no-caps icon="add" label="Новый выезд" style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px" @click="showAddVisit = true" />
+              </div>
+            </q-card-section>
+
+            <!-- Список выездов -->
+            <div v-if="visits.length > 0" class="q-pa-sm">
+              <q-card v-for="visit in visits" :key="'data-visit-' + visit.id" flat bordered class="q-mb-sm" style="border-radius: 6px">
+                <q-card-section class="q-pa-sm">
+                  <div class="row items-center q-mb-xs">
+                    <q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense class="q-mr-xs" />
+                    <span class="text-caption text-weight-bold" style="color: #333">{{ formatDate(visit.visit_date) }}</span>
+                    <span v-if="visit.actual_date" class="text-caption q-ml-sm" style="color: #27AE60">Факт: {{ formatDate(visit.actual_date) }}</span>
+                  </div>
+                  <div v-if="visit.stage_name" class="text-caption" style="color: #888">{{ visit.stage_name }}</div>
+                  <div v-if="visit.notes" class="text-caption q-mt-xs" style="color: #666">{{ visit.notes }}</div>
+
+                  <!-- Файлы отчёта -->
+                  <div v-if="visit.report_files && visit.report_files.length > 0" class="q-mt-xs">
+                    <div class="text-caption text-weight-bold" style="color: #555">Отчёт:</div>
+                    <div v-for="f in visit.report_files" :key="f.id" class="row items-center q-gutter-xs">
+                      <q-icon name="description" size="14px" color="orange" />
+                      <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
+                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteVisitFile(visit, f)" />
+                    </div>
+                  </div>
+
+                  <!-- Фото -->
+                  <div v-if="visit.photo_files && visit.photo_files.length > 0" class="q-mt-xs">
+                    <div class="text-caption text-weight-bold" style="color: #555">Фото:</div>
+                    <div v-for="f in visit.photo_files" :key="f.id" class="row items-center q-gutter-xs">
+                      <q-icon name="image" size="14px" color="blue" />
+                      <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">{{ f.file_name }}</a>
+                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteVisitFile(visit, f)" />
+                    </div>
+                  </div>
+
+                  <!-- Кнопки действий -->
+                  <div class="row q-gutter-xs q-mt-sm justify-end">
+                    <q-btn outline dense size="xs" icon="description" label="Отчёт" no-caps color="orange" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click="uploadVisitReport(visit)" />
+                    <q-btn outline dense size="xs" icon="photo_camera" label="Фото" no-caps color="blue" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click="uploadVisitPhoto(visit)" />
+                    <q-btn outline dense size="xs" icon="edit" no-caps color="grey-7" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click="editVisit(visit)" />
+                    <q-btn outline dense size="xs" icon="delete" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click="deleteVisit(visit)" />
+                  </div>
+                </q-card-section>
+              </q-card>
+            </div>
+
+            <q-card-section v-else class="text-center text-grey-5 q-py-md">
+              Нет выездов
+            </q-card-section>
+          </q-card>
+
+          <!-- Отчёты и фотофиксация (общие) -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-xs">
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Общие отчёты</div>
                 <div class="row q-gutter-xs">
                   <q-btn v-if="can('supervision.files_upload')" outline dense size="xs" icon="description" label="Отчёт" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="uploadReport" />
                   <q-btn v-if="can('supervision.files_upload')" outline dense size="xs" icon="photo_camera" label="Фото" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="takePhoto" />
@@ -242,15 +298,17 @@
             </q-list>
             <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
           </q-card>
-
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА 4: История + Выезды ====== -->
+        <!-- ====== ВКЛАДКА 4: История ====== -->
         <q-tab-panel name="history" class="q-pa-none">
           <!-- История надзора -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">История проекта</div>
+              <div class="row items-center justify-between">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">История проекта</div>
+                <q-btn unelevated dense no-caps icon="add" label="Добавить запись" style="background: #ffd93c; color: #333; font-size: 11px; height: 32px; border-radius: 4px" @click="showAddHistoryDlg = true" />
+              </div>
               <q-btn-toggle v-model="historyFilter" no-caps dense unelevated rounded toggle-color="grey-7" text-color="grey-7" size="xs" class="q-mb-sm q-mt-sm"
                 :options="[
                   { label: 'Все', value: 'all' },
@@ -274,46 +332,6 @@
             </q-list>
             <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">Нет записей</q-card-section>
           </q-card>
-
-          <!-- Выезды -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Выезды на объект</div>
-            </q-card-section>
-
-            <q-list v-if="visits.length > 0" dense separator>
-              <q-item v-for="visit in visits" :key="visit.id">
-                <q-item-section avatar>
-                  <q-icon name="place" color="blue" size="20px" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label><q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense class="q-mr-xs" /> {{ formatDate(visit.visit_date) }}</q-item-label>
-                  <q-item-label caption>
-                    {{ visit.stage_name?.replace(/^Стадия \d+: /, '') }}
-                  </q-item-label>
-                  <q-item-label caption v-if="visit.notes" class="text-grey-7">
-                    {{ visit.notes }}
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <div class="column items-end q-gutter-xs">
-                    <span class="text-caption text-grey-7">{{ visit.executor_name }}</span>
-                    <div class="row q-gutter-xs">
-                      <q-btn flat round dense size="xs" icon="event" color="grey-6" @click.stop="addVisitToCalendar(visit)"><q-tooltip>В календарь</q-tooltip></q-btn>
-                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteVisit(visit)"><q-tooltip>Удалить</q-tooltip></q-btn>
-                    </div>
-                  </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
-
-            <q-card-section v-else class="text-center text-grey-5 q-py-md">
-              Нет выездов
-            </q-card-section>
-            <q-card-actions>
-              <q-btn flat color="positive" icon="add" label="Добавить выезд" no-caps @click="showAddVisit = true" />
-            </q-card-actions>
-          </q-card>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 5: Оплаты надзора ====== -->
@@ -336,37 +354,45 @@
           </q-card>
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА 6: Заметки (голосовые + текстовые) ====== -->
+        <!-- ====== ВКЛАДКА 6: Заметки (текстовые + голосовые) ====== -->
         <q-tab-panel name="notes" class="q-pa-none">
+          <!-- Добавить текстовую заметку -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Заметки</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">Новая заметка</div>
                 <VoiceRecorder :yandex-folder-path="svContractYdPath ? svContractYdPath + '/Авторский надзор' : ''" @recorded="onVoiceRecorded" />
               </div>
             </q-card-section>
             <q-card-section>
-              <q-input v-model="noteText" label="Текстовая заметка" outlined dense type="textarea" autogrow class="q-mb-sm" />
+              <q-input v-model="noteText" outlined dense type="textarea" autogrow placeholder="Введите текст заметки..." class="q-mb-sm" />
               <q-btn unelevated dense no-caps icon="add" label="Добавить заметку" style="background: #ffd93c; color: #333; font-size: 12px; height: 36px; border-radius: 4px" @click="addTextNote" :disable="!noteText?.trim()" />
             </q-card-section>
-            <!-- Список голосовых и текстовых заметок из истории -->
-            <q-list v-if="voiceNotes.length > 0" dense separator>
+          </q-card>
+
+          <!-- Список заметок -->
+          <q-card class="is-card">
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Все заметки</div></q-card-section>
+            <q-list dense separator v-if="voiceNotes.length > 0">
               <q-item v-for="h in voiceNotes" :key="h.id">
-                <q-item-section avatar><q-icon :name="h.entry_type === 'voice_note' ? 'mic' : 'comment'" :color="h.entry_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" /></q-item-section>
+                <q-item-section avatar>
+                  <q-icon :name="h.entry_type === 'voice_note' ? 'mic' : 'comment'" :color="h.entry_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" />
+                </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333; font-weight: 500">{{ cleanNoteText(h) }}</q-item-label>
-                  <q-item-label caption style="color: #888">{{ h.created_by_name || '' }}</q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333">{{ cleanNoteText(h) }}</q-item-label>
+                  <q-item-label caption style="color: #888">{{ h.created_by_name || 'Неизвестный' }}</q-item-label>
                 </q-item-section>
                 <q-item-section v-if="h.entry_type === 'voice_note' && extractVoiceUrl(h)" side>
                   <audio :src="voiceStreamUrl(extractVoiceUrl(h))" controls preload="none" style="height: 36px; width: 120px" />
-                  <q-item-label caption style="color: #888">
-                    <span v-if="h.created_by_name">{{ h.created_by_name }}</span>
-                    <span> · {{ formatDate(h.created_at) }}</span>
-                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="text-caption" style="color: #888">{{ formatDate(h.created_at) }}</div>
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; font-size: 12px">Нет заметок</q-card-section>
+            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
+              <q-icon name="speaker_notes_off" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет заметок</div>
+            </q-card-section>
           </q-card>
         </q-tab-panel>
 
@@ -436,9 +462,9 @@
     </div>
 
     <!-- Диалог добавления выезда -->
-    <q-dialog v-model="showAddVisit">
+    <q-dialog v-model="showAddVisit" @hide="editingVisitId = null">
       <q-card style="min-width: 320px">
-        <q-card-section><div class="text-subtitle1 text-weight-bold">Новый выезд</div></q-card-section>
+        <q-card-section><div class="text-subtitle1 text-weight-bold">{{ editingVisitId ? 'Редактировать выезд' : 'Новый выезд' }}</div></q-card-section>
         <q-card-section>
           <q-input v-model="visitForm.visit_date" label="Дата выезда" outlined dense type="date" class="q-mb-sm" />
           <q-select v-model="visitForm.visit_type" :options="['На объект', 'К поставщику']" label="Тип выезда" outlined dense class="q-mb-sm" />
@@ -624,6 +650,7 @@ const activeTab = ref('executors')
 if (route.query.tab) activeTab.value = route.query.tab
 const svContractYdPath = ref('')
 const showAddVisit = ref(false)
+const editingVisitId = ref(null)
 const showReassignDan = ref(false)
 const showReassignSM = ref(false)
 const newDanId = ref(null)
@@ -686,6 +713,10 @@ const voiceNotes = computed(() => {
     h.entry_type === 'note' ||
     h.entry_type === 'voice_note'
   )
+})
+
+const supplierVisitsCount = computed(() => {
+  return visits.value.filter(v => v.visit_type === 'К поставщику').length
 })
 
 // Имя стадии для диалога загрузки файлов
@@ -1012,6 +1043,7 @@ async function saveTimelineEntry() {
       budget_planned: editEntry.value.budget_planned,
       budget_actual: editEntry.value.budget_actual,
       supplier: editEntry.value.supplier,
+      commission: editEntry.value.commission || null,
       status: editEntry.value.status,
       notes: editEntry.value.notes,
       executor: editEntry.value.executor
@@ -1031,19 +1063,93 @@ async function saveVisit() {
   }
   try {
     const stageLabel = stageCodesForVisit.find(s => s.value === visitForm.value.stage_code)?.label || ''
-    await supervisionApi.createVisit(card.value.id, {
+    const isEditing = !!editingVisitId.value
+    const payload = {
       stage_code: visitForm.value.stage_code,
       stage_name: stageLabel,
       visit_date: visitForm.value.visit_date,
+      visit_type: visitForm.value.visit_type || 'На объект',
       executor_name: visitForm.value.executor_name || '',
       notes: visitForm.value.notes
-    })
-    $q.notify({ type: 'positive', message: 'Выезд добавлен' })
+    }
+    if (isEditing) {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.patch(`/api/v1/supervision-visits/${editingVisitId.value}`, payload)
+      editingVisitId.value = null
+    } else {
+      await supervisionApi.createVisit(card.value.id, payload)
+    }
+    $q.notify({ type: 'positive', message: isEditing ? 'Выезд обновлён' : 'Выезд добавлен' })
     showAddVisit.value = false
     await reloadData()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
+}
+
+function editVisit(visit) {
+  visitForm.value = {
+    visit_date: visit.visit_date || '',
+    stage_code: visit.stage_code || '',
+    notes: visit.notes || '',
+    executor_name: visit.executor_name || '',
+    visit_type: visit.visit_type || 'На объект',
+  }
+  editingVisitId.value = visit.id
+  showAddVisit.value = true
+}
+
+async function uploadVisitReport(visit) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.multiple = true
+  input.accept = '.pdf,.doc,.docx,.xls,.xlsx'
+  input.onchange = async (e) => {
+    for (const file of e.target.files) {
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('visit_id', visit.id)
+        fd.append('file_type', 'report')
+        const { api: ax } = await import('src/boot/axios')
+        await ax.post('/api/v1/supervision-visits/upload-file', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      } catch (err) { $q.notify({ type: 'negative', message: 'Ошибка загрузки: ' + (err.response?.data?.detail || err.message) }) }
+    }
+    $q.notify({ type: 'positive', message: 'Файлы загружены' })
+    await reloadData()
+  }
+  input.click()
+}
+
+async function uploadVisitPhoto(visit) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.multiple = true
+  input.accept = 'image/*'
+  input.onchange = async (e) => {
+    for (const file of e.target.files) {
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('visit_id', visit.id)
+        fd.append('file_type', 'photo')
+        const { api: ax } = await import('src/boot/axios')
+        await ax.post('/api/v1/supervision-visits/upload-file', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      } catch (err) { $q.notify({ type: 'negative', message: 'Ошибка загрузки: ' + (err.response?.data?.detail || err.message) }) }
+    }
+    $q.notify({ type: 'positive', message: 'Фото загружены' })
+    await reloadData()
+  }
+  input.click()
+}
+
+async function deleteVisitFile(visit, file) {
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.delete(`/api/v1/files/${file.id}`)
+    $q.notify({ type: 'positive', message: 'Файл удалён' })
+    await reloadData()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
 }
 
 async function deleteVisit(visit) {
@@ -1221,7 +1327,13 @@ async function reassignSM() {
 async function handleCompleteStage() {
   try {
     await supervisionApi.completeStage(card.value.id)
-    $q.notify({ type: 'positive', message: 'Стадия завершена' })
+    // Автоперемещение на следующую стадию
+    const columns = ['Чертежи', 'Комплектация', 'Черновые работы', 'Чистовые работы', 'Декор', 'Выполненный проект']
+    const currentIdx = columns.indexOf(card.value.column_name)
+    if (currentIdx >= 0 && currentIdx < columns.length - 1) {
+      await supervisionApi.moveCard(card.value.id, columns[currentIdx + 1])
+    }
+    $q.notify({ type: 'positive', message: 'Стадия завершена, карточка перемещена' })
     await reloadData()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })

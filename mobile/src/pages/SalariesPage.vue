@@ -5,7 +5,7 @@
       <div class="toggle-pills-wide">
         <button v-for="t in paymentTabs" :key="t.value" :class="{ active: paymentTab === t.value }" @click="paymentTab = t.value">{{ t.label }}</button>
       </div>
-      <q-btn v-if="isSuperuser" flat dense no-caps icon="calculate" label="Пересчёт" color="orange" @click="recalculatePayments" style="font-size: 11px" />
+      <q-btn v-if="isSuperuser" flat dense no-caps label="Пересчёт" color="orange" @click="recalculatePayments" style="font-size: 11px" />
     </div>
 
     <!-- Фильтры — расширенные как в десктопе -->
@@ -13,14 +13,14 @@
       <div class="col"><q-select v-model="filters.period" :options="periodOptions" outlined dense emit-value map-options style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="date_range" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.employee_id" :options="employeeOpts" outlined dense emit-value map-options clearable use-input input-debounce="200" @filter="filterEmployees" placeholder="Исполнитель" style="font-size: 12px" @update:model-value="onEmployeeFilter" @clear="filters.employee_id = null; loadData()"><template v-slot:prepend><q-icon name="person" size="16px" /></template></q-select></div>
       <div class="col-auto"><q-select v-model="filters.status" :options="statusOptions" outlined dense emit-value map-options style="font-size: 12px; min-width: 100px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="filter_list" size="16px" /></template></q-select></div>
-      <div class="col-auto"><q-select v-model="filters.payment_type" :options="paymentTypeOptions" label="Тип выплаты" outlined dense emit-value map-options clearable style="font-size: 12px; min-width: 100px" @update:model-value="loadData" @clear="filters.payment_type = null; loadData()"><template v-slot:prepend><q-icon name="payment" size="16px" /></template></q-select></div>
+      <div class="col-auto"><q-select v-model="filters.payment_type" :options="paymentTypeOptions" label="Тип выплаты" outlined dense emit-value map-options style="font-size: 12px; min-width: 100px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="payment" size="16px" /></template></q-select></div>
     </div>
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
       <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable emit-value map-options label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
-      <div class="col-auto"><q-btn flat no-caps dense color="grey-7" icon="filter_alt_off" label="Сбросить" class="q-mb-sm" @click="resetFilters" style="font-size: 11px" /></div>
+      <div class="col-auto"><q-btn outlined dense no-caps label="Сбросить" color="grey-7" @click="resetFilters" style="font-size: 12px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; min-width: 100px" /></div>
     </div>
 
     <!-- Период -->
@@ -250,7 +250,7 @@ const paymentTabs = [
 const filters = ref({ period: 'all', year: currentYear, month: new Date().getMonth() + 1, quarter: Math.ceil((new Date().getMonth() + 1) / 3), employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null })
 
 const paymentTypeOptions = [
-  { label: 'Все', value: null },
+  { label: 'Все типы', value: null },
   { label: 'Аванс', value: 'Аванс' },
   { label: 'Доплата', value: 'Доплата' },
   { label: 'Полная оплата', value: 'Полная оплата' },
@@ -594,4 +594,6 @@ onMounted(async () => {
 .employee-group-header { display: flex; align-items: center; padding: 8px 12px; background: white; border: 1px solid #E0E0E0; border-radius: 8px 8px 0 0; cursor: pointer }
 .payment-card { border: none; border-left: 1px solid #E0E0E0; border-right: 1px solid #E0E0E0; border-bottom: 1px solid #F0F0F0; border-radius: 0 }
 .payment-card:last-child { border-radius: 0 0 8px 8px; border-bottom: 1px solid #E0E0E0 }
+/* Единая высота фильтров */
+.q-col-gutter-xs .q-field--outlined .q-field__control { min-height: 40px; height: 40px; }
 </style>

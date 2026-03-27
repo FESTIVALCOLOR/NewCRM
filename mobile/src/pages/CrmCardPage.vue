@@ -30,11 +30,11 @@
             <span v-if="contractData?.yandex_folder_path && canSeeYdFolder" style="color: #ccc; margin: 0 6px">|</span>
             <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense round size="xs" icon="folder_open" no-caps style="color: #F39C12" @click="openYdFolder"><q-tooltip>Яндекс.Диск</q-tooltip></q-btn>
           </div>
-          <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-            <q-chip v-if="card.current_substep_name" dense size="sm" :color="substepColor(card.workflow_status)" text-color="white" style="height: 24px; border-radius: 12px; font-size: 11px; flex: 1; justify-content: center">
+          <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap; align-items: center">
+            <q-chip v-if="card.current_substep_name" dense size="sm" :color="substepColor(card.workflow_status)" text-color="white" style="height: 22px; border-radius: 12px; font-size: 11px; margin: 0; padding: 0 8px; flex: 1; justify-content: center">
               {{ workflowLabel(card.workflow_status) }}: {{ card.current_substep_name }}
             </q-chip>
-            <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" style="height: 24px; border-radius: 12px; font-size: 11px; padding: 0 8px; display: flex; align-items: center" />
+            <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" style="height: 22px; border-radius: 12px; font-size: 11px; padding: 0 8px; display: inline-flex; align-items: center; margin: 0" />
           </div>
         </q-card-section>
       </q-card>
@@ -62,7 +62,7 @@
         <q-tab name="notes" label="Заметки" />
       </q-tabs>
 
-      <q-tab-panels v-model="activeTab" animated class="bg-transparent">
+      <q-tab-panels v-model="activeTab" animated class="bg-transparent" style="padding-bottom: 80px">
 
         <!-- ====== ВКЛАДКА 1: Исполнители и дедлайн ====== -->
         <q-tab-panel name="executors" class="q-pa-none">
@@ -79,6 +79,10 @@
                   <div class="q-mb-sm">
                     <div class="text-caption" style="color: #999">Тип проекта</div>
                     <div style="font-size: 13px; color: #333">{{ card.project_type || '-' }}</div>
+                  </div>
+                  <div v-if="card.project_subtype" class="q-mb-sm">
+                    <div class="text-caption" style="color: #999">Подтип проекта</div>
+                    <div style="font-size: 13px; color: #333">{{ card.project_subtype }}</div>
                   </div>
                 </div>
                 <div class="col-6" style="padding-left: 12px">
@@ -611,7 +615,7 @@
       <MeasurementDialog v-model="showMeasurementDlg" :card-id="card?.id" :contract-id="card?.contract_id" :contract-data="contractData" @saved="onMeasurementSaved" />
 
       <!-- FAB кнопки (скрыты в архиве) -->
-      <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 18]">
+      <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 72]">
         <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
           <q-fab-action v-if="canRestore" icon="build" style="background: #F39C12; color: white" @click="repairWorkflow" :loading="actionLoading" label="Ремонт" external-label label-position="left" />
           <q-fab-action v-if="can('crm_cards.reset_approval') && isArchived" icon="restart_alt" style="background: #E67E22; color: white" @click="doResetApproval" :loading="actionLoading" label="Сброс согласования" external-label label-position="left" />
