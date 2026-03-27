@@ -308,7 +308,7 @@
           <q-card class="is-card">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Лог действий</div></q-card-section>
             <q-list dense separator v-if="filteredHistory.length > 0">
-              <q-item v-for="h in filteredHistory" :key="h.id"><q-item-section avatar><q-icon :name="actionIcon(h.action_type)" :color="actionColor(h.action_type)" size="18px" /></q-item-section><q-item-section><q-item-label style="font-size: 11px; color: #333">{{ h.description || h.action_type }}</q-item-label><q-item-label caption style="color: #888">{{ h.user_name }}</q-item-label></q-item-section><q-item-section side><div class="text-caption" style="color: #888">{{ fmtDateTime(h.action_date) }}</div></q-item-section></q-item>
+              <q-item v-for="h in filteredHistory" :key="h.id"><q-item-section avatar><q-icon :name="actionIcon(h.action_type)" :color="actionColor(h.action_type)" size="18px" /></q-item-section><q-item-section><q-item-label style="font-size: 11px; color: #333">{{ (h.description || h.action_type || '').replace(/\[voice:[^\]]*\]\s*/, '') }}</q-item-label><q-item-label caption style="color: #888">{{ h.user_name }}</q-item-label></q-item-section><q-item-section side><div class="text-caption" style="color: #888">{{ fmtDateTime(h.action_date) }}</div></q-item-section></q-item>
             </q-list>
             <q-card-section v-else class="text-center" style="color: #999; padding: 24px"><q-icon name="history" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет записей</div></q-card-section>
           </q-card>
