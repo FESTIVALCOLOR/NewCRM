@@ -25,10 +25,10 @@
     <!-- Превью записанного аудио -->
     <div v-if="audioBlob && !isRecording" class="row items-center q-gutter-sm" style="flex-wrap: nowrap">
       <audio ref="audioPlayer" :src="audioUrl" controls style="height: 32px; max-width: 180px" />
-      <q-btn round dense icon="send" color="positive" size="xs" @click="uploadAndSend" :loading="uploading">
+      <q-btn round icon="send" color="positive" size="sm" @click="uploadAndSend" :loading="uploading">
         <q-tooltip>Отправить</q-tooltip>
       </q-btn>
-      <q-btn round dense icon="delete" color="negative" size="xs" @click="discardRecording">
+      <q-btn round icon="delete" color="negative" size="sm" @click="discardRecording">
         <q-tooltip>Удалить</q-tooltip>
       </q-btn>
     </div>

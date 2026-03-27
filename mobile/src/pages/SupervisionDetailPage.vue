@@ -374,7 +374,7 @@
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">Заметки</div>
-                <VoiceRecorder :yandex-folder-path="card?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
+                <VoiceRecorder :yandex-folder-path="svContractYdPath" @recorded="onVoiceRecorded" />
               </div>
             </q-card-section>
             <q-card-section>
@@ -646,6 +646,7 @@ const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
 const activeTab = ref('executors')
+const svContractYdPath = ref('')
 const showAddVisit = ref(false)
 const showReassignDan = ref(false)
 const showReassignSM = ref(false)
@@ -1381,7 +1382,17 @@ onMounted(async () => {
       supervisionApi.getVisits(cardId)
     ])
 
-    if (cardRes.status === 'fulfilled') card.value = cardRes.value.data
+    if (cardRes.status === 'fulfilled') {
+      card.value = cardRes.value.data
+      // Загружаем yandex_folder_path из контракта для голосовых заметок
+      if (card.value?.contract_id) {
+        try {
+          const { contractsApi } = await import('src/services/api')
+          const { data: ct } = await contractsApi.getById(card.value.contract_id)
+          svContractYdPath.value = (ct?.yandex_folder_path || '').replace(/^disk:/, '')
+        } catch {}
+      }
+    }
     if (timelineRes.status === 'fulfilled') {
       timeline.value = timelineRes.value.data?.entries || timelineRes.value.data || []
     }

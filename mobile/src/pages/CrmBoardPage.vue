@@ -341,7 +341,8 @@ async function submitBoardReject() {
         if (contractId) {
           const { data: ct } = await contractsApi.getById(contractId)
           if (ct?.yandex_folder_path) {
-            const stageName = (card.column_name || 'Стадия').replace(/:/g, ' -')
+            const STAGE_YD = { 'Стадия 1: планировочные решения': '1 стадия - Планировочное решение', 'Стадия 2: концепция дизайна': '2 стадия - Концепция дизайна', 'Стадия 3: рабочие чертежи': '3 стадия - Чертежный проект', 'Стадия 2: рабочие чертежи': '2 стадия - Чертежный проект', 'Стадия 3: 3д визуализация (Дополнительная)': '3D визуализация' }
+            const stageName = STAGE_YD[card.column_name] || (card.column_name || 'Стадия').replace(/:/g, ' -')
             folder = ct.yandex_folder_path.replace(/^disk:/, '') + '/' + stageName + '/правки'
           }
         }

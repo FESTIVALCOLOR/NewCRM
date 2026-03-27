@@ -1154,8 +1154,17 @@ async function submitReject() {
     let filePath = null
     if (rejectFile.value) {
       const contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
-      const stageName = (card.value.column_name || 'Стадия').replace(/:/g, ' -')
-      const corrPath = contractFolder ? `${contractFolder}/${stageName}/правки` : `/CRM/Правки/${card.value.contract_number||card.value.id}`
+      // Маппинг column_name → имя папки на ЯД (как в десктопе)
+      const STAGE_YD_FOLDERS = {
+        'Стадия 1: планировочные решения': '1 стадия - Планировочное решение',
+        'Стадия 2: концепция дизайна': '2 стадия - Концепция дизайна',
+        'Стадия 3: рабочие чертежи': '3 стадия - Чертежный проект',
+        'Стадия 1: планировочные решения': '1 стадия - Планировочное решение',
+        'Стадия 2: рабочие чертежи': '2 стадия - Чертежный проект',
+        'Стадия 3: 3д визуализация (Дополнительная)': '3D визуализация',
+      }
+      const ydStageName = STAGE_YD_FOLDERS[card.value.column_name] || (card.value.column_name || 'Стадия').replace(/:/g, ' -')
+      const corrPath = contractFolder ? `${contractFolder}/${ydStageName}/правки` : `/CRM/Правки/${card.value.contract_number||card.value.id}`
       const yp = `${corrPath}/${rejectFile.value.name}`
       await filesApi.upload(rejectFile.value, yp)
       filePath = corrPath
