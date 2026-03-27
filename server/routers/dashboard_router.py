@@ -1214,14 +1214,22 @@ async def get_contract_years(
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ОТЧЁТОВ
 # =============================================================================
 
-def _parse_contract_date(date_str: str):
+def _parse_contract_date(date_str):
     """Разбирает дату договора из форматов ДД.ММ.ГГГГ или YYYY-MM-DD.
-    Возвращает объект datetime или None."""
+    Принимает строку или datetime.date/datetime. Возвращает объект datetime или None."""
     if not date_str:
         return None
+    # Если уже datetime или date — возвращаем как datetime
+    if isinstance(date_str, datetime):
+        return date_str
+    from datetime import date as date_type
+    if isinstance(date_str, date_type):
+        return datetime(date_str.year, date_str.month, date_str.day)
+    # Строка
+    date_str = str(date_str).strip()
     for fmt in ('%d.%m.%Y', '%Y-%m-%d'):
         try:
-            return datetime.strptime(date_str.strip(), fmt)
+            return datetime.strptime(date_str, fmt)
         except ValueError:
             pass
     return None

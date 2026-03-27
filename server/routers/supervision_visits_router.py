@@ -432,7 +432,7 @@ async def upload_visit_file(
     upload_path = f"{folder_base}/{subfolder}/{file.filename}" if folder_base else f"/CRM/Надзор/Выезды/{file.filename}"
 
     try:
-        from services.yandex_disk_service import get_yandex_disk_service
+        from yandex_disk_service import get_yandex_disk_service
         yd = get_yandex_disk_service()
         content = await file.read()
         yd.upload_file(upload_path, content)
