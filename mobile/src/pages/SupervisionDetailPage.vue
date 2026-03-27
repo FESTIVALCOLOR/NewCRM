@@ -298,7 +298,7 @@
               <q-item v-for="h in svHistory" :key="h.id">
                 <q-item-section avatar><q-icon :name="historyIcon(h.entry_type)" :color="historyColor(h.entry_type)" size="18px" /></q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">{{ h.message || h.description || '' }}</q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333">{{ cleanNoteText(h) }}</q-item-label>
                   <q-item-label caption style="color: #888">
                     <span v-if="h.entry_type" style="font-weight: bold">{{ historyLabel(h.entry_type) }}</span>
                     <span v-if="h.created_by_name"> · {{ h.created_by_name }}</span>
