@@ -255,7 +255,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { contractsApi, filesApi, crmApi, clientsApi } from 'src/services/api'
+import { contractsApi, filesApi, crmApi, clientsApi, timelineApi } from 'src/services/api'
 import { useReferencesStore } from 'src/stores/references'
 import { useAuthStore } from 'src/stores/auth'
 import { usePermission } from 'src/composables/usePermission'
@@ -682,7 +682,7 @@ onMounted(async () => {
   const id = route.params.id
   try {
     const [cRes, fRes, tRes] = await Promise.allSettled([
-      contractsApi.getById(id), filesApi.getContractFiles(id), crmApi.getTimeline(id)
+      contractsApi.getById(id), filesApi.getContractFiles(id), timelineApi.get(id)
     ])
     if (cRes.status === 'fulfilled') contract.value = cRes.value.data
     if (fRes.status === 'fulfilled') files.value = fRes.value.data || []

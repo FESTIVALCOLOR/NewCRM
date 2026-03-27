@@ -190,6 +190,14 @@ async def send_test_notification(
     return {"ok": True, "message": "Тестовое уведомление отправлено"}
 
 
+@router.get("/notifications/push/vapid-public-key")
+async def get_vapid_public_key():
+    """Получить VAPID public key для Web Push подписки"""
+    from config import get_settings
+    s = get_settings()
+    return {"vapid_public_key": s.vapid_public_key or ""}
+
+
 @router.post("/notifications/push/subscribe")
 async def subscribe_push(
     subscription: dict,
