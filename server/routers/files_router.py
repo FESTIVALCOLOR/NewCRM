@@ -1000,26 +1000,26 @@ async def stream_file_from_yandex(
     if ".." in yandex_path:
         raise HTTPException(status_code=400, detail="Недопустимый путь")
     try:
+        import tempfile
+        from fastapi.responses import FileResponse
+        yd_svc = get_yandex_disk_service()
         clean_path = yandex_path.replace('disk:', '').strip()
         if not clean_path.startswith('/'):
             clean_path = '/' + clean_path
-        download_url = yd_service.get_download_link(f"disk:{clean_path}")
-        if not download_url:
-            raise HTTPException(status_code=404, detail="Файл не найден на ЯД")
-        import httpx
-        from fastapi.responses import StreamingResponse
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(download_url)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=404, detail="Не удалось скачать файл")
-            ext = os.path.splitext(clean_path)[1].lower()
-            content_types = {'.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4'}
-            ct = content_types.get(ext, 'application/octet-stream')
-            return StreamingResponse(
-                iter([resp.content]),
-                media_type=ct,
-                headers={'Content-Disposition': f'inline; filename="{os.path.basename(clean_path)}"', 'Accept-Ranges': 'bytes'}
-            )
+        ext = os.path.splitext(clean_path)[1].lower()
+        content_types = {'.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4'}
+        ct = content_types.get(ext, 'application/octet-stream')
+        # Скачиваем во временный файл
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+        tmp_path = tmp.name
+        tmp.close()
+        yd_svc.download_file(f"disk:{clean_path}", tmp_path)
+        return FileResponse(
+            tmp_path,
+            media_type=ct,
+            filename=os.path.basename(clean_path),
+            headers={'Accept-Ranges': 'bytes'}
+        )
     except HTTPException:
         raise
     except Exception as e:
