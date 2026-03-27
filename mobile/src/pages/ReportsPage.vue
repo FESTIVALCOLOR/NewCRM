@@ -524,6 +524,7 @@ async function loadData() {
 
 function exportPDF() { window.print() }
 watch(projectTab, () => loadData())
+watch(filters, () => { if (auth.token) loadData() }, { deep: true })
 function onRefresh(done) { loadData().finally(done) }
 
 const auth = useAuthStore()

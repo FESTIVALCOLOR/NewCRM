@@ -34,6 +34,7 @@ from constants import (
     POSITION_STUDIO_DIRECTOR, POSITION_SENIOR_MANAGER,
     POSITION_SDP, POSITION_GAP, POSITION_DAN,
     POSITION_MANAGER, POSITION_MEASURER,
+    POSITION_DESIGNER, POSITION_DRAFTSMAN,
     FREE_MOVE_ROLES, REVIEWER_ROLES, ARCHIVE_STATUSES,
 )
 
@@ -1118,9 +1119,8 @@ async def assign_stage_executor(
                     client_name = _client.full_name or ''
             # Маппинг позиции → текст роли (из руководства по уведомлениям §2)
             _role_text_map = {
-                'Чертёжник': 'чертёжником по проекту',
-                'Чертежник': 'чертёжником по проекту',
-                'Дизайнер': 'дизайнером по проекту',
+                POSITION_DRAFTSMAN: 'чертёжником по проекту',
+                POSITION_DESIGNER: 'дизайнером по проекту',
                 POSITION_SDP: 'старшим дизайнером-проектировщиком по проекту',
                 POSITION_GAP: 'главным архитектором проекта',
                 POSITION_MANAGER: 'менеджером по проекту',
@@ -1701,6 +1701,7 @@ def _update_executor_deadline_for_next_substep(db, card_id: int, stage_name: str
 
     if not next_entry:
         # Все подэтапы стадии заполнены — стадия завершена, дедлайн не нужен
+        logger.debug(f"[Deadline] Нет незаполненных подэтапов для card={card_id}, стадия={stage_name}")
         return
 
     # is_in_contract_scope влияет только на расчёт срока договора (итоги),
@@ -1712,6 +1713,7 @@ def _update_executor_deadline_for_next_substep(db, card_id: int, stage_name: str
     if next_entry.custom_norm_days and next_entry.custom_norm_days > 0:
         norm = next_entry.custom_norm_days
     if norm <= 0:
+        logger.warning(f"[Deadline] norm_days=0 для подэтапа «{next_entry.stage_name}» card={card_id} — дедлайн не обновлён")
         return
 
     # База для расчёта: последняя actual_date перед этим подэтапом (сквозная)
@@ -1873,7 +1875,7 @@ async def workflow_repair(
         wf.current_substage_group = next_entry.substage_group
         # Определяем правильный status по роли подэтапа
         reviewer_roles = {POSITION_SDP, POSITION_MANAGER, POSITION_GAP}
-        executor_roles = {'Чертежник', 'Дизайнер'}
+        executor_roles = {POSITION_DRAFTSMAN, POSITION_DESIGNER}
         if next_entry.executor_role in reviewer_roles:
             wf.status = 'pending_review'
         elif next_entry.executor_role in executor_roles:
@@ -1955,7 +1957,7 @@ async def workflow_submit_work(
             return {"status": "no_stage_group"}
 
         # Роли исполнителей (те, кто нажимает "Сдать работу")
-        executor_roles = ['Чертежник', 'Дизайнер']
+        executor_roles = [POSITION_DRAFTSMAN, POSITION_DESIGNER]
 
         # Проверяем workflow state — если revision, обновляем тот же подэтап (не следующий)
         wf = db.query(StageWorkflowState).filter(
@@ -2193,6 +2195,22 @@ async def workflow_reject_work(
             wf.revision_count = (wf.revision_count or 0) + 1
             if revision_file_path:
                 wf.revision_file_path = revision_file_path
+            # П5: сохраняем историю ревизий (не перезатираем предыдущие)
+            import json as _json
+            history = []
+            if wf.revision_history:
+                try:
+                    history = _json.loads(wf.revision_history)
+                except (ValueError, TypeError):
+                    history = []
+            reason = body.get('reason', '')
+            history.append({
+                'num': wf.revision_count,
+                'file_path': revision_file_path or '',
+                'reason': reason,
+                'date': datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+            })
+            wf.revision_history = _json.dumps(history, ensure_ascii=False)
             wf.updated_at = datetime.utcnow()
 
         # Записываем дату проверки reviewer (отклонение тоже фиксируется в таймлайне)
@@ -2613,11 +2631,11 @@ async def workflow_client_approved(
         stage_name = card.column_name
         contract_id = card.contract_id
 
-        # ── ИДЕМПОТЕНТНОСТЬ: если уже в pending_decision, вернуть результат без изменений ──
+        # ── ИДЕМПОТЕНТНОСТЬ + блокировка от race condition (П10) ──
         wf_check = db.query(StageWorkflowState).filter(
             StageWorkflowState.crm_card_id == card_id,
             StageWorkflowState.stage_name == stage_name
-        ).first()
+        ).with_for_update().first()
         if wf_check and wf_check.status == 'pending_decision':
             # Карточка уже ожидает решения (повторный вызов после краша/retry)
             current_subgroup = wf_check.current_substage_group
@@ -2950,7 +2968,7 @@ async def workflow_advance_round(
                     break
 
         # Находим первый подэтап следующего круга (исполнитель)
-        executor_roles = ['Чертежник', 'Дизайнер']
+        executor_roles = [POSITION_DRAFTSMAN, POSITION_DESIGNER]
         next_entry = db.query(ProjectTimelineEntry).filter(
             ProjectTimelineEntry.contract_id == contract_id,
             ProjectTimelineEntry.stage_group == stage_group,
@@ -3276,7 +3294,7 @@ async def workflow_add_extra_round(
         body = {}
 
     stage_name = body.get('stage_name', card.column_name)
-    executor_role = body.get('executor_role', 'Чертежник')
+    executor_role = body.get('executor_role', POSITION_DRAFTSMAN)
     reviewer_role = body.get('reviewer_role', POSITION_SDP)
     norm_days_work = body.get('norm_days_work', 3)
     norm_days_review = body.get('norm_days_review', 1)

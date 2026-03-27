@@ -367,6 +367,7 @@ async function doCardAction(cardId, action) {
       'client-send': () => crmApi.sendToClient(cardId),
       'client-approved': () => crmApi.clientApproved(cardId),
       'sign-act': () => crmApi.signAct(cardId),
+      'send-act': () => { $q.notify({ type: 'info', message: 'Акт отправлен клиенту' }); return { ok: true } },
     }
     if (actions[action]) {
       const result = await actions[action]()

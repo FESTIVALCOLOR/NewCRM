@@ -84,7 +84,7 @@
           <q-btn unelevated dense no-caps label="Клиент согласовал" style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; width: 100%" @click.stop="emit('client-approved')" />
         </div>
         <div v-if="canSignAct" class="row q-gutter-xs q-mb-xs">
-          <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('client-send')" />
+          <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('send-act')" />
           <q-btn unelevated dense no-caps label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('sign-act')" />
         </div>
 
@@ -121,7 +121,7 @@ import { usePermission } from 'src/composables/usePermission'
 import { countWorkingDaysUntil } from 'src/composables/useDeadline'
 
 const props = defineProps({ card: { type: Object, required: true } })
-const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'add-measurement', 'add-tech-task'])
+const emit = defineEmits(['click', 'longpress', 'submit-work', 'reject', 'client-send', 'client-approved', 'sign-act', 'send-act', 'add-measurement', 'add-tech-task'])
 
 const showTeam = ref(false)
 const refs = useReferencesStore()

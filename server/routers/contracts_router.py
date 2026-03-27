@@ -166,6 +166,17 @@ async def update_contract(
         old_status != 'АВТОРСКИЙ НАДЗОР'
     )
 
+    # П4: ретроактивная проверка — нельзя менять подтип на Планировочный,
+    # если CRM-карточка уже на Стадии 2 или 3
+    new_subtype = update_data.get('project_subtype')
+    if new_subtype and 'Планировочный' in new_subtype:
+        crm_card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).first()
+        if crm_card and crm_card.column_name and ('Стадия 2' in crm_card.column_name or 'Стадия 3' in crm_card.column_name):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Нельзя сменить подтип на Планировочный: карточка уже на «{crm_card.column_name}». Сначала верните карточку на Стадию 1."
+            )
+
     # Обновление полей
     for field, value in update_data.items():
         setattr(contract, field, value)

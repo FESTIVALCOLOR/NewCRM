@@ -420,6 +420,13 @@
             </q-card-section>
           </q-card>
 
+          <!-- Кнопка создания нового платежа (П1) -->
+          <q-card v-if="!isArchived && can('crm_cards.payments')" class="is-card q-mb-md">
+            <q-card-section class="q-pa-sm text-center">
+              <q-btn unelevated no-caps icon="add" label="Создать платёж" color="primary" size="sm" class="full-width" @click="showCreatePayment = true" />
+            </q-card-section>
+          </q-card>
+
           <q-card-section v-if="cardPayments.length === 0" class="text-center" style="color: #999; padding: 24px">
             <q-icon name="payments" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет платежей</div>
           </q-card-section>
@@ -704,6 +711,7 @@ const activeTab = ref('executors')
 const actionLoading = ref(false)
 const employeeOptions = ref([])
 const cardPayments = ref([])
+const showCreatePayment = ref(false)
 const actionHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
@@ -1556,6 +1564,54 @@ async function deletePayment(p) {
     catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   })
 }
+
+// П1: создание платежа вручную
+function openCreatePaymentDialog() {
+  const se = stageExecutors.value.filter(s => s.executor_id)
+  const empOptions = se.map(s => ({ label: `${s.executor_name} (${s.stage_name})`, value: s.executor_id, role: s.stage_name }))
+  if (empOptions.length === 0) {
+    $q.notify({ type: 'warning', message: 'Нет назначенных сотрудников' })
+    return
+  }
+  // Шаг 1: выбор сотрудника
+  $q.dialog({
+    title: 'Создать платёж',
+    message: 'Выберите сотрудника:',
+    options: { model: empOptions[0]?.value, items: empOptions.map(e => ({ label: e.label, value: e.value })) },
+    cancel: { label: 'Отмена', flat: true, noCaps: true },
+    ok: { label: 'Далее', noCaps: true, color: 'primary' }
+  }).onOk(empId => {
+    const emp = empOptions.find(e => e.value === empId)
+    // Шаг 2: ввод суммы
+    $q.dialog({
+      title: `Сумма платежа: ${emp?.label}`,
+      prompt: { model: '0', type: 'number', label: 'Сумма (руб.)' },
+      cancel: { label: 'Отмена', flat: true, noCaps: true },
+      ok: { label: 'Создать', noCaps: true, color: 'positive' }
+    }).onOk(async (amount) => {
+      try {
+        const data = {
+          contract_id: card.value.contract_id,
+          employee_id: empId,
+          role: emp?.role || '',
+          payment_type: 'Полная оплата',
+          crm_card_id: card.value.id,
+          calculated_amount: parseFloat(amount),
+          final_amount: parseFloat(amount),
+          report_month: null
+        }
+        const created = await paymentsApi.create(data)
+        if (created) cardPayments.value.push(created)
+        $q.notify({ type: 'positive', message: 'Платёж создан' })
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка создания платежа' })
+      }
+    })
+  })
+}
+
+// Следим за showCreatePayment
+watch(showCreatePayment, (val) => { if (val) { openCreatePaymentDialog(); showCreatePayment.value = false } })
 
 async function deleteFile(f) {
   $q.dialog({ title: 'Удалить файл?', message: f.file_name, cancel: { label: 'Нет', flat: true, noCaps: true }, ok: { label: 'Да', noCaps: true, color: 'negative' } }).onOk(async () => {

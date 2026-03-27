@@ -707,6 +707,7 @@ class StageWorkflowState(Base):
     status = Column(String(30), default='in_progress')  # in_progress, pending_review, revision, client_approval, pending_decision, act_signing, stage_completed
     revision_count = Column(Integer, default=0)
     revision_file_path = Column(Text)
+    revision_history = Column(Text)  # JSON: [{"num": 1, "file_path": "...", "reason": "...", "date": "..."}]
     client_approval_started_at = Column(DateTime)
     client_approval_deadline_paused = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
