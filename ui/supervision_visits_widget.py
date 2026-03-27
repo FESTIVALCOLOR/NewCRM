@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QTableWidgetItem
 )
 from PyQt5.QtCore import Qt, QDate, QUrl
-from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtGui import QDesktopServices, QColor
 from utils.calendar_helpers import add_today_button_to_dateedit
 from utils.icon_loader import IconLoader
 from utils.table_settings import apply_no_focus_delegate
@@ -44,8 +44,8 @@ STAGE_NAME_MAP = {code: name for code, name in SUPERVISION_STAGES}
 class SupervisionVisitsWidget(QWidget):
     """Виджет таблицы выездов и дефектов"""
 
-    COLUMNS = ['Стадия', 'Выезд на объект', 'ФИО исполнителя (ДАН)', 'Примечание', '']
-    COLUMN_WIDTHS = [250, 150, 200, 250, 40]
+    COLUMNS = ['Тип', 'Стадия', 'План. дата', 'Факт. дата', 'ФИО исполнителя', 'Примечание', 'Файлы', '']
+    COLUMN_WIDTHS = [120, 220, 110, 110, 170, 200, 80, 64]
 
     def __init__(self, card_data, data, db=None, api_client=None, employee=None, parent=None):
         super().__init__(parent)
@@ -143,16 +143,19 @@ class SupervisionVisitsWidget(QWidget):
         self.table.setShowGrid(True)
 
         header = self.table.horizontalHeader()
-        # Столбцы 0-3 — Interactive (пользователь может растягивать)
+        # Столбцы 0-6 — Interactive (пользователь может растягивать)
         for col in range(len(self.COLUMNS) - 1):
             header.setSectionResizeMode(col, QHeaderView.Interactive)
-        for col, width in enumerate(self.COLUMN_WIDTHS[:4]):
+        for col, width in enumerate(self.COLUMN_WIDTHS):
             self.table.setColumnWidth(col, width)
-        # Столбец 3 (Примечание) растягивается на оставшееся пространство
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
-        # Столбец удаления — фиксированная узкая ширина
-        header.setSectionResizeMode(4, QHeaderView.Fixed)
-        self.table.setColumnWidth(4, 36)
+        # Столбец 5 (Примечание) растягивается на оставшееся пространство
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        # Столбец «Файлы» — фиксированная ширина
+        header.setSectionResizeMode(6, QHeaderView.Fixed)
+        self.table.setColumnWidth(6, 80)
+        # Столбец действий — фиксированная узкая ширина
+        header.setSectionResizeMode(7, QHeaderView.Fixed)
+        self.table.setColumnWidth(7, 64)
         header.setStretchLastSection(False)
 
         self.table.setStyleSheet("""
@@ -301,7 +304,20 @@ class SupervisionVisitsWidget(QWidget):
                 self.table.setRowHeight(row, 36)
                 visit_id = visit.get('id')
 
-                # Кол 0: Стадия (QComboBox)
+                # Цвет строки: зелёный фон если есть факт. дата
+                row_color = '#E8F5E9' if visit.get('actual_date') else '#FFFFFF'
+
+                # Кол 0: Тип выезда (QTableWidgetItem с цветным фоном)
+                visit_type = visit.get('visit_type', 'На объект') or 'На объект'
+                type_item = QTableWidgetItem(visit_type)
+                type_item.setTextAlignment(Qt.AlignCenter)
+                if visit_type == 'К поставщику':
+                    type_item.setBackground(QColor('#E3F2FD'))
+                else:
+                    type_item.setBackground(QColor('#E8F5E9'))
+                self.table.setItem(row, 0, type_item)
+
+                # Кол 1: Стадия (QComboBox)
                 stage_combo = QComboBox()
                 stage_combo.addItems(STAGE_NAMES)
                 current_name = visit.get('stage_name', '')
@@ -312,11 +328,11 @@ class SupervisionVisitsWidget(QWidget):
                     " font-size: 11px; background: white; }")
                 stage_combo.currentTextChanged.connect(
                     lambda text, vid=visit_id, r=row: self._on_stage_changed(r, vid, text))
-                self.table.setCellWidget(row, 0, stage_combo)
+                self.table.setCellWidget(row, 1, stage_combo)
 
-                # Кол 1: Дата выезда (QDateEdit)
+                # Кол 2: План. дата (QDateEdit)
                 date_container = QWidget()
-                date_container.setStyleSheet('background-color: transparent;')
+                date_container.setStyleSheet(f'background-color: {row_color};')
                 dl = QHBoxLayout(date_container)
                 dl.setContentsMargins(2, 0, 2, 0)
                 dl.setSpacing(0)
@@ -358,9 +374,22 @@ class SupervisionVisitsWidget(QWidget):
                 date_edit.dateChanged.connect(
                     lambda d, vid=visit_id, r=row: self._on_date_changed(r, vid, d))
                 dl.addWidget(date_edit)
-                self.table.setCellWidget(row, 1, date_container)
+                self.table.setCellWidget(row, 2, date_container)
 
-                # Кол 2: ФИО исполнителя (QComboBox)
+                # Кол 3: Факт. дата (QTableWidgetItem, только отображение)
+                actual_date = visit.get('actual_date', '') or ''
+                if actual_date:
+                    ad = QDate.fromString(actual_date, 'yyyy-MM-dd')
+                    actual_display = ad.toString('dd.MM.yyyy') if ad.isValid() else actual_date
+                else:
+                    actual_display = ''
+                actual_item = QTableWidgetItem(actual_display)
+                actual_item.setTextAlignment(Qt.AlignCenter)
+                if visit.get('actual_date'):
+                    actual_item.setBackground(QColor('#E8F5E9'))
+                self.table.setItem(row, 3, actual_item)
+
+                # Кол 4: ФИО исполнителя (QComboBox)
                 executor_combo = QComboBox()
                 executor_combo.addItem('')
                 for name in self._executor_names:
@@ -378,9 +407,9 @@ class SupervisionVisitsWidget(QWidget):
                 executor_combo.currentTextChanged.connect(
                     lambda text, vid=visit_id, r=row:
                         self._on_field_edited(r, vid, 'executor_name', text.strip()))
-                self.table.setCellWidget(row, 2, executor_combo)
+                self.table.setCellWidget(row, 4, executor_combo)
 
-                # Кол 3: Примечание (QLineEdit)
+                # Кол 5: Примечание (QLineEdit)
                 notes_edit = QLineEdit(visit.get('notes', '') or '')
                 notes_edit.setStyleSheet('''
                     QLineEdit {
@@ -391,9 +420,36 @@ class SupervisionVisitsWidget(QWidget):
                 notes_edit.editingFinished.connect(
                     lambda vid=visit_id, r=row, le=notes_edit:
                         self._on_field_edited(r, vid, 'notes', le.text().strip()))
-                self.table.setCellWidget(row, 3, notes_edit)
+                self.table.setCellWidget(row, 5, notes_edit)
 
-                # Кол 4: Кнопка удаления
+                # Кол 6: Кнопка «Файлы на ЯД»
+                btn_yd = IconLoader.create_action_button(
+                    'folder', tooltip='Файлы на Яндекс.Диске',
+                    bg_color='#FFF8E1', hover_color='#FFECB3',
+                    icon_size=14, button_size=28, icon_color='#F57F17'
+                )
+                btn_yd.clicked.connect(
+                    lambda checked, v=visit: self._open_visit_folder(v))
+                self.table.setCellWidget(row, 6, btn_yd)
+
+                # Кол 7: Кнопки действий (удаление + факт. выезд)
+                actions_container = QWidget()
+                actions_container.setStyleSheet(f'background-color: {row_color};')
+                actions_layout = QHBoxLayout(actions_container)
+                actions_layout.setContentsMargins(2, 2, 2, 2)
+                actions_layout.setSpacing(2)
+
+                # Кнопка «Отметить факт. выезд» — только если нет actual_date
+                if not visit.get('actual_date'):
+                    btn_fact = IconLoader.create_action_button(
+                        'check-circle', tooltip='Отметить факт. выезд',
+                        bg_color='#E8F5E9', hover_color='#C8E6C9',
+                        icon_size=14, button_size=28, icon_color='#2E7D32'
+                    )
+                    btn_fact.clicked.connect(
+                        lambda checked, v=visit: self._set_actual_date(v))
+                    actions_layout.addWidget(btn_fact)
+
                 del_btn = IconLoader.create_action_button(
                     'delete2', tooltip='Удалить строку',
                     bg_color='#FFE6E6', hover_color='#FFCCCC',
@@ -401,14 +457,16 @@ class SupervisionVisitsWidget(QWidget):
                 )
                 del_btn.clicked.connect(
                     lambda checked, vid=visit_id: self._delete_row(vid))
-                self.table.setCellWidget(row, 4, del_btn)
+                actions_layout.addWidget(del_btn)
+
+                self.table.setCellWidget(row, 7, actions_container)
 
         finally:
             self.table.setUpdatesEnabled(True)
             self._loading = False
 
     def _update_summary(self):
-        """Обновить сводку: итого по месяцам"""
+        """Обновить сводку: итого по месяцам + счётчик по типам"""
         months = {}
         for v in self.visits:
             vd = v.get('visit_date', '') or ''
@@ -417,6 +475,7 @@ class SupervisionVisitsWidget(QWidget):
                 months[ym] = months.get(ym, 0) + 1
 
         total = len(self.visits)
+        supplier_count = sum(1 for v in self.visits if v.get('visit_type') == 'К поставщику')
         parts = []
         for ym in sorted(months.keys()):
             try:
@@ -430,7 +489,8 @@ class SupervisionVisitsWidget(QWidget):
                 name = ym
             parts.append(f"{name}: {months[ym]}")
 
-        summary = ' | '.join(parts) + f' | Всего: {total}' if parts else f'Всего выездов: {total}'
+        month_summary = ' | '.join(parts) + ' | ' if parts else ''
+        summary = f'{month_summary}Выездов к поставщикам: {supplier_count} | Всего выездов: {total}'
         self.lbl_summary.setText(summary)
 
     # === ОБРАБОТЧИКИ ИЗМЕНЕНИЙ ===
@@ -451,15 +511,42 @@ class SupervisionVisitsWidget(QWidget):
                 logger.error("Ошибка удаления выезда %s: %s", visit_id, e)
 
     def _add_row(self):
-        """Добавить новую запись выезда"""
+        """Добавить новую запись выезда с выбором типа"""
         if not self.card_id:
             return
+
+        # Диалог выбора типа выезда
+        from PyQt5.QtWidgets import QDialog, QFormLayout, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Новый выезд')
+        dlg.setFixedWidth(340)
+        form = QFormLayout(dlg)
+
+        type_combo = QComboBox()
+        type_combo.addItems(['На объект', 'К поставщику'])
+        type_combo.setStyleSheet(
+            "QComboBox { border: 1px solid #E0E0E0; padding: 4px;"
+            " font-size: 12px; background: white; }")
+        form.addRow('Тип выезда:', type_combo)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        form.addRow(buttons)
+
+        if dlg.exec_() != QDialog.Accepted:
+            return
+
+        visit_type = type_combo.currentText()
+
         data = {
             'stage_code': SUPERVISION_STAGES[0][0],
             'stage_name': SUPERVISION_STAGES[0][1],
             'visit_date': QDate.currentDate().toString('yyyy-MM-dd'),
             'executor_name': '',
             'notes': '',
+            'visit_type': visit_type,
+            'actual_date': None,
         }
         try:
             result = self.data.create_supervision_visit(self.card_id, data)
@@ -514,6 +601,39 @@ class SupervisionVisitsWidget(QWidget):
                 dialog._add_project_history('data_change', f'Выезд: {fields}')
         except Exception as e:
             logger.error("Ошибка сохранения выезда %s: %s", visit_id, e)
+
+    # === ФАКТ. ДАТА И ФАЙЛЫ ЯД ===
+
+    def _set_actual_date(self, visit):
+        """Отметить фактическую дату выезда"""
+        from PyQt5.QtWidgets import QInputDialog
+        today = QDate.currentDate().toString('yyyy-MM-dd')
+        date, ok = QInputDialog.getText(
+            self, 'Факт. дата выезда', 'Дата (гггг-мм-дд):', text=today)
+        if ok and date:
+            try:
+                self.data.update_supervision_visit(
+                    self.card_id, visit['id'], {'actual_date': date})
+                dialog = self._dialog
+                if dialog and hasattr(dialog, '_add_project_history'):
+                    dialog._add_project_history(
+                        'data_change', f'Выезд: факт. дата={date}')
+                self._load_data()
+            except Exception as e:
+                logger.error('Ошибка установки факт. даты: %s', e)
+
+    def _open_visit_folder(self, visit):
+        """Открыть папку выезда на Яндекс.Диске"""
+        from urllib.parse import quote
+        folder = self.contract_data.get('yandex_folder_path', '')
+        if folder:
+            folder = folder.replace('disk:', '')
+        visit_date = visit.get('visit_date', 'unknown')
+        subfolder = f"Авторский надзор/Выезды/{visit_date}"
+        path = f"{folder}/{subfolder}" if folder else f"/CRM/Надзор/Выезды/{visit_date}"
+        encoded = quote(path, safe='/')
+        url = f"https://disk.yandex.ru/client/disk{encoded}"
+        QDesktopServices.openUrl(QUrl(url))
 
     # === ЭКСПОРТ ===
 
