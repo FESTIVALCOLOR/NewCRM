@@ -1361,7 +1361,7 @@ async def get_reports_summary(
                 for card in completed_cards:
                     if card.deadline and card.updated_at:
                         try:
-                            deadline_dt = datetime.strptime(card.deadline.strip(), '%Y-%m-%d')
+                            deadline_dt = datetime.strptime(str(card.deadline).strip(), '%Y-%m-%d')
                             if card.updated_at <= deadline_dt:
                                 on_time_count += 1
                         except ValueError:
@@ -1387,7 +1387,7 @@ async def get_reports_summary(
                     for stage in completed_stages:
                         if stage.deadline and stage.completed_date:
                             try:
-                                deadline_dt = datetime.strptime(stage.deadline.strip(), '%Y-%m-%d')
+                                deadline_dt = datetime.strptime(str(stage.deadline).strip(), '%Y-%m-%d')
                                 if stage.completed_date <= deadline_dt:
                                     on_time_stages += 1
                             except ValueError:
@@ -1766,7 +1766,7 @@ async def get_crm_analytics(
         for card in completed_cards:
             if card.deadline and card.updated_at:
                 try:
-                    deadline_dt = datetime.strptime(card.deadline.strip(), '%Y-%m-%d')
+                    deadline_dt = datetime.strptime(str(card.deadline).strip(), '%Y-%m-%d')
                     delta = (card.updated_at - deadline_dt).days
                     deviation_days.append(delta)
                     if card.updated_at <= deadline_dt:
@@ -1792,7 +1792,7 @@ async def get_crm_analytics(
             for stage in completed_stages:
                 if stage.deadline and stage.completed_date:
                     try:
-                        deadline_dt = datetime.strptime(stage.deadline.strip(), '%Y-%m-%d')
+                        deadline_dt = datetime.strptime(str(stage.deadline).strip(), '%Y-%m-%d')
                         if stage.completed_date <= deadline_dt:
                             stages_on_time += 1
                         else:
