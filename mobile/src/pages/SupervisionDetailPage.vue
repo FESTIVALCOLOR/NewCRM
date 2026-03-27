@@ -258,6 +258,11 @@
                     </div>
                   </div>
 
+                  <!-- Ссылка на папку ЯД с загруженными файлами -->
+                  <div v-if="visit.actual_date || visit.visit_date" class="q-mt-xs">
+                    <q-btn flat dense size="xs" icon="folder_open" :label="'Файлы на ЯД'" color="blue" no-caps style="font-size: 10px" @click.stop="openVisitFolder(visit)" />
+                  </div>
+
                   <!-- Кнопки действий -->
                   <div class="row q-gutter-xs q-mt-sm justify-end">
                     <q-btn outline dense size="xs" icon="description" label="Отчёт" no-caps color="orange" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click="uploadVisitReport(visit)" />
@@ -741,13 +746,23 @@ function stageFiles(stageCode) {
 function openStageFolder(entry) {
   const files = stageFiles(entry.stage_code)
   if (files.length > 0 && files[0].yandex_path) {
-    // Открыть папку ЯД (родительскую для файла)
     const filePath = files[0].yandex_path.replace(/^disk:/, '').replace(/\/[^/]+$/, '')
     const encoded = encodeURIComponent(filePath).replace(/%2F/g, '/')
     window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
   } else if (files.length > 0 && files[0].public_link) {
     window.open(files[0].public_link, '_blank')
   }
+}
+
+function openVisitFolder(visit) {
+  // Формируем путь к папке выезда на ЯД
+  const contractFolder = svContractYdPath.value || ''
+  const visitDate = visit.visit_date || 'unknown'
+  const subfolder = `Авторский надзор/Выезды/${visitDate}`
+  const folderPath = contractFolder ? `${contractFolder}/${subfolder}` : `/CRM/Надзор/Выезды/${visitDate}`
+  const clean = folderPath.replace(/^disk:/, '')
+  const encoded = encodeURIComponent(clean).replace(/%2F/g, '/')
+  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
 }
 
 const defaultStages = [
