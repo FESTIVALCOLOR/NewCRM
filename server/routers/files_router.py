@@ -1064,7 +1064,6 @@ async def update_file_order(
 async def stream_file_from_yandex(
     yandex_path: str,
     token: str = None,
-    db: Session = Depends(get_db),
 ):
     """Стримить файл с Яндекс.Диска для проигрывания в браузере (audio/video).
     Принимает JWT token как query param (т.к. <audio src> не может передать Header)."""

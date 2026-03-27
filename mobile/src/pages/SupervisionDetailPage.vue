@@ -384,9 +384,10 @@
             <!-- Список голосовых и текстовых заметок из истории -->
             <q-list v-if="voiceNotes.length > 0" dense separator>
               <q-item v-for="h in voiceNotes" :key="h.id">
-                <q-item-section avatar><q-icon :name="h.description?.includes('Голосовая') ? 'mic' : 'note'" :color="h.description?.includes('Голосовая') ? 'orange' : 'grey-7'" size="18px" /></q-item-section>
+                <q-item-section avatar><q-icon :name="h.entry_type === 'voice_note' ? 'mic' : 'comment'" :color="h.entry_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" /></q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">{{ h.message || h.description || '' }}</q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333; font-weight: 500">{{ cleanNoteText(h) }}</q-item-label>
+                  <q-item-label caption style="color: #888">{{ h.created_by_name || '' }}</q-item-label>
                 </q-item-section>
                 <q-item-section v-if="h.entry_type === 'voice_note' && extractVoiceUrl(h)" side>
                   <audio :src="voiceStreamUrl(extractVoiceUrl(h))" controls preload="none" style="height: 36px; width: 120px" />
@@ -805,6 +806,12 @@ function voiceStreamUrl(path) {
   const cleanPath = path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
   return `https://crm.festivalcolor.ru/api/v1/files/stream?yandex_path=${encodeURIComponent(cleanPath)}&token=${encodeURIComponent(token)}`
+}
+
+function cleanNoteText(h) {
+  const msg = h.message || h.description || 'Заметка'
+  // Убрать путь ЯД из текста: "Голосовая заметка (0:03) — /CRM/.../file.webm" → "Голосовая заметка (0:03)"
+  return msg.replace(/\s*—\s*\/CRM\/.+$/, '').replace(/\[voice:[^\]]*\]\s*/, '')
 }
 
 function extractVoiceUrl(h) {
