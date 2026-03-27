@@ -12,7 +12,7 @@
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
-              <div class="text-body2 q-mt-xs" style="color: #333">{{ card.address }}</div>
+              <div class="text-body2 q-mt-xs" style="color: #333"><a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: #333; text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a></div>
             </div>
             <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
               <q-badge :color="statusColor(card.column_name)" :label="card.column_name" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
@@ -23,7 +23,7 @@
             <span v-if="card.project_type">{{ card.project_type }}</span>
             <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
             <span v-if="card.area">{{ card.area }} м²</span>
-            <span v-if="card.city"><q-icon name="location_on" size="12px" class="q-mr-xs" />{{ card.city }}</span>
+            <span v-if="card.city">{{ card.city }}</span>
             <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense round size="xs" icon="folder_open" no-caps style="color: #F39C12" @click="openYdFolder"><q-tooltip>Яндекс.Диск</q-tooltip></q-btn>
           </div>
           <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap">

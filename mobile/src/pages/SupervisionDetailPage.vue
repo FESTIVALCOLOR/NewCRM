@@ -13,7 +13,7 @@
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
-              <div class="text-body2 q-mt-xs" style="color: #333">{{ card.address }}</div>
+              <div class="text-body2 q-mt-xs" style="color: #333"><a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: #333; text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a></div>
             </div>
             <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
               <q-badge
