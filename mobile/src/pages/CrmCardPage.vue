@@ -23,7 +23,7 @@
             <span v-if="card.project_type">{{ card.project_type }}</span>
             <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
             <span v-if="card.area">{{ card.area }} м²</span>
-            <span v-if="card.city">{{ card.city }}</span>
+            <span v-if="card.city"><q-icon name="location_on" size="12px" class="q-mr-xs" />{{ card.city }}</span>
             <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense round size="xs" icon="folder_open" no-caps style="color: #F39C12" @click="openYdFolder"><q-tooltip>Яндекс.Диск</q-tooltip></q-btn>
           </div>
           <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
