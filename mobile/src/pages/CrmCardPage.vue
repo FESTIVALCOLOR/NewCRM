@@ -1725,8 +1725,9 @@ async function loadChat() {
   if (!card.value?.id) return
   chatLoading.value = true
   try {
-    const { data } = await messengerApi.getChats({ crm_card_id: card.value.id })
-    chatData.value = data?.[0] || null
+    const { api: ax } = await import('src/boot/axios')
+    const { data } = await ax.get(`/api/v1/messenger/chats/by-card/${card.value.id}`, { validateStatus: s => s < 500 })
+    chatData.value = (data && !data.detail) ? (Array.isArray(data) ? data[0] : data) : null
     if (chatData.value) {
       const { data: members } = await messengerApi.getChatMembers(chatData.value.id)
       chatMembers.value = members || []
