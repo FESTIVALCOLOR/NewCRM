@@ -374,7 +374,7 @@
             <q-card-section class="q-pb-none">
               <div class="row items-center justify-between">
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">Заметки</div>
-                <VoiceRecorder :yandex-folder-path="svContractYdPath" @recorded="onVoiceRecorded" />
+                <VoiceRecorder :yandex-folder-path="svContractYdPath ? svContractYdPath + '/Авторский надзор' : ''" @recorded="onVoiceRecorded" />
               </div>
             </q-card-section>
             <q-card-section>
@@ -387,6 +387,9 @@
                 <q-item-section avatar><q-icon :name="h.description?.includes('Голосовая') ? 'mic' : 'note'" :color="h.description?.includes('Голосовая') ? 'orange' : 'grey-7'" size="18px" /></q-item-section>
                 <q-item-section>
                   <q-item-label style="font-size: 12px; color: #333">{{ h.message || h.description || '' }}</q-item-label>
+                  <div v-if="h.entry_type === 'voice_note' && extractVoiceUrl(h)" class="q-mt-xs">
+                    <q-btn outline dense no-caps icon="play_circle" label="Прослушать" size="sm" style="color: #1677FF" @click="openVoiceOnYd(extractVoiceUrl(h))" />
+                  </div>
                   <q-item-label caption style="color: #888">
                     <span v-if="h.created_by_name">{{ h.created_by_name }}</span>
                     <span> · {{ formatDate(h.created_at) }}</span>
@@ -796,6 +799,25 @@ function stageColor(status) {
     'Просрочено': 'negative'
   }
   return colors[status] || 'grey'
+}
+
+async function openVoiceOnYd(path) {
+  try {
+    const ydPath = path.startsWith('disk:') ? path : `disk:${path}`
+    const { data } = await filesApi.getPublicLink(ydPath)
+    if (data?.public_url || data?.href) window.open(data.public_url || data.href, '_blank')
+    else $q.notify({ type: 'info', message: 'Публичная ссылка недоступна' })
+  } catch {
+    const encoded = encodeURI(path.replace(/^disk:/, ''))
+    window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+  }
+}
+
+function extractVoiceUrl(h) {
+  // Извлечь URL голосовой заметки из message (путь к .webm файлу на ЯД)
+  const msg = h.message || h.description || ''
+  const match = msg.match(/\/CRM\/[^\s]+\.webm/)
+  return match ? `https://disk.yandex.ru/client${encodeURI(match[0])}` : ''
 }
 
 function formatDate(dateStr) {

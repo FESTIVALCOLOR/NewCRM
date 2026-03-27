@@ -388,12 +388,10 @@
                 <q-item-section>
                   <q-item-label style="font-size: 12px; color: #333">{{ n.description || 'Заметка' }}</q-item-label>
                   <q-item-label caption style="color: #888">{{ n.user_name || 'Неизвестный' }}</q-item-label>
-                  <!-- Ссылка на голосовую запись -->
-                  <q-item-label v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" caption>
-                    <a :href="noteVoiceUrl(n)" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">
-                      <q-icon name="play_circle" size="14px" class="q-mr-xs" />Прослушать
-                    </a>
-                  </q-item-label>
+                  <!-- Голосовая заметка — кнопка открыть на ЯД -->
+                  <div v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" class="q-mt-xs">
+                    <q-btn outline dense no-caps icon="play_circle" label="Прослушать" size="sm" style="color: #1677FF" @click="openVoiceNote(noteVoiceUrl(n))" />
+                  </div>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-caption" style="color: #888">{{ fmtDateTime(n.action_date) }}</div>
@@ -1066,6 +1064,23 @@ const notesList = computed(() => {
     h.action_type === 'note' || h.action_type === 'voice_note'
   ).sort((a, b) => new Date(b.action_date) - new Date(a.action_date))
 })
+
+// Открыть голосовую заметку — получить публичную ссылку с ЯД
+async function openVoiceNote(path) {
+  try {
+    const ydPath = path.startsWith('disk:') ? path : `disk:${path}`
+    const { data } = await filesApi.getPublicLink(ydPath)
+    if (data?.public_url || data?.href) {
+      window.open(data.public_url || data.href, '_blank')
+    } else {
+      $q.notify({ type: 'info', message: 'Публичная ссылка недоступна' })
+    }
+  } catch {
+    // Fallback — открыть через ЯД клиент
+    const encoded = encodeURI(path.replace(/^disk:/, ''))
+    window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+  }
+}
 
 // Извлечь URL голосовой записи из new_values
 function noteVoiceUrl(n) {

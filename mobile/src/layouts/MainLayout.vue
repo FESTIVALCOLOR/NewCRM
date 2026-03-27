@@ -361,9 +361,7 @@ function openManual() {
   if (url) {
     window.open(url, '_blank')
   } else {
-    import('quasar').then(({ Notify }) => {
-      Notify.create({ type: 'info', message: `Инструкция для «${position}» пока не доступна` })
-    })
+    $q.notify({ type: 'info', message: `Инструкция для «${position}» пока не доступна` })
   }
 }
 
@@ -386,7 +384,7 @@ async function openNotifSettings() {
     }
     showNotifDialog.value = true
   } catch {
-    import('quasar').then(({ Notify }) => Notify.create({ type: 'negative', message: 'Не удалось загрузить настройки' }))
+    $q.notify({ type: 'negative', message: 'Не удалось загрузить настройки' })
   }
 }
 
@@ -401,10 +399,7 @@ async function setNotifChannel(channel) {
   // Если выбран push или both — нужно запросить разрешение и подписаться
   if (channel === 'push' || channel === 'both') {
     if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      import('quasar').then(({ Notify }) => Notify.create({
-        type: 'warning',
-        message: 'Push-уведомления не поддерживаются в этом браузере'
-      }))
+      $q.notify({ type: 'warning', message: 'Push-уведомления не поддерживаются в этом браузере' })
       notifSettings.value.notification_channel = 'telegram'
       return
     }
@@ -412,10 +407,7 @@ async function setNotifChannel(channel) {
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') {
       pushPermissionDenied.value = true
-      import('quasar').then(({ Notify }) => Notify.create({
-        type: 'warning',
-        message: 'Push-уведомления заблокированы. Разрешите в настройках браузера.'
-      }))
+      $q.notify({ type: 'warning', message: 'Push-уведомления заблокированы. Разрешите в настройках браузера.' })
       notifSettings.value.notification_channel = 'telegram'
       return
     }
@@ -427,10 +419,7 @@ async function setNotifChannel(channel) {
       notifSettings.value.push_enabled = true
     } catch (err) {
       console.error('Ошибка подписки на push:', err)
-      import('quasar').then(({ Notify }) => Notify.create({
-        type: 'negative',
-        message: 'Не удалось подписаться на push-уведомления'
-      }))
+      $q.notify({ type: 'negative', message: 'Ошибка подписки на push-уведомления' })
       notifSettings.value.notification_channel = 'telegram'
     }
   }
@@ -445,7 +434,11 @@ async function subscribeToPush() {
 
   // Получить VAPID public key с сервера
   const { data: vapidData } = await api.get('/api/v1/notifications/push/vapid-public-key')
-  const vapidPublicKey = vapidData.public_key
+  const vapidPublicKey = vapidData.vapid_public_key
+  if (!vapidPublicKey) {
+    console.warn('VAPID public key пустой — push недоступен')
+    return
+  }
 
   // Конвертация base64 URL-safe в Uint8Array
   const urlBase64ToUint8Array = (base64String) => {
@@ -484,10 +477,10 @@ async function saveNotifSettings() {
     }
 
     await api.put(`/api/v1/notifications/settings/${empId}`, notifSettings.value)
-    import('quasar').then(({ Notify }) => Notify.create({ type: 'positive', message: 'Настройки сохранены' }))
+    $q.notify({ type: 'positive', message: 'Настройки сохранены' })
     showNotifDialog.value = false
   } catch (err) {
-    import('quasar').then(({ Notify }) => Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }))
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
 }
 
@@ -589,15 +582,13 @@ function _connectWebSocket() {
     // Новое уведомление — обновляем store + показываем toast
     onNotificationNew(data) {
       notificationsStore.load()
-      import('quasar').then(({ Notify }) => {
-        Notify.create({
+      $q.notify({
           type: 'info',
           message: data.title || 'Новое уведомление',
           caption: data.message || '',
           timeout: 5000,
           position: 'top',
           actions: [{ icon: 'close', color: 'white', round: true }],
-        })
       })
     },
     // Пользователь online/offline — обновляем список
