@@ -186,6 +186,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useAuthStore } from 'src/stores/auth'
 import { reportsApi, statisticsApi, dashboardApi } from 'src/services/api'
 import PieChart from 'src/components/charts/PieChart.vue'
 import BarChart from 'src/components/charts/BarChart.vue'
@@ -524,7 +525,21 @@ async function loadData() {
 function exportPDF() { window.print() }
 watch(projectTab, () => loadData())
 function onRefresh(done) { loadData().finally(done) }
-onMounted(() => loadData())
+
+const auth = useAuthStore()
+onMounted(async () => {
+  // Подождать восстановления сессии если токен ещё не готов
+  if (!auth.token && auth.restoreSession) {
+    await auth.restoreSession()
+  }
+  if (auth.token) {
+    await loadData()
+  }
+})
+// Если токен появится позже (после restoreSession) — загрузить данные
+watch(() => auth.token, (val) => {
+  if (val) loadData()
+})
 </script>
 
 <style>

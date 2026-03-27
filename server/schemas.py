@@ -1212,6 +1212,8 @@ class SupervisionVisitCreate(BaseModel):
     visit_date: str
     executor_name: Optional[str] = None
     notes: Optional[str] = None
+    actual_date: Optional[str] = None
+    visit_type: str = 'На объект'
 
 class SupervisionVisitUpdate(BaseModel):
     stage_code: Optional[str] = None
@@ -1219,6 +1221,8 @@ class SupervisionVisitUpdate(BaseModel):
     visit_date: Optional[str] = None
     executor_name: Optional[str] = None
     notes: Optional[str] = None
+    actual_date: Optional[str] = None
+    visit_type: Optional[str] = None
 
 class SupervisionVisitResponse(BaseModel):
     id: int
@@ -1228,6 +1232,8 @@ class SupervisionVisitResponse(BaseModel):
     visit_date: str
     executor_name: Optional[str] = None
     notes: Optional[str] = None
+    actual_date: Optional[str] = None
+    visit_type: Optional[str] = 'На объект'
     sort_order: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

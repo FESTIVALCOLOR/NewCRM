@@ -682,6 +682,8 @@ class SupervisionVisit(Base):
     visit_date = Column(String, nullable=False)  # YYYY-MM-DD
     executor_name = Column(String(255))  # ФИО исполнителя (ДАН)
     notes = Column(Text)
+    actual_date = Column(String(30), nullable=True)  # Фактическая дата выезда
+    visit_type = Column(String(50), default='На объект')  # Тип: 'На объект' / 'К поставщику'
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

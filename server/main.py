@@ -161,6 +161,17 @@ async def startup_event():
         if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
             logger.debug(f"project_files migration note: {e}")
 
+    # Миграция: добавить actual_date и visit_type в supervision_visits
+    try:
+        from sqlalchemy import text as _text3
+        with engine.begin() as conn:
+            conn.execute(_text3("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS actual_date VARCHAR(30)"))
+            conn.execute(_text3("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS visit_type VARCHAR(50) DEFAULT 'На объект'"))
+            logger.info("Migrated supervision_visits: added actual_date, visit_type columns")
+    except Exception as e:
+        if "duplicate" not in str(e).lower() and "already" not in str(e).lower():
+            logger.debug(f"supervision_visits migration note: {e}")
+
     # Seed дефолтных прав и admin-пользователя
     from database import SessionLocal, Employee
     from auth import get_password_hash

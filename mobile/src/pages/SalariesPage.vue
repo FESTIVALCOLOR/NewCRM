@@ -20,7 +20,7 @@
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
       <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable emit-value map-options label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
-      <div class="col-auto"><q-btn outlined dense no-caps label="Сбросить" color="grey-7" @click="resetFilters" style="font-size: 12px; height: 40px; min-height: 40px; border: 1px solid #bdbdbd; border-radius: 4px; min-width: 90px; padding: 0 12px" /></div>
+      <div class="col-auto" style="display: flex; align-items: stretch"><q-btn outlined no-caps label="Сбросить" color="grey-7" @click="resetFilters" class="sal-reset-btn" /></div>
     </div>
 
     <!-- Период -->
@@ -596,4 +596,6 @@ onMounted(async () => {
 .payment-card:last-child { border-radius: 0 0 8px 8px; border-bottom: 1px solid #E0E0E0 }
 /* Единая высота фильтров */
 .q-col-gutter-xs .q-field--outlined .q-field__control { min-height: 40px; height: 40px; }
+/* Кнопка сбросить — ровно как фильтры */
+.sal-reset-btn { font-size: 12px !important; height: 100% !important; min-height: 40px !important; border: 1px solid #bdbdbd !important; border-radius: 4px !important; min-width: 90px; padding: 0 12px !important; }
 </style>

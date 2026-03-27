@@ -155,12 +155,9 @@
                   <q-item-label caption v-if="entry.budget_planned > 0" style="color: #888">
                     Бюджет: {{ formatMoney(entry.budget_actual || 0) }} / {{ formatMoney(entry.budget_planned) }}
                   </q-item-label>
-                  <!-- Файлы этой стадии -->
+                  <!-- Файлы стадии — кнопка папки ЯД -->
                   <div v-if="stageFiles(entry.stage_code).length > 0" class="q-mt-xs">
-                    <div v-for="f in stageFiles(entry.stage_code)" :key="f.id" class="row items-center q-gutter-xs q-mb-xs">
-                      <q-icon name="attach_file" size="14px" color="blue" />
-                      <a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; display: inline-block">{{ f.file_name }}</a>
-                    </div>
+                    <q-btn flat dense size="xs" icon="folder_open" :label="`${stageFiles(entry.stage_code).length} файл(ов)`" color="blue" no-caps style="font-size: 10px" @click.stop="openStageFolder(entry)" />
                   </div>
                 </q-item-section>
                 <q-item-section side>
@@ -739,6 +736,18 @@ function stageFiles(stageCode) {
   if (fromStages.length > 0) return fromStages
   // Fallback: ищем в общих supervision файлах по stage_code
   return svFilesSupervision.value.filter(f => f.stage_code === stageCode)
+}
+
+function openStageFolder(entry) {
+  const files = stageFiles(entry.stage_code)
+  if (files.length > 0 && files[0].yandex_path) {
+    // Открыть папку ЯД (родительскую для файла)
+    const filePath = files[0].yandex_path.replace(/^disk:/, '').replace(/\/[^/]+$/, '')
+    const encoded = encodeURIComponent(filePath).replace(/%2F/g, '/')
+    window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+  } else if (files.length > 0 && files[0].public_link) {
+    window.open(files[0].public_link, '_blank')
+  }
 }
 
 const defaultStages = [

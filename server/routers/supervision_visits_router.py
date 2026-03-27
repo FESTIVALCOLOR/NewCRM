@@ -8,7 +8,7 @@ from datetime import datetime, date
 from collections import defaultdict
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from urllib.parse import quote
@@ -322,6 +322,8 @@ async def create_visit(
         visit_date=data.visit_date,
         executor_name=data.executor_name,
         notes=data.notes,
+        actual_date=data.actual_date,
+        visit_type=data.visit_type,
         sort_order=max_order + 1,
     )
     db.add(visit)
@@ -381,6 +383,70 @@ async def update_visit(
     db.commit()
     db.refresh(visit)
     return visit
+
+
+@router.patch("/{visit_id}")
+async def patch_visit(
+    visit_id: int,
+    update_data: dict = Body(...),
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Частичное обновление выезда (для мобильной версии)"""
+    visit = db.query(SupervisionVisit).filter(SupervisionVisit.id == visit_id).first()
+    if not visit:
+        raise HTTPException(status_code=404, detail="Выезд не найден")
+
+    for key, value in update_data.items():
+        if hasattr(visit, key):
+            setattr(visit, key, value)
+
+    visit.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(visit)
+    return visit
+
+
+@router.post("/upload-file")
+async def upload_visit_file(
+    visit_id: int = Form(...),
+    file_type: str = Form('report'),
+    file: UploadFile = File(...),
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Загрузить файл (отчёт/фото) к выезду"""
+    visit = db.query(SupervisionVisit).filter(SupervisionVisit.id == visit_id).first()
+    if not visit:
+        raise HTTPException(status_code=404, detail="Выезд не найден")
+
+    # Загрузка на Яндекс.Диск
+    card = db.query(SupervisionCard).filter(SupervisionCard.id == visit.supervision_card_id).first()
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first() if card else None
+
+    folder_base = ''
+    if contract and contract.yandex_folder_path:
+        folder_base = contract.yandex_folder_path.replace('disk:', '')
+
+    subfolder = f"Авторский надзор/Выезды/{visit.visit_date or 'unknown'}"
+    upload_path = f"{folder_base}/{subfolder}/{file.filename}" if folder_base else f"/CRM/Надзор/Выезды/{file.filename}"
+
+    try:
+        from services.yandex_disk_service import get_yandex_disk_service
+        yd = get_yandex_disk_service()
+        content = await file.read()
+        yd.upload_file(upload_path, content)
+
+        # Получить публичную ссылку
+        public_link = ''
+        try:
+            public_link = yd.get_public_link(upload_path)
+        except Exception:
+            pass
+
+        return {"status": "ok", "file_name": file.filename, "public_link": public_link, "yandex_path": upload_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки: {str(e)}")
 
 
 @router.delete("/{card_id}/visits/{visit_id}")
