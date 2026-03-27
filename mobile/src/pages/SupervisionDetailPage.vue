@@ -1328,7 +1328,7 @@ async function loadSvChat() {
   svChatLoading.value = true
   try {
     const { api: ax } = await import('src/boot/axios')
-    const { data } = await ax.get(`/api/v1/messenger/chats/by-supervision/${card.value.id}`)
+    const { data } = await ax.get(`/api/v1/messenger/chats/by-supervision/${card.value.id}`, { validateStatus: s => s < 500 })
     svChatData.value = data?.[0] || null
     if (svChatData.value) {
       const { data: members } = await messengerApi.getChatMembers(svChatData.value.id)

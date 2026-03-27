@@ -1,1 +1,0 @@
-import{L as e}from"./dom-DPf5KfN7.js";import{M as t}from"./index-BUySiIyx.js";function n(){let n=t(),r=e(()=>n.isSuperuser);function i(e){return n.has(e)}function a(...e){return e.some(e=>n.has(e))}return{can:i,canAny:a,isSuperuser:r}}export{n as t};
