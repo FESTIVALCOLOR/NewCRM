@@ -627,7 +627,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { supervisionApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
@@ -1323,6 +1323,11 @@ async function doAddHistory() {
 
 // === Telegram-чат надзора ===
 
+// Ленивая загрузка чата при переключении на вкладку
+watch(activeTab, (tab) => {
+  if (tab === 'chat' && !svChatData.value && !svChatLoading.value) loadSvChat()
+})
+
 async function loadSvChat() {
   if (!card.value?.id) return
   svChatLoading.value = true
@@ -1429,7 +1434,7 @@ onMounted(async () => {
 
   // Дополнительные данные (не блокируют основную загрузку)
   reloadData()
-  loadSvChat()
+  // Чат загружается лениво при переключении на вкладку "Чат"
 
   // Блокировка карточки при редактировании
   try {
