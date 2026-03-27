@@ -71,6 +71,15 @@ async def dispatch_notification(
     from database import Notification, NotificationSettings, Employee
 
     try:
+        # 0. Проверить что сотрудник активен (не уволен, не в резерве)
+        employee_check = db.query(Employee).filter_by(id=employee_id).first()
+        if not employee_check:
+            logger.warning(f"dispatch_notification: сотрудник id={employee_id} не найден, пропуск")
+            return
+        if getattr(employee_check, 'status', None) in ('уволен', 'в резерве'):
+            logger.info(f"dispatch_notification: сотрудник id={employee_id} имеет статус '{employee_check.status}', пропуск")
+            return
+
         # 1. Создать запись Notification в БД
         notification = Notification(
             employee_id=employee_id,

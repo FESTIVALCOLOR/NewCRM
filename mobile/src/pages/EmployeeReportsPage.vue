@@ -36,7 +36,7 @@
       <q-card class="is-card q-mb-md" v-if="executorLoad.length > 0">
         <q-card-section>
           <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Нагрузка исполнителей</div>
-          <bar-chart :labels="executorLoad.map(e => e.name.split(' ')[0])" :datasets="[{ label: 'Стадий', data: executorLoad.map(e => e.active_stages), color: '#ffd93c' }]" />
+          <bar-chart :labels="executorLoad.map(e => e.name.split(' ').slice(0, 2).join(' '))" :datasets="[{ label: 'Стадий', data: executorLoad.map(e => e.active_stages), color: '#ffd93c' }]" />
         </q-card-section>
       </q-card>
 
@@ -71,7 +71,7 @@
         <q-card-section>
           <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Сравнение KPI</div>
           <bar-chart
-            :labels="roleEmployees.map(e => (e.full_name || e.name || '').split(' ')[0])"
+            :labels="roleEmployees.map(e => (e.full_name || e.name || '').split(' ').slice(0, 2).join(' '))"
             :datasets="[{ label: 'KPI %', data: roleEmployees.map(e => e.completion_rate || e.kpi || 0), color: '#27AE60' }]"
             horizontal
           />

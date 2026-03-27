@@ -57,7 +57,7 @@
       </div>
 
       <!-- 9. Дедлайн (скрыт в архиве) -->
-      <div v-if="deadlineText && !isArchived" class="q-mb-xs row items-center q-gutter-xs" :style="{ background: deadlineBg, borderRadius: '4px', padding: '3px 8px', height: '28px' }">
+      <div v-if="deadlineText && !isArchived" class="q-mb-xs row items-center q-gutter-xs" :style="{ background: deadlineBg, borderRadius: '4px', padding: '3px 8px', height: '28px', width: '100%' }">
         <q-icon name="schedule" size="10px" :style="{ color: deadlineTextColor }" />
         <span :style="{ fontSize: '10px', color: deadlineTextColor, fontWeight: 'bold' }">{{ deadlineText }}</span>
       </div>

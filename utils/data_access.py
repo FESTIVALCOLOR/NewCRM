@@ -1303,6 +1303,9 @@ class DataAccess(QObject):
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB pause_supervision_card: {e}")
 
+        # Инвалидируем кэш карточек надзора чтобы refresh показал актуальное состояние
+        _global_cache.invalidate("supervision:")
+
         if self.is_online and self.api_client:
             try:
                 return self.api_client.pause_supervision_card(card_id, reason or '')
@@ -1324,13 +1327,20 @@ class DataAccess(QObject):
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB resume_supervision_card: {e}")
 
+        # Инвалидируем кэш карточек надзора чтобы refresh показал актуальное состояние
+        _global_cache.invalidate("supervision:")
+
         if self.is_online and self.api_client:
+            from utils.api_client.exceptions import APIConnectionError, APITimeoutError
             try:
                 return self.api_client.resume_supervision_card(card_id, employee_id)
-            except Exception as e:
-                _safe_log(f"[DataAccess] Ошибка API resume_supervision_card: {e}")
+            except (APIConnectionError, APITimeoutError) as e:
+                _safe_log(f"[DataAccess] Сетевая ошибка resume_supervision_card: {e}")
                 self._queue_operation('update', 'supervision_card', card_id,
                                       {'_action': 'resume', 'employee_id': employee_id})
+            except Exception as e:
+                # Бизнес-ошибки (422/400) — НЕ ставим в очередь (правило #12)
+                _safe_log(f"[DataAccess] Бизнес-ошибка resume_supervision_card: {e}")
         elif self.api_client:
             self._queue_operation('update', 'supervision_card', card_id,
                                   {'_action': 'resume', 'employee_id': employee_id})
@@ -4043,6 +4053,24 @@ class DataAccess(QObject):
         if self._should_use_api():
             return self.api_client.update_notification_settings(employee_id, data)
         return None
+
+    def get_notifications(self, unread_only: bool = False):
+        """Получить список уведомлений"""
+        if self._should_use_api():
+            return self.api_client.get_notifications(unread_only=unread_only)
+        return []
+
+    def mark_notification_read(self, notification_id: int) -> bool:
+        """Отметить уведомление как прочитанное"""
+        if self._should_use_api():
+            return self.api_client.mark_notification_read(notification_id)
+        return False
+
+    def mark_all_notifications_read(self) -> bool:
+        """Отметить все уведомления как прочитанные"""
+        if self._should_use_api():
+            return self.api_client.mark_all_notifications_read()
+        return False
 
     def send_employee_invite(self, employee_id: int) -> bool:
         """Отправить приглашение сотруднику"""

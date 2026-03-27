@@ -193,7 +193,7 @@
     </q-dialog>
 
     <!-- Глобальный поиск -->
-    <q-dialog v-model="showGlobalSearch" position="top" seamless>
+    <q-dialog v-model="showGlobalSearch" position="top">
       <q-card style="width: 100%; max-width: 500px; border-radius: 0 0 10px 10px">
         <q-card-section class="q-pb-none">
           <q-input v-model="globalQuery" placeholder="Клиент, договор, адрес..." dense outlined autofocus @keyup.enter="doGlobalSearch" class="q-mb-sm">
@@ -283,12 +283,20 @@ const showGlobalSearch = ref(false)
 const globalQuery = ref('')
 const globalResults = ref([])
 const globalSearched = ref(false)
+let searchDebounce = null
+
+watch(globalQuery, (val) => {
+  if (val && val.length >= 2) {
+    clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(doGlobalSearch, 400)
+  }
+})
 
 async function doGlobalSearch() {
   if (!globalQuery.value || globalQuery.value.length < 2) return
   try {
     const { api: ax } = await import('src/boot/axios')
-    const { data } = await ax.get('/api/v1/search/global', { params: { q: globalQuery.value } })
+    const { data } = await ax.get('/api/v1/search', { params: { q: globalQuery.value } })
     globalResults.value = (data.results || data || []).map(r => ({
       type: r.type || 'client',
       id: r.id,

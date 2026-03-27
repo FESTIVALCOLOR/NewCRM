@@ -9,7 +9,7 @@
     <template v-else-if="card">
       <!-- Шапка (как CrmCardPage) -->
       <q-card class="is-card q-mb-md">
-        <q-card-section>
+        <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
@@ -26,9 +26,9 @@
           </div>
           <div class="row items-center q-gutter-xs text-caption q-mt-xs" style="color: #888">
             <span v-if="card.project_type">{{ card.project_type }}</span>
-            <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
-            <span v-if="card.area">{{ card.area }} м²</span>
-            <span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
+            <span v-if="card.project_subtype" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.project_subtype">{{ card.project_subtype }}</span>
+            <span v-if="card.area" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.area">{{ card.area }} м²</span>
+            <span v-if="card.city" style="color: #ccc; margin: 0 4px">|</span><span v-if="card.city"><q-icon name="location_on" size="12px" /> {{ card.city }}</span>
           </div>
           <div class="row q-gutter-md text-caption q-mt-xs" style="color: #888">
             <span v-if="card.start_date"><q-icon name="play_arrow" size="14px" /> Начало: {{ formatDate(card.start_date) }}</span>
@@ -43,8 +43,8 @@
       <!-- Вкладки (как CrmCardPage) -->
       <q-tabs v-model="activeTab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-md" style="color: #666" align="left" :breakpoint="0">
         <q-tab name="executors" label="Исполнители" />
-        <q-tab name="timeline" label="Сроки" />
-        <q-tab name="data" label="Данные" />
+        <q-tab name="timeline" label="Закупки" />
+        <q-tab name="data" label="Выезды" />
         <q-tab name="history" label="История" />
         <q-tab name="payments" label="Оплаты" />
         <q-tab name="notes" label="Заметки" />
@@ -113,39 +113,15 @@
 
           <!-- Действия -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div>
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
+            <q-card-section>
+              <q-btn v-if="can('supervision.pause_resume') && !card.is_paused" unelevated dense no-caps icon="pause_circle" label="Приостановить" class="full-width q-mb-sm" style="background: #F39C12; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="handlePause" />
+              <q-btn v-else-if="can('supervision.pause_resume') && card.is_paused" unelevated dense no-caps icon="play_circle" label="Возобновить" class="full-width q-mb-sm" style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="handleResume" />
+              <q-btn v-if="can('supervision.complete_stage')" unelevated dense no-caps icon="check_circle" label="Завершить стадию" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="handleCompleteStage" />
+              <q-btn v-if="can('supervision.move')" unelevated dense no-caps icon="swap_horiz" label="Переместить" class="full-width q-mb-sm" style="background: #95A5A6; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="showMoveDialog = true" />
+              <q-btn v-if="isDan && !card.dan_completed" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="submitDanWork" />
+              <q-btn v-if="can('supervision.complete_stage') && card.dan_completed" unelevated dense no-caps icon="thumb_up" label="Принять работу ДАН" class="full-width q-mb-sm" style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="acceptDanWork" />
             </q-card-section>
-            <q-list>
-              <q-item v-if="can('supervision.pause_resume') && !card.is_paused" clickable v-ripple @click="handlePause">
-                <q-item-section avatar><q-icon name="pause_circle" color="warning" /></q-item-section>
-                <q-item-section>Приостановить</q-item-section>
-              </q-item>
-              <q-item v-else-if="can('supervision.pause_resume') && card.is_paused" clickable v-ripple @click="handleResume">
-                <q-item-section avatar><q-icon name="play_circle" color="positive" /></q-item-section>
-                <q-item-section>Возобновить</q-item-section>
-              </q-item>
-              <q-item v-if="can('supervision.complete_stage')" clickable v-ripple @click="handleCompleteStage">
-                <q-item-section avatar><q-icon name="check_circle" color="primary" /></q-item-section>
-                <q-item-section>Завершить текущую стадию</q-item-section>
-              </q-item>
-              <q-item v-if="can('supervision.move')" clickable v-ripple @click="showMoveDialog = true">
-                <q-item-section avatar><q-icon name="swap_horiz" color="grey-7" /></q-item-section>
-                <q-item-section>Переместить на стадию</q-item-section>
-              </q-item>
-              <q-item v-if="isDan && !card.dan_completed" clickable v-ripple @click="submitDanWork">
-                <q-item-section avatar><q-icon name="check" color="positive" /></q-item-section>
-                <q-item-section>Сдать работу</q-item-section>
-              </q-item>
-              <q-item v-if="can('supervision.complete_stage') && card.dan_completed" clickable v-ripple @click="acceptDanWork">
-                <q-item-section avatar><q-icon name="thumb_up" color="positive" /></q-item-section>
-                <q-item-section>Принять работу ДАН</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="showAddHistoryDlg = true">
-                <q-item-section avatar><q-icon name="note_add" color="grey-7" /></q-item-section>
-                <q-item-section>Добавить запись</q-item-section>
-              </q-item>
-            </q-list>
           </q-card>
         </q-tab-panel>
 
@@ -224,23 +200,21 @@
             <q-card-section>
               <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Бюджет</div>
               <div class="row q-col-gutter-sm">
-                <div class="col-6">
+                <div class="col-6" style="text-align: center">
                   <div class="text-caption text-grey-7">Запланировано</div>
                   <div class="text-weight-bold">{{ formatMoney(summary.total_budget_planned) }}</div>
                 </div>
-                <div class="col-6">
+                <div class="col-6" style="text-align: center">
                   <div class="text-caption text-grey-7">Фактически</div>
                   <div class="text-weight-bold">{{ formatMoney(summary.total_budget_actual) }}</div>
                 </div>
-                <div class="col-6">
+                <div class="col-6" style="text-align: center">
                   <div class="text-caption text-grey-7">Экономия</div>
                   <div class="text-weight-bold text-positive">{{ formatMoney(summary.total_savings) }}</div>
                 </div>
-                <div class="col-6">
-                  <div class="text-caption text-grey-7">Дефекты</div>
-                  <div class="text-weight-bold">
-                    {{ summary.total_defects_resolved }}/{{ summary.total_defects_found }}
-                  </div>
+                <div class="col-6" style="text-align: center">
+                  <div class="text-caption text-grey-7">Комиссия</div>
+                  <div class="text-weight-bold text-positive">{{ formatMoney(summary.total_commission || 0) }}</div>
                 </div>
               </div>
             </q-card-section>
@@ -269,22 +243,6 @@
             <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
           </q-card>
 
-          <!-- Файлы закупок (общие) -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-xs">
-              <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Файлы закупок</div>
-                <q-btn v-if="can('supervision.files_upload')" outline dense size="xs" icon="upload" label="Загрузить счёт" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px" @click="uploadNadzorFile" />
-              </div>
-            </q-card-section>
-            <q-list v-if="svFilesSupervision.length > 0" dense separator>
-              <q-item v-for="f in svFilesSupervision" :key="f.id">
-                <q-item-section avatar><q-icon name="receipt" color="blue" /></q-item-section>
-                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a :href="f.public_link || '#'" target="_blank" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
-              </q-item>
-            </q-list>
-            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
-          </q-card>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 4: История + Выезды ====== -->
@@ -293,9 +251,16 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="text-subtitle2 text-weight-bold" style="color: #333">История проекта</div>
+              <q-btn-toggle v-model="historyFilter" no-caps dense unelevated rounded toggle-color="grey-7" text-color="grey-7" size="xs" class="q-mb-sm q-mt-sm"
+                :options="[
+                  { label: 'Все', value: 'all' },
+                  { label: 'Записи', value: 'note' },
+                  { label: 'Выезды', value: 'site_visit' },
+                  { label: 'Назначения', value: 'assignment_change' },
+                ]" />
             </q-card-section>
-            <q-list v-if="svHistory.length > 0" dense separator>
-              <q-item v-for="h in svHistory" :key="h.id">
+            <q-list v-if="filteredSvHistory.length > 0" dense separator>
+              <q-item v-for="h in filteredSvHistory" :key="h.id">
                 <q-item-section avatar><q-icon :name="historyIcon(h.entry_type)" :color="historyColor(h.entry_type)" size="18px" /></q-item-section>
                 <q-item-section>
                   <q-item-label style="font-size: 12px; color: #333">{{ cleanNoteText(h) }}</q-item-label>
@@ -322,7 +287,7 @@
                   <q-icon name="place" color="blue" size="20px" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label>{{ formatDate(visit.visit_date) }}</q-item-label>
+                  <q-item-label><q-badge :color="visit.visit_type === 'К поставщику' ? 'blue' : 'green'" :label="visit.visit_type || 'На объект'" dense class="q-mr-xs" /> {{ formatDate(visit.visit_date) }}</q-item-label>
                   <q-item-label caption>
                     {{ visit.stage_name?.replace(/^Стадия \d+: /, '') }}
                   </q-item-label>
@@ -333,7 +298,10 @@
                 <q-item-section side>
                   <div class="column items-end q-gutter-xs">
                     <span class="text-caption text-grey-7">{{ visit.executor_name }}</span>
-                    <q-btn flat round dense size="xs" icon="event" color="grey-6" @click.stop="addVisitToCalendar(visit)"><q-tooltip>В календарь</q-tooltip></q-btn>
+                    <div class="row q-gutter-xs">
+                      <q-btn flat round dense size="xs" icon="event" color="grey-6" @click.stop="addVisitToCalendar(visit)"><q-tooltip>В календарь</q-tooltip></q-btn>
+                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deleteVisit(visit)"><q-tooltip>Удалить</q-tooltip></q-btn>
+                    </div>
                   </div>
                 </q-item-section>
               </q-item>
@@ -473,6 +441,7 @@
         <q-card-section><div class="text-subtitle1 text-weight-bold">Новый выезд</div></q-card-section>
         <q-card-section>
           <q-input v-model="visitForm.visit_date" label="Дата выезда" outlined dense type="date" class="q-mb-sm" />
+          <q-select v-model="visitForm.visit_type" :options="['На объект', 'К поставщику']" label="Тип выезда" outlined dense class="q-mb-sm" />
           <q-select v-model="visitForm.stage_code" :options="stageCodesForVisit" label="Стадия" outlined dense emit-value map-options class="q-mb-sm" />
           <q-select v-model="visitForm.executor_name" :options="executorNameOptions" label="Исполнитель (ДАН)" outlined dense emit-value class="q-mb-sm" />
           <q-input v-model="visitForm.notes" label="Заметки" outlined dense type="textarea" autogrow />
@@ -494,6 +463,7 @@
           <q-input v-model.number="editEntry.budget_planned" label="Бюджет план" outlined dense type="number" prefix="₽" class="q-mb-sm" />
           <q-input v-model.number="editEntry.budget_actual" label="Бюджет факт" outlined dense type="number" prefix="₽" class="q-mb-sm" />
           <q-input v-model="editEntry.supplier" label="Поставщик" outlined dense class="q-mb-sm" />
+          <q-input v-model="editEntry.commission" label="Комиссия (доход студии)" outlined dense type="number" prefix="₽" class="q-mb-sm" />
           <q-select v-model="editEntry.status" :options="['Не начато','В работе','Закуплено','Доставлено','Просрочено']" label="Статус" outlined dense class="q-mb-sm" />
           <q-input v-model="editEntry.notes" label="Заметки" outlined dense type="textarea" autogrow class="q-mb-sm" />
           <q-select v-model="editEntry.executor" :options="executorNameOptions" label="Исполнитель" outlined dense emit-value class="q-mb-sm" />
@@ -628,7 +598,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { supervisionApi, filesApi, employeesApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import VoiceRecorder from 'src/components/VoiceRecorder.vue'
@@ -643,6 +613,7 @@ const authStore = useAuthStore()
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 
 const route = useRoute()
+const router = useRouter()
 const $q = useQuasar()
 const loading = ref(true)
 const card = ref(null)
@@ -650,6 +621,7 @@ const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
 const activeTab = ref('executors')
+if (route.query.tab) activeTab.value = route.query.tab
 const svContractYdPath = ref('')
 const showAddVisit = ref(false)
 const showReassignDan = ref(false)
@@ -663,7 +635,7 @@ const editEntry = ref(null)
 const cameraInput = ref(null)
 const fileInput = ref(null)
 const nadzorFileInput = ref(null)
-const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '' })
+const visitForm = ref({ visit_date: new Date().toISOString().split('T')[0], stage_code: '', notes: '', executor_name: '', visit_type: 'На объект' })
 const executorOptions = ref([])
 const executorNameOptions = ref([])
 const svPayments = ref([])
@@ -676,6 +648,12 @@ const moveTargetColumn = ref(null)
 const showAddHistoryDlg = ref(false)
 const historyNote = ref('')
 const noteText = ref('')
+
+const historyFilter = ref('all')
+const filteredSvHistory = computed(() => {
+  if (historyFilter.value === 'all') return svHistory.value
+  return svHistory.value.filter(h => h.entry_type === historyFilter.value)
+})
 
 // === Файлы по стадиям ===
 const svFilesStages = ref({}) // { stage_code: [файлы] }
@@ -1057,7 +1035,7 @@ async function saveVisit() {
       stage_code: visitForm.value.stage_code,
       stage_name: stageLabel,
       visit_date: visitForm.value.visit_date,
-      executor_name: '',
+      executor_name: visitForm.value.executor_name || '',
       notes: visitForm.value.notes
     })
     $q.notify({ type: 'positive', message: 'Выезд добавлен' })
@@ -1066,6 +1044,24 @@ async function saveVisit() {
   } catch (err) {
     $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
   }
+}
+
+async function deleteVisit(visit) {
+  $q.dialog({
+    title: 'Удалить выезд?',
+    message: `${formatDate(visit.visit_date)} — ${visit.stage_name || ''}`,
+    cancel: { label: 'Нет', flat: true, noCaps: true },
+    ok: { label: 'Да', noCaps: true, color: 'negative' },
+  }).onOk(async () => {
+    try {
+      const { api: ax } = await import('src/boot/axios')
+      await ax.delete(`/api/v1/supervision-visits/${visit.id}`)
+      $q.notify({ type: 'positive', message: 'Выезд удалён' })
+      await reloadData()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
 }
 
 function takePhoto() { cameraInput.value?.click() }
@@ -1324,8 +1320,9 @@ async function doAddHistory() {
 // === Telegram-чат надзора ===
 
 // Ленивая загрузка чата при переключении на вкладку
-watch(activeTab, (tab) => {
-  if (tab === 'chat' && !svChatData.value && !svChatLoading.value) loadSvChat()
+watch(activeTab, (val) => {
+  router.replace({ query: { ...route.query, tab: val } })
+  if (val === 'chat' && !svChatData.value && !svChatLoading.value) loadSvChat()
 })
 
 async function loadSvChat() {

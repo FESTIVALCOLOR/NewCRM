@@ -104,6 +104,21 @@ export const crmApi = {
   closeStage: (cardId) =>
     api.post(`/api/v1/crm/cards/${cardId}/workflow/close-stage`),
 
+  addExtraRound: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/add-extra-round`),
+  managerAcceptance: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/manager-acceptance`),
+  completeApprovalStage: (cardId, data) =>
+    api.post(`/api/v1/crm/cards/${cardId}/complete-approval-stage`, data),
+  resetApproval: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/reset-approval`),
+  resetDesigner: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/reset-designer`),
+  resetDraftsman: (cardId) =>
+    api.post(`/api/v1/crm/cards/${cardId}/reset-draftsman`),
+  resetStageByName: (cardId, stageName) =>
+    api.post(`/api/v1/crm/cards/${cardId}/reset-stage-by-name`, { stage_name: stageName }),
+
   repairWorkflow: (cardId) =>
     api.post(`/api/v1/crm/cards/${cardId}/workflow/repair`),
 

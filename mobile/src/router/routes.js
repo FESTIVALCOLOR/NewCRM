@@ -109,6 +109,10 @@ export default [
         meta: { title: 'Уведомления' }
       },
       {
+        path: 'notification-settings',
+        component: () => import('../pages/NotificationSettingsPage.vue'),
+      },
+      {
         path: 'files',
         name: 'files',
         component: () => import('src/pages/FilesPage.vue'),

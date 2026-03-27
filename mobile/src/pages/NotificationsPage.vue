@@ -14,15 +14,46 @@
             { label: 'Непрочитанные', value: 'unread' }
           ]"
         />
-        <q-btn
-          v-if="store.unreadCount > 0"
-          flat
-          dense
-          label="Прочитать все"
-          no-caps
-          color="primary"
-          @click="markAllRead"
-        />
+        <div class="row items-center q-gutter-sm">
+          <q-btn flat round dense icon="settings" color="grey-7" @click="$router.push('/notification-settings')">
+            <q-tooltip>Настройки</q-tooltip>
+          </q-btn>
+          <q-btn
+            v-if="store.unreadCount > 0"
+            flat
+            dense
+            label="Прочитать все"
+            no-caps
+            color="primary"
+            @click="markAllRead"
+          />
+        </div>
+      </div>
+      <q-btn-toggle
+        v-model="typeFilter"
+        no-caps
+        dense
+        unelevated
+        rounded
+        toggle-color="grey-7"
+        text-color="grey-7"
+        size="xs"
+        class="q-mb-md"
+        :options="[
+          { label: 'Все типы', value: 'all' },
+          { label: 'Назначения', value: 'assigned' },
+          { label: 'Стадии', value: 'crm_stage' },
+          { label: 'Дедлайны', value: 'deadline' },
+          { label: 'Оплаты', value: 'payment' },
+          { label: 'Надзор', value: 'supervision' }
+        ]"
+      />
+
+      <!-- Дополнительные фильтры -->
+      <div class="row q-col-gutter-xs q-mt-sm" style="width: 100%">
+        <div class="col-12">
+          <q-input v-model="addressFilter" placeholder="Поиск по адресу..." dense outlined clearable style="font-size: 12px" />
+        </div>
       </div>
 
       <!-- Загрузка -->
@@ -42,7 +73,7 @@
       <q-card class="is-card" v-else-if="filteredItems.length > 0">
         <q-list separator>
           <q-item
-            v-for="n in filteredItems"
+            v-for="n in displayedItems"
             :key="n.id"
             clickable
             v-ripple
@@ -63,8 +94,11 @@
           </q-item>
         </q-list>
       </q-card>
+      <div v-if="hasMore" class="text-center q-pa-md">
+        <q-btn flat no-caps color="primary" label="Загрузить ещё" @click="loadMore" />
+      </div>
 
-      <div v-else class="text-center q-pa-xl text-grey-5">
+      <div v-if="!store.loading && filteredItems.length === 0" class="text-center q-pa-xl text-grey-5">
         <q-icon name="notifications_none" size="48px" class="q-mb-sm" />
         <div>{{ filter === 'unread' ? 'Нет непрочитанных' : 'Нет уведомлений' }}</div>
       </div>
@@ -75,16 +109,39 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { useNotificationsStore } from 'src/stores/notifications'
+import { useAuthStore } from '../stores/auth.js'
 
+const $q = useQuasar()
 const router = useRouter()
 const store = useNotificationsStore()
+const auth = useAuthStore()
 const filter = ref('all')
+const typeFilter = ref('all')
+const addressFilter = ref('')
+const displayCount = ref(30)
 
 const filteredItems = computed(() => {
-  if (filter.value === 'unread') return store.items.filter(n => !n.is_read)
-  return store.items
+  let items = store.items
+  if (filter.value === 'unread') items = items.filter(n => !n.is_read)
+  if (typeFilter.value !== 'all') items = items.filter(n => n.notification_type === typeFilter.value)
+  if (addressFilter.value && addressFilter.value.length >= 2) {
+    const q = addressFilter.value.toLowerCase()
+    items = items.filter(n =>
+      (n.message || '').toLowerCase().includes(q) ||
+      (n.title || '').toLowerCase().includes(q)
+    )
+  }
+  return items
 })
+
+const displayedItems = computed(() => filteredItems.value.slice(0, displayCount.value))
+const hasMore = computed(() => filteredItems.value.length > displayCount.value)
+
+function loadMore() {
+  displayCount.value += 30
+}
 
 function iconFor(type) {
   const icons = {
@@ -120,8 +177,15 @@ function handleClick(n) {
   }
 }
 
-function markAllRead() {
-  store.items.filter(n => !n.is_read).forEach(n => store.markRead(n.id))
+async function markAllRead() {
+  try {
+    const { notificationsApi } = await import('../services/api.js')
+    await notificationsApi.markAllRead(auth.user?.id)
+    store.items.forEach(n => { n.is_read = true })
+    $q.notify({ type: 'positive', message: 'Все прочитано' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка при чтении уведомлений' })
+  }
 }
 
 function onRefresh(done) {

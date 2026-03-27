@@ -282,6 +282,24 @@ async def get_notifications(
     return query.order_by(Notification.created_at.desc()).all()
 
 
+@router.post("/notifications/mark-all-read")
+async def mark_all_notifications_read(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Отметить все уведомления текущего пользователя как прочитанные"""
+    now = datetime.utcnow()
+    updated = db.query(Notification).filter(
+        Notification.employee_id == current_user.id,
+        Notification.is_read == False,
+    ).update({
+        Notification.is_read: True,
+        Notification.read_at: now,
+    }, synchronize_session='fetch')
+    db.commit()
+    return {"message": f"Прочитано {updated} уведомлений", "count": updated}
+
+
 @router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(
     notification_id: int,

@@ -60,6 +60,7 @@
                     <div class="row q-gutter-xs text-caption q-mt-xs" style="color: #888">
                       <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
                       <span v-if="card.dan_name">ДАН: {{ card.dan_name }}</span>
+                      <span v-if="card.agent_type" style="color: #666; font-weight: 500"> · {{ card.agent_type }}</span>
                     </div>
                     <div v-if="card.deadline" class="text-caption q-mt-xs" :style="{ color: dlColor(card.deadline), fontWeight: 'bold' }">
                       Дедлайн: {{ new Date(card.deadline).toLocaleDateString('ru-RU') }}

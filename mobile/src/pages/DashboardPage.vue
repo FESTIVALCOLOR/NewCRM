@@ -67,7 +67,10 @@
         <q-card-section class="q-pb-none">
           <div class="row items-center justify-between">
             <div class="text-subtitle2 text-weight-bold" style="color: #333">Уведомления</div>
-            <q-badge v-if="notificationsStore.unreadCount > 0" color="negative" :label="notificationsStore.unreadCount" />
+            <div class="row items-center q-gutter-xs">
+              <q-btn v-if="notificationsStore.unreadCount > 0" flat dense no-caps size="xs" color="primary" label="Прочитать все" @click="markAllNotificationsRead" style="font-size: 10px" />
+              <q-badge v-if="notificationsStore.unreadCount > 0" color="negative" :label="notificationsStore.unreadCount" />
+            </div>
           </div>
         </q-card-section>
         <q-list v-if="recentNotifications.length > 0" separator>
@@ -166,6 +169,18 @@ async function loadMyTasks() {
       .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
       .slice(0, 5)
   } catch {}
+}
+
+async function markAllNotificationsRead() {
+  try {
+    const { notificationsApi } = await import('../services/api.js')
+    const { useAuthStore } = await import('../stores/auth.js')
+    const auth = useAuthStore()
+    await notificationsApi.markAllRead(auth.user?.id)
+    notificationsStore.items.forEach(n => { n.is_read = true })
+  } catch (err) {
+    console.error('markAllRead error', err)
+  }
 }
 
 function onRefresh(done) { Promise.all([dashboard.loadAll(), notificationsStore.load(), loadMyTasks()]).finally(done) }

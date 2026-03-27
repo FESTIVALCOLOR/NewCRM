@@ -32,7 +32,7 @@
 
       <!-- Счётчик -->
       <div class="text-caption" style="color: #888" v-if="!clientsStore.loading">
-        Найдено: {{ clientsStore.filteredItems.length }}
+        Найдено: {{ displayedClients.length }}
         <span v-if="clientsStore.totalCount"> из {{ clientsStore.totalCount }}</span>
       </div>
 
@@ -50,10 +50,10 @@
       </div>
 
       <!-- Список клиентов -->
-      <q-card class="is-card" v-else-if="clientsStore.filteredItems.length > 0">
+      <q-card class="is-card" v-else-if="displayedClients.length > 0">
         <q-list separator>
           <q-item
-            v-for="client in clientsStore.filteredItems"
+            v-for="client in displayedClients"
             :key="client.id"
             clickable
             v-ripple
@@ -128,13 +128,48 @@ const dashItems = computed(() => [
 const clientType = ref('Все')
 const sortBy = ref('name')
 
+const searchQuery = ref('')
+
 const sortOpts = [
   { label: 'По имени', value: 'name' },
   { label: 'По дате', value: 'date' }
 ]
 
+const displayedClients = computed(() => {
+  let items = [...(clientsStore.items || clientsStore.filteredItems || [])]
+
+  // Фильтр по типу
+  if (clientType.value && clientType.value !== 'Все') {
+    if (clientType.value === 'Юридическое лицо') {
+      items = items.filter(c => c.organization_name && c.organization_name.trim())
+    } else {
+      items = items.filter(c => !c.organization_name || !c.organization_name.trim())
+    }
+  }
+
+  // Фильтр по поиску
+  if (searchQuery.value && searchQuery.value.length >= 2) {
+    const q = searchQuery.value.toLowerCase()
+    items = items.filter(c =>
+      (c.full_name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.organization_name || '').toLowerCase().includes(q)
+    )
+  }
+
+  // Сортировка
+  if (sortBy.value === 'name') {
+    items.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ru'))
+  } else if (sortBy.value === 'date') {
+    items.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+  }
+
+  return items
+})
+
 function applyFilters() {
-  // Фильтрация через computed в store
+  // Фильтрация реализована через computed displayedClients
 }
 
 // Отображение имени клиента: ИП Иванов / ООО "Ромашка" / Просто ФИО

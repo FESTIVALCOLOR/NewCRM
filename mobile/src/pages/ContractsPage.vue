@@ -140,10 +140,13 @@ function agentColor(agentName) {
   return agent?.color || '#95A5A6'
 }
 
-// Фон карточки: зелёный если оплачен, оранжевый если нет
 function cardBgStyle(contract) {
-  if (contract.status?.includes('СДАН')) return { background: '#E8F5E9' }
-  if (contract.status === 'В работе') return { background: '#FFF8E1' }
+  const s = contract.status || ''
+  if (s.includes('СДАН') || s.includes('Сдан')) return { background: '#E8F5E9' }
+  if (s.includes('НАДЗОР') || s.includes('надзор')) return { background: '#E3F2FD' }
+  if (s.includes('РАСТОРГНУТ') || s.includes('Расторгнут')) return { background: '#FFEBEE' }
+  if (s === 'В работе') return { background: '#F5F5F5' }
+  if (s === 'Новый заказ' || s === 'Новый') return { background: '#FFFFFF' }
   return {}
 }
 

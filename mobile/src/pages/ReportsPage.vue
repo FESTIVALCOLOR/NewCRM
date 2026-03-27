@@ -492,13 +492,21 @@ async function loadData() {
   ])
 
   if (sumR.status === 'fulfilled') summary.value = sumR.value.data
+  else console.error('Reports summary error:', sumR.reason?.response?.status, sumR.reason?.message)
   if (funnelR.status === 'fulfilled') funnel.value = funnelR.value.data
+  else console.error('Reports funnel error:', funnelR.reason?.response?.status, funnelR.reason?.message)
   if (projR.status === 'fulfilled') projectStats.value = projR.value.data
+  else console.error('Reports projects error:', projR.reason?.response?.status, projR.reason?.message)
   if (dynR.status === 'fulfilled') clientsDynamicsRaw.value = dynR.value.data
+  else console.error('Reports clients dynamics error:', dynR.reason?.response?.status, dynR.reason?.message)
   if (supR.status === 'fulfilled') supervisionStats.value = supR.value.data
+  else console.error('Reports supervision error:', supR.reason?.response?.status, supR.reason?.message)
   if (contR.status === 'fulfilled') contractsDashboard.value = contR.value.data
+  else console.error('Reports contracts error:', contR.reason?.response?.status, contR.reason?.message)
   if (cbyPR.status === 'fulfilled') contractsByPeriodRaw.value = cbyPR.value.data
+  else console.error('Reports contracts by period error:', cbyPR.reason?.response?.status, cbyPR.reason?.message)
   if (crmDetR.status === 'fulfilled') crmDetailed.value = crmDetR.value.data
+  else console.error('Reports CRM detailed error:', crmDetR.reason?.response?.status, crmDetR.reason?.message)
 }
 
 function exportPDF() { window.print() }

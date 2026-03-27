@@ -5,6 +5,7 @@
       <div class="toggle-pills-wide">
         <button v-for="t in paymentTabs" :key="t.value" :class="{ active: paymentTab === t.value }" @click="paymentTab = t.value">{{ t.label }}</button>
       </div>
+      <q-btn v-if="isSuperuser" flat dense no-caps icon="calculate" label="Пересчёт" color="orange" @click="recalculatePayments" style="font-size: 11px" />
     </div>
 
     <!-- Фильтры — расширенные как в десктопе -->
@@ -12,12 +13,14 @@
       <div class="col"><q-select v-model="filters.period" :options="periodOptions" outlined dense emit-value map-options style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="date_range" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.employee_id" :options="employeeOpts" outlined dense emit-value map-options clearable use-input input-debounce="200" @filter="filterEmployees" placeholder="Исполнитель" style="font-size: 12px" @update:model-value="onEmployeeFilter" @clear="filters.employee_id = null; loadData()"><template v-slot:prepend><q-icon name="person" size="16px" /></template></q-select></div>
       <div class="col-auto"><q-select v-model="filters.status" :options="statusOptions" outlined dense emit-value map-options style="font-size: 12px; min-width: 100px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="filter_list" size="16px" /></template></q-select></div>
+      <div class="col-auto"><q-select v-model="filters.payment_type" :options="paymentTypeOptions" label="Тип выплаты" outlined dense emit-value map-options clearable style="font-size: 12px; min-width: 100px" @update:model-value="loadData" @clear="filters.payment_type = null; loadData()"><template v-slot:prepend><q-icon name="payment" size="16px" /></template></q-select></div>
     </div>
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
       <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable emit-value map-options label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
+      <div class="col-auto"><q-btn flat no-caps dense color="grey-7" icon="filter_alt_off" label="Сбросить" class="q-mb-sm" @click="resetFilters" style="font-size: 11px" /></div>
     </div>
 
     <!-- Период -->
@@ -123,9 +126,9 @@
       </template>
     </q-pull-to-refresh>
 
-    <!-- FAB создания (только для окладов) -->
-    <q-page-sticky v-if="paymentTab === 'salary' && can('salaries.create')" position="bottom-right" :offset="[18, 18]">
-      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="showCreateDialog = true" />
+    <!-- FAB создания платежа -->
+    <q-page-sticky v-if="can('salaries.create') || can('crm_cards.payments')" position="bottom-right" :offset="[18, 18]">
+      <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="openCreatePayment" />
     </q-page-sticky>
 
     <!-- Диалог создания оклада -->
@@ -167,6 +170,29 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+    <!-- Диалог создания произвольного платежа -->
+    <q-dialog v-model="showCreatePaymentDialog">
+      <q-card style="min-width: 340px; border-radius: 8px">
+        <q-card-section>
+          <div class="text-subtitle1 text-weight-bold" style="color: #333">Новый платёж</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <q-select v-model="newPayment.employee_id" :options="employeeOpts" label="Сотрудник *"
+                    outlined dense emit-value map-options class="q-mb-sm" />
+          <q-input v-model="newPayment.amount" label="Сумма *" outlined dense type="number" class="q-mb-sm" />
+          <q-select v-model="newPayment.payment_type"
+                    :options="['Аванс', 'Доплата', 'Полная оплата']"
+                    label="Тип выплаты" outlined dense class="q-mb-sm" />
+          <q-input v-model="newPayment.role" label="Роль (необязательно)" outlined dense class="q-mb-sm" />
+          <q-input v-model="newPayment.stage_name" label="Стадия (необязательно)" outlined dense class="q-mb-sm" />
+          <q-input v-model="newPayment.report_month" label="Месяц отчёта" outlined dense type="month" class="q-mb-sm" />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" v-close-popup no-caps />
+          <q-btn unelevated color="positive" label="Создать" no-caps @click="createPayment" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -174,11 +200,12 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { paymentsApi, salariesApi, employeesApi } from 'src/services/api'
+import { api } from 'src/boot/axios'
 import { useReferencesStore } from 'src/stores/references'
 import { usePermission } from 'src/composables/usePermission'
 import { useOptimistic } from 'src/composables/useOptimistic'
 
-const { can } = usePermission()
+const { can, isSuperuser } = usePermission()
 const { optimistic } = useOptimistic()
 
 const $q = useQuasar()
@@ -194,6 +221,17 @@ const newPay = ref({ employee_id: null, amount: null, report_month: '' })
 const showEditDialog = ref(false)
 const editSaving = ref(false)
 const editPay = ref({ id: null, employee_name: '', final_amount: null, report_month: '', payment_type: '', comment: '', source: '' })
+const showCreatePaymentDialog = ref(false)
+const newPayment = ref({
+  employee_id: null,
+  amount: '',
+  payment_type: 'Полная оплата',
+  stage_name: '',
+  role: '',
+  report_month: '',
+  contract_id: null,
+  crm_card_id: null,
+})
 // Состояние развёрнутости групп (ключ — employeeId, значение — bool)
 const expandedGroups = ref({})
 const editPaymentTypeOpts = [
@@ -209,7 +247,15 @@ const paymentTabs = [
   { label: 'Оклады', value: 'salary' }
 ]
 
-const filters = ref({ period: 'all', year: currentYear, month: new Date().getMonth() + 1, quarter: Math.ceil((new Date().getMonth() + 1) / 3), employee_id: null, status: null, address: '', role: null, agent_type: null })
+const filters = ref({ period: 'all', year: currentYear, month: new Date().getMonth() + 1, quarter: Math.ceil((new Date().getMonth() + 1) / 3), employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null })
+
+const paymentTypeOptions = [
+  { label: 'Все', value: null },
+  { label: 'Аванс', value: 'Аванс' },
+  { label: 'Доплата', value: 'Доплата' },
+  { label: 'Полная оплата', value: 'Полная оплата' },
+  { label: 'Оклад', value: 'Оклад' },
+]
 
 const roleOpts = computed(() => {
   const roles = new Set(allEmployees.value.map(e => e.position).filter(Boolean))
@@ -220,6 +266,15 @@ const agentOpts = computed(() => refsStore.agentNames())
 function onEmployeeFilter(val) {
   // При выборе null (сброс) или disable item — пропускаем
   if (val === null || val === undefined) { filters.value.employee_id = null }
+  loadData()
+}
+
+function resetFilters() {
+  filters.value = {
+    period: 'all', year: currentYear, month: new Date().getMonth() + 1,
+    quarter: Math.ceil((new Date().getMonth() + 1) / 3),
+    employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null
+  }
   loadData()
 }
 
@@ -277,6 +332,23 @@ function payRowStyle(p) {
   return {}
 }
 
+async function recalculatePayments() {
+  $q.dialog({
+    title: 'Пересчёт по тарифам',
+    message: 'Пересчитать все платежи по текущим тарифам? Это обновит calculated_amount для всех незакрытых платежей.',
+    cancel: { label: 'Отмена', flat: true, noCaps: true },
+    ok: { label: 'Пересчитать', noCaps: true, color: 'warning' },
+  }).onOk(async () => {
+    try {
+      await api.post('/api/v1/payments/recalculate')
+      $q.notify({ type: 'positive', message: 'Пересчёт выполнен' })
+      loadData()
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка пересчёта' })
+    }
+  })
+}
+
 async function loadData() {
   loading.value = true
   try {
@@ -322,6 +394,10 @@ async function loadData() {
     if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay')
     else if (filters.value.status === 'to_pay') filtered = filtered.filter(p => !p.is_paid && p.payment_status === 'to_pay')
     else if (filters.value.status === 'paid') filtered = filtered.filter(p => p.is_paid || p.payment_status === 'paid')
+    // Фильтр по типу выплаты
+    if (filters.value.payment_type) {
+      filtered = filtered.filter(p => p.payment_type === filters.value.payment_type || p.payment_subtype === filters.value.payment_type)
+    }
 
     payments.value = filtered
   } catch { payments.value = [] } finally { loading.value = false }
@@ -416,6 +492,41 @@ async function createSalary() {
     const detail = err.response?.data?.detail
     const msg = typeof detail === 'string' ? detail : JSON.stringify(detail || 'Ошибка создания')
     $q.notify({ type: 'negative', message: msg })
+  }
+}
+
+function openCreatePayment() {
+  if (paymentTab.value === 'salary') {
+    showCreateDialog.value = true  // Старая логика для окладов
+  } else {
+    showCreatePaymentDialog.value = true  // Новый диалог для произвольных платежей
+  }
+}
+
+async function createPayment() {
+  if (!newPayment.value.employee_id || !newPayment.value.amount) {
+    $q.notify({ type: 'warning', message: 'Заполните сотрудника и сумму' })
+    return
+  }
+  try {
+    await paymentsApi.create({
+      employee_id: newPayment.value.employee_id,
+      calculated_amount: parseFloat(newPayment.value.amount),
+      final_amount: parseFloat(newPayment.value.amount),
+      payment_type: newPayment.value.payment_type,
+      payment_status: 'pending',
+      stage_name: newPayment.value.stage_name || null,
+      role: newPayment.value.role || null,
+      report_month: newPayment.value.report_month || null,
+      contract_id: newPayment.value.contract_id || null,
+      crm_card_id: newPayment.value.crm_card_id || null,
+    })
+    $q.notify({ type: 'positive', message: 'Платёж создан' })
+    showCreatePaymentDialog.value = false
+    newPayment.value = { employee_id: null, amount: '', payment_type: 'Полная оплата', stage_name: '', role: '', report_month: '', contract_id: null, crm_card_id: null }
+    loadData()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка создания платежа' })
   }
 }
 

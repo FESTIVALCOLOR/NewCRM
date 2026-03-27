@@ -8,7 +8,7 @@
     <template v-else-if="card">
       <!-- Шапка -->
       <q-card class="is-card q-mb-md">
-        <q-card-section>
+        <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
@@ -19,21 +19,37 @@
               <q-badge v-if="card.agent_type" text-color="white" :style="{ background: agentColor, minWidth: '100px', justifyContent: 'center', padding: '5px 8px', fontSize: '11px' }" :label="card.agent_type" />
             </div>
           </div>
-          <div class="row items-center q-gutter-xs text-caption q-mt-xs" style="color: #888">
+          <div class="row items-center text-caption q-mt-xs" style="color: #888; gap: 0">
             <span v-if="card.project_type">{{ card.project_type }}</span>
-            <span v-if="card.project_subtype"> · {{ card.project_subtype }}</span>
+            <span v-if="card.project_subtype" style="color: #ccc; margin: 0 6px">|</span>
+            <span v-if="card.project_subtype">{{ card.project_subtype }}</span>
+            <span v-if="card.area" style="color: #ccc; margin: 0 6px">|</span>
             <span v-if="card.area">{{ card.area }} м²</span>
+            <span v-if="card.city" style="color: #ccc; margin: 0 6px">|</span>
             <span v-if="card.city">{{ card.city }}</span>
+            <span v-if="contractData?.yandex_folder_path && canSeeYdFolder" style="color: #ccc; margin: 0 6px">|</span>
             <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense round size="xs" icon="folder_open" no-caps style="color: #F39C12" @click="openYdFolder"><q-tooltip>Яндекс.Диск</q-tooltip></q-btn>
           </div>
           <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-            <q-chip v-if="card.current_substep_name" dense size="sm" :color="substepColor(card.workflow_status)" text-color="white" style="flex: 1; justify-content: center">
+            <q-chip v-if="card.current_substep_name" dense size="sm" :color="substepColor(card.workflow_status)" text-color="white" style="height: 24px; border-radius: 12px; font-size: 11px; flex: 1; justify-content: center">
               {{ workflowLabel(card.workflow_status) }}: {{ card.current_substep_name }}
             </q-chip>
-            <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" />
+            <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" style="height: 24px; border-radius: 12px; font-size: 11px; padding: 0 8px; display: flex; align-items: center" />
           </div>
         </q-card-section>
       </q-card>
+
+      <!-- Прогресс подэтапов -->
+      <div v-if="substepProgress.length > 1" class="q-px-md q-pb-sm">
+        <div class="row items-center q-gutter-xs" style="flex-wrap: wrap">
+          <div v-for="(step, idx) in substepProgress" :key="idx" class="row items-center">
+            <q-badge :color="step.active ? 'positive' : (step.done ? 'grey-5' : 'grey-3')"
+                     :text-color="step.active ? 'white' : (step.done ? 'white' : 'grey-6')"
+                     :label="step.label" style="font-size: 9px; padding: 2px 6px" />
+            <q-icon v-if="idx < substepProgress.length - 1" name="chevron_right" size="12px" color="grey-4" />
+          </div>
+        </div>
+      </div>
 
       <!-- Вкладки -->
       <q-tabs v-model="activeTab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-md" style="color: #666" align="left" :breakpoint="0">
@@ -53,14 +69,34 @@
           <!-- Информация -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Информация</div></q-card-section>
-            <q-list dense>
-              <q-item><q-item-section avatar><q-icon name="description" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Договор</q-item-label><q-item-label>{{ card.contract_number }}</q-item-label></q-item-section></q-item>
-              <q-item v-if="card.project_type"><q-item-section avatar><q-icon name="category" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Тип проекта</q-item-label><q-item-label>{{ card.project_type }}<span v-if="card.project_subtype"> / {{ card.project_subtype }}</span></q-item-label></q-item-section></q-item>
-              <q-item v-if="card.contract_period"><q-item-section avatar><q-icon name="schedule" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Срок выполнения</q-item-label><q-item-label>{{ card.contract_period }} раб. дней</q-item-label></q-item-section></q-item>
-              <q-item v-if="contractData?.contract_date"><q-item-section avatar><q-icon name="play_arrow" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дата начала работ</q-item-label><q-item-label>{{ fmtDate(contractData.contract_date) }}</q-item-label></q-item-section></q-item>
-              <q-item v-if="card.deadline"><q-item-section avatar><q-icon name="flag" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Дедлайн проекта</q-item-label><q-item-label :style="{ color: dlHex(card.deadline) }">{{ fmtDate(card.deadline) }} ({{ daysLeft(card.deadline) }})</q-item-label></q-item-section><q-item-section side><q-btn flat round dense size="xs" icon="event" color="grey-7" @click="addDeadlineToCalendar"><q-tooltip>В календарь</q-tooltip></q-btn></q-item-section></q-item>
-              <q-item v-if="card.tags"><q-item-section avatar><q-icon name="label" color="grey-7" /></q-item-section><q-item-section><q-item-label caption>Теги</q-item-label><q-item-label>{{ card.tags }}</q-item-label></q-item-section></q-item>
-            </q-list>
+            <q-card-section>
+              <div class="row">
+                <div class="col-6" style="padding-right: 12px; border-right: 1px solid #E0E0E0">
+                  <div class="q-mb-sm">
+                    <div class="text-caption" style="color: #999">Договор</div>
+                    <div style="font-size: 13px; color: #333">{{ card.contract_number || '-' }}</div>
+                  </div>
+                  <div class="q-mb-sm">
+                    <div class="text-caption" style="color: #999">Тип проекта</div>
+                    <div style="font-size: 13px; color: #333">{{ card.project_type || '-' }}</div>
+                  </div>
+                </div>
+                <div class="col-6" style="padding-left: 12px">
+                  <div class="q-mb-sm">
+                    <div class="text-caption" style="color: #999">Срок договора</div>
+                    <div style="font-size: 13px; color: #333">{{ contractData?.contract_period ? contractData.contract_period + ' раб.дн.' : '-' }}</div>
+                  </div>
+                  <div class="q-mb-sm">
+                    <div class="text-caption" style="color: #999">Дата начала</div>
+                    <div style="font-size: 13px; color: #333">{{ fmtDateShort(card.start_date || contractData?.contract_date) || '-' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-caption" style="color: #999">Дедлайн проекта</div>
+                    <div style="font-size: 13px" :style="{ color: card.deadline ? dlHex(card.deadline) : '#333' }">{{ fmtDateShort(card.deadline) || '-' }}</div>
+                  </div>
+                </div>
+              </div>
+            </q-card-section>
           </q-card>
 
           <!-- Команда проекта с кнопками управления -->
@@ -114,11 +150,23 @@
                 </div>
               </div>
 
+              <!-- Доп. круг -->
+              <q-btn v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_decision'"
+                     unelevated dense no-caps icon="add_circle_outline" label="Доп. круг" class="full-width q-mb-sm"
+                     style="background: #D5D8DC; color: #333; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px"
+                     @click="doAddExtraRound" :loading="actionLoading" />
+
               <!-- Акт -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" class="row q-gutter-sm q-mb-sm">
                 <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('client-send')" :loading="actionLoading" />
                 <q-btn unelevated dense no-caps icon="draw" label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('sign-act')" :loading="actionLoading" />
               </div>
+
+              <!-- Принятие менеджером -->
+              <q-btn v-if="can('crm_cards.move') && card.workflow_status === 'stage_completed'"
+                     unelevated dense no-caps icon="verified" label="Принять (менеджер)" class="full-width q-mb-sm"
+                     style="background: #AED6F1; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                     @click="doManagerAcceptance" :loading="actionLoading" />
 
               <div v-if="!card.workflow_status" class="text-center" style="color: #999; font-size: 12px; padding: 8px 0">Нет активного рабочего процесса</div>
 
@@ -138,7 +186,7 @@
           <q-card class="is-card">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div></q-card-section>
             <q-list dense separator v-if="timelineEntries.length > 0">
-              <q-item v-for="e in timelineEntries" :key="e.id" :style="timelineRowStyle(e)">
+              <q-item v-for="e in timelineEntries" :key="e.id" :style="timelineRowStyle(e)" :clickable="e.executor_role !== 'header' && can('crm_cards.deadlines')" @click="editNormDays(e)">
                 <q-item-section avatar v-if="e.executor_role !== 'header'" style="min-width: 24px">
                   <q-icon :name="timelineIcon(e)" :color="timelineIconColor(e)" size="18px" />
                 </q-item-section>
@@ -167,6 +215,16 @@
                 </q-item-section>
               </q-item>
             </q-list>
+            <!-- Итого -->
+            <div v-if="timelineTotals.normTotal > 0" class="q-pa-sm" style="background: #F5F5F5; border-top: 2px solid #E0E0E0">
+              <div class="row items-center justify-between">
+                <span class="text-caption text-weight-bold" style="color: #555">Итого</span>
+                <span class="text-caption" style="color: #555">
+                  Норма: {{ timelineTotals.normTotal }} дн.
+                  <span v-if="timelineTotals.actualTotal > 0"> | Факт: {{ timelineTotals.actualTotal }} дн.</span>
+                </span>
+              </div>
+            </div>
             <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
               <q-icon name="timeline" size="32px" color="grey-4" class="q-mb-sm" /><div>Таблица сроков не инициализирована</div>
             </q-card-section>
@@ -520,6 +578,31 @@
             <q-select v-model="assignEmployeeId" :options="employeeOptions" option-value="id" option-label="label" label="Сотрудник" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterAssignEmployees" class="q-mb-sm" />
             <q-input v-if="assignNeedsDeadline" v-model="assignDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
           </q-card-section>
+          <q-card-section v-if="otherStageExecutors.length > 0" class="q-pt-none">
+            <div class="text-caption text-grey-7 q-mb-xs">Исполнители на других стадиях:</div>
+            <q-list dense>
+              <q-item v-for="(ex, idx) in otherStageExecutors" :key="idx" dense class="q-pa-none" style="min-height: 28px">
+                <q-item-section>
+                  <q-item-label style="font-size: 11px; color: #666">
+                    {{ ex.stage_name }}: <span style="color: #333; font-weight: 500">{{ ex.executor_name || 'Не назначен' }}</span>
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card-section>
+          <q-card-section v-if="assignHistory.length > 0" class="q-pt-none">
+            <div class="text-caption text-grey-7 q-mb-xs">История назначений:</div>
+            <q-list dense>
+              <q-item v-for="(h, idx) in assignHistory" :key="idx" dense class="q-pa-none" style="min-height: 28px">
+                <q-item-section>
+                  <q-item-label style="font-size: 11px; color: #666">
+                    {{ h.executor_name || '?' }} — {{ formatHistoryDate(h.assigned_date) }}
+                    <span v-if="h.assigned_by_name" style="color: #999"> ({{ h.assigned_by_name }})</span>
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card-section>
           <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Назначить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doAssign" :loading="actionLoading" /></q-card-actions>
         </q-card>
       </q-dialog>
@@ -531,6 +614,9 @@
       <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 18]">
         <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
           <q-fab-action v-if="canRestore" icon="build" style="background: #F39C12; color: white" @click="repairWorkflow" :loading="actionLoading" label="Ремонт" external-label label-position="left" />
+          <q-fab-action v-if="can('crm_cards.reset_approval') && isArchived" icon="restart_alt" style="background: #E67E22; color: white" @click="doResetApproval" :loading="actionLoading" label="Сброс согласования" external-label label-position="left" />
+          <q-fab-action v-if="can('crm_cards.reset_designer')" icon="person_off" style="background: #E67E22; color: white" @click="doResetDesigner" :loading="actionLoading" label="Сброс дизайнера" external-label label-position="left" />
+          <q-fab-action v-if="can('crm_cards.reset_draftsman')" icon="person_off" style="background: #E67E22; color: white" @click="doResetDraftsman" :loading="actionLoading" label="Сброс чертёжника" external-label label-position="left" />
           <q-fab-action icon="sync" style="background: #5DADE2; color: white" @click="syncCrmWithYd" :loading="crmSyncing" label="Синхронизация ЯД" external-label label-position="left" />
           <q-fab-action icon="edit" style="background: #ffd93c; color: #333" @click="editCard" label="Редактировать" external-label label-position="left" />
         </q-fab>
@@ -618,6 +704,15 @@ const actionHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
 const timelineEntries = ref([])
+const timelineTotals = computed(() => {
+  let normTotal = 0, actualTotal = 0
+  for (const e of timelineEntries.value) {
+    if (e.executor_role === 'header') continue
+    normTotal += (e.custom_norm_days || e.norm_days || 0)
+    actualTotal += (e.actual_days || 0)
+  }
+  return { normTotal, actualTotal }
+})
 const workflowStates = ref([])
 const showRejectDialog = ref(false)
 const showMeasurementDlg = ref(false)
@@ -643,8 +738,9 @@ const crmSyncing = ref(false)
 const crmUploadVariation = ref(1)
 const historyFilter = ref('all')
 
-// Загрузка чата при переключении на вкладку
+// Загрузка чата при переключении на вкладку + сохранение вкладки в URL
 watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
   if (tab === 'chat' && !chatData.value && !chatLoading.value) loadChat()
   // Заметки подгружаются из actionHistory — при переходе обновляем если данных ещё нет
   if (tab === 'notes' && actionHistory.value.length === 0 && card.value?.id) reloadCard()
@@ -660,6 +756,26 @@ const assignDeadline = ref('')
 const assignNeedsDeadline = ref(false)
 const assignStageName = ref('')
 const assignMode = ref('assign') // 'assign' или 'change'
+const assignHistory = ref([])
+
+const otherStageExecutors = computed(() => {
+  if (!card.value || !assignStageName.value) return []
+  return (card.value.stage_executors || [])
+    .filter(se => se.stage_name !== assignStageName.value)
+    .reduce((acc, se) => {
+      const existing = acc.find(a => a.stage_name === se.stage_name)
+      if (!existing || se.id > existing.id) {
+        return [...acc.filter(a => a.stage_name !== se.stage_name), se]
+      }
+      return acc
+    }, [])
+})
+
+function formatHistoryDate(d) {
+  if (!d) return ''
+  try { return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) }
+  catch { return d }
+}
 
 const agentColor = computed(() => refs.agentByName(card.value?.agent_type)?.color || '#95A5A6')
 
@@ -1028,6 +1144,61 @@ function timelineIconColor(e) {
   if (e.status === 'skipped') return 'grey-4'
   return 'grey-5'
 }
+// Редактирование нормо-дней в timeline
+function editNormDays(entry) {
+  if (!can('crm_cards.deadlines') || entry.executor_role === 'header') return
+  $q.dialog({
+    title: 'Нормо-дни',
+    message: `${entry.stage_name}`,
+    prompt: {
+      model: String(entry.custom_norm_days || entry.norm_days || ''),
+      type: 'number',
+      label: 'Дней',
+    },
+    cancel: { label: 'Отмена', flat: true, noCaps: true },
+    ok: { label: 'Сохранить', noCaps: true, color: 'positive' },
+  }).onOk(async (val) => {
+    try {
+      const days = parseInt(val)
+      if (isNaN(days) || days < 0) return
+      const { api: ax } = await import('src/boot/axios')
+      await ax.put(`/api/v1/timeline/${card.value.contract_id}/entry/${encodeURIComponent(entry.stage_code)}`, { custom_norm_days: days })
+      entry.custom_norm_days = days
+      $q.notify({ type: 'positive', message: 'Нормо-дни обновлены' })
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+    }
+  })
+}
+// Прогресс подэтапов текущей стадии (только визуальный)
+const substepProgress = computed(() => {
+  if (!timelineEntries.value.length || !card.value) return []
+  const currentStage = card.value.column_name
+  if (!currentStage || currentStage === 'Новый заказ' || currentStage === 'В ожидании' || currentStage === 'Выполненный проект') return []
+
+  // Фильтруем подэтапы текущей стадии (не заголовки)
+  const stageEntries = timelineEntries.value.filter(e =>
+    e.executor_role !== 'header' &&
+    e.stage_code &&
+    e.substage_group
+  )
+
+  // Группируем по substage_group
+  const groups = []
+  const seen = new Set()
+  for (const e of stageEntries) {
+    const group = e.substage_group
+    if (group && !seen.has(group)) {
+      seen.add(group)
+      groups.push({
+        label: group.replace('Подэтап ', ''),
+        active: card.value.current_substage_group === group,
+        done: !!e.actual_date,
+      })
+    }
+  }
+  return groups
+})
 function fmtDateTime(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }
 function fmtMoney(v) { if (!v) return '0 ₽'; return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v) }
 function openLink(url) { if (url) window.open(url, '_blank') }
@@ -1188,6 +1359,16 @@ function showAssignDialog(member, mode) {
   assignDialogTitle.value = mode === 'assign' ? `Назначить ${member.role}` : `Изменить ${member.role}`
   assignEmployeeId.value = null
   assignDeadline.value = ''
+
+  // Загрузить историю назначений для этой стадии
+  if (member.stageName) {
+    const history = (card.value.stage_executors || [])
+      .filter(se => se.stage_name === member.stageName)
+      .sort((a, b) => new Date(b.assigned_date || 0) - new Date(a.assigned_date || 0))
+    assignHistory.value = history
+  } else {
+    assignHistory.value = []
+  }
 
   filterAssignEmployees('', (fn) => fn())
   assignDialogVisible.value = true
@@ -1623,6 +1804,56 @@ async function doCloseStage() {
   try {
     await crmApi.closeStage(card.value.id)
     $q.notify({ type: 'positive', message: 'Этап закрыт, переход к подписанию акта' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+async function doAddExtraRound() {
+  actionLoading.value = true
+  try {
+    await crmApi.addExtraRound(card.value.id)
+    $q.notify({ type: 'positive', message: 'Добавлен дополнительный круг' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+async function doManagerAcceptance() {
+  actionLoading.value = true
+  try {
+    await crmApi.managerAcceptance(card.value.id)
+    $q.notify({ type: 'positive', message: 'Принято менеджером' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+async function doResetApproval() {
+  actionLoading.value = true
+  try {
+    await crmApi.resetApproval(card.value.id)
+    $q.notify({ type: 'positive', message: 'Согласование сброшено' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+async function doResetDesigner() {
+  actionLoading.value = true
+  try {
+    await crmApi.resetDesigner(card.value.id)
+    $q.notify({ type: 'positive', message: 'Отметка дизайнера сброшена' })
+    await reloadCard()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { actionLoading.value = false }
+}
+
+async function doResetDraftsman() {
+  actionLoading.value = true
+  try {
+    await crmApi.resetDraftsman(card.value.id)
+    $q.notify({ type: 'positive', message: 'Отметка чертёжника сброшена' })
     await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   finally { actionLoading.value = false }

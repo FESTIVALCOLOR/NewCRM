@@ -272,6 +272,24 @@ class MainWindow(QMainWindow):
         notif_btn.clicked.connect(self._open_notification_settings)
         info_bar_layout.addWidget(notif_btn)
 
+        # Кнопка «Список уведомлений» — колокольчик рядом с настройками
+        notif_list_btn = _IconLoader.create_icon_button(
+            'message-circle', '', 'Список уведомлений', icon_size=12
+        )
+        notif_list_btn.setFixedSize(22, 22)
+        notif_list_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover {
+                background: #f0f0f0; border-color: #d9d9d9;
+            }
+        """)
+        notif_list_btn.setCursor(Qt.PointingHandCursor)
+        notif_list_btn.clicked.connect(self._open_notifications_list)
+        info_bar_layout.addWidget(notif_list_btn)
+
         # Кнопка «Инструкция» — открывает PDF-инструкцию для текущей роли с Яндекс.Диска
         manual_btn = _IconLoader.create_icon_button(
             'file-text', '', 'Открыть инструкцию по использованию программы', icon_size=12
@@ -1695,6 +1713,70 @@ class MainWindow(QMainWindow):
             data_access=data_access,
             employee=self.employee,
         )
+        border_layout.addWidget(widget)
+
+        dlg.exec_()
+
+    # ========== СПИСОК УВЕДОМЛЕНИЙ ==========
+    def _open_notifications_list(self):
+        """Открыть диалог со списком уведомлений"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFrame
+        from PyQt5.QtCore import Qt as _Qt
+        from ui.custom_title_bar import CustomTitleBar
+        try:
+            from ui.notifications_list_widget import NotificationsListWidget
+        except ImportError:
+            return
+
+        from utils.data_access import DataAccess
+        data_access = DataAccess(api_client=self.api_client, db=self.db)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Уведомления')
+        dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+        dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+        dlg.setMinimumSize(700, 500)
+
+        outer_layout = QVBoxLayout(dlg)
+        outer_layout.setContentsMargins(1, 1, 1, 1)
+        outer_layout.setSpacing(0)
+
+        border_frame = QFrame()
+        border_frame.setObjectName("borderFrame")
+        border_frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+        outer_layout.addWidget(border_frame)
+
+        border_layout = QVBoxLayout(border_frame)
+        border_layout.setContentsMargins(0, 0, 0, 0)
+        border_layout.setSpacing(0)
+
+        title_bar = CustomTitleBar(dlg, 'Уведомления', simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+        """)
+        border_layout.addWidget(title_bar)
+
+        widget = NotificationsListWidget(
+            data_access=data_access,
+            parent=dlg,
+        )
+        widget.setStyleSheet("""
+            NotificationsListWidget {
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
         border_layout.addWidget(widget)
 
         dlg.exec_()

@@ -108,6 +108,11 @@ async def check_deadlines_once():
                 if not card:
                     continue
                 contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+                if not contract:
+                    continue
+                # Пропускаем архивные договоры (СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР)
+                if contract.status in ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'):
+                    continue
                 address = contract.address if contract else ''
                 pt = (contract.project_type or '').lower() if contract else ''
                 pt_key = 'template' if 'шабл' in pt else 'individual'
