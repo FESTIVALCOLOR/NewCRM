@@ -42,7 +42,8 @@
         <q-tab name="data" label="Данные" />
         <q-tab name="history" label="История" />
         <q-tab v-if="can('crm_cards.payments')" name="payments" label="Оплаты" />
-        <q-tab name="chat" icon="chat" label="Чат" />
+        <q-tab name="chat" label="Чат" />
+        <q-tab name="notes" label="Заметки" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent">
@@ -92,8 +93,8 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
             <q-card-section v-if="!isArchived">
-              <!-- Сдать работу -->
-              <q-btn v-if="card.workflow_status === 'in_progress' || card.workflow_status === 'revision'" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('submit')" :loading="actionLoading" />
+              <!-- Сдать работу — только для исполнителя текущей стадии -->
+              <q-btn v-if="isCurrentStageExecutor && (card.workflow_status === 'in_progress' || card.workflow_status === 'revision')" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('submit')" :loading="actionLoading" />
 
               <!-- Проверяющий: Клиенту + На исправление -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" class="row q-gutter-sm q-mb-sm">
@@ -158,7 +159,10 @@
                     <q-tooltip style="font-size: 12px; white-space: pre-line">{{ startTooltip }}</q-tooltip>
                   </q-icon>
                 </q-item-section>
-                <q-item-section side v-if="e.actual_date">
+                <q-item-section side v-if="e.status === 'skipped'">
+                  <div class="text-caption" style="color: #999; font-style: italic">Пропущено</div>
+                </q-item-section>
+                <q-item-section side v-else-if="e.actual_date">
                   <div class="text-caption" :style="{ color: isOverdue(e) ? '#E74C3C' : '#27AE60' }">{{ fmtDateShort(e.actual_date) }}</div>
                 </q-item-section>
               </q-item>
@@ -294,7 +298,6 @@
         <q-tab-panel name="history" class="q-pa-none">
           <div class="row items-center q-mb-md q-gutter-sm">
             <q-select v-model="historyFilter" :options="historyFilterOptions" outlined dense style="font-size: 12px; flex: 1" emit-value map-options />
-            <VoiceRecorder :yandex-folder-path="contractData?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
           </div>
           <q-card v-if="completedStages.length > 0" class="is-card q-mb-md" style="border-left: 3px solid #27AE60">
             <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #27AE60">Выполненные стадии</div></q-card-section>
@@ -358,6 +361,49 @@
           <q-card-section v-if="cardPayments.length === 0" class="text-center" style="color: #999; padding: 24px">
             <q-icon name="payments" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет платежей</div>
           </q-card-section>
+        </q-tab-panel>
+
+        <!-- ====== ВКЛАДКА: Заметки (текстовые + голосовые) ====== -->
+        <q-tab-panel name="notes" class="q-pa-none">
+          <!-- Добавить текстовую заметку -->
+          <q-card class="is-card q-mb-md">
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Новая заметка</div></q-card-section>
+            <q-card-section>
+              <q-input v-model="noteText" outlined dense type="textarea" autogrow placeholder="Введите текст заметки..." class="q-mb-sm" />
+              <div class="row items-center q-gutter-sm">
+                <q-btn unelevated dense no-caps icon="send" label="Отправить" style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px; flex: 1" @click="submitNote" :loading="noteSending" :disable="!noteText?.trim()" />
+                <VoiceRecorder :yandex-folder-path="contractData?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <!-- Список заметок -->
+          <q-card class="is-card">
+            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Все заметки</div></q-card-section>
+            <q-list dense separator v-if="notesList.length > 0">
+              <q-item v-for="n in notesList" :key="n.id">
+                <q-item-section avatar>
+                  <q-icon :name="n.action_type === 'voice_note' ? 'mic' : 'comment'" :color="n.action_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label style="font-size: 12px; color: #333">{{ n.description || 'Заметка' }}</q-item-label>
+                  <q-item-label caption style="color: #888">{{ n.user_name || 'Неизвестный' }}</q-item-label>
+                  <!-- Ссылка на голосовую запись -->
+                  <q-item-label v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" caption>
+                    <a :href="noteVoiceUrl(n)" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 11px">
+                      <q-icon name="play_circle" size="14px" class="q-mr-xs" />Прослушать
+                    </a>
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="text-caption" style="color: #888">{{ fmtDateTime(n.action_date) }}</div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
+              <q-icon name="speaker_notes_off" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет заметок</div>
+            </q-card-section>
+          </q-card>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА: Telegram-чат ====== -->
@@ -603,6 +649,8 @@ const historyFilter = ref('all')
 // Загрузка чата при переключении на вкладку
 watch(activeTab, (tab) => {
   if (tab === 'chat' && !chatData.value && !chatLoading.value) loadChat()
+  // Заметки подгружаются из actionHistory — при переходе обновляем если данных ещё нет
+  if (tab === 'notes' && actionHistory.value.length === 0 && card.value?.id) reloadCard()
 })
 
 // Диалог назначения
@@ -827,6 +875,22 @@ const hasWorkflowActions = computed(() => {
   return s && ['in_progress', 'pending_review', 'client_approval', 'act_signing'].includes(s)
 })
 
+// Проверка: текущий пользователь — исполнитель текущей стадии
+const isCurrentStageExecutor = computed(() => {
+  if (!card.value || !authStore.user) return false
+  const userId = authStore.user.id
+  const columnName = card.value.column_name || ''
+  const executors = card.value.stage_executors || []
+  // Ищем исполнителя текущей стадии (по column_name)
+  const currentStageExecs = executors.filter(se =>
+    se.stage_name && columnName.toLowerCase().includes(se.stage_name.toLowerCase().split(':')[1]?.trim().substring(0, 10) || '')
+  )
+  if (currentStageExecs.length === 0) return false
+  // Берём последнего назначенного (max id)
+  const latest = currentStageExecs.reduce((a, b) => a.id > b.id ? a : b)
+  return latest.executor_id === userId
+})
+
 // Подсказка для START (как десктоп timeline_widget.py:862-877)
 const startTooltip = computed(() => {
   const fmt = (d) => {
@@ -936,9 +1000,14 @@ function isOverdue(e) {
   const norm = e.custom_norm_days || e.norm_days || 0
   return norm > 0 && (e.actual_days || 0) > norm
 }
-// Текущий активный подэтап (current_substep_code)
+// Текущий активный подэтап (из workflow state, не из card)
 function isActiveSubstep(e) {
-  return e.stage_code && card.value?.current_substep_code === e.stage_code && !e.actual_date
+  if (!e.stage_code || e.actual_date) return false
+  // Сначала проверяем workflow state (более точный источник)
+  const wf = workflowStates.value.find(w => w.stage_name === card.value?.column_name)
+  if (wf?.current_substep_code) return wf.current_substep_code === e.stage_code
+  // Fallback на card
+  return card.value?.current_substep_code === e.stage_code
 }
 function timelineRowStyle(e) {
   if (e.executor_role === 'header') return 'background: #F5F5F5'
@@ -987,6 +1056,46 @@ function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWit
 function actionIcon(t) { if (!t) return 'history'; const l=t.toLowerCase(); if (l.includes('move')||l.includes('column')) return 'swap_horiz'; if (l.includes('assign')) return 'person_add'; if (l.includes('submit')) return 'send'; if (l.includes('accept')) return 'check_circle'; if (l.includes('reject')) return 'replay'; if (l.includes('payment')) return 'payments'; if (l.includes('deadline')) return 'event'; if (l.includes('file')) return 'attach_file'; return 'history' }
 function actionColor(t) { if (!t) return 'grey-5'; const l=t.toLowerCase(); if (l.includes('accept')||l.includes('complete')) return 'positive'; if (l.includes('reject')) return 'negative'; if (l.includes('submit')) return 'info'; return 'grey-7' }
 
+// === Заметки (текстовые + голосовые) ===
+const noteText = ref('')
+const noteSending = ref(false)
+
+// Список заметок — фильтр из actionHistory по типам note/voice_note
+const notesList = computed(() => {
+  return actionHistory.value.filter(h =>
+    h.action_type === 'note' || h.action_type === 'voice_note'
+  ).sort((a, b) => new Date(b.action_date) - new Date(a.action_date))
+})
+
+// Извлечь URL голосовой записи из new_values
+function noteVoiceUrl(n) {
+  if (!n.new_values) return ''
+  try {
+    const parsed = typeof n.new_values === 'string' ? JSON.parse(n.new_values) : n.new_values
+    return parsed.voice_url || ''
+  } catch { return '' }
+}
+
+// Отправить текстовую заметку
+async function submitNote() {
+  if (!noteText.value?.trim() || !card.value?.id) return
+  noteSending.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.post('/api/v1/action-history', {
+      action_type: 'note',
+      entity_type: 'crm_card',
+      entity_id: card.value.id,
+      description: noteText.value.trim()
+    })
+    noteText.value = ''
+    $q.notify({ type: 'positive', message: 'Заметка добавлена' })
+    await reloadCard()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Ошибка сохранения заметки' })
+  } finally { noteSending.value = false }
+}
+
 // === Голосовая заметка — добавление в историю CRM карточки ===
 async function onVoiceRecorded({ url, duration, path }) {
   try {
@@ -996,8 +1105,10 @@ async function onVoiceRecorded({ url, duration, path }) {
       action_type: 'voice_note',
       entity_type: 'crm_card',
       entity_id: card.value.id,
-      description: `Голосовая заметка (${durationStr}) — ${path}`
+      description: `Голосовая заметка (${durationStr})`,
+      new_values: JSON.stringify({ voice_url: url || path })
     })
+    $q.notify({ type: 'positive', message: 'Голосовая заметка сохранена' })
     await reloadCard()
   } catch (err) {
     $q.notify({ type: 'negative', message: 'Ошибка сохранения записи в историю' })

@@ -16,7 +16,7 @@
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
       <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
-      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
+      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable emit-value map-options label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
       <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
     </div>
 
@@ -55,7 +55,7 @@
 
       <template v-else>
         <div v-for="group in groupedPayments" :key="group.employeeId" class="q-mb-md">
-          <div class="employee-group-header" @click="group.expanded = !group.expanded">
+          <div class="employee-group-header" @click="expandedGroups[group.employeeId] = !expandedGroups[group.employeeId]">
             <q-avatar size="28px" color="grey-3" text-color="grey-8">{{ group.initial }}</q-avatar>
             <div style="flex: 1; margin-left: 8px">
               <div class="text-weight-bold" style="font-size: 13px; color: #333">{{ group.name }}</div>
@@ -65,10 +65,10 @@
               <div class="text-weight-bold" style="font-size: 14px; color: #333">{{ formatMoney(group.total) }}</div>
               <div class="text-caption" style="color: #999">{{ group.items.length }} выплат</div>
             </div>
-            <q-icon :name="group.expanded ? 'expand_less' : 'expand_more'" color="grey-5" size="20px" class="q-ml-xs" />
+            <q-icon :name="expandedGroups[group.employeeId] ? 'expand_less' : 'expand_more'" color="grey-5" size="20px" class="q-ml-xs" />
           </div>
           <q-slide-transition>
-            <div v-show="group.expanded">
+            <div v-show="expandedGroups[group.employeeId]">
               <q-card v-for="p in group.items" :key="p.id || p.salary_id" flat class="payment-card" :style="payRowStyle(p)">
                 <q-card-section class="q-pa-sm">
                   <div class="row items-center no-wrap">
@@ -194,6 +194,8 @@ const newPay = ref({ employee_id: null, amount: null, report_month: '' })
 const showEditDialog = ref(false)
 const editSaving = ref(false)
 const editPay = ref({ id: null, employee_name: '', final_amount: null, report_month: '', payment_type: '', comment: '', source: '' })
+// Состояние развёрнутости групп (ключ — employeeId, значение — bool)
+const expandedGroups = ref({})
 const editPaymentTypeOpts = [
   { label: 'Индивидуальный', value: 'Индивидуальный' },
   { label: 'Шаблонный', value: 'Шаблонный' },
@@ -254,7 +256,11 @@ const groupedPayments = computed(() => {
   const map = {}
   for (const p of payments.value) {
     const key = p.employee_id || p.employee_name || 'unknown'
-    if (!map[key]) { map[key] = { employeeId: key, name: p.employee_name || 'Без исполнителя', role: p.role || p.position || '', initial: (p.employee_name || '?')[0], total: 0, items: [], expanded: true } }
+    if (!map[key]) {
+      // Состояние expanded берём из реактивного объекта (по умолчанию развёрнуто)
+      if (!(key in expandedGroups.value)) expandedGroups.value[key] = true
+      map[key] = { employeeId: key, name: p.employee_name || 'Без исполнителя', role: p.role || p.position || '', initial: (p.employee_name || '?')[0], total: 0, items: [] }
+    }
     map[key].items.push(p); map[key].total += p.final_amount || p.amount || 0
   }
   return Object.values(map).sort((a, b) => b.total - a.total)
@@ -285,8 +291,7 @@ async function loadData() {
       params.include_null_month = true
     }
     if (filters.value.employee_id) params.employee_id = filters.value.employee_id
-    if (filters.value.status === 'paid') params.is_paid = true
-    else if (filters.value.status === 'to_pay') params.is_paid = false
+    // Статус фильтруем на клиенте — серверный is_paid ненадёжен (NULL vs false)
     // Всегда включаем платежи без месяца (в работе)
     if (!params.include_null_month) params.include_null_month = true
     // Загружаем без payment_type фильтра на сервере — фильтруем на клиенте для надёжности
@@ -313,10 +318,10 @@ async function loadData() {
     if (filters.value.role) filtered = filtered.filter(p => (p.role || '').includes(filters.value.role) || (p.position || '').includes(filters.value.role))
     // Фильтр по агенту
     if (filters.value.agent_type) filtered = filtered.filter(p => (p.agent_type || '').includes(filters.value.agent_type))
-    // Фильтр по статусу
-    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && p.payment_status !== 'to_pay')
+    // Фильтр по статусу (серверные значения: 'paid', 'to_pay', 'pending'/null)
+    if (filters.value.status === 'in_work') filtered = filtered.filter(p => !p.is_paid && p.payment_status !== 'paid' && p.payment_status !== 'to_pay')
     else if (filters.value.status === 'to_pay') filtered = filtered.filter(p => !p.is_paid && p.payment_status === 'to_pay')
-    else if (filters.value.status === 'paid') filtered = filtered.filter(p => p.is_paid)
+    else if (filters.value.status === 'paid') filtered = filtered.filter(p => p.is_paid || p.payment_status === 'paid')
 
     payments.value = filtered
   } catch { payments.value = [] } finally { loading.value = false }
@@ -396,15 +401,16 @@ async function deletePayment(p) {
 
 async function createSalary() {
   if (!newPay.value.employee_id || !newPay.value.amount) { $q.notify({ type: 'warning', message: 'Заполните сотрудника и сумму' }); return }
-  // report_month обязателен, формат YYYY-MM
-  const month = newPay.value.report_month || `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  // report_month передаём только если пользователь указал, иначе — статус "в работе" (pending)
+  const payload = {
+    employee_id: newPay.value.employee_id,
+    amount: parseFloat(newPay.value.amount),
+    payment_type: 'Оклад',
+    payment_status: 'pending'
+  }
+  if (newPay.value.report_month) payload.report_month = newPay.value.report_month
   try {
-    await salariesApi.create({
-      employee_id: newPay.value.employee_id,
-      amount: parseFloat(newPay.value.amount),
-      payment_type: 'Оклад',
-      report_month: month
-    })
+    await salariesApi.create(payload)
     $q.notify({ type: 'positive', message: 'Оклад создан' }); showCreateDialog.value = false; loadData()
   } catch (err) {
     const detail = err.response?.data?.detail
