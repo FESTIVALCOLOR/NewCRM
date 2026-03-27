@@ -329,6 +329,7 @@ async def upload_file_to_yandex(
         '.dwg', '.dxf', '.skp', '.3ds', '.max', '.blend',
         '.zip', '.rar', '.7z',
         '.txt', '.csv', '.rtf',
+        '.webm', '.ogg', '.mp3', '.wav', '.m4a',  # аудио (голосовые заметки)
     }
     if file.filename:
         ext = os.path.splitext(file.filename)[1].lower()
