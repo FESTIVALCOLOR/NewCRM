@@ -131,8 +131,13 @@ async def _dispatch_crm_notifications(
 
 def _add_business_days(start_date, days: int):
     """Добавить рабочие дни (пн-пт + праздники РФ) к дате."""
+    if not start_date:
+        return datetime.utcnow()
     if isinstance(start_date, str):
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            return datetime.utcnow()
     current = start_date
     added = 0
     while added < days:
