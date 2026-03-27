@@ -1071,9 +1071,9 @@ async def stream_file_from_yandex(
     # Проверка авторизации через query token
     if not token:
         raise HTTPException(status_code=401, detail="Требуется авторизация")
-    from auth import decode_access_token
+    from auth import decode_token
     try:
-        payload = decode_access_token(token)
+        payload = decode_token(token)
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Невалидный токен")

@@ -809,8 +809,9 @@ function voiceStreamUrl(path) {
 
 function extractVoiceUrl(h) {
   // Извлечь путь голосовой из message — формат: "Голосовая заметка (0:02) — /CRM/.../file.webm"
+  // Путь может содержать пробелы (названия городов, адреса)
   const msg = h.message || h.description || ''
-  const match = msg.match(/— (\/CRM\/[^\s]+\.webm)/)
+  const match = msg.match(/— (\/CRM\/.+\.webm)/)
   return match ? match[1] : ''
 }
 
