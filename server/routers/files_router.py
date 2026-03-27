@@ -977,6 +977,56 @@ async def scan_contract_files_on_yandex(
 # ДИНАМИЧЕСКИЕ ПУТИ (ПОСЛЕ СТАТИЧЕСКИХ)
 # =========================
 
+# ВАЖНО: /stream ПЕРЕД /{file_id} — иначе FastAPI матчит "stream" как file_id
+@router.get("/stream")
+async def stream_file_from_yandex(
+    yandex_path: str,
+    token: str = None,
+):
+    """Стримить файл с Яндекс.Диска для проигрывания в браузере (audio/video).
+    Принимает JWT token как query param (т.к. <audio src> не может передать Header)."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    from auth import decode_token
+    try:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Невалидный токен")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+    if not yandex_disk_available:
+        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
+    if ".." in yandex_path:
+        raise HTTPException(status_code=400, detail="Недопустимый путь")
+    try:
+        clean_path = yandex_path.replace('disk:', '').strip()
+        if not clean_path.startswith('/'):
+            clean_path = '/' + clean_path
+        download_url = yd_service.get_download_link(f"disk:{clean_path}")
+        if not download_url:
+            raise HTTPException(status_code=404, detail="Файл не найден на ЯД")
+        import httpx
+        from fastapi.responses import StreamingResponse
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(download_url)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=404, detail="Не удалось скачать файл")
+            ext = os.path.splitext(clean_path)[1].lower()
+            content_types = {'.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4'}
+            ct = content_types.get(ext, 'application/octet-stream')
+            return StreamingResponse(
+                iter([resp.content]),
+                media_type=ct,
+                headers={'Content-Disposition': f'inline; filename="{os.path.basename(clean_path)}"', 'Accept-Ranges': 'bytes'}
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка стриминга файла: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка при получении файла")
+
+
 @router.get("/{file_id}")
 async def get_file_record(
     file_id: int,
@@ -1058,72 +1108,3 @@ async def update_file_order(
     db.commit()
 
     return {"status": "success", "file_id": file_id, "file_order": file_order}
-
-
-@router.get("/stream")
-async def stream_file_from_yandex(
-    yandex_path: str,
-    token: str = None,
-):
-    """Стримить файл с Яндекс.Диска для проигрывания в браузере (audio/video).
-    Принимает JWT token как query param (т.к. <audio src> не может передать Header)."""
-    # Проверка авторизации через query token
-    if not token:
-        raise HTTPException(status_code=401, detail="Требуется авторизация")
-    from auth import decode_token
-    try:
-        payload = decode_token(token)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Невалидный токен")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Невалидный токен")
-    if not yandex_disk_available:
-        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
-
-    if ".." in yandex_path:
-        raise HTTPException(status_code=400, detail="Недопустимый путь")
-
-    try:
-        # Скачиваем файл с ЯД в память
-        clean_path = yandex_path.replace('disk:', '').strip()
-        if not clean_path.startswith('/'):
-            clean_path = '/' + clean_path
-
-        download_url = yd_service.get_download_link(f"disk:{clean_path}")
-        if not download_url:
-            raise HTTPException(status_code=404, detail="Файл не найден на ЯД")
-
-        import httpx
-        from fastapi.responses import StreamingResponse
-
-        # Скачиваем и стримим
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(download_url)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=404, detail="Не удалось скачать файл")
-
-            # Определяем content-type
-            ext = os.path.splitext(clean_path)[1].lower()
-            content_types = {
-                '.webm': 'audio/webm',
-                '.ogg': 'audio/ogg',
-                '.mp3': 'audio/mpeg',
-                '.wav': 'audio/wav',
-                '.m4a': 'audio/mp4',
-            }
-            ct = content_types.get(ext, 'application/octet-stream')
-
-            return StreamingResponse(
-                iter([resp.content]),
-                media_type=ct,
-                headers={
-                    'Content-Disposition': f'inline; filename="{os.path.basename(clean_path)}"',
-                    'Accept-Ranges': 'bytes',
-                }
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Ошибка стриминга файла: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка при получении файла")
