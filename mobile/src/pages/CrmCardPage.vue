@@ -504,7 +504,11 @@
           <q-toolbar style="background: #E74C3C; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title><q-btn flat round dense icon="close" color="white" @click="showRejectDialog = false" /></q-toolbar>
           <q-card-section>
             <q-input v-model="rejectReason" label="Причина *" outlined dense type="textarea" autogrow class="q-mb-sm" />
-            <q-file v-model="rejectFile" label="Файл с правками" outlined dense accept=".pdf,.jpg,.png,.doc" class="q-mb-sm"><template v-slot:prepend><q-icon name="attach_file" /></template></q-file>
+            <div class="q-mb-sm">
+              <q-btn outline no-caps icon="attach_file" :label="rejectFile ? rejectFile.name : 'Прикрепить файл с правками'" style="width: 100%; justify-content: flex-start; text-transform: none" @click="$refs.rejectFileInput.click()" />
+              <input ref="rejectFileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display: none" @change="e => { rejectFile = e.target.files[0] || null }" />
+              <q-btn v-if="rejectFile" flat dense icon="close" size="sm" class="q-ml-sm" @click="rejectFile = null" />
+            </div>
           </q-card-section>
           <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitReject" :loading="actionLoading" /></q-card-actions>
         </q-card>
