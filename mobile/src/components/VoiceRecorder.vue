@@ -143,7 +143,7 @@ async function uploadAndSend() {
     const file = new File([audioBlob.value], fileName, { type: audioBlob.value.type })
 
     // Загружаем на Яндекс.Диск
-    const response = await filesApi.upload(file, `disk:${uploadPath}`)
+    const response = await filesApi.upload(file, uploadPath)
     const uploadedUrl = response.data?.public_url || response.data?.url || uploadPath
 
     const duration = seconds.value

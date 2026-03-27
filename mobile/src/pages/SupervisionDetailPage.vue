@@ -48,7 +48,7 @@
         <q-tab name="history" label="История" />
         <q-tab name="payments" label="Оплаты" />
         <q-tab name="notes" label="Заметки" />
-        <q-tab name="chat" icon="chat" label="Чат" />
+        <q-tab name="chat" label="Чат" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent">
@@ -1246,7 +1246,8 @@ async function onVoiceRecorded({ url, duration, path }) {
   try {
     const durationStr = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`
     await supervisionApi.addHistory(card.value.id, {
-      description: `Голосовая заметка (${durationStr}) — ${path}`
+      entry_type: 'voice_note',
+      message: `Голосовая заметка (${durationStr}) — ${path}`
     })
     await reloadData()
   } catch (err) {
@@ -1259,7 +1260,8 @@ async function addTextNote() {
   if (!noteText.value?.trim()) return
   try {
     await supervisionApi.addHistory(card.value.id, {
-      description: `Текстовая заметка: ${noteText.value.trim()}`
+      entry_type: 'note',
+      message: noteText.value.trim()
     })
     $q.notify({ type: 'positive', message: 'Заметка добавлена' })
     noteText.value = ''
@@ -1284,7 +1286,7 @@ function addVisitToCalendar(visit) {
 async function doAddHistory() {
   if (!historyNote.value) return
   try {
-    await supervisionApi.addHistory(card.value.id, { description: historyNote.value })
+    await supervisionApi.addHistory(card.value.id, { entry_type: 'note', message: historyNote.value })
     $q.notify({ type: 'positive', message: 'Запись добавлена' })
     showAddHistoryDlg.value = false
     historyNote.value = ''

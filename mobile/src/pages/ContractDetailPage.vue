@@ -231,12 +231,10 @@
 
       <!-- FAB кнопки -->
       <q-page-sticky position="bottom-right" :offset="[18, 18]">
-        <div class="column q-gutter-sm items-end">
-          <q-btn round icon="sync" size="md" style="background: #5DADE2; color: white" @click="syncWithYd" :loading="syncing">
-            <q-tooltip>Синхронизировать с ЯД</q-tooltip>
-          </q-btn>
-          <q-btn v-if="can('contracts.update')" fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
-        </div>
+        <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
+          <q-fab-action icon="sync" style="background: #5DADE2; color: white" @click="syncWithYd" :loading="syncing" label="Синхронизация ЯД" external-label label-position="left" />
+          <q-fab-action v-if="can('contracts.update')" icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" label="Редактировать" external-label label-position="left" />
+        </q-fab>
       </q-page-sticky>
 
       <contract-form-dialog v-model="showEdit" :contract="contract" @saved="reload" />

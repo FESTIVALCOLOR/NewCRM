@@ -168,6 +168,24 @@
     <measurement-dialog v-model="showMeasDialog" :card-id="measCardId" :contract-id="measContractId" :contract-data="measContractData" @saved="onMeasurementSaved" />
     <tech-task-dialog v-model="showTTDialog" :card-id="ttCardId" :contract-id="ttContractId" :contract-data="ttContractData" @saved="onTechTaskSaved" />
     <page-dashboard :items="dashItems" />
+
+    <!-- Диалог "На исправление" прямо на доске -->
+    <q-dialog v-model="boardRejectVisible">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #E74C3C; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title><q-btn flat round dense icon="close" color="white" @click="boardRejectVisible = false" /></q-toolbar>
+        <q-card-section>
+          <q-input v-model="boardRejectReason" label="Причина *" outlined dense type="textarea" autogrow class="q-mb-sm" />
+          <div class="q-mb-sm">
+            <q-btn outline no-caps icon="attach_file" :label="boardRejectFile ? boardRejectFile.name : 'Прикрепить файл с правками'" style="width: 100%; justify-content: flex-start; text-transform: none" @click="$refs.boardRejectFileInput.click()" />
+            <input ref="boardRejectFileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display: none" @change="e => { boardRejectFile = e.target.files[0] || null }" />
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" v-close-popup no-caps />
+          <q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitBoardReject" :loading="boardRejectLoading" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -176,7 +194,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
-import { crmApi, employeesApi, contractsApi, paymentsApi } from 'src/services/api'
+import { crmApi, employeesApi, contractsApi, paymentsApi, filesApi } from 'src/services/api'
 import { usePermission } from 'src/composables/usePermission'
 import { useOptimistic } from 'src/composables/useOptimistic'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
@@ -295,18 +313,63 @@ async function openTechTaskDialog(card) {
 }
 function onTechTaskSaved() { crmStore.loadCards() }
 
+// === Reject диалог на доске ===
+const boardRejectVisible = ref(false)
+const boardRejectReason = ref('')
+const boardRejectFile = ref(null)
+const boardRejectLoading = ref(false)
+const boardRejectCardId = ref(null)
+
+function openBoardReject(cardId) {
+  boardRejectCardId.value = cardId
+  boardRejectReason.value = ''
+  boardRejectFile.value = null
+  boardRejectVisible.value = true
+}
+
+async function submitBoardReject() {
+  if (!boardRejectReason.value) { $q.notify({ type: 'warning', message: 'Укажите причину' }); return }
+  boardRejectLoading.value = true
+  try {
+    // Загрузка файла если есть
+    let filePath = null
+    if (boardRejectFile.value) {
+      try {
+        const card = crmStore.cards.find(c => c.id === boardRejectCardId.value)
+        const contractId = card?.contract_id
+        let folder = '/CRM/Правки'
+        if (contractId) {
+          const { data: ct } = await contractsApi.getById(contractId)
+          if (ct?.yandex_folder_path) {
+            const stageName = (card.column_name || 'Стадия').replace(/:/g, ' -')
+            folder = ct.yandex_folder_path.replace(/^disk:/, '') + '/' + stageName + '/правки'
+          }
+        }
+        await filesApi.upload(boardRejectFile.value, `${folder}/${boardRejectFile.value.name}`)
+        filePath = folder
+      } catch (e) { console.warn('Ошибка загрузки файла правок:', e) }
+    }
+    await crmApi.rejectWork(boardRejectCardId.value, { reason: boardRejectReason.value, revision_file_path: filePath })
+    $q.notify({ type: 'positive', message: 'Отправлено на исправление' })
+    boardRejectVisible.value = false
+    crmStore.loadCards()
+  } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  finally { boardRejectLoading.value = false }
+}
+
 async function doCardAction(cardId, action) {
   try {
     const actions = {
       submit: () => crmApi.submitWork(cardId),
       accept: () => crmApi.acceptWork(cardId),
-      reject: () => { router.push(`/crm/${cardId}?tab=executors`); return Promise.resolve() },
+      reject: () => { openBoardReject(cardId); return null },
       'client-send': () => crmApi.sendToClient(cardId),
       'client-approved': () => crmApi.clientApproved(cardId),
       'sign-act': () => crmApi.signAct(cardId),
     }
     if (actions[action]) {
-      await actions[action]()
+      const result = await actions[action]()
+      if (result === null) return // reject открывает диалог, не показывать toast
       $q.notify({ type: 'positive', message: 'Действие выполнено' })
       crmStore.loadCards()
     }

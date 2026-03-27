@@ -85,7 +85,7 @@
     </div>
 
     <!-- FAB загрузки файла -->
-    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+    <q-page-sticky position="bottom-right" :offset="[18, 80]">
       <q-btn fab icon="upload_file" color="primary" @click="triggerUpload">
         <q-tooltip>Загрузить файл</q-tooltip>
       </q-btn>

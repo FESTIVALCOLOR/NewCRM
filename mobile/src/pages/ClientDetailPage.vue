@@ -114,7 +114,7 @@
       </q-card>
 
       <!-- FAB редактирования -->
-      <q-page-sticky v-if="can('clients.update')" position="bottom-right" :offset="[18, 18]">
+      <q-page-sticky v-if="can('clients.update')" position="bottom-right" :offset="[18, 80]">
         <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="showEdit = true" />
       </q-page-sticky>
 

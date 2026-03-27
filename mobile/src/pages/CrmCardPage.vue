@@ -532,15 +532,11 @@
 
       <!-- FAB кнопки (скрыты в архиве) -->
       <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 18]">
-        <div class="column q-gutter-sm items-end">
-          <q-btn v-if="canRestore" round icon="build" size="md" style="background: #F39C12; color: white" @click="repairWorkflow" :loading="actionLoading">
-            <q-tooltip>Ремонт карточки</q-tooltip>
-          </q-btn>
-          <q-btn round icon="sync" size="md" style="background: #5DADE2; color: white" @click="syncCrmWithYd" :loading="crmSyncing">
-            <q-tooltip>Синхронизировать с ЯД</q-tooltip>
-          </q-btn>
-          <q-btn fab icon="edit" style="background: #ffd93c; color: #333" @click="editCard" />
-        </div>
+        <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
+          <q-fab-action v-if="canRestore" icon="build" style="background: #F39C12; color: white" @click="repairWorkflow" :loading="actionLoading" label="Ремонт" external-label label-position="left" />
+          <q-fab-action icon="sync" style="background: #5DADE2; color: white" @click="syncCrmWithYd" :loading="crmSyncing" label="Синхронизация ЯД" external-label label-position="left" />
+          <q-fab-action icon="edit" style="background: #ffd93c; color: #333" @click="editCard" label="Редактировать" external-label label-position="left" />
+        </q-fab>
       </q-page-sticky>
 
       <!-- Диалог возврата в активные -->
@@ -1158,7 +1154,7 @@ async function submitReject() {
     let filePath = null
     if (rejectFile.value) {
       const contractFolder = (contractData.value?.yandex_folder_path || '').replace(/^disk:/, '')
-      const stageName = card.value.column_name || 'Стадия'
+      const stageName = (card.value.column_name || 'Стадия').replace(/:/g, ' -')
       const corrPath = contractFolder ? `${contractFolder}/${stageName}/правки` : `/CRM/Правки/${card.value.contract_number||card.value.id}`
       const yp = `${corrPath}/${rejectFile.value.name}`
       await filesApi.upload(rejectFile.value, yp)
