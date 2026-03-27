@@ -105,6 +105,8 @@ async def get_notification_settings(
         notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
         notify_revision_info=getattr(settings, 'notify_revision_info', False),
         telegram_connected=bool(employee.telegram_user_id),
+        push_enabled=getattr(settings, 'push_enabled', False),
+        notification_channel=getattr(settings, 'notification_channel', 'telegram') or 'telegram',
     )
 
 
@@ -165,6 +167,8 @@ async def update_notification_settings(
         notify_duplicate_info=getattr(settings, 'notify_duplicate_info', False),
         notify_revision_info=getattr(settings, 'notify_revision_info', False),
         telegram_connected=bool(employee.telegram_user_id),
+        push_enabled=getattr(settings, 'push_enabled', False),
+        notification_channel=getattr(settings, 'notification_channel', 'telegram') or 'telegram',
     )
 
 

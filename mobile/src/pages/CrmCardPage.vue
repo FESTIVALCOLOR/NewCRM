@@ -388,10 +388,11 @@
                 <q-item-section>
                   <q-item-label style="font-size: 12px; color: #333">{{ (n.description || 'Заметка').replace(/\[voice:[^\]]*\]\s*/, '') }}</q-item-label>
                   <q-item-label caption style="color: #888">{{ n.user_name || 'Неизвестный' }}</q-item-label>
-                  <!-- Голосовая заметка — кнопка открыть на ЯД -->
-                  <div v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" class="q-mt-xs">
-                    <q-btn outline dense no-caps icon="play_circle" label="Прослушать" size="sm" style="color: #1677FF" @click="openVoiceNote(noteVoiceUrl(n))" />
-                  </div>
+                </q-item-section>
+                <q-item-section v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" side>
+                  <q-btn round flat icon="play_circle" color="primary" size="sm" @click="openVoiceNote(noteVoiceUrl(n))">
+                    <q-tooltip>Прослушать на ЯД</q-tooltip>
+                  </q-btn>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-caption" style="color: #888">{{ fmtDateTime(n.action_date) }}</div>
@@ -1067,19 +1068,10 @@ const notesList = computed(() => {
 
 // Открыть голосовую заметку — получить публичную ссылку с ЯД
 async function openVoiceNote(path) {
-  try {
-    const ydPath = path.startsWith('disk:') ? path : `disk:${path}`
-    const { data } = await filesApi.getPublicLink(ydPath)
-    if (data?.public_url || data?.href) {
-      window.open(data.public_url || data.href, '_blank')
-    } else {
-      $q.notify({ type: 'info', message: 'Публичная ссылка недоступна' })
-    }
-  } catch {
-    // Fallback — открыть через ЯД клиент
-    const encoded = encodeURI(path.replace(/^disk:/, ''))
-    window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
-  }
+  // Открываем файл на Яндекс.Диске через клиент
+  const cleanPath = path.replace(/^disk:/, '')
+  const encoded = encodeURI(cleanPath)
+  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
 }
 
 // Извлечь путь голосовой записи из description [voice:/path/file.webm]
