@@ -34,9 +34,7 @@
             <span v-if="card.start_date"><q-icon name="play_arrow" size="14px" /> Начало: {{ formatDate(card.start_date) }}</span>
             <span v-if="card.deadline"><q-icon name="flag" size="14px" :style="{ color: dlColor(card.deadline) }" /> Дедлайн: {{ formatDate(card.deadline) }}</span>
           </div>
-          <div v-if="card.dan_completed" class="q-mt-xs">
-            <q-badge color="positive" label="Работа сдана ДАН" style="padding: 4px 8px" />
-          </div>
+          <!-- Статус ДАН убран — функционал завершения через кнопку "Завершить стадию" -->
         </q-card-section>
       </q-card>
 
@@ -213,7 +211,7 @@
                 </div>
                 <div class="col-6" style="text-align: center">
                   <div class="text-caption text-grey-7">Комиссия</div>
-                  <div class="text-weight-bold text-positive">{{ formatMoney(summary.total_commission || 0) }}</div>
+                  <div class="text-weight-bold text-positive">{{ formatMoney(totalCommission) }}</div>
                 </div>
               </div>
             </q-card-section>
@@ -646,6 +644,13 @@ const card = ref(null)
 const timeline = ref([])
 const summary = ref(null)
 const visits = ref([])
+// Комиссия считается из timeline entries (серверный summary может не содержать)
+const totalCommission = computed(() => {
+  const fromSummary = summary.value?.total_commission
+  if (fromSummary && fromSummary > 0) return fromSummary
+  // Fallback: сумма commission из timeline
+  return timeline.value.reduce((sum, e) => sum + (parseFloat(e.commission) || 0), 0)
+})
 const activeTab = ref('executors')
 if (route.query.tab) activeTab.value = route.query.tab
 const svContractYdPath = ref('')
@@ -727,9 +732,12 @@ const uploadStageLabel = computed(() => {
   return tl?.stage_name?.replace(/^Стадия \d+: /, '') || uploadStageCode.value
 })
 
-// Файлы конкретной стадии
+// Файлы конкретной стадии (основной источник + fallback по supervision файлам)
 function stageFiles(stageCode) {
-  return svFilesStages.value[stageCode] || []
+  const fromStages = svFilesStages.value[stageCode] || []
+  if (fromStages.length > 0) return fromStages
+  // Fallback: ищем в общих supervision файлах по stage_code
+  return svFilesSupervision.value.filter(f => f.stage_code === stageCode)
 }
 
 const defaultStages = [
@@ -982,6 +990,8 @@ async function doUploadStageFiles() {
     $q.notify({ type: 'positive', message: `Загружено ${stageUploadFiles.value.length} файл(ов)` })
     showStageFileUpload.value = false
     stageUploadFiles.value = null
+    // Принудительное обновление файлов стадий
+    if (card.value?.contract_id) await loadStageFiles(card.value.contract_id)
     await reloadData()
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файлов' })

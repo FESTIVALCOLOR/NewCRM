@@ -18,18 +18,18 @@
 
       <!-- Фильтры -->
       <div class="row q-col-gutter-xs q-mb-sm">
-        <div class="col-4">
+        <div class="col-3">
           <q-select v-model="statusFilter" :options="statusOpts" label="Статус" outlined dense emit-value map-options clearable />
         </div>
-        <div class="col-4">
+        <div class="col-3">
           <q-select v-model="typeFilter" :options="typeOpts" label="Тип" outlined dense emit-value map-options clearable />
         </div>
-        <div class="col-4">
+        <div class="col-3">
           <q-select v-model="agentFilter" :options="agentOpts" label="Агент" outlined dense clearable />
         </div>
-      </div>
-      <div class="row q-mb-sm">
-        <q-select v-model="sortBy" :options="sortOptions" label="Сортировка" outlined dense emit-value map-options clearable style="min-width: 140px; font-size: 12px" />
+        <div class="col-3">
+          <q-select v-model="sortBy" :options="sortOptions" label="Сортировка" outlined dense emit-value map-options clearable />
+        </div>
       </div>
 
       <div class="text-caption" style="color: #888" v-if="!loading">

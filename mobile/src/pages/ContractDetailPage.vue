@@ -8,8 +8,8 @@
             <div style="flex: 1">
               <div class="text-subtitle1 text-weight-bold" style="color: #555">{{ contract.contract_number }}</div>
               <div class="row items-center q-mt-xs">
+            <q-icon v-if="contract.address" name="location_on" size="16px" color="red" class="q-mr-xs cursor-pointer" @click="openMap(contract.address)" />
             <div class="text-body2" style="color: #333; flex: 1">{{ contract.address }}</div>
-            <q-btn v-if="contract.address" flat round dense size="sm" icon="location_on" style="color: #333" @click="openMap(contract.address)"><q-tooltip>На карте</q-tooltip></q-btn>
           </div>
             </div>
             <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
@@ -60,9 +60,9 @@
                 <div class="text-caption" style="color: #999">Срок договора</div>
                 <div style="font-size: 13px; color: #333">{{ contract.contract_period }} раб. дней</div>
               </div>
-              <div v-if="contract.deadline" class="q-mb-sm">
+              <div v-if="contract.deadline || crmDeadline" class="q-mb-sm">
                 <div class="text-caption" style="color: #999">Дедлайн проекта</div>
-                <div style="font-size: 13px; color: #333">{{ fmtDate(contract.deadline) }}</div>
+                <div style="font-size: 13px; color: #333">{{ fmtDate(contract.deadline || crmDeadline) }}</div>
               </div>
             </div>
             <!-- Колонка 2: Сумма, Площадь, Город -->
@@ -147,7 +147,7 @@
           <div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div>
         </q-card-section>
         <q-list dense separator>
-          <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' || !entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: 'bold' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {})">
+          <q-item v-for="entry in timeline" :key="entry.id" :class="{ 'bg-green-1': entry.actual_date && entry.executor_role !== 'header' && entry.stage_code?.includes('.') }" :style="entry.executor_role === 'header' ? { background: '#EEEEEE', fontWeight: 'bold' } : (!entry.stage_code?.includes('.') ? { background: '#F5F5F5', fontWeight: '600' } : (entry.status === 'skipped' ? { background: '#FAFAFA', opacity: 0.7 } : {}))">
             <q-item-section avatar>
               <q-icon :name="entry.status === 'skipped' ? 'block' : (entry.actual_date ? 'check_circle' : 'radio_button_unchecked')" :color="entry.status === 'skipped' ? 'grey-4' : (entry.actual_date ? 'positive' : 'grey-5')" size="16px" />
             </q-item-section>
@@ -330,6 +330,7 @@ const uploadStage = ref('')
 const receiptType = ref('')
 
 const agentColor = computed(() => refs.agentByName(contract.value?.agent_type)?.color || '#95A5A6')
+const crmDeadline = computed(() => contract.value?.crm_card_deadline || null)
 
 // ФИО клиента — из contract.client_name или загрузим отдельно
 const clientName = ref(null)
