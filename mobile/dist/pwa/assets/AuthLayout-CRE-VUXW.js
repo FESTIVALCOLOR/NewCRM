@@ -1,1 +1,0 @@
-import{G as e,gt as t,st as n,ut as r,z as i}from"./dom-DPf5KfN7.js";import{n as a,t as o}from"./QLayout-BalYtkL-.js";import{t as s}from"./_plugin-vue_export-helper-gFNv2Gru.js";var c={};function l(s,c){let l=r(`router-view`);return n(),i(o,{view:`hHh lpR fFf`},{default:t(()=>[e(a,null,{default:t(()=>[e(l)]),_:1})]),_:1})}var u=s(c,[[`render`,l]]);export{u as default};

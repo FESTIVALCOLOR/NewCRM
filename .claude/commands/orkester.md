@@ -48,7 +48,7 @@ $ARGUMENTS
 
 ---
 
-## ШАГ 0.7: DESIGN (модель: opus) — УСЛОВНЫЙ
+## ШАГ 0.7: DESIGN (модель: sonnet) — УСЛОВНЫЙ
 
 Активируется в режимах: **full**, **refactor**.
 Пропустить в: **fix**, **test**, **security**, **deploy**, **docker**, **qa**.
@@ -66,7 +66,7 @@ $ARGUMENTS
 
 ---
 
-## ШАГ 1: PLANNER (модель: opus)
+## ШАГ 1: PLANNER (модель: sonnet)
 
 Вызови субагент `.claude/agents/planner-agent.md` через Task tool.
 
@@ -101,7 +101,7 @@ $ARGUMENTS
 
 ---
 
-## ШАГ 2: WORKER (модель: opus) + специализированные агенты
+## ШАГ 2: WORKER (модель: sonnet) + специализированные агенты
 
 Вызови субагент `.claude/agents/worker-agent.md` через Task tool.
 
@@ -293,8 +293,6 @@ git add <список_изменённых_файлов>
 # Коммит (HEREDOC формат)
 git commit -m "$(cat <<'EOF'
 описание изменений
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 
@@ -322,9 +320,6 @@ gh pr create --title "{краткий заголовок до 70 символо�
 - Локальные тесты: {N} passed, 0 failed
 - Gate Checks: 5/5 passed
 - Категории: {e2e, db, ui, client, critical}
-
-Сгенерировано Claude Code
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -458,7 +453,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 10: SENIOR REVIEWER (модель: opus) — УСЛОВНЫЙ
+## ШАГ 10: SENIOR REVIEWER (модель: sonnet) — УСЛОВНЫЙ
 
 Активировать если:
 - Изменено 3+ файлов в разных модулях
@@ -489,7 +484,7 @@ MISMATCH → Worker исправляет → Checker перепроверяет
 
 ---
 
-## ШАГ 12: DEPLOY (модель: opus) — ТОЛЬКО ПО ЗАПРОСУ
+## ШАГ 12: DEPLOY (модель: sonnet) — ТОЛЬКО ПО ЗАПРОСУ
 
 **НИКОГДА** не запускать автоматически!
 Только если пользователь явно запросил деплой или режим **deploy**.
@@ -723,8 +718,8 @@ send_task_notification(
 
 ## КОНТЕКСТНОЕ ОКНО СУБАГЕНТОВ
 
-Оркестратор работает с моделью `opus[1m]` (1M токенов контекста).
-Субагенты через Task tool ограничены стандартным контекстом (~200K), т.к. параметр `model` принимает только `"sonnet"`, `"opus"`, `"haiku"` без `[1m]` суффикса. Это допустимо — каждый субагент решает узкую задачу и не нуждается в 1M контексте.
+Оркестратор и субагенты работают с моделью `sonnet` (тариф Pro, ~200K контекста).
+Параметр `model` в Task tool принимает `"sonnet"` или `"haiku"`. Каждый субагент решает узкую задачу и 200K контекста достаточно.
 
 ---
 

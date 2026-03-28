@@ -36,6 +36,14 @@ class MiscMixin:
         )
         return response.status_code == 200
 
+    def mark_all_notifications_read(self) -> bool:
+        """Отметить все уведомления как прочитанные"""
+        response = self._request(
+            'POST',
+            f"{self.base_url}/api/v1/notifications/mark-all-read"
+        )
+        return response.status_code == 200
+
     def sync(self, last_sync_timestamp: datetime, entity_types: List[str],
              retry: bool = True, timeout: int = None, mark_offline: bool = False) -> Dict[str, Any]:
         """

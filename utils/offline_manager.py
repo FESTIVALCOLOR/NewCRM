@@ -625,6 +625,35 @@ class OfflineManager(QObject):
             return {'success': False, 'error': 'Failed to create supervision card'}
 
         elif op_type == OperationType.UPDATE.value:
+            # Специальные случаи: pause/resume/reset_stage_completion
+            action = data.get('_action')
+            if action == 'pause':
+                try:
+                    result = self.api_client.pause_supervision_card(
+                        entity_id, data.get('reason', ''))
+                    if result is not None:
+                        return {'success': True, 'server_id': entity_id}
+                    return {'success': False, 'error': 'Failed to pause supervision card'}
+                except Exception as e:
+                    return {'success': False, 'error': str(e)}
+            elif action == 'resume':
+                try:
+                    result = self.api_client.resume_supervision_card(
+                        entity_id, data.get('employee_id'))
+                    if result is not None:
+                        return {'success': True, 'server_id': entity_id}
+                    return {'success': False, 'error': 'Failed to resume supervision card'}
+                except Exception as e:
+                    return {'success': False, 'error': str(e)}
+            elif action == 'reset_stage_completion':
+                try:
+                    result = self.api_client.reset_supervision_stage_completion(entity_id)
+                    if result is not None:
+                        return {'success': True, 'server_id': entity_id}
+                    return {'success': False, 'error': 'Failed to reset stage completion'}
+                except Exception as e:
+                    return {'success': False, 'error': str(e)}
+
             result = self.api_client.update_supervision_card(entity_id, data)
             if result:
                 return {'success': True, 'server_id': entity_id}

@@ -5802,13 +5802,17 @@ class CardEditDialog(QDialog):
                             new_files_found = True
                         else:
                             print(f"[YD-SYNC] Новых файлов не найдено")
-                        if contract_updated:
-                            print(f"[YD-SYNC] Контракт обновлён (references/photo_documentation)")
+                        # Синхронизируем контракт в локальную БД после скана
+                        # (scan обновляет поля contracts на сервере — нужно подтянуть в SQLite)
+                        if new_count > 0 or contract_updated:
+                            print(f"[YD-SYNC] Синхронизация контракта после скана (new={new_count}, updated={contract_updated})")
                             try:
-                                from utils.db_sync import sync_all_data
-                                sync_all_data(self.data.api_client, self.data.db)
+                                # Обновляем данные контракта из API в локальную БД
+                                fresh_contract = self.data.get_contract(contract_id)
+                                if fresh_contract:
+                                    self._cached_contract = fresh_contract
                             except Exception as sync_e:
-                                print(f"[YD-SYNC] Ошибка синхронизации БД: {sync_e}")
+                                print(f"[YD-SYNC] Ошибка синхронизации: {sync_e}")
                     except Exception as scan_err:
                         print(f"[YD-SYNC] Ошибка сканирования ЯД: {scan_err}")
                 elif skip_scan:
