@@ -483,7 +483,7 @@
           <template v-else-if="chatData">
             <q-card class="is-card q-mb-md">
               <q-card-section>
-                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">{{ chatData.title || 'Проектный чат' }}</div>
+                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">{{ chatData.chat_title || 'Проектный чат' }}</div>
                 <div v-if="chatData.invite_link" class="q-mb-sm">
                   <a :href="chatData.invite_link" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 13px">
                     <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
@@ -529,12 +529,29 @@
               <q-card-section class="text-center q-pa-lg">
                 <q-icon name="chat_bubble_outline" size="48px" color="grey-4" class="q-mb-sm" />
                 <div style="color: #999; font-size: 13px" class="q-mb-md">Telegram-чат не создан</div>
-                <q-btn unelevated dense no-caps icon="add" label="Создать чат" style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px" @click="createProjectChat" :loading="chatCreating" />
+                <q-btn unelevated dense no-caps icon="add" label="Создать чат" style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px" @click="openCreateChatDlg" :loading="chatCreating" />
               </q-card-section>
             </q-card>
           </template>
         </q-tab-panel>
       </q-tab-panels>
+
+      <!-- Диалог создания Telegram-чата -->
+      <q-dialog v-model="showCreateChatDlg" persistent>
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #ffd93c; color: #333">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Создать Telegram-чат</q-toolbar-title>
+            <q-btn flat round dense icon="close" @click="showCreateChatDlg = false" />
+          </q-toolbar>
+          <q-card-section>
+            <q-input v-model="newChatTitle" label="Название чата" outlined dense class="q-mb-xs" hint="ИН-Город-Адрес или ШП-Город-Адрес" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" v-close-popup no-caps />
+            <q-btn unelevated label="Создать" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="createProjectChat" :loading="chatCreating" :disable="!newChatTitle.trim()" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
 
       <!-- Диалог отправки сообщения в чат -->
       <q-dialog v-model="showSendMessageDlg">
@@ -743,6 +760,8 @@ const showSendMessageDlg = ref(false)
 const showScriptsDlg = ref(false)
 const chatMessageText = ref('')
 const chatScripts = ref([])
+const showCreateChatDlg = ref(false)
+const newChatTitle = ref('')
 
 const crmFileInput = ref(null)
 const crmUploadStage = ref('')
@@ -2017,30 +2036,44 @@ async function loadChat() {
   chatLoading.value = true
   try {
     const { api: ax } = await import('src/boot/axios')
-    const { data } = await ax.get(`/api/v1/messenger/chats/by-card/${card.value.id}`, { validateStatus: s => s < 500 })
-    chatData.value = (data && !data.detail) ? (Array.isArray(data) ? data[0] : data) : null
-    if (chatData.value) {
-      const { data: members } = await messengerApi.getChatMembers(chatData.value.id)
-      chatMembers.value = members || []
+    const resp = await ax.get(`/api/v1/messenger/chats/by-card/${card.value.id}`, { validateStatus: s => s < 500 })
+    if (resp.data && resp.data.chat) {
+      chatData.value = resp.data.chat
+      chatMembers.value = resp.data.members || []
+    } else {
+      chatData.value = null
+      chatMembers.value = []
     }
   } catch { chatData.value = null }
   chatLoading.value = false
 }
 
+function openCreateChatDlg() {
+  const prefix = card.value?.project_type === 'Шаблонный' ? 'ШП' : 'ИН'
+  const city = (card.value?.city || '').replace(/_/g, '-')
+  const address = (card.value?.address || '').replace(/_/g, '-')
+  newChatTitle.value = [prefix, city, address].filter(Boolean).join('-')
+  showCreateChatDlg.value = true
+}
+
 async function createProjectChat() {
   if (!card.value?.id) return
   chatCreating.value = true
+  showCreateChatDlg.value = false
   try {
     const payload = {
       crm_card_id: card.value.id,
-      title: card.value.contract_number || `Чат проекта #${card.value.id}`
+      chat_title: newChatTitle.value.trim() || undefined
     }
     const { data } = await messengerApi.createChat(payload)
-    chatData.value = data
+    if (data && data.chat) {
+      chatData.value = data.chat
+      chatMembers.value = data.members || []
+    }
     $q.notify({ type: 'positive', message: 'Чат создан' })
-    await loadChat()
   } catch (e) {
-    $q.notify({ type: 'negative', message: 'Ошибка создания чата' })
+    const msg = e?.response?.data?.detail || 'Ошибка создания чата'
+    $q.notify({ type: 'negative', message: msg })
   }
   chatCreating.value = false
 }

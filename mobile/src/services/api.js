@@ -451,6 +451,7 @@ export const locksApi = {
 export const messengerApi = {
   getChats: (params) => api.get('/api/v1/messenger/chats', { params }),
   createChat: (data) => api.post('/api/v1/messenger/chats', data),
+  createSupervisionChat: (data) => api.post('/api/v1/messenger/chats/supervision', data),
   deleteChat: (chatId) => api.delete(`/api/v1/messenger/chats/${chatId}`),
   getChatMembers: (chatId) => api.get(`/api/v1/messenger/chats/${chatId}/members`),
   sendMessage: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/send-message`, data),

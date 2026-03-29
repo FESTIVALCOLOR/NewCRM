@@ -1117,14 +1117,12 @@ def _build_chat_title(contract: Contract, card: CRMCard) -> str:
             if addr_check.startswith(c):
                 address = address[len(c):].lstrip('.,;:_ -')
                 break
-    # Определяем тип агента
-    agent_type = (contract.agent_type or '').lower()
-    if 'фестиваль' in agent_type or 'festival' in agent_type:
-        prefix = "ФК"
-    elif 'петрович' in agent_type or 'petrovich' in agent_type:
-        prefix = "П"
+    # Определяем префикс по типу проекта: ИН — индивидуальный, ШП — шаблонный
+    project_type = (contract.project_type or '').strip().lower()
+    if 'шаблон' in project_type:
+        prefix = "ШП"
     else:
-        prefix = "ФК"
+        prefix = "ИН"
     return f"{prefix}-{city}-{address}"
 
 
