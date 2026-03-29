@@ -73,7 +73,7 @@
             <q-item-label caption>{{ formatSize(item.size) }}</q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-icon name="open_in_new" color="grey-5" />
+            <q-icon :name="isImage(item.name, item.media_type) ? 'photo_library' : 'open_in_new'" color="grey-5" />
           </q-item-section>
         </q-item>
       </q-list>
@@ -85,8 +85,8 @@
     </div>
 
     <!-- Галерея превью изображений -->
-    <q-dialog v-model="previewVisible" maximized>
-      <div class="column" style="background: rgba(0,0,0,0.95); height: 100%">
+    <q-dialog v-model="previewVisible" maximized transition-show="fade" transition-hide="fade">
+      <div class="column" style="background: rgba(0,0,0,0.95); height: 100dvh; min-height: 100dvh">
         <!-- Шапка -->
         <div class="row items-center q-pa-sm no-wrap">
           <q-btn flat round dense icon="close" color="white" @click="previewVisible = false" />
@@ -162,11 +162,12 @@ const previewIdx = ref(0)
 const imageUrls = ref({})  // path -> { url, loading, error }
 
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic']
-function isImage(name) {
+function isImage(name, mediaType) {
+  if (mediaType === 'image') return true
   return IMAGE_EXTS.includes((name || '').split('.').pop()?.toLowerCase() || '')
 }
 
-const imageFiles = computed(() => files.value.filter(f => isImage(f.name)))
+const imageFiles = computed(() => files.value.filter(f => isImage(f.name, f.media_type)))
 const currentPreviewFile = computed(() => imageFiles.value[previewIdx.value] || null)
 const currentPreviewState = computed(() =>
   currentPreviewFile.value ? (imageUrls.value[currentPreviewFile.value.path] || null) : null
@@ -274,7 +275,7 @@ async function loadFolder() {
 
 async function openFile(item) {
   // Изображения — открываем в галерее
-  if (isImage(item.name)) {
+  if (isImage(item.name, item.media_type)) {
     await openImagePreview(item)
     return
   }

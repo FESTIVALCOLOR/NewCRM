@@ -2071,6 +2071,7 @@ async function createProjectChat() {
       chatMembers.value = data.members || []
     }
     $q.notify({ type: 'positive', message: 'Чат создан' })
+    await loadChat()
   } catch (e) {
     const msg = e?.response?.data?.detail || 'Ошибка создания чата'
     $q.notify({ type: 'negative', message: msg })
