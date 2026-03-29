@@ -406,7 +406,7 @@
               <q-card-section>
                 <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">{{ svChatData.chat_title || 'Проектный чат' }}</div>
                 <div v-if="svChatData.invite_link" class="q-mb-sm">
-                  <a :href="svChatData.invite_link" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 13px">
+                  <a :href="tgDeepLink(svChatData.invite_link)" style="color: #1677FF; text-decoration: none; font-size: 13px">
                     <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
                   </a>
                 </div>
@@ -436,6 +436,7 @@
               <q-card-section>
                 <q-btn unelevated dense no-caps icon="send" label="Отправить сообщение" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showSvSendMsgDlg = true" />
                 <q-btn unelevated dense no-caps icon="smart_toy" label="Запустить скрипт" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="loadSvScriptsAndShow" />
+                <q-btn unelevated dense no-caps icon="person_add" label="Добавить участника" class="full-width q-mb-sm" style="background: #AAB7B8; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showAddSvMemberDlg = true" />
                 <q-btn outline dense no-caps icon="delete" label="Удалить чат" class="full-width" color="negative" style="font-size: 12px; height: 36px; border-radius: 4px" @click="confirmDeleteSvChat" />
               </q-card-section>
             </q-card>
@@ -588,6 +589,26 @@
       </q-card>
     </q-dialog>
 
+    <!-- Диалог добавления участника в чат надзора -->
+    <q-dialog v-model="showAddSvMemberDlg">
+      <q-card style="min-width: 320px; border-radius: 10px">
+        <q-toolbar style="background: #AAB7B8; color: white">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Добавить участника</q-toolbar-title>
+          <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </q-toolbar>
+        <q-card-section>
+          <q-select v-model="addSvMemberEmployeeId" :options="executorOptions"
+            option-value="value" option-label="label" label="Сотрудник" outlined dense emit-value map-options />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Отмена" v-close-popup no-caps />
+          <q-btn unelevated label="Добавить" style="background: #AAB7B8; color: white; border-radius: 4px" no-caps
+            :loading="addSvMemberLoading" :disable="!addSvMemberEmployeeId"
+            @click="doAddSvMember" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Диалог выбора скрипта надзора -->
     <q-dialog v-model="showSvScriptsDlg">
       <q-card style="min-width: 320px; border-radius: 10px">
@@ -726,6 +747,9 @@ const svChatMsgText = ref('')
 const svChatScripts = ref([])
 const showCreateSvChatDlg = ref(false)
 const newSvChatTitle = ref('')
+const showAddSvMemberDlg = ref(false)
+const addSvMemberEmployeeId = ref(null)
+const addSvMemberLoading = ref(false)
 
 // ДАН ли текущий пользователь
 const isDan = computed(() => {
@@ -1516,6 +1540,13 @@ watch(activeTab, (val) => {
   if (val === 'chat' && !svChatData.value && !svChatLoading.value) loadSvChat()
 })
 
+function tgDeepLink(link) {
+  if (!link) return '#'
+  const m = link.match(/t\.me\/(?:joinchat\/|\+)([A-Za-z0-9_-]+)/)
+  if (m) return `tg://join?invite=${m[1]}`
+  return link
+}
+
 async function loadSvChat() {
   if (!card.value?.id) return
   svChatLoading.value = true
@@ -1545,9 +1576,20 @@ async function createSvChat() {
   svChatCreating.value = true
   showCreateSvChatDlg.value = false
   try {
+    const c = card.value
+    const memberFields = [
+      { key: 'dan_id', role: 'ДАН' },
+      { key: 'senior_manager_id', role: 'Старший менеджер' },
+      { key: 'studio_director_id', role: 'Руководитель студии' }
+    ]
+    const members = memberFields
+      .filter(m => c[m.key])
+      .map(m => ({ member_type: 'employee', member_id: c[m.key], role_in_project: m.role }))
+
     const payload = {
-      supervision_card_id: card.value.id,
-      chat_title: newSvChatTitle.value.trim() || undefined
+      supervision_card_id: c.id,
+      chat_title: newSvChatTitle.value.trim() || undefined,
+      members
     }
     const { data } = await messengerApi.createSupervisionChat(payload)
     if (data && data.chat) {
@@ -1561,6 +1603,25 @@ async function createSvChat() {
     $q.notify({ type: 'negative', message: msg })
   }
   svChatCreating.value = false
+}
+
+async function doAddSvMember() {
+  if (!svChatData.value?.id || !addSvMemberEmployeeId.value) return
+  addSvMemberLoading.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.post(`/api/v1/messenger/chats/${svChatData.value.id}/add-member`, {
+      member_type: 'employee',
+      member_id: addSvMemberEmployeeId.value
+    })
+    $q.notify({ type: 'positive', message: 'Участник добавлен' })
+    showAddSvMemberDlg.value = false
+    addSvMemberEmployeeId.value = null
+    await loadSvChat()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e?.response?.data?.detail || 'Ошибка добавления' })
+  }
+  addSvMemberLoading.value = false
 }
 
 async function confirmDeleteSvChat() {
@@ -1639,7 +1700,8 @@ onMounted(async () => {
 
   // Дополнительные данные (не блокируют основную загрузку)
   reloadData()
-  // Чат загружается лениво при переключении на вкладку "Чат"
+  // Чат — грузим сразу, чтобы данные были готовы при открытии вкладки
+  loadSvChat()
 
   // Блокировка карточки при редактировании
   try {

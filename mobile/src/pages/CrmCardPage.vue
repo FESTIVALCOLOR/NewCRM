@@ -485,7 +485,7 @@
               <q-card-section>
                 <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">{{ chatData.chat_title || 'Проектный чат' }}</div>
                 <div v-if="chatData.invite_link" class="q-mb-sm">
-                  <a :href="chatData.invite_link" target="_blank" style="color: #1677FF; text-decoration: none; font-size: 13px">
+                  <a :href="tgDeepLink(chatData.invite_link)" style="color: #1677FF; text-decoration: none; font-size: 13px">
                     <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
                   </a>
                 </div>
@@ -518,6 +518,7 @@
               <q-card-section>
                 <q-btn unelevated dense no-caps icon="send" label="Отправить сообщение" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showSendMessageDlg = true" />
                 <q-btn unelevated dense no-caps icon="smart_toy" label="Запустить скрипт" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="loadScriptsAndShow" />
+                <q-btn unelevated dense no-caps icon="person_add" label="Добавить участника" class="full-width q-mb-sm" style="background: #AAB7B8; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showAddMemberDlg = true" />
                 <q-btn outline dense no-caps icon="delete" label="Удалить чат" class="full-width" color="negative" style="font-size: 12px; height: 36px; border-radius: 4px" @click="confirmDeleteChat" />
               </q-card-section>
             </q-card>
@@ -535,6 +536,26 @@
           </template>
         </q-tab-panel>
       </q-tab-panels>
+
+      <!-- Галерея изображений файлов стадий -->
+      <q-dialog v-model="crmGalleryVisible" maximized transition-show="fade" transition-hide="fade">
+        <div class="column" style="background: rgba(0,0,0,0.95); height: 100dvh; min-height: 100dvh">
+          <div class="row items-center q-pa-sm no-wrap">
+            <q-btn flat round dense icon="close" color="white" @click="crmGalleryVisible = false" />
+            <div class="col text-center text-white q-px-sm" style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ crmCurrentGalleryFile?.file_name }}</div>
+            <div class="text-white text-caption" style="min-width: 44px; text-align: right">{{ crmGalleryIdx + 1 }}/{{ crmGalleryFiles.length }}</div>
+          </div>
+          <div class="col flex flex-center" style="position: relative; overflow: hidden" v-touch-swipe.mouse="handleCrmGallerySwipe">
+            <q-btn v-if="crmGalleryIdx > 0" flat round icon="chevron_left" color="white" style="position: absolute; left: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmPrevImage" />
+            <img v-if="crmCurrentGalleryFile?.public_link" :src="crmCurrentGalleryFile.public_link"
+              style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; padding: 8px" />
+            <q-btn v-if="crmGalleryIdx < crmGalleryFiles.length - 1" flat round icon="chevron_right" color="white" style="position: absolute; right: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmNextImage" />
+          </div>
+          <div class="row justify-center q-pa-sm">
+            <q-btn flat no-caps icon="open_in_new" label="Открыть в браузере" color="white" size="sm" @click="window.open(crmCurrentGalleryFile?.public_link, '_blank')" />
+          </div>
+        </div>
+      </q-dialog>
 
       <!-- Диалог создания Telegram-чата -->
       <q-dialog v-model="showCreateChatDlg" persistent>
@@ -565,6 +586,26 @@
       </q-dialog>
 
       <!-- Диалог выбора скрипта -->
+      <!-- Диалог добавления участника в чат -->
+      <q-dialog v-model="showAddMemberDlg">
+        <q-card style="min-width: 320px; border-radius: 10px">
+          <q-toolbar style="background: #AAB7B8; color: white">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Добавить участника</q-toolbar-title>
+            <q-btn flat round dense icon="close" color="white" v-close-popup />
+          </q-toolbar>
+          <q-card-section>
+            <q-select v-model="addMemberEmployeeId" :options="employeeOptions" option-value="id"
+              option-label="label" label="Сотрудник" outlined dense emit-value map-options
+              use-input input-debounce="200" @filter="filterAssignEmployees" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" v-close-popup no-caps />
+            <q-btn unelevated label="Добавить" style="background: #AAB7B8; color: white; border-radius: 4px" no-caps
+              :loading="addMemberLoading" :disable="!addMemberEmployeeId" @click="doAddChatMember" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <q-dialog v-model="showScriptsDlg">
         <q-card style="min-width: 320px; border-radius: 10px">
           <q-toolbar style="background: #58D68D; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Запустить скрипт</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
@@ -762,6 +803,9 @@ const chatMessageText = ref('')
 const chatScripts = ref([])
 const showCreateChatDlg = ref(false)
 const newChatTitle = ref('')
+const showAddMemberDlg = ref(false)
+const addMemberEmployeeId = ref(null)
+const addMemberLoading = ref(false)
 
 const crmFileInput = ref(null)
 const crmUploadStage = ref('')
@@ -1249,9 +1293,37 @@ async function openYdFolder() {
     window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
   }
 }
-function openFile(f) { if (f.public_link) window.open(f.public_link, '_blank') }
-function fileIcon(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'picture_as_pdf'; if (n.match(/\.(jpg|jpeg|png|webp)$/)) return 'image'; return 'insert_drive_file' }
-function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'red'; if (n.match(/\.(jpg|jpeg|png|webp)$/)) return 'green'; return 'grey-7' }
+const IMAGE_RE = /\.(jpg|jpeg|png|webp|gif|bmp|heic)$/i
+function isImageFile(f) { return IMAGE_RE.test(f.file_name || '') }
+function fileIcon(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'picture_as_pdf'; if (IMAGE_RE.test(n)) return 'photo_library'; return 'insert_drive_file' }
+function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'red'; if (IMAGE_RE.test(n)) return 'green'; return 'grey-7' }
+
+// === Галерея изображений в файлах стадий ===
+const crmGalleryVisible = ref(false)
+const crmGalleryIdx = ref(0)
+const crmGalleryFiles = ref([])
+const crmCurrentGalleryFile = computed(() => crmGalleryFiles.value[crmGalleryIdx.value] || null)
+
+function openFile(f) {
+  if (!f.public_link) return
+  if (isImageFile(f)) {
+    const imgs = projectFiles.value.filter(pf => isImageFile(pf) && pf.public_link)
+    const idx = imgs.findIndex(pf => pf.id === f.id)
+    if (idx >= 0) {
+      crmGalleryFiles.value = imgs
+      crmGalleryIdx.value = idx
+      crmGalleryVisible.value = true
+      return
+    }
+  }
+  window.open(f.public_link, '_blank')
+}
+function crmPrevImage() { if (crmGalleryIdx.value > 0) crmGalleryIdx.value-- }
+function crmNextImage() { if (crmGalleryIdx.value < crmGalleryFiles.value.length - 1) crmGalleryIdx.value++ }
+function handleCrmGallerySwipe({ direction }) {
+  if (direction === 'right') crmPrevImage()
+  else if (direction === 'left') crmNextImage()
+}
 function actionIcon(t) { if (!t) return 'history'; const l=t.toLowerCase(); if (l.includes('move')||l.includes('column')) return 'swap_horiz'; if (l.includes('assign')) return 'person_add'; if (l.includes('submit')) return 'send'; if (l.includes('accept')) return 'check_circle'; if (l.includes('reject')) return 'replay'; if (l.includes('payment')) return 'payments'; if (l.includes('deadline')) return 'event'; if (l.includes('file')) return 'attach_file'; return 'history' }
 function actionColor(t) { if (!t) return 'grey-5'; const l=t.toLowerCase(); if (l.includes('accept')||l.includes('complete')) return 'positive'; if (l.includes('reject')) return 'negative'; if (l.includes('submit')) return 'info'; return 'grey-7' }
 
@@ -1815,6 +1887,9 @@ async function loadAdditionalData(cardId) {
 
   // Фоновая синхронизация файлов с ЯД — убираем записи удалённых файлов
   syncCrmFilesWithYd()
+
+  // Чат — грузим всегда, чтобы данные были готовы при открытии вкладки
+  loadChat()
 }
 
 // Кнопка «Синхронизировать с ЯД» — обратная синхронизация
@@ -2031,6 +2106,14 @@ async function syncCrmFilesWithYd() {
 
 // === Telegram-чат — загрузка и действия ===
 
+function tgDeepLink(link) {
+  if (!link) return '#'
+  // t.me/joinchat/HASH или t.me/+HASH → tg://join?invite=HASH
+  const m = link.match(/t\.me\/(?:joinchat\/|\+)([A-Za-z0-9_-]+)/)
+  if (m) return `tg://join?invite=${m[1]}`
+  return link
+}
+
 async function loadChat() {
   if (!card.value?.id) return
   chatLoading.value = true
@@ -2061,9 +2144,23 @@ async function createProjectChat() {
   chatCreating.value = true
   showCreateChatDlg.value = false
   try {
+    // Автоматически добавляем всех назначенных членов команды
+    const c = card.value
+    const memberFields = [
+      { key: 'senior_manager_id', role: 'Старший менеджер' },
+      { key: 'sdp_id', role: 'СДП' },
+      { key: 'gap_id', role: 'ГАП' },
+      { key: 'manager_id', role: 'Менеджер' },
+      { key: 'surveyor_id', role: 'Замерщик' }
+    ]
+    const members = memberFields
+      .filter(m => c[m.key])
+      .map(m => ({ member_type: 'employee', member_id: c[m.key], role_in_project: m.role }))
+
     const payload = {
-      crm_card_id: card.value.id,
-      chat_title: newChatTitle.value.trim() || undefined
+      crm_card_id: c.id,
+      chat_title: newChatTitle.value.trim() || undefined,
+      members
     }
     const { data } = await messengerApi.createChat(payload)
     if (data && data.chat) {
@@ -2077,6 +2174,25 @@ async function createProjectChat() {
     $q.notify({ type: 'negative', message: msg })
   }
   chatCreating.value = false
+}
+
+async function doAddChatMember() {
+  if (!chatData.value?.id || !addMemberEmployeeId.value) return
+  addMemberLoading.value = true
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    await ax.post(`/api/v1/messenger/chats/${chatData.value.id}/add-member`, {
+      member_type: 'employee',
+      member_id: addMemberEmployeeId.value
+    })
+    $q.notify({ type: 'positive', message: 'Участник добавлен' })
+    showAddMemberDlg.value = false
+    addMemberEmployeeId.value = null
+    await loadChat()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e?.response?.data?.detail || 'Ошибка добавления' })
+  }
+  addMemberLoading.value = false
 }
 
 async function confirmDeleteChat() {
