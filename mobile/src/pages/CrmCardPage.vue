@@ -338,11 +338,16 @@
             <!-- Файлы текущей вариации -->
             <q-list dense v-if="filesForVariation(stage.code).length > 0">
               <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
-                <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
-                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openFile(f)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+                <q-item-section avatar>
+                  <q-img v-if="isImageFile(f) && f.public_link" :src="f.public_link"
+                    style="width: 48px; height: 48px; border-radius: 4px; cursor: pointer"
+                    @click="openStageFile(f, stage.code)" />
+                  <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
+                </q-item-section>
+                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openStageFile(f, stage.code)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
                 <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
                   <div class="row q-gutter-xs no-wrap">
-                    <q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openFile(f)" />
+                    <q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openStageFile(f, stage.code)" />
                     <q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" />
                   </div>
                 </q-item-section>
@@ -594,9 +599,8 @@
             <q-btn flat round dense icon="close" color="white" v-close-popup />
           </q-toolbar>
           <q-card-section>
-            <q-select v-model="addMemberEmployeeId" :options="employeeOptions" option-value="id"
-              option-label="label" label="Сотрудник" outlined dense emit-value map-options
-              use-input input-debounce="200" @filter="filterAssignEmployees" />
+            <q-select v-model="addMemberEmployeeId" :options="cardTeamOptions" option-value="id"
+              option-label="label" label="Участник проекта" outlined dense emit-value map-options />
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Отмена" v-close-popup no-caps />
@@ -973,6 +977,26 @@ const allTeamMembers = computed(() => {
 const stageExecutors = computed(() => card.value?.stage_executors || [])
 const completedStages = computed(() => stageExecutors.value.filter(se => se.completed))
 
+// Команда карточки для добавления в чат (только назначенные сотрудники)
+const cardTeamOptions = computed(() => {
+  if (!card.value) return []
+  const opts = []
+  const addOpt = (id, name, role) => { if (id && name) opts.push({ id, label: `${name} (${role})` }) }
+  addOpt(card.value.senior_manager_id, card.value.senior_manager_name, 'Ст. менеджер')
+  addOpt(card.value.sdp_id, card.value.sdp_name, 'СДП')
+  addOpt(card.value.gap_id, card.value.gap_name, 'ГАП')
+  addOpt(card.value.manager_id, card.value.manager_name, 'Менеджер')
+  addOpt(card.value.surveyor_id, card.value.surveyor_name, 'Замерщик')
+  const seenIds = new Set(opts.map(o => o.id))
+  for (const se of (card.value.stage_executors || [])) {
+    if (se.executor_id && se.executor_name && !seenIds.has(se.executor_id)) {
+      seenIds.add(se.executor_id)
+      opts.push({ id: se.executor_id, label: `${se.executor_name} (${se.stage_name || 'Исполнитель'})` })
+    }
+  }
+  return opts
+})
+
 function filesByStage(stage) { return projectFiles.value.filter(f => f.stage === stage) }
 
 // Путь к файлу правок для стадии (из workflow state)
@@ -1245,34 +1269,48 @@ function editNormDays(entry) {
     }
   })
 }
-// Прогресс подэтапов текущей стадии (только визуальный)
+// Прогресс подэтапов всех стадий (1.x → 2.x → 3.x)
 const substepProgress = computed(() => {
   if (!timelineEntries.value.length || !card.value) return []
   const currentStage = card.value.column_name
   if (!currentStage || currentStage === 'Новый заказ' || currentStage === 'В ожидании' || currentStage === 'Выполненный проект') return []
 
-  // Фильтруем подэтапы текущей стадии (не заголовки)
+  // Собираем все подэтапы (не заголовки), со всех стадий проекта
   const stageEntries = timelineEntries.value.filter(e =>
     e.executor_role !== 'header' &&
     e.stage_code &&
     e.substage_group
   )
 
-  // Группируем по substage_group
+  // Группируем по substage_group, сохраняя порядок из timeline
   const groups = []
   const seen = new Set()
+  const groupDone = {}  // substage_group → все подзадачи завершены?
   for (const e of stageEntries) {
     const group = e.substage_group
-    if (group && !seen.has(group)) {
+    if (!group) continue
+    if (!groupDone[group]) groupDone[group] = true
+    if (!e.actual_date) groupDone[group] = false
+    if (!seen.has(group)) {
       seen.add(group)
-      groups.push({
-        label: group.replace('Подэтап ', ''),
-        active: card.value.current_substage_group === group,
-        done: !!e.actual_date,
-      })
+      groups.push({ label: group.replace('Подэтап ', ''), group })
     }
   }
-  return groups
+
+  const result = groups.map(g => ({
+    label: g.label,
+    active: card.value.current_substage_group === g.group,
+    done: !!groupDone[g.group],
+  }))
+
+  // Если current_substage_group не задан — детектируем как первый незавершённый
+  if (result.length > 0 && !result.some(g => g.active)) {
+    const first = result.find(g => !g.done)
+    if (first) first.active = true
+    else result[result.length - 1].active = true
+  }
+
+  return result
 })
 function fmtDateTime(d) { if (!d) return ''; return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }
 function fmtMoney(v) { if (!v) return '0 ₽'; return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v) }
@@ -1308,6 +1346,21 @@ function openFile(f) {
   if (!f.public_link) return
   if (isImageFile(f)) {
     const imgs = projectFiles.value.filter(pf => isImageFile(pf) && pf.public_link)
+    const idx = imgs.findIndex(pf => pf.id === f.id)
+    if (idx >= 0) {
+      crmGalleryFiles.value = imgs
+      crmGalleryIdx.value = idx
+      crmGalleryVisible.value = true
+      return
+    }
+  }
+  window.open(f.public_link, '_blank')
+}
+// Открыть файл стадии: картинки → галерея только из этой стадии/вариации
+function openStageFile(f, stageCode) {
+  if (!f.public_link) { window.open(f.public_link || '#', '_blank'); return }
+  if (isImageFile(f)) {
+    const imgs = filesForVariation(stageCode).filter(pf => isImageFile(pf) && pf.public_link)
     const idx = imgs.findIndex(pf => pf.id === f.id)
     if (idx >= 0) {
       crmGalleryFiles.value = imgs
@@ -1458,10 +1511,33 @@ function showAssignDialog(member, mode) {
   assignRoleKey.value = member.roleKey
   assignStageName.value = member.stageName || ''
   assignMode.value = mode
-  assignNeedsDeadline.value = false  // Дедлайн устанавливается при перемещении (move), не при назначении в команду
+  // Для исполнителей стадий (дизайнер/чертёжник) — запрашиваем дедлайн с авторасчётом из норма-дней
+  assignNeedsDeadline.value = !!member.isStageExecutor
   assignDialogTitle.value = mode === 'assign' ? `Назначить ${member.role}` : `Изменить ${member.role}`
   assignEmployeeId.value = null
   assignDeadline.value = ''
+
+  // Авторасчёт дедлайна по норма-дням из таймлайна (как десктоп crm_dialogs.py:719-734)
+  if (member.isStageExecutor && timelineEntries.value.length) {
+    const stageNumMatch = (member.stageName || '').match(/Стадия\s+(\d+)/i)
+    const stageNum = stageNumMatch ? stageNumMatch[1] : null
+    if (stageNum) {
+      const normTotal = timelineEntries.value
+        .filter(e => e.executor_role !== 'header' && e.substage_group && e.substage_group.startsWith(`Подэтап ${stageNum}.`))
+        .reduce((sum, e) => sum + (Number(e.custom_norm_days) || Number(e.norm_days) || 0), 0)
+      if (normTotal > 0) {
+        const HOLIDAYS = [[1,1],[1,2],[1,3],[1,4],[1,5],[1,6],[1,7],[1,8],[2,23],[3,8],[5,1],[5,9],[6,12],[11,4]]
+        let cur = new Date(); let added = 0
+        while (added < normTotal) {
+          cur.setDate(cur.getDate() + 1)
+          const dow = cur.getDay()
+          const isHol = HOLIDAYS.some(([m,d]) => cur.getMonth()+1===m && cur.getDate()===d)
+          if (dow !== 0 && dow !== 6 && !isHol) added++
+        }
+        assignDeadline.value = cur.toISOString().slice(0, 10)
+      }
+    }
+  }
 
   // Загрузить историю назначений для этой стадии
   if (member.stageName) {
@@ -2223,7 +2299,10 @@ async function doSendMessage() {
 async function loadScriptsAndShow() {
   try {
     const { data } = await messengerApi.getScripts({ crm_card_id: card.value?.id })
-    chatScripts.value = data || []
+    // Показываем только стартовый и финальный скрипты — остальные отправляются автоматически
+    chatScripts.value = (data || []).filter(s =>
+      s.script_type === 'project_start' || s.script_type === 'project_end'
+    )
   } catch { chatScripts.value = [] }
   showScriptsDlg.value = true
 }

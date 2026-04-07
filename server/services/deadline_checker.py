@@ -301,11 +301,18 @@ async def check_deadlines_once():
 
 
 async def deadline_checker_loop():
-    """Бесконечный цикл проверки дедлайнов."""
-    logger.info("Deadline checker запущен (интервал: 4 часа)")
+    """Бесконечный цикл проверки дедлайнов, запускается ежедневно в 10:00 МСК (07:00 UTC)."""
+    logger.info("Deadline checker запущен (ежедневно в 10:00 МСК = 07:00 UTC)")
     while True:
         try:
+            now = datetime.utcnow()
+            next_run = now.replace(hour=7, minute=0, second=0, microsecond=0)
+            if now >= next_run:
+                next_run = next_run + timedelta(days=1)
+            sleep_secs = (next_run - now).total_seconds()
+            logger.info(f"Deadline checker: следующий запуск через {sleep_secs / 3600:.1f}ч (в 10:00 МСК)")
+            await asyncio.sleep(sleep_secs)
             await check_deadlines_once()
         except Exception as e:
             logger.error(f"deadline_checker_loop: {e}")
-        await asyncio.sleep(CHECK_INTERVAL)
+            await asyncio.sleep(3600)
