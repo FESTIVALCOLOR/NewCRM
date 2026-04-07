@@ -199,7 +199,13 @@
                     {{ e.stage_name }}
                   </q-item-label>
                   <q-item-label v-if="e.executor_role !== 'header'" caption :style="{ color: isOverdue(e) ? '#E74C3C' : '#888' }">
-                    <span v-if="e.norm_days">Норма: {{ e.custom_norm_days || e.norm_days }} дн.</span>
+                    <template v-if="e.norm_days">Норма:
+                      <template v-if="e.custom_norm_days && e.custom_norm_days !== e.norm_days">
+                        <s style="color:#999">{{ e.norm_days }}</s>
+                        <b style="color:#C62828"> {{ e.custom_norm_days }}</b> дн.
+                      </template>
+                      <template v-else>{{ e.norm_days }} дн.</template>
+                    </template>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
                     <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
                     <span v-if="isOverdue(e)" style="color: #E74C3C; font-weight: bold"> | Просрочен</span>
@@ -557,7 +563,7 @@
             <q-btn v-if="crmGalleryIdx < crmGalleryFiles.length - 1" flat round icon="chevron_right" color="white" style="position: absolute; right: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmNextImage" />
           </div>
           <div class="row justify-center q-pa-sm">
-            <q-btn flat no-caps icon="open_in_new" label="Открыть в браузере" color="white" size="sm" @click="window.open(crmCurrentGalleryFile?.public_link, '_blank')" />
+            <q-btn flat no-caps icon="open_in_new" label="Открыть в браузере" color="white" size="sm" @click="openLink(crmCurrentGalleryFile?.public_link)" />
           </div>
         </div>
       </q-dialog>
@@ -778,13 +784,12 @@ const actionHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
 const timelineEntries = ref([])
-const EXECUTOR_ROLES = new Set(['Дизайнер', 'Чертёжник'])
 const timelineTotals = computed(() => {
   let normTotal = 0, actualTotal = 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
-    // Считаем норма-дни только по исполнителям (Дизайнер/Чертёжник), как в десктопе
-    if (EXECUTOR_ROLES.has(e.executor_role)) {
+    // Как в десктопе: считаем только строки в объёме договора (is_in_contract_scope != false)
+    if (e.is_in_contract_scope !== false) {
       normTotal += (e.custom_norm_days || e.norm_days || 0)
     }
     actualTotal += (e.actual_days || 0)
@@ -1227,6 +1232,7 @@ function isActiveSubstep(e) {
 }
 function timelineRowStyle(e) {
   if (e.executor_role === 'header') return 'background: #F5F5F5'
+  if (e.is_in_contract_scope === false) return 'background: #E0E0E0'  // вне объёма договора — серый
   if (isActiveSubstep(e)) return 'border: 2px solid #4CAF50; border-radius: 4px'
   if (e.actual_date && isOverdue(e)) return 'background: #FFEBEE'
   if (e.actual_date && !isOverdue(e)) return 'background: #E8F5E9'
@@ -1349,7 +1355,7 @@ function imgStreamUrl(f) {
   if (!raw) return f?.public_link || ''
   const path = raw.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
-  return `/api/v1/files/redirect?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
 }
 function fileIcon(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'picture_as_pdf'; if (IMAGE_RE.test(n)) return 'photo_library'; return 'insert_drive_file' }
 function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'red'; if (IMAGE_RE.test(n)) return 'green'; return 'grey-7' }

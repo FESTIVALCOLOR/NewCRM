@@ -978,52 +978,7 @@ async def scan_contract_files_on_yandex(
 # ДИНАМИЧЕСКИЕ ПУТИ (ПОСЛЕ СТАТИЧЕСКИХ)
 # =========================
 
-# ВАЖНО: /redirect, /stream ПЕРЕД /{file_id} — иначе FastAPI матчит как file_id
-@router.get("/redirect")
-async def redirect_to_yandex_file(
-    yandex_path: str,
-    token: str = None,
-):
-    """Редирект на прямой URL скачивания файла с Яндекс.Диска (для отображения изображений в mobile)."""
-    if not token:
-        raise HTTPException(status_code=401, detail="Требуется авторизация")
-    from auth import decode_token
-    try:
-        payload = decode_token(token)
-        if not payload.get("sub"):
-            raise HTTPException(status_code=401, detail="Невалидный токен")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Невалидный токен")
-    if not yandex_disk_available:
-        raise HTTPException(status_code=503, detail="Yandex Disk service not available")
-    if ".." in yandex_path:
-        raise HTTPException(status_code=400, detail="Недопустимый путь")
-    try:
-        import requests as req
-        yd_svc = get_yandex_disk_service()
-        clean_path = yandex_path.replace('disk:', '').strip()
-        if not clean_path.startswith('/'):
-            clean_path = '/' + clean_path
-        resp = req.get(
-            f"{yd_svc.base_url}/resources/download",
-            headers=yd_svc.headers,
-            params={"path": f"disk:{clean_path}"},
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=500, detail="Ошибка получения ссылки ЯД")
-        download_url = resp.json().get("href", "")
-        if not download_url:
-            raise HTTPException(status_code=404, detail="Файл не найден")
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=download_url, status_code=302)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"redirect_to_yandex_file: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка при получении файла")
-
-
+# ВАЖНО: /stream ПЕРЕД /{file_id} — иначе FastAPI матчит "stream" как file_id
 @router.get("/stream")
 async def stream_file_from_yandex(
     yandex_path: str,
@@ -1053,7 +1008,13 @@ async def stream_file_from_yandex(
         if not clean_path.startswith('/'):
             clean_path = '/' + clean_path
         ext = os.path.splitext(clean_path)[1].lower()
-        content_types = {'.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4'}
+        content_types = {
+            '.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav', '.m4a': 'audio/mp4',
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+            '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+            '.heic': 'image/heic',
+        }
         ct = content_types.get(ext, 'application/octet-stream')
         # Скачиваем во временный файл
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
