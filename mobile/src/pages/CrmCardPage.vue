@@ -339,7 +339,7 @@
             <q-list dense v-if="filesForVariation(stage.code).length > 0">
               <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
                 <q-item-section avatar>
-                  <q-img v-if="isImageFile(f) && f.public_link" :src="f.public_link"
+                  <q-img v-if="isImageFile(f)" :src="imgStreamUrl(f)"
                     style="width: 48px; height: 48px; border-radius: 4px; cursor: pointer"
                     @click="openStageFile(f, stage.code)" />
                   <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
@@ -552,7 +552,7 @@
           </div>
           <div class="col flex flex-center" style="position: relative; overflow: hidden" v-touch-swipe.mouse="handleCrmGallerySwipe">
             <q-btn v-if="crmGalleryIdx > 0" flat round icon="chevron_left" color="white" style="position: absolute; left: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmPrevImage" />
-            <img v-if="crmCurrentGalleryFile?.public_link" :src="crmCurrentGalleryFile.public_link"
+            <img v-if="crmCurrentGalleryFile" :src="imgStreamUrl(crmCurrentGalleryFile)"
               style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; padding: 8px" />
             <q-btn v-if="crmGalleryIdx < crmGalleryFiles.length - 1" flat round icon="chevron_right" color="white" style="position: absolute; right: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmNextImage" />
           </div>
@@ -778,11 +778,15 @@ const actionHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
 const timelineEntries = ref([])
+const EXECUTOR_ROLES = new Set(['Дизайнер', 'Чертёжник'])
 const timelineTotals = computed(() => {
   let normTotal = 0, actualTotal = 0
   for (const e of timelineEntries.value) {
     if (e.executor_role === 'header') continue
-    normTotal += (e.custom_norm_days || e.norm_days || 0)
+    // Считаем норма-дни только по исполнителям (Дизайнер/Чертёжник), как в десктопе
+    if (EXECUTOR_ROLES.has(e.executor_role)) {
+      normTotal += (e.custom_norm_days || e.norm_days || 0)
+    }
     actualTotal += (e.actual_days || 0)
   }
   return { normTotal, actualTotal }
@@ -1277,23 +1281,30 @@ const substepProgress = computed(() => {
 
   // Собираем все подэтапы (не заголовки), со всех стадий проекта
   const stageEntries = timelineEntries.value.filter(e =>
-    e.executor_role !== 'header' &&
-    e.stage_code &&
-    e.substage_group
+    e.executor_role !== 'header' && e.stage_code
   )
 
-  // Группируем по substage_group, сохраняя порядок из timeline
+  // Группируем: substage_group для иерархических стадий (1.x, 2.x),
+  // stage_group для плоских (STAGE3 инд., STAGE2/3 шабл. где substage_group = null)
   const groups = []
   const seen = new Set()
-  const groupDone = {}  // substage_group → все подзадачи завершены?
+  const groupDone = {}
+
   for (const e of stageEntries) {
-    const group = e.substage_group
+    const group = e.substage_group || e.stage_group
     if (!group) continue
-    if (!groupDone[group]) groupDone[group] = true
+    if (groupDone[group] === undefined) groupDone[group] = true
     if (!e.actual_date) groupDone[group] = false
     if (!seen.has(group)) {
       seen.add(group)
-      groups.push({ label: group.replace('Подэтап ', ''), group })
+      let label
+      if (e.substage_group) {
+        label = e.substage_group.replace('Подэтап ', '')
+      } else {
+        // Плоская стадия — показываем номер стадии (STAGE3 → "3")
+        label = (group || '').replace('STAGE', '')
+      }
+      groups.push({ label, group })
     }
   }
 
@@ -1333,6 +1344,13 @@ async function openYdFolder() {
 }
 const IMAGE_RE = /\.(jpg|jpeg|png|webp|gif|bmp|heic)$/i
 function isImageFile(f) { return IMAGE_RE.test(f.file_name || '') }
+function imgStreamUrl(f) {
+  const raw = f?.yandex_path || ''
+  if (!raw) return f?.public_link || ''
+  const path = raw.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/redirect?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
 function fileIcon(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'picture_as_pdf'; if (IMAGE_RE.test(n)) return 'photo_library'; return 'insert_drive_file' }
 function fileColor(f) { const n = (f.file_name||'').toLowerCase(); if (n.endsWith('.pdf')) return 'red'; if (IMAGE_RE.test(n)) return 'green'; return 'grey-7' }
 
@@ -1358,9 +1376,8 @@ function openFile(f) {
 }
 // Открыть файл стадии: картинки → галерея только из этой стадии/вариации
 function openStageFile(f, stageCode) {
-  if (!f.public_link) { window.open(f.public_link || '#', '_blank'); return }
   if (isImageFile(f)) {
-    const imgs = filesForVariation(stageCode).filter(pf => isImageFile(pf) && pf.public_link)
+    const imgs = filesForVariation(stageCode).filter(pf => isImageFile(pf))
     const idx = imgs.findIndex(pf => pf.id === f.id)
     if (idx >= 0) {
       crmGalleryFiles.value = imgs
@@ -1369,7 +1386,7 @@ function openStageFile(f, stageCode) {
       return
     }
   }
-  window.open(f.public_link, '_blank')
+  if (f.public_link) window.open(f.public_link, '_blank')
 }
 function crmPrevImage() { if (crmGalleryIdx.value > 0) crmGalleryIdx.value-- }
 function crmNextImage() { if (crmGalleryIdx.value < crmGalleryFiles.value.length - 1) crmGalleryIdx.value++ }
@@ -2258,15 +2275,16 @@ async function doAddChatMember() {
   try {
     const { api: ax } = await import('src/boot/axios')
     await ax.post(`/api/v1/messenger/chats/${chatData.value.id}/add-member`, {
-      member_type: 'employee',
-      member_id: addMemberEmployeeId.value
+      employee_id: addMemberEmployeeId.value
     })
     $q.notify({ type: 'positive', message: 'Участник добавлен' })
     showAddMemberDlg.value = false
     addMemberEmployeeId.value = null
     await loadChat()
   } catch (e) {
-    $q.notify({ type: 'negative', message: e?.response?.data?.detail || 'Ошибка добавления' })
+    const detail = e?.response?.data?.detail
+    const msg = Array.isArray(detail) ? detail.map(d => d.msg || d).join('; ') : (detail || 'Ошибка добавления')
+    $q.notify({ type: 'negative', message: msg })
   }
   addMemberLoading.value = false
 }
@@ -2299,9 +2317,11 @@ async function doSendMessage() {
 async function loadScriptsAndShow() {
   try {
     const { data } = await messengerApi.getScripts({ crm_card_id: card.value?.id })
-    // Показываем только стартовый и финальный скрипты — остальные отправляются автоматически
+    // Показываем только стартовый/финальный скрипты под тип проекта (инд/шабл)
+    const pt = card.value?.project_type || ''
     chatScripts.value = (data || []).filter(s =>
-      s.script_type === 'project_start' || s.script_type === 'project_end'
+      (s.script_type === 'project_start' || s.script_type === 'project_end') &&
+      s.project_type === pt
     )
   } catch { chatScripts.value = [] }
   showScriptsDlg.value = true
