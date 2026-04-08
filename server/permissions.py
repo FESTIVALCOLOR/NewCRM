@@ -170,21 +170,33 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "notifications.settings_supervision", "notifications.settings_payment",
     },
     POSITION_SDP: {
-        "access.crm", "access.reports", "access.employees",
+        "access.crm", "access.clients", "access.contracts", "access.reports", "access.employees",
+        # CRM workflow — СДП проверяет и передаёт клиенту на Стадиях 1 и 2
+        "crm_cards.update", "crm_cards.move", "crm_cards.complete_approval",
+        "crm_cards.assign_executor", "crm_cards.files_upload", "crm_cards.deadlines",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
         "notifications.settings_projects",
     },
     POSITION_GAP: {
-        "access.crm", "access.reports", "access.employees",
+        "access.crm", "access.clients", "access.contracts", "access.reports", "access.employees",
+        # CRM workflow — ГАП проверяет и передаёт клиенту на Стадии 3 (инд.) и Стадии 2 (шабл.)
+        "crm_cards.update", "crm_cards.move", "crm_cards.complete_approval",
+        "crm_cards.assign_executor", "crm_cards.files_upload", "crm_cards.deadlines",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
         "messenger.view_chat",
         "notifications.settings_projects",
     },
     POSITION_MANAGER: {
-        "access.crm", "access.supervision", "access.reports", "access.employees",
+        "access.crm", "access.supervision", "access.clients", "access.contracts",
+        "access.reports", "access.employees",
+        # CRM workflow — Менеджер ведёт шаблонные проекты + назначает исполнителей
+        "crm_cards.update", "crm_cards.move", "crm_cards.complete_approval",
+        "crm_cards.assign_executor", "crm_cards.files_upload",
         "crm_cards.reset_designer", "crm_cards.reset_draftsman",
-        "crm_cards.assign_executor",
+        # Надзор — Менеджер управляет авторским надзором
+        "supervision.update", "supervision.move", "supervision.complete_stage",
+        "supervision.assign_executor", "supervision.files_upload",
         "notifications.settings_projects",
         "notifications.settings_supervision",
     },
