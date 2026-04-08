@@ -5,13 +5,13 @@
       <div class="row items-center no-wrap">
         <!-- Тип проекта — pill toggle -->
         <div class="toggle-pills">
-          <button :class="{ active: crmStore.projectType === 'Индивидуальный' }" @click="crmStore.setProjectType('Индивидуальный')">Инд.</button>
-          <button :class="{ active: crmStore.projectType === 'Шаблонный' }" @click="crmStore.setProjectType('Шаблонный')">Шабл.</button>
+          <button :class="{ active: crmStore.projectType === 'Индивидуальный' }" @click="crmStore.setProjectType('Индивидуальный')">Инд. <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.countIndividual }}</span></button>
+          <button :class="{ active: crmStore.projectType === 'Шаблонный' }" @click="crmStore.setProjectType('Шаблонный')">Шабл. <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.countTemplate }}</span></button>
         </div>
         <q-space />
         <!-- Актив/Архив — pill toggle -->
         <div class="toggle-pills">
-          <button :class="{ active: !crmStore.showArchive }" @click="crmStore.showArchive && crmStore.toggleArchive()">Активные</button>
+          <button :class="{ active: !crmStore.showArchive }" @click="crmStore.showArchive && crmStore.toggleArchive()">Активные <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.totalCards }}</span></button>
           <button :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">Архив</button>
         </div>
       </div>
@@ -628,6 +628,21 @@ onMounted(async () => {
 }
 .toggle-pills button + button {
   border-left: 1px solid #d9d9d9;
+}
+.pill-count {
+  display: inline-block;
+  background: rgba(0,0,0,0.12);
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 0 5px;
+  margin-left: 3px;
+  min-width: 16px;
+  text-align: center;
+}
+.toggle-pills button.active .pill-count {
+  background: #ffd93c;
+  color: #333;
 }
 
 /* Column navigation mini-bar */

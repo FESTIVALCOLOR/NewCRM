@@ -54,11 +54,11 @@
       <!-- Вкладки -->
       <q-tabs v-model="activeTab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-md" style="color: #666" align="left" :breakpoint="0">
         <q-tab name="executors" label="Исполнители" />
-        <q-tab name="timeline" label="Сроки" />
+        <q-tab v-if="!isExecutor" name="timeline" label="Сроки" />
         <q-tab name="data" label="Данные" />
         <q-tab name="history" label="История" />
         <q-tab v-if="can('crm_cards.payments')" name="payments" label="Оплаты" />
-        <q-tab name="chat" label="Чат" />
+        <q-tab v-if="!isExecutor && can('messenger.view_chat')" name="chat" label="Чат" />
         <q-tab name="notes" label="Заметки" />
       </q-tabs>
 
@@ -333,8 +333,8 @@
                 <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div>
                 <div class="row q-gutter-xs">
                   <q-btn v-if="revisionPathForStage(stage.code)" outline dense size="xs" label="Правки" no-caps color="negative" style="border-radius: 4px; padding: 2px 8px; font-weight: bold" @click="openRevisionFolder(stage.code)"><q-tooltip>Открыть папку с правками</q-tooltip></q-btn>
-                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadToVariation(stage.code)" />
-                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="create_new_folder" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="addVariationTab(stage.code)"><q-tooltip>Добавить вариацию</q-tooltip></q-btn>
+                  <q-btn v-if="canUploadForProjectStage(stage.code) && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadToVariation(stage.code)" />
+                  <q-btn v-if="canUploadForProjectStage(stage.code) && !isArchived" outline dense size="xs" icon="create_new_folder" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="addVariationTab(stage.code)"><q-tooltip>Добавить вариацию</q-tooltip></q-btn>
                   <q-btn v-if="getVariations(stage.code).length > 1 && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteVariationTab(stage.code)"><q-tooltip>Удалить текущую вариацию</q-tooltip></q-btn>
                 </div>
               </div>
@@ -358,7 +358,7 @@
                 <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
                   <div class="row q-gutter-xs no-wrap">
                     <q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openStageFile(f, stage.code)" />
-                    <q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" />
+                    <q-btn v-if="canUploadForProjectStage(stage.code) && can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" />
                   </div>
                 </q-item-section>
               </q-item>
@@ -771,6 +771,47 @@ import { addToCalendar } from 'src/composables/useCalendar'
 
 const { can, isSuperuser } = usePermission()
 const authStore = useAuthStore()
+
+// Текущий пользователь — исполнитель (дизайнер/чертёжник) без управленческих прав
+const isExecutor = computed(() => {
+  const pos = authStore.user?.position || ''
+  const secPos = authStore.user?.secondary_position || ''
+  const executorPositions = ['Дизайнер', 'Чертёжник', 'Замерщик']
+  return executorPositions.some(p => pos === p || secPos === p) && !can('crm_cards.deadlines')
+})
+
+/**
+ * Может ли текущий пользователь загружать файлы для данной стадии проекта?
+ * Управление (есть crm_cards.deadlines) — всё.
+ * Исполнитель — только та стадия, в которой он назначен исполнителем.
+ */
+function canUploadForProjectStage(stageCode) {
+  if (!can('crm_cards.files_upload')) return false
+  if (!isExecutor.value) return true  // руководство/менеджеры могут всё
+  if (!card.value) return false
+
+  const empId = authStore.user?.id
+  const se = card.value.stage_executors || []
+
+  // Определяем stage_name по stageCode
+  const stageLabel = (projectStages.value.find(s => s.code === stageCode) || {}).label || ''
+  const stageLower = stageLabel.toLowerCase()
+
+  // Проверяем является ли пользователь исполнителем этой конкретной стадии
+  const isAssigned = se.some(e => {
+    const eStageLower = (e.stage_name || '').toLowerCase()
+    // Совпадение по ключевым словам из стадии
+    if (stageLower.includes('планировочн') && eStageLower.includes('планировочн') && e.executor_id === empId) return true
+    if (stageLower.includes('концепция') && eStageLower.includes('концепция') && e.executor_id === empId) return true
+    if (stageLower.includes('чертёж') && eStageLower.includes('чертеж') && e.executor_id === empId) return true
+    if (stageLower.includes('чертежная') && eStageLower.includes('чертеж') && e.executor_id === empId) return true
+    if (stageLower.includes('3d') || stageLower.includes('визуализ')) {
+      if ((eStageLower.includes('визуализ') || eStageLower.includes('3д')) && e.executor_id === empId) return true
+    }
+    return false
+  })
+  return isAssigned
+}
 
 const route = useRoute()
 const router = useRouter()

@@ -64,6 +64,14 @@ export const useCrmStore = defineStore('crm', () => {
 
   const totalCards = computed(() => filteredCards.value.length)
 
+  // Кол-во карточек по типу проекта (для счётчика на кнопках Инд./Шабл.)
+  const countIndividual = computed(() =>
+    cards.value.filter(c => c.project_type !== 'Шаблонный').length
+  )
+  const countTemplate = computed(() =>
+    cards.value.filter(c => c.project_type === 'Шаблонный').length
+  )
+
   // Фильтрация карточек по роли текущего пользователя (как в десктопе crm_tab.py:1473-1525)
   function hasPos(...positions) {
     const auth = useAuthStore()
@@ -181,7 +189,7 @@ export const useCrmStore = defineStore('crm', () => {
 
   return {
     cards, filteredCards, loading, projectType, showArchive, selectedCard, cardLoading,
-    columns, totalCards,
+    columns, totalCards, countIndividual, countTemplate,
     loadCards, loadCard, setProjectType, toggleArchive,
     moveCardOptimistic, rollbackMoveCard,
     columnOrder, COLUMNS_INDIVIDUAL, COLUMNS_TEMPLATE
