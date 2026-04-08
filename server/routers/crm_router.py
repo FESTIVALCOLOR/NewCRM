@@ -867,6 +867,20 @@ async def move_crm_card_to_column(
                 if unfilled:
                     logger.info(f"Card {card_id} move: {len(unfilled)} entries marked skipped in {old_stage_group}")
 
+            # Помечаем StageExecutors предыдущей стадии как completed (чтобы не слать уведомления о просрочке)
+            if 'Стадия' in old_column:
+                old_stage_execs = db.query(StageExecutor).filter(
+                    StageExecutor.crm_card_id == card_id,
+                    StageExecutor.stage_name == old_column,
+                    StageExecutor.completed == False,
+                ).all()
+                for ex in old_stage_execs:
+                    ex.completed = True
+                    if not ex.completed_date:
+                        ex.completed_date = datetime.utcnow()
+                if old_stage_execs:
+                    logger.info(f"Card {card_id} move: {len(old_stage_execs)} stage executors completed for {old_column}")
+
         # Автосоздание workflow state при перемещении на рабочую стадию
         if old_column != new_column and 'Стадия' in new_column and contract:
             new_stage_group = _resolve_stage_group(new_column)

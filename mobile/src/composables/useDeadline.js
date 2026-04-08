@@ -104,36 +104,43 @@ function columnToStageGroup(columnName) {
  * @param {string} columnName - название стадии ('Стадия 2: концепция дизайна')
  * @returns {string} 'YYYY-MM-DD' или '' если не удалось рассчитать
  */
-export function calcDeadlineFromTimeline(entries, columnName) {
-  if (!entries || entries.length === 0 || !columnName) return ''
+/**
+ * Получить информацию о дедлайне стадии (deadline + normDays + substepName).
+ * Используется в диалогах назначения/перемещения для отображения norm_days.
+ */
+export function getStageDeadlineInfo(entries, columnName) {
+  if (!entries || entries.length === 0 || !columnName) {
+    return { deadline: '', normDays: 0, substepName: '' }
+  }
   const stageGroup = columnToStageGroup(columnName)
-  if (!stageGroup) return ''
+  if (!stageGroup) return { deadline: '', normDays: 0, substepName: '' }
 
   const sorted = [...entries].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 
   let prevDate = ''
   let normDays = 0
+  let substepName = ''
 
   for (const e of sorted) {
     if ((e.executor_role || '') === 'header') continue
-
-    // Нашли первый незаполненный подэтап в нужной стадии (как в desktop: берём norm_days)
     if (e.stage_group === stageGroup && !e.actual_date && (e.norm_days || 0) > 0) {
       normDays = e.norm_days
+      substepName = e.stage_name || ''
       break
     }
-
-    // Обновляем prev_date (сквозной по всем стадиям)
     if (e.actual_date) prevDate = e.actual_date
   }
 
-  if (normDays <= 0) return ''
+  if (normDays <= 0) return { deadline: '', normDays: 0, substepName }
 
-  // Базовая дата: prev_actual_date или сегодня
   if (!prevDate) {
     const now = new Date()
     prevDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   }
 
-  return addWorkingDays(prevDate, normDays)
+  return { deadline: addWorkingDays(prevDate, normDays), normDays, substepName }
+}
+
+export function calcDeadlineFromTimeline(entries, columnName) {
+  return getStageDeadlineInfo(entries, columnName).deadline
 }

@@ -652,6 +652,25 @@
         </q-card>
       </q-dialog>
 
+      <!-- Диалог редактирования записи таймлайна -->
+      <q-dialog v-model="timelineEditVisible">
+        <q-card style="min-width: 300px; border-radius: 10px">
+          <q-toolbar style="background: #ffd93c; color: #333">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">{{ timelineEditEntry?.stage_name }}</q-toolbar-title>
+            <q-btn flat round dense icon="close" @click="timelineEditVisible = false" />
+          </q-toolbar>
+          <q-card-section class="q-pb-sm">
+            <q-input v-model="timelineEditNormDays" label="Норма-дни (польз.)" outlined dense type="number" class="q-mb-sm" :hint="`Стандарт: ${timelineEditEntry?.norm_days || 0} дн.`" />
+            <q-input v-model="timelineEditActualDate" label="Дата выполнения" outlined dense type="date" clearable class="q-mb-xs" />
+            <div style="font-size: 11px; color: #888">Заполните дату выполнения подэтапа</div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Отмена" no-caps @click="timelineEditVisible = false" />
+            <q-btn unelevated label="Сохранить" no-caps style="background: #4CAF50; color: white; border-radius: 4px" @click="saveTimelineEntry" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <!-- Диалог назначения исполнителя -->
       <q-dialog v-model="assignDialogVisible">
         <q-card style="min-width: 320px; border-radius: 10px">
@@ -659,7 +678,12 @@
           <q-card-section>
             <div class="text-caption q-mb-sm" style="color: #888">Роль: {{ assignRole }}</div>
             <q-select v-model="assignEmployeeId" :options="employeeOptions" option-value="id" option-label="label" label="Сотрудник" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterAssignEmployees" class="q-mb-sm" />
-            <q-input v-if="assignNeedsDeadline" v-model="assignDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
+            <template v-if="assignNeedsDeadline">
+              <q-input v-model="assignDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-xs" />
+              <div v-if="assignNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 4px">
+                Норма дней: {{ assignNormDays }} раб. дн.<span v-if="assignSubstepName" style="font-weight: 400; color: #666"> · {{ assignSubstepName }}</span>
+              </div>
+            </template>
           </q-card-section>
           <q-card-section v-if="otherStageExecutors.length > 0" class="q-pt-none">
             <div class="text-caption text-grey-7 q-mb-xs">Исполнители на других стадиях:</div>
@@ -854,6 +878,8 @@ const assignNeedsDeadline = ref(false)
 const assignStageName = ref('')
 const assignMode = ref('assign') // 'assign' или 'change'
 const assignHistory = ref([])
+const assignNormDays = ref(0)
+const assignSubstepName = ref('')
 
 const otherStageExecutors = computed(() => {
   if (!card.value || !assignStageName.value) return []
@@ -1263,30 +1289,37 @@ function timelineIconColor(e) {
   return 'grey-5'
 }
 // Редактирование нормо-дней в timeline
+const timelineEditEntry = ref(null)
+const timelineEditNormDays = ref('')
+const timelineEditActualDate = ref('')
+const timelineEditVisible = ref(false)
+
 function editNormDays(entry) {
   if (!can('crm_cards.deadlines') || entry.executor_role === 'header') return
-  $q.dialog({
-    title: 'Нормо-дни',
-    message: `${entry.stage_name}`,
-    prompt: {
-      model: String(entry.custom_norm_days || entry.norm_days || ''),
-      type: 'number',
-      label: 'Дней',
-    },
-    cancel: { label: 'Отмена', flat: true, noCaps: true },
-    ok: { label: 'Сохранить', noCaps: true, color: 'positive' },
-  }).onOk(async (val) => {
-    try {
-      const days = parseInt(val)
-      if (isNaN(days) || days < 0) return
-      const { api: ax } = await import('src/boot/axios')
-      await ax.put(`/api/v1/timeline/${card.value.contract_id}/entry/${encodeURIComponent(entry.stage_code)}`, { custom_norm_days: days })
-      entry.custom_norm_days = days
-      $q.notify({ type: 'positive', message: 'Нормо-дни обновлены' })
-    } catch (err) {
-      $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
-    }
-  })
+  timelineEditEntry.value = entry
+  timelineEditNormDays.value = String(entry.custom_norm_days || entry.norm_days || '')
+  timelineEditActualDate.value = entry.actual_date || ''
+  timelineEditVisible.value = true
+}
+
+async function saveTimelineEntry() {
+  const entry = timelineEditEntry.value
+  if (!entry) return
+  try {
+    const { api: ax } = await import('src/boot/axios')
+    const update = {}
+    const days = parseInt(timelineEditNormDays.value)
+    if (!isNaN(days) && days >= 0) update.custom_norm_days = days
+    const ad = timelineEditActualDate.value
+    update.actual_date = ad || null
+    await ax.put(`/api/v1/timeline/${card.value.contract_id}/entry/${encodeURIComponent(entry.stage_code)}`, update)
+    if ('custom_norm_days' in update) entry.custom_norm_days = update.custom_norm_days
+    entry.actual_date = update.actual_date || null
+    timelineEditVisible.value = false
+    $q.notify({ type: 'positive', message: 'Сохранено' })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' })
+  }
 }
 // Прогресс подэтапов всех стадий (1.x → 2.x → 3.x)
 const substepProgress = computed(() => {
@@ -1558,15 +1591,18 @@ async function showAssignDialog(member, mode) {
   assignEmployeeId.value = null
   assignDeadline.value = ''
 
-  // Авторасчёт дедлайна по норма-дням из таймлайна (как десктоп crm_dialogs.py:719-734)
+  // Авторасчёт дедлайна + норма-дней из таймлайна (как десктоп crm_dialogs.py:719-734)
+  assignNormDays.value = 0
+  assignSubstepName.value = ''
   if (member.isStageExecutor && timelineEntries.value.length) {
     const stageNumMatch = (member.stageName || '').match(/Стадия\s+(\d+)/i)
     const stageNum = stageNumMatch ? stageNumMatch[1] : null
     if (stageNum) {
-      // Используем calcDeadlineFromTimeline (как в move dialog) — правильно обрабатывает все типы стадий
-      const { calcDeadlineFromTimeline } = await import('src/composables/useDeadline')
-      const dl = calcDeadlineFromTimeline(timelineEntries.value, member.stageName || '')
-      if (dl) assignDeadline.value = dl
+      const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
+      const info = getStageDeadlineInfo(timelineEntries.value, member.stageName || '')
+      if (info.deadline) assignDeadline.value = info.deadline
+      assignNormDays.value = info.normDays || 0
+      assignSubstepName.value = info.substepName || ''
     }
   }
 

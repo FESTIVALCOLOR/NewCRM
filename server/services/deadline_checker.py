@@ -19,11 +19,6 @@ logger = logging.getLogger(__name__)
 # Интервал проверки (секунды): 4 часа
 CHECK_INTERVAL = 4 * 60 * 60
 
-# Набор уже отправленных уведомлений (чтобы не дублировать в рамках дня)
-# Формат: {(card_id, stage_name, date_str, type)}
-_sent_today: set = set()
-_sent_date: Optional[date] = None
-
 # Государственные праздники РФ (фиксированные даты, месяц-день)
 # Перенос выходных регулируется ежегодно, но базовые даты стабильны
 _RUSSIAN_HOLIDAYS_MD: Set[tuple] = {
@@ -73,15 +68,27 @@ def _get_reviewer_id(card, stage_name: str, pt_key: str) -> Optional[int]:
         return getattr(card, 'sdp_id', None)
 
 
+def _already_sent_today(db, employee_id: int, entity_id: int, msg_key: str) -> bool:
+    """Проверить по БД, было ли уведомление уже отправлено сегодня.
+
+    msg_key — уникальный суффикс в заголовке (напр. stage_name + type).
+    Используется вместо in-memory set, который сбрасывается при перезапуске сервера.
+    """
+    from database import Notification
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    exists = db.query(Notification).filter(
+        Notification.employee_id == employee_id,
+        Notification.notification_type == 'deadline',
+        Notification.related_entity_id == entity_id,
+        Notification.message.contains(msg_key),
+        Notification.created_at >= today_start,
+    ).first()
+    return exists is not None
+
+
 async def check_deadlines_once():
     """Однократная проверка всех дедлайнов CRM и надзора."""
-    global _sent_today, _sent_date
-
-    # Сброс кэша при смене даты
     today = date.today()
-    if _sent_date != today:
-        _sent_today = set()
-        _sent_date = today
 
     from database import SessionLocal, StageExecutor, CRMCard, Contract, SupervisionCard, SupervisionTimelineEntry
     from services.notification_dispatcher import dispatch_notification
@@ -113,21 +120,25 @@ async def check_deadlines_once():
                 # Пропускаем архивные договоры (СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР)
                 if contract.status in ('СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'):
                     continue
+                # Пропускаем если карточка уже перешла на другую стадию (безопасность)
+                if card.column_name != ex.stage_name:
+                    continue
+
                 address = contract.address if contract else ''
                 pt = (contract.project_type or '').lower() if contract else ''
                 pt_key = 'template' if 'шабл' in pt else 'individual'
                 dl_str = dl.strftime('%d.%m.%Y')
+                stage_short = ex.stage_name or ''
 
                 # Предупреждение за 2 рабочих дня
                 if biz_days == 2:
-                    key = (card.id, ex.stage_name, str(today), 'warning')
-                    if key not in _sent_today:
-                        _sent_today.add(key)
+                    warn_key = f'через 2 рабочих дня ({dl_str})'
+                    if not _already_sent_today(db, ex.executor_id, card.id, warn_key):
                         await dispatch_notification(
                             db=db, employee_id=ex.executor_id,
                             event_type='deadline',
                             title=f'Дедлайн: {address}',
-                            message=f'Дедлайн по проекту {address} через 2 рабочих дня ({dl_str}).',
+                            message=f'Дедлайн по стадии "{stage_short}" проекта {address} через 2 рабочих дня ({dl_str}).',
                             related_entity_type='crm_card',
                             related_entity_id=card.id,
                             project_type=pt_key,
@@ -137,12 +148,11 @@ async def check_deadlines_once():
                 # Просрочка
                 # Руководство §2.4: Исполнитель + Ст.менеджер + Reviewer (СДП/ГАП/Менеджер)
                 elif today > dl:
-                    key = (card.id, ex.stage_name, str(today), 'overdue')
-                    if key not in _sent_today:
-                        _sent_today.add(key)
-                        overdue_msg = f'Дедлайн по проекту {address} просрочен! Было: {dl_str}.'
-                        sent_ids = set()
-                        # Исполнителю
+                    overdue_msg = f'Дедлайн по стадии "{stage_short}" проекта {address} просрочен! Было: {dl_str}.'
+                    sent_ids = set()
+
+                    # Исполнителю
+                    if not _already_sent_today(db, ex.executor_id, card.id, dl_str):
                         await dispatch_notification(
                             db=db, employee_id=ex.executor_id,
                             event_type='deadline',
@@ -153,9 +163,11 @@ async def check_deadlines_once():
                             project_type=pt_key,
                             card_id=card.id,
                         )
-                        sent_ids.add(ex.executor_id)
-                        # Старшему менеджеру
-                        if card.senior_manager_id and card.senior_manager_id not in sent_ids:
+                    sent_ids.add(ex.executor_id)
+
+                    # Старшему менеджеру
+                    if card.senior_manager_id and card.senior_manager_id not in sent_ids:
+                        if not _already_sent_today(db, card.senior_manager_id, card.id, dl_str):
                             await dispatch_notification(
                                 db=db, employee_id=card.senior_manager_id,
                                 event_type='deadline',
@@ -166,10 +178,12 @@ async def check_deadlines_once():
                                 project_type=pt_key,
                                 card_id=card.id,
                             )
-                            sent_ids.add(card.senior_manager_id)
-                        # Reviewer (СДП/ГАП/Менеджер — зависит от стадии и типа проекта)
-                        reviewer_id = _get_reviewer_id(card, ex.stage_name, pt_key)
-                        if reviewer_id and reviewer_id not in sent_ids:
+                        sent_ids.add(card.senior_manager_id)
+
+                    # Reviewer (СДП/ГАП/Менеджер — зависит от стадии и типа проекта)
+                    reviewer_id = _get_reviewer_id(card, ex.stage_name, pt_key)
+                    if reviewer_id and reviewer_id not in sent_ids:
+                        if not _already_sent_today(db, reviewer_id, card.id, dl_str):
                             await dispatch_notification(
                                 db=db, employee_id=reviewer_id,
                                 event_type='deadline',
@@ -205,10 +219,9 @@ async def check_deadlines_once():
                 recipients = [r for r in [sv.dan_id, sv.senior_manager_id] if r]
 
                 if biz_days == 2:
-                    key = (sv.id, 'supervision', str(today), 'warning')
-                    if key not in _sent_today:
-                        _sent_today.add(key)
-                        for emp_id in recipients:
+                    for emp_id in recipients:
+                        warn_key = f'через 2 рабочих дня ({dl_str})'
+                        if not _already_sent_today(db, emp_id, sv.id, warn_key):
                             await dispatch_notification(
                                 db=db, employee_id=emp_id,
                                 event_type='deadline',
@@ -219,10 +232,8 @@ async def check_deadlines_once():
                                 project_type='supervision',
                             )
                 elif today > dl:
-                    key = (sv.id, 'supervision', str(today), 'overdue')
-                    if key not in _sent_today:
-                        _sent_today.add(key)
-                        for emp_id in recipients:
+                    for emp_id in recipients:
+                        if not _already_sent_today(db, emp_id, sv.id, dl_str):
                             await dispatch_notification(
                                 db=db, employee_id=emp_id,
                                 event_type='deadline',
@@ -264,10 +275,9 @@ async def check_deadlines_once():
                 recipients = [r for r in [sv.dan_id, sv.senior_manager_id] if r]
 
                 if biz_days == 2:
-                    key = (sv.id, ste.stage_code, str(today), 'stage_warning')
-                    if key not in _sent_today:
-                        _sent_today.add(key)
-                        for emp_id in recipients:
+                    for emp_id in recipients:
+                        warn_key = f'через 2 рабочих дня ({dl_str})'
+                        if not _already_sent_today(db, emp_id, sv.id, warn_key):
                             await dispatch_notification(
                                 db=db, employee_id=emp_id,
                                 event_type='deadline',
@@ -278,10 +288,8 @@ async def check_deadlines_once():
                                 project_type='supervision',
                             )
                 elif today > dl:
-                    key = (sv.id, ste.stage_code, str(today), 'stage_overdue')
-                    if key not in _sent_today:
-                        _sent_today.add(key)
-                        for emp_id in recipients:
+                    for emp_id in recipients:
+                        if not _already_sent_today(db, emp_id, sv.id, dl_str):
                             await dispatch_notification(
                                 db=db, employee_id=emp_id,
                                 event_type='deadline',

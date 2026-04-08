@@ -139,7 +139,10 @@
           <q-card-section>
             <div class="text-caption q-mb-sm" style="color: #888">Стадия: {{ moveTargetCol }}</div>
             <q-select v-model="moveExecutorId" :options="filteredMoveEmployees" option-value="id" option-label="label" label="Исполнитель *" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterMoveEmps" class="q-mb-sm" />
-            <q-input v-model="moveDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-sm" />
+            <q-input v-model="moveDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-xs" />
+            <div v-if="moveNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 8px">
+              Норма дней: {{ moveNormDays }} раб. дн.<span v-if="moveSubstepName" style="font-weight: 400; color: #666"> · {{ moveSubstepName }}</span>
+            </div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
@@ -216,6 +219,8 @@ const moveStep = ref(1)
 const moveTargetCol = ref('')
 const moveExecutorId = ref(null)
 const moveDeadline = ref('')
+const moveNormDays = ref(0)
+const moveSubstepName = ref('')
 const moveLoading = ref(false)
 const employeeOpts = ref([])
 const completionStatus = ref('СДАН')
@@ -454,15 +459,20 @@ async function selectMoveColumn(colName) {
       }
     } catch {}
 
-    // Автоподстановка дедлайна из timeline (если не подставлен из stage_executors)
+    // Автоподстановка дедлайна + norm_days из timeline (если не подставлен из stage_executors)
+    moveNormDays.value = 0
+    moveSubstepName.value = ''
     const cid = moveCard.value.contract_id
     if (cid) {
       try {
         const { api: ax } = await import('src/boot/axios')
+        const { getStageDeadlineInfo } = await import('src/composables/useDeadline')
         const resp = await ax.get(`/api/v1/timeline/${cid}`)
         const entries = Array.isArray(resp.data) ? resp.data : []
-        const auto = calcDeadlineFromTimeline(entries, colName)
-        if (auto) moveDeadline.value = auto
+        const info = getStageDeadlineInfo(entries, colName)
+        if (info.deadline) moveDeadline.value = info.deadline
+        moveNormDays.value = info.normDays || 0
+        moveSubstepName.value = info.substepName || ''
       } catch { /* fallback ниже */ }
     }
     if (!moveDeadline.value) {
