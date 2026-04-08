@@ -187,13 +187,21 @@ const teamMembers = computed(() => {
 const stageDeadline = computed(() => {
   const c = props.card
   const col = (c.column_name || '').toLowerCase()
-  // Дизайнер — стадия 2 (концепция/визуализация)
-  // Не показываем дедлайн если исполнитель уже сдал (completed=True) — карточка на проверке
-  if ((col.includes('концепция') || col.includes('визуализац')) && c.designer_deadline && !c.designer_completed)
-    return c.designer_deadline
-  // Чертёжник — стадия 1 (планировочные) или 3 (чертежи)
-  if ((col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) && c.draftsman_deadline && !c.draftsman_completed)
-    return c.draftsman_deadline
+  const wf = c.workflow_status || ''
+
+  // Дедлайн исполнителя актуален только пока он активно работает.
+  // pending_review/client_approval/etc. → работа сдана, дедлайн исполнителя устарел.
+  const executorWorking = wf === 'in_progress' || wf === 'revision' || !wf
+
+  if (executorWorking) {
+    // Дизайнер — стадия 2 (концепция/визуализация)
+    if ((col.includes('концепция') || col.includes('визуализац')) && c.designer_deadline && !c.designer_completed)
+      return c.designer_deadline
+    // Чертёжник — стадия 1 (планировочные) или 3 (чертежи)
+    if ((col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) && c.draftsman_deadline && !c.draftsman_completed)
+      return c.draftsman_deadline
+  }
+
   return c.deadline
 })
 
