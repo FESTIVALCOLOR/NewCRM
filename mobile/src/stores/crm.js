@@ -65,11 +65,12 @@ export const useCrmStore = defineStore('crm', () => {
   const totalCards = computed(() => filteredCards.value.length)
 
   // Кол-во карточек по типу проекта (для счётчика на кнопках Инд./Шабл.)
+  // Используем filteredCards — только карточки видимые текущей роли
   const countIndividual = computed(() =>
-    cards.value.filter(c => c.project_type !== 'Шаблонный').length
+    filteredCards.value.filter(c => c.project_type !== 'Шаблонный').length
   )
   const countTemplate = computed(() =>
-    cards.value.filter(c => c.project_type === 'Шаблонный').length
+    filteredCards.value.filter(c => c.project_type === 'Шаблонный').length
   )
 
   // Фильтрация карточек по роли текущего пользователя (как в десктопе crm_tab.py:1473-1525)
