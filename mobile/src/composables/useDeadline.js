@@ -117,9 +117,9 @@ export function calcDeadlineFromTimeline(entries, columnName) {
   for (const e of sorted) {
     if ((e.executor_role || '') === 'header') continue
 
-    // Нашли первый незаполненный подэтап в нужной стадии
+    // Нашли первый незаполненный подэтап в нужной стадии (как в desktop: берём norm_days)
     if (e.stage_group === stageGroup && !e.actual_date && (e.norm_days || 0) > 0) {
-      normDays = e.custom_norm_days > 0 ? e.custom_norm_days : e.norm_days
+      normDays = e.norm_days
       break
     }
 

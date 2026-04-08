@@ -80,6 +80,7 @@ class ChatMemberResponse(BaseModel):
     invite_status: str
     invited_at: Optional[datetime] = None
     joined_at: Optional[datetime] = None
+    name: Optional[str] = None  # имя сотрудника (обогащается на сервере)
 
     class Config:
         from_attributes = True

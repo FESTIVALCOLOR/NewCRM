@@ -1999,9 +1999,22 @@ async def get_messenger_chat_by_card(
         MessengerChatMember.messenger_chat_id == chat.id
     ).all()
 
+    # Обогащаем именами сотрудников
+    from database import Employee as Emp, Client as Cli
+    enriched = []
+    for m in members:
+        d = {c.name: getattr(m, c.name) for c in m.__table__.columns}
+        if m.member_type == 'employee':
+            emp = db.query(Emp).filter(Emp.id == m.member_id).first()
+            d['name'] = emp.full_name if emp else None
+        elif m.member_type == 'client':
+            cli = db.query(Cli).filter(Cli.id == m.member_id).first()
+            d['name'] = cli.full_name if cli else None
+        enriched.append(ChatMemberResponse(**d))
+
     return MessengerChatDetailResponse(
         chat=MessengerChatResponse.model_validate(chat),
-        members=[ChatMemberResponse.model_validate(m) for m in members]
+        members=enriched,
     )
 
 
@@ -2023,9 +2036,21 @@ async def get_messenger_chat_by_supervision(
         MessengerChatMember.messenger_chat_id == chat.id
     ).all()
 
+    from database import Employee as Emp, Client as Cli
+    enriched = []
+    for m in members:
+        d = {c.name: getattr(m, c.name) for c in m.__table__.columns}
+        if m.member_type == 'employee':
+            emp = db.query(Emp).filter(Emp.id == m.member_id).first()
+            d['name'] = emp.full_name if emp else None
+        elif m.member_type == 'client':
+            cli = db.query(Cli).filter(Cli.id == m.member_id).first()
+            d['name'] = cli.full_name if cli else None
+        enriched.append(ChatMemberResponse(**d))
+
     return MessengerChatDetailResponse(
         chat=MessengerChatResponse.model_validate(chat),
-        members=[ChatMemberResponse.model_validate(m) for m in members]
+        members=enriched,
     )
 
 

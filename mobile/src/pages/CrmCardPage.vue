@@ -226,13 +226,17 @@
               </q-item>
             </q-list>
             <!-- Итого -->
-            <div v-if="timelineTotals.normTotal > 0" class="q-pa-sm" style="background: #F5F5F5; border-top: 2px solid #E0E0E0">
+            <div v-if="timelineTotals.normTotal > 0" class="q-pa-sm"
+              :style="hasCustomNormDays ? 'background: #FFF3F3; border-top: 2px solid #E53935; border: 2px solid #E53935; border-radius: 0 0 8px 8px' : 'background: #F5F5F5; border-top: 2px solid #E0E0E0'">
               <div class="row items-center justify-between">
                 <span class="text-caption text-weight-bold" style="color: #555">Итого</span>
                 <span class="text-caption" style="color: #555">
                   Норма: {{ timelineTotals.normTotal }} дн.
                   <span v-if="timelineTotals.actualTotal > 0"> | Факт: {{ timelineTotals.actualTotal }} дн.</span>
                 </span>
+              </div>
+              <div v-if="hasCustomNormDays" style="color: #E53935; font-size: 11px; margin-top: 4px">
+                ⚠ Норма-дни изменены. Требуется учёт в расчёте последующих стадий.
               </div>
             </div>
             <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
@@ -350,7 +354,7 @@
                     @click="openStageFile(f, stage.code)" />
                   <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
                 </q-item-section>
-                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openStageFile(f, stage.code)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+                <q-item-section v-if="!isImageFile(f)" style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openStageFile(f, stage.code)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
                 <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
                   <div class="row q-gutter-xs no-wrap">
                     <q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openStageFile(f, stage.code)" />
@@ -784,6 +788,11 @@ const actionHistory = ref([])
 const contractData = ref(null)
 const projectFiles = ref([])
 const timelineEntries = ref([])
+const hasCustomNormDays = computed(() =>
+  timelineEntries.value.some(e =>
+    e.executor_role !== 'header' && e.custom_norm_days && e.custom_norm_days !== e.norm_days
+  )
+)
 const timelineTotals = computed(() => {
   let normTotal = 0, actualTotal = 0
   for (const e of timelineEntries.value) {
@@ -1300,7 +1309,7 @@ const substepProgress = computed(() => {
     const group = e.substage_group || e.stage_group
     if (!group) continue
     if (groupDone[group] === undefined) groupDone[group] = true
-    if (!e.actual_date) groupDone[group] = false
+    if (!e.actual_date && e.status !== 'skipped') groupDone[group] = false  // пропущенные = завершённые
     if (!seen.has(group)) {
       seen.add(group)
       let label
@@ -1314,13 +1323,22 @@ const substepProgress = computed(() => {
     }
   }
 
+  // Активная группа — через current_substep_code (как isActiveSubstep в таймлайне)
+  const wf = workflowStates.value.find(w => w.stage_name === card.value?.column_name)
+  const activeCode = wf?.current_substep_code || card.value?.current_substep_code
+  let activeGroup = null
+  if (activeCode) {
+    const activeEntry = stageEntries.find(e => e.stage_code === activeCode)
+    if (activeEntry) activeGroup = activeEntry.substage_group || activeEntry.stage_group
+  }
+
   const result = groups.map(g => ({
     label: g.label,
-    active: card.value.current_substage_group === g.group,
+    active: activeGroup ? activeGroup === g.group : false,
     done: !!groupDone[g.group],
   }))
 
-  // Если current_substage_group не задан — детектируем как первый незавершённый
+  // Fallback — если активная группа не определена, берём первый незавершённый
   if (result.length > 0 && !result.some(g => g.active)) {
     const first = result.find(g => !g.done)
     if (first) first.active = true
@@ -1545,20 +1563,10 @@ function showAssignDialog(member, mode) {
     const stageNumMatch = (member.stageName || '').match(/Стадия\s+(\d+)/i)
     const stageNum = stageNumMatch ? stageNumMatch[1] : null
     if (stageNum) {
-      const normTotal = timelineEntries.value
-        .filter(e => e.executor_role !== 'header' && e.substage_group && e.substage_group.startsWith(`Подэтап ${stageNum}.`))
-        .reduce((sum, e) => sum + (Number(e.custom_norm_days) || Number(e.norm_days) || 0), 0)
-      if (normTotal > 0) {
-        const HOLIDAYS = [[1,1],[1,2],[1,3],[1,4],[1,5],[1,6],[1,7],[1,8],[2,23],[3,8],[5,1],[5,9],[6,12],[11,4]]
-        let cur = new Date(); let added = 0
-        while (added < normTotal) {
-          cur.setDate(cur.getDate() + 1)
-          const dow = cur.getDay()
-          const isHol = HOLIDAYS.some(([m,d]) => cur.getMonth()+1===m && cur.getDate()===d)
-          if (dow !== 0 && dow !== 6 && !isHol) added++
-        }
-        assignDeadline.value = cur.toISOString().slice(0, 10)
-      }
+      // Используем calcDeadlineFromTimeline (как в move dialog) — правильно обрабатывает все типы стадий
+      const { calcDeadlineFromTimeline } = await import('src/composables/useDeadline')
+      const dl = calcDeadlineFromTimeline(timelineEntries.value, member.stageName || '')
+      if (dl) assignDeadline.value = dl
     }
   }
 
