@@ -198,7 +198,7 @@ router = APIRouter(tags=["crm"])
 
 @router.get("/cards")
 async def get_crm_cards(
-    project_type: str,
+    project_type: Optional[str] = None,
     archived: bool = False,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -206,7 +206,7 @@ async def get_crm_cards(
     """Получить список CRM карточек по типу проекта
 
     Args:
-        project_type: Тип проекта (Индивидуальный/Шаблонный)
+        project_type: Тип проекта (Индивидуальный/Шаблонный). Если не указан — все типы.
         archived: Если True - возвращает архивные карточки (СДАН, РАСТОРГНУТ, АВТОРСКИЙ НАДЗОР)
     """
     try:
@@ -214,9 +214,9 @@ async def get_crm_cards(
             Contract, CRMCard.contract_id == Contract.id
         ).outerjoin(
             Client, Contract.client_id == Client.id
-        ).filter(
-            Contract.project_type == project_type
         )
+        if project_type:
+            query = query.filter(Contract.project_type == project_type)
 
         if archived:
             # Архивные карточки - статус СДАН, РАСТОРГНУТ или АВТОРСКИЙ НАДЗОР

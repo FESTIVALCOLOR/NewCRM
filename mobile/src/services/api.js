@@ -49,7 +49,7 @@ export const statisticsApi = {
 export const crmApi = {
   getCards: (projectType, archived = false) =>
     api.get('/api/v1/crm/cards', {
-      params: { project_type: projectType, archived }
+      params: { ...(projectType ? { project_type: projectType } : {}), archived }
     }),
 
   getCard: (cardId) =>

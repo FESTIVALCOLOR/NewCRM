@@ -35,45 +35,7 @@ export const useCrmStore = defineStore('crm', () => {
     projectType.value === 'Шаблонный' ? COLUMNS_TEMPLATE : COLUMNS_INDIVIDUAL
   )
 
-  // Группировка карточек по колонкам
-  const columns = computed(() => {
-    const order = columnOrder.value
-    const grouped = {}
-
-    for (const col of order) {
-      grouped[col] = []
-    }
-
-    for (const card of filteredCards.value) {
-      const col = card.column_name || 'Новый заказ'
-      if (!grouped[col]) {
-        grouped[col] = []
-      }
-      grouped[col].push(card)
-    }
-
-    return order
-      .filter(col => grouped[col])
-      .map(col => ({
-        name: col,
-        shortName: col.replace(/^Стадия \d+: /, ''),
-        cards: grouped[col],
-        count: grouped[col].length
-      }))
-  })
-
-  const totalCards = computed(() => filteredCards.value.length)
-
-  // Кол-во карточек по типу проекта (для счётчика на кнопках Инд./Шабл.)
-  // Используем filteredCards — только карточки видимые текущей роли
-  const countIndividual = computed(() =>
-    filteredCards.value.filter(c => c.project_type !== 'Шаблонный').length
-  )
-  const countTemplate = computed(() =>
-    filteredCards.value.filter(c => c.project_type === 'Шаблонный').length
-  )
-
-  // Фильтрация карточек по роли текущего пользователя (как в десктопе crm_tab.py:1473-1525)
+  // Фильтрация карточек по роли (без фильтра по типу проекта)
   function hasPos(...positions) {
     const auth = useAuthStore()
     const pos = auth.user?.position || ''
@@ -81,7 +43,8 @@ export const useCrmStore = defineStore('crm', () => {
     return positions.includes(pos) || positions.includes(secPos)
   }
 
-  const filteredCards = computed(() => {
+  // Карточки видимые текущей роли (ВСЕ типы) — для счётчиков
+  const roleFilteredCards = computed(() => {
     const auth = useAuthStore()
     if (!auth.user) return cards.value
 
@@ -128,10 +91,59 @@ export const useCrmStore = defineStore('crm', () => {
     })
   })
 
+  // Карточки для доски: роль + тип проекта
+  const filteredCards = computed(() => {
+    const byRole = roleFilteredCards.value
+    return byRole.filter(c =>
+      projectType.value === 'Шаблонный'
+        ? c.project_type === 'Шаблонный'
+        : c.project_type !== 'Шаблонный'
+    )
+  })
+
+  // Группировка карточек по колонкам
+  const columns = computed(() => {
+    const order = columnOrder.value
+    const grouped = {}
+
+    for (const col of order) {
+      grouped[col] = []
+    }
+
+    for (const card of filteredCards.value) {
+      const col = card.column_name || 'Новый заказ'
+      if (!grouped[col]) {
+        grouped[col] = []
+      }
+      grouped[col].push(card)
+    }
+
+    return order
+      .filter(col => grouped[col])
+      .map(col => ({
+        name: col,
+        shortName: col.replace(/^Стадия \d+: /, ''),
+        cards: grouped[col],
+        count: grouped[col].length
+      }))
+  })
+
+  // totalCards — карточки текущего вида (тип + роль)
+  const totalCards = computed(() => filteredCards.value.length)
+
+  // Счётчики по типу: считаются по roleFilteredCards (все типы, видимые роли)
+  const countIndividual = computed(() =>
+    roleFilteredCards.value.filter(c => c.project_type !== 'Шаблонный').length
+  )
+  const countTemplate = computed(() =>
+    roleFilteredCards.value.filter(c => c.project_type === 'Шаблонный').length
+  )
+
+  // Загружаем ВСЕ карточки (без фильтра по типу) — чтобы счётчики были корректны
   async function loadCards() {
     loading.value = true
     try {
-      const { data } = await crmApi.getCards(projectType.value, showArchive.value)
+      const { data } = await crmApi.getCards(null, showArchive.value)
       cards.value = data
     } catch {
       cards.value = []
@@ -143,24 +155,15 @@ export const useCrmStore = defineStore('crm', () => {
   /**
    * Оптимистичное перемещение карточки — UI обновляется мгновенно,
    * откатывается при ошибке API
-   * @param {number} cardId
-   * @param {string} newColumn
-   * @returns {{ success: boolean, oldColumn: string|null }}
    */
   function moveCardOptimistic(cardId, newColumn) {
     const card = cards.value.find(c => c.id === cardId)
     if (!card) return { success: false, oldColumn: null }
     const oldColumn = card.column_name
-    // Мгновенное обновление UI
     card.column_name = newColumn
     return { success: true, oldColumn }
   }
 
-  /**
-   * Откат перемещения карточки
-   * @param {number} cardId
-   * @param {string} oldColumn
-   */
   function rollbackMoveCard(cardId, oldColumn) {
     const card = cards.value.find(c => c.id === cardId)
     if (card) card.column_name = oldColumn
@@ -180,7 +183,7 @@ export const useCrmStore = defineStore('crm', () => {
 
   function setProjectType(type) {
     projectType.value = type
-    loadCards()
+    // Перезагрузка не нужна — все карточки уже загружены
   }
 
   function toggleArchive() {
