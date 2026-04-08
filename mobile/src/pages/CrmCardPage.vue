@@ -1547,7 +1547,7 @@ async function submitReject() {
 }
 
 // Назначение / изменение члена команды
-function showAssignDialog(member, mode) {
+async function showAssignDialog(member, mode) {
   assignRole.value = member.role
   assignRoleKey.value = member.roleKey
   assignStageName.value = member.stageName || ''
