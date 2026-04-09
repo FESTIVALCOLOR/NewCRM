@@ -3,7 +3,9 @@
     <q-card-section class="q-pa-sm">
       <!-- 1. Верхняя строка: номер + статус работы -->
       <div class="row items-center justify-between q-mb-xs">
-        <div style="color: #888; font-size: 10px">Договор: {{ card.contract_number || `#${card.id}` }}</div>
+        <div style="color: #888; font-size: 10px">
+          Договор: {{ card.contract_number || `#${card.id}` }}
+        </div>
         <div v-if="workStatusText" :style="{ fontSize: '8px', fontWeight: 'bold', color: workStatusColor, border: `1px solid ${workStatusColor}`, borderRadius: '3px', padding: '1px 6px' }">
           {{ workStatusText }}
         </div>
@@ -60,13 +62,21 @@
       <div v-if="!isArchived && (generalDeadlineText || substepDeadlineText)" class="q-mb-xs row no-wrap" style="gap: 4px">
         <!-- Общий дедлайн заказа (всегда слева) -->
         <div v-if="generalDeadlineText" :style="{ flex: 1, background: generalDeadlineBg, borderRadius: '4px', padding: '3px 6px', minWidth: 0 }">
-          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">Общий</div>
-          <div :style="{ fontSize: '10px', color: generalDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">{{ generalDeadlineText }}</div>
+          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">
+            Общий
+          </div>
+          <div :style="{ fontSize: '10px', color: generalDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">
+            {{ generalDeadlineText }}
+          </div>
         </div>
         <!-- Дедлайн текущего подэтапа (справа, если есть) -->
         <div v-if="substepDeadlineText" :style="{ flex: 1, background: substepDeadlineBg, borderRadius: '4px', padding: '3px 6px', minWidth: 0 }">
-          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">Подэтап</div>
-          <div :style="{ fontSize: '10px', color: substepDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">{{ substepDeadlineText }}</div>
+          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">
+            Подэтап
+          </div>
+          <div :style="{ fontSize: '10px', color: substepDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">
+            {{ substepDeadlineText }}
+          </div>
         </div>
       </div>
 
@@ -79,43 +89,128 @@
       <div v-if="!isArchived" class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
         <!-- Строка 1: Workflow кнопки -->
         <div v-if="canSubmitWork" class="q-mb-xs">
-          <q-btn unelevated dense no-caps label="Сдать работу" icon="check" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; padding: 4px 12px; height: 32px; border-radius: 4px; width: 100%" @click.stop="emit('submit-work')" />
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="Сдать работу"
+            icon="check"
+            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; padding: 4px 12px; height: 32px; border-radius: 4px; width: 100%"
+            @click.stop="emit('submit-work')"
+          />
         </div>
         <div v-if="showWaitReview" class="q-mb-xs" style="background: #FFF3E0; color: #E67E22; font-size: 11px; font-weight: bold; padding: 6px 12px; border-radius: 4px; text-align: center; border: 1px solid #F39C12">
           Ожидайте проверку
         </div>
         <div v-if="canApprove" class="row q-gutter-xs q-mb-xs">
-          <q-btn unelevated dense no-caps label="Клиенту" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('client-send')" />
-          <q-btn unelevated dense no-caps label="Исправление" style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('reject')" />
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="Клиенту"
+            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            @click.stop="emit('client-send')"
+          />
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="Исправление"
+            style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            @click.stop="emit('reject')"
+          />
         </div>
         <div v-if="canClientApproved" class="q-mb-xs">
-          <q-btn unelevated dense no-caps label="Клиент согласовал" style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; width: 100%" @click.stop="emit('client-approved')" />
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="Клиент согласовал"
+            style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; width: 100%"
+            @click.stop="emit('client-approved')"
+          />
         </div>
         <div v-if="canSignAct" class="row q-gutter-xs q-mb-xs">
-          <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('send-act')" />
-          <q-btn unelevated dense no-caps label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1" @click.stop="emit('sign-act')" />
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="Отправить акт"
+            style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            @click.stop="emit('send-act')"
+          />
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            label="Акт подписан"
+            style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px; flex: 1"
+            @click.stop="emit('sign-act')"
+          />
         </div>
 
         <!-- Строка 2: Добавить замер / ТЗ -->
         <div v-if="showAddMeasurement || showAddTechTask" class="row q-gutter-xs q-mb-xs">
-          <q-btn v-if="showAddMeasurement" unelevated dense no-caps icon="photo_camera" label="Добавить замер" style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1" @click.stop="emit('add-measurement')" />
-          <q-btn v-if="showAddTechTask" unelevated dense no-caps icon="description" label="Добавить ТЗ" style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1" @click.stop="emit('add-tech-task')" />
+          <q-btn
+            v-if="showAddMeasurement"
+            unelevated
+            dense
+            no-caps
+            icon="photo_camera"
+            label="Добавить замер"
+            style="background: #F39C12; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1"
+            @click.stop="emit('add-measurement')"
+          />
+          <q-btn
+            v-if="showAddTechTask"
+            unelevated
+            dense
+            no-caps
+            icon="description"
+            label="Добавить ТЗ"
+            style="background: #9B59B6; color: white; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; flex: 1"
+            @click.stop="emit('add-tech-task')"
+          />
         </div>
 
         <!-- Строка 3: Данные карточки -->
         <div class="q-mb-xs">
-          <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" @click="emit('click')" />
+          <q-btn
+            flat
+            dense
+            no-caps
+            icon="open_in_new"
+            label="Данные карточки"
+            style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+            @click="emit('click')"
+          />
         </div>
 
         <!-- Строка 4: Переместить -->
         <div>
-          <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; width: 100%" @click="emit('longpress')" />
+          <q-btn
+            flat
+            dense
+            no-caps
+            icon="swap_horiz"
+            label="Переместить"
+            style="color: #888; font-size: 10px; height: 24px; width: 100%"
+            @click="emit('longpress')"
+          />
         </div>
       </div>
 
       <!-- Архив: только кнопка открытия -->
       <div v-else class="q-mt-xs" style="border-top: 1px solid #E0E0E0; padding-top: 6px">
-        <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" @click="emit('click')" />
+        <q-btn
+          flat
+          dense
+          no-caps
+          icon="open_in_new"
+          label="Данные карточки"
+          style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+          @click="emit('click')"
+        />
       </div>
     </q-card-section>
   </q-card>
@@ -219,7 +314,7 @@ const generalDeadlineText = computed(() => {
   const d = new Date(props.card.deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
   const days = generalDeadlineDays.value
   if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
-  if (days === 0) return `${d} сег!`
+  if (days === 0) return `${d} Сегодня!`
   return `${d} (${days}р.д.)`
 })
 const generalDeadlineColor = computed(() => _deadlineDaysColor(generalDeadlineDays.value))
@@ -237,7 +332,7 @@ const substepDeadlineText = computed(() => {
   const d = new Date(deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
   const days = substepDeadlineDays.value
   if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
-  if (days === 0) return `${d} сег!`
+  if (days === 0) return `${d} Сегодня!`
   return `${d} (${days}р.д.)`
 })
 const substepDeadlineColor = computed(() => _deadlineDaysColor(substepDeadlineDays.value))
