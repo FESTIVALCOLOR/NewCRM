@@ -19,7 +19,7 @@ export const dashboardApi = {
     api.get('/api/v1/dashboard/employees'),
 
   getReportsSummary: (params = {}) =>
-    api.get('/api/v1/dashboard/reports/summary', { params })
+    api.get('/api/v1/dashboard/reports/summary', { params }),
 }
 
 // === Statistics ===
@@ -41,7 +41,7 @@ export const statisticsApi = {
     api.get('/api/v1/statistics/contracts-by-period', { params }),
 
   getEmployees: (params = {}) =>
-    api.get('/api/v1/statistics/employees', { params })
+    api.get('/api/v1/statistics/employees', { params }),
 }
 
 // === CRM ===
@@ -49,7 +49,7 @@ export const statisticsApi = {
 export const crmApi = {
   getCards: (projectType, archived = false) =>
     api.get('/api/v1/crm/cards', {
-      params: { ...(projectType ? { project_type: projectType } : {}), archived }
+      params: { ...(projectType ? { project_type: projectType } : {}), archived },
     }),
 
   getCard: (cardId) =>
@@ -135,7 +135,7 @@ export const crmApi = {
     api.get(`/api/v1/crm/cards/${cardId}/accepted-stages`),
 
   getSubmittedStages: (cardId) =>
-    api.get(`/api/v1/crm/cards/${cardId}/submitted-stages`)
+    api.get(`/api/v1/crm/cards/${cardId}/submitted-stages`),
 }
 
 // === Clients ===
@@ -154,7 +154,7 @@ export const clientsApi = {
     api.put(`/api/v1/clients/${clientId}`, data),
 
   delete: (clientId) =>
-    api.delete(`/api/v1/clients/${clientId}`)
+    api.delete(`/api/v1/clients/${clientId}`),
 }
 
 // === Contracts ===
@@ -176,7 +176,7 @@ export const contractsApi = {
     api.delete(`/api/v1/contracts/${contractId}`),
 
   updateFiles: (contractId, data) =>
-    api.patch(`/api/v1/contracts/${contractId}/files`, data)
+    api.patch(`/api/v1/contracts/${contractId}/files`, data),
 }
 
 // === Notifications ===
@@ -198,7 +198,7 @@ export const notificationsApi = {
     api.post('/api/v1/notifications/test'),
 
   markAllRead: (empId) =>
-    api.post('/api/v1/notifications/mark-all-read', { employee_id: empId })
+    api.post('/api/v1/notifications/mark-all-read', { employee_id: empId }),
 }
 
 // === Web Push ===
@@ -211,7 +211,7 @@ export const pushApi = {
     api.post('/api/v1/notifications/push/subscribe', subscription),
 
   unsubscribe: () =>
-    api.post('/api/v1/notifications/push/unsubscribe')
+    api.post('/api/v1/notifications/push/unsubscribe'),
 }
 
 // === Employees ===
@@ -254,7 +254,7 @@ export const employeesApi = {
     api.get(`/api/v1/employees/${id}/telegram-link`),
 
   connectTelegram: (id, code) =>
-    api.post(`/api/v1/employees/${id}/telegram-connect/${code}`)
+    api.post(`/api/v1/employees/${id}/telegram-connect/${code}`),
 }
 
 // === Payments ===
@@ -288,7 +288,7 @@ export const paymentsApi = {
     api.get('/api/v1/payments/by-type', { params }),
 
   markUnpaid: (id) =>
-    api.patch(`/api/v1/payments/${id}/mark-unpaid`)
+    api.patch(`/api/v1/payments/${id}/mark-unpaid`),
 }
 
 // === Salaries ===
@@ -307,7 +307,7 @@ export const salariesApi = {
     api.put(`/api/v1/salaries/${id}`, data),
 
   delete: (id) =>
-    api.delete(`/api/v1/salaries/${id}`)
+    api.delete(`/api/v1/salaries/${id}`),
 }
 
 // === Reports ===
@@ -335,7 +335,7 @@ export const reportsApi = {
     api.get('/api/v1/statistics/cities'),
 
   getContractYears: () =>
-    api.get('/api/v1/dashboard/contract-years')
+    api.get('/api/v1/dashboard/contract-years'),
 }
 
 // === Supervision ===
@@ -381,7 +381,7 @@ export const supervisionApi = {
     api.put(`/api/v1/supervision-timeline/${cardId}/entry/${stageCode}`, data),
 
   addHistory: (cardId, data) =>
-    api.post(`/api/v1/supervision/cards/${cardId}/history`, data)
+    api.post(`/api/v1/supervision/cards/${cardId}/history`, data),
 }
 
 // === Timeline ===
@@ -400,14 +400,14 @@ export const timelineApi = {
     api.get(`/api/v1/timeline/${contractId}/export/excel`, { responseType: 'blob' }),
 
   exportPdf: (contractId) =>
-    api.get(`/api/v1/timeline/${contractId}/export/pdf`, { responseType: 'blob' })
+    api.get(`/api/v1/timeline/${contractId}/export/pdf`, { responseType: 'blob' }),
 }
 
 // === Глобальный поиск ===
 
 export const searchApi = {
   global: (params) =>
-    api.get('/api/v1/search', { params })
+    api.get('/api/v1/search', { params }),
 }
 
 // === История действий ===
@@ -417,7 +417,7 @@ export const actionHistoryApi = {
     api.get('/api/v1/action-history', { params }),
 
   getByEntity: (entityType, entityId) =>
-    api.get(`/api/v1/action-history/${entityType}/${entityId}`)
+    api.get(`/api/v1/action-history/${entityType}/${entityId}`),
 }
 
 // === Нормо-дни ===
@@ -430,7 +430,7 @@ export const normDaysApi = {
     api.get('/api/v1/norm-days/preview', { params }),
 
   save: (data) =>
-    api.post('/api/v1/norm-days', data)
+    api.post('/api/v1/norm-days', data),
 }
 
 // === Locks (Блокировки при редактировании) ===
@@ -439,11 +439,11 @@ export const locksApi = {
   lock: (entityType, entityId) =>
     api.post('/api/v1/locks', { entity_type: entityType, entity_id: entityId }),
 
-  unlock: (lockId) =>
-    api.delete(`/api/v1/locks/${lockId}`),
+  unlock: (entityType, entityId) =>
+    api.delete(`/api/v1/locks/${entityType}/${entityId}`),
 
   check: (entityType, entityId) =>
-    api.get(`/api/v1/locks/${entityType}/${entityId}`)
+    api.get(`/api/v1/locks/${entityType}/${entityId}`),
 }
 
 // === Messenger (Telegram-чаты проектов) ===
@@ -457,7 +457,7 @@ export const messengerApi = {
   sendMessage: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/message`, data),
   getScripts: (params) => api.get('/api/v1/messenger/scripts', { params }),
   triggerScript: (scriptId, chatId) => api.post(`/api/v1/messenger/scripts/${scriptId}/trigger`, { chat_id: chatId }),
-  sendSurvey: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/send-survey`, data)
+  sendSurvey: (chatId, data) => api.post(`/api/v1/messenger/chats/${chatId}/send-survey`, data),
 }
 
 // === Files (Яндекс.Диск) ===
@@ -465,7 +465,7 @@ export const messengerApi = {
 export const filesApi = {
   getContractFiles: (contractId, stage) =>
     api.get(`/api/v1/files/contract/${contractId}`, {
-      params: stage ? { stage } : {}
+      params: stage ? { stage } : {},
     }),
 
   listFolder: (folderPath) =>
@@ -481,7 +481,7 @@ export const filesApi = {
     const params = yandexPath ? { yandex_path: yandexPath } : {}
     return api.post('/api/v1/files/upload', formData, {
       params,
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
     })
-  }
+  },
 }

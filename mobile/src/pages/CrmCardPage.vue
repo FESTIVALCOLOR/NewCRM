@@ -11,8 +11,12 @@
         <q-card-section style="background: #F8F9FA; border-radius: 8px 8px 0 0">
           <div class="row items-start justify-between q-mb-xs">
             <div style="flex: 1">
-              <div class="text-subtitle1 text-weight-bold" style="color: #333">{{ card.contract_number }}</div>
-              <div class="text-body2 q-mt-xs" style="color: #333"><a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: #333; text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a></div>
+              <div class="text-subtitle1 text-weight-bold" style="color: #333">
+                {{ card.contract_number }}
+              </div>
+              <div class="text-body2 q-mt-xs" style="color: #333">
+                <a v-if="card.address" :href="'https://yandex.ru/maps/?text=' + encodeURIComponent(card.address)" target="_blank" style="color: #333; text-decoration: none"><q-icon name="location_on" size="14px" color="red" class="q-mr-xs" />{{ card.address }}</a>
+              </div>
             </div>
             <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
               <q-badge :color="statusColor(card.column_name)" :label="card.column_name" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
@@ -28,10 +32,29 @@
             <span v-if="card.city" style="color: #ccc; margin: 0 6px">|</span>
             <span v-if="card.city">{{ card.city }}</span>
             <span v-if="contractData?.yandex_folder_path && canSeeYdFolder" style="color: #ccc; margin: 0 6px">|</span>
-            <q-btn v-if="contractData?.yandex_folder_path && canSeeYdFolder" flat dense round size="xs" icon="folder_open" no-caps style="color: #F39C12" @click="openYdFolder"><q-tooltip>Яндекс.Диск</q-tooltip></q-btn>
+            <q-btn
+              v-if="contractData?.yandex_folder_path && canSeeYdFolder"
+              flat
+              dense
+              round
+              size="xs"
+              icon="folder_open"
+              no-caps
+              style="color: #F39C12"
+              @click="openYdFolder"
+            >
+              <q-tooltip>Яндекс.Диск</q-tooltip>
+            </q-btn>
           </div>
           <div v-if="card.current_substep_name || card.revision_count > 0" class="row items-center q-gutter-xs q-mt-xs" style="flex-wrap: wrap; align-items: center">
-            <q-chip v-if="card.current_substep_name" dense size="sm" :color="substepColor(card.workflow_status)" text-color="white" style="height: 22px; border-radius: 12px; font-size: 11px; margin: 0; padding: 0 8px; flex: 1; justify-content: center">
+            <q-chip
+              v-if="card.current_substep_name"
+              dense
+              size="sm"
+              :color="substepColor(card.workflow_status)"
+              text-color="white"
+              style="height: 22px; border-radius: 12px; font-size: 11px; margin: 0; padding: 0 8px; flex: 1; justify-content: center"
+            >
               {{ workflowLabel(card.workflow_status) }}: {{ card.current_substep_name }}
             </q-chip>
             <q-badge v-if="card.revision_count > 0" color="negative" :label="`Правки: ${card.revision_count}`" style="height: 22px; border-radius: 12px; font-size: 11px; padding: 0 8px; display: inline-flex; align-items: center; margin: 0" />
@@ -43,16 +66,29 @@
       <div v-if="substepProgress.length > 1" class="q-px-md q-pb-sm">
         <div class="row items-center q-gutter-xs" style="flex-wrap: wrap">
           <div v-for="(step, idx) in substepProgress" :key="idx" class="row items-center">
-            <q-badge :color="step.active ? 'positive' : (step.done ? 'grey-5' : 'grey-3')"
-                     :text-color="step.active ? 'white' : (step.done ? 'white' : 'grey-6')"
-                     :label="step.label" style="font-size: 9px; padding: 2px 6px" />
+            <q-badge
+              :color="step.active ? 'positive' : (step.done ? 'grey-5' : 'grey-3')"
+              :text-color="step.active ? 'white' : (step.done ? 'white' : 'grey-6')"
+              :label="step.label"
+              style="font-size: 9px; padding: 2px 6px"
+            />
             <q-icon v-if="idx < substepProgress.length - 1" name="chevron_right" size="12px" color="grey-4" />
           </div>
         </div>
       </div>
 
       <!-- Вкладки -->
-      <q-tabs v-model="activeTab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-md" style="color: #666" align="left" :breakpoint="0">
+      <q-tabs
+        v-model="activeTab"
+        dense
+        active-color="dark"
+        indicator-color="accent"
+        no-caps
+        class="q-mb-md"
+        style="color: #666"
+        align="left"
+        :breakpoint="0"
+      >
         <q-tab name="executors" label="Исполнители" />
         <q-tab v-if="!isExecutor" name="timeline" label="Сроки" />
         <q-tab name="data" label="Данные" />
@@ -63,40 +99,67 @@
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent" style="padding-bottom: 80px">
-
         <!-- ====== ВКЛАДКА 1: Исполнители и дедлайн ====== -->
         <q-tab-panel name="executors" class="q-pa-none">
           <!-- Информация -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Информация</div></q-card-section>
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Информация
+              </div>
+            </q-card-section>
             <q-card-section>
               <div class="row">
                 <div class="col-6" style="padding-right: 12px; border-right: 1px solid #E0E0E0">
                   <div class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">Договор</div>
-                    <div style="font-size: 13px; color: #333">{{ card.contract_number || '-' }}</div>
+                    <div class="text-caption" style="color: #999">
+                      Договор
+                    </div>
+                    <div style="font-size: 13px; color: #333">
+                      {{ card.contract_number || '-' }}
+                    </div>
                   </div>
                   <div class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">Тип проекта</div>
-                    <div style="font-size: 13px; color: #333">{{ card.project_type || '-' }}</div>
+                    <div class="text-caption" style="color: #999">
+                      Тип проекта
+                    </div>
+                    <div style="font-size: 13px; color: #333">
+                      {{ card.project_type || '-' }}
+                    </div>
                   </div>
                   <div v-if="card.project_subtype" class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">Подтип проекта</div>
-                    <div style="font-size: 13px; color: #333">{{ card.project_subtype }}</div>
+                    <div class="text-caption" style="color: #999">
+                      Подтип проекта
+                    </div>
+                    <div style="font-size: 13px; color: #333">
+                      {{ card.project_subtype }}
+                    </div>
                   </div>
                 </div>
                 <div class="col-6" style="padding-left: 12px">
                   <div class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">Срок договора</div>
-                    <div style="font-size: 13px; color: #333">{{ contractData?.contract_period ? contractData.contract_period + ' раб.дн.' : '-' }}</div>
+                    <div class="text-caption" style="color: #999">
+                      Срок договора
+                    </div>
+                    <div style="font-size: 13px; color: #333">
+                      {{ contractData?.contract_period ? contractData.contract_period + ' раб.дн.' : '-' }}
+                    </div>
                   </div>
                   <div class="q-mb-sm">
-                    <div class="text-caption" style="color: #999">Дата начала</div>
-                    <div style="font-size: 13px; color: #333">{{ fmtDateShort(card.start_date || contractData?.contract_date) || '-' }}</div>
+                    <div class="text-caption" style="color: #999">
+                      Дата начала
+                    </div>
+                    <div style="font-size: 13px; color: #333">
+                      {{ fmtDateShort(card.start_date || contractData?.contract_date) || '-' }}
+                    </div>
                   </div>
                   <div>
-                    <div class="text-caption" style="color: #999">Дедлайн проекта</div>
-                    <div style="font-size: 13px" :style="{ color: card.deadline ? dlHex(card.deadline) : '#333' }">{{ fmtDateShort(card.deadline) || '-' }}</div>
+                    <div class="text-caption" style="color: #999">
+                      Дедлайн проекта
+                    </div>
+                    <div style="font-size: 13px" :style="{ color: card.deadline ? dlHex(card.deadline) : '#333' }">
+                      {{ fmtDateShort(card.deadline) || '-' }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -105,24 +168,67 @@
 
           <!-- Команда проекта с кнопками управления -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Команда проекта</div></q-card-section>
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Команда проекта
+              </div>
+            </q-card-section>
             <q-list dense separator>
               <q-item v-for="m in allTeamMembers" :key="m.roleKey">
                 <q-item-section avatar>
-                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'">{{ m.name ? m.name[0] : '?' }}</q-avatar>
+                  <q-avatar size="28px" :color="m.name ? 'grey-3' : 'red-1'" :text-color="m.name ? 'grey-8' : 'red-3'">
+                    {{ m.name ? m.name[0] : '?' }}
+                  </q-avatar>
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px" :style="{ color: m.name ? '#333' : '#bbb' }">{{ m.name || 'Не назначен' }}</q-item-label>
-                  <q-item-label caption>{{ m.role }}</q-item-label>
+                  <q-item-label style="font-size: 12px" :style="{ color: m.name ? '#333' : '#bbb' }">
+                    {{ m.name || 'Не назначен' }}
+                  </q-item-label>
+                  <q-item-label caption>
+                    {{ m.role }}
+                  </q-item-label>
                 </q-item-section>
-                <q-item-section side v-if="m.deadline">
+                <q-item-section v-if="m.deadline" side>
                   <q-badge :color="dlBadgeColor(m.deadline)" :label="fmtDateShort(m.deadline)" dense />
                 </q-item-section>
-                <q-item-section side v-if="!isArchived">
+                <q-item-section v-if="!isArchived" side>
                   <div class="row q-gutter-xs">
-                    <q-btn v-if="m.name && m.canManage" flat round dense size="xs" icon="edit" color="grey-7" @click="showAssignDialog(m, 'change')"><q-tooltip>Изменить</q-tooltip></q-btn>
-                    <q-btn v-if="m.name && m.canManage" flat round dense size="xs" icon="person_remove" color="negative" @click="removeTeamMember(m)"><q-tooltip>Удалить</q-tooltip></q-btn>
-                    <q-btn v-if="!m.name && m.canManage" flat round dense size="xs" icon="person_add" color="positive" @click="showAssignDialog(m, 'assign')"><q-tooltip>Назначить</q-tooltip></q-btn>
+                    <q-btn
+                      v-if="m.name && m.canManage"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="edit"
+                      color="grey-7"
+                      @click="showAssignDialog(m, 'change')"
+                    >
+                      <q-tooltip>Изменить</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="m.name && m.canManage"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="person_remove"
+                      color="negative"
+                      @click="removeTeamMember(m)"
+                    >
+                      <q-tooltip>Удалить</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="!m.name && m.canManage"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="person_add"
+                      color="positive"
+                      @click="showAssignDialog(m, 'assign')"
+                    >
+                      <q-tooltip>Назначить</q-tooltip>
+                    </q-btn>
                   </div>
                 </q-item-section>
               </q-item>
@@ -131,56 +237,177 @@
 
           <!-- Workflow действия -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Действия
+              </div>
+            </q-card-section>
             <q-card-section v-if="!isArchived">
               <!-- Сдать работу — только для исполнителя текущей стадии -->
-              <q-btn v-if="isCurrentStageExecutor && (card.workflow_status === 'in_progress' || card.workflow_status === 'revision')" unelevated dense no-caps icon="check" label="Сдать работу" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('submit')" :loading="actionLoading" />
+              <q-btn
+                v-if="isCurrentStageExecutor && (card.workflow_status === 'in_progress' || card.workflow_status === 'revision')"
+                unelevated
+                dense
+                no-caps
+                icon="check"
+                label="Сдать работу"
+                class="full-width q-mb-sm"
+                style="background: #58D68D; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="doAction('submit')"
+              />
 
               <!-- Проверяющий: Клиенту + На исправление -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_review'" class="row q-gutter-sm q-mb-sm">
-                <q-btn unelevated dense no-caps icon="forward_to_inbox" label="Отправить клиенту" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('client-send')" :loading="actionLoading" />
-                <q-btn unelevated dense no-caps icon="replay" label="На исправление" style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="showRejectDialog = true" />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="forward_to_inbox"
+                  label="Отправить клиенту"
+                  style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  :loading="actionLoading"
+                  @click="doAction('client-send')"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="replay"
+                  label="На исправление"
+                  style="background: #F1948A; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  @click="showRejectDialog = true"
+                />
               </div>
 
               <!-- Клиент согласовал -->
-              <q-btn v-if="can('crm_cards.complete_approval') && card.workflow_status === 'client_approval'" unelevated dense no-caps icon="thumb_up" label="Клиент согласовал" class="full-width q-mb-sm" style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="doAction('client-approved')" :loading="actionLoading" />
+              <q-btn
+                v-if="can('crm_cards.complete_approval') && card.workflow_status === 'client_approval'"
+                unelevated
+                dense
+                no-caps
+                icon="thumb_up"
+                label="Клиент согласовал"
+                class="full-width q-mb-sm"
+                style="background: #27AE60; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="doAction('client-approved')"
+              />
 
               <!-- Решение после согласования клиента (pending_decision) -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_decision'" class="q-mb-sm">
-                <div class="text-caption q-mb-xs" style="color: #888; text-align: center">Клиент согласовал. Выберите действие:</div>
+                <div class="text-caption q-mb-xs" style="color: #888; text-align: center">
+                  Клиент согласовал. Выберите действие:
+                </div>
                 <div class="row q-gutter-sm q-mb-xs">
-                  <q-btn unelevated dense no-caps icon="skip_next" label="Следующий круг" style="background: #5DADE2; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAdvanceRound" :loading="actionLoading" />
-                  <q-btn unelevated dense no-caps icon="done_all" label="Закрыть этап" style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doCloseStage" :loading="actionLoading" />
+                  <q-btn
+                    unelevated
+                    dense
+                    no-caps
+                    icon="skip_next"
+                    label="Следующий круг"
+                    style="background: #5DADE2; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                    :loading="actionLoading"
+                    @click="doAdvanceRound"
+                  />
+                  <q-btn
+                    unelevated
+                    dense
+                    no-caps
+                    icon="done_all"
+                    label="Закрыть этап"
+                    style="background: #27AE60; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                    :loading="actionLoading"
+                    @click="doCloseStage"
+                  />
                 </div>
               </div>
 
               <!-- Доп. круг -->
-              <q-btn v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_decision'"
-                     unelevated dense no-caps icon="add_circle_outline" label="Доп. круг" class="full-width q-mb-sm"
-                     style="background: #D5D8DC; color: #333; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px"
-                     @click="doAddExtraRound" :loading="actionLoading" />
+              <q-btn
+                v-if="can('crm_cards.complete_approval') && card.workflow_status === 'pending_decision'"
+                unelevated
+                dense
+                no-caps
+                icon="add_circle_outline"
+                label="Доп. круг"
+                class="full-width q-mb-sm"
+                style="background: #D5D8DC; color: #333; font-size: 11px; font-weight: bold; height: 32px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="doAddExtraRound"
+              />
 
               <!-- Акт -->
               <div v-if="can('crm_cards.complete_approval') && card.workflow_status === 'act_signing'" class="row q-gutter-sm q-mb-sm">
-                <q-btn unelevated dense no-caps label="Отправить акт" style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('client-send')" :loading="actionLoading" />
-                <q-btn unelevated dense no-caps icon="draw" label="Акт подписан" style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1" @click="doAction('sign-act')" :loading="actionLoading" />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  label="Отправить акт"
+                  style="background: #58D68D; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  :loading="actionLoading"
+                  @click="doAction('client-send')"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="draw"
+                  label="Акт подписан"
+                  style="background: #85C1E9; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
+                  :loading="actionLoading"
+                  @click="doAction('sign-act')"
+                />
               </div>
 
               <!-- Принятие менеджером -->
-              <q-btn v-if="can('crm_cards.move') && card.workflow_status === 'stage_completed'"
-                     unelevated dense no-caps icon="verified" label="Принять (менеджер)" class="full-width q-mb-sm"
-                     style="background: #AED6F1; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
-                     @click="doManagerAcceptance" :loading="actionLoading" />
+              <q-btn
+                v-if="can('crm_cards.move') && card.workflow_status === 'stage_completed'"
+                unelevated
+                dense
+                no-caps
+                icon="verified"
+                label="Принять (менеджер)"
+                class="full-width q-mb-sm"
+                style="background: #AED6F1; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="doManagerAcceptance"
+              />
 
-              <div v-if="!card.workflow_status" class="text-center" style="color: #999; font-size: 12px; padding: 8px 0">Нет активного рабочего процесса</div>
-
+              <div v-if="!card.workflow_status" class="text-center" style="color: #999; font-size: 12px; padding: 8px 0">
+                Нет активного рабочего процесса
+              </div>
             </q-card-section>
 
             <!-- Архивные действия -->
             <q-card-section v-else>
-              <q-btn v-if="canRestore" unelevated dense no-caps icon="replay" label="Вернуть в активные" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="showRestoreDialog = true" :loading="actionLoading" />
-              <q-btn v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР'" unelevated dense no-caps icon="engineering" label="В авторский надзор" class="full-width q-mb-sm" style="background: #F39C12; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px" @click="transferToSupervision" :loading="actionLoading" />
-              <div class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">Карточка в архиве</div>
+              <q-btn
+                v-if="canRestore"
+                unelevated
+                dense
+                no-caps
+                icon="replay"
+                label="Вернуть в активные"
+                class="full-width q-mb-sm"
+                style="background: #5DADE2; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="showRestoreDialog = true"
+              />
+              <q-btn
+                v-if="canRestore && card.column_name !== 'АВТОРСКИЙ НАДЗОР'"
+                unelevated
+                dense
+                no-caps
+                icon="engineering"
+                label="В авторский надзор"
+                class="full-width q-mb-sm"
+                style="background: #F39C12; color: white; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px"
+                :loading="actionLoading"
+                @click="transferToSupervision"
+              />
+              <div class="text-center" style="color: #999; font-size: 12px; padding: 4px 0">
+                Карточка в архиве
+              </div>
             </q-card-section>
           </q-card>
         </q-tab-panel>
@@ -188,10 +415,20 @@
         <!-- ====== ВКЛАДКА 2: Таблица сроков (из timeline API) ====== -->
         <q-tab-panel name="timeline" class="q-pa-none">
           <q-card class="is-card">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Таблица сроков</div></q-card-section>
-            <q-list dense separator v-if="timelineEntries.length > 0">
-              <q-item v-for="e in timelineEntries" :key="e.id" :style="timelineRowStyle(e)" :clickable="e.executor_role !== 'header' && can('crm_cards.deadlines')" @click="editNormDays(e)">
-                <q-item-section avatar v-if="e.executor_role !== 'header'" style="min-width: 24px">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Таблица сроков
+              </div>
+            </q-card-section>
+            <q-list v-if="timelineEntries.length > 0" dense separator>
+              <q-item
+                v-for="e in timelineEntries"
+                :key="e.id"
+                :style="timelineRowStyle(e)"
+                :clickable="e.executor_role !== 'header' && can('crm_cards.deadlines')"
+                @click="editNormDays(e)"
+              >
+                <q-item-section v-if="e.executor_role !== 'header'" avatar style="min-width: 24px">
                   <q-icon :name="timelineIcon(e)" :color="timelineIconColor(e)" size="18px" />
                 </q-item-section>
                 <q-item-section :style="e.executor_role === 'header' ? 'padding-left: 4px' : ''">
@@ -199,12 +436,15 @@
                     {{ e.stage_name }}
                   </q-item-label>
                   <q-item-label v-if="e.executor_role !== 'header'" caption :style="{ color: isOverdue(e) ? '#E74C3C' : '#888' }">
-                    <template v-if="e.norm_days">Норма:
+                    <template v-if="e.norm_days">
+                      Норма:
                       <template v-if="e.custom_norm_days && e.custom_norm_days !== e.norm_days">
                         <s style="color:#999">{{ e.norm_days }}</s>
                         <b style="color:#C62828"> {{ e.custom_norm_days }}</b> дн.
                       </template>
-                      <template v-else>{{ e.norm_days }} дн.</template>
+                      <template v-else>
+                        {{ e.norm_days }} дн.
+                      </template>
                     </template>
                     <span v-if="e.actual_days"> | Факт: {{ e.actual_days }} дн.</span>
                     <span v-if="e.executor_role"> | {{ e.executor_role }}</span>
@@ -212,22 +452,31 @@
                     <span v-else-if="e.actual_date && !isOverdue(e)" style="color: #27AE60"> | В срок</span>
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side v-if="e.stage_code === 'START'" style="min-width: auto; padding-right: 0">
+                <q-item-section v-if="e.stage_code === 'START'" side style="min-width: auto; padding-right: 0">
                   <q-icon name="info_outline" size="16px" color="grey-6" class="cursor-pointer">
-                    <q-tooltip style="font-size: 12px; white-space: pre-line">{{ startTooltip }}</q-tooltip>
+                    <q-tooltip style="font-size: 12px; white-space: pre-line">
+                      {{ startTooltip }}
+                    </q-tooltip>
                   </q-icon>
                 </q-item-section>
-                <q-item-section side v-if="e.status === 'skipped'">
-                  <div class="text-caption" style="color: #999; font-style: italic">Пропущено</div>
+                <q-item-section v-if="e.status === 'skipped'" side>
+                  <div class="text-caption" style="color: #999; font-style: italic">
+                    Пропущено
+                  </div>
                 </q-item-section>
-                <q-item-section side v-else-if="e.actual_date">
-                  <div class="text-caption" :style="{ color: isOverdue(e) ? '#E74C3C' : '#27AE60' }">{{ fmtDateShort(e.actual_date) }}</div>
+                <q-item-section v-else-if="e.actual_date" side>
+                  <div class="text-caption" :style="{ color: isOverdue(e) ? '#E74C3C' : '#27AE60' }">
+                    {{ fmtDateShort(e.actual_date) }}
+                  </div>
                 </q-item-section>
               </q-item>
             </q-list>
             <!-- Итого -->
-            <div v-if="timelineTotals.normTotal > 0" class="q-pa-sm"
-              :style="hasCustomNormDays ? 'background: #FFF3F3; border-top: 2px solid #E53935; border: 2px solid #E53935; border-radius: 0 0 8px 8px' : 'background: #F5F5F5; border-top: 2px solid #E0E0E0'">
+            <div
+              v-if="timelineTotals.normTotal > 0"
+              class="q-pa-sm"
+              :style="hasCustomNormDays ? 'background: #FFF3F3; border-top: 2px solid #E53935; border: 2px solid #E53935; border-radius: 0 0 8px 8px' : 'background: #F5F5F5; border-top: 2px solid #E0E0E0'"
+            >
               <div class="row items-center justify-between">
                 <span class="text-caption text-weight-bold" style="color: #555">Итого</span>
                 <span class="text-caption" style="color: #555">
@@ -251,31 +500,113 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Техническое задание</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Техническое задание
+                </div>
                 <div class="row q-gutter-xs">
-                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadCrmFile('tech_task')" />
-                  <q-btn v-if="contractData?.tech_task_link" outline dense size="xs" icon="open_in_new" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="openLink(contractData.tech_task_link)"><q-tooltip>Открыть в ЯД</q-tooltip></q-btn>
+                  <q-btn
+                    v-if="can('crm_cards.files_upload') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                    @click="uploadCrmFile('tech_task')"
+                  />
+                  <q-btn
+                    v-if="contractData?.tech_task_link"
+                    outline
+                    dense
+                    size="xs"
+                    icon="open_in_new"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="openLink(contractData.tech_task_link)"
+                  >
+                    <q-tooltip>Открыть в ЯД</q-tooltip>
+                  </q-btn>
                 </div>
               </div>
             </q-card-section>
-            <q-list dense v-if="filesByStage('tech_task').length > 0">
-              <q-item v-for="f in filesByStage('tech_task')" :key="f.id" >
-                <q-item-section avatar><q-icon :name="fileIcon(f)" :color="fileColor(f)" /></q-item-section>
-                <q-item-section style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openFile(f)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
-                <q-item-section v-if="!isArchived" side style="flex-shrink: 0"><div class="row q-gutter-xs no-wrap"><q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openFile(f)" /><q-btn v-if="can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" /></div></q-item-section>
+            <q-list v-if="filesByStage('tech_task').length > 0" dense>
+              <q-item v-for="f in filesByStage('tech_task')" :key="f.id">
+                <q-item-section avatar>
+                  <q-icon :name="fileIcon(f)" :color="fileColor(f)" />
+                </q-item-section>
+                <q-item-section style="min-width: 0">
+                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                    <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openFile(f)">{{ f.file_name }}</a>
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
+                  <div class="row q-gutter-xs no-wrap">
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="open_in_new"
+                      label="Открыть"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                      @click.stop="openFile(f)"
+                    /><q-btn
+                      v-if="can('crm_cards.files_delete')"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      no-caps
+                      color="negative"
+                      style="padding: 2px 6px; border-radius: 4px"
+                      @click.stop="deleteFile(f)"
+                    />
+                  </div>
+                </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
+            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
+              Нет файлов
+            </q-card-section>
           </q-card>
 
           <!-- Замер (как десктоп: ссылка на папку + дата + загрузка множества файлов) -->
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Замер</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Замер
+                </div>
                 <div class="row q-gutter-xs">
-                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="showMeasurementDlg = true" />
-                  <q-btn v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteFolderSection('measurement')"><q-tooltip>Удалить замер</q-tooltip></q-btn>
+                  <q-btn
+                    v-if="can('crm_cards.files_upload') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                    @click="showMeasurementDlg = true"
+                  />
+                  <q-btn
+                    v-if="contractData?.measurement_image_link && can('crm_cards.files_delete') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteFolderSection('measurement')"
+                  >
+                    <q-tooltip>Удалить замер</q-tooltip>
+                  </q-btn>
                 </div>
               </div>
             </q-card-section>
@@ -283,8 +614,12 @@
               <div v-if="contractData?.measurement_image_link" class="q-mb-xs">
                 <a :href="contractData.measurement_image_link" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с замером</a>
               </div>
-              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">Не загружен</div>
-              <div class="text-caption" style="color: #888">Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}</div>
+              <div v-else style="color: #999; font-size: 12px" class="q-mb-xs">
+                Не загружен
+              </div>
+              <div class="text-caption" style="color: #888">
+                Дата: {{ contractData?.measurement_date ? fmtDate(contractData.measurement_date) : 'Не установлена' }}
+              </div>
             </q-card-section>
           </q-card>
 
@@ -292,10 +627,35 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Фотофиксация</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Фотофиксация
+                </div>
                 <div class="row q-gutter-xs">
-                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadCrmFile('photo_documentation')" />
-                  <q-btn v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteFolderSection('photo_documentation')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
+                  <q-btn
+                    v-if="can('crm_cards.files_upload') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                    @click="uploadCrmFile('photo_documentation')"
+                  />
+                  <q-btn
+                    v-if="(contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path) && can('crm_cards.files_delete') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteFolderSection('photo_documentation')"
+                  >
+                    <q-tooltip>Удалить папку</q-tooltip>
+                  </q-btn>
                 </div>
               </div>
             </q-card-section>
@@ -303,7 +663,9 @@
               <div v-if="contractData?.photo_folder_public_link || contractData?.photo_documentation_yandex_path" class="q-mb-xs">
                 <a :href="contractData.photo_folder_public_link || contractData.photo_documentation_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">Открыть папку с фотофиксацией</a>
               </div>
-              <div v-else style="color: #999; font-size: 12px">Не загружена</div>
+              <div v-else style="color: #999; font-size: 12px">
+                Не загружена
+              </div>
             </q-card-section>
           </q-card>
 
@@ -311,10 +673,35 @@
           <q-card class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  {{ card.project_type === 'Шаблонный' ? 'Шаблоны проекта' : 'Референсы' }}
+                </div>
                 <div class="row q-gutter-xs">
-                  <q-btn v-if="can('crm_cards.files_upload') && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadCrmFile('references')" />
-                  <q-btn v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteFolderSection('references')"><q-tooltip>Удалить папку</q-tooltip></q-btn>
+                  <q-btn
+                    v-if="can('crm_cards.files_upload') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                    @click="uploadCrmFile('references')"
+                  />
+                  <q-btn
+                    v-if="contractData?.references_yandex_path && can('crm_cards.files_delete') && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteFolderSection('references')"
+                  >
+                    <q-tooltip>Удалить папку</q-tooltip>
+                  </q-btn>
                 </div>
               </div>
             </q-card-section>
@@ -322,7 +709,9 @@
               <div v-if="contractData?.references_yandex_path" class="q-mb-xs">
                 <a :href="contractData.references_yandex_path" target="_blank" style="color: #1677FF; font-size: 12px">{{ card.project_type === 'Шаблонный' ? 'Открыть папку с шаблонами' : 'Открыть папку с референсами' }}</a>
               </div>
-              <div v-else style="color: #999; font-size: 12px">Не загружена</div>
+              <div v-else style="color: #999; font-size: 12px">
+                Не загружена
+              </div>
             </q-card-section>
           </q-card>
 
@@ -330,94 +719,262 @@
           <q-card v-for="stage in projectStages" :key="stage.code" class="is-card q-mb-md" :style="isCurrentStage(stage.code) ? 'border: 2px solid #27AE60' : ''">
             <q-card-section class="q-pb-xs">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ stage.label }}</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  {{ stage.label }}
+                </div>
                 <div class="row q-gutter-xs">
-                  <q-btn v-if="revisionPathForStage(stage.code)" outline dense size="xs" label="Правки" no-caps color="negative" style="border-radius: 4px; padding: 2px 8px; font-weight: bold" @click="openRevisionFolder(stage.code)"><q-tooltip>Открыть папку с правками</q-tooltip></q-btn>
-                  <q-btn v-if="canUploadForProjectStage(stage.code) && !isArchived" outline dense size="xs" icon="upload" label="Загрузить" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click="uploadToVariation(stage.code)" />
-                  <q-btn v-if="canUploadForProjectStage(stage.code) && !isArchived" outline dense size="xs" icon="create_new_folder" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 6px" @click="addVariationTab(stage.code)"><q-tooltip>Добавить вариацию</q-tooltip></q-btn>
-                  <q-btn v-if="getVariations(stage.code).length > 1 && !isArchived" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="border-radius: 4px; padding: 2px 6px" @click="deleteVariationTab(stage.code)"><q-tooltip>Удалить текущую вариацию</q-tooltip></q-btn>
+                  <q-btn
+                    v-if="revisionPathForStage(stage.code)"
+                    outline
+                    dense
+                    size="xs"
+                    label="Правки"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 8px; font-weight: bold"
+                    @click="openRevisionFolder(stage.code)"
+                  >
+                    <q-tooltip>Открыть папку с правками</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    v-if="canUploadForProjectStage(stage.code) && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="upload"
+                    label="Загрузить"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                    @click="uploadToVariation(stage.code)"
+                  />
+                  <q-btn
+                    v-if="canUploadForProjectStage(stage.code) && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="create_new_folder"
+                    no-caps
+                    color="grey-7"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="addVariationTab(stage.code)"
+                  >
+                    <q-tooltip>Добавить вариацию</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    v-if="getVariations(stage.code).length > 1 && !isArchived"
+                    outline
+                    dense
+                    size="xs"
+                    icon="delete_outline"
+                    no-caps
+                    color="negative"
+                    style="border-radius: 4px; padding: 2px 6px"
+                    @click="deleteVariationTab(stage.code)"
+                  >
+                    <q-tooltip>Удалить текущую вариацию</q-tooltip>
+                  </q-btn>
                 </div>
               </div>
             </q-card-section>
 
             <!-- Вкладки вариаций -->
-            <q-tabs v-if="getVariations(stage.code).length > 1" v-model="activeVariation[stage.code]" dense active-color="dark" indicator-color="accent" no-caps style="font-size: 11px" align="left">
+            <q-tabs
+              v-if="getVariations(stage.code).length > 1"
+              v-model="activeVariation[stage.code]"
+              dense
+              active-color="dark"
+              indicator-color="accent"
+              no-caps
+              style="font-size: 11px"
+              align="left"
+            >
               <q-tab v-for="v in getVariations(stage.code)" :key="v" :name="v" :label="`Вариация ${v}`" />
             </q-tabs>
 
             <!-- Файлы текущей вариации -->
-            <q-list dense v-if="filesForVariation(stage.code).length > 0">
+            <q-list v-if="filesForVariation(stage.code).length > 0" dense>
               <q-item v-for="f in filesForVariation(stage.code)" :key="f.id">
                 <q-item-section avatar>
-                  <q-img v-if="isImageFile(f)" :src="imgStreamUrl(f)"
+                  <q-img
+                    v-if="isImageFile(f)"
+                    :src="imgStreamUrl(f)"
                     style="width: 48px; height: 48px; border-radius: 4px; cursor: pointer"
-                    @click="openStageFile(f, stage.code)" />
+                    @click="openStageFile(f, stage.code)"
+                  />
                   <q-icon v-else :name="fileIcon(f)" :color="fileColor(f)" />
                 </q-item-section>
-                <q-item-section v-if="!isImageFile(f)" style="min-width: 0"><q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><a href="#" @click.prevent="openStageFile(f, stage.code)" style="color: #1677FF; text-decoration: none">{{ f.file_name }}</a></q-item-label></q-item-section>
+                <q-item-section v-if="!isImageFile(f)" style="min-width: 0">
+                  <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                    <a href="#" style="color: #1677FF; text-decoration: none" @click.prevent="openStageFile(f, stage.code)">{{ f.file_name }}</a>
+                  </q-item-label>
+                </q-item-section>
                 <q-item-section v-if="!isArchived" side style="flex-shrink: 0">
                   <div class="row q-gutter-xs no-wrap">
-                    <q-btn outline dense size="xs" icon="open_in_new" label="Открыть" no-caps color="grey-7" style="border-radius: 4px; padding: 2px 8px; min-width: 88px" @click.stop="openStageFile(f, stage.code)" />
-                    <q-btn v-if="canUploadForProjectStage(stage.code) && can('crm_cards.files_delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="padding: 2px 6px; border-radius: 4px" @click.stop="deleteFile(f)" />
+                    <q-btn
+                      outline
+                      dense
+                      size="xs"
+                      icon="open_in_new"
+                      label="Открыть"
+                      no-caps
+                      color="grey-7"
+                      style="border-radius: 4px; padding: 2px 8px; min-width: 88px"
+                      @click.stop="openStageFile(f, stage.code)"
+                    />
+                    <q-btn
+                      v-if="canUploadForProjectStage(stage.code) && can('crm_cards.files_delete')"
+                      outline
+                      dense
+                      size="xs"
+                      icon="delete_outline"
+                      no-caps
+                      color="negative"
+                      style="padding: 2px 6px; border-radius: 4px"
+                      @click.stop="deleteFile(f)"
+                    />
                   </div>
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">Нет файлов</q-card-section>
+            <q-card-section v-else class="q-py-sm text-center" style="color: #bbb; font-size: 11px">
+              Нет файлов
+            </q-card-section>
             <div class="q-pb-sm" />
           </q-card>
 
           <div class="q-mb-xl" />
-          <input ref="crmFileInput" type="file" style="position: absolute; left: -9999px; opacity: 0" multiple @change="handleCrmFileUpload" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg" />
+          <input
+            ref="crmFileInput"
+            type="file"
+            style="position: absolute; left: -9999px; opacity: 0"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.bmp,.doc,.docx,.xls,.xlsx,.dwg"
+            @change="handleCrmFileUpload"
+          >
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 4: История ====== -->
         <q-tab-panel name="history" class="q-pa-none">
           <div class="row items-center q-mb-md q-gutter-sm">
-            <q-select v-model="historyFilter" :options="historyFilterOptions" outlined dense style="font-size: 12px; flex: 1" emit-value map-options />
+            <q-select
+              v-model="historyFilter"
+              :options="historyFilterOptions"
+              outlined
+              dense
+              style="font-size: 12px; flex: 1"
+              emit-value
+              map-options
+            />
           </div>
           <q-card v-if="completedStages.length > 0" class="is-card q-mb-md" style="border-left: 3px solid #27AE60">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #27AE60">Выполненные стадии</div></q-card-section>
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #27AE60">
+                Выполненные стадии
+              </div>
+            </q-card-section>
             <q-list dense>
-              <q-item v-for="se in completedStages" :key="'c-'+se.id"><q-item-section avatar><q-icon name="check_circle" color="positive" size="18px" /></q-item-section><q-item-section><q-item-label style="font-size: 12px">{{ se.stage_name }}</q-item-label><q-item-label caption>{{ se.executor_name }} | {{ fmtDateShort(se.completed_date) }}</q-item-label></q-item-section></q-item>
+              <q-item v-for="se in completedStages" :key="'c-'+se.id">
+                <q-item-section avatar>
+                  <q-icon name="check_circle" color="positive" size="18px" />
+                </q-item-section><q-item-section>
+                  <q-item-label style="font-size: 12px">
+                    {{ se.stage_name }}
+                  </q-item-label><q-item-label caption>
+                    {{ se.executor_name }} | {{ fmtDateShort(se.completed_date) }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
             </q-list>
           </q-card>
           <q-card class="is-card">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Лог действий</div></q-card-section>
-            <q-list dense separator v-if="filteredHistory.length > 0">
-              <q-item v-for="h in filteredHistory" :key="h.id"><q-item-section avatar><q-icon :name="actionIcon(h.action_type)" :color="actionColor(h.action_type)" size="18px" /></q-item-section><q-item-section><q-item-label style="font-size: 11px; color: #333">{{ (h.description || h.action_type || '').replace(/\[voice:[^\]]*\]\s*/, '') }}</q-item-label><q-item-label caption style="color: #888">{{ h.user_name }}</q-item-label></q-item-section><q-item-section side><div class="text-caption" style="color: #888">{{ fmtDateTime(h.action_date) }}</div></q-item-section></q-item>
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Лог действий
+              </div>
+            </q-card-section>
+            <q-list v-if="filteredHistory.length > 0" dense separator>
+              <q-item v-for="h in filteredHistory" :key="h.id">
+                <q-item-section avatar>
+                  <q-icon :name="actionIcon(h.action_type)" :color="actionColor(h.action_type)" size="18px" />
+                </q-item-section><q-item-section>
+                  <q-item-label style="font-size: 11px; color: #333">
+                    {{ (h.description || h.action_type || '').replace(/\[voice:[^\]]*\]\s*/, '') }}
+                  </q-item-label><q-item-label caption style="color: #888">
+                    {{ h.user_name }}
+                  </q-item-label>
+                </q-item-section><q-item-section side>
+                  <div class="text-caption" style="color: #888">
+                    {{ fmtDateTime(h.action_date) }}
+                  </div>
+                </q-item-section>
+              </q-item>
             </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; padding: 24px"><q-icon name="history" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет записей</div></q-card-section>
+            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
+              <q-icon name="history" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет записей</div>
+            </q-card-section>
           </q-card>
         </q-tab-panel>
 
         <!-- ====== ВКЛАДКА 5: Оплаты исполнителям ====== -->
         <q-tab-panel name="payments" class="q-pa-none">
-          <q-card class="is-card q-mb-md" v-for="group in paymentGroups" :key="group.role">
+          <q-card v-for="group in paymentGroups" :key="group.role" class="is-card q-mb-md">
             <q-card-section class="q-pb-xs">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ group.role }}</div>
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                {{ group.role }}
+              </div>
             </q-card-section>
             <q-list dense separator>
               <q-item v-for="p in group.items" :key="p.id" :style="paymentRowStyle(p)">
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">{{ p.employee_name || 'Не указан' }}</q-item-label>
-                  <q-item-label caption style="color: #888">{{ p.stage_name || '' }}</q-item-label>
-                  <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #27AE60; font-size: 10px">оплачено</q-item-label>
-                  <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">к оплате</q-item-label>
-                  <q-item-label v-else caption style="color: #bbb; font-size: 10px">в работе</q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333" class="text-weight-medium">
+                    {{ p.employee_name || 'Не указан' }}
+                  </q-item-label>
+                  <q-item-label caption style="color: #888">
+                    {{ p.stage_name || '' }}
+                  </q-item-label>
+                  <q-item-label v-if="p.is_paid || p.payment_status === 'paid'" caption style="color: #27AE60; font-size: 10px">
+                    оплачено
+                  </q-item-label>
+                  <q-item-label v-else-if="p.payment_status === 'to_pay'" caption style="color: #F39C12; font-size: 10px">
+                    к оплате
+                  </q-item-label>
+                  <q-item-label v-else caption style="color: #bbb; font-size: 10px">
+                    в работе
+                  </q-item-label>
                 </q-item-section>
                 <q-item-section side>
                   <div class="text-right">
                     <div class="row items-center justify-end no-wrap">
                       <span class="text-caption" style="color: #888">{{ p.payment_subtype || '' }}</span>
-                      <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px"></div>
-                      <div class="text-caption" :style="{ color: p.report_month ? '#333' : '#bbb' }">{{ formatReportMonth(p.report_month) }}</div>
-                      <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px"></div>
-                      <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ fmtMoney(p.final_amount || p.amount) }}</div>
+                      <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px" />
+                      <div class="text-caption" :style="{ color: p.report_month ? '#333' : '#bbb' }">
+                        {{ formatReportMonth(p.report_month) }}
+                      </div>
+                      <div style="width: 1px; height: 14px; background: #ddd; margin: 0 6px" />
+                      <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">
+                        {{ fmtMoney(p.final_amount || p.amount) }}
+                      </div>
                     </div>
                     <div v-if="!isArchived" class="row items-center justify-end q-gutter-xs q-mt-xs">
-                      <q-btn flat round dense size="xs" icon="edit" color="grey-7" @click.stop="editPaymentAmount(p)" />
-                      <q-btn flat round dense size="xs" icon="delete_outline" color="negative" @click.stop="deletePayment(p)" />
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        size="xs"
+                        icon="edit"
+                        color="grey-7"
+                        @click.stop="editPaymentAmount(p)"
+                      />
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        size="xs"
+                        icon="delete_outline"
+                        color="negative"
+                        @click.stop="deletePayment(p)"
+                      />
                     </div>
                   </div>
                 </q-item-section>
@@ -429,8 +986,12 @@
           <q-card v-if="cardPayments.length > 0" class="is-card" style="border-left: 3px solid #ffd93c">
             <q-card-section class="q-pa-md">
               <div class="row items-center justify-between" style="flex-wrap: wrap; gap: 4px">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">Итого по карточке</div>
-                <div class="text-h6 text-weight-bold" style="color: #333">{{ fmtMoney(paymentTotal) }}</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Итого по карточке
+                </div>
+                <div class="text-h6 text-weight-bold" style="color: #333">
+                  {{ fmtMoney(paymentTotal) }}
+                </div>
               </div>
             </q-card-section>
           </q-card>
@@ -438,7 +999,16 @@
           <!-- Кнопка создания нового платежа (П1) -->
           <q-card v-if="!isArchived && can('crm_cards.payments')" class="is-card q-mb-md">
             <q-card-section class="q-pa-sm text-center">
-              <q-btn unelevated no-caps icon="add" label="Создать платёж" color="primary" size="sm" class="full-width" @click="showCreatePayment = true" />
+              <q-btn
+                unelevated
+                no-caps
+                icon="add"
+                label="Создать платёж"
+                color="primary"
+                size="sm"
+                class="full-width"
+                @click="showCreatePayment = true"
+              />
             </q-card-section>
           </q-card>
 
@@ -451,11 +1021,33 @@
         <q-tab-panel name="notes" class="q-pa-none">
           <!-- Добавить текстовую заметку -->
           <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Новая заметка</div></q-card-section>
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Новая заметка
+              </div>
+            </q-card-section>
             <q-card-section>
-              <q-input v-model="noteText" outlined dense type="textarea" autogrow placeholder="Введите текст заметки..." class="q-mb-sm" />
+              <q-input
+                v-model="noteText"
+                outlined
+                dense
+                type="textarea"
+                autogrow
+                placeholder="Введите текст заметки..."
+                class="q-mb-sm"
+              />
               <div class="row items-center q-gutter-sm">
-                <q-btn unelevated dense no-caps icon="send" label="Отправить" style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px; flex: 1" @click="submitNote" :loading="noteSending" :disable="!noteText?.trim()" />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="send"
+                  label="Отправить"
+                  style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px; flex: 1"
+                  :loading="noteSending"
+                  :disable="!noteText?.trim()"
+                  @click="submitNote"
+                />
                 <VoiceRecorder :yandex-folder-path="contractData?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
               </div>
             </q-card-section>
@@ -463,21 +1055,31 @@
 
           <!-- Список заметок -->
           <q-card class="is-card">
-            <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Все заметки</div></q-card-section>
-            <q-list dense separator v-if="notesList.length > 0">
+            <q-card-section class="q-pb-none">
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                Все заметки
+              </div>
+            </q-card-section>
+            <q-list v-if="notesList.length > 0" dense separator>
               <q-item v-for="n in notesList" :key="n.id">
                 <q-item-section avatar>
                   <q-icon :name="n.action_type === 'voice_note' ? 'mic' : 'comment'" :color="n.action_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">{{ (n.description || 'Заметка').replace(/\[voice:[^\]]*\]\s*/, '') }}</q-item-label>
-                  <q-item-label caption style="color: #888">{{ n.user_name || 'Неизвестный' }}</q-item-label>
+                  <q-item-label style="font-size: 12px; color: #333">
+                    {{ (n.description || 'Заметка').replace(/\[voice:[^\]]*\]\s*/, '') }}
+                  </q-item-label>
+                  <q-item-label caption style="color: #888">
+                    {{ n.user_name || 'Неизвестный' }}
+                  </q-item-label>
                 </q-item-section>
                 <q-item-section v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" side>
                   <audio :src="voiceStreamUrl(noteVoiceUrl(n))" controls preload="none" style="height: 36px; width: 120px" />
                 </q-item-section>
                 <q-item-section side>
-                  <div class="text-caption" style="color: #888">{{ fmtDateTime(n.action_date) }}</div>
+                  <div class="text-caption" style="color: #888">
+                    {{ fmtDateTime(n.action_date) }}
+                  </div>
                 </q-item-section>
               </q-item>
             </q-list>
@@ -498,7 +1100,9 @@
           <template v-else-if="chatData">
             <q-card class="is-card q-mb-md">
               <q-card-section>
-                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">{{ chatData.chat_title || 'Проектный чат' }}</div>
+                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">
+                  {{ chatData.chat_title || 'Проектный чат' }}
+                </div>
                 <div v-if="chatData.invite_link" class="q-mb-sm">
                   <a :href="tgDeepLink(chatData.invite_link)" style="color: #1677FF; text-decoration: none; font-size: 13px">
                     <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
@@ -512,29 +1116,82 @@
 
             <!-- Участники -->
             <q-card class="is-card q-mb-md">
-              <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Участники</div></q-card-section>
+              <q-card-section class="q-pb-none">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Участники
+                </div>
+              </q-card-section>
               <q-list dense separator>
                 <q-item v-for="member in chatMembers" :key="member.id || member.user_id">
                   <q-item-section avatar>
-                    <q-avatar size="28px" color="grey-3" text-color="grey-8">{{ (member.name || member.username || '?')[0] }}</q-avatar>
+                    <q-avatar size="28px" color="grey-3" text-color="grey-8">
+                      {{ (member.name || member.username || '?')[0] }}
+                    </q-avatar>
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label style="font-size: 12px; color: #333">{{ member.name || member.username || 'Неизвестный' }}</q-item-label>
-                    <q-item-label caption>{{ member.role || 'участник' }}</q-item-label>
+                    <q-item-label style="font-size: 12px; color: #333">
+                      {{ member.name || member.username || 'Неизвестный' }}
+                    </q-item-label>
+                    <q-item-label caption>
+                      {{ member.role || 'участник' }}
+                    </q-item-label>
                   </q-item-section>
                 </q-item>
               </q-list>
-              <q-card-section v-if="chatMembers.length === 0" class="text-center" style="color: #999; font-size: 12px">Нет участников</q-card-section>
+              <q-card-section v-if="chatMembers.length === 0" class="text-center" style="color: #999; font-size: 12px">
+                Нет участников
+              </q-card-section>
             </q-card>
 
             <!-- Действия с чатом -->
             <q-card class="is-card q-mb-md">
-              <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold" style="color: #333">Действия</div></q-card-section>
+              <q-card-section class="q-pb-none">
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  Действия
+                </div>
+              </q-card-section>
               <q-card-section>
-                <q-btn unelevated dense no-caps icon="send" label="Отправить сообщение" class="full-width q-mb-sm" style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showSendMessageDlg = true" />
-                <q-btn unelevated dense no-caps icon="smart_toy" label="Запустить скрипт" class="full-width q-mb-sm" style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="loadScriptsAndShow" />
-                <q-btn unelevated dense no-caps icon="person_add" label="Добавить участника" class="full-width q-mb-sm" style="background: #AAB7B8; color: white; font-size: 12px; height: 36px; border-radius: 4px" @click="showAddMemberDlg = true" />
-                <q-btn outline dense no-caps icon="delete" label="Удалить чат" class="full-width" color="negative" style="font-size: 12px; height: 36px; border-radius: 4px" @click="confirmDeleteChat" />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="send"
+                  label="Отправить сообщение"
+                  class="full-width q-mb-sm"
+                  style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px"
+                  @click="showSendMessageDlg = true"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="smart_toy"
+                  label="Запустить скрипт"
+                  class="full-width q-mb-sm"
+                  style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px"
+                  @click="loadScriptsAndShow"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="person_add"
+                  label="Добавить участника"
+                  class="full-width q-mb-sm"
+                  style="background: #AAB7B8; color: white; font-size: 12px; height: 36px; border-radius: 4px"
+                  @click="showAddMemberDlg = true"
+                />
+                <q-btn
+                  outline
+                  dense
+                  no-caps
+                  icon="delete"
+                  label="Удалить чат"
+                  class="full-width"
+                  color="negative"
+                  style="font-size: 12px; height: 36px; border-radius: 4px"
+                  @click="confirmDeleteChat"
+                />
               </q-card-section>
             </q-card>
           </template>
@@ -544,8 +1201,19 @@
             <q-card class="is-card q-mb-md">
               <q-card-section class="text-center q-pa-lg">
                 <q-icon name="chat_bubble_outline" size="48px" color="grey-4" class="q-mb-sm" />
-                <div style="color: #999; font-size: 13px" class="q-mb-md">Telegram-чат не создан</div>
-                <q-btn unelevated dense no-caps icon="add" label="Создать чат" style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px" @click="openCreateChatDlg" :loading="chatCreating" />
+                <div style="color: #999; font-size: 13px" class="q-mb-md">
+                  Telegram-чат не создан
+                </div>
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  icon="add"
+                  label="Создать чат"
+                  style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px"
+                  :loading="chatCreating"
+                  @click="openCreateChatDlg"
+                />
               </q-card-section>
             </q-card>
           </template>
@@ -556,18 +1224,56 @@
       <q-dialog v-model="crmGalleryVisible" maximized transition-show="fade" transition-hide="fade">
         <div class="column" style="background: rgba(0,0,0,0.95); height: 100dvh; min-height: 100dvh">
           <div class="row items-center q-pa-sm no-wrap">
-            <q-btn flat round dense icon="close" color="white" @click="crmGalleryVisible = false" />
-            <div class="col text-center text-white q-px-sm" style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ crmCurrentGalleryFile?.file_name }}</div>
-            <div class="text-white text-caption" style="min-width: 44px; text-align: right">{{ crmGalleryIdx + 1 }}/{{ crmGalleryFiles.length }}</div>
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              color="white"
+              @click="crmGalleryVisible = false"
+            />
+            <div class="col text-center text-white q-px-sm" style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+              {{ crmCurrentGalleryFile?.file_name }}
+            </div>
+            <div class="text-white text-caption" style="min-width: 44px; text-align: right">
+              {{ crmGalleryIdx + 1 }}/{{ crmGalleryFiles.length }}
+            </div>
           </div>
-          <div class="col flex flex-center" style="position: relative; overflow: hidden" v-touch-swipe.mouse="handleCrmGallerySwipe">
-            <q-btn v-if="crmGalleryIdx > 0" flat round icon="chevron_left" color="white" style="position: absolute; left: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmPrevImage" />
-            <img v-if="crmCurrentGalleryFile" :src="imgStreamUrl(crmCurrentGalleryFile)"
-              style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; padding: 8px" />
-            <q-btn v-if="crmGalleryIdx < crmGalleryFiles.length - 1" flat round icon="chevron_right" color="white" style="position: absolute; right: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)" @click="crmNextImage" />
+          <div v-touch-swipe.mouse="handleCrmGallerySwipe" class="col flex flex-center" style="position: relative; overflow: hidden">
+            <q-btn
+              v-if="crmGalleryIdx > 0"
+              flat
+              round
+              icon="chevron_left"
+              color="white"
+              style="position: absolute; left: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)"
+              @click="crmPrevImage"
+            />
+            <img
+              v-if="crmCurrentGalleryFile"
+              :src="imgStreamUrl(crmCurrentGalleryFile)"
+              style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; padding: 8px"
+            >
+            <q-btn
+              v-if="crmGalleryIdx < crmGalleryFiles.length - 1"
+              flat
+              round
+              icon="chevron_right"
+              color="white"
+              style="position: absolute; right: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)"
+              @click="crmNextImage"
+            />
           </div>
           <div class="row justify-center q-pa-sm">
-            <q-btn flat no-caps icon="open_in_new" label="Открыть в браузере" color="white" size="sm" @click="openLink(crmCurrentGalleryFile?.public_link)" />
+            <q-btn
+              flat
+              no-caps
+              icon="open_in_new"
+              label="Открыть в браузере"
+              color="white"
+              size="sm"
+              @click="openLink(crmCurrentGalleryFile?.public_link)"
+            />
           </div>
         </div>
       </q-dialog>
@@ -576,15 +1282,38 @@
       <q-dialog v-model="showCreateChatDlg" persistent>
         <q-card style="min-width: 320px; border-radius: 10px">
           <q-toolbar style="background: #ffd93c; color: #333">
-            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Создать Telegram-чат</q-toolbar-title>
-            <q-btn flat round dense icon="close" @click="showCreateChatDlg = false" />
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              Создать Telegram-чат
+            </q-toolbar-title>
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="showCreateChatDlg = false"
+            />
           </q-toolbar>
           <q-card-section>
-            <q-input v-model="newChatTitle" label="Название чата" outlined dense class="q-mb-xs" hint="ИН-Город-Адрес или ШП-Город-Адрес" />
+            <q-input
+              v-model="newChatTitle"
+              label="Название чата"
+              outlined
+              dense
+              class="q-mb-xs"
+              hint="ИН-Город-Адрес или ШП-Город-Адрес"
+            />
           </q-card-section>
           <q-card-actions align="right">
-            <q-btn flat label="Отмена" v-close-popup no-caps />
-            <q-btn unelevated label="Создать" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="createProjectChat" :loading="chatCreating" :disable="!newChatTitle.trim()" />
+            <q-btn v-close-popup flat label="Отмена" no-caps />
+            <q-btn
+              unelevated
+              label="Создать"
+              style="background: #ffd93c; color: #333; border-radius: 4px"
+              no-caps
+              :loading="chatCreating"
+              :disable="!newChatTitle.trim()"
+              @click="createProjectChat"
+            />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -592,11 +1321,39 @@
       <!-- Диалог отправки сообщения в чат -->
       <q-dialog v-model="showSendMessageDlg">
         <q-card style="min-width: 320px; border-radius: 10px">
-          <q-toolbar style="background: #5DADE2; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Отправить сообщение</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+          <q-toolbar style="background: #5DADE2; color: white">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              Отправить сообщение
+            </q-toolbar-title><q-btn
+              v-close-popup
+              flat
+              round
+              dense
+              icon="close"
+              color="white"
+            />
+          </q-toolbar>
           <q-card-section>
-            <q-input v-model="chatMessageText" label="Текст сообщения" outlined dense type="textarea" autogrow />
+            <q-input
+              v-model="chatMessageText"
+              label="Текст сообщения"
+              outlined
+              dense
+              type="textarea"
+              autogrow
+            />
           </q-card-section>
-          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Отправить" style="background: #5DADE2; color: white; border-radius: 4px" no-caps @click="doSendMessage" :loading="chatActionLoading" :disable="!chatMessageText?.trim()" /></q-card-actions>
+          <q-card-actions align="right">
+            <q-btn v-close-popup flat label="Отмена" no-caps /><q-btn
+              unelevated
+              label="Отправить"
+              style="background: #5DADE2; color: white; border-radius: 4px"
+              no-caps
+              :loading="chatActionLoading"
+              :disable="!chatMessageText?.trim()"
+              @click="doSendMessage"
+            />
+          </q-card-actions>
         </q-card>
       </q-dialog>
 
@@ -605,50 +1362,147 @@
       <q-dialog v-model="showAddMemberDlg">
         <q-card style="min-width: 320px; border-radius: 10px">
           <q-toolbar style="background: #AAB7B8; color: white">
-            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Добавить участника</q-toolbar-title>
-            <q-btn flat round dense icon="close" color="white" v-close-popup />
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              Добавить участника
+            </q-toolbar-title>
+            <q-btn
+              v-close-popup
+              flat
+              round
+              dense
+              icon="close"
+              color="white"
+            />
           </q-toolbar>
           <q-card-section>
-            <q-select v-model="addMemberEmployeeId" :options="cardTeamOptions" option-value="id"
-              option-label="label" label="Участник проекта" outlined dense emit-value map-options />
+            <q-select
+              v-model="addMemberEmployeeId"
+              :options="cardTeamOptions"
+              option-value="id"
+              option-label="label"
+              label="Участник проекта"
+              outlined
+              dense
+              emit-value
+              map-options
+            />
           </q-card-section>
           <q-card-actions align="right">
-            <q-btn flat label="Отмена" v-close-popup no-caps />
-            <q-btn unelevated label="Добавить" style="background: #AAB7B8; color: white; border-radius: 4px" no-caps
-              :loading="addMemberLoading" :disable="!addMemberEmployeeId" @click="doAddChatMember" />
+            <q-btn v-close-popup flat label="Отмена" no-caps />
+            <q-btn
+              unelevated
+              label="Добавить"
+              style="background: #AAB7B8; color: white; border-radius: 4px"
+              no-caps
+              :loading="addMemberLoading"
+              :disable="!addMemberEmployeeId"
+              @click="doAddChatMember"
+            />
           </q-card-actions>
         </q-card>
       </q-dialog>
 
       <q-dialog v-model="showScriptsDlg">
         <q-card style="min-width: 320px; border-radius: 10px">
-          <q-toolbar style="background: #58D68D; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">Запустить скрипт</q-toolbar-title><q-btn flat round dense icon="close" color="white" v-close-popup /></q-toolbar>
+          <q-toolbar style="background: #58D68D; color: white">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              Запустить скрипт
+            </q-toolbar-title><q-btn
+              v-close-popup
+              flat
+              round
+              dense
+              icon="close"
+              color="white"
+            />
+          </q-toolbar>
           <q-list v-if="chatScripts.length > 0" dense separator>
-            <q-item v-for="script in chatScripts" :key="script.id" clickable v-ripple @click="doTriggerScript(script)">
-              <q-item-section avatar><q-icon name="smart_toy" color="grey-7" /></q-item-section>
+            <q-item
+              v-for="script in chatScripts"
+              :key="script.id"
+              v-ripple
+              clickable
+              @click="doTriggerScript(script)"
+            >
+              <q-item-section avatar>
+                <q-icon name="smart_toy" color="grey-7" />
+              </q-item-section>
               <q-item-section>
                 <q-item-label>{{ script.name || script.code }}</q-item-label>
-                <q-item-label caption>{{ script.description || '' }}</q-item-label>
+                <q-item-label caption>
+                  {{ script.description || '' }}
+                </q-item-label>
               </q-item-section>
             </q-item>
           </q-list>
-          <q-card-section v-else class="text-center" style="color: #999">Нет доступных скриптов</q-card-section>
+          <q-card-section v-else class="text-center" style="color: #999">
+            Нет доступных скриптов
+          </q-card-section>
         </q-card>
       </q-dialog>
 
       <!-- Диалог ревизии -->
       <q-dialog v-model="showRejectDialog">
         <q-card style="min-width: 320px; border-radius: 10px">
-          <q-toolbar style="background: #E74C3C; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title><q-btn flat round dense icon="close" color="white" @click="showRejectDialog = false" /></q-toolbar>
+          <q-toolbar style="background: #E74C3C; color: white">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              На исправление
+            </q-toolbar-title><q-btn
+              flat
+              round
+              dense
+              icon="close"
+              color="white"
+              @click="showRejectDialog = false"
+            />
+          </q-toolbar>
           <q-card-section>
-            <q-input v-model="rejectReason" label="Причина *" outlined dense type="textarea" autogrow class="q-mb-sm" />
+            <q-input
+              v-model="rejectReason"
+              label="Причина *"
+              outlined
+              dense
+              type="textarea"
+              autogrow
+              class="q-mb-sm"
+            />
             <div class="q-mb-sm">
-              <q-btn outline no-caps icon="attach_file" :label="rejectFile ? rejectFile.name : 'Прикрепить файл с правками'" style="width: 100%; justify-content: flex-start; text-transform: none" @click="$refs.rejectFileInput.click()" />
-              <input ref="rejectFileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display: none" @change="e => { rejectFile = e.target.files[0] || null }" />
-              <q-btn v-if="rejectFile" flat dense icon="close" size="sm" class="q-ml-sm" @click="rejectFile = null" />
+              <q-btn
+                outline
+                no-caps
+                icon="attach_file"
+                :label="rejectFile ? rejectFile.name : 'Прикрепить файл с правками'"
+                style="width: 100%; justify-content: flex-start; text-transform: none"
+                @click="$refs.rejectFileInput.click()"
+              />
+              <input
+                ref="rejectFileInput"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                style="display: none"
+                @change="e => { rejectFile = e.target.files[0] || null }"
+              >
+              <q-btn
+                v-if="rejectFile"
+                flat
+                dense
+                icon="close"
+                size="sm"
+                class="q-ml-sm"
+                @click="rejectFile = null"
+              />
             </div>
           </q-card-section>
-          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitReject" :loading="actionLoading" /></q-card-actions>
+          <q-card-actions align="right">
+            <q-btn v-close-popup flat label="Отмена" no-caps /><q-btn
+              unelevated
+              label="Отправить"
+              style="background: #E74C3C; color: white; border-radius: 4px"
+              no-caps
+              :loading="actionLoading"
+              @click="submitReject"
+            />
+          </q-card-actions>
         </q-card>
       </q-dialog>
 
@@ -656,17 +1510,49 @@
       <q-dialog v-model="timelineEditVisible">
         <q-card style="min-width: 300px; border-radius: 10px">
           <q-toolbar style="background: #ffd93c; color: #333">
-            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">{{ timelineEditEntry?.stage_name }}</q-toolbar-title>
-            <q-btn flat round dense icon="close" @click="timelineEditVisible = false" />
+            <q-toolbar-title class="text-weight-bold" style="font-size: 13px">
+              {{ timelineEditEntry?.stage_name }}
+            </q-toolbar-title>
+            <q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="timelineEditVisible = false"
+            />
           </q-toolbar>
           <q-card-section class="q-pb-sm">
-            <q-input v-model="timelineEditNormDays" label="Норма-дни (польз.)" outlined dense type="number" class="q-mb-sm" :hint="`Стандарт: ${timelineEditEntry?.norm_days || 0} дн.`" />
-            <q-input v-model="timelineEditActualDate" label="Дата выполнения" outlined dense type="date" clearable class="q-mb-xs" />
-            <div style="font-size: 11px; color: #888">Заполните дату выполнения подэтапа</div>
+            <q-input
+              v-model="timelineEditNormDays"
+              label="Норма-дни (польз.)"
+              outlined
+              dense
+              type="number"
+              class="q-mb-sm"
+              :hint="`Стандарт: ${timelineEditEntry?.norm_days || 0} дн.`"
+            />
+            <q-input
+              v-model="timelineEditActualDate"
+              label="Дата выполнения"
+              outlined
+              dense
+              type="date"
+              clearable
+              class="q-mb-xs"
+            />
+            <div style="font-size: 11px; color: #888">
+              Заполните дату выполнения подэтапа
+            </div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Отмена" no-caps @click="timelineEditVisible = false" />
-            <q-btn unelevated label="Сохранить" no-caps style="background: #4CAF50; color: white; border-radius: 4px" @click="saveTimelineEntry" />
+            <q-btn
+              unelevated
+              label="Сохранить"
+              no-caps
+              style="background: #4CAF50; color: white; border-radius: 4px"
+              @click="saveTimelineEntry"
+            />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -674,21 +1560,62 @@
       <!-- Диалог назначения исполнителя -->
       <q-dialog v-model="assignDialogVisible">
         <q-card style="min-width: 320px; border-radius: 10px">
-          <q-toolbar style="background: #ffd93c; color: #333"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">{{ assignDialogTitle }}</q-toolbar-title><q-btn flat round dense icon="close" @click="assignDialogVisible = false" /></q-toolbar>
+          <q-toolbar style="background: #ffd93c; color: #333">
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              {{ assignDialogTitle }}
+            </q-toolbar-title><q-btn
+              flat
+              round
+              dense
+              icon="close"
+              @click="assignDialogVisible = false"
+            />
+          </q-toolbar>
           <q-card-section>
-            <div class="text-caption q-mb-sm" style="color: #888">Роль: {{ assignRole }}</div>
-            <q-select v-model="assignEmployeeId" :options="employeeOptions" option-value="id" option-label="label" label="Сотрудник" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterAssignEmployees" class="q-mb-sm" />
+            <div class="text-caption q-mb-sm" style="color: #888">
+              Роль: {{ assignRole }}
+            </div>
+            <q-select
+              v-model="assignEmployeeId"
+              :options="employeeOptions"
+              option-value="id"
+              option-label="label"
+              label="Сотрудник"
+              outlined
+              dense
+              emit-value
+              map-options
+              use-input
+              input-debounce="200"
+              class="q-mb-sm"
+              @filter="filterAssignEmployees"
+            />
             <template v-if="assignNeedsDeadline">
-              <q-input v-model="assignDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-xs" />
+              <q-input
+                v-model="assignDeadline"
+                label="Дедлайн"
+                outlined
+                dense
+                type="date"
+                class="q-mb-xs"
+              />
               <div v-if="assignNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 4px">
                 Норма дней: {{ assignNormDays }} раб. дн.<span v-if="assignSubstepName" style="font-weight: 400; color: #666"> · {{ assignSubstepName }}</span>
               </div>
             </template>
           </q-card-section>
           <q-card-section v-if="otherStageExecutors.length > 0" class="q-pt-none">
-            <div class="text-caption text-grey-7 q-mb-xs">Исполнители на других стадиях:</div>
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Исполнители на других стадиях:
+            </div>
             <q-list dense>
-              <q-item v-for="(ex, idx) in otherStageExecutors" :key="idx" dense class="q-pa-none" style="min-height: 28px">
+              <q-item
+                v-for="(ex, idx) in otherStageExecutors"
+                :key="idx"
+                dense
+                class="q-pa-none"
+                style="min-height: 28px"
+              >
                 <q-item-section>
                   <q-item-label style="font-size: 11px; color: #666">
                     {{ ex.stage_name }}: <span style="color: #333; font-weight: 500">{{ ex.executor_name || 'Не назначен' }}</span>
@@ -698,9 +1625,17 @@
             </q-list>
           </q-card-section>
           <q-card-section v-if="assignHistory.length > 0" class="q-pt-none">
-            <div class="text-caption text-grey-7 q-mb-xs">История назначений:</div>
+            <div class="text-caption text-grey-7 q-mb-xs">
+              История назначений:
+            </div>
             <q-list dense>
-              <q-item v-for="(h, idx) in assignHistory" :key="idx" dense class="q-pa-none" style="min-height: 28px">
+              <q-item
+                v-for="(h, idx) in assignHistory"
+                :key="idx"
+                dense
+                class="q-pa-none"
+                style="min-height: 28px"
+              >
                 <q-item-section>
                   <q-item-label style="font-size: 11px; color: #666">
                     {{ h.executor_name || '?' }} — {{ formatHistoryDate(h.assigned_date) }}
@@ -710,22 +1645,88 @@
               </q-item>
             </q-list>
           </q-card-section>
-          <q-card-actions align="right"><q-btn flat label="Отмена" v-close-popup no-caps /><q-btn unelevated label="Назначить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doAssign" :loading="actionLoading" /></q-card-actions>
+          <q-card-actions align="right">
+            <q-btn v-close-popup flat label="Отмена" no-caps /><q-btn
+              unelevated
+              label="Назначить"
+              style="background: #ffd93c; color: #333; border-radius: 4px"
+              no-caps
+              :loading="actionLoading"
+              @click="doAssign"
+            />
+          </q-card-actions>
         </q-card>
       </q-dialog>
 
       <!-- Диалог замера -->
-      <MeasurementDialog v-model="showMeasurementDlg" :card-id="card?.id" :contract-id="card?.contract_id" :contract-data="contractData" @saved="onMeasurementSaved" />
+      <MeasurementDialog
+        v-model="showMeasurementDlg"
+        :card-id="card?.id"
+        :contract-id="card?.contract_id"
+        :contract-data="contractData"
+        @saved="onMeasurementSaved"
+      />
 
       <!-- FAB кнопки (скрыты в архиве) -->
       <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 72]">
         <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
-          <q-fab-action v-if="canRestore" icon="build" style="background: #F39C12; color: white" @click="repairWorkflow" :loading="actionLoading" label="Ремонт" external-label label-position="left" />
-          <q-fab-action v-if="can('crm_cards.reset_approval') && isArchived" icon="restart_alt" style="background: #E67E22; color: white" @click="doResetApproval" :loading="actionLoading" label="Сброс согласования" external-label label-position="left" />
-          <q-fab-action v-if="can('crm_cards.reset_designer')" icon="person_off" style="background: #E67E22; color: white" @click="doResetDesigner" :loading="actionLoading" label="Сброс дизайнера" external-label label-position="left" />
-          <q-fab-action v-if="can('crm_cards.reset_draftsman')" icon="person_off" style="background: #E67E22; color: white" @click="doResetDraftsman" :loading="actionLoading" label="Сброс чертёжника" external-label label-position="left" />
-          <q-fab-action icon="sync" style="background: #5DADE2; color: white" @click="syncCrmWithYd" :loading="crmSyncing" label="Синхронизация ЯД" external-label label-position="left" />
-          <q-fab-action icon="edit" style="background: #ffd93c; color: #333" @click="editCard" label="Редактировать" external-label label-position="left" />
+          <q-fab-action
+            v-if="canRestore"
+            icon="build"
+            style="background: #F39C12; color: white"
+            :loading="actionLoading"
+            label="Ремонт"
+            external-label
+            label-position="left"
+            @click="repairWorkflow"
+          />
+          <q-fab-action
+            v-if="can('crm_cards.reset_approval') && isArchived"
+            icon="restart_alt"
+            style="background: #E67E22; color: white"
+            :loading="actionLoading"
+            label="Сброс согласования"
+            external-label
+            label-position="left"
+            @click="doResetApproval"
+          />
+          <q-fab-action
+            v-if="can('crm_cards.reset_designer')"
+            icon="person_off"
+            style="background: #E67E22; color: white"
+            :loading="actionLoading"
+            label="Сброс дизайнера"
+            external-label
+            label-position="left"
+            @click="doResetDesigner"
+          />
+          <q-fab-action
+            v-if="can('crm_cards.reset_draftsman')"
+            icon="person_off"
+            style="background: #E67E22; color: white"
+            :loading="actionLoading"
+            label="Сброс чертёжника"
+            external-label
+            label-position="left"
+            @click="doResetDraftsman"
+          />
+          <q-fab-action
+            icon="sync"
+            style="background: #5DADE2; color: white"
+            :loading="crmSyncing"
+            label="Синхронизация ЯД"
+            external-label
+            label-position="left"
+            @click="syncCrmWithYd"
+          />
+          <q-fab-action
+            icon="edit"
+            style="background: #ffd93c; color: #333"
+            label="Редактировать"
+            external-label
+            label-position="left"
+            @click="editCard"
+          />
         </q-fab>
       </q-page-sticky>
 
@@ -733,16 +1734,44 @@
       <q-dialog v-model="showRestoreDialog">
         <q-card style="min-width: 320px; border-radius: 10px">
           <q-toolbar style="background: #5DADE2; color: white">
-            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Возврат в активные</q-toolbar-title>
-            <q-btn flat round dense icon="close" color="white" v-close-popup />
+            <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+              Возврат в активные
+            </q-toolbar-title>
+            <q-btn
+              v-close-popup
+              flat
+              round
+              dense
+              icon="close"
+              color="white"
+            />
           </q-toolbar>
           <q-card-section>
-            <div class="text-caption q-mb-sm" style="color: #888">Выберите стадию, в которую нужно вернуть проект. Будет сброшена выбранная стадия и все последующие.</div>
-            <q-select v-model="restoreStage" :options="restoreStageOptions" label="Стадия" outlined dense emit-value map-options class="q-mb-sm" />
+            <div class="text-caption q-mb-sm" style="color: #888">
+              Выберите стадию, в которую нужно вернуть проект. Будет сброшена выбранная стадия и все последующие.
+            </div>
+            <q-select
+              v-model="restoreStage"
+              :options="restoreStageOptions"
+              label="Стадия"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="q-mb-sm"
+            />
           </q-card-section>
           <q-card-actions align="right">
-            <q-btn flat label="Отмена" no-caps v-close-popup />
-            <q-btn unelevated label="Вернуть" no-caps style="background: #5DADE2; color: white; border-radius: 4px" @click="doRestore" :loading="actionLoading" :disable="!restoreStage" />
+            <q-btn v-close-popup flat label="Отмена" no-caps />
+            <q-btn
+              unelevated
+              label="Вернуть"
+              no-caps
+              style="background: #5DADE2; color: white; border-radius: 4px"
+              :loading="actionLoading"
+              :disable="!restoreStage"
+              @click="doRestore"
+            />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -750,7 +1779,14 @@
 
     <div v-else class="text-center q-pa-xl" style="color: #999">
       <q-icon name="search_off" size="48px" class="q-mb-sm" /><div>Карточка не найдена</div>
-      <q-btn flat label="Назад" @click="$router.back()" class="q-mt-md" no-caps style="color: #333" />
+      <q-btn
+        flat
+        label="Назад"
+        class="q-mt-md"
+        no-caps
+        style="color: #333"
+        @click="$router.back()"
+      />
     </div>
   </q-page>
 </template>
@@ -855,8 +1891,8 @@ const projectFiles = ref([])
 const timelineEntries = ref([])
 const hasCustomNormDays = computed(() =>
   timelineEntries.value.some(e =>
-    e.executor_role !== 'header' && e.custom_norm_days && e.custom_norm_days !== e.norm_days
-  )
+    e.executor_role !== 'header' && e.custom_norm_days && e.custom_norm_days !== e.norm_days,
+  ),
 )
 const timelineTotals = computed(() => {
   let normTotal = 0, actualTotal = 0
@@ -962,7 +1998,7 @@ const ROLE_POSITION_FILTER = {
   manager: ['Менеджер', 'Старший менеджер'],
   surveyor: ['Замерщик'],
   designer: ['Дизайнер'],
-  draftsman: ['Чертёжник', 'Чертежник']
+  draftsman: ['Чертёжник', 'Чертежник'],
 }
 
 function filterAssignEmployees(val, update) {
@@ -994,13 +2030,13 @@ const projectStages = computed(() => {
     return [
       { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
       { code: 'stage3', label: 'Стадия 2: Чертёжная документация' },
-      { code: 'stage2_3d', label: 'Стадия 3: 3D визуализация (Доп.)' }
+      { code: 'stage2_3d', label: 'Стадия 3: 3D визуализация (Доп.)' },
     ]
   }
   return [
     { code: 'stage1', label: 'Стадия 1: Планировочное решение' },
     { code: 'stage2_concept', label: 'Стадия 2: Концепция дизайна' },
-    { code: 'stage3', label: 'Стадия 3: Чертёжная документация' }
+    { code: 'stage3', label: 'Стадия 3: Чертёжная документация' },
   ]
 })
 
@@ -1093,7 +2129,7 @@ function revisionPathForStage(stageCode) {
   if (!colName.startsWith(prefix)) return ''
   const wf = workflowStates.value.find(w =>
     w.stage_name && w.stage_name.startsWith(prefix) &&
-    w.revision_file_path && w.status === 'revision'
+    w.revision_file_path && w.status === 'revision',
   )
   return wf?.revision_file_path || ''
 }
@@ -1142,7 +2178,7 @@ function deleteVariationTab(stageCode) {
     title: `Удалить Вариацию ${v}?`,
     message: `${varFiles.length} файлов будет удалено`,
     cancel: { label: 'Нет', flat: true, noCaps: true },
-    ok: { label: 'Да, удалить', noCaps: true, color: 'negative' }
+    ok: { label: 'Да, удалить', noCaps: true, color: 'negative' },
   }).onOk(async () => {
     for (const f of varFiles) {
       try {
@@ -1180,7 +2216,7 @@ const isCurrentStageExecutor = computed(() => {
   const executors = card.value.stage_executors || []
   // Ищем исполнителя текущей стадии (по column_name)
   const currentStageExecs = executors.filter(se =>
-    se.stage_name && columnName.toLowerCase().includes(se.stage_name.toLowerCase().split(':')[1]?.trim().substring(0, 10) || '')
+    se.stage_name && columnName.toLowerCase().includes(se.stage_name.toLowerCase().split(':')[1]?.trim().substring(0, 10) || ''),
   )
   if (currentStageExecs.length === 0) return false
   // Берём последнего назначенного (max id)
@@ -1231,7 +2267,7 @@ const historyFilterOptions = [
   { label: 'Все действия', value: 'all' }, { label: 'Перемещение', value: 'move' },
   { label: 'Назначения', value: 'assign' }, { label: 'Workflow', value: 'workflow' },
   { label: 'Оплаты', value: 'payment' }, { label: 'Дедлайны', value: 'deadline' },
-  { label: 'Файлы', value: 'file' }, { label: 'Прочее', value: 'other' }
+  { label: 'Файлы', value: 'file' }, { label: 'Прочее', value: 'other' },
 ]
 const filteredHistory = computed(() => {
   if (historyFilter.value === 'all') return actionHistory.value
@@ -1264,7 +2300,7 @@ async function deleteFolderSection(section) {
     title: `Удалить папку ${cfg.label}?`,
     message: 'Файлы будут удалены с Яндекс.Диска',
     cancel: { label: 'Нет', flat: true, noCaps: true },
-    ok: { label: 'Удалить', noCaps: true, color: 'negative' }
+    ok: { label: 'Удалить', noCaps: true, color: 'negative' },
   }).onOk(async () => {
     try {
       // Очищаем поля в contracts
@@ -1370,7 +2406,7 @@ const substepProgress = computed(() => {
 
   // Собираем все подэтапы (не заголовки), со всех стадий проекта
   const stageEntries = timelineEntries.value.filter(e =>
-    e.executor_role !== 'header' && e.stage_code
+    e.executor_role !== 'header' && e.stage_code,
   )
 
   // Группируем: substage_group для иерархических стадий (1.x, 2.x),
@@ -1502,7 +2538,7 @@ const noteSending = ref(false)
 // Список заметок — фильтр из actionHistory по типам note/voice_note
 const notesList = computed(() => {
   return actionHistory.value.filter(h =>
-    h.action_type === 'note' || h.action_type === 'voice_note'
+    h.action_type === 'note' || h.action_type === 'voice_note',
   ).sort((a, b) => new Date(b.action_date) - new Date(a.action_date))
 })
 
@@ -1531,7 +2567,7 @@ async function submitNote() {
       action_type: 'note',
       entity_type: 'crm_card',
       entity_id: card.value.id,
-      description: noteText.value.trim()
+      description: noteText.value.trim(),
     })
     noteText.value = ''
     $q.notify({ type: 'positive', message: 'Заметка добавлена' })
@@ -1551,7 +2587,7 @@ async function onVoiceRecorded({ url, duration, path }) {
       action_type: 'voice_note',
       entity_type: 'crm_card',
       entity_id: card.value.id,
-      description: `[voice:${voicePath}] Голосовая заметка (${durationStr})`
+      description: `[voice:${voicePath}] Голосовая заметка (${durationStr})`,
     })
     $q.notify({ type: 'positive', message: 'Голосовая заметка сохранена' })
     await reloadCard()
@@ -1568,7 +2604,7 @@ function addDeadlineToCalendar() {
     description: `Дедлайн проекта ${card.value.contract_number}. Стадия: ${card.value.column_name || ''}`,
     startDate: card.value.deadline,
     location: card.value.address || '',
-    reminder: 1440 // за 1 день
+    reminder: 1440, // за 1 день
   }, $q)
 }
 
@@ -1692,14 +2728,14 @@ async function doAssign() {
       await crmApi.reassignExecutor(card.value.id, stageName, {
         executor_id: assignEmployeeId.value,
         deadline: assignDeadline.value || null,
-        completed: false
+        completed: false,
       })
 
       // 2. Двойная запись оплат (как десктоп _reassign_payments_via_api)
       if (oldExecutorId && oldExecutorId !== assignEmployeeId.value) {
         // Помечаем старые оплаты как reassigned
         const oldPayments = cardPayments.value.filter(p =>
-          p.employee_id === oldExecutorId && p.role === roleName && !p.reassigned
+          p.employee_id === oldExecutorId && p.role === roleName && !p.reassigned,
         )
         for (const op of oldPayments) {
           try {
@@ -1854,7 +2890,7 @@ function openCreatePaymentDialog() {
     message: 'Выберите сотрудника:',
     options: { model: empOptions[0]?.value, items: empOptions.map(e => ({ label: e.label, value: e.value })) },
     cancel: { label: 'Отмена', flat: true, noCaps: true },
-    ok: { label: 'Далее', noCaps: true, color: 'primary' }
+    ok: { label: 'Далее', noCaps: true, color: 'primary' },
   }).onOk(empId => {
     const emp = empOptions.find(e => e.value === empId)
     // Шаг 2: ввод суммы
@@ -1862,7 +2898,7 @@ function openCreatePaymentDialog() {
       title: `Сумма платежа: ${emp?.label}`,
       prompt: { model: '0', type: 'number', label: 'Сумма (руб.)' },
       cancel: { label: 'Отмена', flat: true, noCaps: true },
-      ok: { label: 'Создать', noCaps: true, color: 'positive' }
+      ok: { label: 'Создать', noCaps: true, color: 'positive' },
     }).onOk(async (amount) => {
       try {
         const data = {
@@ -1873,7 +2909,7 @@ function openCreatePaymentDialog() {
           crm_card_id: card.value.id,
           calculated_amount: parseFloat(amount),
           final_amount: parseFloat(amount),
-          report_month: null
+          report_month: null,
         }
         const created = await paymentsApi.create(data)
         if (created) cardPayments.value.push(created)
@@ -1947,7 +2983,7 @@ async function handleCrmFileUpload(event) {
       stage1: '1 стадия - Планировочное решение',                     // Стадия 1
       stage2_concept: '2 стадия - Концепция дизайна/Концепция-коллажи', // Стадия 2 концепция
       stage2_3d: '2 стадия - Концепция дизайна/3D визуализация',        // Стадия 2 визуализация
-      stage3: '3 стадия - Чертежный проект'                            // Стадия 3
+      stage3: '3 стадия - Чертежный проект',                            // Стадия 3
     }
 
     for (let i = 0; i < fileList.length; i++) {
@@ -1981,7 +3017,7 @@ async function handleCrmFileUpload(event) {
           contract_id: contractId, stage, file_name: file.name,
           file_type: file.type?.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : 'other',
           public_link: publicLink, yandex_path: ypClean,
-          file_order: projectFiles.value.length + i + 1, variation
+          file_order: projectFiles.value.length + i + 1, variation,
         })
       } catch (dbErr) {
         const d = dbErr.response?.data?.detail
@@ -2335,7 +3371,7 @@ async function createProjectChat() {
       { key: 'sdp_id', role: 'СДП' },
       { key: 'gap_id', role: 'ГАП' },
       { key: 'manager_id', role: 'Менеджер' },
-      { key: 'surveyor_id', role: 'Замерщик' }
+      { key: 'surveyor_id', role: 'Замерщик' },
     ]
     const members = memberFields
       .filter(m => c[m.key])
@@ -2344,7 +3380,7 @@ async function createProjectChat() {
     const payload = {
       crm_card_id: c.id,
       chat_title: newChatTitle.value.trim() || undefined,
-      members
+      members,
     }
     const { data } = await messengerApi.createChat(payload)
     if (data && data.chat) {
@@ -2366,7 +3402,7 @@ async function doAddChatMember() {
   try {
     const { api: ax } = await import('src/boot/axios')
     await ax.post(`/api/v1/messenger/chats/${chatData.value.id}/add-member`, {
-      employee_id: addMemberEmployeeId.value
+      employee_id: addMemberEmployeeId.value,
     })
     $q.notify({ type: 'positive', message: 'Участник добавлен' })
     showAddMemberDlg.value = false
@@ -2412,7 +3448,7 @@ async function loadScriptsAndShow() {
     const pt = card.value?.project_type || ''
     chatScripts.value = (data || []).filter(s =>
       (s.script_type === 'project_start' || s.script_type === 'project_end') &&
-      s.project_type === pt
+      s.project_type === pt,
     )
   } catch { chatScripts.value = [] }
   showScriptsDlg.value = true
@@ -2435,20 +3471,21 @@ async function acquireLock(cardId) {
   try {
     // Проверяем, не заблокирована ли уже
     const { data: existing } = await locksApi.check('crm_card', cardId)
-    if (existing && existing.locked_by && existing.locked_by !== authStore.user?.id) {
-      lockedByUser.value = existing.locked_by_name || 'другой пользователь'
+    // is_own_lock = true → это наша блокировка, предупреждение не нужно
+    if (existing && existing.is_locked && !existing.is_own_lock) {
+      lockedByUser.value = existing.locked_by || 'другой пользователь'
       $q.notify({ type: 'warning', message: `Карточка редактируется: ${lockedByUser.value}`, timeout: 5000 })
       return
     }
-    // Захватываем блокировку
-    const { data } = await locksApi.lock('crm_card', cardId)
-    if (data?.lock_id || data?.id) currentLockId.value = data.lock_id || data.id
+    // Захватываем блокировку (entity_type+id — сервер вернёт created/renewed)
+    await locksApi.lock('crm_card', cardId)
+    currentLockId.value = cardId
   } catch { /* блокировки опциональны — не блокируем работу */ }
 }
 
 async function releaseLock() {
   if (!currentLockId.value) return
-  try { await locksApi.unlock(currentLockId.value) } catch {}
+  try { await locksApi.unlock('crm_card', currentLockId.value) } catch {}
   currentLockId.value = null
 }
 
