@@ -56,10 +56,18 @@
         <span style="color: white; font-size: 10px">{{ card.tags }}</span>
       </div>
 
-      <!-- 9. Дедлайн (скрыт в архиве) -->
-      <div v-if="deadlineText && !isArchived" class="q-mb-xs row items-center" :style="{ background: deadlineBg, borderRadius: '4px', padding: '3px 8px', height: '28px', width: '100%', gap: '4px' }">
-        <q-icon name="schedule" size="10px" :style="{ color: deadlineTextColor }" />
-        <span :style="{ fontSize: '10px', color: deadlineTextColor, fontWeight: 'bold' }">{{ deadlineText }}</span>
+      <!-- 9. Дедлайны (скрыты в архиве) -->
+      <div v-if="!isArchived && (generalDeadlineText || substepDeadlineText)" class="q-mb-xs row no-wrap" style="gap: 4px">
+        <!-- Общий дедлайн заказа (всегда слева) -->
+        <div v-if="generalDeadlineText" :style="{ flex: 1, background: generalDeadlineBg, borderRadius: '4px', padding: '3px 6px', minWidth: 0 }">
+          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">Общий</div>
+          <div :style="{ fontSize: '10px', color: generalDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">{{ generalDeadlineText }}</div>
+        </div>
+        <!-- Дедлайн текущего подэтапа (справа, если есть) -->
+        <div v-if="substepDeadlineText" :style="{ flex: 1, background: substepDeadlineBg, borderRadius: '4px', padding: '3px 6px', minWidth: 0 }">
+          <div style="font-size: 8px; color: #888; font-weight: bold; line-height: 1.3">Подэтап</div>
+          <div :style="{ fontSize: '10px', color: substepDeadlineColor, fontWeight: 'bold', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }">{{ substepDeadlineText }}</div>
+        </div>
       </div>
 
       <!-- 10. Индикатор "Работа сдана" (скрыт в архиве) -->
@@ -183,57 +191,57 @@ const teamMembers = computed(() => {
   return items
 })
 
-// === Дедлайн: исполнителя стадии (как десктоп crm_tab.py:2306-2314) ===
-const stageDeadline = computed(() => {
-  const c = props.card
-  const col = (c.column_name || '').toLowerCase()
-  const wf = c.workflow_status || ''
+// === Дедлайн: два блока — общий + подэтап ===
 
-  // Дедлайн исполнителя актуален только пока он активно работает.
-  // pending_review/client_approval/etc. → работа сдана, дедлайн исполнителя устарел.
-  const executorWorking = wf === 'in_progress' || wf === 'revision' || !wf
-
-  if (executorWorking) {
-    // Дизайнер — стадия 2 (концепция/визуализация)
-    if ((col.includes('концепция') || col.includes('визуализац')) && c.designer_deadline && !c.designer_completed)
-      return c.designer_deadline
-    // Чертёжник — стадия 1 (планировочные) или 3 (чертежи)
-    if ((col.includes('планировочн') || col.includes('чертеж') || col.includes('чертёж')) && c.draftsman_deadline && !c.draftsman_completed)
-      return c.draftsman_deadline
-  }
-
-  return c.deadline
-})
-
-// Рабочие дни (как десктоп — без выходных и праздников РФ)
-const deadlineDays = computed(() => {
-  if (!stageDeadline.value) return null
-  return countWorkingDaysUntil(stageDeadline.value)
-})
-const deadlineText = computed(() => {
-  if (deadlineDays.value === null) return null
-  const d = new Date(stageDeadline.value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const days = deadlineDays.value
-  if (days < 0) return `${d} ПРОСРОЧЕН (${Math.abs(days)} раб.дн.)`
-  if (days === 0) return `${d} СЕГОДНЯ!`
-  return `${d} (${days} раб.дн.)`
-})
-const deadlineBg = computed(() => {
-  const days = deadlineDays.value
-  if (days === null) return 'transparent'
-  if (days < 0) return '#FFEBEE'
-  if (days <= 2) return '#FFF8E1'
-  return '#F5F5F5'
-})
-const deadlineTextColor = computed(() => {
-  const days = deadlineDays.value
+// Вспомогательные функции форматирования
+function _deadlineDaysColor(days) {
   if (days === null) return '#888'
   if (days < 0) return '#8B0000'
   if (days === 0) return '#DC143C'
   if (days <= 1) return '#E74C3C'
   if (days <= 2) return '#F39C12'
   return '#888'
+}
+function _deadlineDaysBg(days) {
+  if (days === null) return '#F5F5F5'
+  if (days < 0) return '#FFEBEE'
+  if (days <= 2) return '#FFF8E1'
+  return '#F5F5F5'
+}
+
+// Левый блок: Общий дедлайн заказа (всегда c.deadline)
+const generalDeadlineDays = computed(() => {
+  if (!props.card.deadline) return null
+  return countWorkingDaysUntil(props.card.deadline)
 })
+const generalDeadlineText = computed(() => {
+  if (generalDeadlineDays.value === null) return null
+  const d = new Date(props.card.deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const days = generalDeadlineDays.value
+  if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
+  if (days === 0) return `${d} сег!`
+  return `${d} (${days}р.д.)`
+})
+const generalDeadlineColor = computed(() => _deadlineDaysColor(generalDeadlineDays.value))
+const generalDeadlineBg = computed(() => _deadlineDaysBg(generalDeadlineDays.value))
+
+// Правый блок: Дедлайн текущего подэтапа (current_substep_deadline с сервера)
+const substepDeadlineDays = computed(() => {
+  const deadline = props.card.current_substep_deadline
+  if (!deadline) return null
+  return countWorkingDaysUntil(deadline)
+})
+const substepDeadlineText = computed(() => {
+  const deadline = props.card.current_substep_deadline
+  if (!deadline || substepDeadlineDays.value === null) return null
+  const d = new Date(deadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const days = substepDeadlineDays.value
+  if (days < 0) return `${d} (−${Math.abs(days)}р.д.)`
+  if (days === 0) return `${d} сег!`
+  return `${d} (${days}р.д.)`
+})
+const substepDeadlineColor = computed(() => _deadlineDaysColor(substepDeadlineDays.value))
+const substepDeadlineBg = computed(() => _deadlineDaysBg(substepDeadlineDays.value))
 
 // === Индикатор "Работа сдана" (для проверяющих) ===
 const workSubmittedText = computed(() => {

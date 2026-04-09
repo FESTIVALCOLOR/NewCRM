@@ -192,6 +192,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["crm"])
 
 
+def _calc_substep_planned_date(entries, target_code: str) -> str:
+    """Рассчитать плановую дату для подэтапа target_code по логике calc_planned_dates.
+    entries: список ProjectTimelineEntry, отсортированных по sort_order.
+    Возвращает строку 'YYYY-MM-DD' или ''.
+    """
+    prev_date = ''
+    for entry in entries:
+        if (entry.executor_role or '') == 'header':
+            continue
+        code = entry.stage_code or ''
+        if code == 'START':
+            prev_date = entry.actual_date or ''
+            continue
+        norm = int(entry.custom_norm_days or 0) if (entry.custom_norm_days and entry.custom_norm_days > 0) else int(entry.norm_days or 0)
+        actual = entry.actual_date or ''
+        if prev_date and norm > 0:
+            planned = _add_working_days_to_date(prev_date, norm)
+        elif prev_date:
+            planned = prev_date
+        else:
+            planned = ''
+        if code == target_code:
+            return planned
+        prev_date = actual if actual else (planned or prev_date)
+    return ''
+
+
 # =========================
 # CRM КАРТОЧКИ
 # =========================
@@ -271,6 +298,15 @@ async def get_crm_cards(
                 ProjectTimelineEntry.stage_code.in_(substep_codes)
             ).all()
             substep_name_map = {e.stage_code: e.stage_name for e in substep_entries}
+
+        # Batch-load timeline entries для расчёта дедлайна текущего подэтапа
+        contract_ids = list(set(card.contract_id for card in cards))
+        all_timeline_entries = db.query(ProjectTimelineEntry).filter(
+            ProjectTimelineEntry.contract_id.in_(contract_ids)
+        ).order_by(ProjectTimelineEntry.contract_id, ProjectTimelineEntry.sort_order).all() if contract_ids else []
+        timeline_by_contract = {}
+        for te in all_timeline_entries:
+            timeline_by_contract.setdefault(te.contract_id, []).append(te)
 
         result = []
         for card in cards:
@@ -359,7 +395,15 @@ async def get_crm_cards(
                 'current_substep_name': (lambda wf: substep_name_map.get(wf.current_substep_code) if wf and wf.current_substep_code else None)(wf_states_by_card.get((card.id, card.column_name))),
                 'workflow_status': (lambda wf: wf.status if wf else None)(wf_states_by_card.get((card.id, card.column_name))),
                 'revision_count': (lambda wf: wf.revision_count if wf else 0)(wf_states_by_card.get((card.id, card.column_name))),
+                # Дедлайн текущего подэтапа (плановая дата из timeline)
+                'current_substep_deadline': None,  # заполняется ниже
             }
+            # Вычислить дедлайн текущего подэтапа
+            _wf = wf_states_by_card.get((card.id, card.column_name))
+            _substep_code = _wf.current_substep_code if _wf else None
+            if _substep_code and card.contract_id in timeline_by_contract:
+                _planned = _calc_substep_planned_date(timeline_by_contract[card.contract_id], _substep_code)
+                card_data['current_substep_deadline'] = _planned or None
             result.append(card_data)
 
         return result
