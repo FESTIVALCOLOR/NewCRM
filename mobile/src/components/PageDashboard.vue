@@ -3,8 +3,12 @@
     <div class="row q-col-gutter-xs">
       <div v-for="item in items" :key="item.label" :class="colClass">
         <div class="dash-item">
-          <div class="dash-value" :style="{ color: item.color || '#333' }">{{ item.value }}</div>
-          <div class="dash-label">{{ item.label }}</div>
+          <div class="dash-value" :style="{ color: item.color || '#333' }">
+            {{ item.value }}
+          </div>
+          <div class="dash-label">
+            {{ item.label }}
+          </div>
         </div>
       </div>
     </div>
@@ -15,7 +19,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
-  items: { type: Array, default: () => [] }
+  items: { type: Array, default: () => [] },
 })
 
 const visible = ref(true)

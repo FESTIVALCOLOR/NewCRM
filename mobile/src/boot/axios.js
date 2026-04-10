@@ -6,8 +6,8 @@ const api = axios.create({
   baseURL: 'https://crm.festivalcolor.ru',
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 })
 
 // Request interceptor — добавляет JWT токен
@@ -19,7 +19,7 @@ api.interceptors.request.use(
     }
     return config
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 )
 
 // Response interceptor — обработка 401 и refresh
@@ -68,7 +68,7 @@ api.interceptors.response.use(
 
         const { data } = await axios.post(
           `${api.defaults.baseURL}/api/v1/auth/refresh`,
-          { refresh_token: refreshToken }
+          { refresh_token: refreshToken },
         )
 
         const newToken = data.access_token
@@ -90,7 +90,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error)
-  }
+  },
 )
 
 // Interceptor для offline-очереди:
@@ -118,14 +118,14 @@ api.interceptors.response.use(
         method: method.toUpperCase(),
         url: config.url,
         data: config.data ? JSON.parse(typeof config.data === 'string' ? config.data : JSON.stringify(config.data)) : null,
-        description: `${method.toUpperCase()} ${config.url}`
+        description: `${method.toUpperCase()} ${config.url}`,
       })
       console.info(`[OfflineQueue] Операция сохранена: ${method.toUpperCase()} ${config.url}`)
     } catch (queueErr) {
       console.warn('[OfflineQueue] Не удалось сохранить в очередь:', queueErr)
     }
     return Promise.reject(error)
-  }
+  },
 )
 
 export default boot(({ app }) => {

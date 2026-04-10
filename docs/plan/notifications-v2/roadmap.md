@@ -2,14 +2,14 @@
 
 ## Оглавление
 
-- ⬜ Этап 1: DB миграция (Employee, NotificationSettings, MessengerScript)
-- ⬜ Этап 2: Schemas (NotificationSettingsResponse/Update)
-- ⬜ Этап 3: notification_dispatcher — project_type фильтры + дублирование
-- ⬜ Этап 4: notification_service — переменные + project_type фильтр скриптов
-- ⬜ Этап 5: crm_router — dispatch_notification во все workflow endpoints
-- ⬜ Этап 6: messenger_router — seed ~40 скриптов из документации
-- ⬜ Этап 7: notifications_router — CRUD для новых полей настроек
-- ⬜ Этап 8: UI — панель настроек уведомлений сотрудника
+- ✅ Этап 1: DB миграция (Employee, NotificationSettings, MessengerScript)
+- ✅ Этап 2: Schemas (NotificationSettingsResponse/Update)
+- ✅ Этап 3: notification_dispatcher — project_type фильтры + дублирование
+- ✅ Этап 4: notification_service — переменные + project_type фильтр скриптов
+- ✅ Этап 5: crm_router — dispatch_notification во все workflow endpoints
+- ✅ Этап 6: messenger_router — seed ~40 скриптов из документации
+- ✅ Этап 7: notifications_router — CRUD для новых полей настроек
+- ✅ Этап 8: UI — панель настроек уведомлений сотрудника
 - ⬜ Этап 9: Тесты + Gate Check
 - ⬜ Этап 10: PR + CI
 

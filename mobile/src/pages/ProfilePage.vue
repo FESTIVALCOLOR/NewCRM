@@ -6,9 +6,15 @@
         <q-avatar size="80px" color="primary" text-color="white" class="q-mb-md">
           <span class="text-h4">{{ authStore.initials }}</span>
         </q-avatar>
-        <div class="text-h6 text-weight-bold">{{ authStore.fullName }}</div>
-        <div class="text-body2 text-grey-7">{{ authStore.userPosition }}</div>
-        <div class="text-caption text-grey-5">{{ authStore.userRole }}</div>
+        <div class="text-h6 text-weight-bold">
+          {{ authStore.fullName }}
+        </div>
+        <div class="text-body2 text-grey-7">
+          {{ authStore.userPosition }}
+        </div>
+        <div class="text-caption text-grey-5">
+          {{ authStore.userRole }}
+        </div>
       </q-card-section>
     </q-card>
 
@@ -20,7 +26,9 @@
             <q-icon name="email" color="grey-7" />
           </q-item-section>
           <q-item-section>
-            <q-item-label caption>Email</q-item-label>
+            <q-item-label caption>
+              Email
+            </q-item-label>
             <q-item-label>{{ authStore.user.email }}</q-item-label>
           </q-item-section>
         </q-item>
@@ -30,7 +38,9 @@
             <q-icon name="phone" color="grey-7" />
           </q-item-section>
           <q-item-section>
-            <q-item-label caption>Телефон</q-item-label>
+            <q-item-label caption>
+              Телефон
+            </q-item-label>
             <q-item-label>{{ authStore.user.phone }}</q-item-label>
           </q-item-section>
         </q-item>
@@ -40,7 +50,9 @@
             <q-icon name="business" color="grey-7" />
           </q-item-section>
           <q-item-section>
-            <q-item-label caption>Отдел</q-item-label>
+            <q-item-label caption>
+              Отдел
+            </q-item-label>
             <q-item-label>{{ authStore.user.department }}</q-item-label>
           </q-item-section>
         </q-item>
@@ -50,7 +62,7 @@
     <!-- Редактировать профиль -->
     <q-card class="is-card q-mb-md">
       <q-list>
-        <q-item clickable v-ripple @click="openEditProfile">
+        <q-item v-ripple clickable @click="openEditProfile">
           <q-item-section avatar>
             <q-icon name="edit" color="grey-7" />
           </q-item-section>
@@ -65,7 +77,7 @@
     <!-- Действия -->
     <q-card class="is-card">
       <q-list>
-        <q-item clickable v-ripple @click="checkUpdate">
+        <q-item v-ripple clickable @click="checkUpdate">
           <q-item-section avatar>
             <q-icon name="system_update" color="grey-7" />
           </q-item-section>
@@ -82,7 +94,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple @click="handleLogout" class="text-negative">
+        <q-item v-ripple clickable class="text-negative" @click="handleLogout">
           <q-item-section avatar>
             <q-icon name="logout" color="negative" />
           </q-item-section>
@@ -95,16 +107,44 @@
     <q-dialog v-model="showEditProfile">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Редактировать профиль</q-toolbar-title>
-          <q-btn flat round dense icon="close" @click="showEditProfile = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            Редактировать профиль
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showEditProfile = false"
+          />
         </q-toolbar>
         <q-card-section>
-          <q-input v-model="profileForm.phone" label="Телефон" outlined dense type="tel" class="q-mb-sm" />
-          <q-input v-model="profileForm.email" label="Email" outlined dense type="email" />
+          <q-input
+            v-model="profileForm.phone"
+            label="Телефон"
+            outlined
+            dense
+            type="tel"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="profileForm.email"
+            label="Email"
+            outlined
+            dense
+            type="email"
+          />
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup no-caps />
-          <q-btn unelevated label="Сохранить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps :loading="profileSaving" @click="saveProfile" />
+          <q-btn v-close-popup flat label="Отмена" no-caps />
+          <q-btn
+            unelevated
+            label="Сохранить"
+            style="background: #ffd93c; color: #333; border-radius: 4px"
+            no-caps
+            :loading="profileSaving"
+            @click="saveProfile"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -127,7 +167,7 @@ const profileForm = ref({ phone: '', email: '' })
 function openEditProfile() {
   profileForm.value = {
     phone: authStore.user?.phone || '',
-    email: authStore.user?.email || ''
+    email: authStore.user?.email || '',
   }
   showEditProfile.value = true
 }
@@ -139,7 +179,7 @@ async function saveProfile() {
     if (!userId) { $q.notify({ type: 'negative', message: 'Не удалось определить пользователя' }); return }
     await employeesApi.update(userId, {
       phone: profileForm.value.phone || null,
-      email: profileForm.value.email || null
+      email: profileForm.value.email || null,
     })
     // Обновляем локальные данные
     if (authStore.user) {

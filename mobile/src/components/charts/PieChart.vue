@@ -15,7 +15,7 @@ const props = defineProps({
   labels: { type: Array, required: true },
   values: { type: Array, required: true },
   colors: { type: Array, default: () => ['#ffd93c', '#F39C12', '#27AE60', '#E74C3C', '#85C1E9', '#9B59B6', '#1ABC9C', '#E67E22'] },
-  title: { type: String, default: '' }
+  title: { type: String, default: '' },
 })
 
 const chartData = computed(() => ({
@@ -24,8 +24,8 @@ const chartData = computed(() => ({
     data: props.values,
     backgroundColor: props.colors.slice(0, props.values.length),
     borderWidth: 1,
-    borderColor: '#fff'
-  }]
+    borderColor: '#fff',
+  }],
 }))
 
 const chartOptions = {
@@ -33,7 +33,7 @@ const chartOptions = {
   maintainAspectRatio: false,
   plugins: {
     legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
-    title: { display: false }
-  }
+    title: { display: false },
+  },
 }
 </script>

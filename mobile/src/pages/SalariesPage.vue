@@ -3,48 +3,227 @@
     <!-- Тип выплат -->
     <div class="row items-center q-mb-md" style="overflow-x: auto; flex-wrap: nowrap">
       <div class="toggle-pills-wide">
-        <button v-for="t in paymentTabs" :key="t.value" :class="{ active: paymentTab === t.value }" @click="paymentTab = t.value">{{ t.label }}</button>
+        <button v-for="t in paymentTabs" :key="t.value" :class="{ active: paymentTab === t.value }" @click="paymentTab = t.value">
+          {{ t.label }}
+        </button>
       </div>
-      <q-btn v-if="isSuperuser" flat dense no-caps label="Пересчёт" color="orange" @click="recalculatePayments" style="font-size: 11px" />
+      <q-btn
+        v-if="isSuperuser"
+        flat
+        dense
+        no-caps
+        label="Пересчёт"
+        color="orange"
+        style="font-size: 11px"
+        @click="recalculatePayments"
+      />
     </div>
 
     <!-- Фильтры — расширенные как в десктопе -->
     <div class="row q-col-gutter-xs q-mb-xs">
-      <div class="col"><q-select v-model="filters.period" :options="periodOptions" outlined dense emit-value map-options style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="date_range" size="16px" /></template></q-select></div>
-      <div class="col"><q-select v-model="filters.employee_id" :options="employeeOpts" outlined dense emit-value map-options clearable use-input input-debounce="200" @filter="filterEmployees" placeholder="Исполнитель" style="font-size: 12px" @update:model-value="onEmployeeFilter" @clear="filters.employee_id = null; loadData()"><template v-slot:prepend><q-icon name="person" size="16px" /></template></q-select></div>
-      <div class="col-auto"><q-select v-model="filters.status" :options="statusOptions" outlined dense emit-value map-options style="font-size: 12px; min-width: 100px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="filter_list" size="16px" /></template></q-select></div>
-      <div class="col-auto"><q-select v-model="filters.payment_type" :options="paymentTypeOptions" label="Тип выплаты" outlined dense emit-value map-options style="font-size: 12px; min-width: 100px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="payment" size="16px" /></template></q-select></div>
+      <div class="col">
+        <q-select
+          v-model="filters.period"
+          :options="periodOptions"
+          outlined
+          dense
+          emit-value
+          map-options
+          style="font-size: 12px"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="date_range" size="16px" />
+          </template>
+        </q-select>
+      </div>
+      <div class="col">
+        <q-select
+          v-model="filters.employee_id"
+          :options="employeeOpts"
+          outlined
+          dense
+          emit-value
+          map-options
+          clearable
+          use-input
+          input-debounce="200"
+          placeholder="Исполнитель"
+          style="font-size: 12px"
+          @filter="filterEmployees"
+          @update:model-value="onEmployeeFilter"
+          @clear="filters.employee_id = null; loadData()"
+        >
+          <template #prepend>
+            <q-icon name="person" size="16px" />
+          </template>
+        </q-select>
+      </div>
+      <div class="col-auto">
+        <q-select
+          v-model="filters.status"
+          :options="statusOptions"
+          outlined
+          dense
+          emit-value
+          map-options
+          style="font-size: 12px; min-width: 100px"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="filter_list" size="16px" />
+          </template>
+        </q-select>
+      </div>
+      <div class="col-auto">
+        <q-select
+          v-model="filters.payment_type"
+          :options="paymentTypeOptions"
+          label="Тип выплаты"
+          outlined
+          dense
+          emit-value
+          map-options
+          style="font-size: 12px; min-width: 100px"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="payment" size="16px" />
+          </template>
+        </q-select>
+      </div>
     </div>
     <!-- Строка 2: адрес, роль, агент -->
     <div class="row q-col-gutter-xs q-mb-md">
-      <div class="col"><q-input v-model="filters.address" placeholder="Адрес" outlined dense clearable style="font-size: 12px" @update:model-value="loadData"><template v-slot:prepend><q-icon name="location_on" size="16px" /></template></q-input></div>
-      <div class="col"><q-select v-model="filters.role" :options="roleOpts" outlined dense clearable emit-value map-options label="Роль" style="font-size: 12px" @clear="filters.role = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="badge" size="16px" /></template></q-select></div>
-      <div class="col"><q-select v-model="filters.agent_type" :options="agentOpts" outlined dense clearable label="Агент" style="font-size: 12px" @clear="filters.agent_type = null; loadData()" @update:model-value="loadData"><template v-slot:prepend><q-icon name="business" size="16px" /></template></q-select></div>
-      <div class="col-auto" style="display: flex; align-items: center"><q-btn outline dense no-caps label="Сбросить" color="grey" @click="resetFilters" style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 90px; height: 40px" /></div>
+      <div class="col">
+        <q-input
+          v-model="filters.address"
+          placeholder="Адрес"
+          outlined
+          dense
+          clearable
+          style="font-size: 12px"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="location_on" size="16px" />
+          </template>
+        </q-input>
+      </div>
+      <div class="col">
+        <q-select
+          v-model="filters.role"
+          :options="roleOpts"
+          outlined
+          dense
+          clearable
+          emit-value
+          map-options
+          label="Роль"
+          style="font-size: 12px"
+          @clear="filters.role = null; loadData()"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="badge" size="16px" />
+          </template>
+        </q-select>
+      </div>
+      <div class="col">
+        <q-select
+          v-model="filters.agent_type"
+          :options="agentOpts"
+          outlined
+          dense
+          clearable
+          label="Агент"
+          style="font-size: 12px"
+          @clear="filters.agent_type = null; loadData()"
+          @update:model-value="loadData"
+        >
+          <template #prepend>
+            <q-icon name="business" size="16px" />
+          </template>
+        </q-select>
+      </div>
+      <div class="col-auto" style="display: flex; align-items: center">
+        <q-btn
+          outline
+          dense
+          no-caps
+          label="Сбросить"
+          color="grey"
+          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 90px; height: 40px"
+          @click="resetFilters"
+        />
+      </div>
     </div>
 
     <!-- Период -->
     <div v-if="filters.period !== 'all'" class="row q-col-gutter-xs q-mb-md">
-      <div class="col"><q-select v-model="filters.year" :options="years" label="Год" outlined dense @update:model-value="loadData" /></div>
-      <div class="col" v-if="filters.period === 'month'"><q-select v-model="filters.month" :options="monthOpts" label="Месяц" outlined dense emit-value map-options @update:model-value="loadData" /></div>
-      <div class="col" v-if="filters.period === 'quarter'"><q-select v-model="filters.quarter" :options="quarterOpts" label="Квартал" outlined dense emit-value map-options @update:model-value="loadData" /></div>
+      <div class="col">
+        <q-select
+          v-model="filters.year"
+          :options="years"
+          label="Год"
+          outlined
+          dense
+          @update:model-value="loadData"
+        />
+      </div>
+      <div v-if="filters.period === 'month'" class="col">
+        <q-select
+          v-model="filters.month"
+          :options="monthOpts"
+          label="Месяц"
+          outlined
+          dense
+          emit-value
+          map-options
+          @update:model-value="loadData"
+        />
+      </div>
+      <div v-if="filters.period === 'quarter'" class="col">
+        <q-select
+          v-model="filters.quarter"
+          :options="quarterOpts"
+          label="Квартал"
+          outlined
+          dense
+          emit-value
+          map-options
+          @update:model-value="loadData"
+        />
+      </div>
     </div>
 
     <!-- Итого -->
-    <q-card class="is-card q-mb-md summary-card" v-if="!loading">
+    <q-card v-if="!loading" class="is-card q-mb-md summary-card">
       <q-card-section class="q-pa-md">
         <div class="row items-end justify-between">
           <div>
-            <div class="text-caption" style="color: #888">Итого</div>
-            <div class="text-h5 text-weight-bold" style="color: #333">{{ formatMoney(totalAmount) }}</div>
+            <div class="text-caption" style="color: #888">
+              Итого
+            </div>
+            <div class="text-h5 text-weight-bold" style="color: #333">
+              {{ formatMoney(totalAmount) }}
+            </div>
           </div>
           <div class="text-right">
             <div class="row q-gutter-sm">
-              <div class="stat-pill paid">{{ paidCount }} оплачено</div>
-              <div class="stat-pill pending">{{ toPayCount }} к оплате</div>
-              <div class="stat-pill inwork">{{ inWorkCount }} в работе</div>
+              <div class="stat-pill paid">
+                {{ paidCount }} оплачено
+              </div>
+              <div class="stat-pill pending">
+                {{ toPayCount }} к оплате
+              </div>
+              <div class="stat-pill inwork">
+                {{ inWorkCount }} в работе
+              </div>
             </div>
-            <div class="text-caption q-mt-xs" style="color: #999">{{ payments.length }} записей</div>
+            <div class="text-caption q-mt-xs" style="color: #999">
+              {{ payments.length }} записей
+            </div>
           </div>
         </div>
       </q-card-section>
@@ -53,50 +232,148 @@
     <!-- Список -->
     <q-pull-to-refresh @refresh="onRefresh">
       <div v-if="loading">
-        <q-card class="is-card q-mb-sm" v-for="n in 5" :key="n"><q-card-section><q-skeleton type="text" width="60%" /><q-skeleton type="text" width="40%" /></q-card-section></q-card>
+        <q-card v-for="n in 5" :key="n" class="is-card q-mb-sm">
+          <q-card-section><q-skeleton type="text" width="60%" /><q-skeleton type="text" width="40%" /></q-card-section>
+        </q-card>
       </div>
 
       <template v-else>
         <div v-for="group in groupedPayments" :key="group.employeeId" class="q-mb-md">
           <div class="employee-group-header" @click="expandedGroups[group.employeeId] = !expandedGroups[group.employeeId]">
-            <q-avatar size="28px" color="grey-3" text-color="grey-8">{{ group.initial }}</q-avatar>
+            <q-avatar size="28px" color="grey-3" text-color="grey-8">
+              {{ group.initial }}
+            </q-avatar>
             <div style="flex: 1; margin-left: 8px">
-              <div class="text-weight-bold" style="font-size: 13px; color: #333">{{ group.name }}</div>
-              <div class="text-caption" style="color: #888">{{ group.role }}</div>
+              <div class="text-weight-bold" style="font-size: 13px; color: #333">
+                {{ group.name }}
+              </div>
+              <div class="text-caption" style="color: #888">
+                {{ group.role }}
+              </div>
             </div>
             <div class="text-right">
-              <div class="text-weight-bold" style="font-size: 14px; color: #333">{{ formatMoney(group.total) }}</div>
-              <div class="text-caption" style="color: #999">{{ group.items.length }} выплат</div>
+              <div class="text-weight-bold" style="font-size: 14px; color: #333">
+                {{ formatMoney(group.total) }}
+              </div>
+              <div class="text-caption" style="color: #999">
+                {{ group.items.length }} выплат
+              </div>
             </div>
             <q-icon :name="expandedGroups[group.employeeId] ? 'expand_less' : 'expand_more'" color="grey-5" size="20px" class="q-ml-xs" />
           </div>
           <q-slide-transition>
             <div v-show="expandedGroups[group.employeeId]">
-              <q-card v-for="p in group.items" :key="p.id || p.salary_id" flat class="payment-card" :style="payRowStyle(p)">
+              <q-card
+                v-for="p in group.items"
+                :key="p.id || p.salary_id"
+                flat
+                class="payment-card"
+                :style="payRowStyle(p)"
+              >
                 <q-card-section class="q-pa-sm">
                   <div class="row items-center no-wrap">
                     <div style="flex: 1; min-width: 0">
                       <div class="text-caption ellipsis" style="color: #888">
                         {{ p.contract_number || '' }}<span v-if="p.stage_name"> · {{ p.stage_name }}</span><span v-if="p.payment_subtype"> · {{ p.payment_subtype }}</span>
                       </div>
-                      <div v-if="p.address" class="text-caption ellipsis" style="color: #aaa; font-size: 10px">{{ p.address }}</div>
+                      <div v-if="p.address" class="text-caption ellipsis" style="color: #aaa; font-size: 10px">
+                        {{ p.address }}
+                      </div>
                     </div>
                     <div class="text-right q-ml-sm" style="flex-shrink: 0">
                       <div class="row items-center justify-end no-wrap">
-                        <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">{{ formatMoney(p.final_amount || p.amount) }}</div>
-                        <div style="width: 1px; height: 16px; background: #ddd; margin: 0 6px"></div>
-                        <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">{{ fmtMonth(p.report_month) }}</div>
+                        <div class="text-weight-bold" style="font-size: 13px" :style="{ color: p.is_paid ? '#27AE60' : '#333' }">
+                          {{ formatMoney(p.final_amount || p.amount) }}
+                        </div>
+                        <div style="width: 1px; height: 16px; background: #ddd; margin: 0 6px" />
+                        <div class="text-caption" :style="{ color: fmtMonth(p.report_month) !== 'в работе' ? '#333' : '#bbb' }">
+                          {{ fmtMonth(p.report_month) }}
+                        </div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
                         <!-- Статус -->
-                        <q-btn v-if="p.is_paid || p.payment_status === 'paid'" unelevated dense size="xs" label="Оплачено" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="undoPaid(p)" />
-                        <q-btn v-else-if="p.report_month || p.payment_status === 'to_pay'" unelevated dense size="xs" label="К оплате" no-caps color="warning" text-color="dark" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
-                        <q-btn v-else unelevated dense size="xs" label="В работе" no-caps color="grey-3" text-color="grey-7" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" disable />
+                        <q-btn
+                          v-if="p.is_paid || p.payment_status === 'paid'"
+                          unelevated
+                          dense
+                          size="xs"
+                          label="Оплачено"
+                          no-caps
+                          color="positive"
+                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          @click.stop="undoPaid(p)"
+                        />
+                        <q-btn
+                          v-else-if="p.report_month || p.payment_status === 'to_pay'"
+                          unelevated
+                          dense
+                          size="xs"
+                          label="К оплате"
+                          no-caps
+                          color="warning"
+                          text-color="dark"
+                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          @click.stop="setPayStatus(p)"
+                        />
+                        <q-btn
+                          v-else
+                          unelevated
+                          dense
+                          size="xs"
+                          label="В работе"
+                          no-caps
+                          color="grey-3"
+                          text-color="grey-7"
+                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          disable
+                        />
                         <!-- Действия -->
-                        <q-btn v-if="can('salaries.mark_paid') && !p.is_paid && (p.report_month || p.payment_status === 'to_pay')" outline dense size="xs" icon="check" label="Оплатить" no-caps color="positive" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="markPaid(p)" />
-                        <q-btn v-if="can('salaries.mark_to_pay') && !p.is_paid && !p.report_month && p.payment_status !== 'to_pay'" outline dense size="xs" icon="schedule" label="К оплате" no-caps color="warning" style="font-size: 10px; padding: 2px 8px; border-radius: 4px" @click.stop="setPayStatus(p)" />
-                        <q-btn v-if="can('salaries.update')" outline dense size="xs" icon="edit" no-caps color="grey-7" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="openEditDialog(p)" />
-                        <q-btn v-if="can('salaries.delete')" outline dense size="xs" icon="delete_outline" no-caps color="negative" style="font-size: 10px; padding: 2px 6px; border-radius: 4px" @click.stop="deletePayment(p)" />
+                        <q-btn
+                          v-if="can('salaries.mark_paid') && !p.is_paid && (p.report_month || p.payment_status === 'to_pay')"
+                          outline
+                          dense
+                          size="xs"
+                          icon="check"
+                          label="Оплатить"
+                          no-caps
+                          color="positive"
+                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          @click.stop="markPaid(p)"
+                        />
+                        <q-btn
+                          v-if="can('salaries.mark_to_pay') && !p.is_paid && !p.report_month && p.payment_status !== 'to_pay'"
+                          outline
+                          dense
+                          size="xs"
+                          icon="schedule"
+                          label="К оплате"
+                          no-caps
+                          color="warning"
+                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          @click.stop="setPayStatus(p)"
+                        />
+                        <q-btn
+                          v-if="can('salaries.update')"
+                          outline
+                          dense
+                          size="xs"
+                          icon="edit"
+                          no-caps
+                          color="grey-7"
+                          style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                          @click.stop="openEditDialog(p)"
+                        />
+                        <q-btn
+                          v-if="can('salaries.delete')"
+                          outline
+                          dense
+                          size="xs"
+                          icon="delete_outline"
+                          no-caps
+                          color="negative"
+                          style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                          @click.stop="deletePayment(p)"
+                        />
                       </div>
                     </div>
                   </div>
@@ -110,12 +387,20 @@
         <q-card v-if="payments.length > 0" class="is-card q-mt-md" style="border-left: 3px solid #ffd93c">
           <q-card-section class="q-pa-md">
             <div class="row justify-between q-mb-xs">
-              <div class="text-caption" style="color: #888">Итого за год {{ filters.year || '' }}</div>
-              <div class="text-weight-bold">{{ formatMoney(totalAmount) }}</div>
+              <div class="text-caption" style="color: #888">
+                Итого за год {{ filters.year || '' }}
+              </div>
+              <div class="text-weight-bold">
+                {{ formatMoney(totalAmount) }}
+              </div>
             </div>
             <div class="row justify-between">
-              <div class="text-caption" style="color: #888">Всего записей</div>
-              <div class="text-weight-bold">{{ payments.length }}</div>
+              <div class="text-caption" style="color: #888">
+                Всего записей
+              </div>
+              <div class="text-weight-bold">
+                {{ payments.length }}
+              </div>
             </div>
           </q-card-section>
         </q-card>
@@ -135,17 +420,55 @@
     <q-dialog v-model="showCreateDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Новый оклад</q-toolbar-title>
-          <q-btn flat round dense icon="close" @click="showCreateDialog = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            Новый оклад
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showCreateDialog = false"
+          />
         </q-toolbar>
         <q-card-section>
-          <q-select v-model="newPay.employee_id" :options="employeeOpts" label="Сотрудник *" outlined dense emit-value map-options class="q-mb-sm" />
-          <q-input v-model.number="newPay.amount" label="Сумма *" outlined dense type="number" prefix="₽" class="q-mb-sm" />
-          <q-input v-model="newPay.report_month" label="Месяц" outlined dense type="month" class="q-mb-sm" />
+          <q-select
+            v-model="newPay.employee_id"
+            :options="employeeOpts"
+            label="Сотрудник *"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model.number="newPay.amount"
+            label="Сумма *"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="newPay.report_month"
+            label="Месяц"
+            outlined
+            dense
+            type="month"
+            class="q-mb-sm"
+          />
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup no-caps />
-          <q-btn unelevated label="Создать" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="createSalary" />
+          <q-btn v-close-popup flat label="Отмена" no-caps />
+          <q-btn
+            unelevated
+            label="Создать"
+            style="background: #ffd93c; color: #333; border-radius: 4px"
+            no-caps
+            @click="createSalary"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -154,19 +477,67 @@
     <q-dialog v-model="showEditDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Редактировать платёж</q-toolbar-title>
-          <q-btn flat round dense icon="close" @click="showEditDialog = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            Редактировать платёж
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showEditDialog = false"
+          />
         </q-toolbar>
         <q-card-section>
-          <div class="text-caption q-mb-sm" style="color: #888">{{ editPay.employee_name }}</div>
-          <q-input v-model.number="editPay.final_amount" label="Сумма *" outlined dense type="number" prefix="₽" class="q-mb-sm" />
-          <q-input v-model="editPay.report_month" label="Месяц отчёта" outlined dense type="month" class="q-mb-sm" />
-          <q-select v-model="editPay.payment_type" :options="editPaymentTypeOpts" label="Тип" outlined dense emit-value map-options class="q-mb-sm" />
-          <q-input v-model="editPay.comment" label="Комментарий" outlined dense type="textarea" autogrow />
+          <div class="text-caption q-mb-sm" style="color: #888">
+            {{ editPay.employee_name }}
+          </div>
+          <q-input
+            v-model.number="editPay.final_amount"
+            label="Сумма *"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="editPay.report_month"
+            label="Месяц отчёта"
+            outlined
+            dense
+            type="month"
+            class="q-mb-sm"
+          />
+          <q-select
+            v-model="editPay.payment_type"
+            :options="editPaymentTypeOpts"
+            label="Тип"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="editPay.comment"
+            label="Комментарий"
+            outlined
+            dense
+            type="textarea"
+            autogrow
+          />
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup no-caps />
-          <q-btn unelevated label="Сохранить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps :loading="editSaving" @click="saveEdit" />
+          <q-btn v-close-popup flat label="Отмена" no-caps />
+          <q-btn
+            unelevated
+            label="Сохранить"
+            style="background: #ffd93c; color: #333; border-radius: 4px"
+            no-caps
+            :loading="editSaving"
+            @click="saveEdit"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -174,22 +545,69 @@
     <q-dialog v-model="showCreatePaymentDialog">
       <q-card style="min-width: 340px; border-radius: 8px">
         <q-card-section>
-          <div class="text-subtitle1 text-weight-bold" style="color: #333">Новый платёж</div>
+          <div class="text-subtitle1 text-weight-bold" style="color: #333">
+            Новый платёж
+          </div>
         </q-card-section>
         <q-card-section class="q-pt-none">
-          <q-select v-model="newPayment.employee_id" :options="employeeOpts" label="Сотрудник *"
-                    outlined dense emit-value map-options class="q-mb-sm" />
-          <q-input v-model="newPayment.amount" label="Сумма *" outlined dense type="number" class="q-mb-sm" />
-          <q-select v-model="newPayment.payment_type"
-                    :options="['Аванс', 'Доплата', 'Полная оплата']"
-                    label="Тип выплаты" outlined dense class="q-mb-sm" />
-          <q-input v-model="newPayment.role" label="Роль (необязательно)" outlined dense class="q-mb-sm" />
-          <q-input v-model="newPayment.stage_name" label="Стадия (необязательно)" outlined dense class="q-mb-sm" />
-          <q-input v-model="newPayment.report_month" label="Месяц отчёта" outlined dense type="month" class="q-mb-sm" />
+          <q-select
+            v-model="newPayment.employee_id"
+            :options="employeeOpts"
+            label="Сотрудник *"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="newPayment.amount"
+            label="Сумма *"
+            outlined
+            dense
+            type="number"
+            class="q-mb-sm"
+          />
+          <q-select
+            v-model="newPayment.payment_type"
+            :options="['Аванс', 'Доплата', 'Полная оплата']"
+            label="Тип выплаты"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="newPayment.role"
+            label="Роль (необязательно)"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="newPayment.stage_name"
+            label="Стадия (необязательно)"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="newPayment.report_month"
+            label="Месяц отчёта"
+            outlined
+            dense
+            type="month"
+            class="q-mb-sm"
+          />
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup no-caps />
-          <q-btn unelevated color="positive" label="Создать" no-caps @click="createPayment" />
+          <q-btn v-close-popup flat label="Отмена" no-caps />
+          <q-btn
+            unelevated
+            color="positive"
+            label="Создать"
+            no-caps
+            @click="createPayment"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -238,13 +656,13 @@ const editPaymentTypeOpts = [
   { label: 'Индивидуальный', value: 'Индивидуальный' },
   { label: 'Шаблонный', value: 'Шаблонный' },
   { label: 'Авторский надзор', value: 'Авторский надзор' },
-  { label: 'Оклад', value: 'Оклад' }
+  { label: 'Оклад', value: 'Оклад' },
 ]
 
 const paymentTabs = [
   { label: 'Все', value: 'all' }, { label: 'Инд.', value: 'individual' },
   { label: 'Шабл.', value: 'template' }, { label: 'Надзор', value: 'supervision' },
-  { label: 'Оклады', value: 'salary' }
+  { label: 'Оклады', value: 'salary' },
 ]
 
 const filters = ref({ period: 'all', year: currentYear, month: new Date().getMonth() + 1, quarter: Math.ceil((new Date().getMonth() + 1) / 3), employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null })
@@ -273,7 +691,7 @@ function resetFilters() {
   filters.value = {
     period: 'all', year: currentYear, month: new Date().getMonth() + 1,
     quarter: Math.ceil((new Date().getMonth() + 1) / 3),
-    employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null
+    employee_id: null, status: null, address: '', role: null, agent_type: null, payment_type: null,
   }
   loadData()
 }
@@ -313,6 +731,7 @@ const groupedPayments = computed(() => {
     const key = p.employee_id || p.employee_name || 'unknown'
     if (!map[key]) {
       // Состояние expanded берём из реактивного объекта (по умолчанию развёрнуто)
+      // eslint-disable-next-line vue/no-side-effects-in-computed-properties
       if (!(key in expandedGroups.value)) expandedGroups.value[key] = true
       map[key] = { employeeId: key, name: p.employee_name || 'Без исполнителя', role: p.role || p.position || '', initial: (p.employee_name || '?')[0], total: 0, items: [] }
     }
@@ -433,7 +852,7 @@ async function markPaid(p) {
       p.is_paid = snapshot.is_paid
       p.payment_status = snapshot.payment_status
     },
-    'Оплачено'
+    'Оплачено',
   )
 }
 
@@ -482,7 +901,7 @@ async function createSalary() {
     employee_id: newPay.value.employee_id,
     amount: parseFloat(newPay.value.amount),
     payment_type: 'Оклад',
-    payment_status: 'pending'
+    payment_status: 'pending',
   }
   if (newPay.value.report_month) payload.report_month = newPay.value.report_month
   try {
@@ -538,7 +957,7 @@ function openEditDialog(p) {
     report_month: p.report_month || '',
     payment_type: p.payment_type || p.source || '',
     comment: p.comment || '',
-    source: p.source || ''
+    source: p.source || '',
   }
   showEditDialog.value = true
 }
@@ -552,7 +971,7 @@ async function saveEdit() {
       amount: parseFloat(editPay.value.final_amount),
       report_month: editPay.value.report_month || null,
       payment_type: editPay.value.payment_type,
-      comment: editPay.value.comment || null
+      comment: editPay.value.comment || null,
     }
     if (editPay.value.source === 'Оклад') {
       await salariesApi.update(editPay.value.id, data)

@@ -1,12 +1,31 @@
 <template>
-  <q-dialog v-model="show" persistent maximized transition-show="slide-up" transition-hide="slide-down">
+  <q-dialog
+    v-model="show"
+    persistent
+    maximized
+    transition-show="slide-up"
+    transition-hide="slide-down"
+  >
     <q-card>
       <q-toolbar style="background: #ffd93c; color: #333">
-        <q-btn flat round dense icon="close" @click="close" />
+        <q-btn
+          flat
+          round
+          dense
+          icon="close"
+          @click="close"
+        />
         <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
           {{ isEdit ? 'Редактировать договор' : 'Новый договор' }}
         </q-toolbar-title>
-        <q-btn label="Сохранить" no-caps @click="save" :loading="saving" outline style="border: 1px solid #333; border-radius: 8px; color: #333" />
+        <q-btn
+          label="Сохранить"
+          no-caps
+          :loading="saving"
+          outline
+          style="border: 1px solid #333; border-radius: 8px; color: #333"
+          @click="save"
+        />
       </q-toolbar>
 
       <q-card-section class="q-pa-md" style="max-height: calc(100vh - 50px); overflow-y: auto">
@@ -16,62 +35,191 @@
             v-if="!isEdit"
             v-model="form.client_id"
             :options="clientOptions"
-            option-value="id" option-label="label"
-            label="Клиент *" outlined dense emit-value map-options
-            use-input input-debounce="200" @filter="filterClients"
+            option-value="id"
+            option-label="label"
+            label="Клиент *"
+            outlined
+            dense
+            emit-value
+            map-options
+            use-input
+            input-debounce="200"
             :rules="[val => !!val || 'Выберите клиента']"
+            @filter="filterClients"
           >
-            <template v-slot:no-option><q-item><q-item-section class="text-grey">Не найдено</q-item-section></q-item></template>
+            <template #no-option>
+              <q-item>
+                <q-item-section class="text-grey">
+                  Не найдено
+                </q-item-section>
+              </q-item>
+            </template>
           </q-select>
 
           <!-- Номер договора -->
-          <q-input v-model="form.contract_number" label="Номер договора *" outlined dense :rules="[val => !!val || 'Обязательное поле']" />
+          <q-input
+            v-model="form.contract_number"
+            label="Номер договора *"
+            outlined
+            dense
+            :rules="[val => !!val || 'Обязательное поле']"
+          />
 
           <!-- Тип проекта -->
-          <q-select v-model="form.project_type" :options="['Индивидуальный', 'Шаблонный', 'Авторский надзор']" label="Тип проекта *" outlined dense :rules="[val => !!val || 'Выберите тип']" @update:model-value="onProjectTypeChange" />
+          <q-select
+            v-model="form.project_type"
+            :options="['Индивидуальный', 'Шаблонный', 'Авторский надзор']"
+            label="Тип проекта *"
+            outlined
+            dense
+            :rules="[val => !!val || 'Выберите тип']"
+            @update:model-value="onProjectTypeChange"
+          />
 
           <!-- Подтип проекта -->
-          <q-select v-model="form.project_subtype" :options="subtypeOptions" label="Подтип проекта" outlined dense />
+          <q-select
+            v-model="form.project_subtype"
+            :options="subtypeOptions"
+            label="Подтип проекта"
+            outlined
+            dense
+          />
 
           <!-- Адрес -->
           <q-input v-model="form.address" label="Адрес объекта" outlined dense />
 
           <!-- Город -->
-          <q-select v-model="form.city" :options="cityOptions" label="Город *" outlined dense />
+          <q-select
+            v-model="form.city"
+            :options="cityOptions"
+            label="Город *"
+            outlined
+            dense
+          />
 
           <!-- Тип агента -->
-          <q-select v-model="form.agent_type" :options="agentOptions" label="Тип агента" outlined dense use-input new-value-mode="add" />
+          <q-select
+            v-model="form.agent_type"
+            :options="agentOptions"
+            label="Тип агента"
+            outlined
+            dense
+            use-input
+            new-value-mode="add"
+          />
 
           <!-- Статус -->
-          <q-select v-if="isEdit" v-model="form.status" :options="statusOptions" label="Статус" outlined dense />
+          <q-select
+            v-if="isEdit"
+            v-model="form.status"
+            :options="statusOptions"
+            label="Статус"
+            outlined
+            dense
+          />
 
           <!-- Площадь -->
-          <q-input v-model.number="form.area" label="Площадь (м²) *" outlined dense type="number" :rules="[val => val > 0 || 'Укажите площадь']" @update:model-value="recalcPeriod" />
+          <q-input
+            v-model.number="form.area"
+            label="Площадь (м²) *"
+            outlined
+            dense
+            type="number"
+            :rules="[val => val > 0 || 'Укажите площадь']"
+            @update:model-value="recalcPeriod"
+          />
 
           <!-- Этажность (только для шаблонных) -->
-          <q-input v-if="form.project_type === 'Шаблонный'" v-model.number="form.floors" label="Этажей" outlined dense type="number" @update:model-value="recalcPeriod" />
+          <q-input
+            v-if="form.project_type === 'Шаблонный'"
+            v-model.number="form.floors"
+            label="Этажей"
+            outlined
+            dense
+            type="number"
+            @update:model-value="recalcPeriod"
+          />
 
           <!-- Дата договора -->
-          <q-input v-model="form.contract_date" label="Дата договора" outlined dense type="date" />
+          <q-input
+            v-model="form.contract_date"
+            label="Дата договора"
+            outlined
+            dense
+            type="date"
+          />
 
           <!-- Срок выполнения (авторасчёт / ручной) -->
           <div>
             <div class="row items-center q-gutter-xs q-mb-xs">
-              <div class="text-caption text-weight-bold" style="color: #333">Срок выполнения (раб. дней)</div>
+              <div class="text-caption text-weight-bold" style="color: #333">
+                Срок выполнения (раб. дней)
+              </div>
               <q-badge :color="manualPeriod ? 'orange' : 'positive'" :label="manualPeriod ? 'Ручной' : 'Авто'" dense style="font-size: 9px" />
-              <q-btn flat dense size="xs" :label="manualPeriod ? 'Авто' : 'Вручную'" no-caps style="font-size: 10px; color: #666" @click="toggleManualPeriod" />
+              <q-btn
+                flat
+                dense
+                size="xs"
+                :label="manualPeriod ? 'Авто' : 'Вручную'"
+                no-caps
+                style="font-size: 10px; color: #666"
+                @click="toggleManualPeriod"
+              />
             </div>
-            <q-input v-model.number="form.contract_period" outlined dense type="number" :disable="!manualPeriod" />
+            <q-input
+              v-model.number="form.contract_period"
+              outlined
+              dense
+              type="number"
+              :disable="!manualPeriod"
+            />
           </div>
 
-          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: #333">Финансы</div>
+          <div class="text-subtitle2 text-weight-bold q-mt-md" style="color: #333">
+            Финансы
+          </div>
 
-          <q-input v-model.number="form.total_amount" label="Общая сумма" outlined dense type="number" prefix="₽" />
-          <q-input v-model.number="form.advance_payment" label="Аванс" outlined dense type="number" prefix="₽" />
-          <q-input v-model.number="form.additional_payment" label="Доп. оплата" outlined dense type="number" prefix="₽" />
-          <q-input v-model.number="form.third_payment" label="Третий платёж" outlined dense type="number" prefix="₽" />
+          <q-input
+            v-model.number="form.total_amount"
+            label="Общая сумма"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+          />
+          <q-input
+            v-model.number="form.advance_payment"
+            label="Аванс"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+          />
+          <q-input
+            v-model.number="form.additional_payment"
+            label="Доп. оплата"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+          />
+          <q-input
+            v-model.number="form.third_payment"
+            label="Третий платёж"
+            outlined
+            dense
+            type="number"
+            prefix="₽"
+          />
 
-          <q-input v-model="form.comments" label="Комментарий" outlined dense type="textarea" autogrow />
+          <q-input
+            v-model="form.comments"
+            label="Комментарий"
+            outlined
+            dense
+            type="textarea"
+            autogrow
+          />
         </q-form>
       </q-card-section>
     </q-card>
@@ -107,7 +255,7 @@ const emptyForm = () => ({
   address: '', city: 'МСК', area: null, floors: 1, agent_type: '',
   contract_date: today, contract_period: 45,
   total_amount: null, advance_payment: null, additional_payment: null, third_payment: null,
-  status: 'Новый заказ', comments: ''
+  status: 'Новый заказ', comments: '',
 })
 
 const form = ref(emptyForm())
@@ -174,7 +322,7 @@ function calcIndividualTerm(ptCode, area) {
   const tables = {
     1: [[70,50],[100,60],[130,70],[160,80],[190,90],[220,100],[250,110],[300,120],[350,130],[400,140],[450,150],[500,160]],
     3: [[70,10],[100,15],[130,20],[160,25],[190,30],[220,35],[250,40],[300,45],[350,50],[400,55],[450,60],[500,65]],
-    2: [[70,30],[100,35],[130,40],[160,45],[190,50],[220,55],[250,60],[300,65],[350,70],[400,75],[450,80],[500,85]]
+    2: [[70,30],[100,35],[130,40],[160,45],[190,50],[220,55],[250,60],[300,65],[350,70],[400,75],[450,80],[500,85]],
   }
   const thresholds = tables[ptCode] || tables[2]
   for (const [maxArea, days] of thresholds) {
@@ -209,7 +357,7 @@ async function filterClients(val, update) {
     const { data } = await clientsApi.getList(params)
     update(() => {
       clientOptions.value = data.map(c => ({
-        id: c.id, label: `${c.full_name}${c.organization_name ? ' (' + c.organization_name + ')' : ''}`
+        id: c.id, label: `${c.full_name}${c.organization_name ? ' (' + c.organization_name + ')' : ''}`,
       }))
     })
   } catch { update(() => { clientOptions.value = [] }) }

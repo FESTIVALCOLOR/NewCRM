@@ -2,25 +2,41 @@
 Роутер для endpoint'ов договоров (contracts).
 Подключается в main.py через app.include_router(contracts_router, prefix="/api/contracts").
 """
-import logging
+
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
-from sqlalchemy.exc import IntegrityError
+import logging
 from typing import List, Optional
 
-from database import (
-    get_db, Contract, CRMCard, SupervisionCard, ProjectFile,
-    ActivityLog, Employee, StageExecutor,
-    Client, Payment, ProjectTimelineEntry,
-    SupervisionTimelineEntry, SupervisionProjectHistory, SupervisionVisit,
-    StageWorkflowState, ApprovalStageDeadline, MessengerChat,
-    Salary, FileStorage
-)
 from auth import get_current_user
+from constants import ARCHIVE_STATUSES
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from permissions import require_permission
-from schemas import ContractResponse, ContractCreate, ContractUpdate, ContractFilesUpdate, StatusResponse
+from schemas import ContractCreate, ContractFilesUpdate, ContractResponse, ContractUpdate, StatusResponse
+from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from database import (
+    ActivityLog,
+    ApprovalStageDeadline,
+    Client,
+    Contract,
+    CRMCard,
+    Employee,
+    FileStorage,
+    MessengerChat,
+    Payment,
+    ProjectFile,
+    ProjectTimelineEntry,
+    Salary,
+    StageExecutor,
+    StageWorkflowState,
+    SupervisionCard,
+    SupervisionProjectHistory,
+    SupervisionTimelineEntry,
+    SupervisionVisit,
+    get_db,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["contracts"])
@@ -30,14 +46,9 @@ router = APIRouter(tags=["contracts"])
 # ДОГОВОРЫ
 # =========================
 
-@router.get("/", response_model=List[ContractResponse])
-async def get_contracts(
-    skip: int = 0,
-    limit: int = 100,
-    response: Response = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+
+@router.get("/", response_model=list[ContractResponse])
+async def get_contracts(skip: int = 0, limit: int = 100, response: Response = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить список договоров с пагинацией.
     Заголовок X-Total-Count содержит общее количество записей."""
     # Считаем общее количество записей для пагинации
@@ -51,11 +62,7 @@ async def get_contracts(
 
 @router.get("/count")
 async def get_contracts_count(
-    status: Optional[str] = None,
-    project_type: Optional[str] = None,
-    year: Optional[int] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    status: Optional[str] = None, project_type: Optional[str] = None, year: Optional[int] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Получить количество договоров с фильтрацией (без загрузки всех записей)"""
     query = db.query(func.count(Contract.id))
@@ -65,17 +72,14 @@ async def get_contracts_count(
         query = query.filter(Contract.project_type == project_type)
     if year:
         from sqlalchemy import extract
-        query = query.filter(extract('year', Contract.contract_date) == year)
+
+        query = query.filter(extract("year", Contract.contract_date) == year)
     count = query.scalar()
     return {"count": count}
 
 
 @router.get("/{contract_id}", response_model=ContractResponse)
-async def get_contract(
-    contract_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_contract(contract_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить договор по ID"""
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
@@ -84,11 +88,7 @@ async def get_contract(
 
 
 @router.post("/", response_model=ContractResponse)
-async def create_contract(
-    contract_data: ContractCreate,
-    current_user: Employee = Depends(require_permission("contracts.create")),
-    db: Session = Depends(get_db)
-):
+async def create_contract(contract_data: ContractCreate, current_user: Employee = Depends(require_permission("contracts.create")), db: Session = Depends(get_db)):
     """Создать новый договор"""
     # Проверяем существование клиента
     client = db.query(Client).filter(Client.id == contract_data.client_id).first()
@@ -102,32 +102,26 @@ async def create_contract(
 
         # Автоматически создаём CRM карточку для нового договора
         # (кроме Авторского надзора — для него создаётся SupervisionCard)
-        if contract.project_type != 'Авторский надзор':
+        if contract.project_type != "Авторский надзор":
             # Назначаем создателя в соответствующее поле по должности
             crm_card_kwargs = {
-                'contract_id': contract.id,
-                'column_name': 'Новый заказ',
+                "contract_id": contract.id,
+                "column_name": "Новый заказ",
             }
-            if current_user.position in ('Руководитель студии', 'Старший менеджер'):
-                crm_card_kwargs['senior_manager_id'] = current_user.id
-            elif current_user.position == 'Менеджер':
-                crm_card_kwargs['manager_id'] = current_user.id
+            if current_user.position in ("Руководитель студии", "Старший менеджер"):
+                crm_card_kwargs["senior_manager_id"] = current_user.id
+            elif current_user.position == "Менеджер":
+                crm_card_kwargs["manager_id"] = current_user.id
             else:
                 # Для остальных должностей — в manager_id как fallback
-                crm_card_kwargs['manager_id'] = current_user.id
+                crm_card_kwargs["manager_id"] = current_user.id
 
             crm_card = CRMCard(**crm_card_kwargs)
             db.add(crm_card)
-            logger.info(f"Создана CRM карточка для договора {contract.id}, "
-                       f"создатель: {current_user.full_name} ({current_user.position})")
+            logger.info(f"Создана CRM карточка для договора {contract.id}, создатель: {current_user.full_name} ({current_user.position})")
 
         # Лог
-        log = ActivityLog(
-            employee_id=current_user.id,
-            action_type="create",
-            entity_type="contract",
-            entity_id=contract.id
-        )
+        log = ActivityLog(employee_id=current_user.id, action_type="create", entity_type="contract", entity_id=contract.id)
         db.add(log)
 
         # Единый коммит: договор + карточка + лог — атомарно
@@ -146,12 +140,7 @@ async def create_contract(
 
 
 @router.put("/{contract_id}", response_model=ContractResponse)
-async def update_contract(
-    contract_id: int,
-    contract_data: ContractUpdate,
-    current_user: Employee = Depends(require_permission("contracts.update")),
-    db: Session = Depends(get_db)
-):
+async def update_contract(contract_id: int, contract_data: ContractUpdate, current_user: Employee = Depends(require_permission("contracts.update")), db: Session = Depends(get_db)):
     """Обновить договор"""
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
@@ -160,22 +149,16 @@ async def update_contract(
     # Проверяем, изменяется ли статус на "АВТОРСКИЙ НАДЗОР"
     old_status = contract.status
     update_data = contract_data.model_dump(exclude_unset=True)
-    new_status = update_data.get('status')
-    need_supervision_card = (
-        new_status == 'АВТОРСКИЙ НАДЗОР' and
-        old_status != 'АВТОРСКИЙ НАДЗОР'
-    )
+    new_status = update_data.get("status")
+    need_supervision_card = new_status == "АВТОРСКИЙ НАДЗОР" and old_status != "АВТОРСКИЙ НАДЗОР"
 
     # П4: ретроактивная проверка — нельзя менять подтип на Планировочный,
     # если CRM-карточка уже на Стадии 2 или 3
-    new_subtype = update_data.get('project_subtype')
-    if new_subtype and 'Планировочный' in new_subtype:
+    new_subtype = update_data.get("project_subtype")
+    if new_subtype and "Планировочный" in new_subtype:
         crm_card = db.query(CRMCard).filter(CRMCard.contract_id == contract_id).first()
-        if crm_card and crm_card.column_name and ('Стадия 2' in crm_card.column_name or 'Стадия 3' in crm_card.column_name):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Нельзя сменить подтип на Планировочный: карточка уже на «{crm_card.column_name}». Сначала верните карточку на Стадию 1."
-            )
+        if crm_card and crm_card.column_name and ("Стадия 2" in crm_card.column_name or "Стадия 3" in crm_card.column_name):
+            raise HTTPException(status_code=400, detail=f"Нельзя сменить подтип на Планировочный: карточка уже на «{crm_card.column_name}». Сначала верните карточку на Стадию 1.")
 
     # Обновление полей
     for field, value in update_data.items():
@@ -183,7 +166,7 @@ async def update_contract(
 
     # Auto-fill status_changed_date при смене статуса
     if new_status and new_status != old_status:
-        contract.status_changed_date = datetime.utcnow().strftime('%Y-%m-%d')
+        contract.status_changed_date = datetime.utcnow().strftime("%Y-%m-%d")
 
     contract.updated_at = datetime.utcnow()
     db.commit()
@@ -191,26 +174,15 @@ async def update_contract(
 
     # BUG #2 FIX: Автоматическое создание карточки надзора при смене статуса
     if need_supervision_card:
-        existing_supervision = db.query(SupervisionCard).filter(
-            SupervisionCard.contract_id == contract_id
-        ).first()
+        existing_supervision = db.query(SupervisionCard).filter(SupervisionCard.contract_id == contract_id).first()
         if not existing_supervision:
-            supervision_card = SupervisionCard(
-                contract_id=contract_id,
-                column_name='Новый заказ',
-                created_at=datetime.utcnow()
-            )
+            supervision_card = SupervisionCard(contract_id=contract_id, column_name="Новый заказ", created_at=datetime.utcnow())
             db.add(supervision_card)
             db.commit()
             logger.info(f"Автоматически создана карточка надзора для договора {contract_id}")
 
     # Лог
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="update",
-        entity_type="contract",
-        entity_id=contract.id
-    )
+    log = ActivityLog(employee_id=current_user.id, action_type="update", entity_type="contract", entity_id=contract.id)
     db.add(log)
     db.commit()
 
@@ -218,12 +190,7 @@ async def update_contract(
 
 
 @router.patch("/{contract_id}/files")
-async def update_contract_files(
-    contract_id: int,
-    files_data: ContractFilesUpdate,
-    current_user: Employee = Depends(require_permission("contracts.update")),
-    db: Session = Depends(get_db)
-):
+async def update_contract_files(contract_id: int, files_data: ContractFilesUpdate, current_user: Employee = Depends(require_permission("contracts.update")), db: Session = Depends(get_db)):
     """
     Обновить файлы договора (замер, референсы, фотофиксация)
 
@@ -248,43 +215,38 @@ async def update_contract_files(
     db.refresh(contract)
 
     # Лог
-    log = ActivityLog(
-        employee_id=current_user.id,
-        action_type="update_files",
-        entity_type="contract",
-        entity_id=contract.id
-    )
+    log = ActivityLog(employee_id=current_user.id, action_type="update_files", entity_type="contract", entity_id=contract.id)
     db.add(log)
     db.commit()
 
     return {
-        'id': contract.id,
-        'measurement_image_link': contract.measurement_image_link,
-        'measurement_file_name': contract.measurement_file_name,
-        'measurement_yandex_path': contract.measurement_yandex_path,
-        'measurement_date': contract.measurement_date,
-        'contract_file_link': contract.contract_file_link,
-        'tech_task_link': contract.tech_task_link,
-        'updated_at': contract.updated_at.isoformat() if contract.updated_at else None
+        "id": contract.id,
+        "measurement_image_link": contract.measurement_image_link,
+        "measurement_file_name": contract.measurement_file_name,
+        "measurement_yandex_path": contract.measurement_yandex_path,
+        "measurement_date": contract.measurement_date,
+        "contract_file_link": contract.contract_file_link,
+        "tech_task_link": contract.tech_task_link,
+        "updated_at": contract.updated_at.isoformat() if contract.updated_at else None,
     }
 
 
 @router.post("/fix-all-folders")
-async def fix_all_contract_folders(
-    current_user: Employee = Depends(require_permission("contracts.update")),
-    db: Session = Depends(get_db)
-):
+async def fix_all_contract_folders(current_user: Employee = Depends(require_permission("contracts.update")), db: Session = Depends(get_db)):
     """Массовая починка папок ЯД: создаёт папки которых нет на диске,
     генерирует путь для договоров без yandex_folder_path."""
     import re
+
     # Берём ВСЕ активные договоры (не только без пути)
     contracts = db.query(Contract).all()
 
-    from yandex_disk_service import YandexDiskService
-    import requests as req
     import os
+
+    import requests as req
+    from yandex_disk_service import YandexDiskService
+
     yd = YandexDiskService()
-    token = os.environ.get('YANDEX_DISK_TOKEN', '')
+    token = os.environ.get("YANDEX_DISK_TOKEN", "")
     fixed = 0
     already_ok = 0
     errors = []
@@ -294,23 +256,18 @@ async def fix_all_contract_folders(
             # Генерируем путь если нет
             folder_path = contract.yandex_folder_path
             if not folder_path:
-                agent = contract.agent_type or 'ФЕСТИВАЛЬ'
-                ptype = contract.project_type or 'Индивидуальный'
-                city = contract.city or 'Москва'
-                address = contract.address or 'Без адреса'
+                agent = contract.agent_type or "ФЕСТИВАЛЬ"
+                ptype = contract.project_type or "Индивидуальный"
+                city = contract.city or "Москва"
+                address = contract.address or "Без адреса"
                 area = contract.area or 0
-                type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
+                type_folder = "Индивидуальные" if "ндивид" in ptype else "Шаблонные"
                 folder_name = f"{city}-{address}-{area}м2"
-                folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
+                folder_name = re.sub(r'[<>:"|?*]', "", folder_name)
                 folder_path = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
 
             # Проверяем существование папки на ЯД
-            check = req.get(
-                'https://cloud-api.yandex.net/v1/disk/resources',
-                params={'path': folder_path},
-                headers={'Authorization': f'OAuth {token}'},
-                timeout=10
-            )
+            check = req.get("https://cloud-api.yandex.net/v1/disk/resources", params={"path": folder_path}, headers={"Authorization": f"OAuth {token}"}, timeout=10)
             if check.status_code == 200:
                 # Папка существует
                 if not contract.yandex_folder_path:
@@ -333,37 +290,35 @@ async def fix_all_contract_folders(
         "message": f"Починено {fixed}, уже ОК {already_ok}, ошибки {len(errors)} из {len(contracts)} договоров",
         "fixed": fixed,
         "already_ok": already_ok,
-        "errors": errors[:10]
+        "errors": errors[:10],
     }
 
 
 @router.post("/{contract_id}/fix-folder", response_model=StatusResponse)
-async def fix_contract_folder(
-    contract_id: int,
-    current_user: Employee = Depends(require_permission("contracts.update")),
-    db: Session = Depends(get_db)
-):
+async def fix_contract_folder(contract_id: int, current_user: Employee = Depends(require_permission("contracts.update")), db: Session = Depends(get_db)):
     """Диагностика и починка папки на Яндекс.Диске для договора.
     Создаёт папку если не существует, обновляет yandex_folder_path в БД.
     """
     import re
+
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
 
     try:
         from yandex_disk_service import YandexDiskService
+
         yd = YandexDiskService()
 
         # Генерируем путь
-        agent = contract.agent_type or 'ФЕСТИВАЛЬ'
-        ptype = contract.project_type or 'Индивидуальный'
-        city = contract.city or 'Москва'
-        address = contract.address or 'Без адреса'
+        agent = contract.agent_type or "ФЕСТИВАЛЬ"
+        ptype = contract.project_type or "Индивидуальный"
+        city = contract.city or "Москва"
+        address = contract.address or "Без адреса"
         area = contract.area or 0
-        type_folder = 'Индивидуальные' if 'ндивид' in ptype else 'Шаблонные'
+        type_folder = "Индивидуальные" if "ндивид" in ptype else "Шаблонные"
         folder_name = f"{city}-{address}-{area}м2"
-        folder_name = re.sub(r'[<>:"|?*]', '', folder_name)
+        folder_name = re.sub(r'[<>:"|?*]', "", folder_name)
         folder_path = f"disk:/CRM/Проекты/{agent}/{type_folder}/{city}/{folder_name}"
 
         # Создаём папку рекурсивно
@@ -382,15 +337,15 @@ async def fix_contract_folder(
 
 
 @router.delete("/{contract_id}", response_model=StatusResponse)
-async def delete_contract(
-    contract_id: int,
-    current_user: Employee = Depends(require_permission("contracts.delete")),
-    db: Session = Depends(get_db)
-):
+async def delete_contract(contract_id: int, current_user: Employee = Depends(require_permission("contracts.delete")), db: Session = Depends(get_db)):
     """Удалить договор и все связанные данные"""
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Договор не найден")
+
+    # Запрет удаления активного договора
+    if contract.status not in ARCHIVE_STATUSES:
+        raise HTTPException(status_code=409, detail=f"Нельзя удалить активный договор (статус: {contract.status}). Сначала переведите в архивный статус.")
 
     try:
         # Удаляем timeline записи проекта
@@ -441,12 +396,7 @@ async def delete_contract(
         db.query(FileStorage).filter(FileStorage.contract_id == contract_id).delete()
 
         # Лог перед удалением
-        log = ActivityLog(
-            employee_id=current_user.id,
-            action_type="delete",
-            entity_type="contract",
-            entity_id=contract_id
-        )
+        log = ActivityLog(employee_id=current_user.id, action_type="delete", entity_type="contract", entity_id=contract_id)
         db.add(log)
 
         db.delete(contract)

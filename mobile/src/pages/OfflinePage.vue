@@ -2,7 +2,9 @@
   <q-page class="flex flex-center" style="background: #FFFFFF">
     <div class="text-center q-pa-lg">
       <q-icon name="wifi_off" size="72px" style="color: #E0E0E0" class="q-mb-md" />
-      <div class="text-h6 q-mb-sm" style="color: #333">Нет подключения к интернету</div>
+      <div class="text-h6 q-mb-sm" style="color: #333">
+        Нет подключения к интернету
+      </div>
       <div class="text-body2 q-mb-lg" style="color: #888">
         Проверьте соединение и попробуйте снова
       </div>

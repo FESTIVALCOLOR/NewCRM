@@ -3,8 +3,16 @@
     <!-- Header: лого + текст + кнопки (инструкция, настройки, выход) -->
     <q-header class="bg-white text-dark" style="border-bottom: 1px solid #E0E0E0">
       <q-toolbar style="min-height: 44px; padding: 0 4px">
-        <q-btn flat dense round icon="menu" @click="toggleDrawer" class="lt-md" size="sm" />
-        <img src="/logo.png" alt="" style="height: 22px; width: auto" class="q-mr-xs" />
+        <q-btn
+          flat
+          dense
+          round
+          icon="menu"
+          class="lt-md"
+          size="sm"
+          @click="toggleDrawer"
+        />
+        <img src="/logo.png" alt="" style="height: 22px; width: auto" class="q-mr-xs">
         <!-- На мобильном: CRM FESTIVAL COLOR, на планшете: полный текст -->
         <div class="text-weight-bold ellipsis gt-xs" style="font-size: 11px; color: #333">
           Система управления заказами FESTIVAL COLOR
@@ -14,74 +22,167 @@
         </div>
         <q-space />
         <!-- Глобальный поиск -->
-        <q-btn flat dense round icon="search" size="sm" color="grey-7" @click="showGlobalSearch = true">
+        <q-btn
+          flat
+          dense
+          round
+          icon="search"
+          size="sm"
+          color="grey-7"
+          @click="showGlobalSearch = true"
+        >
           <q-tooltip>Поиск</q-tooltip>
         </q-btn>
         <!-- Offline-очередь: badge с количеством ожидающих операций -->
-        <q-btn v-if="offlinePending > 0" flat dense round icon="cloud_upload" size="sm" color="orange-7" @click="handleOfflineQueue">
-          <q-badge color="orange" floating style="font-size: 9px">{{ offlinePending }}</q-badge>
+        <q-btn
+          v-if="offlinePending > 0"
+          flat
+          dense
+          round
+          icon="cloud_upload"
+          size="sm"
+          color="orange-7"
+          @click="handleOfflineQueue"
+        >
+          <q-badge color="orange" floating style="font-size: 9px">
+            {{ offlinePending }}
+          </q-badge>
           <q-tooltip>{{ offlinePending }} операций ожидают отправки</q-tooltip>
         </q-btn>
         <!-- Обновить сервер (первая) -->
-        <q-btn flat dense round icon="refresh" size="sm" color="grey-7" @click="refreshData">
+        <q-btn
+          flat
+          dense
+          round
+          icon="refresh"
+          size="sm"
+          color="grey-7"
+          @click="refreshData"
+        >
           <q-tooltip>Обновить</q-tooltip>
         </q-btn>
         <!-- Инструкция (иконка как в десктопе — файл) -->
-        <q-btn flat dense round icon="menu_book" size="sm" color="grey-7" @click="openManual">
+        <q-btn
+          flat
+          dense
+          round
+          icon="menu_book"
+          size="sm"
+          color="grey-7"
+          @click="openManual"
+        >
           <q-tooltip>Инструкция</q-tooltip>
         </q-btn>
         <!-- Настройки уведомлений (шестерёнка) -->
-        <q-btn flat dense round icon="settings" size="sm" color="grey-7" @click="openNotifSettings">
+        <q-btn
+          flat
+          dense
+          round
+          icon="settings"
+          size="sm"
+          color="grey-7"
+          @click="openNotifSettings"
+        >
           <q-tooltip>Настройки уведомлений</q-tooltip>
         </q-btn>
         <!-- Уведомления -->
-        <q-btn flat dense round icon="notifications" size="sm" color="grey-7" @click="$router.push('/notifications')">
+        <q-btn
+          flat
+          dense
+          round
+          icon="notifications"
+          size="sm"
+          color="grey-7"
+          @click="$router.push('/notifications')"
+        >
           <q-badge v-if="unreadCount > 0" color="negative" floating style="font-size: 9px">
             {{ unreadCount > 99 ? '99+' : unreadCount }}
           </q-badge>
         </q-btn>
         <!-- Выход -->
-        <q-btn flat dense round icon="logout" size="sm" style="color: #ccc" @click="handleLogout">
+        <q-btn
+          flat
+          dense
+          round
+          icon="logout"
+          size="sm"
+          style="color: #ccc"
+          @click="handleLogout"
+        >
           <q-tooltip>Выйти</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-header>
 
     <!-- Drawer — порядок как в десктопе -->
-    <q-drawer v-model="drawerOpen" :width="260" :breakpoint="1024" bordered class="bg-white">
+    <q-drawer
+      v-model="drawerOpen"
+      :width="260"
+      :breakpoint="1024"
+      bordered
+      class="bg-white"
+    >
       <div class="q-pa-md">
         <div class="row items-center q-gutter-sm">
-          <q-avatar color="grey-3" text-color="grey-8" size="42px">{{ authStore.initials }}</q-avatar>
+          <q-avatar color="grey-3" text-color="grey-8" size="42px">
+            {{ authStore.initials }}
+          </q-avatar>
           <div>
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ authStore.fullName }}</div>
-            <div class="text-caption" style="color: #888">{{ authStore.userPosition }}</div>
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              {{ authStore.fullName }}
+            </div>
+            <div class="text-caption" style="color: #888">
+              {{ authStore.userPosition }}
+            </div>
           </div>
         </div>
       </div>
       <q-separator />
       <q-list padding>
-        <q-item v-for="item in filteredMenuItems" :key="item.to" :to="item.to" clickable v-ripple
-          active-class="drawer-active">
-          <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
-          <q-item-section style="font-size: 13px">{{ item.label }}</q-item-section>
+        <q-item
+          v-for="item in filteredMenuItems"
+          :key="item.to"
+          v-ripple
+          :to="item.to"
+          clickable
+          active-class="drawer-active"
+        >
+          <q-item-section avatar>
+            <q-icon :name="item.icon" />
+          </q-item-section>
+          <q-item-section style="font-size: 13px">
+            {{ item.label }}
+          </q-item-section>
         </q-item>
       </q-list>
       <q-separator />
       <!-- Онлайн счётчик (как в десктопе — внизу бокового меню) -->
-      <q-item v-if="onlineCount > 0" clickable v-ripple @click="showOnlinePopup = true" style="color: #555">
+      <q-item
+        v-if="onlineCount > 0"
+        v-ripple
+        clickable
+        style="color: #555"
+        @click="showOnlinePopup = true"
+      >
         <q-item-section avatar>
           <q-icon name="circle" color="green" size="12px" />
         </q-item-section>
-        <q-item-section style="font-size: 13px">{{ onlineCount }} онлайн</q-item-section>
+        <q-item-section style="font-size: 13px">
+          {{ onlineCount }} онлайн
+        </q-item-section>
         <q-item-section side>
           <q-icon name="info_outline" color="grey-5" size="16px" />
         </q-item-section>
       </q-item>
       <q-separator />
       <q-list padding>
-        <q-item clickable v-ripple @click="handleLogout">
-          <q-item-section avatar><q-icon name="logout" color="negative" /></q-item-section>
-          <q-item-section class="text-negative" style="font-size: 13px">Выйти</q-item-section>
+        <q-item v-ripple clickable @click="handleLogout">
+          <q-item-section avatar>
+            <q-icon name="logout" color="negative" />
+          </q-item-section>
+          <q-item-section class="text-negative" style="font-size: 13px">
+            Выйти
+          </q-item-section>
         </q-item>
       </q-list>
     </q-drawer>
@@ -113,14 +214,24 @@
     <q-dialog v-model="showOnlinePopup" position="bottom">
       <q-card style="width: 100%; max-width: 360px; border-radius: 10px 10px 0 0">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Пользователи онлайн: {{ onlineCount }}</div>
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Пользователи онлайн: {{ onlineCount }}
+          </div>
         </q-card-section>
         <q-list v-if="canSeeOnlineNames" dense separator style="max-height: 300px; overflow-y: auto">
           <q-item v-for="u in onlineUsers" :key="u.id">
-            <q-item-section avatar><q-avatar size="28px" color="green-2" text-color="green-8">{{ u.full_name?.[0] || '?' }}</q-avatar></q-item-section>
+            <q-item-section avatar>
+              <q-avatar size="28px" color="green-2" text-color="green-8">
+                {{ u.full_name?.[0] || '?' }}
+              </q-avatar>
+            </q-item-section>
             <q-item-section>
-              <q-item-label style="font-size: 13px">{{ u.full_name }}</q-item-label>
-              <q-item-label caption>{{ u.position }}</q-item-label>
+              <q-item-label style="font-size: 13px">
+                {{ u.full_name }}
+              </q-item-label>
+              <q-item-label caption>
+                {{ u.position }}
+              </q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
@@ -128,7 +239,13 @@
           Список доступен только руководящему составу
         </q-card-section>
         <q-card-actions align="center">
-          <q-btn flat label="Закрыть" no-caps v-close-popup style="color: #888" />
+          <q-btn
+            v-close-popup
+            flat
+            label="Закрыть"
+            no-caps
+            style="color: #888"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -136,58 +253,141 @@
     <q-dialog v-model="showNotifDialog">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Настройки уведомлений</q-toolbar-title>
-          <q-btn flat round dense icon="close" @click="showNotifDialog = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            Настройки уведомлений
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showNotifDialog = false"
+          />
         </q-toolbar>
         <q-card-section v-if="notifSettings" style="max-height: 70vh; overflow-y: auto">
           <q-list dense>
             <!-- Канал уведомлений -->
-            <q-item-label header style="font-size: 12px; color: #666; padding-bottom: 2px">Канал уведомлений</q-item-label>
+            <q-item-label header style="font-size: 12px; color: #666; padding-bottom: 2px">
+              Канал уведомлений
+            </q-item-label>
             <q-item tag="label" clickable @click="setNotifChannel('telegram')">
-              <q-item-section avatar><q-radio v-model="notifSettings.notification_channel" val="telegram" color="accent" /></q-item-section>
+              <q-item-section avatar>
+                <q-radio v-model="notifSettings.notification_channel" val="telegram" color="accent" />
+              </q-item-section>
               <q-item-section>
                 <q-item-label>Telegram</q-item-label>
-                <q-item-label caption>Через Telegram бот</q-item-label>
+                <q-item-label caption>
+                  Через Telegram бот
+                </q-item-label>
               </q-item-section>
             </q-item>
             <q-item tag="label" clickable @click="setNotifChannel('push')">
-              <q-item-section avatar><q-radio v-model="notifSettings.notification_channel" val="push" color="accent" /></q-item-section>
+              <q-item-section avatar>
+                <q-radio v-model="notifSettings.notification_channel" val="push" color="accent" />
+              </q-item-section>
               <q-item-section>
                 <q-item-label>Push-уведомления</q-item-label>
-                <q-item-label caption>Через браузер (PWA)</q-item-label>
+                <q-item-label caption>
+                  Через браузер (PWA)
+                </q-item-label>
               </q-item-section>
             </q-item>
             <q-item tag="label" clickable @click="setNotifChannel('both')">
-              <q-item-section avatar><q-radio v-model="notifSettings.notification_channel" val="both" color="accent" /></q-item-section>
+              <q-item-section avatar>
+                <q-radio v-model="notifSettings.notification_channel" val="both" color="accent" />
+              </q-item-section>
               <q-item-section>
                 <q-item-label>Оба канала</q-item-label>
-                <q-item-label caption>Telegram + Push одновременно</q-item-label>
+                <q-item-label caption>
+                  Telegram + Push одновременно
+                </q-item-label>
               </q-item-section>
             </q-item>
             <q-banner v-if="pushPermissionDenied" dense class="bg-orange-1 q-my-xs" rounded>
-              <template v-slot:avatar><q-icon name="warning" color="orange" /></template>
+              <template #avatar>
+                <q-icon name="warning" color="orange" />
+              </template>
               Push-уведомления заблокированы в настройках браузера
             </q-banner>
             <q-separator class="q-my-xs" />
-            <q-item tag="label"><q-item-section>Telegram бот</q-item-section><q-item-section side><q-toggle v-model="notifSettings.telegram_enabled" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Email</q-item-section><q-item-section side><q-toggle v-model="notifSettings.email_enabled" color="accent" /></q-item-section></q-item>
+            <q-item tag="label">
+              <q-item-section>Telegram бот</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.telegram_enabled" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Email</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.email_enabled" color="accent" />
+              </q-item-section>
+            </q-item>
             <q-separator class="q-my-xs" />
-            <q-item tag="label"><q-item-section>Смена стадии CRM</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_crm_stage" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Назначение задач</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_assigned" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Дедлайны</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_deadline" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Оплаты</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_payment" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Авт. надзор</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_supervision" color="accent" /></q-item-section></q-item>
+            <q-item tag="label">
+              <q-item-section>Смена стадии CRM</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_crm_stage" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Назначение задач</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_assigned" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Дедлайны</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_deadline" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Оплаты</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_payment" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Авт. надзор</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_supervision" color="accent" />
+              </q-item-section>
+            </q-item>
             <q-separator class="q-my-xs" />
-            <q-item tag="label"><q-item-section>Индивидуальные</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_individual" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Шаблонные</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_template" color="accent" /></q-item-section></q-item>
+            <q-item tag="label">
+              <q-item-section>Индивидуальные</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_individual" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Шаблонные</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_template" color="accent" />
+              </q-item-section>
+            </q-item>
             <q-separator class="q-my-xs" />
-            <q-item tag="label"><q-item-section>Дублирование (подчинённые)</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_duplicates" color="accent" /></q-item-section></q-item>
-            <q-item tag="label"><q-item-section>Исправления подчинённых</q-item-section><q-item-section side><q-toggle v-model="notifSettings.notify_subordinate_revisions" color="accent" /></q-item-section></q-item>
+            <q-item tag="label">
+              <q-item-section>Дублирование (подчинённые)</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_duplicates" color="accent" />
+              </q-item-section>
+            </q-item>
+            <q-item tag="label">
+              <q-item-section>Исправления подчинённых</q-item-section><q-item-section side>
+                <q-toggle v-model="notifSettings.notify_subordinate_revisions" color="accent" />
+              </q-item-section>
+            </q-item>
           </q-list>
         </q-card-section>
         <q-card-actions align="center" class="column q-gutter-sm q-pb-md">
-          <q-btn label="Сохранить" no-caps unelevated style="background: #ffd93c; color: #333; border-radius: 8px; width: 200px" @click="saveNotifSettings" />
-          <q-btn outline label="Тестовое уведомление" no-caps icon="notifications_active" size="sm" style="border-radius: 8px; width: 200px" @click="sendTestNotif" :loading="testNotifLoading" />
+          <q-btn
+            label="Сохранить"
+            no-caps
+            unelevated
+            style="background: #ffd93c; color: #333; border-radius: 8px; width: 200px"
+            @click="saveNotifSettings"
+          />
+          <q-btn
+            outline
+            label="Тестовое уведомление"
+            no-caps
+            icon="notifications_active"
+            size="sm"
+            style="border-radius: 8px; width: 200px"
+            :loading="testNotifLoading"
+            @click="sendTestNotif"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -196,17 +396,47 @@
     <q-dialog v-model="showGlobalSearch" position="top">
       <q-card style="width: 100%; max-width: 500px; border-radius: 0 0 10px 10px">
         <q-card-section class="q-pb-none">
-          <q-input v-model="globalQuery" placeholder="Клиент, договор, адрес..." dense outlined autofocus @keyup.enter="doGlobalSearch" class="q-mb-sm">
-            <template v-slot:prepend><q-icon name="search" /></template>
-            <template v-slot:append><q-btn v-if="globalQuery" flat round dense icon="close" size="xs" @click="globalQuery = ''" /></template>
+          <q-input
+            v-model="globalQuery"
+            placeholder="Клиент, договор, адрес..."
+            dense
+            outlined
+            autofocus
+            class="q-mb-sm"
+            @keyup.enter="doGlobalSearch"
+          >
+            <template #prepend>
+              <q-icon name="search" />
+            </template>
+            <template #append>
+              <q-btn
+                v-if="globalQuery"
+                flat
+                round
+                dense
+                icon="close"
+                size="xs"
+                @click="globalQuery = ''"
+              />
+            </template>
           </q-input>
         </q-card-section>
         <q-list v-if="globalResults.length > 0" separator style="max-height: 400px; overflow-y: auto">
-          <q-item v-for="r in globalResults" :key="`${r.type}-${r.id}`" clickable v-ripple @click="goToResult(r)">
-            <q-item-section avatar><q-icon :name="r.type === 'client' ? 'person' : r.type === 'contract' ? 'description' : 'view_kanban'" :color="r.type === 'client' ? 'green' : r.type === 'contract' ? 'blue' : 'orange'" /></q-item-section>
+          <q-item
+            v-for="r in globalResults"
+            :key="`${r.type}-${r.id}`"
+            v-ripple
+            clickable
+            @click="goToResult(r)"
+          >
+            <q-item-section avatar>
+              <q-icon :name="r.type === 'client' ? 'person' : r.type === 'contract' ? 'description' : 'view_kanban'" :color="r.type === 'client' ? 'green' : r.type === 'contract' ? 'blue' : 'orange'" />
+            </q-item-section>
             <q-item-section>
               <q-item-label>{{ r.title }}</q-item-label>
-              <q-item-label caption>{{ r.subtitle }}</q-item-label>
+              <q-item-label caption>
+                {{ r.subtitle }}
+              </q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
@@ -254,11 +484,11 @@ async function handleOfflineQueue() {
       model: 'sync',
       items: [
         { label: 'Отправить сейчас', value: 'sync' },
-        { label: 'Очистить очередь (удалить)', value: 'clear' }
-      ]
+        { label: 'Очистить очередь (удалить)', value: 'clear' },
+      ],
     },
     cancel: true,
-    persistent: false
+    persistent: false,
   }).onOk(async (action) => {
     if (action === 'clear') {
       await clearOfflineAll()
@@ -286,9 +516,12 @@ const globalSearched = ref(false)
 let searchDebounce = null
 
 watch(globalQuery, (val) => {
+  clearTimeout(searchDebounce)
   if (val && val.length >= 2) {
-    clearTimeout(searchDebounce)
     searchDebounce = setTimeout(doGlobalSearch, 400)
+  } else {
+    globalResults.value = []
+    globalSearched.value = false
   }
 })
 
@@ -301,7 +534,7 @@ async function doGlobalSearch() {
       type: r.type || 'client',
       id: r.id,
       title: r.title || r.name || r.full_name || r.contract_number || '',
-      subtitle: r.subtitle || r.address || r.phone || ''
+      subtitle: r.subtitle || r.address || r.phone || '',
     }))
     globalSearched.value = true
   } catch {
@@ -318,6 +551,7 @@ function goToResult(r) {
   if (r.type === 'client') router.push(`/clients/${r.id}`)
   else if (r.type === 'contract') router.push(`/contracts/${r.id}`)
   else if (r.type === 'crm_card') router.push(`/crm/${r.id}`)
+  else if (r.type === 'supervision_card') router.push(`/supervision/${r.id}`)
 }
 
 onMounted(() => {
@@ -357,7 +591,7 @@ const menuItems = [
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты по сотрудникам' },
   { to: '/files', icon: 'folder', label: 'Файлы' },
-  { to: '/admin', icon: 'admin_panel_settings', label: 'Администрирование' }
+  { to: '/admin', icon: 'admin_panel_settings', label: 'Администрирование' },
 ]
 
 // Bottom bar — все кнопки без подписей, порядок как десктоп
@@ -372,7 +606,7 @@ const bottomTabs = [
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты сотр.' },
   { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
-  { to: '/admin', icon: 'admin_panel_settings', label: 'Админ' }
+  { to: '/admin', icon: 'admin_panel_settings', label: 'Админ' },
 ]
 
 function toggleDrawer() { drawerOpen.value = !drawerOpen.value }
@@ -392,7 +626,7 @@ function openManual() {
     'Дизайнер': 'https://yadi.sk/i/FuD7OjI9qGpThg',
     'Чертёжник': 'https://yadi.sk/i/ByeUw6h0erkLuQ',
     'Замерщик': 'https://yadi.sk/i/H4MJFHmKIu0zdQ',
-    'ДАН': 'https://yadi.sk/i/LAkkj1h3f5Bv7g'
+    'ДАН': 'https://yadi.sk/i/LAkkj1h3f5Bv7g',
   }
   const position = authStore.user?.position || ''
   const url = MANUAL_URLS[position] || MANUAL_URLS[position.split('/')[0]?.trim()]
@@ -493,7 +727,7 @@ async function subscribeToPush() {
   const registration = await navigator.serviceWorker.ready
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
   })
 
   // Отправить подписку на сервер

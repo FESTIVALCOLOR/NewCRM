@@ -7,7 +7,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const loading = ref(false)
 
   const unreadCount = computed(() =>
-    items.value.filter(n => !n.is_read).length
+    items.value.filter(n => !n.is_read).length,
   )
 
   async function load() {

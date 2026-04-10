@@ -4,14 +4,18 @@
       <q-card class="login-card">
         <!-- Логотип -->
         <q-card-section class="text-center q-pb-none">
-          <img src="/festival_logo.png" alt="Festival Color" style="height: 64px; width: auto" class="q-mb-sm" />
-          <div class="text-h6 text-weight-bold q-mb-xs" style="color: #333">FESTIVAL COLOR</div>
-          <div class="text-caption" style="color: #999">Система управления заказами</div>
+          <img src="/festival_logo.png" alt="Festival Color" style="height: 64px; width: auto" class="q-mb-sm">
+          <div class="text-h6 text-weight-bold q-mb-xs" style="color: #333">
+            FESTIVAL COLOR
+          </div>
+          <div class="text-caption" style="color: #999">
+            Система управления заказами
+          </div>
         </q-card-section>
 
         <!-- Форма -->
         <q-card-section>
-          <q-form @submit.prevent="handleLogin" class="q-gutter-md">
+          <q-form class="q-gutter-md" @submit.prevent="handleLogin">
             <q-input
               v-model="username"
               label="Логин"
@@ -20,7 +24,9 @@
               :rules="[val => !!val || 'Введите логин']"
               autocomplete="username"
             >
-              <template v-slot:prepend><q-icon name="person" /></template>
+              <template #prepend>
+                <q-icon name="person" />
+              </template>
             </q-input>
 
             <q-input
@@ -32,8 +38,10 @@
               :rules="[val => !!val || 'Введите пароль']"
               autocomplete="current-password"
             >
-              <template v-slot:prepend><q-icon name="lock" /></template>
-              <template v-slot:append>
+              <template #prepend>
+                <q-icon name="lock" />
+              </template>
+              <template #append>
                 <q-icon :name="showPassword ? 'visibility_off' : 'visibility'" class="cursor-pointer" @click="showPassword = !showPassword" />
               </template>
             </q-input>
@@ -43,7 +51,9 @@
 
             <!-- Ошибка -->
             <q-banner v-if="authStore.error" class="bg-negative text-white" dense style="border-radius: 4px">
-              <template v-slot:avatar><q-icon name="error" /></template>
+              <template #avatar>
+                <q-icon name="error" />
+              </template>
               {{ authStore.error }}
             </q-banner>
 
@@ -65,7 +75,9 @@
         </q-card-section>
 
         <q-card-section class="text-center q-pt-none">
-          <div class="text-caption" style="color: #ccc">v1.2.0</div>
+          <div class="text-caption" style="color: #ccc">
+            v1.2.0
+          </div>
         </q-card-section>
       </q-card>
     </div>

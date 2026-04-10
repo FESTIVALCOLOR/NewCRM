@@ -1,41 +1,93 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-sm">
-      <div class="text-subtitle1 text-weight-bold" style="color: #333">Отчёты и Статистика</div>
-      <q-btn flat dense icon="picture_as_pdf" color="grey-7" @click="exportPDF"><q-tooltip>Экспорт PDF</q-tooltip></q-btn>
+      <div class="text-subtitle1 text-weight-bold" style="color: #333">
+        Отчёты и Статистика
+      </div>
+      <q-btn
+        flat
+        dense
+        icon="picture_as_pdf"
+        color="grey-7"
+        @click="exportPDF"
+      >
+        <q-tooltip>Экспорт PDF</q-tooltip>
+      </q-btn>
     </div>
 
     <!-- Фильтры -->
     <q-card class="is-card q-mb-md">
       <q-card-section class="q-pa-sm">
         <div class="row q-col-gutter-sm">
-          <div class="col-4"><q-select v-model="filters.year" :options="years" label="Год" outlined dense @update:model-value="loadData" /></div>
-          <div class="col-4"><q-select v-model="filters.quarter" :options="quarters" label="Квартал" outlined dense emit-value map-options @update:model-value="loadData" /></div>
-          <div class="col-4"><q-select v-model="filters.month" :options="monthOpts" label="Месяц" outlined dense emit-value map-options @update:model-value="loadData" /></div>
+          <div class="col-4">
+            <q-select
+              v-model="filters.year"
+              :options="years"
+              label="Год"
+              outlined
+              dense
+              @update:model-value="loadData"
+            />
+          </div>
+          <div class="col-4">
+            <q-select
+              v-model="filters.quarter"
+              :options="quarters"
+              label="Квартал"
+              outlined
+              dense
+              emit-value
+              map-options
+              @update:model-value="loadData"
+            />
+          </div>
+          <div class="col-4">
+            <q-select
+              v-model="filters.month"
+              :options="monthOpts"
+              label="Месяц"
+              outlined
+              dense
+              emit-value
+              map-options
+              @update:model-value="loadData"
+            />
+          </div>
         </div>
       </q-card-section>
     </q-card>
 
     <q-pull-to-refresh @refresh="onRefresh">
-
       <!-- ========== КЛЮЧЕВЫЕ ПОКАЗАТЕЛИ ========== -->
       <q-card class="is-card q-mb-md">
-        <q-card-section class="q-pb-none"><div class="text-subtitle2 text-weight-bold">Ключевые показатели</div></q-card-section>
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle2 text-weight-bold">
+            Ключевые показатели
+          </div>
+        </q-card-section>
         <q-card-section>
           <div class="row q-col-gutter-xs q-mb-sm">
-            <div class="col-4 col-md-2" v-for="kpi in kpiCards" :key="kpi.label">
+            <div v-for="kpi in kpiCards" :key="kpi.label" class="col-4 col-md-2">
               <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${kpi.color}`, borderRadius: '6px', background: '#FAFAFA' }">
-                <div class="text-subtitle1 text-weight-bold">{{ kpi.value }}</div>
-                <div class="text-caption text-grey-7" style="font-size: 9px">{{ kpi.label }}</div>
+                <div class="text-subtitle1 text-weight-bold">
+                  {{ kpi.value }}
+                </div>
+                <div class="text-caption text-grey-7" style="font-size: 9px">
+                  {{ kpi.label }}
+                </div>
               </div>
             </div>
           </div>
           <!-- По агентам -->
-          <div class="row q-col-gutter-xs" v-if="agentKpi.length > 0">
-            <div class="col-6" v-for="a in agentKpi" :key="a.label">
+          <div v-if="agentKpi.length > 0" class="row q-col-gutter-xs">
+            <div v-for="a in agentKpi" :key="a.label" class="col-6">
               <div class="q-pa-xs" :style="{ borderLeft: `3px solid ${a.color}`, borderRadius: '6px', background: '#FAFAFA' }">
-                <div class="text-subtitle2 text-weight-bold">{{ a.value }}</div>
-                <div class="text-caption text-grey-7" style="font-size: 9px">{{ a.label }}</div>
+                <div class="text-subtitle2 text-weight-bold">
+                  {{ a.value }}
+                </div>
+                <div class="text-caption text-grey-7" style="font-size: 9px">
+                  {{ a.label }}
+                </div>
               </div>
             </div>
           </div>
@@ -45,30 +97,44 @@
       <!-- ========== КЛИЕНТЫ ========== -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm">Клиенты</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">
+            Клиенты
+          </div>
           <div class="row q-col-gutter-xs q-mb-md">
-            <div class="col-4 col-md-2 text-center" v-for="m in clientMini" :key="m.label">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || '#333' }">{{ m.value }}</div>
-              <div class="text-caption text-grey-7" style="font-size: 9px">{{ m.label }}</div>
+            <div v-for="m in clientMini" :key="m.label" class="col-4 col-md-2 text-center">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || '#333' }">
+                {{ m.value }}
+              </div>
+              <div class="text-caption text-grey-7" style="font-size: 9px">
+                {{ m.label }}
+              </div>
             </div>
           </div>
           <div class="row q-col-gutter-md">
             <div class="col-12 col-md-6">
-              <div class="text-caption text-weight-bold text-center q-mb-xs">Динамика клиентов</div>
+              <div class="text-caption text-weight-bold text-center q-mb-xs">
+                Динамика клиентов
+              </div>
               <line-chart v-if="clientsDynamics" :labels="clientsDynamics.labels" :datasets="clientsDynamics.datasets" />
             </div>
-            <div class="col-12 col-md-6" v-if="clientTypePie">
-              <div class="text-caption text-weight-bold text-center q-mb-xs">Тип клиентов</div>
+            <div v-if="clientTypePie" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-center q-mb-xs">
+                Тип клиентов
+              </div>
               <pie-chart :labels="clientTypePie.labels" :values="clientTypePie.values" />
             </div>
           </div>
           <div class="row q-col-gutter-md q-mt-sm">
-            <div class="col-12 col-md-6" v-if="clientsByAgentChart">
-              <div class="text-caption text-weight-bold q-mb-xs">Клиенты по агентам</div>
+            <div v-if="clientsByAgentChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Клиенты по агентам
+              </div>
               <bar-chart :labels="clientsByAgentChart.labels" :datasets="clientsByAgentChart.datasets" horizontal />
             </div>
-            <div class="col-12 col-md-6" v-if="newVsReturningChart">
-              <div class="text-caption text-weight-bold q-mb-xs">Новые vs Повторные</div>
+            <div v-if="newVsReturningChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Новые vs Повторные
+              </div>
               <bar-chart :labels="newVsReturningChart.labels" :datasets="newVsReturningChart.datasets" />
             </div>
           </div>
@@ -78,40 +144,58 @@
       <!-- ========== ДОГОВОРЫ ========== -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm">Договоры</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">
+            Договоры
+          </div>
           <div class="row q-col-gutter-xs q-mb-md">
-            <div class="col-4 col-md-2 text-center" v-for="m in contractMini" :key="m.label">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || '#333' }">{{ m.value }}</div>
-              <div class="text-caption text-grey-7" style="font-size: 9px">{{ m.label }}</div>
+            <div v-for="m in contractMini" :key="m.label" class="col-4 col-md-2 text-center">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: m.color || '#333' }">
+                {{ m.value }}
+              </div>
+              <div class="text-caption text-grey-7" style="font-size: 9px">
+                {{ m.label }}
+              </div>
             </div>
           </div>
           <div class="row q-col-gutter-md">
-            <div class="col-12 col-md-6" v-if="contractsDynamics">
-              <div class="text-caption text-weight-bold q-mb-xs">Договоры по месяцам</div>
+            <div v-if="contractsDynamics" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Договоры по месяцам
+              </div>
               <bar-chart :labels="contractsDynamics.labels" :datasets="contractsDynamics.datasets" />
             </div>
-            <div class="col-12 col-md-6" v-if="contractsAmountDynamics">
-              <div class="text-caption text-weight-bold q-mb-xs">Стоимость по месяцам</div>
+            <div v-if="contractsAmountDynamics" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Стоимость по месяцам
+              </div>
               <line-chart :labels="contractsAmountDynamics.labels" :datasets="contractsAmountDynamics.datasets" />
             </div>
           </div>
           <div class="row q-col-gutter-md q-mt-sm">
-            <div class="col-12 col-md-6" v-if="projectTypePie">
-              <div class="text-caption text-weight-bold text-center q-mb-xs">Типы проектов</div>
+            <div v-if="projectTypePie" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-center q-mb-xs">
+                Типы проектов
+              </div>
               <pie-chart :labels="projectTypePie.labels" :values="projectTypePie.values" />
             </div>
-            <div class="col-12 col-md-6" v-if="topCitiesChart">
-              <div class="text-caption text-weight-bold q-mb-xs">ТОП городов</div>
+            <div v-if="topCitiesChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                ТОП городов
+              </div>
               <bar-chart :labels="topCitiesChart.labels" :datasets="topCitiesChart.datasets" horizontal />
             </div>
           </div>
           <div class="row q-col-gutter-md q-mt-sm">
-            <div class="col-12 col-md-6" v-if="contractsByAgentChart">
-              <div class="text-caption text-weight-bold q-mb-xs">Договоры по агентам</div>
+            <div v-if="contractsByAgentChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Договоры по агентам
+              </div>
               <bar-chart :labels="contractsByAgentChart.labels" :datasets="contractsByAgentChart.datasets" />
             </div>
-            <div class="col-12 col-md-6" v-if="amountByAgentChart">
-              <div class="text-caption text-weight-bold q-mb-xs">Стоимость по агентам</div>
+            <div v-if="amountByAgentChart" class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Стоимость по агентам
+              </div>
               <bar-chart :labels="amountByAgentChart.labels" :datasets="amountByAgentChart.datasets" horizontal />
             </div>
           </div>
@@ -121,38 +205,59 @@
       <!-- ========== CRM АНАЛИТИКА ========== -->
       <q-card class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm">CRM Аналитика</div>
-          <q-tabs v-model="projectTab" dense active-color="dark" indicator-color="accent" no-caps align="left">
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">
+            CRM Аналитика
+          </div>
+          <q-tabs
+            v-model="projectTab"
+            dense
+            active-color="dark"
+            indicator-color="accent"
+            no-caps
+            align="left"
+          >
             <q-tab name="individual" label="Индивидуальные" />
             <q-tab name="template" label="Шаблонные" />
           </q-tabs>
           <div v-if="projectStats" class="q-mt-md">
             <div class="row q-col-gutter-xs q-mb-md">
-              <div class="col-3" v-for="s in projectStatCards" :key="s.label">
+              <div v-for="s in projectStatCards" :key="s.label" class="col-3">
                 <div class="text-center q-pa-xs" :style="{ border: `1px solid ${s.color || '#E0E0E0'}`, borderRadius: '6px' }">
-                  <div class="text-subtitle1 text-weight-bold">{{ s.value }}</div>
-                  <div class="text-caption text-grey-7" style="font-size: 9px">{{ s.label }}</div>
+                  <div class="text-subtitle1 text-weight-bold">
+                    {{ s.value }}
+                  </div>
+                  <div class="text-caption text-grey-7" style="font-size: 9px">
+                    {{ s.label }}
+                  </div>
                 </div>
               </div>
             </div>
             <!-- Воронка -->
-            <div class="q-mb-md" v-if="funnelChart">
-              <div class="text-caption text-weight-bold q-mb-xs">Воронка проектов</div>
+            <div v-if="funnelChart" class="q-mb-md">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Воронка проектов
+              </div>
               <bar-chart :labels="funnelChart.labels" :datasets="funnelChart.datasets" horizontal />
             </div>
             <div class="row q-col-gutter-md">
-              <div class="col-12 col-md-6" v-if="cityChart">
-                <div class="text-caption text-weight-bold q-mb-xs">По городам</div>
+              <div v-if="cityChart" class="col-12 col-md-6">
+                <div class="text-caption text-weight-bold q-mb-xs">
+                  По городам
+                </div>
                 <bar-chart :labels="cityChart.labels" :datasets="cityChart.datasets" horizontal />
               </div>
-              <div class="col-12 col-md-6" v-if="agentChart">
-                <div class="text-caption text-weight-bold q-mb-xs">По агентам</div>
+              <div v-if="agentChart" class="col-12 col-md-6">
+                <div class="text-caption text-weight-bold q-mb-xs">
+                  По агентам
+                </div>
                 <bar-chart :labels="agentChart.labels" :datasets="agentChart.datasets" horizontal />
               </div>
             </div>
             <!-- Время стадий vs норматив -->
-            <div class="q-mt-md" v-if="stageDurationsChart" style="overflow-x: auto">
-              <div class="text-caption text-weight-bold q-mb-xs">Время стадий vs норматив — {{ projectTab === 'template' ? 'Шаблонный' : 'Индивидуальный' }}</div>
+            <div v-if="stageDurationsChart" class="q-mt-md" style="overflow-x: auto">
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Время стадий vs норматив — {{ projectTab === 'template' ? 'Шаблонный' : 'Индивидуальный' }}
+              </div>
               <div style="min-width: 700px">
                 <bar-chart :labels="stageDurationsChart.labels" :datasets="stageDurationsChart.datasets" :rotate-labels="90" :height="350" />
               </div>
@@ -162,24 +267,31 @@
       </q-card>
 
       <!-- ========== АВТОРСКИЙ НАДЗОР ========== -->
-      <q-card class="is-card q-mb-md" v-if="supervisionStats">
+      <q-card v-if="supervisionStats" class="is-card q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-weight-bold q-mb-sm">Авторский надзор</div>
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">
+            Авторский надзор
+          </div>
           <div class="row q-col-gutter-xs q-mb-md">
-            <div class="col-4 col-md-2 text-center" v-for="s in supervisionMini" :key="s.label">
-              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || '#333' }">{{ s.value }}</div>
-              <div class="text-caption text-grey-7" style="font-size: 9px">{{ s.label }}</div>
+            <div v-for="s in supervisionMini" :key="s.label" class="col-4 col-md-2 text-center">
+              <div class="text-subtitle1 text-weight-bold" :style="{ color: s.color || '#333' }">
+                {{ s.value }}
+              </div>
+              <div class="text-caption text-grey-7" style="font-size: 9px">
+                {{ s.label }}
+              </div>
             </div>
           </div>
-          <div class="row q-col-gutter-md" v-if="supervisionByAgentChart">
+          <div v-if="supervisionByAgentChart" class="row q-col-gutter-md">
             <div class="col-12 col-md-6">
-              <div class="text-caption text-weight-bold q-mb-xs">Надзоры по агентам</div>
+              <div class="text-caption text-weight-bold q-mb-xs">
+                Надзоры по агентам
+              </div>
               <bar-chart :labels="supervisionByAgentChart.labels" :datasets="supervisionByAgentChart.datasets" horizontal />
             </div>
           </div>
         </q-card-section>
       </q-card>
-
     </q-pull-to-refresh>
   </q-page>
 </template>
@@ -226,7 +338,7 @@ const kpiCards = computed(() => {
     { label: 'Общая стоимость', value: fmtMoney(s.total_amount), color: '#E74C3C' },
     { label: 'Средний чек', value: fmtMoney(s.avg_amount), color: '#9B59B6' },
     { label: 'Общая площадь', value: s.total_area ? `${Math.round(s.total_area)} м²` : '—', color: '#1ABC9C' },
-    { label: 'Средняя площадь', value: s.avg_area ? `${Math.round(s.avg_area)} м²` : '—', color: '#E67E22' }
+    { label: 'Средняя площадь', value: s.avg_area ? `${Math.round(s.avg_area)} м²` : '—', color: '#E67E22' },
   ]
 })
 
@@ -245,7 +357,7 @@ const agentKpi = computed(() => {
       items.push({
         label: `${row.label} — ${a.agent_name}`,
         value: row.fmt(a[row.key], a),
-        color: a.agent_color || '#999'
+        color: a.agent_color || '#999',
       })
     }
   }
@@ -277,8 +389,8 @@ const clientsDynamics = computed(() => {
       labels: raw.map(item => { const m = String(item.month || item.period || '').split('-'); return m.length >= 2 ? months[parseInt(m[1]) - 1] || m[1] : m[0] }),
       datasets: [
         { label: 'Новые', data: raw.map(item => item.new_clients || item.new || 0), color: '#27AE60' },
-        { label: 'Повторные', data: raw.map(item => item.returning_clients || item.returning || 0), color: '#9B59B6' }
-      ]
+        { label: 'Повторные', data: raw.map(item => item.returning_clients || item.returning || 0), color: '#9B59B6' },
+      ],
     }
   }
   const keys = Object.keys(raw).sort()
@@ -287,8 +399,8 @@ const clientsDynamics = computed(() => {
     labels: keys.map(k => { const p = k.split('-'); return p.length >= 2 ? months[parseInt(p[1]) - 1] || k : k }),
     datasets: [
       { label: 'Новые', data: keys.map(k => raw[k]?.new || raw[k]?.new_clients || 0), color: '#27AE60' },
-      { label: 'Повторные', data: keys.map(k => raw[k]?.returning || raw[k]?.returning_clients || 0), color: '#9B59B6' }
-    ]
+      { label: 'Повторные', data: keys.map(k => raw[k]?.returning || raw[k]?.returning_clients || 0), color: '#9B59B6' },
+    ],
   }
 })
 
@@ -303,7 +415,7 @@ const clientsByAgentChart = computed(() => {
   if (ba.length === 0) return null
   return {
     labels: ba.map(a => a.agent_name),
-    datasets: [{ label: 'Клиентов', data: ba.map(a => a.clients || 0), color: '#F39C12' }]
+    datasets: [{ label: 'Клиентов', data: ba.map(a => a.clients || 0), color: '#F39C12' }],
   }
 })
 
@@ -316,8 +428,8 @@ const newVsReturningChart = computed(() => {
       labels: raw.map((_, i) => months[i] || `M${i + 1}`),
       datasets: [
         { label: 'Новые', data: raw.map(item => item.new_clients || item.new || 0), color: '#27AE60' },
-        { label: 'Повторные', data: raw.map(item => item.returning_clients || item.returning || 0), color: '#9B59B6' }
-      ]
+        { label: 'Повторные', data: raw.map(item => item.returning_clients || item.returning || 0), color: '#9B59B6' },
+      ],
     }
   }
   return null
@@ -351,8 +463,8 @@ const contractsDynamics = computed(() => {
     labels: months,
     datasets: [
       { label: 'Индивид.', data: months.map((_, i) => d[String(i + 1)]?.count || 0), color: '#F39C12' },
-      { label: 'Шаблон.', data: months.map((_, i) => d[String(i + 1)]?.template_count || 0), color: '#C62828' }
-    ]
+      { label: 'Шаблон.', data: months.map((_, i) => d[String(i + 1)]?.template_count || 0), color: '#C62828' },
+    ],
   }
 })
 
@@ -362,7 +474,7 @@ const contractsAmountDynamics = computed(() => {
   const months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
   return {
     labels: months,
-    datasets: [{ label: 'Стоимость', data: months.map((_, i) => d[String(i + 1)]?.amount || 0), color: '#F39C12' }]
+    datasets: [{ label: 'Стоимость', data: months.map((_, i) => d[String(i + 1)]?.amount || 0), color: '#F39C12' }],
   }
 })
 
@@ -374,7 +486,7 @@ const topCitiesChart = computed(() => {
     const entries = Object.entries(p.by_cities).sort((a, b) => b[1] - a[1]).slice(0, 8)
     if (entries.length > 0) return {
       labels: entries.map(([k]) => k),
-      datasets: [{ label: 'Договоров', data: entries.map(([, v]) => v), color: '#F39C12' }]
+      datasets: [{ label: 'Договоров', data: entries.map(([, v]) => v), color: '#F39C12' }],
     }
   }
   return null
@@ -385,7 +497,7 @@ const contractsByAgentChart = computed(() => {
   if (ba.length === 0) return null
   return {
     labels: ba.map(a => a.agent_name),
-    datasets: [{ label: 'Договоров', data: ba.map(a => a.contracts || 0), color: '#3498DB' }]
+    datasets: [{ label: 'Договоров', data: ba.map(a => a.contracts || 0), color: '#3498DB' }],
   }
 })
 
@@ -394,7 +506,7 @@ const amountByAgentChart = computed(() => {
   if (ba.length === 0) return null
   return {
     labels: ba.map(a => a.agent_name),
-    datasets: [{ label: 'Стоимость', data: ba.map(a => a.amount || 0), color: '#F39C12' }]
+    datasets: [{ label: 'Стоимость', data: ba.map(a => a.amount || 0), color: '#F39C12' }],
   }
 })
 
@@ -414,7 +526,7 @@ const projectStatCards = computed(() => {
     { label: 'Проектов в срок', value: ots.projects_on_time_pct != null ? `${ots.projects_on_time_pct}%` : (p.total_orders ?? '—'), color: '#27AE60' },
     { label: 'Стадий в срок', value: ots.stages_on_time_pct != null ? `${ots.stages_on_time_pct}%` : '—', color: '#F39C12' },
     { label: 'Ср. отклонение', value: ots.avg_deviation ? `${Number(ots.avg_deviation).toFixed(1)} дн.` : '—', color: '#E74C3C' },
-    { label: 'На паузе', value: d.paused_count ?? p.paused ?? '—', color: '#9B59B6' }
+    { label: 'На паузе', value: d.paused_count ?? p.paused ?? '—', color: '#9B59B6' },
   ]
 })
 
@@ -444,8 +556,8 @@ const stageDurationsChart = computed(() => {
     labels: durations.map(d => (d.stage || '').substring(0, 20)),
     datasets: [
       { label: 'Норматив', data: durations.map(d => d.norm_days || 0), color: '#4CAF50' },
-      { label: 'Факт (дни)', data: durations.map(d => d.actual_days || 0), color: '#F39C12' }
-    ]
+      { label: 'Факт (дни)', data: durations.map(d => d.actual_days || 0), color: '#F39C12' },
+    ],
   }
 })
 
@@ -459,7 +571,7 @@ const supervisionMini = computed(() => {
     { label: 'Активных', value: s.active ?? '—', color: '#F39C12' },
     { label: 'По индивид.', value: s.by_individual ?? '—', color: '#F57C00' },
     { label: 'По шаблонным', value: s.by_template ?? '—', color: '#C62828' },
-    ...agentItems
+    ...agentItems,
   ]
 })
 
@@ -470,7 +582,7 @@ const supervisionByAgentChart = computed(() => {
   if (entries.length === 0) return null
   return {
     labels: entries.map(([k]) => k),
-    datasets: [{ label: 'Надзоров', data: entries.map(([, v]) => v), color: '#F39C12' }]
+    datasets: [{ label: 'Надзоров', data: entries.map(([, v]) => v), color: '#F39C12' }],
   }
 })
 
@@ -492,13 +604,13 @@ async function loadData() {
     statisticsApi.getProjects({ ...params, project_type: 'Авторский надзор' }),
     dashboardApi.getContracts(params),
     statisticsApi.getContractsByPeriod({ year: filters.value.year }),
-    reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: pt })
+    reportsApi.getCrmAnalyticsDetailed({ ...params, project_type: pt }),
   ])
 
   console.log('[Reports] Results:', {
     sum: sumR?.status, funnel: funnelR?.status, proj: projR?.status,
     dyn: dynR?.status, sup: supR?.status, cont: contR?.status,
-    cbyP: cbyPR?.status, crmDet: crmDetR?.status
+    cbyP: cbyPR?.status, crmDet: crmDetR?.status,
   })
   ;[sumR, funnelR, projR, dynR, supR, contR, cbyPR, crmDetR].forEach((r, i) => {
     if (r.status === 'rejected') console.error(`[Reports] Request ${i} failed:`, r.reason?.response?.status, r.reason?.message)

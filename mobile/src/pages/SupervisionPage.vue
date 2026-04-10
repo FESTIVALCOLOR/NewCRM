@@ -4,16 +4,24 @@
     <div style="border-bottom: 1px solid #E0E0E0; padding: 6px 8px">
       <div class="row items-center no-wrap">
         <div class="toggle-pills">
-          <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">Активные</button>
-          <button :class="{ active: showArchive }" @click="showArchive = true; loadCards()">Архив</button>
+          <button :class="{ active: !showArchive }" @click="showArchive = false; loadCards()">
+            Активные
+          </button>
+          <button :class="{ active: showArchive }" @click="showArchive = true; loadCards()">
+            Архив
+          </button>
         </div>
         <q-space />
-        <div class="text-caption" style="color: #888">{{ cards.length }} объектов</div>
+        <div class="text-caption" style="color: #888">
+          {{ cards.length }} объектов
+        </div>
       </div>
     </div>
 
     <div v-if="loading" class="q-pa-md">
-      <q-card class="is-card q-mb-sm" v-for="n in 4" :key="n"><q-card-section><q-skeleton type="text" width="50%" /><q-skeleton type="text" width="70%" /></q-card-section></q-card>
+      <q-card v-for="n in 4" :key="n" class="is-card q-mb-sm">
+        <q-card-section><q-skeleton type="text" width="50%" /><q-skeleton type="text" width="70%" /></q-card-section>
+      </q-card>
     </div>
 
     <template v-else>
@@ -22,16 +30,22 @@
         <q-card v-for="card in cards" :key="card.id" class="is-card q-mb-sm cursor-pointer" @click="openCard(card)">
           <q-card-section class="q-pa-md">
             <div class="row items-center justify-between q-mb-xs">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ card.contract_number || `#${card.id}` }}</div>
+              <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                {{ card.contract_number || `#${card.id}` }}
+              </div>
               <q-badge :color="sColor(card)" :label="card.column_name || 'Архив'" dense />
             </div>
-            <div class="text-body2" style="color: #333">{{ card.address || 'Без адреса' }}</div>
+            <div class="text-body2" style="color: #333">
+              {{ card.address || 'Без адреса' }}
+            </div>
             <div class="row q-gutter-sm text-caption" style="color: #888">
               <span v-if="card.area">{{ card.area }} м²</span><span v-if="card.city">{{ card.city }}</span>
             </div>
           </q-card-section>
         </q-card>
-        <div v-if="cards.length === 0" class="text-center q-py-xl" style="color: #999">Архив пуст</div>
+        <div v-if="cards.length === 0" class="text-center q-py-xl" style="color: #999">
+          Архив пуст
+        </div>
       </div>
 
       <!-- Активные — QCarousel свайп как CRM -->
@@ -41,28 +55,58 @@
             {{ col.shortName }} <span class="count">{{ col.count }}</span>
           </button>
         </div>
-        <q-carousel v-model="currentSlide" swipeable animated transition-prev="slide-right" transition-next="slide-left" style="min-height: calc(100vh - 220px); background: transparent">
+        <q-carousel
+          v-model="currentSlide"
+          swipeable
+          animated
+          transition-prev="slide-right"
+          transition-next="slide-left"
+          style="min-height: calc(100vh - 220px); background: transparent"
+        >
           <q-carousel-slide v-for="(col, idx) in columns" :key="col.name" :name="idx" class="q-pa-none">
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
                 <span style="color: #888; font-size: 11px">Карточек: {{ col.count }}</span>
               </div>
-              <div class="column-body" v-if="col.cards.length > 0">
+              <div v-if="col.cards.length > 0" class="column-body">
                 <q-card v-for="card in col.cards" :key="card.id" class="crm-card q-mb-sm" :style="card.is_paused ? { background: '#FFF8E1', borderColor: '#F39C12' } : {}">
                   <q-card-section class="q-pa-sm">
                     <!-- 1. Номер договора (слева) + Стадия (справа) -->
                     <div class="row items-center justify-between q-mb-xs">
-                      <div style="color: #888; font-size: 10px">{{ card.contract_number || `#${card.id}` }}</div>
-                      <q-badge v-if="!card.is_paused" color="blue-grey-3" text-color="blue-grey-9" :label="card.column_name" dense style="font-size: 9px" />
-                      <q-badge v-else color="warning" label="Приостановлено" dense style="font-size: 9px" />
+                      <div style="color: #888; font-size: 10px">
+                        {{ card.contract_number || `#${card.id}` }}
+                      </div>
+                      <q-badge
+                        v-if="!card.is_paused"
+                        color="blue-grey-3"
+                        text-color="blue-grey-9"
+                        :label="card.column_name"
+                        dense
+                        style="font-size: 9px"
+                      />
+                      <q-badge
+                        v-else
+                        color="warning"
+                        label="Приостановлено"
+                        dense
+                        style="font-size: 9px"
+                      />
                     </div>
                     <!-- Причина паузы -->
                     <div v-if="card.is_paused && card.pause_reason" class="q-mb-xs">
-                      <q-badge color="orange-2" text-color="orange-9" :label="card.pause_reason" dense style="font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" />
+                      <q-badge
+                        color="orange-2"
+                        text-color="orange-9"
+                        :label="card.pause_reason"
+                        dense
+                        style="font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                      />
                     </div>
                     <!-- 2. Адрес -->
-                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">{{ card.address || 'Без адреса' }}</div>
+                    <div class="text-weight-bold q-mb-xs" style="font-size: 13px; color: #222">
+                      {{ card.address || 'Без адреса' }}
+                    </div>
                     <!-- 3. Площадь/город (слева) + Тип агента badge (справа) -->
                     <div class="row items-center justify-between q-mb-xs">
                       <div style="font-size: 11px; color: #888">
@@ -80,18 +124,55 @@
                     </div>
                     <!-- 5. Пауза/Возобновить -->
                     <div class="row q-gutter-xs q-mb-xs">
-                      <q-btn v-if="!card.is_paused" flat dense no-caps icon="pause" label="Пауза" style="color: #F39C12; font-size: 10px; height: 24px; flex: 1; border: 1px solid #F39C12; border-radius: 4px" @click.stop="quickPause(card)" />
-                      <q-btn v-else flat dense no-caps icon="play_arrow" label="Возобновить" style="color: #27AE60; font-size: 10px; height: 24px; flex: 1; border: 1px solid #27AE60; border-radius: 4px" @click.stop="quickResume(card)" />
+                      <q-btn
+                        v-if="!card.is_paused"
+                        flat
+                        dense
+                        no-caps
+                        icon="pause"
+                        label="Пауза"
+                        style="color: #F39C12; font-size: 10px; height: 24px; flex: 1; border: 1px solid #F39C12; border-radius: 4px"
+                        @click.stop="quickPause(card)"
+                      />
+                      <q-btn
+                        v-else
+                        flat
+                        dense
+                        no-caps
+                        icon="play_arrow"
+                        label="Возобновить"
+                        style="color: #27AE60; font-size: 10px; height: 24px; flex: 1; border: 1px solid #27AE60; border-radius: 4px"
+                        @click.stop="quickResume(card)"
+                      />
                     </div>
                     <!-- 6. Кнопки -->
                     <div style="border-top: 1px solid #E0E0E0; padding-top: 6px">
-                      <q-btn flat dense no-caps icon="open_in_new" label="Данные карточки" style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px" class="q-mb-xs" @click="openCard(card)" />
-                      <q-btn flat dense no-caps icon="swap_horiz" label="Переместить" style="color: #888; font-size: 10px; height: 24px; width: 100%" @click.stop="showMoveDialog(card)" />
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        icon="open_in_new"
+                        label="Данные карточки"
+                        style="color: #333; font-size: 11px; height: 28px; width: 100%; background: #F5F5F5; border-radius: 4px"
+                        class="q-mb-xs"
+                        @click="openCard(card)"
+                      />
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        icon="swap_horiz"
+                        label="Переместить"
+                        style="color: #888; font-size: 10px; height: 24px; width: 100%"
+                        @click.stop="showMoveDialog(card)"
+                      />
                     </div>
                   </q-card-section>
                 </q-card>
               </div>
-              <div v-else class="column-empty"><q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div></div>
+              <div v-else class="column-empty">
+                <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
+              </div>
             </div>
           </q-carousel-slide>
         </q-carousel>
@@ -101,19 +182,42 @@
     <q-dialog v-model="moveDialogVisible">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Переместить</q-toolbar-title>
-          <q-btn flat round dense icon="close" @click="moveDialogVisible = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            Переместить
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="moveDialogVisible = false"
+          />
         </q-toolbar>
         <q-card-section v-if="moveCard" class="q-pb-none">
-          <div class="text-weight-bold" style="font-size: 12px">{{ moveCard.contract_number }} — {{ moveCard.address }}</div>
-          <div class="text-caption q-mt-xs" style="color: #888">Текущая: {{ moveCard.column_name }}</div>
+          <div class="text-weight-bold" style="font-size: 12px">
+            {{ moveCard.contract_number }} — {{ moveCard.address }}
+          </div>
+          <div class="text-caption q-mt-xs" style="color: #888">
+            Текущая: {{ moveCard.column_name }}
+          </div>
         </q-card-section>
         <q-list separator>
-          <q-item v-for="col in SUPERVISION_COLUMNS" :key="col" clickable v-ripple @click="doMove(col)" :disable="moveCard?.column_name === col">
+          <q-item
+            v-for="col in SUPERVISION_COLUMNS"
+            :key="col"
+            v-ripple
+            clickable
+            :disable="moveCard?.column_name === col"
+            @click="doMove(col)"
+          >
             <q-item-section>
-              <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">{{ col }}</q-item-label>
+              <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">
+                {{ col }}
+              </q-item-label>
             </q-item-section>
-            <q-item-section side v-if="moveCard?.column_name === col"><q-icon name="check" color="positive" /></q-item-section>
+            <q-item-section v-if="moveCard?.column_name === col" side>
+              <q-icon name="check" color="positive" />
+            </q-item-section>
           </q-item>
         </q-list>
       </q-card>
@@ -156,7 +260,7 @@ const SUPERVISION_COLUMNS = [
   'Стадия 7: Лепной декор', 'Стадия 8: Освещение',
   'Стадия 9: Бытовая техника', 'Стадия 10: Закупка заказной мебели',
   'Стадия 11: Закупка фабричной мебели', 'Стадия 12: Закупка декора',
-  'Выполненный проект'
+  'Выполненный проект',
 ]
 
 const columns = computed(() => {
@@ -185,7 +289,7 @@ async function quickResume(card) {
 const dashItems = computed(() => [
   { label: 'Всего', value: cards.value.length },
   { label: 'В работе', value: cards.value.filter(c => (c.column_name || '').includes('Стадия')).length, color: '#F39C12' },
-  { label: 'Приостановлено', value: cards.value.filter(c => c.is_paused).length, color: '#E74C3C' }
+  { label: 'Приостановлено', value: cards.value.filter(c => c.is_paused).length, color: '#E74C3C' },
 ])
 
 function showMoveDialog(card) {

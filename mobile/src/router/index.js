@@ -6,7 +6,7 @@ import routes from './routes'
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior: () => ({ left: 0, top: 0 })
+  scrollBehavior: () => ({ left: 0, top: 0 }),
 })
 
 let sessionRestored = false

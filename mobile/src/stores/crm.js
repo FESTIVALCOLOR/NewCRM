@@ -10,7 +10,7 @@ const COLUMNS_INDIVIDUAL = [
   'Стадия 1: планировочные решения',
   'Стадия 2: концепция дизайна',
   'Стадия 3: рабочие чертежи',
-  'Выполненный проект'
+  'Выполненный проект',
 ]
 
 const COLUMNS_TEMPLATE = [
@@ -19,7 +19,7 @@ const COLUMNS_TEMPLATE = [
   'Стадия 1: планировочные решения',
   'Стадия 2: рабочие чертежи',
   'Стадия 3: 3д визуализация (Дополнительная)',
-  'Выполненный проект'
+  'Выполненный проект',
 ]
 
 export const useCrmStore = defineStore('crm', () => {
@@ -32,7 +32,7 @@ export const useCrmStore = defineStore('crm', () => {
 
   // Актуальный порядок колонок зависит от типа проекта
   const columnOrder = computed(() =>
-    projectType.value === 'Шаблонный' ? COLUMNS_TEMPLATE : COLUMNS_INDIVIDUAL
+    projectType.value === 'Шаблонный' ? COLUMNS_TEMPLATE : COLUMNS_INDIVIDUAL,
   )
 
   // Фильтрация карточек по роли (без фильтра по типу проекта)
@@ -97,7 +97,7 @@ export const useCrmStore = defineStore('crm', () => {
     return byRole.filter(c =>
       projectType.value === 'Шаблонный'
         ? c.project_type === 'Шаблонный'
-        : c.project_type !== 'Шаблонный'
+        : c.project_type !== 'Шаблонный',
     )
   })
 
@@ -124,7 +124,7 @@ export const useCrmStore = defineStore('crm', () => {
         name: col,
         shortName: col.replace(/^Стадия \d+: /, ''),
         cards: grouped[col],
-        count: grouped[col].length
+        count: grouped[col].length,
       }))
   })
 
@@ -133,10 +133,10 @@ export const useCrmStore = defineStore('crm', () => {
 
   // Счётчики по типу: считаются по roleFilteredCards (все типы, видимые роли)
   const countIndividual = computed(() =>
-    roleFilteredCards.value.filter(c => c.project_type !== 'Шаблонный').length
+    roleFilteredCards.value.filter(c => c.project_type !== 'Шаблонный').length,
   )
   const countTemplate = computed(() =>
-    roleFilteredCards.value.filter(c => c.project_type === 'Шаблонный').length
+    roleFilteredCards.value.filter(c => c.project_type === 'Шаблонный').length,
   )
 
   // Загружаем ВСЕ карточки (без фильтра по типу) — чтобы счётчики были корректны
@@ -196,6 +196,6 @@ export const useCrmStore = defineStore('crm', () => {
     columns, totalCards, countIndividual, countTemplate,
     loadCards, loadCard, setProjectType, toggleArchive,
     moveCardOptimistic, rollbackMoveCard,
-    columnOrder, COLUMNS_INDIVIDUAL, COLUMNS_TEMPLATE
+    columnOrder, COLUMNS_INDIVIDUAL, COLUMNS_TEMPLATE,
   }
 })

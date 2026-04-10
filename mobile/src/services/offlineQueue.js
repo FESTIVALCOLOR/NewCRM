@@ -43,7 +43,7 @@ export async function enqueue(operation) {
     const record = {
       ...operation,
       created_at: new Date().toISOString(),
-      retries: 0
+      retries: 0,
     }
     const req = store.add(record)
     req.onsuccess = () => resolve(req.result)
@@ -135,7 +135,7 @@ export async function syncAll(onProgress = null) {
       const config = {
         method: op.method.toLowerCase(),
         url: op.url,
-        timeout: 15000
+        timeout: 15000,
       }
       if (op.data && ['post', 'put', 'patch'].includes(config.method)) {
         config.data = op.data

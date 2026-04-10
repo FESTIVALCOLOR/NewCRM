@@ -33,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
       formData.append('password', password)
 
       const { data } = await api.post('/api/v1/auth/login', formData, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
 
       accessToken.value = data.access_token
@@ -49,7 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
         role: data.role,
         position: data.position,
         secondary_position: data.secondary_position,
-        department: data.department
+        department: data.department,
       }
 
       // Загружаем полный профиль
@@ -113,7 +113,7 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         if (refreshToken.value) {
           const { data } = await api.post('/api/v1/auth/refresh', {
-            refresh_token: refreshToken.value
+            refresh_token: refreshToken.value,
           })
           accessToken.value = data.access_token
           localStorage.setItem('access_token', data.access_token)
@@ -150,6 +150,6 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     fetchProfile,
-    restoreSession
+    restoreSession,
   }
 })

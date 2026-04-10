@@ -1,6 +1,15 @@
 <template>
   <q-page padding>
-    <q-tabs v-model="tab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-md" style="color: #666" align="left">
+    <q-tabs
+      v-model="tab"
+      dense
+      active-color="dark"
+      indicator-color="accent"
+      no-caps
+      class="q-mb-md"
+      style="color: #666"
+      align="left"
+    >
       <q-tab name="rates" label="Тарифы" />
       <q-tab name="agents" label="Агенты" />
       <q-tab name="cities" label="Города" />
@@ -12,18 +21,29 @@
     <q-tab-panels v-model="tab" animated class="bg-transparent">
       <!-- ТАРИФЫ -->
       <q-tab-panel name="rates" class="q-pa-none">
-        <q-tabs v-model="rateTab" dense active-color="dark" indicator-color="accent" no-caps class="q-mb-sm" style="color: #888" align="left">
+        <q-tabs
+          v-model="rateTab"
+          dense
+          active-color="dark"
+          indicator-color="accent"
+          no-caps
+          class="q-mb-sm"
+          style="color: #888"
+          align="left"
+        >
           <q-tab name="individual" label="Индивид." />
           <q-tab name="template" label="Шаблон." />
           <q-tab name="supervision" label="Надзор" />
           <q-tab name="surveyor" label="Замерщик" />
         </q-tabs>
 
-        <q-card class="is-card q-mb-xs" v-for="rate in filteredRates" :key="rate.id">
+        <q-card v-for="rate in filteredRates" :key="rate.id" class="is-card q-mb-xs">
           <q-card-section class="q-pa-sm">
             <div class="row items-center justify-between">
               <div style="flex: 1">
-                <div class="text-weight-bold" style="font-size: 12px; color: #333">{{ rate.role }}</div>
+                <div class="text-weight-bold" style="font-size: 12px; color: #333">
+                  {{ rate.role }}
+                </div>
                 <div class="text-caption" style="color: #888">
                   <span v-if="rate.stage_name">{{ rate.stage_name }}</span>
                   <span v-if="rate.city"> | {{ rate.city }}</span>
@@ -36,13 +56,29 @@
                 <span v-else-if="rate.surveyor_price">{{ rate.surveyor_price }} ₽</span>
               </div>
               <div>
-                <q-btn flat dense size="xs" icon="edit" color="grey-7" @click="editRate(rate)" />
-                <q-btn flat dense size="xs" icon="delete" color="negative" @click="deleteRate(rate)" />
+                <q-btn
+                  flat
+                  dense
+                  size="xs"
+                  icon="edit"
+                  color="grey-7"
+                  @click="editRate(rate)"
+                />
+                <q-btn
+                  flat
+                  dense
+                  size="xs"
+                  icon="delete"
+                  color="negative"
+                  @click="deleteRate(rate)"
+                />
               </div>
             </div>
           </q-card-section>
         </q-card>
-        <div v-if="filteredRates.length === 0" class="text-center q-pa-md" style="color: #999">Нет тарифов</div>
+        <div v-if="filteredRates.length === 0" class="text-center q-pa-md" style="color: #999">
+          Нет тарифов
+        </div>
       </q-tab-panel>
 
       <!-- АГЕНТЫ -->
@@ -51,11 +87,15 @@
           <q-list separator>
             <q-item v-for="agent in refs.agents" :key="agent.id">
               <q-item-section avatar>
-                <q-avatar size="32px" :style="{ background: agent.color || '#95A5A6' }" text-color="white">{{ agent.name?.[0] }}</q-avatar>
+                <q-avatar size="32px" :style="{ background: agent.color || '#95A5A6' }" text-color="white">
+                  {{ agent.name?.[0] }}
+                </q-avatar>
               </q-item-section>
-              <q-item-section style="color: #333">{{ agent.name }}</q-item-section>
+              <q-item-section style="color: #333">
+                {{ agent.name }}
+              </q-item-section>
               <q-item-section side>
-                <input type="color" :value="agent.color || '#95A5A6'" @change="updateAgentColor(agent, $event.target.value)" style="width: 28px; height: 28px; border: none; cursor: pointer; border-radius: 4px" />
+                <input type="color" :value="agent.color || '#95A5A6'" style="width: 28px; height: 28px; border: none; cursor: pointer; border-radius: 4px" @change="updateAgentColor(agent, $event.target.value)">
               </q-item-section>
             </q-item>
           </q-list>
@@ -70,10 +110,21 @@
         <q-card class="is-card">
           <q-list separator>
             <q-item v-for="city in refs.cities" :key="city">
-              <q-item-section avatar><q-icon name="location_on" color="grey-7" /></q-item-section>
-              <q-item-section style="color: #333">{{ city }}</q-item-section>
+              <q-item-section avatar>
+                <q-icon name="location_on" color="grey-7" />
+              </q-item-section>
+              <q-item-section style="color: #333">
+                {{ city }}
+              </q-item-section>
               <q-item-section side>
-                <q-btn flat dense size="sm" icon="edit" color="grey-7" @click="editCity(city)" />
+                <q-btn
+                  flat
+                  dense
+                  size="sm"
+                  icon="edit"
+                  color="grey-7"
+                  @click="editCity(city)"
+                />
               </q-item-section>
             </q-item>
           </q-list>
@@ -87,13 +138,27 @@
       <q-tab-panel name="roles" class="q-pa-none">
         <q-card class="is-card q-mb-md">
           <q-card-section class="q-pb-none">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">Матрица ролей</div>
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Матрица ролей
+            </div>
           </q-card-section>
           <q-list separator>
-            <q-item v-for="role in rolesList" :key="role" clickable v-ripple @click="viewRolePermissions(role)">
-              <q-item-section avatar><q-icon name="security" color="grey-7" /></q-item-section>
-              <q-item-section style="color: #333">{{ role }}</q-item-section>
-              <q-item-section side><q-icon name="chevron_right" color="grey-5" /></q-item-section>
+            <q-item
+              v-for="role in rolesList"
+              :key="role"
+              v-ripple
+              clickable
+              @click="viewRolePermissions(role)"
+            >
+              <q-item-section avatar>
+                <q-icon name="security" color="grey-7" />
+              </q-item-section>
+              <q-item-section style="color: #333">
+                {{ role }}
+              </q-item-section>
+              <q-item-section side>
+                <q-icon name="chevron_right" color="grey-5" />
+              </q-item-section>
             </q-item>
           </q-list>
         </q-card>
@@ -103,29 +168,49 @@
       <q-tab-panel name="normdays" class="q-pa-none">
         <div class="row q-col-gutter-sm q-mb-md">
           <div class="col-6">
-            <q-select v-model="ndProjectType" :options="['Индивидуальный', 'Шаблонный']" label="Тип" outlined dense @update:model-value="loadNormDays" />
+            <q-select
+              v-model="ndProjectType"
+              :options="['Индивидуальный', 'Шаблонный']"
+              label="Тип"
+              outlined
+              dense
+              @update:model-value="loadNormDays"
+            />
           </div>
           <div class="col-6">
-            <q-select v-model="ndSubtype" :options="refs.projectSubtypes" label="Подтип" outlined dense @update:model-value="loadNormDays" />
+            <q-select
+              v-model="ndSubtype"
+              :options="refs.projectSubtypes"
+              label="Подтип"
+              outlined
+              dense
+              @update:model-value="loadNormDays"
+            />
           </div>
         </div>
         <q-card class="is-card">
-          <q-list dense separator v-if="normDays.length > 0">
+          <q-list v-if="normDays.length > 0" dense separator>
             <q-item v-for="nd in normDays" :key="nd.sort_order" :class="{ 'bg-grey-2': !nd.stage_code?.includes('.') }">
               <q-item-section>
                 <q-item-label style="font-size: 11px; color: #333" :class="{ 'text-weight-bold': !nd.stage_code?.includes('.') }">
                   {{ nd.stage_name }}
                 </q-item-label>
-                <q-item-label caption style="color: #888">{{ nd.executor_role }}</q-item-label>
+                <q-item-label caption style="color: #888">
+                  {{ nd.executor_role }}
+                </q-item-label>
               </q-item-section>
               <q-item-section side>
-                <div class="text-weight-bold" style="color: #333; font-size: 12px">{{ nd.base_norm_days || nd.norm_days || '—' }} дн.</div>
+                <div class="text-weight-bold" style="color: #333; font-size: 12px">
+                  {{ nd.base_norm_days || nd.norm_days || '—' }} дн.
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
           <q-card-section v-else class="text-center" style="color: #999">
             <q-spinner v-if="ndLoading" size="30px" color="accent" />
-            <div v-else>Выберите тип и подтип проекта</div>
+            <div v-else>
+              Выберите тип и подтип проекта
+            </div>
           </q-card-section>
         </q-card>
       </q-tab-panel>
@@ -134,33 +219,75 @@
       <q-tab-panel name="telegram" class="q-pa-none">
         <q-card class="is-card q-mb-md">
           <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Telegram</div>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+              Telegram
+            </div>
             <div class="text-caption q-mb-md" style="color: #888">
               Управление подключением Telegram бота для уведомлений сотрудников
             </div>
-            <q-btn unelevated label="Отправить тестовое уведомление" icon="send" no-caps style="background: #ffd93c; color: #333; border-radius: 4px" class="full-width q-mb-sm" @click="sendTestNotification" />
+            <q-btn
+              unelevated
+              label="Отправить тестовое уведомление"
+              icon="send"
+              no-caps
+              style="background: #ffd93c; color: #333; border-radius: 4px"
+              class="full-width q-mb-sm"
+              @click="sendTestNotification"
+            />
           </q-card-section>
         </q-card>
 
         <q-card class="is-card q-mb-md">
           <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Приглашения сотрудникам</div>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+              Приглашения сотрудникам
+            </div>
             <div class="text-caption q-mb-md" style="color: #888">
               Отправить welcome-email с ссылкой на Telegram бот и временным паролем
             </div>
-            <q-select v-model="inviteEmployeeId" :options="inviteEmployeeOpts" label="Сотрудник" outlined dense emit-value map-options class="q-mb-sm" />
-            <q-btn unelevated label="Отправить приглашение" icon="mail" no-caps style="background: #27AE60; color: white; border-radius: 4px" class="full-width" @click="sendInvite" :disable="!inviteEmployeeId" />
+            <q-select
+              v-model="inviteEmployeeId"
+              :options="inviteEmployeeOpts"
+              label="Сотрудник"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="q-mb-sm"
+            />
+            <q-btn
+              unelevated
+              label="Отправить приглашение"
+              icon="mail"
+              no-caps
+              style="background: #27AE60; color: white; border-radius: 4px"
+              class="full-width"
+              :disable="!inviteEmployeeId"
+              @click="sendInvite"
+            />
           </q-card-section>
         </q-card>
 
         <!-- Токены сотрудников для ручного подключения -->
         <q-card class="is-card q-mb-md">
           <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Telegram-токены сотрудников</div>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+              Telegram-токены сотрудников
+            </div>
             <div class="text-caption q-mb-md" style="color: #888">
               Если сотрудник не может открыть ссылку — отправьте ему инструкцию вручную
             </div>
-            <q-select v-model="tgInfoEmployeeId" :options="inviteEmployeeOpts" label="Выберите сотрудника" outlined dense emit-value map-options class="q-mb-sm" @update:model-value="loadTgInfo" />
+            <q-select
+              v-model="tgInfoEmployeeId"
+              :options="inviteEmployeeOpts"
+              label="Выберите сотрудника"
+              outlined
+              dense
+              emit-value
+              map-options
+              class="q-mb-sm"
+              @update:model-value="loadTgInfo"
+            />
             <template v-if="tgInfo">
               <q-card flat bordered class="q-pa-sm q-mb-sm" style="border-radius: 8px">
                 <div class="row items-center q-mb-xs">
@@ -168,14 +295,34 @@
                   <span style="font-size: 12px; color: #333">{{ tgInfo.telegram_connected ? 'Telegram подключён' : 'Не подключён' }}</span>
                 </div>
                 <template v-if="tgInfo.token_command">
-                  <div class="text-caption q-mb-xs" style="color: #888">Инструкция для сотрудника:</div>
+                  <div class="text-caption q-mb-xs" style="color: #888">
+                    Инструкция для сотрудника:
+                  </div>
                   <div style="background: #F5F5F5; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; color: #333; word-break: break-all">
                     Откройте Telegram → найдите бота @festival_color_crm_bot → отправьте:<br>
                     <strong>{{ tgInfo.token_command }}</strong>
                   </div>
                   <div class="row q-gutter-xs q-mt-sm">
-                    <q-btn flat dense size="sm" icon="content_copy" label="Копировать команду" no-caps color="grey-7" @click="copyToClipboard(tgInfo.token_command)" />
-                    <q-btn flat dense size="sm" icon="link" label="Копировать tg://" no-caps color="grey-7" @click="copyToClipboard(tgInfo.tg_link)" />
+                    <q-btn
+                      flat
+                      dense
+                      size="sm"
+                      icon="content_copy"
+                      label="Копировать команду"
+                      no-caps
+                      color="grey-7"
+                      @click="copyToClipboard(tgInfo.token_command)"
+                    />
+                    <q-btn
+                      flat
+                      dense
+                      size="sm"
+                      icon="link"
+                      label="Копировать tg://"
+                      no-caps
+                      color="grey-7"
+                      @click="copyToClipboard(tgInfo.tg_link)"
+                    />
                   </div>
                 </template>
                 <div v-else class="text-caption" style="color: #999">
@@ -188,7 +335,9 @@
 
         <q-card class="is-card">
           <q-card-section>
-            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">Email сервис</div>
+            <div class="text-subtitle2 text-weight-bold q-mb-sm" style="color: #333">
+              Email сервис
+            </div>
             <div class="text-caption" style="color: #888">
               SMTP настроен на сервере.
             </div>
@@ -201,17 +350,35 @@
     <q-dialog v-model="showRoleDialog" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card>
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-btn flat round dense icon="close" @click="showRoleDialog = false" />
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">{{ selectedRole }}</q-toolbar-title>
-          <q-btn label="Сохранить" no-caps outline style="border: 1px solid #333; border-radius: 8px; color: #333" @click="saveRolePermissions" />
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="showRoleDialog = false"
+          />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            {{ selectedRole }}
+          </q-toolbar-title>
+          <q-btn
+            label="Сохранить"
+            no-caps
+            outline
+            style="border: 1px solid #333; border-radius: 8px; color: #333"
+            @click="saveRolePermissions"
+          />
         </q-toolbar>
         <q-card-section style="max-height: calc(100vh - 50px); overflow-y: auto">
           <div v-for="(perms, group) in permissionsByGroup" :key="group" class="q-mb-md">
-            <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333; border-bottom: 1px solid #E0E0E0; padding-bottom: 4px">{{ group }}</div>
+            <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333; border-bottom: 1px solid #E0E0E0; padding-bottom: 4px">
+              {{ group }}
+            </div>
             <q-list dense>
               <q-item v-for="perm in perms" :key="perm.name" tag="label" dense>
                 <q-item-section>
-                  <q-item-label style="font-size: 11px; color: #333">{{ perm.description || perm.name }}</q-item-label>
+                  <q-item-label style="font-size: 11px; color: #333">
+                    {{ perm.description || perm.name }}
+                  </q-item-label>
                 </q-item-section>
                 <q-item-section side>
                   <q-toggle v-model="perm.granted" color="accent" dense />
@@ -227,18 +394,61 @@
     <q-dialog v-model="showRateDialog">
       <q-card style="min-width: 320px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">{{ editingRate?.id ? 'Редактировать' : 'Новый' }} тариф</q-toolbar-title>
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            {{ editingRate?.id ? 'Редактировать' : 'Новый' }} тариф
+          </q-toolbar-title>
         </q-toolbar>
         <q-card-section v-if="editingRate">
-          <q-select v-model="editingRate.role" :options="refs.positions" label="Роль" outlined dense class="q-mb-sm" />
-          <q-input v-model.number="editingRate.rate_per_m2" label="₽/м²" outlined dense type="number" class="q-mb-sm" />
-          <q-input v-model.number="editingRate.fixed_price" label="Фикс. цена" outlined dense type="number" class="q-mb-sm" />
-          <q-input v-model="editingRate.stage_name" label="Стадия" outlined dense class="q-mb-sm" />
-          <q-select v-model="editingRate.city" :options="refs.cities" label="Город" outlined dense clearable class="q-mb-sm" />
+          <q-select
+            v-model="editingRate.role"
+            :options="refs.positions"
+            label="Роль"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model.number="editingRate.rate_per_m2"
+            label="₽/м²"
+            outlined
+            dense
+            type="number"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model.number="editingRate.fixed_price"
+            label="Фикс. цена"
+            outlined
+            dense
+            type="number"
+            class="q-mb-sm"
+          />
+          <q-input
+            v-model="editingRate.stage_name"
+            label="Стадия"
+            outlined
+            dense
+            class="q-mb-sm"
+          />
+          <q-select
+            v-model="editingRate.city"
+            :options="refs.cities"
+            label="Город"
+            outlined
+            dense
+            clearable
+            class="q-mb-sm"
+          />
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup no-caps />
-          <q-btn unelevated label="Сохранить" style="background: #ffd93c; color: #333; border-radius: 8px" no-caps @click="saveRate" />
+          <q-btn v-close-popup flat label="Отмена" no-caps />
+          <q-btn
+            unelevated
+            label="Сохранить"
+            style="background: #ffd93c; color: #333; border-radius: 8px"
+            no-caps
+            @click="saveRate"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -284,7 +494,7 @@ const PERMISSION_GROUPS = {
   'Зарплаты': ['salaries.create', 'salaries.update', 'salaries.delete', 'salaries.mark_to_pay', 'salaries.mark_paid'],
   'Тарифы': ['rates.create', 'rates.delete'],
   'Мессенджер': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat', 'messenger.manage_scripts'],
-  'Уведомления': ['notifications.settings_projects', 'notifications.settings_duplication', 'notifications.settings_supervision', 'notifications.settings_payment']
+  'Уведомления': ['notifications.settings_projects', 'notifications.settings_duplication', 'notifications.settings_supervision', 'notifications.settings_payment'],
 }
 
 const rateTypeMap = { individual: 'Индивидуальный', template: 'Шаблонный', supervision: 'Авторский надзор', surveyor: 'Замерщик' }
@@ -354,7 +564,7 @@ async function viewRolePermissions(role) {
   try {
     const [defsRes, matrixRes] = await Promise.allSettled([
       api.get('/api/v1/permissions/definitions'),
-      api.get('/api/v1/permissions/role-matrix')
+      api.get('/api/v1/permissions/role-matrix'),
     ])
     const defs = defsRes.status === 'fulfilled' ? defsRes.value.data : []
     const matrix = matrixRes.status === 'fulfilled' ? matrixRes.value.data?.roles || {} : {}

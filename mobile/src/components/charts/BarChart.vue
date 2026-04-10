@@ -17,7 +17,7 @@ const props = defineProps({
   horizontal: { type: Boolean, default: false },
   stacked: { type: Boolean, default: false },
   rotateLabels: { type: Number, default: 0 },
-  height: { type: Number, default: 220 }
+  height: { type: Number, default: 220 },
 })
 
 const chartData = computed(() => ({
@@ -27,8 +27,8 @@ const chartData = computed(() => ({
     data: ds.data,
     backgroundColor: ds.color || '#ffd93c',
     borderRadius: 4,
-    barThickness: props.horizontal ? 16 : undefined
-  }))
+    barThickness: props.horizontal ? 16 : undefined,
+  })),
 }))
 
 const chartOptions = computed(() => ({
@@ -36,7 +36,7 @@ const chartOptions = computed(() => ({
   maintainAspectRatio: false,
   indexAxis: props.horizontal ? 'y' : 'x',
   plugins: {
-    legend: { display: props.datasets.length > 1, position: 'bottom', labels: { font: { size: 11 } } }
+    legend: { display: props.datasets.length > 1, position: 'bottom', labels: { font: { size: 11 } } },
   },
   scales: {
     x: {
@@ -45,10 +45,10 @@ const chartOptions = computed(() => ({
       ticks: {
         font: { size: props.rotateLabels ? 8 : 10 },
         maxRotation: props.rotateLabels || 0,
-        minRotation: props.rotateLabels || 0
-      }
+        minRotation: props.rotateLabels || 0,
+      },
     },
-    y: { stacked: props.stacked, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } }
-  }
+    y: { stacked: props.stacked, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } },
+  },
 }))
 </script>

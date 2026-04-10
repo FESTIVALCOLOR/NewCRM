@@ -5,20 +5,26 @@
 
       <!-- Приветствие -->
       <div class="q-mb-md">
-        <div class="text-h6 text-weight-bold" style="color: #333">{{ greeting }}, {{ firstName }}</div>
-        <div class="text-caption" style="color: #999">{{ todayDate }}</div>
+        <div class="text-h6 text-weight-bold" style="color: #333">
+          {{ greeting }}, {{ firstName }}
+        </div>
+        <div class="text-caption" style="color: #999">
+          {{ todayDate }}
+        </div>
       </div>
 
       <!-- 6 KPI карточек (2×3) -->
       <div class="row q-col-gutter-sm q-mb-md">
-        <div class="col-4" v-for="kpi in kpiCards" :key="kpi.label">
+        <div v-for="kpi in kpiCards" :key="kpi.label" class="col-4">
           <q-card class="is-card" style="min-height: 80px" :style="{ borderLeft: `3px solid ${kpi.border}` }">
             <q-card-section class="q-pa-sm text-center">
               <div class="text-h6 text-weight-bold" style="color: #333">
                 <q-skeleton v-if="dashboard.loading" type="text" width="30px" style="margin: 0 auto" />
                 <span v-else>{{ kpi.value }}</span>
               </div>
-              <div class="text-caption" style="color: #888; font-size: 10px; line-height: 1.2">{{ kpi.label }}</div>
+              <div class="text-caption" style="color: #888; font-size: 10px; line-height: 1.2">
+                {{ kpi.label }}
+              </div>
             </q-card-section>
           </q-card>
         </div>
@@ -26,7 +32,7 @@
 
       <!-- Кнопки быстрого доступа — порядок: Клиенты, Договора, СРМ, СРМ надзора -->
       <div class="row q-col-gutter-sm q-mb-md">
-        <div class="col-6" v-for="action in quickActions" :key="action.to">
+        <div v-for="action in quickActions" :key="action.to" class="col-6">
           <q-btn
             :icon="action.icon"
             :label="action.label"
@@ -40,20 +46,32 @@
       </div>
 
       <!-- Мои задачи (ближайшие дедлайны) -->
-      <q-card class="is-card q-mb-md" v-if="myTasks.length > 0">
+      <q-card v-if="myTasks.length > 0" class="is-card q-mb-md">
         <q-card-section class="q-pb-none">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Мои задачи</div>
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Мои задачи
+          </div>
         </q-card-section>
         <q-list dense separator>
-          <q-item v-for="task in myTasks" :key="task.id" clickable v-ripple @click="$router.push(`/crm/${task.id}`)">
+          <q-item
+            v-for="task in myTasks"
+            :key="task.id"
+            v-ripple
+            clickable
+            @click="$router.push(`/crm/${task.id}`)"
+          >
             <q-item-section avatar>
               <q-icon name="assignment" :color="taskColor(task)" size="20px" />
             </q-item-section>
             <q-item-section>
-              <q-item-label style="font-size: 12px; color: #333">{{ task.address || task.contract_number }}</q-item-label>
-              <q-item-label caption style="color: #888">{{ task.column_name }}</q-item-label>
+              <q-item-label style="font-size: 12px; color: #333">
+                {{ task.address || task.contract_number }}
+              </q-item-label>
+              <q-item-label caption style="color: #888">
+                {{ task.column_name }}
+              </q-item-label>
             </q-item-section>
-            <q-item-section side v-if="task.deadline">
+            <q-item-section v-if="task.deadline" side>
               <div class="text-caption text-weight-bold" :style="{ color: dlColor(task.deadline) }">
                 {{ fmtDeadline(task.deadline) }}
               </div>
@@ -66,25 +84,52 @@
       <q-card class="is-card">
         <q-card-section class="q-pb-none">
           <div class="row items-center justify-between">
-            <div class="text-subtitle2 text-weight-bold" style="color: #333">Уведомления</div>
+            <div class="text-subtitle2 text-weight-bold" style="color: #333">
+              Уведомления
+            </div>
             <div class="row items-center q-gutter-xs">
-              <q-btn v-if="notificationsStore.unreadCount > 0" flat dense no-caps size="xs" color="primary" label="Прочитать все" @click="markAllNotificationsRead" style="font-size: 10px" />
+              <q-btn
+                v-if="notificationsStore.unreadCount > 0"
+                flat
+                dense
+                no-caps
+                size="xs"
+                color="primary"
+                label="Прочитать все"
+                style="font-size: 10px"
+                @click="markAllNotificationsRead"
+              />
               <q-badge v-if="notificationsStore.unreadCount > 0" color="negative" :label="notificationsStore.unreadCount" />
             </div>
           </div>
         </q-card-section>
         <q-list v-if="recentNotifications.length > 0" separator>
-          <q-item v-for="n in recentNotifications" :key="n.id" clickable v-ripple :class="{ 'bg-blue-1': !n.is_read }" @click="handleNotificationClick(n)">
-            <q-item-section avatar><q-icon :name="notificationIcon(n.notification_type)" :color="n.is_read ? 'grey-5' : 'warning'" size="20px" /></q-item-section>
+          <q-item
+            v-for="n in recentNotifications"
+            :key="n.id"
+            v-ripple
+            clickable
+            :class="{ 'bg-blue-1': !n.is_read }"
+            @click="handleNotificationClick(n)"
+          >
+            <q-item-section avatar>
+              <q-icon :name="notificationIcon(n.notification_type)" :color="n.is_read ? 'grey-5' : 'warning'" size="20px" />
+            </q-item-section>
             <q-item-section>
-              <q-item-label :class="{ 'text-weight-bold': !n.is_read }" style="font-size: 13px; color: #333">{{ n.title }}</q-item-label>
-              <q-item-label caption lines="1" style="color: #888">{{ n.message }}</q-item-label>
+              <q-item-label :class="{ 'text-weight-bold': !n.is_read }" style="font-size: 13px; color: #333">
+                {{ n.title }}
+              </q-item-label>
+              <q-item-label caption lines="1" style="color: #888">
+                {{ n.message }}
+              </q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
         <q-card-section v-else class="text-center q-py-md" style="color: #999">
           <q-icon name="notifications_none" size="28px" class="q-mb-xs" />
-          <div class="text-caption">Нет уведомлений</div>
+          <div class="text-caption">
+            Нет уведомлений
+          </div>
         </q-card-section>
       </q-card>
     </q-pull-to-refresh>
@@ -120,7 +165,7 @@ const kpiCards = computed(() => {
     { label: 'Авт. надзор', value: crm.archive_orders ?? '—', border: '#27AE60' },
     { label: 'Клиентов', value: cli.total_clients ?? '—', border: '#9B59B6' },
     { label: 'Договоров', value: cli.clients_by_year ?? '—', border: '#E74C3C' },
-    { label: 'Сотрудников', value: emp.active_employees ?? '—', border: '#1ABC9C' }
+    { label: 'Сотрудников', value: emp.active_employees ?? '—', border: '#1ABC9C' },
   ]
 })
 
@@ -129,7 +174,7 @@ const quickActions = [
   { label: 'Клиенты', icon: 'people', to: '/clients' },
   { label: 'Договора', icon: 'description', to: '/contracts' },
   { label: 'СРМ', icon: 'view_kanban', to: '/crm' },
-  { label: 'СРМ надзора', icon: 'engineering', to: '/supervision' }
+  { label: 'СРМ надзора', icon: 'engineering', to: '/supervision' },
 ]
 
 const myTasks = ref([])

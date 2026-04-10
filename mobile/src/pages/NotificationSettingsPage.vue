@@ -2,8 +2,12 @@
   <q-page padding>
     <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
       <q-card-section>
-        <div class="text-subtitle1 text-weight-bold" style="color: #333">Настройки уведомлений</div>
-        <div class="text-caption text-grey-7">Управление типами и каналами уведомлений</div>
+        <div class="text-subtitle1 text-weight-bold" style="color: #333">
+          Настройки уведомлений
+        </div>
+        <div class="text-caption text-grey-7">
+          Управление типами и каналами уведомлений
+        </div>
       </q-card-section>
     </q-card>
 
@@ -15,13 +19,17 @@
       <!-- Каналы -->
       <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Каналы</div>
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Каналы
+          </div>
         </q-card-section>
         <q-list>
           <q-item>
             <q-item-section>
               <q-item-label>Telegram</q-item-label>
-              <q-item-label caption>Уведомления в Telegram бот</q-item-label>
+              <q-item-label caption>
+                Уведомления в Telegram бот
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.telegram_enabled" color="positive" @update:model-value="save" />
@@ -30,7 +38,9 @@
           <q-item>
             <q-item-section>
               <q-item-label>Push-уведомления</q-item-label>
-              <q-item-label caption>В браузере / PWA приложении</q-item-label>
+              <q-item-label caption>
+                В браузере / PWA приложении
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.push_enabled" color="positive" @update:model-value="save" />
@@ -42,13 +52,17 @@
       <!-- Типы событий -->
       <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Типы событий</div>
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Типы событий
+          </div>
         </q-card-section>
         <q-list>
           <q-item>
             <q-item-section>
               <q-item-label>Назначения</q-item-label>
-              <q-item-label caption>Назначение на проект</q-item-label>
+              <q-item-label caption>
+                Назначение на проект
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_assigned" color="positive" @update:model-value="save" />
@@ -57,7 +71,9 @@
           <q-item>
             <q-item-section>
               <q-item-label>Смена стадий</q-item-label>
-              <q-item-label caption>Сдача, проверка, согласование</q-item-label>
+              <q-item-label caption>
+                Сдача, проверка, согласование
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_crm_stage" color="positive" @update:model-value="save" />
@@ -66,7 +82,9 @@
           <q-item>
             <q-item-section>
               <q-item-label>Дедлайны</q-item-label>
-              <q-item-label caption>Предупреждения о сроках</q-item-label>
+              <q-item-label caption>
+                Предупреждения о сроках
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_deadline" color="positive" @update:model-value="save" />
@@ -75,7 +93,9 @@
           <q-item>
             <q-item-section>
               <q-item-label>Оплаты</q-item-label>
-              <q-item-label caption>Создание и изменение платежей</q-item-label>
+              <q-item-label caption>
+                Создание и изменение платежей
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_payment" color="positive" @update:model-value="save" />
@@ -84,7 +104,9 @@
           <q-item>
             <q-item-section>
               <q-item-label>Авторский надзор</q-item-label>
-              <q-item-label caption>События по надзору</q-item-label>
+              <q-item-label caption>
+                События по надзору
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_supervision" color="positive" @update:model-value="save" />
@@ -96,7 +118,9 @@
       <!-- Типы проектов -->
       <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Типы проектов</div>
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Типы проектов
+          </div>
         </q-card-section>
         <q-list>
           <q-item>
@@ -121,13 +145,17 @@
       <!-- Дополнительно -->
       <q-card class="q-mb-md" style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08)">
         <q-card-section class="q-pb-xs">
-          <div class="text-subtitle2 text-weight-bold" style="color: #333">Дополнительно</div>
+          <div class="text-subtitle2 text-weight-bold" style="color: #333">
+            Дополнительно
+          </div>
         </q-card-section>
         <q-list>
           <q-item>
             <q-item-section>
               <q-item-label>Информационные дубли</q-item-label>
-              <q-item-label caption>Получать копии уведомлений подчинённых</q-item-label>
+              <q-item-label caption>
+                Получать копии уведомлений подчинённых
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_duplicate_info" color="positive" @update:model-value="save" />
@@ -136,7 +164,9 @@
           <q-item>
             <q-item-section>
               <q-item-label>Уведомления об исправлениях</q-item-label>
-              <q-item-label caption>Когда работа отправлена на исправление</q-item-label>
+              <q-item-label caption>
+                Когда работа отправлена на исправление
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-toggle v-model="settings.notify_revision_info" color="positive" @update:model-value="save" />

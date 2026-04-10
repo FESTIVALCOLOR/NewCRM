@@ -98,7 +98,7 @@ function _doConnect(token, handlers) {
     lastError.value = null
     reconnectDelay = 1000 // сбрасываем задержку при успешном подключении
     _startPing()
-    // eslint-disable-next-line no-console
+     
     console.log('[WS] Подключён')
   }
 
@@ -143,12 +143,12 @@ function _doConnect(token, handlers) {
     _stopPing()
 
     if (manualClose) {
-      // eslint-disable-next-line no-console
+       
       console.log('[WS] Отключён вручную')
       return
     }
 
-    // eslint-disable-next-line no-console
+     
     console.log(`[WS] Соединение закрыто (code=${event.code}), переподключение через ${reconnectDelay}мс...`)
     _scheduleReconnect(token, handlers)
   }
@@ -168,7 +168,7 @@ function _scheduleReconnect(token, handlers) {
 
   reconnectTimeout = setTimeout(() => {
     reconnectTimeout = null
-    // eslint-disable-next-line no-console
+     
     console.log('[WS] Попытка переподключения...')
     _doConnect(token, handlers)
   }, reconnectDelay)

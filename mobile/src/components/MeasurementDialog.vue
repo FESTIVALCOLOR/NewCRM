@@ -2,48 +2,122 @@
   <q-dialog v-model="show" persistent>
     <q-card style="min-width: 340px; max-width: 560px; width: 100%; border-radius: 10px">
       <q-toolbar style="background: #F39C12; color: white">
-        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Добавить замер</q-toolbar-title>
-        <q-btn flat round dense icon="close" color="white" @click="close" />
+        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+          Добавить замер
+        </q-toolbar-title>
+        <q-btn
+          flat
+          round
+          dense
+          icon="close"
+          color="white"
+          @click="close"
+        />
       </q-toolbar>
 
       <q-card-section>
         <!-- Режим загрузки (как десктоп RadioButtons) -->
-        <q-option-group v-model="uploadMode" :options="[
-          { label: 'Загрузить файл', value: 'file' },
-          { label: 'По ссылке от замерщика', value: 'link' }
-        ]" inline dense class="q-mb-md" />
+        <q-option-group
+          v-model="uploadMode"
+          :options="[
+            { label: 'Загрузить файл', value: 'file' },
+            { label: 'По ссылке от замерщика', value: 'link' }
+          ]"
+          inline
+          dense
+          class="q-mb-md"
+        />
 
         <!-- === РЕЖИМ 1: Загрузить файл === -->
         <template v-if="uploadMode === 'file'">
-          <div class="text-caption text-weight-bold q-mb-xs">Изображение замера:</div>
+          <div class="text-caption text-weight-bold q-mb-xs">
+            Изображение замера:
+          </div>
           <div v-if="selectedFile" class="q-mb-sm" style="background: #F8F9FA; border: 1px solid #E0E0E0; padding: 6px 10px; border-radius: 4px; font-size: 12px">
             {{ selectedFile.name.length > 25 ? selectedFile.name.slice(0, 12) + '...' + selectedFile.name.slice(-10) : selectedFile.name }}
           </div>
-          <q-btn outline color="grey-7" icon="upload" label="Загрузить" no-caps dense style="height: 28px" @click="fileInput?.click()" class="q-mb-sm" />
-          <input ref="fileInput" type="file" accept="image/png,image/jpg,image/jpeg,image/gif,image/bmp" style="display: none" @change="onFileSelected" />
+          <q-btn
+            outline
+            color="grey-7"
+            icon="upload"
+            label="Загрузить"
+            no-caps
+            dense
+            style="height: 28px"
+            class="q-mb-sm"
+            @click="fileInput?.click()"
+          />
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/png,image/jpg,image/jpeg,image/gif,image/bmp"
+            style="display: none"
+            @change="onFileSelected"
+          >
         </template>
 
         <!-- === РЕЖИМ 2: По ссылке от замерщика === -->
         <template v-if="uploadMode === 'link'">
-          <div class="text-caption text-weight-bold q-mb-xs">Ссылка на папку замерщика:</div>
+          <div class="text-caption text-weight-bold q-mb-xs">
+            Ссылка на папку замерщика:
+          </div>
           <div class="row q-gutter-sm q-mb-sm">
-            <q-input v-model="publicLink" placeholder="Вставьте публичную ссылку ЯД или Google Drive..." outlined dense style="flex: 1" />
-            <q-btn unelevated no-caps label="Получить файлы" style="background: #E0E0E0; color: #333; height: 40px; border-radius: 4px" @click="fetchFiles" :loading="fetching" />
+            <q-input
+              v-model="publicLink"
+              placeholder="Вставьте публичную ссылку ЯД или Google Drive..."
+              outlined
+              dense
+              style="flex: 1"
+            />
+            <q-btn
+              unelevated
+              no-caps
+              label="Получить файлы"
+              style="background: #E0E0E0; color: #333; height: 40px; border-radius: 4px"
+              :loading="fetching"
+              @click="fetchFiles"
+            />
           </div>
 
           <!-- Таблица файлов -->
-          <q-table v-if="fetchedFiles.length > 0" :rows="fetchedFiles" :columns="fileColumns" row-key="name" dense flat bordered
-            class="q-mb-sm" style="max-height: 200px" :pagination="{ rowsPerPage: 0 }" hide-pagination>
-            <template v-slot:body-cell-destination="props">
+          <q-table
+            v-if="fetchedFiles.length > 0"
+            :rows="fetchedFiles"
+            :columns="fileColumns"
+            row-key="name"
+            dense
+            flat
+            bordered
+            class="q-mb-sm"
+            style="max-height: 200px"
+            :pagination="{ rowsPerPage: 0 }"
+            hide-pagination
+          >
+            <template #body-cell-destination="props">
               <q-td :props="props">
-                <q-select v-model="props.row.destination" :options="['Замер', 'Фотофиксация']" dense outlined options-dense
+                <q-select
+                  v-model="props.row.destination"
+                  :options="['Замер', 'Фотофиксация']"
+                  dense
+                  outlined
+                  options-dense
                   :style="{ color: props.row.destination === 'Замер' ? '#1677FF' : '#52C41A', fontSize: '11px', width: '130px' }"
-                  popup-content-style="font-size: 12px" />
+                  popup-content-style="font-size: 12px"
+                />
               </q-td>
             </template>
-            <template v-slot:body-cell-remove="props">
+            <template #body-cell-remove="props">
               <q-td :props="props">
-                <q-btn flat round dense size="sm" icon="delete_outline" color="negative" style="border: 1px solid #E57373; width: 28px; height: 28px" @click="fetchedFiles.splice(props.rowIndex, 1)" />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="sm"
+                  icon="delete_outline"
+                  color="negative"
+                  style="border: 1px solid #E57373; width: 28px; height: 28px"
+                  @click="fetchedFiles.splice(props.rowIndex, 1)"
+                />
               </q-td>
             </template>
           </q-table>
@@ -55,8 +129,15 @@
               (замер: {{ fetchedFiles.filter(f => f.destination === 'Замер').length }},
               фото: {{ fetchedFiles.filter(f => f.destination === 'Фотофиксация').length }})
             </div>
-            <q-btn unelevated no-caps icon="cloud_upload" label="Загрузить на Яндекс.Диск" style="background: #1677FF; color: white; border-radius: 4px; width: 100%; height: 36px"
-              @click="uploadFromLink" :loading="uploading" />
+            <q-btn
+              unelevated
+              no-caps
+              icon="cloud_upload"
+              label="Загрузить на Яндекс.Диск"
+              style="background: #1677FF; color: white; border-radius: 4px; width: 100%; height: 36px"
+              :loading="uploading"
+              @click="uploadFromLink"
+            />
             <q-linear-progress v-if="uploading" :value="uploadProgress" color="primary" class="q-mt-xs" />
           </div>
         </template>
@@ -64,17 +145,41 @@
         <q-separator class="q-my-sm" />
 
         <!-- Замерщик -->
-        <q-select v-model="surveyorId" :options="surveyorOptions" option-value="id" option-label="label"
-          label="Замерщик" outlined dense emit-value map-options class="q-mb-sm" />
+        <q-select
+          v-model="surveyorId"
+          :options="surveyorOptions"
+          option-value="id"
+          option-label="label"
+          label="Замерщик"
+          outlined
+          dense
+          emit-value
+          map-options
+          class="q-mb-sm"
+        />
 
         <!-- Дата замера -->
-        <q-input v-model="measurementDate" label="Дата замера" outlined dense type="date" class="q-mb-sm" />
+        <q-input
+          v-model="measurementDate"
+          label="Дата замера"
+          outlined
+          dense
+          type="date"
+          class="q-mb-sm"
+        />
       </q-card-section>
 
       <q-card-actions align="right">
-        <q-btn flat label="Отмена" no-caps v-close-popup />
-        <q-btn unelevated label="Сохранить" no-caps style="background: #ffd93c; color: #333; border-radius: 4px"
-          :loading="saving" @click="save" :disable="!canSave" />
+        <q-btn v-close-popup flat label="Отмена" no-caps />
+        <q-btn
+          unelevated
+          label="Сохранить"
+          no-caps
+          style="background: #ffd93c; color: #333; border-radius: 4px"
+          :loading="saving"
+          :disable="!canSave"
+          @click="save"
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -148,7 +253,7 @@ async function loadSurveyors() {
       { id: null, label: 'Не назначен' },
       ...(data || [])
         .filter(e => e.status === 'активный' && (e.position === 'Замерщик' || e.secondary_position === 'Замерщик'))
-        .map(e => ({ id: e.id, label: e.full_name }))
+        .map(e => ({ id: e.id, label: e.full_name })),
     ]
   } catch {}
 }
@@ -193,7 +298,7 @@ async function uploadFromLink() {
       try {
         const res = await ax.post('/api/v1/files/download-public', null, {
           params: { public_url: publicLink.value, file_path: f.path || `/${f.name}`, dest_path: destPath },
-          timeout: 120000
+          timeout: 120000,
         })
         if (res.data?.public_link) {
           if (dest === 'Замер') measLink = res.data.public_link
@@ -279,7 +384,7 @@ async function save() {
               contract_id: props.contractId, stage: 'measurement',
               file_type: selectedFile.value.type?.includes('image') ? 'image' : 'pdf',
               public_link: folderLink, yandex_path: ydPath, file_name: selectedFile.value.name,
-              file_order: 0, variation: 1
+              file_order: 0, variation: 1,
             })
           } catch {}
           try { await ax.post(`/api/v1/files/scan/${props.contractId}`) } catch {}
@@ -306,7 +411,7 @@ async function save() {
         try {
           const { data: payments } = await crmApi.getPayments(props.cardId)
           const survPayment = (payments || []).find(p =>
-            p.employee_id === surveyorId.value && p.role === 'Замерщик' && !p.reassigned
+            p.employee_id === surveyorId.value && p.role === 'Замерщик' && !p.reassigned,
           )
           if (survPayment) {
             const reportMonth = measurementDate.value.slice(0, 7)
@@ -322,7 +427,7 @@ async function save() {
           action_type: 'survey_complete',
           entity_type: 'crm_card',
           entity_id: props.cardId,
-          description: `Замер выполнен: ${measurementDate.value} | Замерщик: ${survName}`
+          description: `Замер выполнен: ${measurementDate.value} | Замерщик: ${survName}`,
         })
       } catch {}
     }

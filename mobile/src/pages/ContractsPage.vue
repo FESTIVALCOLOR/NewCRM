@@ -10,8 +10,10 @@
         rounded
         class="q-mb-md"
       >
-        <template v-slot:prepend><q-icon name="search" /></template>
-        <template v-slot:append v-if="search">
+        <template #prepend>
+          <q-icon name="search" />
+        </template>
+        <template v-if="search" #append>
           <q-icon name="close" class="cursor-pointer" @click="search = ''" />
         </template>
       </q-input>
@@ -19,26 +21,60 @@
       <!-- Фильтры -->
       <div class="row q-col-gutter-xs q-mb-sm">
         <div class="col-3">
-          <q-select v-model="statusFilter" :options="statusOpts" label="Статус" outlined dense emit-value map-options clearable />
+          <q-select
+            v-model="statusFilter"
+            :options="statusOpts"
+            label="Статус"
+            outlined
+            dense
+            emit-value
+            map-options
+            clearable
+          />
         </div>
         <div class="col-3">
-          <q-select v-model="typeFilter" :options="typeOpts" label="Тип" outlined dense emit-value map-options clearable />
+          <q-select
+            v-model="typeFilter"
+            :options="typeOpts"
+            label="Тип"
+            outlined
+            dense
+            emit-value
+            map-options
+            clearable
+          />
         </div>
         <div class="col-3">
-          <q-select v-model="agentFilter" :options="agentOpts" label="Агент" outlined dense clearable />
+          <q-select
+            v-model="agentFilter"
+            :options="agentOpts"
+            label="Агент"
+            outlined
+            dense
+            clearable
+          />
         </div>
         <div class="col-3">
-          <q-select v-model="sortBy" :options="sortOptions" label="Сортировка" outlined dense emit-value map-options clearable />
+          <q-select
+            v-model="sortBy"
+            :options="sortOptions"
+            label="Сортировка"
+            outlined
+            dense
+            emit-value
+            map-options
+            clearable
+          />
         </div>
       </div>
 
-      <div class="text-caption" style="color: #888" v-if="!loading">
+      <div v-if="!loading" class="text-caption" style="color: #888">
         Договоров: {{ filtered.length }}
       </div>
 
       <!-- Загрузка -->
       <div v-if="loading">
-        <q-card class="is-card q-mb-sm" v-for="n in 5" :key="n">
+        <q-card v-for="n in 5" :key="n" class="is-card q-mb-sm">
           <q-card-section>
             <q-skeleton type="text" width="50%" class="q-mb-xs" />
             <q-skeleton type="text" width="70%" />
@@ -58,8 +94,12 @@
           <q-card-section class="q-pa-md">
             <div class="row items-start justify-between q-mb-xs">
               <div style="flex: 1">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">{{ contract.contract_number }}</div>
-                <div class="text-body2 q-mt-xs" style="color: #333">{{ contract.address || 'Без адреса' }}</div>
+                <div class="text-subtitle2 text-weight-bold" style="color: #333">
+                  {{ contract.contract_number }}
+                </div>
+                <div class="text-body2 q-mt-xs" style="color: #333">
+                  {{ contract.address || 'Без адреса' }}
+                </div>
               </div>
               <div class="column items-end q-gutter-xs q-ml-sm" style="flex-shrink: 0">
                 <q-badge :color="statusColor(contract.status)" :label="contract.status" style="min-width: 100px; justify-content: center; padding: 5px 8px; font-size: 11px" />
@@ -112,7 +152,7 @@ const dashItems = computed(() => {
   return [
     { label: 'Всего', value: all.length },
     { label: 'В работе', value: active, color: '#F39C12' },
-    { label: 'Сдано', value: done, color: '#27AE60' }
+    { label: 'Сдано', value: done, color: '#27AE60' },
   ]
 })
 const contracts = ref([])
@@ -136,12 +176,12 @@ const statusOpts = [
   { label: 'Новый заказ', value: 'Новый заказ' },
   { label: 'СДАН', value: 'СДАН' },
   { label: 'РАСТОРГНУТ', value: 'РАСТОРГНУТ' },
-  { label: 'АВТ. НАДЗОР', value: 'АВТОРСКИЙ НАДЗОР' }
+  { label: 'АВТ. НАДЗОР', value: 'АВТОРСКИЙ НАДЗОР' },
 ]
 
 const typeOpts = [
   { label: 'Индивидуальный', value: 'Индивидуальный' },
-  { label: 'Шаблонный', value: 'Шаблонный' }
+  { label: 'Шаблонный', value: 'Шаблонный' },
 ]
 
 const agentOpts = computed(() => refs.agentNames())
@@ -168,14 +208,14 @@ const filtered = computed(() => {
     result = result.filter(c =>
       (c.contract_number || '').toLowerCase().includes(q) ||
       (c.address || '').toLowerCase().includes(q) ||
-      (c.city || '').toLowerCase().includes(q)
+      (c.city || '').toLowerCase().includes(q),
     )
   }
   if (statusFilter.value) result = result.filter(c => c.status === statusFilter.value)
   if (typeFilter.value) result = result.filter(c => c.project_type === typeFilter.value)
   if (agentFilter.value) result = result.filter(c => c.agent_type === agentFilter.value)
   // Сортировка
-  let items = [...result]
+  const items = [...result]
   if (sortBy.value === 'date') items.sort((a, b) => new Date(b.contract_date || 0) - new Date(a.contract_date || 0))
   else if (sortBy.value === 'agent') items.sort((a, b) => (a.agent_type || '').localeCompare(b.agent_type || '', 'ru'))
   else if (sortBy.value === 'project_type') items.sort((a, b) => (a.project_type || '').localeCompare(b.project_type || '', 'ru'))

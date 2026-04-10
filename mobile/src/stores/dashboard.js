@@ -19,7 +19,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         dashboardApi.getContracts({ year }),
         dashboardApi.getCrm({ project_type: 'Индивидуальный' }),
         dashboardApi.getEmployees(),
-        statisticsApi.getGeneral({ year })
+        statisticsApi.getGeneral({ year }),
       ])
 
       if (clients.status === 'fulfilled') clientsStats.value = clients.value.data

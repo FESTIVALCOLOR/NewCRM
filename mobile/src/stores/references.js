@@ -18,7 +18,7 @@ export const useReferencesStore = defineStore('references', () => {
     'Менеджер',
     'Замерщик',
     'Дизайнер',
-    'Чертёжник'
+    'Чертёжник',
   ]
 
   // Типы проектов
@@ -28,12 +28,12 @@ export const useReferencesStore = defineStore('references', () => {
   const projectSubtypes = [
     'Полный (с 3д визуализацией)',
     'Эскизный (с коллажами)',
-    'Планировочный'
+    'Планировочный',
   ]
 
   // Статусы договора
   const contractStatuses = [
-    'Новый заказ', 'В ожидании', 'В работе', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР'
+    'Новый заказ', 'В ожидании', 'В работе', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР',
   ]
 
   // Типы оплаты
@@ -48,7 +48,7 @@ export const useReferencesStore = defineStore('references', () => {
       const [citiesRes, agentsRes, ratesRes] = await Promise.allSettled([
         api.get('/api/v1/cities'),
         api.get('/api/v1/agents'),
-        api.get('/api/v1/rates')
+        api.get('/api/v1/rates'),
       ])
 
       if (citiesRes.status === 'fulfilled') {
@@ -85,6 +85,6 @@ export const useReferencesStore = defineStore('references', () => {
   return {
     cities, agents, rates, loaded,
     positions, projectTypes, projectSubtypes, contractStatuses, paymentTypes, employeeStatuses,
-    loadAll, agentNames, agentByName
+    loadAll, agentNames, agentByName,
   }
 })

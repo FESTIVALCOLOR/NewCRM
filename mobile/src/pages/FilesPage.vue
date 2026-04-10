@@ -27,7 +27,9 @@
     <!-- Загрузка -->
     <div v-if="loading" class="q-pa-md">
       <q-item v-for="n in 6" :key="n">
-        <q-item-section avatar><q-skeleton type="circle" size="36px" /></q-item-section>
+        <q-item-section avatar>
+          <q-skeleton type="circle" size="36px" />
+        </q-item-section>
         <q-item-section>
           <q-skeleton type="text" width="60%" />
           <q-skeleton type="text" width="30%" />
@@ -36,14 +38,14 @@
     </div>
 
     <!-- Содержимое папки -->
-    <q-card class="is-card" v-else-if="items.length > 0">
+    <q-card v-else-if="items.length > 0" class="is-card">
       <q-list separator>
         <!-- Папки -->
         <q-item
           v-for="item in folders"
           :key="item.path"
-          clickable
           v-ripple
+          clickable
           @click="navigateTo(item.path)"
         >
           <q-item-section avatar>
@@ -61,8 +63,8 @@
         <q-item
           v-for="item in files"
           :key="item.path"
-          clickable
           v-ripple
+          clickable
           @click="openFile(item)"
         >
           <q-item-section avatar>
@@ -70,7 +72,9 @@
           </q-item-section>
           <q-item-section>
             <q-item-label>{{ item.name }}</q-item-label>
-            <q-item-label caption>{{ formatSize(item.size) }}</q-item-label>
+            <q-item-label caption>
+              {{ formatSize(item.size) }}
+            </q-item-label>
           </q-item-section>
           <q-item-section side>
             <q-icon :name="isImage(item.name, item.media_type) ? 'photo_library' : 'open_in_new'" color="grey-5" />
@@ -89,7 +93,14 @@
       <div class="column" style="background: rgba(0,0,0,0.95); height: 100dvh; min-height: 100dvh">
         <!-- Шапка -->
         <div class="row items-center q-pa-sm no-wrap">
-          <q-btn flat round dense icon="close" color="white" @click="previewVisible = false" />
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            color="white"
+            @click="previewVisible = false"
+          />
           <div class="col text-center text-white q-px-sm" style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
             {{ currentPreviewFile?.name }}
           </div>
@@ -99,29 +110,58 @@
         </div>
 
         <!-- Изображение -->
-        <div class="col flex flex-center" style="position: relative; overflow: hidden"
-          v-touch-swipe.mouse="handleImageSwipe">
-          <q-btn v-if="previewIdx > 0" flat round icon="chevron_left" color="white"
+        <div
+          v-touch-swipe.mouse="handleImageSwipe"
+          class="col flex flex-center"
+          style="position: relative; overflow: hidden"
+        >
+          <q-btn
+            v-if="previewIdx > 0"
+            flat
+            round
+            icon="chevron_left"
+            color="white"
             style="position: absolute; left: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)"
-            @click="prevImage" />
+            @click="prevImage"
+          />
 
           <div class="flex flex-center" style="width: 100%; height: 100%; padding: 8px">
             <q-spinner v-if="currentPreviewState?.loading" color="white" size="48px" />
-            <q-icon v-else-if="currentPreviewState?.error || !currentPreviewState?.url"
-              name="broken_image" size="64px" color="grey-5" />
-            <img v-else :src="currentPreviewState.url"
-              style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px" />
+            <q-icon
+              v-else-if="currentPreviewState?.error || !currentPreviewState?.url"
+              name="broken_image"
+              size="64px"
+              color="grey-5"
+            />
+            <img
+              v-else
+              :src="currentPreviewState.url"
+              style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px"
+            >
           </div>
 
-          <q-btn v-if="previewIdx < imageFiles.length - 1" flat round icon="chevron_right" color="white"
+          <q-btn
+            v-if="previewIdx < imageFiles.length - 1"
+            flat
+            round
+            icon="chevron_right"
+            color="white"
             style="position: absolute; right: 4px; z-index: 2; opacity: 0.8; background: rgba(0,0,0,0.3)"
-            @click="nextImage" />
+            @click="nextImage"
+          />
         </div>
 
         <!-- Нижняя панель -->
         <div class="row justify-center q-pa-sm">
-          <q-btn flat no-caps icon="open_in_new" label="Открыть в браузере"
-            color="white" size="sm" @click="openCurrentInBrowser" />
+          <q-btn
+            flat
+            no-caps
+            icon="open_in_new"
+            label="Открыть в браузере"
+            color="white"
+            size="sm"
+            @click="openCurrentInBrowser"
+          />
         </div>
       </div>
     </q-dialog>
@@ -135,9 +175,9 @@
         ref="fileInput"
         type="file"
         style="display: none"
-        @change="handleUpload"
         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.dwg,.zip"
-      />
+        @change="handleUpload"
+      >
     </q-page-sticky>
   </q-page>
 </template>
@@ -170,7 +210,7 @@ function isImage(name, mediaType) {
 const imageFiles = computed(() => files.value.filter(f => isImage(f.name, f.media_type)))
 const currentPreviewFile = computed(() => imageFiles.value[previewIdx.value] || null)
 const currentPreviewState = computed(() =>
-  currentPreviewFile.value ? (imageUrls.value[currentPreviewFile.value.path] || null) : null
+  currentPreviewFile.value ? (imageUrls.value[currentPreviewFile.value.path] || null) : null,
 )
 
 const breadcrumbs = computed(() => {
@@ -190,7 +230,7 @@ function fileIcon(name) {
     pdf: 'picture_as_pdf', jpg: 'image', jpeg: 'image', png: 'image', gif: 'image',
     doc: 'article', docx: 'article', xls: 'table_chart', xlsx: 'table_chart',
     dwg: 'architecture', dxf: 'architecture', skp: 'view_in_ar',
-    zip: 'folder_zip', rar: 'folder_zip', '7z': 'folder_zip'
+    zip: 'folder_zip', rar: 'folder_zip', '7z': 'folder_zip',
   }
   return icons[ext] || 'insert_drive_file'
 }
@@ -200,7 +240,7 @@ function fileColor(name) {
   const colors = {
     pdf: 'red', jpg: 'green', jpeg: 'green', png: 'green',
     doc: 'blue', docx: 'blue', xls: 'teal', xlsx: 'teal',
-    dwg: 'purple', zip: 'orange'
+    dwg: 'purple', zip: 'orange',
   }
   return colors[ext] || 'grey-7'
 }

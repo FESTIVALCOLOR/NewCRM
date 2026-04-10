@@ -1,19 +1,31 @@
 <template>
-  <q-dialog v-model="show" persistent maximized transition-show="slide-up" transition-hide="slide-down">
+  <q-dialog
+    v-model="show"
+    persistent
+    maximized
+    transition-show="slide-up"
+    transition-hide="slide-down"
+  >
     <q-card>
       <!-- Жёлтый заголовок, чёрный текст -->
       <q-toolbar style="background: #ffd93c; color: #333">
-        <q-btn flat round dense icon="close" @click="close" />
+        <q-btn
+          flat
+          round
+          dense
+          icon="close"
+          @click="close"
+        />
         <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
           {{ isEdit ? 'Редактировать клиента' : 'Новый клиент' }}
         </q-toolbar-title>
         <q-btn
           label="Сохранить"
           no-caps
-          @click="save"
           :loading="saving"
           outline
           style="border: 1px solid #333; border-radius: 8px; color: #333"
+          @click="save"
         />
       </q-toolbar>
 
@@ -48,13 +60,36 @@
           />
 
           <!-- Email (обязательный) -->
-          <q-input v-model="form.email" label="Email *" outlined dense type="email" :rules="[val => !!val || 'Введите email']" />
+          <q-input
+            v-model="form.email"
+            label="Email *"
+            outlined
+            dense
+            type="email"
+            :rules="[val => !!val || 'Введите email']"
+          />
 
           <!-- Telegram -->
-          <q-input v-model="form.telegram_account" label="Telegram (имя или телефон)" outlined dense placeholder="@username или +79001234567">
-            <template v-slot:prepend><q-icon name="send" /></template>
-            <template v-slot:append>
-              <q-btn v-if="telegramSearchLink" flat round dense size="sm" icon="open_in_new" @click="openTelegram">
+          <q-input
+            v-model="form.telegram_account"
+            label="Telegram (имя или телефон)"
+            outlined
+            dense
+            placeholder="@username или +79001234567"
+          >
+            <template #prepend>
+              <q-icon name="send" />
+            </template>
+            <template #append>
+              <q-btn
+                v-if="telegramSearchLink"
+                flat
+                round
+                dense
+                size="sm"
+                icon="open_in_new"
+                @click="openTelegram"
+              >
                 <q-tooltip>Открыть в Telegram</q-tooltip>
               </q-btn>
             </template>
@@ -68,7 +103,9 @@
 
           <!-- Юр. лицо — дополнительные поля -->
           <template v-if="form.client_type === 'Юридическое лицо'">
-            <div class="text-subtitle2 text-weight-bold q-mt-md">Организация</div>
+            <div class="text-subtitle2 text-weight-bold q-mt-md">
+              Организация
+            </div>
 
             <q-select
               v-model="form.organization_type"
@@ -81,21 +118,48 @@
             <q-input v-model="form.organization_name" label="Название организации" outlined dense />
             <q-input v-model="form.inn" label="ИНН" outlined dense />
             <q-input v-model="form.ogrn" label="ОГРН" outlined dense />
-            <q-input v-model="form.account_details" label="Банковские реквизиты" outlined dense type="textarea" autogrow />
+            <q-input
+              v-model="form.account_details"
+              label="Банковские реквизиты"
+              outlined
+              dense
+              type="textarea"
+              autogrow
+            />
             <q-input v-model="form.responsible_person" label="Ответственное лицо" outlined dense />
           </template>
 
           <!-- Физ. лицо — паспорт -->
           <template v-if="form.client_type === 'Физическое лицо'">
-            <div class="text-subtitle2 text-weight-bold q-mt-md">Паспортные данные</div>
+            <div class="text-subtitle2 text-weight-bold q-mt-md">
+              Паспортные данные
+            </div>
 
             <div class="row q-gutter-sm">
-              <q-input v-model="form.passport_series" label="Серия паспорта" outlined dense style="flex: 1; min-width: 120px" />
-              <q-input v-model="form.passport_number" label="Номер паспорта" outlined dense style="flex: 1; min-width: 120px" />
+              <q-input
+                v-model="form.passport_series"
+                label="Серия паспорта"
+                outlined
+                dense
+                style="flex: 1; min-width: 120px"
+              />
+              <q-input
+                v-model="form.passport_number"
+                label="Номер паспорта"
+                outlined
+                dense
+                style="flex: 1; min-width: 120px"
+              />
             </div>
 
             <q-input v-model="form.passport_issued_by" label="Кем выдан" outlined dense />
-            <q-input v-model="form.passport_issued_date" label="Дата выдачи" outlined dense type="date" />
+            <q-input
+              v-model="form.passport_issued_date"
+              label="Дата выдачи"
+              outlined
+              dense
+              type="date"
+            />
           </template>
 
           <!-- Кнопка удаления (только при редактировании) -->
@@ -122,7 +186,7 @@ import { clientsApi } from 'src/services/api'
 
 const props = defineProps({
   modelValue: Boolean,
-  client: { type: Object, default: null }
+  client: { type: Object, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'saved'])
@@ -149,7 +213,7 @@ const emptyForm = () => ({
   passport_series: '',
   passport_number: '',
   passport_issued_by: '',
-  passport_issued_date: ''
+  passport_issued_date: '',
 })
 
 const form = ref(emptyForm())
@@ -192,7 +256,7 @@ async function deleteClient() {
     title: 'Удалить клиента?',
     message: form.value.full_name,
     cancel: true,
-    persistent: true
+    persistent: true,
   }).onOk(async () => {
     try {
       await clientsApi.delete(props.client.id)

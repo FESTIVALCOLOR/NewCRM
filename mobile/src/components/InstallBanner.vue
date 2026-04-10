@@ -6,13 +6,19 @@
     rounded
     dense
   >
-    <template v-slot:avatar>
+    <template #avatar>
       <q-icon name="install_mobile" />
     </template>
     Установите приложение для быстрого доступа
-    <template v-slot:action>
+    <template #action>
       <q-btn flat label="Установить" no-caps @click="installApp" />
-      <q-btn flat icon="close" round dense @click="dismissBanner" />
+      <q-btn
+        flat
+        icon="close"
+        round
+        dense
+        @click="dismissBanner"
+      />
     </template>
   </q-banner>
 
@@ -21,7 +27,9 @@
     <q-card style="max-width: 340px">
       <q-card-section class="text-center">
         <q-icon name="ios_share" size="48px" color="primary" class="q-mb-md" />
-        <div class="text-h6 q-mb-sm">Установка на iPhone</div>
+        <div class="text-h6 q-mb-sm">
+          Установка на iPhone
+        </div>
         <div class="text-body2 text-grey-7">
           1. Нажмите кнопку <q-icon name="ios_share" size="18px" /> внизу экрана<br>
           2. Выберите «На экран Домой»<br>
@@ -29,7 +37,13 @@
         </div>
       </q-card-section>
       <q-card-actions align="center">
-        <q-btn flat label="Понятно" color="primary" v-close-popup no-caps />
+        <q-btn
+          v-close-popup
+          flat
+          label="Понятно"
+          color="primary"
+          no-caps
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>

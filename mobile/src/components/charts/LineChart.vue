@@ -13,7 +13,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
 
 const props = defineProps({
   labels: { type: Array, required: true },
-  datasets: { type: Array, required: true }
+  datasets: { type: Array, required: true },
 })
 
 const chartData = computed(() => ({
@@ -26,19 +26,19 @@ const chartData = computed(() => ({
     fill: true,
     tension: 0.3,
     pointRadius: 3,
-    pointBackgroundColor: ds.color || '#ffd93c'
-  }))
+    pointBackgroundColor: ds.color || '#ffd93c',
+  })),
 }))
 
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } }
+    legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } },
   },
   scales: {
     x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-    y: { grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } }
-  }
+    y: { grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 } } },
+  },
 }
 </script>

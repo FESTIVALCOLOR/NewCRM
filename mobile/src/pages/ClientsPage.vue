@@ -12,10 +12,10 @@
         debounce="300"
         @update:model-value="onSearch"
       >
-        <template v-slot:prepend>
+        <template #prepend>
           <q-icon name="search" />
         </template>
-        <template v-slot:append v-if="clientsStore.search">
+        <template v-if="clientsStore.search" #append>
           <q-icon name="close" class="cursor-pointer" @click="clearSearch" />
         </template>
       </q-input>
@@ -23,24 +23,42 @@
       <!-- Фильтры -->
       <div class="row q-col-gutter-xs q-mb-sm">
         <div class="col-6">
-          <q-select v-model="clientType" :options="['Все', 'Физическое лицо', 'Юридическое лицо']" label="Тип" outlined dense @update:model-value="applyFilters" />
+          <q-select
+            v-model="clientType"
+            :options="['Все', 'Физическое лицо', 'Юридическое лицо']"
+            label="Тип"
+            outlined
+            dense
+            @update:model-value="applyFilters"
+          />
         </div>
         <div class="col-6">
-          <q-select v-model="sortBy" :options="sortOpts" label="Сортировка" outlined dense emit-value map-options @update:model-value="applyFilters" />
+          <q-select
+            v-model="sortBy"
+            :options="sortOpts"
+            label="Сортировка"
+            outlined
+            dense
+            emit-value
+            map-options
+            @update:model-value="applyFilters"
+          />
         </div>
       </div>
 
       <!-- Счётчик -->
-      <div class="text-caption" style="color: #888" v-if="!clientsStore.loading">
+      <div v-if="!clientsStore.loading" class="text-caption" style="color: #888">
         Найдено: {{ displayedClients.length }}
         <span v-if="clientsStore.totalCount"> из {{ clientsStore.totalCount }}</span>
       </div>
 
       <!-- Загрузка -->
       <div v-if="clientsStore.loading">
-        <q-card class="is-card q-mb-sm" v-for="n in 5" :key="n">
+        <q-card v-for="n in 5" :key="n" class="is-card q-mb-sm">
           <q-item>
-            <q-item-section avatar><q-skeleton type="circle" size="40px" /></q-item-section>
+            <q-item-section avatar>
+              <q-skeleton type="circle" size="40px" />
+            </q-item-section>
             <q-item-section>
               <q-skeleton type="text" width="60%" />
               <q-skeleton type="text" width="40%" />
@@ -50,13 +68,13 @@
       </div>
 
       <!-- Список клиентов -->
-      <q-card class="is-card" v-else-if="displayedClients.length > 0">
+      <q-card v-else-if="displayedClients.length > 0" class="is-card">
         <q-list separator>
           <q-item
             v-for="client in displayedClients"
             :key="client.id"
-            clickable
             v-ripple
+            clickable
             @click="openClient(client.id)"
           >
             <q-item-section avatar>
@@ -72,10 +90,10 @@
               <q-item-label class="text-weight-medium">
                 {{ clientDisplayName(client) }}
               </q-item-label>
-              <q-item-label caption v-if="client.organization_name && client.organization_type !== 'ИП'">
+              <q-item-label v-if="client.organization_name && client.organization_type !== 'ИП'" caption>
                 {{ client.full_name }}
               </q-item-label>
-              <q-item-label caption v-if="client.phone">
+              <q-item-label v-if="client.phone" caption>
                 {{ client.phone }}
               </q-item-label>
             </q-item-section>
@@ -123,7 +141,7 @@ const showForm = ref(false)
 const dashItems = computed(() => [
   { label: 'Всего клиентов', value: clientsStore.items?.length || 0, color: '#333' },
   { label: 'Физ. лица', value: clientsStore.items?.filter(c => !c.organization_name).length || 0, color: '#27AE60' },
-  { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.organization_name).length || 0, color: '#3498DB' }
+  { label: 'Юр. лица', value: clientsStore.items?.filter(c => c.organization_name).length || 0, color: '#3498DB' },
 ])
 const clientType = ref('Все')
 const sortBy = ref('name')
@@ -132,7 +150,7 @@ const searchQuery = ref('')
 
 const sortOpts = [
   { label: 'По имени', value: 'name' },
-  { label: 'По дате', value: 'date' }
+  { label: 'По дате', value: 'date' },
 ]
 
 const displayedClients = computed(() => {
@@ -154,7 +172,7 @@ const displayedClients = computed(() => {
       (c.full_name || '').toLowerCase().includes(q) ||
       (c.phone || '').toLowerCase().includes(q) ||
       (c.email || '').toLowerCase().includes(q) ||
-      (c.organization_name || '').toLowerCase().includes(q)
+      (c.organization_name || '').toLowerCase().includes(q),
     )
   }
 

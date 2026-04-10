@@ -3,7 +3,9 @@
   <q-dialog v-model="show" position="bottom">
     <q-card style="width: 100%; max-width: 500px">
       <q-card-section class="q-pb-none">
-        <div class="text-subtitle1 text-weight-bold">Действия</div>
+        <div class="text-subtitle1 text-weight-bold">
+          Действия
+        </div>
       </q-card-section>
 
       <q-list>
@@ -13,17 +15,17 @@
             <q-item
               v-for="col in availableColumns"
               :key="col"
-              clickable
               v-ripple
-              @click="moveToColumn(col)"
+              clickable
               :disable="col === card?.column_name"
+              @click="moveToColumn(col)"
             >
               <q-item-section>
                 <q-item-label :class="{ 'text-grey-5': col === card?.column_name }">
                   {{ col }}
                 </q-item-label>
               </q-item-section>
-              <q-item-section side v-if="col === card?.column_name">
+              <q-item-section v-if="col === card?.column_name" side>
                 <q-icon name="check" color="primary" />
               </q-item-section>
             </q-item>
@@ -98,7 +100,13 @@
       </q-list>
 
       <q-card-actions align="center" class="q-pt-none">
-        <q-btn flat label="Закрыть" no-caps color="grey-7" v-close-popup />
+        <q-btn
+          v-close-popup
+          flat
+          label="Закрыть"
+          no-caps
+          color="grey-7"
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -114,7 +122,7 @@ const { can } = usePermission()
 
 const props = defineProps({
   modelValue: Boolean,
-  card: { type: Object, default: null }
+  card: { type: Object, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'updated'])
@@ -128,7 +136,7 @@ const employeeOptions = ref([])
 const assignForm = ref({
   stage_name: '',
   executor_id: null,
-  deadline: ''
+  deadline: '',
 })
 
 const COLUMNS_INDIVIDUAL = [
@@ -136,13 +144,13 @@ const COLUMNS_INDIVIDUAL = [
   'Стадия 1: планировочные решения',
   'Стадия 2: концепция дизайна',
   'Стадия 3: рабочие чертежи',
-  'Выполненный проект'
+  'Выполненный проект',
 ]
 
 const STAGES_INDIVIDUAL = [
   'Стадия 1: планировочные решения',
   'Стадия 2: концепция дизайна',
-  'Стадия 3: рабочие чертежи'
+  'Стадия 3: рабочие чертежи',
 ]
 
 const availableColumns = ref(COLUMNS_INDIVIDUAL)

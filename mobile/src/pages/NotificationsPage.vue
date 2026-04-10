@@ -15,7 +15,14 @@
           ]"
         />
         <div class="row items-center q-gutter-sm">
-          <q-btn flat round dense icon="settings" color="grey-7" @click="$router.push('/notification-settings')">
+          <q-btn
+            flat
+            round
+            dense
+            icon="settings"
+            color="grey-7"
+            @click="$router.push('/notification-settings')"
+          >
             <q-tooltip>Настройки</q-tooltip>
           </q-btn>
           <q-btn
@@ -52,15 +59,24 @@
       <!-- Дополнительные фильтры -->
       <div class="row q-col-gutter-xs q-mt-sm" style="width: 100%">
         <div class="col-12">
-          <q-input v-model="addressFilter" placeholder="Поиск по адресу..." dense outlined clearable style="font-size: 12px" />
+          <q-input
+            v-model="addressFilter"
+            placeholder="Поиск по адресу..."
+            dense
+            outlined
+            clearable
+            style="font-size: 12px"
+          />
         </div>
       </div>
 
       <!-- Загрузка -->
       <div v-if="store.loading && store.items.length === 0">
-        <q-card class="is-card q-mb-sm" v-for="n in 5" :key="n">
+        <q-card v-for="n in 5" :key="n" class="is-card q-mb-sm">
           <q-item>
-            <q-item-section avatar><q-skeleton type="circle" size="36px" /></q-item-section>
+            <q-item-section avatar>
+              <q-skeleton type="circle" size="36px" />
+            </q-item-section>
             <q-item-section>
               <q-skeleton type="text" width="70%" />
               <q-skeleton type="text" width="50%" />
@@ -70,13 +86,13 @@
       </div>
 
       <!-- Список -->
-      <q-card class="is-card" v-else-if="filteredItems.length > 0">
+      <q-card v-else-if="filteredItems.length > 0" class="is-card">
         <q-list separator>
           <q-item
             v-for="n in displayedItems"
             :key="n.id"
-            clickable
             v-ripple
+            clickable
             :class="{ 'bg-blue-1': !n.is_read }"
             @click="handleClick(n)"
           >
@@ -84,18 +100,30 @@
               <q-icon :name="iconFor(n.notification_type)" :color="n.is_read ? 'grey-5' : 'primary'" size="24px" />
             </q-item-section>
             <q-item-section>
-              <q-item-label :class="{ 'text-weight-bold': !n.is_read }">{{ n.title }}</q-item-label>
-              <q-item-label caption lines="2">{{ n.message }}</q-item-label>
-              <q-item-label caption class="text-grey-5">{{ formatTime(n.created_at) }}</q-item-label>
+              <q-item-label :class="{ 'text-weight-bold': !n.is_read }">
+                {{ n.title }}
+              </q-item-label>
+              <q-item-label caption lines="2">
+                {{ n.message }}
+              </q-item-label>
+              <q-item-label caption class="text-grey-5">
+                {{ formatTime(n.created_at) }}
+              </q-item-label>
             </q-item-section>
-            <q-item-section side v-if="!n.is_read">
+            <q-item-section v-if="!n.is_read" side>
               <q-badge color="primary" rounded />
             </q-item-section>
           </q-item>
         </q-list>
       </q-card>
       <div v-if="hasMore" class="text-center q-pa-md">
-        <q-btn flat no-caps color="primary" label="Загрузить ещё" @click="loadMore" />
+        <q-btn
+          flat
+          no-caps
+          color="primary"
+          label="Загрузить ещё"
+          @click="loadMore"
+        />
       </div>
 
       <div v-if="!store.loading && filteredItems.length === 0" class="text-center q-pa-xl text-grey-5">
@@ -130,7 +158,7 @@ const filteredItems = computed(() => {
     const q = addressFilter.value.toLowerCase()
     items = items.filter(n =>
       (n.message || '').toLowerCase().includes(q) ||
-      (n.title || '').toLowerCase().includes(q)
+      (n.title || '').toLowerCase().includes(q),
     )
   }
   return items
@@ -149,7 +177,7 @@ function iconFor(type) {
     deadline: 'schedule',
     payment: 'payments',
     crm_stage: 'swap_horiz',
-    supervision: 'engineering'
+    supervision: 'engineering',
   }
   return icons[type] || 'notifications'
 }

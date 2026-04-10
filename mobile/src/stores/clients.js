@@ -18,7 +18,7 @@ export const useClientsStore = defineStore('clients', () => {
       (c.full_name || '').toLowerCase().includes(q) ||
       (c.organization_name || '').toLowerCase().includes(q) ||
       (c.phone || '').includes(q) ||
-      (c.email || '').toLowerCase().includes(q)
+      (c.email || '').toLowerCase().includes(q),
     )
   })
 
@@ -62,6 +62,6 @@ export const useClientsStore = defineStore('clients', () => {
   return {
     items, loading, search, totalCount, selectedClient, clientContracts,
     filteredItems,
-    loadClients, loadClient, loadClientContracts
+    loadClients, loadClient, loadClientContracts,
   }
 })

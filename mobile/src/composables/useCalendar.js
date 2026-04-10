@@ -65,7 +65,7 @@ export function generateICS(event) {
     startDate,
     endDate,
     location = '',
-    reminder = 1440 // 1 день = 1440 минут
+    reminder = 1440, // 1 день = 1440 минут
   } = event
 
   const dtStart = formatICSDate(startDate)
@@ -105,7 +105,7 @@ export function generateICS(event) {
       'ACTION:DISPLAY',
       `DESCRIPTION:${escapeICS(title)}`,
       `TRIGGER:-PT${reminder}M`,
-      'END:VALARM'
+      'END:VALARM',
     )
   }
 
@@ -152,7 +152,7 @@ export function googleCalendarUrl(event) {
     text: event.title || '',
     dates: `${start}/${end}`,
     details: event.description || '',
-    location: event.location || ''
+    location: event.location || '',
   })
 
   return `https://www.google.com/calendar/render?${params.toString()}`
@@ -178,12 +178,12 @@ export function addToCalendar(event, $q) {
       model: 'ics',
       items: [
         { label: 'Скачать .ics (универсальный)', value: 'ics' },
-        { label: 'Google Calendar', value: 'google' }
-      ]
+        { label: 'Google Calendar', value: 'google' },
+      ],
     },
     cancel: { label: 'Отмена', flat: true, noCaps: true },
     ok: { label: 'Добавить', noCaps: true, color: 'primary' },
-    persistent: false
+    persistent: false,
   }).onOk((choice) => {
     if (choice === 'google') {
       window.open(googleCalendarUrl(event), '_blank')

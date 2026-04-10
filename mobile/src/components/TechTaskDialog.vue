@@ -2,29 +2,70 @@
   <q-dialog v-model="show" persistent>
     <q-card style="min-width: 340px; max-width: 500px; width: 100%; border-radius: 10px">
       <q-toolbar style="background: #9B59B6; color: white">
-        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Добавить ТЗ</q-toolbar-title>
-        <q-btn flat round dense icon="close" color="white" @click="close" />
+        <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+          Добавить ТЗ
+        </q-toolbar-title>
+        <q-btn
+          flat
+          round
+          dense
+          icon="close"
+          color="white"
+          @click="close"
+        />
       </q-toolbar>
 
       <q-card-section>
         <!-- Файл ТЗ -->
-        <div class="text-caption text-weight-bold q-mb-xs">Файл ТЗ:</div>
+        <div class="text-caption text-weight-bold q-mb-xs">
+          Файл ТЗ:
+        </div>
         <div v-if="selectedFile" class="q-mb-sm" style="background: #F8F9FA; border: 1px solid #E0E0E0; padding: 6px 10px; border-radius: 4px; font-size: 12px">
           {{ selectedFile.name.length > 25 ? selectedFile.name.slice(0, 12) + '...' + selectedFile.name.slice(-10) : selectedFile.name }}
         </div>
-        <q-btn outline color="grey-7" icon="upload" label="Выбрать файл" no-caps dense style="height: 28px" @click="fileInput?.click()" class="q-mb-md" />
-        <input ref="fileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display: none" @change="onFileSelected" />
+        <q-btn
+          outline
+          color="grey-7"
+          icon="upload"
+          label="Выбрать файл"
+          no-caps
+          dense
+          style="height: 28px"
+          class="q-mb-md"
+          @click="fileInput?.click()"
+        />
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+          style="display: none"
+          @change="onFileSelected"
+        >
 
         <q-separator class="q-my-sm" />
 
         <!-- Дата ТЗ -->
-        <q-input v-model="techTaskDate" label="Дата ТЗ" outlined dense type="date" class="q-mb-sm" />
+        <q-input
+          v-model="techTaskDate"
+          label="Дата ТЗ"
+          outlined
+          dense
+          type="date"
+          class="q-mb-sm"
+        />
       </q-card-section>
 
       <q-card-actions align="right">
-        <q-btn flat label="Отмена" no-caps v-close-popup />
-        <q-btn unelevated label="Сохранить" no-caps style="background: #9B59B6; color: white; border-radius: 4px"
-          :loading="saving" @click="save" :disable="!selectedFile" />
+        <q-btn v-close-popup flat label="Отмена" no-caps />
+        <q-btn
+          unelevated
+          label="Сохранить"
+          no-caps
+          style="background: #9B59B6; color: white; border-radius: 4px"
+          :loading="saving"
+          :disable="!selectedFile"
+          @click="save"
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -89,7 +130,7 @@ async function save() {
             contract_id: props.contractId, stage: 'tech_task',
             file_type: selectedFile.value.type?.includes('image') ? 'image' : 'pdf',
             public_link: folderLink, yandex_path: ydPath, file_name: selectedFile.value.name,
-            file_order: 0, variation: 1
+            file_order: 0, variation: 1,
           })
         } catch {}
         try { await ax.post(`/api/v1/files/scan/${props.contractId}`) } catch {}
@@ -110,7 +151,7 @@ async function save() {
           action_type: 'tech_task_date_changed',
           entity_type: 'crm_card',
           entity_id: props.cardId,
-          description: `ТЗ загружено: ${techTaskDate.value} | ${selectedFile.value.name}`
+          description: `ТЗ загружено: ${techTaskDate.value} | ${selectedFile.value.name}`,
         })
       } catch {}
     }

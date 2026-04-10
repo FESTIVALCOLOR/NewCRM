@@ -5,35 +5,54 @@
       <div class="row items-center no-wrap">
         <!-- Тип проекта — pill toggle -->
         <div class="toggle-pills">
-          <button :class="{ active: crmStore.projectType === 'Индивидуальный' }" @click="crmStore.setProjectType('Индивидуальный')">Инд. <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.countIndividual }}</span></button>
-          <button :class="{ active: crmStore.projectType === 'Шаблонный' }" @click="crmStore.setProjectType('Шаблонный')">Шабл. <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.countTemplate }}</span></button>
+          <button :class="{ active: crmStore.projectType === 'Индивидуальный' }" @click="crmStore.setProjectType('Индивидуальный')">
+            Инд. <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.countIndividual }}</span>
+          </button>
+          <button :class="{ active: crmStore.projectType === 'Шаблонный' }" @click="crmStore.setProjectType('Шаблонный')">
+            Шабл. <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.countTemplate }}</span>
+          </button>
         </div>
         <q-space />
         <!-- Актив/Архив — pill toggle -->
         <div class="toggle-pills">
-          <button :class="{ active: !crmStore.showArchive }" @click="crmStore.showArchive && crmStore.toggleArchive()">Активные <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.totalCards }}</span></button>
-          <button :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">Архив</button>
+          <button :class="{ active: !crmStore.showArchive }" @click="crmStore.showArchive && crmStore.toggleArchive()">
+            Активные <span v-if="!crmStore.showArchive" class="pill-count">{{ crmStore.totalCards }}</span>
+          </button>
+          <button :class="{ active: crmStore.showArchive }" @click="!crmStore.showArchive && crmStore.toggleArchive()">
+            Архив
+          </button>
         </div>
       </div>
     </div>
 
     <!-- Загрузка -->
     <div v-if="crmStore.loading" class="q-pa-md">
-      <q-card class="is-card q-mb-sm" v-for="n in 3" :key="n">
+      <q-card v-for="n in 3" :key="n" class="is-card q-mb-sm">
         <q-card-section><q-skeleton type="text" width="50%" /><q-skeleton type="text" width="70%" /></q-card-section>
       </q-card>
     </div>
 
     <template v-if="!crmStore.loading">
-
       <!-- АРХИВ — список с фильтром -->
       <div v-if="crmStore.showArchive" class="q-pa-sm">
-        <q-input v-model="archiveSearch" placeholder="Поиск по адресу, номеру..." dense outlined clearable class="q-mb-sm" style="font-size: 12px">
-          <template v-slot:prepend><q-icon name="search" size="18px" /></template>
+        <q-input
+          v-model="archiveSearch"
+          placeholder="Поиск по адресу, номеру..."
+          dense
+          outlined
+          clearable
+          class="q-mb-sm"
+          style="font-size: 12px"
+        >
+          <template #prepend>
+            <q-icon name="search" size="18px" />
+          </template>
         </q-input>
         <div v-if="archiveFiltered.length === 0" class="text-center q-py-xl" style="color: #999">
           <q-icon name="archive" size="40px" class="q-mb-sm" />
-          <div class="text-caption">{{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}</div>
+          <div class="text-caption">
+            {{ archiveSearch ? 'Ничего не найдено' : 'Архив пуст' }}
+          </div>
         </div>
         <div class="row q-gutter-sm">
           <div v-for="card in archiveFiltered" :key="card.id" class="col-12 col-sm-5 col-md-3 col-lg-2">
@@ -47,7 +66,8 @@
         <!-- Мини-навигация колонок: горизонтальный скролл -->
         <div class="column-nav">
           <button
-            v-for="(col, idx) in crmStore.columns" :key="col.name"
+            v-for="(col, idx) in crmStore.columns"
+            :key="col.name"
             :class="{ active: currentSlide === idx }"
             @click="currentSlide = idx"
           >
@@ -72,8 +92,22 @@
                 <span class="column-title">{{ col.name }}</span>
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
-              <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openTechTaskDialog(card)" />
+              <div v-if="col.cards.length > 0" class="column-body">
+                <crm-card-item
+                  v-for="card in col.cards"
+                  :key="card.id"
+                  :card="card"
+                  @click="openCard(card.id)"
+                  @longpress="showMoveDialog(card)"
+                  @submit-work="doCardAction(card.id, 'submit')"
+                  @accept="doCardAction(card.id, 'accept')"
+                  @reject="doCardAction(card.id, 'reject')"
+                  @client-send="doCardAction(card.id, 'client-send')"
+                  @client-approved="doCardAction(card.id, 'client-approved')"
+                  @sign-act="doCardAction(card.id, 'sign-act')"
+                  @add-measurement="openMeasurementDialog(card)"
+                  @add-tech-task="openTechTaskDialog(card)"
+                />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" />
@@ -91,15 +125,36 @@
             {{ col.shortName }} <span class="count">{{ col.count }}</span>
           </button>
         </div>
-        <q-carousel v-model="currentSlide" swipeable animated transition-prev="slide-right" transition-next="slide-left" style="min-height: calc(100vh - 220px); background: transparent">
+        <q-carousel
+          v-model="currentSlide"
+          swipeable
+          animated
+          transition-prev="slide-right"
+          transition-next="slide-left"
+          style="min-height: calc(100vh - 220px); background: transparent"
+        >
           <q-carousel-slide v-for="(col, idx) in crmStore.columns" :key="col.name" :name="idx" class="q-pa-none">
             <div class="column-frame">
               <div class="column-header">
                 <span class="column-title">{{ col.name }}</span>
                 <span style="color: #888; font-size: 11px">Карточек в столбце: {{ col.count }}</span>
               </div>
-              <div class="column-body" v-if="col.cards.length > 0">
-                <crm-card-item v-for="card in col.cards" :key="card.id" :card="card" @click="openCard(card.id)" @longpress="showMoveDialog(card)" @submit-work="doCardAction(card.id, 'submit')" @accept="doCardAction(card.id, 'accept')" @reject="doCardAction(card.id, 'reject')" @client-send="doCardAction(card.id, 'client-send')" @client-approved="doCardAction(card.id, 'client-approved')" @sign-act="doCardAction(card.id, 'sign-act')" @add-measurement="openMeasurementDialog(card)" @add-tech-task="openTechTaskDialog(card)" />
+              <div v-if="col.cards.length > 0" class="column-body">
+                <crm-card-item
+                  v-for="card in col.cards"
+                  :key="card.id"
+                  :card="card"
+                  @click="openCard(card.id)"
+                  @longpress="showMoveDialog(card)"
+                  @submit-work="doCardAction(card.id, 'submit')"
+                  @accept="doCardAction(card.id, 'accept')"
+                  @reject="doCardAction(card.id, 'reject')"
+                  @client-send="doCardAction(card.id, 'client-send')"
+                  @client-approved="doCardAction(card.id, 'client-approved')"
+                  @sign-act="doCardAction(card.id, 'sign-act')"
+                  @add-measurement="openMeasurementDialog(card)"
+                  @add-tech-task="openTechTaskDialog(card)"
+                />
               </div>
               <div v-else class="column-empty">
                 <q-icon name="inbox" size="32px" color="grey-4" /><div>Нет карточек</div>
@@ -113,23 +168,48 @@
     <q-dialog v-model="moveDialogVisible">
       <q-card style="min-width: 320px; border-radius: 10px">
         <q-toolbar style="background: #ffd93c; color: #333">
-          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">Переместить карточку</q-toolbar-title>
-          <q-btn flat round dense icon="close" @click="moveDialogVisible = false" />
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            Переместить карточку
+          </q-toolbar-title>
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            @click="moveDialogVisible = false"
+          />
         </q-toolbar>
         <q-card-section v-if="moveCard" class="q-pb-none">
-          <div class="text-weight-bold" style="font-size: 12px">{{ moveCard.contract_number }} — {{ moveCard.address }}</div>
-          <div class="text-caption q-mt-xs" style="color: #888">Текущая: {{ moveCard.column_name }}</div>
+          <div class="text-weight-bold" style="font-size: 12px">
+            {{ moveCard.contract_number }} — {{ moveCard.address }}
+          </div>
+          <div class="text-caption q-mt-xs" style="color: #888">
+            Текущая: {{ moveCard.column_name }}
+          </div>
         </q-card-section>
 
         <!-- Шаг 1: выбор стадии -->
         <template v-if="moveStep === 1">
           <q-list separator>
-            <q-item v-for="col in crmStore.columnOrder" :key="col" clickable v-ripple @click="selectMoveColumn(col)" :disable="moveCard?.column_name === col">
+            <q-item
+              v-for="col in crmStore.columnOrder"
+              :key="col"
+              v-ripple
+              clickable
+              :disable="moveCard?.column_name === col"
+              @click="selectMoveColumn(col)"
+            >
               <q-item-section>
-                <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">{{ col }}</q-item-label>
+                <q-item-label :style="{ color: moveCard?.column_name === col ? '#ccc' : '#333', fontSize: '13px' }">
+                  {{ col }}
+                </q-item-label>
               </q-item-section>
-              <q-item-section side v-if="moveCard?.column_name === col"><q-icon name="check" color="positive" /></q-item-section>
-              <q-item-section side v-else-if="stageNeedsExecutor(col)"><q-icon name="person_add" color="grey-5" size="16px" /></q-item-section>
+              <q-item-section v-if="moveCard?.column_name === col" side>
+                <q-icon name="check" color="positive" />
+              </q-item-section>
+              <q-item-section v-else-if="stageNeedsExecutor(col)" side>
+                <q-icon name="person_add" color="grey-5" size="16px" />
+              </q-item-section>
             </q-item>
           </q-list>
         </template>
@@ -137,55 +217,159 @@
         <!-- Шаг 2: назначение сотрудника (если стадия требует) -->
         <template v-if="moveStep === 2">
           <q-card-section>
-            <div class="text-caption q-mb-sm" style="color: #888">Стадия: {{ moveTargetCol }}</div>
-            <q-select v-model="moveExecutorId" :options="filteredMoveEmployees" option-value="id" option-label="label" label="Исполнитель *" outlined dense emit-value map-options use-input input-debounce="200" @filter="filterMoveEmps" class="q-mb-sm" />
-            <q-input v-model="moveDeadline" label="Дедлайн" outlined dense type="date" class="q-mb-xs" />
+            <div class="text-caption q-mb-sm" style="color: #888">
+              Стадия: {{ moveTargetCol }}
+            </div>
+            <q-select
+              v-model="moveExecutorId"
+              :options="filteredMoveEmployees"
+              option-value="id"
+              option-label="label"
+              label="Исполнитель *"
+              outlined
+              dense
+              emit-value
+              map-options
+              use-input
+              input-debounce="200"
+              class="q-mb-sm"
+              @filter="filterMoveEmps"
+            />
+            <q-input
+              v-model="moveDeadline"
+              label="Дедлайн"
+              outlined
+              dense
+              type="date"
+              class="q-mb-xs"
+            />
             <div v-if="moveNormDays > 0" style="font-size: 11px; color: #2F5496; font-weight: 600; margin-bottom: 8px">
               Норма дней: {{ moveNormDays }} раб. дн.<span v-if="moveSubstepName" style="font-weight: 400; color: #666"> · {{ moveSubstepName }}</span>
             </div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
-            <q-btn unelevated label="Переместить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doMoveWithAssign" :loading="moveLoading" />
+            <q-btn
+              unelevated
+              label="Переместить"
+              style="background: #ffd93c; color: #333; border-radius: 4px"
+              no-caps
+              :loading="moveLoading"
+              @click="doMoveWithAssign"
+            />
           </q-card-actions>
         </template>
 
         <!-- Шаг 3: Завершение проекта -->
         <template v-if="moveStep === 3">
           <q-card-section>
-            <div class="text-caption q-mb-sm" style="color: #888">Выберите статус завершения проекта</div>
-            <q-option-group v-model="completionStatus" :options="[
-              { label: 'Проект СДАН', value: 'СДАН' },
-              { label: 'Авторский надзор', value: 'АВТОРСКИЙ НАДЗОР' },
-              { label: 'Расторгнут', value: 'РАСТОРГНУТ' }
-            ]" color="accent" class="q-mb-sm" />
-            <q-input v-if="completionStatus === 'РАСТОРГНУТ'" v-model="terminationReason" label="Причина расторжения *" outlined dense type="textarea" autogrow class="q-mb-sm" />
+            <div class="text-caption q-mb-sm" style="color: #888">
+              Выберите статус завершения проекта
+            </div>
+            <q-option-group
+              v-model="completionStatus"
+              :options="[
+                { label: 'Проект СДАН', value: 'СДАН' },
+                { label: 'Авторский надзор', value: 'АВТОРСКИЙ НАДЗОР' },
+                { label: 'Расторгнут', value: 'РАСТОРГНУТ' }
+              ]"
+              color="accent"
+              class="q-mb-sm"
+            />
+            <q-input
+              v-if="completionStatus === 'РАСТОРГНУТ'"
+              v-model="terminationReason"
+              label="Причина расторжения *"
+              outlined
+              dense
+              type="textarea"
+              autogrow
+              class="q-mb-sm"
+            />
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Назад" no-caps @click="moveStep = 1" />
-            <q-btn unelevated label="Завершить" style="background: #ffd93c; color: #333; border-radius: 4px" no-caps @click="doCompleteProject" :loading="moveLoading" />
+            <q-btn
+              unelevated
+              label="Завершить"
+              style="background: #ffd93c; color: #333; border-radius: 4px"
+              no-caps
+              :loading="moveLoading"
+              @click="doCompleteProject"
+            />
           </q-card-actions>
         </template>
       </q-card>
     </q-dialog>
-    <measurement-dialog v-model="showMeasDialog" :card-id="measCardId" :contract-id="measContractId" :contract-data="measContractData" @saved="onMeasurementSaved" />
-    <tech-task-dialog v-model="showTTDialog" :card-id="ttCardId" :contract-id="ttContractId" :contract-data="ttContractData" @saved="onTechTaskSaved" />
+    <measurement-dialog
+      v-model="showMeasDialog"
+      :card-id="measCardId"
+      :contract-id="measContractId"
+      :contract-data="measContractData"
+      @saved="onMeasurementSaved"
+    />
+    <tech-task-dialog
+      v-model="showTTDialog"
+      :card-id="ttCardId"
+      :contract-id="ttContractId"
+      :contract-data="ttContractData"
+      @saved="onTechTaskSaved"
+    />
     <page-dashboard :items="dashItems" />
 
     <!-- Диалог "На исправление" прямо на доске -->
     <q-dialog v-model="boardRejectVisible">
       <q-card style="min-width: 320px; border-radius: 10px">
-        <q-toolbar style="background: #E74C3C; color: white"><q-toolbar-title class="text-weight-bold" style="font-size: 14px">На исправление</q-toolbar-title><q-btn flat round dense icon="close" color="white" @click="boardRejectVisible = false" /></q-toolbar>
+        <q-toolbar style="background: #E74C3C; color: white">
+          <q-toolbar-title class="text-weight-bold" style="font-size: 14px">
+            На исправление
+          </q-toolbar-title><q-btn
+            flat
+            round
+            dense
+            icon="close"
+            color="white"
+            @click="boardRejectVisible = false"
+          />
+        </q-toolbar>
         <q-card-section>
-          <q-input v-model="boardRejectReason" label="Причина *" outlined dense type="textarea" autogrow class="q-mb-sm" />
+          <q-input
+            v-model="boardRejectReason"
+            label="Причина *"
+            outlined
+            dense
+            type="textarea"
+            autogrow
+            class="q-mb-sm"
+          />
           <div class="q-mb-sm">
-            <q-btn outline no-caps icon="attach_file" :label="boardRejectFile ? boardRejectFile.name : 'Прикрепить файл с правками'" style="width: 100%; justify-content: flex-start; text-transform: none" @click="$refs.boardRejectFileInput.click()" />
-            <input ref="boardRejectFileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display: none" @change="e => { boardRejectFile = e.target.files[0] || null }" />
+            <q-btn
+              outline
+              no-caps
+              icon="attach_file"
+              :label="boardRejectFile ? boardRejectFile.name : 'Прикрепить файл с правками'"
+              style="width: 100%; justify-content: flex-start; text-transform: none"
+              @click="$refs.boardRejectFileInput.click()"
+            />
+            <input
+              ref="boardRejectFileInput"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              style="display: none"
+              @change="e => { boardRejectFile = e.target.files[0] || null }"
+            >
           </div>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup no-caps />
-          <q-btn unelevated label="Отправить" style="background: #E74C3C; color: white; border-radius: 4px" no-caps @click="submitBoardReject" :loading="boardRejectLoading" />
+          <q-btn v-close-popup flat label="Отмена" no-caps />
+          <q-btn
+            unelevated
+            label="Отправить"
+            style="background: #E74C3C; color: white; border-radius: 4px"
+            no-caps
+            :loading="boardRejectLoading"
+            @click="submitBoardReject"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -239,7 +423,7 @@ const archiveFiltered = computed(() => {
     (c.address || '').toLowerCase().includes(q) ||
     (c.contract_number || '').toLowerCase().includes(q) ||
     (c.city || '').toLowerCase().includes(q) ||
-    (c.agent_type || '').toLowerCase().includes(q)
+    (c.agent_type || '').toLowerCase().includes(q),
   )
 })
 
@@ -275,7 +459,7 @@ const dashItems = computed(() => {
   return [
     { label: 'Всего карточек', value: total },
     { label: 'В работе', value: inWork, color: '#F39C12' },
-    { label: 'Столбцов', value: cols.length, color: '#3498DB' }
+    { label: 'Столбцов', value: cols.length, color: '#3498DB' },
   ]
 })
 
@@ -501,7 +685,7 @@ async function doMoveCard(colName) {
     },
     () => crmApi.moveCard(cardId, colName),
     (oldColumn) => crmStore.rollbackMoveCard(cardId, oldColumn),
-    `Перемещено: ${colName}`
+    `Перемещено: ${colName}`,
   )
   // Перезагружаем для полной синхронизации (обновление счётчиков и т.д.)
   crmStore.loadCards()
@@ -518,7 +702,7 @@ async function doMoveWithAssign() {
     await crmApi.assignExecutor(moveCard.value.id, {
       stage_name: moveTargetCol.value,
       executor_id: moveExecutorId.value,
-      deadline: moveDeadline.value || null
+      deadline: moveDeadline.value || null,
     })
 
     // 3. Создаём оплату при перемещении (как десктоп ExecutorSelectionDialog)
@@ -530,14 +714,14 @@ async function doMoveWithAssign() {
       // Проверяем нет ли уже оплаты для этого исполнителя на этой роли
       const { data: existingPayments } = await crmApi.getPayments(moveCard.value.id)
       const alreadyPaid = (existingPayments || []).some(p =>
-        p.employee_id === moveExecutorId.value && p.role === roleName && !p.reassigned
+        p.employee_id === moveExecutorId.value && p.role === roleName && !p.reassigned,
       )
 
       if (!alreadyPaid) {
         const calcRes = await paymentsApi.calculate({
           contract_id: moveCard.value.contract_id,
           employee_id: moveExecutorId.value,
-          role: roleName
+          role: roleName,
         })
         const fullAmount = calcRes.data?.amount || calcRes.data?.full_amount || 0
 
@@ -557,7 +741,7 @@ async function doMoveWithAssign() {
         }
       }
     } catch { /* оплата опциональна */ }
-    $q.notify({ type: 'positive', message: `Перемещено + исполнитель назначен` })
+    $q.notify({ type: 'positive', message: 'Перемещено + исполнитель назначен' })
     moveDialogVisible.value = false
     crmStore.loadCards()
   } catch (err) {

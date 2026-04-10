@@ -1,30 +1,51 @@
 # -*- coding: utf-8 -*-
 """Мелкие диалоги CRM, выделенные из crm_tab.py"""
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QLabel, QScrollArea, QFrame, QDialog, QFormLayout,
-                             QLineEdit, QComboBox, QDateEdit, QCheckBox,
-                             QGroupBox, QSpinBox, QTableWidget, QHeaderView,
-                             QTableWidgetItem, QTabWidget, QTextEdit,
-                             QStackedWidget, QRadioButton, QProgressBar)
-from ui.custom_dateedit import CustomDateEdit
-from PyQt5.QtCore import Qt, QDate, pyqtSignal, QUrl, QTimer
-from PyQt5.QtGui import QColor, QPixmap, QFont
-from database.db_manager import DatabaseManager
-from utils.data_access import DataAccess
-from utils.icon_loader import IconLoader
-from ui.custom_title_bar import CustomTitleBar
-from ui.custom_combobox import CustomComboBox
-from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
-from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
-from utils.table_settings import ProportionalResizeTable, apply_no_focus_delegate
-from utils.date_utils import format_date, format_month_year
-from utils.yandex_disk import YandexDiskManager
-from config import YANDEX_DISK_TOKEN
-from utils.resource_path import resource_path
-from utils.dialog_helpers import create_progress_dialog
+
 import os
 import threading
 
+from PyQt5.QtCore import QDate, Qt, QTimer, QUrl, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QPixmap
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDateEdit,
+    QDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QScrollArea,
+    QSpinBox,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from config import YANDEX_DISK_TOKEN
+from database.db_manager import DatabaseManager
+from ui.custom_combobox import CustomComboBox
+from ui.custom_dateedit import CustomDateEdit
+from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
+from ui.custom_title_bar import CustomTitleBar
+from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
+from utils.data_access import DataAccess
+from utils.date_utils import format_date, format_month_year
+from utils.dialog_helpers import create_progress_dialog
+from utils.icon_loader import IconLoader
+from utils.resource_path import resource_path
+from utils.table_settings import ProportionalResizeTable, apply_no_focus_delegate
+from utils.yandex_disk import YandexDiskManager
 
 
 class RejectWithCorrectionsDialog(QDialog):
@@ -34,12 +55,12 @@ class RejectWithCorrectionsDialog(QDialog):
         super().__init__(parent)
         self.stage_name = stage_name
         self.contract_id = contract_id
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = api_client
-        self.corrections_folder_path = ''
+        self.corrections_folder_path = ""
         self.selected_files = []
-        self.setWindowTitle('Отправить на исправление')
+        self.setWindowTitle("Отправить на исправление")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedWidth(420)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -66,24 +87,24 @@ class RejectWithCorrectionsDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
 
         # Заголовок
-        title = QLabel(f'Отправить на исправление')
-        title.setStyleSheet('font-size: 14px; font-weight: bold; color: #E74C3C;')
+        title = QLabel(f"Отправить на исправление")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #E74C3C;")
         layout.addWidget(title)
 
         # Описание
-        desc = QLabel(f'Стадия: {self.stage_name}\n\nВыберите файлы с правками для загрузки на Яндекс.Диск:')
+        desc = QLabel(f"Стадия: {self.stage_name}\n\nВыберите файлы с правками для загрузки на Яндекс.Диск:")
         desc.setWordWrap(True)
-        desc.setStyleSheet('font-size: 11px; color: #555;')
+        desc.setStyleSheet("font-size: 11px; color: #555;")
         layout.addWidget(desc)
 
         # Выбор файла
         file_row = QHBoxLayout()
-        self.file_label = QLabel('Файлы не выбраны')
-        self.file_label.setStyleSheet('font-size: 10px; color: #999; padding: 4px 8px; border: 1px dashed #CCC; border-radius: 4px;')
+        self.file_label = QLabel("Файлы не выбраны")
+        self.file_label.setStyleSheet("font-size: 10px; color: #999; padding: 4px 8px; border: 1px dashed #CCC; border-radius: 4px;")
         self.file_label.setMinimumHeight(28)
         file_row.addWidget(self.file_label, 1)
 
-        select_btn = QPushButton('Выбрать файлы')
+        select_btn = QPushButton("Выбрать файлы")
         select_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F5F5F5;
@@ -105,7 +126,7 @@ class RejectWithCorrectionsDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        cancel_btn = QPushButton('Отмена')
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F5F5F5;
@@ -122,7 +143,7 @@ class RejectWithCorrectionsDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
 
-        self.send_btn = QPushButton('Отправить на исправление')
+        self.send_btn = QPushButton("Отправить на исправление")
         self._send_btn_active_style = """
             QPushButton {
                 background-color: #E74C3C;
@@ -163,16 +184,15 @@ class RejectWithCorrectionsDialog(QDialog):
 
     def _select_file(self):
         from PyQt5.QtWidgets import QFileDialog
-        file_paths, _ = QFileDialog.getOpenFileNames(
-            self, 'Выбрать файлы правок', '',
-            'Все файлы (*.*);;Документы (*.pdf *.doc *.docx);;Изображения (*.png *.jpg *.jpeg)'
-        )
+
+        file_paths, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы правок", "", "Все файлы (*.*);;Документы (*.pdf *.doc *.docx);;Изображения (*.png *.jpg *.jpeg)")
         if file_paths:
             self.selected_files = file_paths
             import os
+
             names = [os.path.basename(f) for f in file_paths]
-            self.file_label.setText(', '.join(names))
-            self.file_label.setStyleSheet('font-size: 10px; color: #333; padding: 4px 8px; border: 1px solid #27AE60; border-radius: 4px; background-color: #E8F8F5;')
+            self.file_label.setText(", ".join(names))
+            self.file_label.setStyleSheet("font-size: 10px; color: #333; padding: 4px 8px; border: 1px solid #27AE60; border-radius: 4px; background-color: #E8F8F5;")
             self.send_btn.setEnabled(True)
             self.send_btn.setStyleSheet(self._send_btn_active_style)
 
@@ -180,34 +200,35 @@ class RejectWithCorrectionsDialog(QDialog):
         """Отправка: загрузка файлов на ЯД (если выбраны) и закрытие диалога"""
         if self.selected_files:
             self.send_btn.setEnabled(False)
-            self.send_btn.setText('Загрузка...')
+            self.send_btn.setText("Загрузка...")
             from PyQt5.QtWidgets import QApplication
+
             QApplication.processEvents()
 
             try:
-                from utils.yandex_disk import YandexDiskManager
                 from config import YANDEX_DISK_TOKEN
+                from utils.yandex_disk import YandexDiskManager
 
                 # Получаем путь к папке договора на ЯД (сначала из кэша родителя)
                 contract_folder = None
                 parent = self.parent()
-                if parent and hasattr(parent, '_cached_contract'):
+                if parent and hasattr(parent, "_cached_contract"):
                     cached = parent._cached_contract
-                    if cached and cached.get('yandex_folder_path'):
-                        contract_folder = cached['yandex_folder_path']
+                    if cached and cached.get("yandex_folder_path"):
+                        contract_folder = cached["yandex_folder_path"]
 
                 if not contract_folder and self.contract_id:
                     try:
                         if self.data.is_multi_user:
                             contract = self.data.get_contract(self.contract_id)
-                            contract_folder = contract.get('yandex_folder_path') if contract else None
+                            contract_folder = contract.get("yandex_folder_path") if contract else None
                         else:
                             conn = self.data.db.connect()
                             cursor = conn.cursor()
-                            cursor.execute('SELECT yandex_folder_path FROM contracts WHERE id = ?', (self.contract_id,))
+                            cursor.execute("SELECT yandex_folder_path FROM contracts WHERE id = ?", (self.contract_id,))
                             result = cursor.fetchone()
                             conn.close()
-                            contract_folder = result['yandex_folder_path'] if result else None
+                            contract_folder = result["yandex_folder_path"] if result else None
                     except Exception as e:
                         print(f"[WARN] Не удалось получить папку договора: {e}")
 
@@ -220,38 +241,31 @@ class RejectWithCorrectionsDialog(QDialog):
                     if corrections_path:
                         self.corrections_folder_path = corrections_path
                         import os
+
                         # Загружаем все выбранные файлы
                         for file_path in self.selected_files:
                             file_name = os.path.basename(file_path)
                             yandex_file_path = f"{corrections_path}/{file_name}"
                             yd.upload_file(file_path, yandex_file_path)
                     else:
-                        CustomMessageBox(self, 'Ошибка',
-                            'Не удалось создать папку правок на Яндекс.Диске.',
-                            'error').exec_()
+                        CustomMessageBox(self, "Ошибка", "Не удалось создать папку правок на Яндекс.Диске.", "error").exec_()
                         self.send_btn.setEnabled(True)
-                        self.send_btn.setText('Отправить на исправление')
+                        self.send_btn.setText("Отправить на исправление")
                         return
                 else:
-                    CustomMessageBox(self, 'Ошибка',
-                        'Не найдена папка договора на Яндекс.Диске или не настроен токен.\n'
-                        'Файл не может быть загружен.',
-                        'error').exec_()
+                    CustomMessageBox(self, "Ошибка", "Не найдена папка договора на Яндекс.Диске или не настроен токен.\nФайл не может быть загружен.", "error").exec_()
                     self.send_btn.setEnabled(True)
-                    self.send_btn.setText('Отправить на исправление')
+                    self.send_btn.setText("Отправить на исправление")
                     return
 
             except Exception as e:
                 print(f"[ERROR] Ошибка загрузки файла правок: {e}")
-                CustomMessageBox(self, 'Ошибка',
-                    f'Не удалось загрузить файл правок:\n{e}',
-                    'error').exec_()
+                CustomMessageBox(self, "Ошибка", f"Не удалось загрузить файл правок:\n{e}", "error").exec_()
                 self.send_btn.setEnabled(True)
-                self.send_btn.setText('Отправить на исправление')
+                self.send_btn.setText("Отправить на исправление")
                 return
 
         self.accept()
-
 
 
 class ProjectDataDialog(QDialog):
@@ -260,23 +274,24 @@ class ProjectDataDialog(QDialog):
     def __init__(self, parent, project_data_link):
         super().__init__(parent)
         self.project_data_link = project_data_link
-        
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self.init_ui()
-    
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -287,13 +302,13 @@ class ProjectDataDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, 'Данные проекта', simple_mode=True)
+        title_bar = CustomTitleBar(self, "Данные проекта", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -303,7 +318,7 @@ class ProjectDataDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -313,15 +328,15 @@ class ProjectDataDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        header = QLabel('Ссылка на данные проекта:')
-        header.setStyleSheet('font-size: 14px; font-weight: bold; margin-bottom: 10px;')
+
+        header = QLabel("Ссылка на данные проекта:")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 10px;")
         layout.addWidget(header)
-        
+
         link_frame = QFrame()
         link_frame.setStyleSheet("""
             QFrame {
@@ -332,17 +347,17 @@ class ProjectDataDialog(QDialog):
             }
         """)
         link_layout = QVBoxLayout()
-        
+
         link_label = QLabel(f'<a href="{self.project_data_link}" style="color: #ffd93c; font-size: 12px; text-decoration: underline;">{self.project_data_link}</a>')
         link_label.setOpenExternalLinks(True)
         link_label.setWordWrap(True)
         link_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         link_layout.addWidget(link_label)
-        
+
         link_frame.setLayout(link_layout)
         layout.addWidget(link_frame)
-        
-        copy_btn = QPushButton('Копировать ссылку')
+
+        copy_btn = QPushButton("Копировать ссылку")
         copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95A5A6;
@@ -357,8 +372,8 @@ class ProjectDataDialog(QDialog):
         """)
         copy_btn.clicked.connect(self.copy_link)
         layout.addWidget(copy_btn)
-        
-        open_btn = QPushButton('Открыть в браузере')
+
+        open_btn = QPushButton("Открыть в браузере")
         open_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffd93c;
@@ -372,55 +387,48 @@ class ProjectDataDialog(QDialog):
         """)
         open_btn.clicked.connect(self.open_in_browser)
         layout.addWidget(open_btn)
-        
-        close_btn = QPushButton('Закрыть')
-        close_btn.setStyleSheet('padding: 10px 20px; margin-top: 10px;')
+
+        close_btn = QPushButton("Закрыть")
+        close_btn.setStyleSheet("padding: 10px 20px; margin-top: 10px;")
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
-        
+
         self.setMinimumWidth(950)
-    
+
     def copy_link(self):
         """Копирование ссылки в буфер обмена"""
         from PyQt5.QtWidgets import QApplication
+
         clipboard = QApplication.clipboard()
         clipboard.setText(self.project_data_link)
         # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех" - авто-принятие
-    
+
     def open_in_browser(self):
         """Открытие ссылки в браузере"""
-        from PyQt5.QtGui import QDesktopServices
         from PyQt5.QtCore import QUrl
+        from PyQt5.QtGui import QDesktopServices
+
         QDesktopServices.openUrl(QUrl(self.project_data_link))
-    
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self.center_on_screen()
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
+
         center_dialog_on_parent(self)
-
-
-
-
-
-
-
-
-
-
 
 
 class ExecutorSelectionDialog(QDialog):
@@ -430,13 +438,13 @@ class ExecutorSelectionDialog(QDialog):
         self.stage_name = stage_name
         self.project_type = project_type
         self.contract_id = contract_id
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
 
         # Загрузка norm_days из timeline
         self._norm_days = 0
-        self._current_substep = ''
+        self._current_substep = ""
         self._load_timeline_norm_days()
 
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
@@ -445,6 +453,7 @@ class ExecutorSelectionDialog(QDialog):
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self.init_ui()
@@ -452,8 +461,8 @@ class ExecutorSelectionDialog(QDialog):
     def _load_timeline_norm_days(self):
         """Загрузить norm_days первого незаполненного подэтапа текущей стадии
         и дату предыдущего подэтапа для расчёта дедлайна."""
-        self._prev_actual_date = ''  # дата предыдущего подэтапа (для расчёта дедлайна)
-        self._current_stage_code = ''  # stage_code подэтапа для обновления custom_norm_days
+        self._prev_actual_date = ""  # дата предыдущего подэтапа (для расчёта дедлайна)
+        self._current_stage_code = ""  # stage_code подэтапа для обновления custom_norm_days
         if not self.contract_id:
             return
         try:
@@ -461,49 +470,47 @@ class ExecutorSelectionDialog(QDialog):
             if not entries:
                 return
             # Определяем stage_group из stage_name
-            stage_group = ''
-            if 'Стадия 1' in self.stage_name:
-                stage_group = 'STAGE1'
-            elif 'Стадия 2' in self.stage_name:
-                stage_group = 'STAGE2'
-            elif 'Стадия 3' in self.stage_name:
-                stage_group = 'STAGE3'
+            stage_group = ""
+            if "Стадия 1" in self.stage_name:
+                stage_group = "STAGE1"
+            elif "Стадия 2" in self.stage_name:
+                stage_group = "STAGE2"
+            elif "Стадия 3" in self.stage_name:
+                stage_group = "STAGE3"
 
             if not stage_group:
                 return
 
             # Сортируем по sort_order для корректного определения предыдущего подэтапа
-            sorted_entries = sorted(entries, key=lambda x: x.get('sort_order', 0))
+            sorted_entries = sorted(entries, key=lambda x: x.get("sort_order", 0))
 
             # prev_date сквозной по всем стадиям: дедлайн считается от
             # последней заполненной actual_date в timeline (не только текущей стадии),
             # т.к. стадии выполняются последовательно.
-            prev_date = ''
+            prev_date = ""
             for e in sorted_entries:
-                if e.get('executor_role', '') == 'header':
+                if e.get("executor_role", "") == "header":
                     continue
-                if (e.get('stage_group') == stage_group
-                        and not e.get('actual_date')
-                        and e.get('norm_days', 0) > 0):
+                if e.get("stage_group") == stage_group and not e.get("actual_date") and e.get("norm_days", 0) > 0:
                     # Нашли первый незаполненный подэтап в текущей стадии
-                    self._norm_days = int(e.get('norm_days', 0))
-                    self._current_substep = e.get('stage_name', '')
-                    self._current_stage_code = e.get('stage_code', '')
+                    self._norm_days = int(e.get("norm_days", 0))
+                    self._current_substep = e.get("stage_name", "")
+                    self._current_stage_code = e.get("stage_code", "")
                     self._prev_actual_date = prev_date  # дата предыдущего заполненного
                     break
                 # Обновляем prev_date только для non-header строк с actual_date
-                ad = e.get('actual_date', '')
+                ad = e.get("actual_date", "")
                 if ad:
                     prev_date = ad
         except Exception as ex:
             print(f"[ExecutorDialog] Ошибка загрузки timeline: {ex}")
-    
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -514,13 +521,13 @@ class ExecutorSelectionDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, 'Выбор исполнителя', simple_mode=True)
+        title_bar = CustomTitleBar(self, "Выбор исполнителя", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -530,7 +537,7 @@ class ExecutorSelectionDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -540,32 +547,32 @@ class ExecutorSelectionDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        info = QLabel(f'Выберите исполнителя для стадии:')
-        info.setStyleSheet('font-size: 13px; font-weight: bold;')
+
+        info = QLabel(f"Выберите исполнителя для стадии:")
+        info.setStyleSheet("font-size: 13px; font-weight: bold;")
         info.setAlignment(Qt.AlignCenter)
         layout.addWidget(info)
-        
+
         stage_frame = QFrame()
-        stage_frame.setStyleSheet('''
+        stage_frame.setStyleSheet("""
             QFrame {
                 background-color: transparent;
                 border: none;
                 padding: 0px;
             }
-        ''')
+        """)
         stage_layout = QVBoxLayout()
-        
+
         stage_label = QLabel(f"<b>{self.stage_name}</b>")
         stage_label.setWordWrap(True)
-        stage_label.setStyleSheet('font-size: 12px; color: #333;')
+        stage_label.setStyleSheet("font-size: 12px; color: #333;")
         stage_label.setAlignment(Qt.AlignCenter)
         stage_layout.addWidget(stage_label)
-        
+
         stage_frame.setLayout(stage_layout)
         layout.addWidget(stage_frame)
 
@@ -575,13 +582,16 @@ class ExecutorSelectionDialog(QDialog):
             conn = self.db.connect()
             cursor = conn.cursor()
 
-            cursor.execute('''
+            cursor.execute(
+                """
             SELECT se.stage_name, e.full_name, se.assigned_date
             FROM stage_executors se
             JOIN employees e ON se.executor_id = e.id
             WHERE se.crm_card_id = ?
             ORDER BY se.assigned_date DESC
-            ''', (self.card_id,))
+            """,
+                (self.card_id,),
+            )
 
             history_records = cursor.fetchall()
             self.db.close()
@@ -601,26 +611,27 @@ class ExecutorSelectionDialog(QDialog):
                 history_layout.setSpacing(3)
 
                 history_title = QLabel("История исполнителей на других стадиях:")
-                history_title.setStyleSheet('font-size: 9px; color: #666; font-style: italic;')
+                history_title.setStyleSheet("font-size: 9px; color: #666; font-style: italic;")
                 history_layout.addWidget(history_title)
 
                 # Показываем максимум 5 последних записей
                 for record in history_records[:5]:
                     from datetime import datetime
+
                     try:
                         # Пробуем сначала с временем
-                        assigned_date = datetime.strptime(record['assigned_date'], '%Y-%m-%d %H:%M:%S')
-                        date_str = assigned_date.strftime('%d-%m-%Y')
+                        assigned_date = datetime.strptime(record["assigned_date"], "%Y-%m-%d %H:%M:%S")
+                        date_str = assigned_date.strftime("%d-%m-%Y")
                     except Exception:
                         try:
                             # Пробуем без времени
-                            assigned_date = datetime.strptime(record['assigned_date'][:10], '%Y-%m-%d')
-                            date_str = assigned_date.strftime('%d-%m-%Y')
+                            assigned_date = datetime.strptime(record["assigned_date"][:10], "%Y-%m-%d")
+                            date_str = assigned_date.strftime("%d-%m-%Y")
                         except Exception:
-                            date_str = record['assigned_date'][:10] if record['assigned_date'] else '—'
+                            date_str = record["assigned_date"][:10] if record["assigned_date"] else "—"
 
                     history_item = QLabel(f"• {record['stage_name']}: {record['full_name']} ({date_str})")
-                    history_item.setStyleSheet('font-size: 9px; color: #555;')
+                    history_item.setStyleSheet("font-size: 9px; color: #555;")
                     history_layout.addWidget(history_item)
 
                 history_frame.setLayout(history_layout)
@@ -633,16 +644,16 @@ class ExecutorSelectionDialog(QDialog):
         form_layout = QFormLayout()
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена поддержка стадии 3д визуализации (#18)
-        if 'Стадия 1' in self.stage_name:
-            position = 'Чертёжник'
-        elif 'Стадия 2' in self.stage_name and 'концепция' in self.stage_name:
-            position = 'Дизайнер'
-        elif '3д визуализация' in self.stage_name.lower() or 'визуализация' in self.stage_name.lower():
-            position = 'Дизайнер'  # 3д визуализация - работа дизайнера
-        elif 'Стадия 2' in self.stage_name or 'Стадия 3' in self.stage_name:
-            position = 'Чертёжник'
+        if "Стадия 1" in self.stage_name:
+            position = "Чертёжник"
+        elif "Стадия 2" in self.stage_name and "концепция" in self.stage_name:
+            position = "Дизайнер"
+        elif "3д визуализация" in self.stage_name.lower() or "визуализация" in self.stage_name.lower():
+            position = "Дизайнер"  # 3д визуализация - работа дизайнера
+        elif "Стадия 2" in self.stage_name or "Стадия 3" in self.stage_name:
+            position = "Чертёжник"
         else:
-            position = 'Чертёжник'
+            position = "Чертёжник"
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Стандартная высота 28px (#14)
         self.executor_combo = CustomComboBox()
@@ -652,12 +663,10 @@ class ExecutorSelectionDialog(QDialog):
         try:
             all_employees = self.data.get_all_employees()
             # Фильтруем по основной ИЛИ дополнительной должности
-            executors = [e for e in all_employees
-                        if e.get('position') == position
-                        or e.get('secondary_position') == position]
+            executors = [e for e in all_employees if e.get("position") == position or e.get("secondary_position") == position]
             print(f"[OK] Поиск сотрудников с должностью '{position}' (включая secondary_position):")
             for e in executors:
-                secondary = e.get('secondary_position', '')
+                secondary = e.get("secondary_position", "")
                 secondary_text = f" + {secondary}" if secondary else ""
                 print(f"  [OK] {e['full_name']} ({e['position']}{secondary_text})")
         except Exception as e:
@@ -666,25 +675,25 @@ class ExecutorSelectionDialog(QDialog):
 
         if not executors:
             # ========== ЗАМЕНИЛИ QMessageBox ==========
-            CustomMessageBox(self, 'Внимание', f'Нет доступных сотрудников с должностью "{position}"', 'warning').exec_()
+            CustomMessageBox(self, "Внимание", f'Нет доступных сотрудников с должностью "{position}"', "warning").exec_()
             self.reject()
             return
 
         for executor in executors:
-            self.executor_combo.addItem(executor['full_name'], executor['id'])
+            self.executor_combo.addItem(executor["full_name"], executor["id"])
 
         # ИСПРАВЛЕНИЕ: Предлагаем исполнителя из предыдущих стадий
         # Получаем предыдущего исполнителя через DataAccess
         previous_executor_id = None
         try:
             card_data = self.data.get_crm_card(self.card_id)
-            stage_executors = card_data.get('stage_executors', [])
+            stage_executors = card_data.get("stage_executors", [])
             for se in stage_executors:
-                exec_id = se.get('executor_id')
+                exec_id = se.get("executor_id")
                 if exec_id:
                     # Проверяем, что этот исполнитель в списке доступных
                     for executor in executors:
-                        if executor['id'] == exec_id:
+                        if executor["id"] == exec_id:
                             previous_executor_id = exec_id
                             break
                 if previous_executor_id:
@@ -699,18 +708,18 @@ class ExecutorSelectionDialog(QDialog):
                     print(f"Предложен исполнитель из предыдущих стадий (ID={previous_executor_id})")
                     break
 
-        form_layout.addRow('Исполнитель:', self.executor_combo)
-        
+        form_layout.addRow("Исполнитель:", self.executor_combo)
+
         # Норма дней из таблицы сроков
         if self._norm_days > 0:
-            norm_label = QLabel(f'Норма дней: {self._norm_days} раб. дн.')
-            norm_label.setStyleSheet('color: #2F5496; font-size: 11px; font-weight: 600;')
-            form_layout.addRow('', norm_label)
+            norm_label = QLabel(f"Норма дней: {self._norm_days} раб. дн.")
+            norm_label.setStyleSheet("color: #2F5496; font-size: 11px; font-weight: 600;")
+            form_layout.addRow("", norm_label)
             if self._current_substep:
-                substep_label = QLabel(f'Подэтап: {self._current_substep}')
-                substep_label.setStyleSheet('color: #666; font-size: 10px;')
+                substep_label = QLabel(f"Подэтап: {self._current_substep}")
+                substep_label.setStyleSheet("color: #666; font-size: 10px;")
                 substep_label.setWordWrap(True)
-                form_layout.addRow('', substep_label)
+                form_layout.addRow("", substep_label)
 
         self.stage_deadline = CustomDateEdit()
         self.stage_deadline.setCalendarPopup(True)
@@ -718,12 +727,13 @@ class ExecutorSelectionDialog(QDialog):
         # База: дата предыдущего подэтапа (если есть), иначе сегодня
         if self._norm_days > 0:
             from utils.calendar_helpers import add_working_days
-            base_date = getattr(self, '_prev_actual_date', '') or ''
+
+            base_date = getattr(self, "_prev_actual_date", "") or ""
             if not base_date:
-                base_date = QDate.currentDate().toString('yyyy-MM-dd')
+                base_date = QDate.currentDate().toString("yyyy-MM-dd")
             auto_deadline = add_working_days(base_date, self._norm_days)
             if auto_deadline:
-                d = QDate.fromString(auto_deadline, 'yyyy-MM-dd')
+                d = QDate.fromString(auto_deadline, "yyyy-MM-dd")
                 if d.isValid():
                     self.stage_deadline.setDate(d)
                 else:
@@ -732,20 +742,20 @@ class ExecutorSelectionDialog(QDialog):
                 self.stage_deadline.setDate(QDate.currentDate().addDays(7))
         else:
             self.stage_deadline.setDate(QDate.currentDate().addDays(7))
-        self.stage_deadline.setDisplayFormat('dd.MM.yyyy')
+        self.stage_deadline.setDisplayFormat("dd.MM.yyyy")
         self.stage_deadline.setStyleSheet(CALENDAR_STYLE)
         add_today_button_to_dateedit(self.stage_deadline)
-        form_layout.addRow('Дедлайн:', self.stage_deadline)
+        form_layout.addRow("Дедлайн:", self.stage_deadline)
 
         layout.addLayout(form_layout)
 
-        hint = QLabel('Исполнитель получит доступ к карточке после назначения')
+        hint = QLabel("Исполнитель получит доступ к карточке после назначения")
         hint.setWordWrap(True)
-        hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
+        hint.setStyleSheet("color: #666; font-size: 10px; font-style: italic;")
         layout.addWidget(hint)
-        
+
         # ИСПРАВЛЕНИЕ 07.02.2026: Желтая кнопка как в unified_styles (#14)
-        save_btn = QPushButton('Назначить')
+        save_btn = QPushButton("Назначить")
         save_btn.setFixedHeight(28)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -761,7 +771,7 @@ class ExecutorSelectionDialog(QDialog):
         save_btn.clicked.connect(self.assign_executor)
         layout.addWidget(save_btn)
 
-        cancel_btn = QPushButton('Отмена')
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.setFixedHeight(28)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -776,56 +786,47 @@ class ExecutorSelectionDialog(QDialog):
         """)
         cancel_btn.clicked.connect(self.reject)
         layout.addWidget(cancel_btn)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
-        
+
         self.setMinimumWidth(450)
-    
+
     def assign_executor(self):
         executor_id = self.executor_combo.currentData()
-        deadline = self.stage_deadline.date().toString('yyyy-MM-dd')
+        deadline = self.stage_deadline.date().toString("yyyy-MM-dd")
 
-        current_user_id = self.parent().employee['id']
+        current_user_id = self.parent().employee["id"]
 
         # Назначаем исполнителя через DataAccess
         try:
-            stage_data = {
-                'stage_name': self.stage_name,
-                'executor_id': executor_id,
-                'deadline': deadline,
-                'assigned_by': current_user_id
-            }
+            stage_data = {"stage_name": self.stage_name, "executor_id": executor_id, "deadline": deadline, "assigned_by": current_user_id}
             self.data.assign_stage_executor(self.card_id, stage_data)
             print(f"[DataAccess] Исполнитель назначен на стадию {self.stage_name}")
         except Exception as e:
             print(f"[DataAccess ERROR] Ошибка назначения исполнителя: {e}")
-            CustomMessageBox(self, 'Ошибка', f'Не удалось назначить исполнителя: {e}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось назначить исполнителя: {e}", "error").exec_()
             return
 
         # ========== СОХРАНЕНИЕ custom_norm_days (если СДП изменил дедлайн) ==========
         if self._norm_days > 0 and self._current_stage_code and self.contract_id:
             try:
                 from utils.calendar_helpers import add_working_days, working_days_between
-                base_date = self._prev_actual_date or ''
+
+                base_date = self._prev_actual_date or ""
                 if not base_date:
-                    base_date = QDate.currentDate().toString('yyyy-MM-dd')
+                    base_date = QDate.currentDate().toString("yyyy-MM-dd")
                 auto_deadline = add_working_days(base_date, self._norm_days)
                 if auto_deadline and deadline != auto_deadline:
                     # СДП установил дату, отличную от авторасчёта — сохраняем custom_norm_days
                     custom_days = working_days_between(base_date, deadline)
                     if custom_days and custom_days != self._norm_days:
-                        self.data.update_timeline_entry(
-                            self.contract_id,
-                            self._current_stage_code,
-                            {'custom_norm_days': custom_days}
-                        )
-                        print(f"[Timeline] custom_norm_days={custom_days} для {self._current_stage_code} "
-                              f"(стандарт: {self._norm_days})")
+                        self.data.update_timeline_entry(self.contract_id, self._current_stage_code, {"custom_norm_days": custom_days})
+                        print(f"[Timeline] custom_norm_days={custom_days} для {self._current_stage_code} (стандарт: {self._norm_days})")
             except Exception as ex:
                 print(f"[Timeline] Ошибка сохранения custom_norm_days: {ex}")
 
@@ -848,12 +849,7 @@ class ExecutorSelectionDialog(QDialog):
             # FIX Баг 7: Проверка дублирования оплат перед созданием
             # Если для этого исполнителя на этой стадии уже есть оплаты — пропускаем
             existing_payments = self.data.get_payments_for_contract(contract_id) or []
-            has_existing = any(
-                p.get('employee_id') == executor_id and
-                p.get('stage_name') == self.stage_name and
-                not p.get('reassigned')
-                for p in existing_payments
-            )
+            has_existing = any(p.get("employee_id") == executor_id and p.get("stage_name") == self.stage_name and not p.get("reassigned") for p in existing_payments)
             if has_existing:
                 print(f"[IDEMPOTENT] Оплаты для исполнителя {executor_id} на стадии {self.stage_name} уже существуют — пропускаем")
                 self.accept()
@@ -861,48 +857,46 @@ class ExecutorSelectionDialog(QDialog):
 
             # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена поддержка стадии 3д визуализации (#18)
             # Определяем роль исполнителя
-            if 'концепция' in self.stage_name or 'визуализация' in self.stage_name.lower():
-                role = 'Дизайнер'
+            if "концепция" in self.stage_name or "визуализация" in self.stage_name.lower():
+                role = "Дизайнер"
             else:
-                role = 'Чертёжник'
+                role = "Чертёжник"
 
             # ИСПРАВЛЕНИЕ: Для индивидуальных - создаем АВАНС (50%) и ДОПЛАТУ (50%)
-            if contract['project_type'] == 'Индивидуальный':
+            if contract["project_type"] == "Индивидуальный":
                 # Рассчитываем полную сумму
-                full_amount = self.data.calculate_payment_amount(
-                    contract_id, executor_id, role, self.stage_name
-                )
+                full_amount = self.data.calculate_payment_amount(contract_id, executor_id, role, self.stage_name)
 
                 # Делим пополам
                 advance_amount = full_amount / 2
                 balance_amount = full_amount / 2
 
-                current_month = QDate.currentDate().toString('yyyy-MM')
+                current_month = QDate.currentDate().toString("yyyy-MM")
 
                 # Создаем аванс через DataAccess
                 advance_data = {
-                    'contract_id': contract_id,
-                    'crm_card_id': self.card_id,
-                    'employee_id': executor_id,
-                    'role': role,
-                    'stage_name': self.stage_name,
-                    'calculated_amount': advance_amount,
-                    'final_amount': advance_amount,
-                    'payment_type': 'Аванс',
-                    'report_month': current_month
+                    "contract_id": contract_id,
+                    "crm_card_id": self.card_id,
+                    "employee_id": executor_id,
+                    "role": role,
+                    "stage_name": self.stage_name,
+                    "calculated_amount": advance_amount,
+                    "final_amount": advance_amount,
+                    "payment_type": "Аванс",
+                    "report_month": current_month,
                 }
                 self.data.create_payment(advance_data)
 
                 balance_data = {
-                    'contract_id': contract_id,
-                    'crm_card_id': self.card_id,
-                    'employee_id': executor_id,
-                    'role': role,
-                    'stage_name': self.stage_name,
-                    'calculated_amount': balance_amount,
-                    'final_amount': balance_amount,
-                    'payment_type': 'Доплата',
-                    'report_month': None
+                    "contract_id": contract_id,
+                    "crm_card_id": self.card_id,
+                    "employee_id": executor_id,
+                    "role": role,
+                    "stage_name": self.stage_name,
+                    "calculated_amount": balance_amount,
+                    "final_amount": balance_amount,
+                    "payment_type": "Доплата",
+                    "report_month": None,
                 }
                 self.data.create_payment(balance_data)
                 print(f"[DataAccess] Индивидуальный проект: созданы аванс и доплата для {role}")
@@ -910,7 +904,7 @@ class ExecutorSelectionDialog(QDialog):
                 # ========== ИСПРАВЛЕНИЕ 06.02.2026: ШАБЛОННЫЕ ПРОЕКТЫ - СПЕЦИАЛЬНАЯ ЛОГИКА (#16) ==========
                 # Для стадии 1 (планировочные) создаём выплату с суммой 0.00
                 # Для стадии 2 и выше создаём выплату с тарифом из таблицы
-                is_stage_1 = ('Стадия 1' in self.stage_name or 'планировочные' in self.stage_name.lower())
+                is_stage_1 = "Стадия 1" in self.stage_name or "планировочные" in self.stage_name.lower()
 
                 # Рассчитываем сумму (для стадии 1 будет 0, для стадии 2+ берём из тарифов)
                 if is_stage_1:
@@ -919,24 +913,22 @@ class ExecutorSelectionDialog(QDialog):
                     print(f"[INFO] Стадия 1: создаём выплату с суммой 0.00 для {role}")
                 else:
                     # Расчёт суммы через DataAccess
-                    result = self.data.calculate_payment_amount(
-                        contract_id, executor_id, role, self.stage_name
-                    )
+                    result = self.data.calculate_payment_amount(contract_id, executor_id, role, self.stage_name)
                     calculated_amount = float(result) if result else 0
                     final_amount = calculated_amount
                     print(f"[INFO] Стадия 2+: создаём выплату с тарифом {calculated_amount:.2f} для {role}")
 
                 # Создаём выплату через DataAccess
                 payment_data = {
-                    'contract_id': contract_id,
-                    'crm_card_id': self.card_id,
-                    'employee_id': executor_id,
-                    'role': role,
-                    'stage_name': self.stage_name,
-                    'calculated_amount': calculated_amount,
-                    'final_amount': final_amount,
-                    'payment_type': 'Полная оплата',
-                    'report_month': ''
+                    "contract_id": contract_id,
+                    "crm_card_id": self.card_id,
+                    "employee_id": executor_id,
+                    "role": role,
+                    "stage_name": self.stage_name,
+                    "calculated_amount": calculated_amount,
+                    "final_amount": final_amount,
+                    "payment_type": "Полная оплата",
+                    "report_month": "",
                 }
                 self.data.create_payment(payment_data)
                 print(f"[DataAccess] Шаблонный проект: создана выплата для {role}")
@@ -950,45 +942,48 @@ class ExecutorSelectionDialog(QDialog):
 
         # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех"
         self.accept()
-             
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self.center_on_screen()
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
+
         center_dialog_on_parent(self)
 
+
 class ProjectCompletionDialog(QDialog):
-    def __init__(self, parent, card_id, api_client=None, project_type='Индивидуальный'):
+    def __init__(self, parent, card_id, api_client=None, project_type="Индивидуальный"):
         super().__init__(parent)
         self.card_id = card_id
         self.project_type = project_type
         self.payment_pending = False  # Флаг: проект ожидает оплаты (СДАН отложен)
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
-        
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self.init_ui()
-    
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -999,13 +994,13 @@ class ProjectCompletionDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, 'Завершение проекта', simple_mode=True)
+        title_bar = CustomTitleBar(self, "Завершение проекта", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -1015,7 +1010,7 @@ class ProjectCompletionDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -1025,40 +1020,40 @@ class ProjectCompletionDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        info = QLabel('Выберите статус завершения проекта:')
-        info.setStyleSheet('font-size: 14px; font-weight: bold;')
+
+        info = QLabel("Выберите статус завершения проекта:")
+        info.setStyleSheet("font-size: 14px; font-weight: bold;")
         info.setAlignment(Qt.AlignCenter)
         layout.addWidget(info)
-        
+
         form_layout = QFormLayout()
-        
+
         self.status = CustomComboBox()
-        self.status.addItems(['Проект СДАН', 'Проект передан в АВТОРСКИЙ НАДЗОР', 'Проект РАСТОРГНУТ'])
+        self.status.addItems(["Проект СДАН", "Проект передан в АВТОРСКИЙ НАДЗОР", "Проект РАСТОРГНУТ"])
         self.status.currentTextChanged.connect(self.on_status_changed)
-        form_layout.addRow('Статус:', self.status)
-        
-        self.termination_reason_group = QGroupBox('Причина расторжения')
+        form_layout.addRow("Статус:", self.status)
+
+        self.termination_reason_group = QGroupBox("Причина расторжения")
         termination_layout = QVBoxLayout()
-        
+
         self.termination_reason = QTextEdit()
         self.termination_reason.setMaximumHeight(100)
         termination_layout.addWidget(self.termination_reason)
-        
+
         self.termination_reason_group.setLayout(termination_layout)
         self.termination_reason_group.hide()
-        
+
         layout.addLayout(form_layout)
         layout.addWidget(self.termination_reason_group)
-        
+
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
 
-        save_btn = QPushButton('Завершить проект')
+        save_btn = QPushButton("Завершить проект")
         save_btn.clicked.connect(self.complete_project)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -1076,7 +1071,7 @@ class ProjectCompletionDialog(QDialog):
         """)
         save_btn.setFixedHeight(36)
 
-        cancel_btn = QPushButton('Отмена')
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -1097,85 +1092,83 @@ class ProjectCompletionDialog(QDialog):
         buttons_layout.addWidget(save_btn)
         buttons_layout.addWidget(cancel_btn)
         layout.addLayout(buttons_layout)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
-        
+
         self.setMinimumWidth(500)
-    
+
     def on_status_changed(self, status):
-        if 'РАСТОРГНУТ' in status:
+        if "РАСТОРГНУТ" in status:
             self.termination_reason_group.show()
         else:
             self.termination_reason_group.hide()
-     
+
     def complete_project(self):
         status = self.status.currentText()
 
-        if 'РАСТОРГНУТ' in status and not self.termination_reason.toPlainText().strip():
-            CustomMessageBox(self, 'Ошибка', 'Укажите причину расторжения', 'warning').exec_()
+        if "РАСТОРГНУТ" in status and not self.termination_reason.toPlainText().strip():
+            CustomMessageBox(self, "Ошибка", "Укажите причину расторжения", "warning").exec_()
             return
 
         try:
             contract_id = self.data.get_contract_id_by_crm_card(self.card_id)
 
             # Формируем данные для обновления договора
-            contract_status = status.replace('Проект ', '').replace('передан в ', '')
-            today_str = QDate.currentDate().toString('yyyy-MM-dd')
+            contract_status = status.replace("Проект ", "").replace("передан в ", "")
+            today_str = QDate.currentDate().toString("yyyy-MM-dd")
 
             # === ПРОВЕРКА ФИНАЛЬНОГО ПЛАТЕЖА ДЛЯ СТАТУСА "СДАН" ===
-            if 'СДАН' in contract_status and 'РАСТОРГНУТ' not in contract_status:
+            if "СДАН" in contract_status and "РАСТОРГНУТ" not in contract_status:
                 contract = self.data.get_contract(contract_id) if contract_id else None
                 payment_ok = True
                 if contract:
-                    if self.project_type == 'Индивидуальный':
-                        payment_ok = bool(contract.get('third_payment_paid_date'))
+                    if self.project_type == "Индивидуальный":
+                        payment_ok = bool(contract.get("third_payment_paid_date"))
                     else:  # Шаблонный
-                        payment_ok = bool(contract.get('advance_payment_paid_date'))
+                        payment_ok = bool(contract.get("advance_payment_paid_date"))
 
                 if not payment_ok:
                     # Финальный платёж не проведён — ставим статус "Выполненный проект" (ожидание оплаты)
                     self.payment_pending = True
                     updates = {
-                        'status': 'Выполненный проект',
-                        'status_changed_date': today_str  # Дата готовности проекта
+                        "status": "Выполненный проект",
+                        "status_changed_date": today_str,  # Дата готовности проекта
                     }
                     self.data.update_contract(contract_id, updates)
                     print(f"[PAYMENT] Проект ожидает финального платежа. Статус: Выполненный проект")
 
-                    if self.project_type == 'Индивидуальный':
-                        payment_name = '3-й платёж (доплата)'
+                    if self.project_type == "Индивидуальный":
+                        payment_name = "3-й платёж (доплата)"
                     else:
-                        payment_name = 'оплата'
+                        payment_name = "оплата"
 
                     CustomMessageBox(
-                        self, 'Ожидание оплаты',
-                        f'<b>Проект завершён, но ожидается подтверждение финального платежа.</b><br><br>'
+                        self,
+                        "Ожидание оплаты",
+                        f"<b>Проект завершён, но ожидается подтверждение финального платежа.</b><br><br>"
                         f'Карточка перемещена в "Выполненные".<br>'
-                        f'Для перемещения в архив необходимо подтвердить {payment_name} '
-                        f'в карточке договора.<br><br>'
-                        f'<i>После подтверждения оплаты карточка автоматически переместится в архив.</i>',
-                        'info'
+                        f"Для перемещения в архив необходимо подтвердить {payment_name} "
+                        f"в карточке договора.<br><br>"
+                        f"<i>После подтверждения оплаты карточка автоматически переместится в архив.</i>",
+                        "info",
                     ).exec_()
 
                     # Устанавливаем отчетный месяц
-                    current_month = QDate.currentDate().toString('yyyy-MM')
+                    current_month = QDate.currentDate().toString("yyyy-MM")
                     self.data.set_payments_report_month(contract_id, current_month)
 
                     self.accept()
                     return
 
-            updates = {
-                'status': contract_status,
-                'status_changed_date': today_str
-            }
+            updates = {"status": contract_status, "status_changed_date": today_str}
 
-            if 'РАСТОРГНУТ' in status:
-                updates['termination_reason'] = self.termination_reason.toPlainText().strip()
+            if "РАСТОРГНУТ" in status:
+                updates["termination_reason"] = self.termination_reason.toPlainText().strip()
 
             # Обновляем через DataAccess
             supervision_card_id = None
@@ -1185,23 +1178,18 @@ class ProjectCompletionDialog(QDialog):
             print(f"[DataAccess] Договор {contract_id} обновлен: {updates}")
 
             # 2. Создаём карточку надзора (если нужно)
-            if 'АВТОРСКИЙ НАДЗОР' in status:
+            if "АВТОРСКИЙ НАДЗОР" in status:
                 print(f"\n Создание карточки надзора для договора {contract_id}...")
                 # Получаем дедлайн CRM карточки для plan_date надзора
-                crm_card = self.data.get_crm_card(self.card_id) if hasattr(self, 'card_id') else None
-                crm_deadline = crm_card.get('deadline', '') if crm_card else ''
-                supervision_data = {
-                    'contract_id': contract_id,
-                    'column_name': 'Новый заказ',
-                    'start_date': QDate.currentDate().toString('yyyy-MM-dd'),
-                    'deadline': crm_deadline or ''
-                }
+                crm_card = self.data.get_crm_card(self.card_id) if hasattr(self, "card_id") else None
+                crm_deadline = crm_card.get("deadline", "") if crm_card else ""
+                supervision_data = {"contract_id": contract_id, "column_name": "Новый заказ", "start_date": QDate.currentDate().toString("yyyy-MM-dd"), "deadline": crm_deadline or ""}
                 result = self.data.create_supervision_card(supervision_data)
-                supervision_card_id = result.get('id') if isinstance(result, dict) else result
+                supervision_card_id = result.get("id") if isinstance(result, dict) else result
                 print(f"[DataAccess] Создана карточка надзора ID={supervision_card_id}")
 
             # 3. Устанавливаем отчетный месяц
-            current_month = QDate.currentDate().toString('yyyy-MM')
+            current_month = QDate.currentDate().toString("yyyy-MM")
             result = self.data.set_payments_report_month(contract_id, current_month)
             if result:
                 print(f"[DataAccess] Установлен отчетный месяц {current_month}")
@@ -1219,19 +1207,20 @@ class ProjectCompletionDialog(QDialog):
         except Exception as e:
             print(f" Ошибка завершения проекта: {e}")
             import traceback
+
             traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось завершить проект: {e}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось завершить проект: {e}", "error").exec_()
 
     def _complete_project_locally(self, contract_id, updates, status):
         """Локальное завершение проекта (offline fallback)"""
         self.data.update_contract(contract_id, updates)
 
-        if 'АВТОРСКИЙ НАДЗОР' in status:
+        if "АВТОРСКИЙ НАДЗОР" in status:
             print(f"\n [LOCAL] Создание карточки надзора для договора {contract_id}...")
             supervision_card_id = self.data.create_supervision_card(contract_id)
             print(f"  [LOCAL] Результат: supervision_card_id = {supervision_card_id}")
 
-        current_month = QDate.currentDate().toString('yyyy-MM')
+        current_month = QDate.currentDate().toString("yyyy-MM")
         self._set_report_month_locally(contract_id, current_month)
 
     def _set_report_month_locally(self, contract_id, current_month):
@@ -1240,49 +1229,52 @@ class ProjectCompletionDialog(QDialog):
             payments = self.data.get_payments_for_contract(contract_id) or []
             updated = 0
             for p in payments:
-                if not p.get('report_month'):
-                    self.data.update_payment(p['id'], {'report_month': current_month})
+                if not p.get("report_month"):
+                    self.data.update_payment(p["id"], {"report_month": current_month})
                     updated += 1
             print(f"[DataAccess] Установлен отчетный месяц {current_month} для {updated} выплат")
         except Exception as e:
             print(f"[ERROR] Ошибка установки отчетного месяца: {e}")
-    
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self.center_on_screen()
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
+
         center_dialog_on_parent(self)
-      
+
+
 class CRMStatisticsDialog(QDialog):
     def __init__(self, parent, project_type, employee):
         super().__init__(parent)
         self.project_type = project_type
         self.employee = employee
-        self.data = getattr(parent, 'data', None) or DataAccess()
+        self.data = getattr(parent, "data", None) or DataAccess()
         self.db = self.data.db
-        
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self.init_ui()
-        
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -1293,13 +1285,13 @@ class CRMStatisticsDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, f'Статистика CRM - {self.project_type} проекты', simple_mode=True)
+        title_bar = CustomTitleBar(self, f"Статистика CRM - {self.project_type} проекты", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -1309,7 +1301,7 @@ class CRMStatisticsDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -1319,15 +1311,15 @@ class CRMStatisticsDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(10)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        header = QLabel(f'Статистика: {self.project_type} проекты')
-        header.setStyleSheet('font-size: 16px; font-weight: bold; padding: 5px;')
+
+        header = QLabel(f"Статистика: {self.project_type} проекты")
+        header.setStyleSheet("font-size: 16px; font-weight: bold; padding: 5px;")
         layout.addWidget(header)
-        
+
         tabs = QTabWidget()
         tabs.setStyleSheet("""
             QTabBar::tab {
@@ -1340,20 +1332,20 @@ class CRMStatisticsDialog(QDialog):
                 background-color: #f5f5f5;
             }
         """)
-        
+
         # === ВКЛАДКА: Статистика исполнителей ===
         executors_widget = QWidget()
         executors_layout = QVBoxLayout()
         executors_layout.setContentsMargins(10, 10, 10, 10)
-        
-        filters_group = QGroupBox('Фильтры')
+
+        filters_group = QGroupBox("Фильтры")
         filters_layout = QVBoxLayout()
 
         # Кнопка свернуть/развернуть
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 5)
 
-        toggle_filters_btn = IconLoader.create_icon_button('arrow-down-circle', '', 'Развернуть фильтры', icon_size=12)
+        toggle_filters_btn = IconLoader.create_icon_button("arrow-down-circle", "", "Развернуть фильтры", icon_size=12)
         toggle_filters_btn.setFixedSize(20, 20)
         toggle_filters_btn.setStyleSheet("""
             QPushButton {
@@ -1378,97 +1370,88 @@ class CRMStatisticsDialog(QDialog):
         filters_content.hide()  # По умолчанию свернуто
 
         period_layout = QHBoxLayout()
-        period_layout.addWidget(QLabel('Период:'))
-        
+        period_layout.addWidget(QLabel("Период:"))
+
         self.period_combo = CustomComboBox()
-        self.period_combo.addItems(['Все время', 'Месяц', 'Квартал', 'Год'])
+        self.period_combo.addItems(["Все время", "Месяц", "Квартал", "Год"])
         self.period_combo.currentTextChanged.connect(self.on_period_changed)
         period_layout.addWidget(self.period_combo)
-        
+
         self.year_spin = QSpinBox()
         self.year_spin.setRange(2020, 2030)
         self.year_spin.setValue(QDate.currentDate().year())
         self.year_spin.valueChanged.connect(self.load_statistics)
-        self.year_spin.setPrefix('Год: ')
+        self.year_spin.setPrefix("Год: ")
         period_layout.addWidget(self.year_spin)
-        
+
         self.quarter_combo = CustomComboBox()
-        self.quarter_combo.addItems(['Q1', 'Q2', 'Q3', 'Q4'])
+        self.quarter_combo.addItems(["Q1", "Q2", "Q3", "Q4"])
         self.quarter_combo.setCurrentIndex((QDate.currentDate().month() - 1) // 3)
         self.quarter_combo.currentIndexChanged.connect(self.load_statistics)
         period_layout.addWidget(self.quarter_combo)
         self.quarter_combo.hide()
-        
+
         self.month_combo = CustomComboBox()
-        months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+        months = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
         self.month_combo.addItems(months)
         self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
         self.month_combo.currentIndexChanged.connect(self.load_statistics)
         period_layout.addWidget(self.month_combo)
         self.month_combo.hide()
-        
+
         period_layout.addStretch()
         filters_content_layout.addLayout(period_layout)
 
         row2_layout = QHBoxLayout()
-        
-        row2_layout.addWidget(QLabel('Проект:'))
+
+        row2_layout.addWidget(QLabel("Проект:"))
         self.project_combo = CustomComboBox()
-        self.project_combo.addItem('Все проекты', None)
+        self.project_combo.addItem("Все проекты", None)
         self.project_combo.setMinimumWidth(250)
         self.load_projects()
         self.project_combo.currentIndexChanged.connect(self.load_statistics)
         row2_layout.addWidget(self.project_combo)
-        
-        row2_layout.addWidget(QLabel('Исполнитель:'))
+
+        row2_layout.addWidget(QLabel("Исполнитель:"))
         self.executor_combo = CustomComboBox()
-        self.executor_combo.addItem('Все', None)
+        self.executor_combo.addItem("Все", None)
         self.executor_combo.setMinimumWidth(200)
         self.load_executors()
         self.executor_combo.currentIndexChanged.connect(self.load_statistics)
         row2_layout.addWidget(self.executor_combo)
-        
+
         row2_layout.addStretch()
         filters_content_layout.addLayout(row2_layout)
 
         row3_layout = QHBoxLayout()
-        
-        row3_layout.addWidget(QLabel('Стадия:'))
+
+        row3_layout.addWidget(QLabel("Стадия:"))
         self.stage_combo = CustomComboBox()
-        self.stage_combo.addItem('Все', None)
+        self.stage_combo.addItem("Все", None)
         self.stage_combo.setMinimumWidth(250)
-        if self.project_type == 'Индивидуальный':
-            stages = [
-                'Стадия 1: планировочные решения',
-                'Стадия 2: концепция дизайна',
-                'Стадия 3: рабочие чертежи'
-            ]
+        if self.project_type == "Индивидуальный":
+            stages = ["Стадия 1: планировочные решения", "Стадия 2: концепция дизайна", "Стадия 3: рабочие чертежи"]
         else:
             # ИСПРАВЛЕНИЕ 06.02.2026: Добавлена стадия 3д визуализации (#18)
-            stages = [
-                'Стадия 1: планировочные решения',
-                'Стадия 2: рабочие чертежи',
-                'Стадия 3: 3д визуализация (Дополнительная)'
-            ]
+            stages = ["Стадия 1: планировочные решения", "Стадия 2: рабочие чертежи", "Стадия 3: 3д визуализация (Дополнительная)"]
         for stage in stages:
             self.stage_combo.addItem(stage)
         self.stage_combo.currentIndexChanged.connect(self.load_statistics)
         row3_layout.addWidget(self.stage_combo)
-        
-        row3_layout.addWidget(QLabel('Статус:'))
+
+        row3_layout.addWidget(QLabel("Статус:"))
         self.status_combo = CustomComboBox()
-        self.status_combo.addItems(['Все', 'Выполнено', 'В работе', 'Просрочено'])
+        self.status_combo.addItems(["Все", "Выполнено", "В работе", "Просрочено"])
         self.status_combo.setMinimumWidth(150)
         self.status_combo.currentIndexChanged.connect(self.load_statistics)
         row3_layout.addWidget(self.status_combo)
-        
+
         row3_layout.addStretch()
-        
+
         # ========== КНОПКА СБРОСА (SVG) ==========
-        reset_btn = IconLoader.create_icon_button('refresh', 'Сбросить фильтры', icon_size=12)
+        reset_btn = IconLoader.create_icon_button("refresh", "Сбросить фильтры", icon_size=12)
         reset_btn.clicked.connect(self.reset_filters)
-        reset_btn.setStyleSheet('padding: 5px 15px;')
+        reset_btn.setStyleSheet("padding: 5px 15px;")
         row3_layout.addWidget(reset_btn)
 
         filters_content_layout.addLayout(row3_layout)
@@ -1481,38 +1464,38 @@ class CRMStatisticsDialog(QDialog):
             is_visible = filters_content.isVisible()
             filters_content.setVisible(not is_visible)
             if is_visible:
-                toggle_filters_btn.setIcon(IconLoader.load('arrow-down-circle'))
-                toggle_filters_btn.setToolTip('Развернуть фильтры')
+                toggle_filters_btn.setIcon(IconLoader.load("arrow-down-circle"))
+                toggle_filters_btn.setToolTip("Развернуть фильтры")
             else:
-                toggle_filters_btn.setIcon(IconLoader.load('arrow-up-circle'))
-                toggle_filters_btn.setToolTip('Свернуть фильтры')
+                toggle_filters_btn.setIcon(IconLoader.load("arrow-up-circle"))
+                toggle_filters_btn.setToolTip("Свернуть фильтры")
 
         toggle_filters_btn.clicked.connect(toggle_filters_stat)
 
         filters_group.setLayout(filters_layout)
         executors_layout.addWidget(filters_group)
-        
+
         summary_layout = QHBoxLayout()
-        
-        self.total_label = QLabel('Всего записей: 0')
-        self.total_label.setStyleSheet('font-weight: bold; padding: 5px; background-color: #ffffff; border-radius: 4px;')
+
+        self.total_label = QLabel("Всего записей: 0")
+        self.total_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #ffffff; border-radius: 4px;")
         summary_layout.addWidget(self.total_label)
-        
-        self.completed_label = QLabel('Выполнено: 0')
-        self.completed_label.setStyleSheet('font-weight: bold; padding: 5px; background-color: #D5F4E6; border-radius: 4px;')
+
+        self.completed_label = QLabel("Выполнено: 0")
+        self.completed_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #D5F4E6; border-radius: 4px;")
         summary_layout.addWidget(self.completed_label)
-        
-        self.in_progress_label = QLabel('В работе: 0')
-        self.in_progress_label.setStyleSheet('font-weight: bold; padding: 5px; background-color: #FFF3CD; border-radius: 4px;')
+
+        self.in_progress_label = QLabel("В работе: 0")
+        self.in_progress_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #FFF3CD; border-radius: 4px;")
         summary_layout.addWidget(self.in_progress_label)
-        
-        self.overdue_label = QLabel('Просрочено: 0')
-        self.overdue_label.setStyleSheet('font-weight: bold; padding: 5px; background-color: #FADBD8; border-radius: 4px;')
+
+        self.overdue_label = QLabel("Просрочено: 0")
+        self.overdue_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #FADBD8; border-radius: 4px;")
         summary_layout.addWidget(self.overdue_label)
-        
+
         summary_layout.addStretch()
         executors_layout.addLayout(summary_layout)
-        
+
         self.stats_table = QTableWidget()
         apply_no_focus_delegate(self.stats_table)
         self.stats_table.setStyleSheet("""
@@ -1525,32 +1508,29 @@ class CRMStatisticsDialog(QDialog):
             }
         """)
         self.stats_table.setColumnCount(8)
-        self.stats_table.setHorizontalHeaderLabels([
-            'Дата назначения', 'Исполнитель', 'Стадия', 'Назначил',
-            'Дедлайн', 'Сдано', 'Статус', 'Проект'
-        ])
+        self.stats_table.setHorizontalHeaderLabels(["Дата назначения", "Исполнитель", "Стадия", "Назначил", "Дедлайн", "Сдано", "Статус", "Проект"])
         self.stats_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.stats_table.setAlternatingRowColors(True)
+        self.stats_table.setAlternatingRowColors(False)
         self.stats_table.setSelectionBehavior(QTableWidget.SelectRows)
-        
+
         self.stats_table.setStyleSheet("""
             QTableWidget::item {
                 padding: 2px 2px;
             }
         """)
         self.stats_table.verticalHeader().setDefaultSectionSize(30)
-        
+
         executors_layout.addWidget(self.stats_table, 1)
-        
+
         executors_widget.setLayout(executors_layout)
-        tabs.addTab(executors_widget, 'Статистика исполнителей')
-        
+        tabs.addTab(executors_widget, "Статистика исполнителей")
+
         layout.addWidget(tabs, 1)
 
         # ========== КНОПКИ ЭКСПОРТА (SVG) ==========
         buttons_layout = QHBoxLayout()
-        
-        excel_btn = IconLoader.create_icon_button('export', 'Экспорт в XLSX', icon_size=12)
+
+        excel_btn = IconLoader.create_icon_button("export", "Экспорт в XLSX", icon_size=12)
         # ИСПРАВЛЕНИЕ 06.02.2026: Уменьшен padding для стандартной высоты 28px (#11)
         excel_btn.setStyleSheet("""
             QPushButton {
@@ -1564,8 +1544,8 @@ class CRMStatisticsDialog(QDialog):
         """)
         excel_btn.clicked.connect(self.export_to_xlsx)
         buttons_layout.addWidget(excel_btn)
-        
-        pdf_btn = IconLoader.create_icon_button('export', 'Экспорт в PDF', icon_size=12)
+
+        pdf_btn = IconLoader.create_icon_button("export", "Экспорт в PDF", icon_size=12)
         # ИСПРАВЛЕНИЕ 06.02.2026: Уменьшен padding для стандартной высоты 28px (#11)
         pdf_btn.setStyleSheet("""
             QPushButton {
@@ -1579,81 +1559,80 @@ class CRMStatisticsDialog(QDialog):
         """)
         pdf_btn.clicked.connect(self.export_to_pdf)
         buttons_layout.addWidget(pdf_btn)
-        
+
         buttons_layout.addStretch()
-        
-        close_btn = QPushButton('Закрыть')
+
+        close_btn = QPushButton("Закрыть")
         close_btn.clicked.connect(self.accept)
         # ИСПРАВЛЕНИЕ 06.02.2026: Уменьшен padding для стандартной высоты 28px (#11)
-        close_btn.setStyleSheet('padding: 4px 12px;')
+        close_btn.setStyleSheet("padding: 4px 12px;")
         buttons_layout.addWidget(close_btn)
-        
+
         layout.addLayout(buttons_layout)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
-        
+
         # ========== ИСПРАВЛЕНИЕ: АДАПТИВНЫЕ РАЗМЕРЫ ==========
         from PyQt5.QtWidgets import QDesktopWidget
+
         available_screen = QDesktopWidget().availableGeometry()
-        
+
         max_height = min(int(available_screen.height() * 0.85), 900)
         max_width = min(int(available_screen.width() * 0.9), 1200)
-        
+
         self.setMinimumSize(1200, 900)
         self.setMaximumSize(max_width, max_height)
         # ======================================================
-        
+
         from PyQt5.QtCore import QTimer
+
         QTimer.singleShot(100, self.load_statistics)
-    
+
     def load_projects(self):
         """Загрузка списка проектов для текущего типа"""
         try:
             projects = self.data.get_projects_by_type(self.project_type)
-            
+
             for project in projects:
                 display_text = f"{project['contract_number']} - {project['address']}"
-                if project.get('city'):
+                if project.get("city"):
                     display_text += f" ({project['city']})"
-                
-                self.project_combo.addItem(display_text, project['contract_id'])
+
+                self.project_combo.addItem(display_text, project["contract_id"])
         except Exception as e:
             print(f"Ошибка загрузки проектов: {e}")
-            
+
     def on_period_changed(self, period):
         """Обработка изменения периода"""
-        self.year_spin.setVisible(period != 'Все время')
-        self.quarter_combo.setVisible(period == 'Квартал')
-        self.month_combo.setVisible(period == 'Месяц')
+        self.year_spin.setVisible(period != "Все время")
+        self.quarter_combo.setVisible(period == "Квартал")
+        self.month_combo.setVisible(period == "Месяц")
         self.load_statistics()
-    
+
     def load_executors(self):
         """Загрузка списка исполнителей"""
         try:
-            designers = self.data.get_employees_by_position('Дизайнер')
-            draftsmen = self.data.get_employees_by_position('Чертёжник')
-            
+            designers = self.data.get_employees_by_position("Дизайнер")
+            draftsmen = self.data.get_employees_by_position("Чертёжник")
+
             all_executors = designers + draftsmen
-            
+
             seen = set()
             for executor in all_executors:
-                if executor['id'] not in seen:
-                    self.executor_combo.addItem(
-                        f"{executor['full_name']} ({executor['position']})",
-                        executor['id']
-                    )
-                    seen.add(executor['id'])
+                if executor["id"] not in seen:
+                    self.executor_combo.addItem(f"{executor['full_name']} ({executor['position']})", executor["id"])
+                    seen.add(executor["id"])
         except Exception as e:
             print(f"Ошибка загрузки исполнителей: {e}")
-            
+
     def reset_filters(self):
         """Сброс всех фильтров"""
-        self.period_combo.setCurrentText('Все время')
+        self.period_combo.setCurrentText("Все время")
         self.project_combo.setCurrentIndex(0)
         self.executor_combo.setCurrentIndex(0)
         self.stage_combo.setCurrentIndex(0)
@@ -1662,140 +1641,139 @@ class CRMStatisticsDialog(QDialog):
         self.quarter_combo.setCurrentIndex((QDate.currentDate().month() - 1) // 3)
         self.month_combo.setCurrentIndex(QDate.currentDate().month() - 1)
         self.load_statistics()
-        
+
     def load_statistics(self):
         """Загрузка статистики с учетом фильтров"""
         required_attributes = [
-            'period_combo', 'year_spin', 'quarter_combo', 'month_combo',
-            'project_combo', 'executor_combo', 'stage_combo', 'status_combo',
-            'total_label', 'completed_label', 'in_progress_label', 'overdue_label',
-            'stats_table'
+            "period_combo",
+            "year_spin",
+            "quarter_combo",
+            "month_combo",
+            "project_combo",
+            "executor_combo",
+            "stage_combo",
+            "status_combo",
+            "total_label",
+            "completed_label",
+            "in_progress_label",
+            "overdue_label",
+            "stats_table",
         ]
-        
+
         for attr in required_attributes:
             if not hasattr(self, attr):
                 print(f"[WARN] Атрибут '{attr}' еще не создан, пропускаем загрузку статистики")
                 return
-        
+
         period = self.period_combo.currentText()
         year = self.year_spin.value()
         quarter = None
         month = None
-        
-        if period == 'Квартал':
+
+        if period == "Квартал":
             quarter = self.quarter_combo.currentText()
-        elif period == 'Месяц':
+        elif period == "Месяц":
             month = self.month_combo.currentIndex() + 1
-        
+
         project_id = self.project_combo.currentData()
         executor_id = self.executor_combo.currentData()
         stage_name = self.stage_combo.currentText() if self.stage_combo.currentIndex() > 0 else None
         status_filter = self.status_combo.currentText()
-        
-        stats = self.data.get_crm_statistics_filtered(
-            self.project_type,
-            period,
-            year,
-            quarter,
-            month,
-            project_id,
-            executor_id,
-            stage_name,
-            status_filter
-        )
-        
+
+        stats = self.data.get_crm_statistics_filtered(self.project_type, period, year, quarter, month, project_id, executor_id, stage_name, status_filter)
+
         total = len(stats)
-        completed = sum(1 for s in stats if s.get('completed'))
-        in_progress = sum(1 for s in stats if not s.get('completed') and not self.is_overdue(s.get('deadline')))
-        overdue = sum(1 for s in stats if not s.get('completed') and self.is_overdue(s.get('deadline')))
-        
-        self.total_label.setText(f'Всего записей: {total}')
-        self.completed_label.setText(f'Выполнено: {completed}')
-        self.in_progress_label.setText(f'В работе: {in_progress}')
-        self.overdue_label.setText(f'Просрочено: {overdue}')
-        
+        completed = sum(1 for s in stats if s.get("completed"))
+        in_progress = sum(1 for s in stats if not s.get("completed") and not self.is_overdue(s.get("deadline")))
+        overdue = sum(1 for s in stats if not s.get("completed") and self.is_overdue(s.get("deadline")))
+
+        self.total_label.setText(f"Всего записей: {total}")
+        self.completed_label.setText(f"Выполнено: {completed}")
+        self.in_progress_label.setText(f"В работе: {in_progress}")
+        self.overdue_label.setText(f"Просрочено: {overdue}")
+
         self.stats_table.setRowCount(len(stats))
-        
+
         for row, stat in enumerate(stats):
-            is_overdue = self.is_overdue(stat.get('deadline')) and not stat.get('completed')
-            is_completed = stat.get('completed')
-            
+            is_overdue = self.is_overdue(stat.get("deadline")) and not stat.get("completed")
+            is_completed = stat.get("completed")
+
             if is_overdue:
                 row_color = QColor(255, 230, 230)
             elif is_completed:
                 row_color = QColor(230, 255, 230)
             else:
                 row_color = QColor(255, 255, 255)
-            
-            date_item = QTableWidgetItem(stat.get('assigned_date', ''))
+
+            date_item = QTableWidgetItem(stat.get("assigned_date", ""))
             date_item.setBackground(row_color)
             self.stats_table.setItem(row, 0, date_item)
-            
-            executor_item = QTableWidgetItem(stat.get('executor_name', ''))
+
+            executor_item = QTableWidgetItem(stat.get("executor_name", ""))
             executor_item.setBackground(row_color)
             self.stats_table.setItem(row, 1, executor_item)
-            
-            stage_item = QTableWidgetItem(stat.get('stage_name', ''))
+
+            stage_item = QTableWidgetItem(stat.get("stage_name", ""))
             stage_item.setBackground(row_color)
             self.stats_table.setItem(row, 2, stage_item)
-            
-            assigned_item = QTableWidgetItem(stat.get('assigned_by_name', ''))
+
+            assigned_item = QTableWidgetItem(stat.get("assigned_by_name", ""))
             assigned_item.setBackground(row_color)
             self.stats_table.setItem(row, 3, assigned_item)
-            
-            deadline_item = QTableWidgetItem(stat.get('deadline', ''))
+
+            deadline_item = QTableWidgetItem(stat.get("deadline", ""))
             deadline_item.setBackground(row_color)
             self.stats_table.setItem(row, 4, deadline_item)
 
             # ИСПРАВЛЕНИЕ: Колонка "Сдано"
-            submitted_item = QTableWidgetItem(stat.get('submitted_date', '') if stat.get('submitted_date') else '')
+            submitted_item = QTableWidgetItem(stat.get("submitted_date", "") if stat.get("submitted_date") else "")
             submitted_item.setBackground(row_color)
             self.stats_table.setItem(row, 5, submitted_item)
 
-            if stat.get('completed'):
+            if stat.get("completed"):
                 status_text = f"Завершено {stat.get('completed_date', '')}"
                 status_item = QTableWidgetItem(status_text)
             elif is_overdue:
-                status_item = QTableWidgetItem('[WARN] Просрочено')
+                status_item = QTableWidgetItem("[WARN] Просрочено")
             else:
-                status_item = QTableWidgetItem('⏳ В работе')
+                status_item = QTableWidgetItem("⏳ В работе")
 
             status_item.setBackground(row_color)
             self.stats_table.setItem(row, 6, status_item)
 
-            project_item = QTableWidgetItem(stat.get('project_info', ''))
+            project_item = QTableWidgetItem(stat.get("project_info", ""))
             project_item.setBackground(row_color)
             self.stats_table.setItem(row, 7, project_item)
-         
+
     def is_overdue(self, deadline_str):
         """Проверка просрочки дедлайна"""
         if not deadline_str:
             return False
         try:
-            deadline = QDate.fromString(deadline_str, 'yyyy-MM-dd')
+            deadline = QDate.fromString(deadline_str, "yyyy-MM-dd")
             return deadline < QDate.currentDate()
         except Exception:
             return False
-    
+
     def _get_current_filters_info(self):
         """Получение текстового описания текущих фильтров"""
         filters = []
-        filter_suffix = ''
+        filter_suffix = ""
 
         period = self.period_combo.currentText()
-        if period != 'Все время':
+        if period != "Все время":
             year = self.year_spin.value()
-            if period == 'Год':
+            if period == "Год":
                 filters.append(f"Период: {year}")
-                filter_suffix += f'_{year}'
-            elif period == 'Квартал':
+                filter_suffix += f"_{year}"
+            elif period == "Квартал":
                 q = self.quarter_combo.currentText()
                 filters.append(f"Период: {q} {year}")
-                filter_suffix += f'_{year}_{q}'
-            elif period == 'Месяц':
+                filter_suffix += f"_{year}_{q}"
+            elif period == "Месяц":
                 m = self.month_combo.currentText()
                 filters.append(f"Период: {m} {year}")
-                filter_suffix += f'_{year}_{m}'
+                filter_suffix += f"_{year}_{m}"
 
         project_text = self.project_combo.currentText()
         if self.project_combo.currentData() is not None:
@@ -1804,14 +1782,14 @@ class CRMStatisticsDialog(QDialog):
         executor_text = self.executor_combo.currentText()
         if self.executor_combo.currentData() is not None:
             filters.append(f"Исполнитель: {executor_text}")
-            filter_suffix += f'_{executor_text.split()[0]}'
+            filter_suffix += f"_{executor_text.split()[0]}"
 
         stage_text = self.stage_combo.currentText()
         if self.stage_combo.currentIndex() > 0:
             filters.append(f"Стадия: {stage_text}")
 
         status_text = self.status_combo.currentText()
-        if status_text != 'Все':
+        if status_text != "Все":
             filters.append(f"Статус: {status_text}")
 
         return filters, filter_suffix
@@ -1819,22 +1797,20 @@ class CRMStatisticsDialog(QDialog):
     def export_to_excel(self):
         """Экспорт статистики в CSV (S-13: переименовано для честности)"""
         try:
-            from PyQt5.QtWidgets import QFileDialog
             import csv
 
+            from PyQt5.QtWidgets import QFileDialog
+
             filters, filter_suffix = self._get_current_filters_info()
-            safe_suffix = filter_suffix.replace(' ', '_').replace(':', '')
+            safe_suffix = filter_suffix.replace(" ", "_").replace(":", "")
 
             filename, _ = QFileDialog.getSaveFileName(
-                self,
-                'Сохранить статистику',
-                f'crm_statistics_{self.project_type}{safe_suffix}_{QDate.currentDate().toString("yyyy-MM-dd")}.csv',
-                'CSV Files (*.csv)'
+                self, "Сохранить статистику", f"crm_statistics_{self.project_type}{safe_suffix}_{QDate.currentDate().toString('yyyy-MM-dd')}.csv", "CSV Files (*.csv)"
             )
 
             if filename:
-                with open(filename, 'w', newline='', encoding='utf-8-sig') as file:
-                    writer = csv.writer(file, delimiter=';')
+                with open(filename, "w", newline="", encoding="utf-8-sig") as file:
+                    writer = csv.writer(file, delimiter=";")
 
                     # Строка с параметрами фильтрации
                     if filters:
@@ -1844,44 +1820,40 @@ class CRMStatisticsDialog(QDialog):
                     writer.writerow([f"Тип проекта: {self.project_type}"])
                     writer.writerow([])  # пустая строка-разделитель
 
-                    headers = [
-                        'Дата назначения', 'Исполнитель', 'Стадия',
-                        'Назначил', 'Дедлайн', 'Сдано', 'Статус', 'Проект'
-                    ]
+                    headers = ["Дата назначения", "Исполнитель", "Стадия", "Назначил", "Дедлайн", "Сдано", "Статус", "Проект"]
                     writer.writerow(headers)
 
                     for row in range(self.stats_table.rowCount()):
                         row_data = []
                         for col in range(self.stats_table.columnCount()):
                             item = self.stats_table.item(row, col)
-                            row_data.append(item.text() if item else '')
+                            row_data.append(item.text() if item else "")
                         writer.writerow(row_data)
 
                 # ИСПРАВЛЕНИЕ 06.02.2026: Убран диалог "Успех"
                 pass
         except Exception as e:
-            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать данные:\n{str(e)}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось экспортировать данные:\n{str(e)}", "error").exec_()
 
     def export_to_xlsx(self):
         """Экспорт статистики в XLSX формат"""
         try:
             from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
         except ImportError:
             # Если openpyxl не установлен, fallback на CSV
             self.export_to_excel()
             return
 
-        from PyQt5.QtWidgets import QFileDialog
         from datetime import datetime
 
+        from PyQt5.QtWidgets import QFileDialog
+
         filters, filter_suffix = self._get_current_filters_info()
-        safe_suffix = filter_suffix.replace(' ', '_').replace(':', '')
+        safe_suffix = filter_suffix.replace(" ", "_").replace(":", "")
 
         filename, _ = QFileDialog.getSaveFileName(
-            self, 'Сохранить статистику',
-            f'crm_statistics_{self.project_type}{safe_suffix}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx',
-            'Excel Files (*.xlsx)'
+            self, "Сохранить статистику", f"crm_statistics_{self.project_type}{safe_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", "Excel Files (*.xlsx)"
         )
         if not filename:
             return
@@ -1892,12 +1864,9 @@ class CRMStatisticsDialog(QDialog):
             ws.title = "Статистика CRM"
 
             # Стили
-            header_font = Font(bold=True, color='FFFFFF', size=10)
-            header_fill = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid')
-            thin_border = Border(
-                left=Side(style='thin'), right=Side(style='thin'),
-                top=Side(style='thin'), bottom=Side(style='thin')
-            )
+            header_font = Font(bold=True, color="FFFFFF", size=10)
+            header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+            thin_border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
 
             # Строка с фильтрами
             start_row = 1
@@ -1912,10 +1881,10 @@ class CRMStatisticsDialog(QDialog):
             # Заголовки
             for col in range(self.stats_table.columnCount()):
                 header = self.stats_table.horizontalHeaderItem(col)
-                cell = ws.cell(row=start_row, column=col+1, value=header.text() if header else '')
+                cell = ws.cell(row=start_row, column=col + 1, value=header.text() if header else "")
                 cell.font = header_font
                 cell.fill = header_fill
-                cell.alignment = Alignment(horizontal='center')
+                cell.alignment = Alignment(horizontal="center")
                 cell.border = thin_border
                 # Авто-ширина колонок
                 col_letter = chr(65 + col) if col < 26 else chr(64 + col // 26) + chr(65 + col % 26)
@@ -1925,30 +1894,30 @@ class CRMStatisticsDialog(QDialog):
             for row in range(self.stats_table.rowCount()):
                 for col in range(self.stats_table.columnCount()):
                     item = self.stats_table.item(row, col)
-                    cell = ws.cell(row=row + start_row + 1, column=col+1, value=item.text() if item else '')
+                    cell = ws.cell(row=row + start_row + 1, column=col + 1, value=item.text() if item else "")
                     cell.border = thin_border
 
             wb.save(filename)
         except Exception as e:
-            CustomMessageBox(self, 'Ошибка', f'Не удалось экспортировать данные:\n{str(e)}', 'error').exec_()
-                   
+            CustomMessageBox(self, "Ошибка", f"Не удалось экспортировать данные:\n{str(e)}", "error").exec_()
+
     def export_to_pdf(self):
         """Экспорт в PDF"""
         import logging
+
         from PyQt5.QtWidgets import QFileDialog
+
         from utils.pdf_utils import build_table_pdf
+
         _logger = logging.getLogger(__name__)
 
-        default_name = f'Отчет Статистика CRM {self.project_type} от {QDate.currentDate().toString("dd.MM.yyyy")}'
-        filename, _ = QFileDialog.getSaveFileName(
-            self, 'Сохранить PDF', default_name, 'PDF файлы (*.pdf)'
-        )
+        default_name = f"Отчет Статистика CRM {self.project_type} от {QDate.currentDate().toString('dd.MM.yyyy')}"
+        filename, _ = QFileDialog.getSaveFileName(self, "Сохранить PDF", default_name, "PDF файлы (*.pdf)")
         if not filename:
             return
 
         try:
-            headers = [self.stats_table.horizontalHeaderItem(col).text()
-                       for col in range(self.stats_table.columnCount())]
+            headers = [self.stats_table.horizontalHeaderItem(col).text() for col in range(self.stats_table.columnCount())]
             rows = []
             total = self.stats_table.rowCount()
             completed = in_work = overdue = 0
@@ -1957,52 +1926,53 @@ class CRMStatisticsDialog(QDialog):
                 row_data = []
                 for col in range(self.stats_table.columnCount()):
                     item = self.stats_table.item(row, col)
-                    row_data.append(item.text() if item else '')
+                    row_data.append(item.text() if item else "")
                 rows.append(row_data)
 
                 status_item = self.stats_table.item(row, 5)
                 if status_item:
                     st = status_item.text()
-                    if 'Завершено' in st:
+                    if "Завершено" in st:
                         completed += 1
-                    elif 'Просрочено' in st:
+                    elif "Просрочено" in st:
                         overdue += 1
                     else:
                         in_work += 1
 
             build_table_pdf(
                 output_path=filename,
-                title=f'Статистика CRM: {self.project_type} проекты',
+                title=f"Статистика CRM: {self.project_type} проекты",
                 headers=headers,
                 rows=rows,
                 summary_items=[
-                    ('Всего записей', str(total)),
-                    ('Выполнено', str(completed)),
-                    ('В работе', str(in_work)),
-                    ('Просрочено', str(overdue)),
+                    ("Всего записей", str(total)),
+                    ("Выполнено", str(completed)),
+                    ("В работе", str(in_work)),
+                    ("Просрочено", str(overdue)),
                 ],
                 status_column=5,
                 status_colors={
-                    'Просрочено': '#E74C3C',
-                    'Завершено': '#27AE60',
+                    "Просрочено": "#E74C3C",
+                    "Завершено": "#27AE60",
                 },
             )
         except Exception as e:
             _logger.error(f"Ошибка экспорта PDF: {e}", exc_info=True)
-            CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF:\n{e}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось создать PDF:\n{e}", "error").exec_()
 
     def perform_pdf_export_with_params(self, folder, filename):
         """Выполнение экспорта PDF с параметрами (обратная совместимость)"""
-        import os
         import logging
+        import os
+
         from utils.pdf_utils import build_table_pdf
+
         _logger = logging.getLogger(__name__)
 
         try:
             full_path = os.path.join(folder, filename)
 
-            headers = [self.stats_table.horizontalHeaderItem(col).text()
-                       for col in range(self.stats_table.columnCount())]
+            headers = [self.stats_table.horizontalHeaderItem(col).text() for col in range(self.stats_table.columnCount())]
             rows = []
             total = self.stats_table.rowCount()
             completed = in_work = overdue = 0
@@ -2011,48 +1981,48 @@ class CRMStatisticsDialog(QDialog):
                 row_data = []
                 for col in range(self.stats_table.columnCount()):
                     item = self.stats_table.item(row, col)
-                    row_data.append(item.text() if item else '')
+                    row_data.append(item.text() if item else "")
                 rows.append(row_data)
 
                 status_item = self.stats_table.item(row, 5)
                 if status_item:
                     st = status_item.text()
-                    if 'Завершено' in st:
+                    if "Завершено" in st:
                         completed += 1
-                    elif 'Просрочено' in st:
+                    elif "Просрочено" in st:
                         overdue += 1
                     else:
                         in_work += 1
 
             build_table_pdf(
                 output_path=full_path,
-                title=f'Статистика CRM: {self.project_type} проекты',
+                title=f"Статистика CRM: {self.project_type} проекты",
                 headers=headers,
                 rows=rows,
                 summary_items=[
-                    ('Всего записей', str(total)),
-                    ('Выполнено', str(completed)),
-                    ('В работе', str(in_work)),
-                    ('Просрочено', str(overdue)),
+                    ("Всего записей", str(total)),
+                    ("Выполнено", str(completed)),
+                    ("В работе", str(in_work)),
+                    ("Просрочено", str(overdue)),
                 ],
                 status_column=5,
                 status_colors={
-                    'Просрочено': '#E74C3C',
-                    'Завершено': '#27AE60',
+                    "Просрочено": "#E74C3C",
+                    "Завершено": "#27AE60",
                 },
             )
         except Exception as e:
             _logger.error(f"Ошибка экспорта PDF: {e}", exc_info=True)
-            CustomMessageBox(self, 'Ошибка', f'Не удалось создать PDF:\n{e}', 'error').exec_()
-        
+            CustomMessageBox(self, "Ошибка", f"Не удалось создать PDF:\n{e}", "error").exec_()
+
     def open_folder(self, folder_path):
         """Открытие папки в проводнике"""
         try:
             import platform
-            
-            if platform.system() == 'Windows':
+
+            if platform.system() == "Windows":
                 os.startfile(folder_path)
-            elif platform.system() == 'Darwin':
+            elif platform.system() == "Darwin":
                 os.system(f'open "{folder_path}"')
             else:
                 os.system(f'xdg-open "{folder_path}"')
@@ -2062,39 +2032,42 @@ class CRMStatisticsDialog(QDialog):
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self.center_on_screen()
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
+
         center_dialog_on_parent(self)
+
 
 class ExportPDFDialog(QDialog):
     """Диалог выбора имени файла для экспорта PDF"""
-    
+
     def __init__(self, parent, default_filename):
         super().__init__(parent)
         self.default_filename = default_filename
         self.selected_folder = None
-        
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self.init_ui()
-    
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -2105,13 +2078,13 @@ class ExportPDFDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, 'Экспорт в PDF', simple_mode=True)
+        title_bar = CustomTitleBar(self, "Экспорт в PDF", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -2121,7 +2094,7 @@ class ExportPDFDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -2131,30 +2104,30 @@ class ExportPDFDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        header = QLabel('Экспорт статистики в PDF')
-        header.setStyleSheet('font-size: 14px; font-weight: bold; color: #E74C3C;')
+
+        header = QLabel("Экспорт статистики в PDF")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #E74C3C;")
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
-        
+
         # Подсчет записей из родительской таблицы
         parent_dialog = self.parent()
-        if hasattr(parent_dialog, 'stats_table'):
+        if hasattr(parent_dialog, "stats_table"):
             row_count = parent_dialog.stats_table.rowCount()
-            info = QLabel(f'Будет экспортировано записей: <b>{row_count}</b>')
+            info = QLabel(f"Будет экспортировано записей: <b>{row_count}</b>")
         else:
-            info = QLabel('Будет экспортирована статистика')
-        
-        info.setStyleSheet('font-size: 11px; color: #555;')
+            info = QLabel("Будет экспортирована статистика")
+
+        info.setStyleSheet("font-size: 11px; color: #555;")
         info.setAlignment(Qt.AlignCenter)
         layout.addWidget(info)
-        
+
         filename_layout = QFormLayout()
-        
+
         self.filename_input = QLineEdit()
         self.filename_input.setText(self.default_filename)
         self.filename_input.setStyleSheet("""
@@ -2165,17 +2138,17 @@ class ExportPDFDialog(QDialog):
                 font-size: 11px;
             }
         """)
-        filename_layout.addRow('Имя файла:', self.filename_input)
-        
+        filename_layout.addRow("Имя файла:", self.filename_input)
+
         layout.addLayout(filename_layout)
-        
-        hint = QLabel('Файл будет сохранен в выбранную папку с расширением .pdf')
+
+        hint = QLabel("Файл будет сохранен в выбранную папку с расширением .pdf")
         hint.setWordWrap(True)
-        hint.setStyleSheet('color: #666; font-size: 10px; font-style: italic;')
+        hint.setStyleSheet("color: #666; font-size: 10px; font-style: italic;")
         hint.setAlignment(Qt.AlignCenter)
         layout.addWidget(hint)
-        
-        folder_btn = QPushButton('Выбрать папку и экспортировать')
+
+        folder_btn = QPushButton("Выбрать папку и экспортировать")
         folder_btn.setStyleSheet("""
             QPushButton {
                 background-color: #E74C3C;
@@ -2189,8 +2162,8 @@ class ExportPDFDialog(QDialog):
         """)
         folder_btn.clicked.connect(self.select_folder)
         layout.addWidget(folder_btn)
-        
-        cancel_btn = QPushButton('Отмена')
+
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95A5A6;
@@ -2204,80 +2177,78 @@ class ExportPDFDialog(QDialog):
         """)
         cancel_btn.clicked.connect(self.reject)
         layout.addWidget(cancel_btn)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
-        
+
         self.setMinimumWidth(550)
-    
+
     def select_folder(self):
         """Выбор папки"""
         from PyQt5.QtWidgets import QFileDialog
-        
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            'Выберите папку для сохранения',
-            '',
-            QFileDialog.ShowDirsOnly
-        )
-        
+
+        folder = QFileDialog.getExistingDirectory(self, "Выберите папку для сохранения", "", QFileDialog.ShowDirsOnly)
+
         if folder:
             self.selected_folder = folder
             self.accept()
-    
+
     def get_filename(self):
         """Получить имя файла"""
         filename = self.filename_input.text().strip()
         if not filename:
             filename = self.default_filename
-        if not filename.endswith('.pdf'):
-            filename += '.pdf'
+        if not filename.endswith(".pdf"):
+            filename += ".pdf"
         return filename
-    
+
     def get_folder(self):
         """Получить выбранную папку"""
         return self.selected_folder
-    
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self.center_on_screen()
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
+
         center_dialog_on_parent(self)
-            
+
+
 class PDFExportSuccessDialog(QDialog):
     """Диалог успешного экспорта PDF"""
-    
+
     def __init__(self, parent, file_path, folder_path):
         super().__init__(parent)
         self.file_path = file_path
         self.folder_path = folder_path
-        
+
         # ========== УБИРАЕМ СТАНДАРТНУЮ РАМКУ ==========
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Исправление черного фона всплывающих подсказок
         from utils.tooltip_fix import apply_tooltip_palette
+
         apply_tooltip_palette(self)
 
         self.init_ui()
-    
+
     def init_ui(self):
         # ========== ГЛАВНЫЙ LAYOUT ==========
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # ========== КОНТЕЙНЕР С РАМКОЙ ==========
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -2288,13 +2259,13 @@ class PDFExportSuccessDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-        
+
         border_layout = QVBoxLayout()
         border_layout.setContentsMargins(0, 0, 0, 0)
         border_layout.setSpacing(0)
-        
+
         # ========== КАСТОМНЫЙ TITLE BAR ==========
-        title_bar = CustomTitleBar(self, 'Успех', simple_mode=True)
+        title_bar = CustomTitleBar(self, "Успех", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -2304,7 +2275,7 @@ class PDFExportSuccessDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # ========== КОНТЕНТ ==========
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -2314,38 +2285,38 @@ class PDFExportSuccessDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        success_title = QLabel('PDF успешно создан!')
-        success_title.setStyleSheet('font-size: 14px; font-weight: bold; color: #27AE60;')
+
+        success_title = QLabel("PDF успешно создан!")
+        success_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #27AE60;")
         success_title.setAlignment(Qt.AlignCenter)
         layout.addWidget(success_title)
-        
+
         path_frame = QFrame()
-        path_frame.setStyleSheet('''
+        path_frame.setStyleSheet("""
             QFrame {
                 background-color: #f5f5f5;
                 border: none;
                 border-radius: 4px;
                 padding: 10px;
             }
-        ''')
+        """)
         path_layout = QVBoxLayout()
         path_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         path_label = QLabel(self.file_path)
         path_label.setWordWrap(True)
-        path_label.setStyleSheet('font-size: 10px; color: #333;')
+        path_label.setStyleSheet("font-size: 10px; color: #333;")
         path_label.setAlignment(Qt.AlignCenter)
         path_layout.addWidget(path_label)
-        
+
         path_frame.setLayout(path_layout)
         layout.addWidget(path_frame)
-        
-        open_folder_btn = QPushButton('Открыть папку с файлом')
+
+        open_folder_btn = QPushButton("Открыть папку с файлом")
         open_folder_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffd93c;
@@ -2359,8 +2330,8 @@ class PDFExportSuccessDialog(QDialog):
         """)
         open_folder_btn.clicked.connect(self.open_folder)
         layout.addWidget(open_folder_btn)
-        
-        ok_btn = QPushButton('OK')
+
+        ok_btn = QPushButton("OK")
         ok_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27AE60;
@@ -2374,43 +2345,44 @@ class PDFExportSuccessDialog(QDialog):
         """)
         ok_btn.clicked.connect(self.accept)
         layout.addWidget(ok_btn)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
-        
+
         self.setMinimumWidth(500)
-    
+
     def open_folder(self):
         """Открытие папки"""
         try:
             import platform
-            
-            if platform.system() == 'Windows':
+
+            if platform.system() == "Windows":
                 os.startfile(self.folder_path)
-            elif platform.system() == 'Darwin':
+            elif platform.system() == "Darwin":
                 os.system(f'open "{self.folder_path}"')
             else:
                 os.system(f'xdg-open "{self.folder_path}"')
         except Exception as e:
             print(f"Не удалось открыть папку: {e}")
-    
+
     def showEvent(self, event):
         """Центрирование при первом показе"""
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self.center_on_screen()
 
     def center_on_screen(self):
         """Центрирование относительно родительского окна"""
         from utils.dialog_helpers import center_dialog_on_parent
+
         center_dialog_on_parent(self)
 
-        
+
 class ReassignExecutorDialog(QDialog):
     """Диалог переназначения исполнителя БЕЗ перемещения карточки"""
 
@@ -2422,7 +2394,7 @@ class ReassignExecutorDialog(QDialog):
         self.executor_type = executor_type
         self.stage_name = stage_name
         self.real_stage_name = None  # ИСПРАВЛЕНИЕ 25.01.2026: Реальное имя стадии из БД
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
 
@@ -2439,15 +2411,15 @@ class ReassignExecutorDialog(QDialog):
         """Получить реальное имя исполнителя из DataAccess"""
         try:
             card_data = self.data.get_crm_card(self.card_id)
-            stage_executors = card_data.get('stage_executors', [])
+            stage_executors = card_data.get("stage_executors", [])
             for se in stage_executors:
-                if self.stage_keyword.lower() in se.get('stage_name', '').lower():
-                    executor_id = se.get('executor_id')
+                if self.stage_keyword.lower() in se.get("stage_name", "").lower():
+                    executor_id = se.get("executor_id")
                     if executor_id:
                         employees = self.data.get_all_employees()
                         for emp in employees:
-                            if emp.get('id') == executor_id:
-                                return emp.get('full_name')
+                            if emp.get("id") == executor_id:
+                                return emp.get("full_name")
         except Exception as e:
             print(f"[WARNING] Ошибка получения имени исполнителя: {e}")
 
@@ -2455,16 +2427,19 @@ class ReassignExecutorDialog(QDialog):
         try:
             conn = self.db.connect()
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
             SELECT e.full_name
             FROM stage_executors se
             JOIN employees e ON se.executor_id = e.id
             WHERE se.crm_card_id = ? AND se.stage_name LIKE ?
             ORDER BY se.id DESC LIMIT 1
-            ''', (self.card_id, f'%{self.stage_keyword}%'))
+            """,
+                (self.card_id, f"%{self.stage_keyword}%"),
+            )
             record = cursor.fetchone()
             self.db.close()
-            return record['full_name'] if record else None
+            return record["full_name"] if record else None
         except Exception as e:
             print(f"[WARNING] Ошибка получения имени исполнителя (raw SQL): {e}")
             return None
@@ -2474,7 +2449,7 @@ class ReassignExecutorDialog(QDialog):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # Контейнер с рамкой
         border_frame = QFrame()
         border_frame.setObjectName("borderFrame")
@@ -2491,7 +2466,7 @@ class ReassignExecutorDialog(QDialog):
         border_layout.setSpacing(0)
 
         # Title Bar
-        title_bar = CustomTitleBar(self, 'Переназначить исполнителя', simple_mode=True)
+        title_bar = CustomTitleBar(self, "Переназначить исполнителя", simple_mode=True)
         title_bar.setStyleSheet("""
             CustomTitleBar {
                 background-color: #FFFFFF;
@@ -2501,7 +2476,7 @@ class ReassignExecutorDialog(QDialog):
             }
         """)
         border_layout.addWidget(title_bar)
-        
+
         # Контент
         content_widget = QWidget()
         content_widget.setStyleSheet("""
@@ -2511,22 +2486,22 @@ class ReassignExecutorDialog(QDialog):
                 border-bottom-right-radius: 10px;
             }
         """)
-        
+
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        info_label = QLabel(f'Переназначение исполнителя для стадии:')
-        info_label.setStyleSheet('font-size: 13px; font-weight: bold;')
+
+        info_label = QLabel(f"Переназначение исполнителя для стадии:")
+        info_label.setStyleSheet("font-size: 13px; font-weight: bold;")
         info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(info_label)
-        
+
         stage_label = QLabel(f"<b>{self.stage_name}</b>")
         stage_label.setWordWrap(True)
-        stage_label.setStyleSheet('font-size: 12px; color: #555;')
+        stage_label.setStyleSheet("font-size: 12px; color: #555;")
         stage_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(stage_label)
-        
+
         current_frame = QFrame()
         current_frame.setStyleSheet("""
             QFrame {
@@ -2538,9 +2513,9 @@ class ReassignExecutorDialog(QDialog):
         """)
         current_layout = QVBoxLayout()
         current_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         current_label = QLabel(f"Текущий исполнитель: <b>{self.current_executor_name}</b>")
-        current_label.setStyleSheet('font-size: 11px; color: #333;')
+        current_label.setStyleSheet("font-size: 11px; color: #333;")
         current_label.setAlignment(Qt.AlignCenter)
         current_layout.addWidget(current_label)
 
@@ -2554,15 +2529,12 @@ class ReassignExecutorDialog(QDialog):
 
             # Загружаем историю переназначений через DataAccess
             try:
-                action_history = self.data.get_action_history('crm_card', self.card_id)
+                action_history = self.data.get_action_history("crm_card", self.card_id)
                 for ah in action_history:
-                    if ah.get('action_type') == 'reassign':
-                        description = ah.get('description', '')
-                        created_at = ah.get('action_date', '')
-                        history_records.append({
-                            'description': description,
-                            'created_at': created_at
-                        })
+                    if ah.get("action_type") == "reassign":
+                        description = ah.get("description", "")
+                        created_at = ah.get("action_date", "")
+                        history_records.append({"description": description, "created_at": created_at})
                 print(f"[DataAccess] Загружено записей истории переназначений: {len(history_records)}")
             except Exception as e:
                 print(f"[WARN] Ошибка загрузки истории переназначений: {e}")
@@ -2572,19 +2544,15 @@ class ReassignExecutorDialog(QDialog):
             current_executors = []
             try:
                 card_data = self.data.get_crm_card(self.card_id)
-                stage_executors = card_data.get('stage_executors', [])
+                stage_executors = card_data.get("stage_executors", [])
                 employees = self.data.get_all_employees()
-                emp_map = {e.get('id'): e.get('full_name', 'Неизвестно') for e in employees}
+                emp_map = {e.get("id"): e.get("full_name", "Неизвестно") for e in employees}
 
                 for se in stage_executors:
-                    emp_id = se.get('executor_id')
-                    emp_name = emp_map.get(emp_id, 'Неизвестно')
-                    assigned_date = se.get('assigned_date') or se.get('created_at', '')
-                    current_executors.append({
-                        'stage_name': se.get('stage_name'),
-                        'full_name': emp_name,
-                        'assigned_date': assigned_date
-                    })
+                    emp_id = se.get("executor_id")
+                    emp_name = emp_map.get(emp_id, "Неизвестно")
+                    assigned_date = se.get("assigned_date") or se.get("created_at", "")
+                    current_executors.append({"stage_name": se.get("stage_name"), "full_name": emp_name, "assigned_date": assigned_date})
             except Exception as e:
                 print(f"[WARN] Ошибка загрузки текущих исполнителей: {e}")
 
@@ -2605,46 +2573,48 @@ class ReassignExecutorDialog(QDialog):
                 # Показываем текущих исполнителей
                 if current_executors:
                     executors_title = QLabel("Текущие исполнители:")
-                    executors_title.setStyleSheet('font-size: 9px; color: #666; font-style: italic;')
+                    executors_title.setStyleSheet("font-size: 9px; color: #666; font-style: italic;")
                     history_layout.addWidget(executors_title)
 
                     for record in current_executors:
                         from datetime import datetime
+
                         try:
-                            date_val = record.get('assigned_date', '')
-                            if 'T' in str(date_val):
-                                assigned_date = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+                            date_val = record.get("assigned_date", "")
+                            if "T" in str(date_val):
+                                assigned_date = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
                             else:
-                                assigned_date = datetime.strptime(str(date_val)[:10], '%Y-%m-%d')
-                            date_str = assigned_date.strftime('%d-%m-%Y')
+                                assigned_date = datetime.strptime(str(date_val)[:10], "%Y-%m-%d")
+                            date_str = assigned_date.strftime("%d-%m-%Y")
                         except Exception:
-                            date_str = str(record.get('assigned_date', ''))[:10] if record.get('assigned_date') else '-'
+                            date_str = str(record.get("assigned_date", ""))[:10] if record.get("assigned_date") else "-"
 
                         exec_item = QLabel(f"  {record['stage_name']}: {record['full_name']} ({date_str})")
-                        exec_item.setStyleSheet('font-size: 9px; color: #555;')
+                        exec_item.setStyleSheet("font-size: 9px; color: #555;")
                         history_layout.addWidget(exec_item)
 
                 # Показываем историю переназначений
                 if history_records:
                     history_title = QLabel("История переназначений:")
-                    history_title.setStyleSheet('font-size: 9px; color: #666; font-style: italic; margin-top: 5px;')
+                    history_title.setStyleSheet("font-size: 9px; color: #666; font-style: italic; margin-top: 5px;")
                     history_layout.addWidget(history_title)
 
                     for record in history_records[:5]:
                         from datetime import datetime
-                        try:
-                            date_val = record.get('created_at', '')
-                            if 'T' in str(date_val):
-                                created_date = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
-                            else:
-                                created_date = datetime.strptime(str(date_val)[:19], '%Y-%m-%d %H:%M:%S')
-                            date_str = created_date.strftime('%d-%m-%Y')
-                        except Exception:
-                            date_str = '-'
 
-                        description = record.get('description', '')
+                        try:
+                            date_val = record.get("created_at", "")
+                            if "T" in str(date_val):
+                                created_date = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
+                            else:
+                                created_date = datetime.strptime(str(date_val)[:19], "%Y-%m-%d %H:%M:%S")
+                            date_str = created_date.strftime("%d-%m-%Y")
+                        except Exception:
+                            date_str = "-"
+
+                        description = record.get("description", "")
                         history_item = QLabel(f"  {date_str}: {description}")
-                        history_item.setStyleSheet('font-size: 9px; color: #555;')
+                        history_item.setStyleSheet("font-size: 9px; color: #555;")
                         history_item.setWordWrap(True)
                         history_layout.addWidget(history_item)
 
@@ -2654,6 +2624,7 @@ class ReassignExecutorDialog(QDialog):
         except Exception as e:
             print(f"[WARN] Не удалось загрузить историю исполнителей: {e}")
             import traceback
+
             traceback.print_exc()
         # ==================================================
 
@@ -2664,17 +2635,16 @@ class ReassignExecutorDialog(QDialog):
         # Получаем сотрудников включая двойные должности (secondary_position), только активных
         try:
             all_employees = self.data.get_all_employees()
-            executors = [e for e in all_employees
-                        if (e.get('position') == self.position
-                            or e.get('secondary_position') == self.position)
-                        and e.get('status', '').lower() not in ('уволен', 'в резерве')]
+            executors = [
+                e for e in all_employees if (e.get("position") == self.position or e.get("secondary_position") == self.position) and e.get("status", "").lower() not in ("уволен", "в резерве")
+            ]
             print(f"[DEBUG] Найдено сотрудников для должности '{self.position}': {len(executors)} (включая secondary_position)")
         except Exception as e:
             print(f"[DataAccess ERROR] Ошибка получения сотрудников: {e}")
             executors = []
 
         if not executors:
-            CustomMessageBox(self, 'Внимание', f'Нет доступных сотрудников с должностью "{self.position}"', 'warning').exec_()
+            CustomMessageBox(self, "Внимание", f'Нет доступных сотрудников с должностью "{self.position}"', "warning").exec_()
             self.reject()
             return
 
@@ -2684,34 +2654,37 @@ class ReassignExecutorDialog(QDialog):
         self._current_executor_id = None
         try:
             card_data = self.data.get_crm_card(self.card_id)
-            stage_executors = card_data.get('stage_executors', [])
+            stage_executors = card_data.get("stage_executors", [])
             for se in stage_executors:
-                if self.stage_keyword.lower() in se.get('stage_name', '').lower():
-                    current_executor_id = se.get('executor_id')
+                if self.stage_keyword.lower() in se.get("stage_name", "").lower():
+                    current_executor_id = se.get("executor_id")
                     # ИСПРАВЛЕНИЕ 25.01.2026: Сохраняем реальное имя стадии из БД
-                    self.real_stage_name = se.get('stage_name')
+                    self.real_stage_name = se.get("stage_name")
                     break
 
             if not current_executor_id:
                 # Fallback на raw SQL
                 conn = self.db.connect()
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    """
                 SELECT executor_id, stage_name FROM stage_executors
                 WHERE crm_card_id = ? AND stage_name LIKE ?
                 ORDER BY id DESC LIMIT 1
-                ''', (self.card_id, f'%{self.stage_keyword}%'))
+                """,
+                    (self.card_id, f"%{self.stage_keyword}%"),
+                )
                 record = cursor.fetchone()
                 if record:
-                    current_executor_id = record['executor_id']
-                    self.real_stage_name = record['stage_name']
+                    current_executor_id = record["executor_id"]
+                    self.real_stage_name = record["stage_name"]
                 self.db.close()
         except Exception as e:
             print(f"[WARNING] Не удалось получить ID текущего исполнителя: {e}")
 
         # Добавляем сотрудников в combobox
         for executor in executors:
-            self.executor_combo.addItem(executor['full_name'], executor['id'])
+            self.executor_combo.addItem(executor["full_name"], executor["id"])
 
         # Устанавливаем текущего исполнителя
         if current_executor_id:
@@ -2721,12 +2694,12 @@ class ReassignExecutorDialog(QDialog):
                     self.executor_combo.setCurrentIndex(i)
                     break
 
-        form_layout.addRow('Новый исполнитель:', self.executor_combo)
-        
+        form_layout.addRow("Новый исполнитель:", self.executor_combo)
+
         # Поле дедлайна
         self.deadline_edit = CustomDateEdit()
         self.deadline_edit.setCalendarPopup(True)
-        self.deadline_edit.setDisplayFormat('dd.MM.yyyy')
+        self.deadline_edit.setDisplayFormat("dd.MM.yyyy")
         self.deadline_edit.setStyleSheet(CALENDAR_STYLE)
 
         # Загружаем текущий дедлайн через DataAccess
@@ -2734,10 +2707,10 @@ class ReassignExecutorDialog(QDialog):
             deadline_value = None
             try:
                 card_data = self.data.get_crm_card(self.card_id)
-                stage_executors = card_data.get('stage_executors', [])
+                stage_executors = card_data.get("stage_executors", [])
                 for se in stage_executors:
-                    if self.stage_keyword.lower() in se.get('stage_name', '').lower():
-                        deadline_value = se.get('deadline')
+                    if self.stage_keyword.lower() in se.get("stage_name", "").lower():
+                        deadline_value = se.get("deadline")
                         break
             except Exception as e:
                 print(f"[DataAccess] Ошибка получения дедлайна: {e}")
@@ -2746,34 +2719,37 @@ class ReassignExecutorDialog(QDialog):
                 # Fallback на raw SQL
                 conn = self.db.connect()
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    """
                 SELECT deadline FROM stage_executors
                 WHERE crm_card_id = ? AND stage_name LIKE ?
                 ORDER BY id DESC LIMIT 1
-                ''', (self.card_id, f'%{self.stage_keyword}%'))
+                """,
+                    (self.card_id, f"%{self.stage_keyword}%"),
+                )
                 record = cursor.fetchone()
-                if record and record['deadline']:
-                    deadline_value = record['deadline']
+                if record and record["deadline"]:
+                    deadline_value = record["deadline"]
                 self.db.close()
 
             if deadline_value:
-                self.deadline_edit.setDate(QDate.fromString(str(deadline_value), 'yyyy-MM-dd'))
+                self.deadline_edit.setDate(QDate.fromString(str(deadline_value), "yyyy-MM-dd"))
             else:
                 self.deadline_edit.setDate(QDate.currentDate().addDays(7))
         except Exception as e:
             print(f" Не удалось загрузить дедлайн: {e}")
             self.deadline_edit.setDate(QDate.currentDate().addDays(7))
-        
-        form_layout.addRow('Дедлайн:', self.deadline_edit)
-        
+
+        form_layout.addRow("Дедлайн:", self.deadline_edit)
+
         layout.addLayout(form_layout)
-        
-        hint = QLabel(' Исполнитель будет изменен БЕЗ перемещения карточки')
+
+        hint = QLabel(" Исполнитель будет изменен БЕЗ перемещения карточки")
         hint.setWordWrap(True)
-        hint.setStyleSheet('color: #FF9800; font-size: 10px; font-style: italic; font-weight: bold;')
+        hint.setStyleSheet("color: #FF9800; font-size: 10px; font-style: italic; font-weight: bold;")
         layout.addWidget(hint)
-        
-        save_btn = QPushButton('Переназначить')
+
+        save_btn = QPushButton("Переназначить")
         save_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
@@ -2787,8 +2763,8 @@ class ReassignExecutorDialog(QDialog):
         """)
         save_btn.clicked.connect(self.save_reassignment)
         layout.addWidget(save_btn)
-        
-        cancel_btn = QPushButton('Отмена')
+
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95A5A6;
@@ -2802,10 +2778,10 @@ class ReassignExecutorDialog(QDialog):
         """)
         cancel_btn.clicked.connect(self.reject)
         layout.addWidget(cancel_btn)
-        
+
         content_widget.setLayout(layout)
         border_layout.addWidget(content_widget)
-        
+
         border_frame.setLayout(border_layout)
         main_layout.addWidget(border_frame)
         self.setLayout(main_layout)
@@ -2816,15 +2792,15 @@ class ReassignExecutorDialog(QDialog):
     def save_reassignment(self):
         """Сохранение нового назначения"""
         new_executor_id = self.executor_combo.currentData()
-        new_deadline = self.deadline_edit.date().toString('yyyy-MM-dd')
+        new_deadline = self.deadline_edit.date().toString("yyyy-MM-dd")
 
         if not new_executor_id:
-            CustomMessageBox(self, 'Ошибка', 'Выберите исполнителя', 'warning').exec_()
+            CustomMessageBox(self, "Ошибка", "Выберите исполнителя", "warning").exec_()
             return
 
         # S4.2: Предупреждение если выбран тот же исполнитель
-        if hasattr(self, '_current_executor_id') and new_executor_id == self._current_executor_id:
-            CustomMessageBox(self, 'Внимание', 'Выбранный исполнитель уже назначен на эту стадию.', 'warning').exec_()
+        if hasattr(self, "_current_executor_id") and new_executor_id == self._current_executor_id:
+            CustomMessageBox(self, "Внимание", "Выбранный исполнитель уже назначен на эту стадию.", "warning").exec_()
             return
 
         try:
@@ -2835,16 +2811,15 @@ class ReassignExecutorDialog(QDialog):
             try:
                 card_data = self.data.get_crm_card(self.card_id)
                 if card_data:
-                    contract_id = card_data.get('contract_id')
+                    contract_id = card_data.get("contract_id")
                     stage_name_to_use = self.real_stage_name or self.stage_name
-                    stage_executors = card_data.get('stage_executors', [])
+                    stage_executors = card_data.get("stage_executors", [])
                     print(f"[DEBUG] Ищем стадию: stage_name_to_use='{stage_name_to_use}', stage_keyword='{self.stage_keyword}'")
                     print(f"[DEBUG] Доступные stage_executors: {[s.get('stage_name') for s in stage_executors]}")
                     for se in stage_executors:
-                        stage_name_in_data = se.get('stage_name', '')
-                        if (stage_name_in_data == stage_name_to_use or
-                            self.stage_keyword.lower() in stage_name_in_data.lower()):
-                            old_executor_id = se.get('executor_id')
+                        stage_name_in_data = se.get("stage_name", "")
+                        if stage_name_in_data == stage_name_to_use or self.stage_keyword.lower() in stage_name_in_data.lower():
+                            old_executor_id = se.get("executor_id")
                             print(f"[DEBUG] Найден stage_executor '{stage_name_in_data}', executor_id={old_executor_id}")
                             break
                 print(f"[DEBUG] Старый исполнитель (DataAccess): {old_executor_id}, contract_id: {contract_id}")
@@ -2855,27 +2830,26 @@ class ReassignExecutorDialog(QDialog):
             if old_executor_id is None:
                 conn = self.db.connect()
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    """
                 SELECT se.executor_id, cc.contract_id
                 FROM stage_executors se
                 JOIN crm_cards cc ON cc.id = se.crm_card_id
                 WHERE se.crm_card_id = ? AND se.stage_name LIKE ?
                 ORDER BY se.id DESC LIMIT 1
-                ''', (self.card_id, f'%{self.stage_keyword}%'))
+                """,
+                    (self.card_id, f"%{self.stage_keyword}%"),
+                )
                 record = cursor.fetchone()
                 if record:
-                    old_executor_id = record['executor_id']
-                    contract_id = record['contract_id']
+                    old_executor_id = record["executor_id"]
+                    contract_id = record["contract_id"]
                 self.db.close()
                 print(f"[DEBUG] Старый исполнитель (локально): {old_executor_id}, contract_id: {contract_id}")
 
             # Обновляем исполнителя через DataAccess
             try:
-                update_data = {
-                    'executor_id': new_executor_id,
-                    'deadline': new_deadline,
-                    'completed': False
-                }
+                update_data = {"executor_id": new_executor_id, "deadline": new_deadline, "completed": False}
                 # ИСПРАВЛЕНИЕ 25.01.2026: Используем real_stage_name из БД, а не stage_name из колонки
                 stage_name_to_use = self.real_stage_name or self.stage_name
                 print(f"[DEBUG] Переназначение: stage_name_to_use={stage_name_to_use}, real_stage_name={self.real_stage_name}")
@@ -2893,24 +2867,21 @@ class ReassignExecutorDialog(QDialog):
             except Exception as e:
                 print(f"[DataAccess ERROR] Ошибка переназначения: {e}")
                 import traceback
+
                 traceback.print_exc()
-                CustomMessageBox(
-                    self, 'Ошибка',
-                    f'Не удалось переназначить исполнителя.\n'
-                    f'Проверьте подключение к серверу и попробуйте снова.\n\n{e}',
-                    'error'
-                ).exec_()
+                CustomMessageBox(self, "Ошибка", f"Не удалось переназначить исполнителя.\nПроверьте подключение к серверу и попробуйте снова.\n\n{e}", "error").exec_()
                 return
 
         except Exception as e:
             print(f"[ERROR] Критическая ошибка переназначения: {e}")
             import traceback
+
             traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось переназначить исполнителя:\n{str(e)}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось переназначить исполнителя:\n{str(e)}", "error").exec_()
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self._center_on_parent()
 
@@ -2926,6 +2897,7 @@ class ReassignExecutorDialog(QDialog):
             self.move(x, y)
         else:
             from PyQt5.QtWidgets import QDesktopWidget
+
             screen = QDesktopWidget().availableGeometry()
             x = (screen.width() - self.width()) // 2 + screen.left()
             y = (screen.height() - self.height()) // 3 + screen.top()
@@ -2935,16 +2907,13 @@ class ReassignExecutorDialog(QDialog):
         """ИСПРАВЛЕНИЕ 01.02.2026: Проверка идемпотентности - существует ли уже такой платеж"""
         for p in all_payments:
             # Пропускаем переназначенные платежи
-            if p.get('reassigned'):
+            if p.get("reassigned"):
                 continue
             # Проверяем совпадение ключевых полей
-            if (p.get('contract_id') == contract_id and
-                p.get('employee_id') == employee_id and
-                p.get('role') == role and
-                p.get('payment_type') == payment_type):
+            if p.get("contract_id") == contract_id and p.get("employee_id") == employee_id and p.get("role") == role and p.get("payment_type") == payment_type:
                 # Для stage_name проверяем частичное совпадение
-                p_stage = (p.get('stage_name') or '').lower()
-                check_stage = (stage_name or '').lower()
+                p_stage = (p.get("stage_name") or "").lower()
+                check_stage = (stage_name or "").lower()
                 if check_stage in p_stage or p_stage in check_stage or not check_stage:
                     print(f"[IDEMPOTENT] Платеж уже существует: ID={p.get('id')}, {role}/{payment_type}")
                     return p  # Возвращаем существующий платеж
@@ -2954,13 +2923,11 @@ class ReassignExecutorDialog(QDialog):
         """Переназначение оплат через API при смене исполнителя"""
         try:
             from datetime import datetime
-            current_month = datetime.now().strftime('%Y-%m')
+
+            current_month = datetime.now().strftime("%Y-%m")
 
             # Определяем роль по должности
-            role_map = {
-                'Дизайнер': 'Дизайнер',
-                'Чертёжник': 'Чертёжник'
-            }
+            role_map = {"Дизайнер": "Дизайнер", "Чертёжник": "Чертёжник"}
             role = role_map.get(self.position, self.position)
 
             # Получаем все платежи для этого контракта
@@ -2978,13 +2945,13 @@ class ReassignExecutorDialog(QDialog):
             for payment in all_payments:
                 # ИСПРАВЛЕНИЕ 30.01.2026: Пропускаем уже переназначенные платежи
                 # чтобы избежать дублирования при повторном переназначении
-                if payment.get('reassigned'):
+                if payment.get("reassigned"):
                     print(f"[DEBUG] Пропускаем уже переназначенный платеж ID={payment.get('id')}")
                     continue
 
-                payment_stage = payment.get('stage_name') or ''  # Защита от None
-                payment_role = payment.get('role') or ''  # Защита от None
-                payment_employee_id = payment.get('employee_id')
+                payment_stage = payment.get("stage_name") or ""  # Защита от None
+                payment_role = payment.get("role") or ""  # Защита от None
+                payment_employee_id = payment.get("employee_id")
 
                 # Пропускаем платежи без stage_name (например, для ролей без стадии)
                 if not payment_stage:
@@ -3003,15 +2970,12 @@ class ReassignExecutorDialog(QDialog):
 
             if old_payments:
                 for old_payment in old_payments:
-                    old_payment_id = old_payment.get('id')
-                    payment_type = old_payment.get('payment_type', 'Неизвестно')
+                    old_payment_id = old_payment.get("id")
+                    payment_type = old_payment.get("payment_type", "Неизвестно")
 
                     # 1. Помечаем старую запись как переназначенную
                     try:
-                        self.data.update_payment(old_payment_id, {
-                            'reassigned': True,
-                            'report_month': current_month
-                        })
+                        self.data.update_payment(old_payment_id, {"reassigned": True, "report_month": current_month})
                         print(f"[DataAccess] Старый платеж {old_payment_id} ({payment_type}) помечен как переназначенный")
                     except Exception as e:
                         print(f"[WARN] Ошибка обновления старого платежа {old_payment_id}: {e}")
@@ -3020,28 +2984,26 @@ class ReassignExecutorDialog(QDialog):
                     # ИСПРАВЛЕНИЕ 29.01.2026:
                     # - Аванс: report_month = текущий месяц
                     # - Доплата: report_month = None (статус "В работе", заполнится при приёмке)
-                    if payment_type == 'Доплата':
+                    if payment_type == "Доплата":
                         new_report_month = None  # "В работе"
                     else:
                         new_report_month = current_month  # Аванс и другие - текущий месяц
 
                     # ИСПРАВЛЕНИЕ 30.01.2026: Если старая сумма = 0, пересчитываем по тарифам
-                    old_calculated = old_payment.get('calculated_amount', 0) or 0
-                    old_final = old_payment.get('final_amount', 0) or 0
-                    is_manual = old_payment.get('is_manual', 0)
-                    manual_amount = old_payment.get('manual_amount')
+                    old_calculated = old_payment.get("calculated_amount", 0) or 0
+                    old_final = old_payment.get("final_amount", 0) or 0
+                    is_manual = old_payment.get("is_manual", 0)
+                    manual_amount = old_payment.get("manual_amount")
 
                     if old_calculated == 0 and old_final == 0 and not is_manual:
                         # Пересчитываем сумму по тарифам
                         print(f"[INFO] Старый платеж имел сумму 0, пересчитываем по тарифам")
                         try:
                             full_amount = 0
-                            stage_name_for_calc = old_payment.get('stage_name') or stage_name
+                            stage_name_for_calc = old_payment.get("stage_name") or stage_name
 
                             try:
-                                result = self.data.calculate_payment_amount(
-                                    contract_id, new_executor_id, role, stage_name_for_calc
-                                )
+                                result = self.data.calculate_payment_amount(contract_id, new_executor_id, role, stage_name_for_calc)
                                 full_amount = float(result) if result else 0
                                 print(f"[DataAccess] Рассчитанная сумма: {full_amount}")
                             except Exception as e:
@@ -3058,28 +3020,25 @@ class ReassignExecutorDialog(QDialog):
                     # ИСПРАВЛЕНИЕ 30.01.2026: Новые платежи НЕ должны иметь reassigned=True!
                     # reassigned=True только для СТАРЫХ (заменённых) платежей
                     new_payment_data = {
-                        'contract_id': contract_id,
-                        'crm_card_id': self.card_id,
-                        'supervision_card_id': old_payment.get('supervision_card_id'),
-                        'employee_id': new_executor_id,
-                        'role': role,
-                        'stage_name': old_payment.get('stage_name'),
-                        'calculated_amount': old_calculated,
-                        'manual_amount': manual_amount,
-                        'final_amount': old_final,
-                        'is_manual': is_manual,
-                        'payment_type': payment_type,
-                        'report_month': new_report_month,
-                        'reassigned': False,
-                        'old_employee_id': old_executor_id
+                        "contract_id": contract_id,
+                        "crm_card_id": self.card_id,
+                        "supervision_card_id": old_payment.get("supervision_card_id"),
+                        "employee_id": new_executor_id,
+                        "role": role,
+                        "stage_name": old_payment.get("stage_name"),
+                        "calculated_amount": old_calculated,
+                        "manual_amount": manual_amount,
+                        "final_amount": old_final,
+                        "is_manual": is_manual,
+                        "payment_type": payment_type,
+                        "report_month": new_report_month,
+                        "reassigned": False,
+                        "old_employee_id": old_executor_id,
                     }
 
                     try:
                         # ИСПРАВЛЕНИЕ 01.02.2026: Проверка идемпотентности перед созданием
-                        existing = self._check_payment_exists(
-                            all_payments, contract_id, new_executor_id, role,
-                            old_payment.get('stage_name'), payment_type
-                        )
+                        existing = self._check_payment_exists(all_payments, contract_id, new_executor_id, role, old_payment.get("stage_name"), payment_type)
                         if existing:
                             print(f"[IDEMPOTENT] Пропускаем создание - платеж уже существует: ID={existing.get('id')}")
                             continue
@@ -3092,21 +3051,21 @@ class ReassignExecutorDialog(QDialog):
 
                 # Верификация: проверяем что все ожидаемые типы оплат созданы для нового исполнителя.
                 # Индивидуальные проекты: Аванс + Доплата; Шаблонные: Полная оплата.
-                if self.project_type == 'Шаблонный':
-                    expected_types = {'Полная оплата'}
+                if self.project_type == "Шаблонный":
+                    expected_types = {"Полная оплата"}
                 else:
-                    expected_types = {'Аванс', 'Доплата'}
+                    expected_types = {"Аванс", "Доплата"}
                 try:
                     updated_payments = self.data.get_payments_for_contract(contract_id)
                     new_exec_payments = [
-                        p for p in updated_payments
-                        if p.get('employee_id') == new_executor_id
-                        and p.get('role') == role
-                        and not p.get('reassigned')
-                        and (self.stage_keyword.lower() in (p.get('stage_name') or '').lower()
-                             or stage_name.lower() in (p.get('stage_name') or '').lower())
+                        p
+                        for p in updated_payments
+                        if p.get("employee_id") == new_executor_id
+                        and p.get("role") == role
+                        and not p.get("reassigned")
+                        and (self.stage_keyword.lower() in (p.get("stage_name") or "").lower() or stage_name.lower() in (p.get("stage_name") or "").lower())
                     ]
-                    new_types = {p.get('payment_type') for p in new_exec_payments}
+                    new_types = {p.get("payment_type") for p in new_exec_payments}
                     missing_types = expected_types - new_types
 
                     if missing_types:
@@ -3114,9 +3073,7 @@ class ReassignExecutorDialog(QDialog):
                         # Рассчитываем сумму
                         full_amount = 0
                         try:
-                            result = self.data.calculate_payment_amount(
-                                contract_id, new_executor_id, role, stage_name
-                            )
+                            result = self.data.calculate_payment_amount(contract_id, new_executor_id, role, stage_name)
                             full_amount = float(result) if result else 0
                         except Exception:
                             pass
@@ -3125,35 +3082,33 @@ class ReassignExecutorDialog(QDialog):
                         for missing_type in missing_types:
                             # Помечаем старую запись этого типа как переназначенную (если ещё не помечена)
                             for old_p in updated_payments:
-                                if (old_p.get('employee_id') == old_executor_id
-                                    and old_p.get('role') == role
-                                    and old_p.get('payment_type') == missing_type
-                                    and not old_p.get('reassigned')
-                                    and (self.stage_keyword.lower() in (old_p.get('stage_name') or '').lower()
-                                         or stage_name.lower() in (old_p.get('stage_name') or '').lower())):
+                                if (
+                                    old_p.get("employee_id") == old_executor_id
+                                    and old_p.get("role") == role
+                                    and old_p.get("payment_type") == missing_type
+                                    and not old_p.get("reassigned")
+                                    and (self.stage_keyword.lower() in (old_p.get("stage_name") or "").lower() or stage_name.lower() in (old_p.get("stage_name") or "").lower())
+                                ):
                                     try:
-                                        self.data.update_payment(old_p['id'], {
-                                            'reassigned': True,
-                                            'report_month': current_month
-                                        })
+                                        self.data.update_payment(old_p["id"], {"reassigned": True, "report_month": current_month})
                                         print(f"[VERIFY] Старый платеж {old_p['id']} ({missing_type}) помечен как переназначенный")
                                     except Exception:
                                         pass
                                     break
 
-                            new_report_month = None if missing_type == 'Доплата' else current_month
+                            new_report_month = None if missing_type == "Доплата" else current_month
                             missing_data = {
-                                'contract_id': contract_id,
-                                'crm_card_id': self.card_id,
-                                'employee_id': new_executor_id,
-                                'role': role,
-                                'stage_name': stage_name,
-                                'calculated_amount': half_amount,
-                                'final_amount': half_amount,
-                                'payment_type': missing_type,
-                                'report_month': new_report_month,
-                                'reassigned': False,
-                                'old_employee_id': old_executor_id
+                                "contract_id": contract_id,
+                                "crm_card_id": self.card_id,
+                                "employee_id": new_executor_id,
+                                "role": role,
+                                "stage_name": stage_name,
+                                "calculated_amount": half_amount,
+                                "final_amount": half_amount,
+                                "payment_type": missing_type,
+                                "report_month": new_report_month,
+                                "reassigned": False,
+                                "old_employee_id": old_executor_id,
                             }
                             self.data.create_payment(missing_data)
                             print(f"[VERIFY] Создан недостающий платеж ({missing_type}) для {new_executor_id}: {half_amount:.2f}")
@@ -3190,24 +3145,22 @@ class ReassignExecutorDialog(QDialog):
                     # Создаём Аванс - отчётный месяц = месяц переназначения
                     # ИСПРАВЛЕНИЕ 30.01.2026: reassigned=False для НОВЫХ платежей
                     advance_data = {
-                        'contract_id': contract_id,
-                        'crm_card_id': self.card_id,
-                        'employee_id': new_executor_id,
-                        'role': role,
-                        'stage_name': stage_name,
-                        'calculated_amount': advance_amount,
-                        'final_amount': advance_amount,
-                        'payment_type': 'Аванс',
-                        'report_month': current_month,  # Аванс - месяц переназначения
-                        'reassigned': False,
-                        'old_employee_id': old_executor_id
+                        "contract_id": contract_id,
+                        "crm_card_id": self.card_id,
+                        "employee_id": new_executor_id,
+                        "role": role,
+                        "stage_name": stage_name,
+                        "calculated_amount": advance_amount,
+                        "final_amount": advance_amount,
+                        "payment_type": "Аванс",
+                        "report_month": current_month,  # Аванс - месяц переназначения
+                        "reassigned": False,
+                        "old_employee_id": old_executor_id,
                     }
 
                     try:
                         # ИСПРАВЛЕНИЕ 01.02.2026: Проверка идемпотентности перед созданием Аванса
-                        existing_advance = self._check_payment_exists(
-                            all_payments, contract_id, new_executor_id, role, stage_name, 'Аванс'
-                        )
+                        existing_advance = self._check_payment_exists(all_payments, contract_id, new_executor_id, role, stage_name, "Аванс")
                         if existing_advance:
                             print(f"[IDEMPOTENT] Пропускаем создание Аванса - уже существует: ID={existing_advance.get('id')}")
                         else:
@@ -3220,24 +3173,22 @@ class ReassignExecutorDialog(QDialog):
                     # Заполнится автоматически при приёмке работы
                     # ИСПРАВЛЕНИЕ 30.01.2026: reassigned=False для НОВЫХ платежей
                     balance_data = {
-                        'contract_id': contract_id,
-                        'crm_card_id': self.card_id,
-                        'employee_id': new_executor_id,
-                        'role': role,
-                        'stage_name': stage_name,
-                        'calculated_amount': balance_amount,
-                        'final_amount': balance_amount,
-                        'payment_type': 'Доплата',
-                        'report_month': None,  # None = "В работе", заполнится при приёмке
-                        'reassigned': False,
-                        'old_employee_id': old_executor_id
+                        "contract_id": contract_id,
+                        "crm_card_id": self.card_id,
+                        "employee_id": new_executor_id,
+                        "role": role,
+                        "stage_name": stage_name,
+                        "calculated_amount": balance_amount,
+                        "final_amount": balance_amount,
+                        "payment_type": "Доплата",
+                        "report_month": None,  # None = "В работе", заполнится при приёмке
+                        "reassigned": False,
+                        "old_employee_id": old_executor_id,
                     }
 
                     try:
                         # ИСПРАВЛЕНИЕ 01.02.2026: Проверка идемпотентности перед созданием Доплаты
-                        existing_balance = self._check_payment_exists(
-                            all_payments, contract_id, new_executor_id, role, stage_name, 'Доплата'
-                        )
+                        existing_balance = self._check_payment_exists(all_payments, contract_id, new_executor_id, role, stage_name, "Доплата")
                         if existing_balance:
                             print(f"[IDEMPOTENT] Пропускаем создание Доплаты - уже существует: ID={existing_balance.get('id')}")
                         else:
@@ -3249,11 +3200,13 @@ class ReassignExecutorDialog(QDialog):
                 except Exception as e:
                     print(f"[ERROR] Ошибка создания новых платежей: {e}")
                     import traceback
+
                     traceback.print_exc()
 
         except Exception as e:
             print(f"[ERROR] Ошибка переназначения оплат через API: {e}")
             import traceback
+
             traceback.print_exc()
 
     def _add_reassignment_history(self, old_executor_id, new_executor_id, stage_name):
@@ -3266,10 +3219,10 @@ class ReassignExecutorDialog(QDialog):
             try:
                 employees = self.data.get_all_employees()
                 for emp in employees:
-                    if emp.get('id') == old_executor_id:
-                        old_name = emp.get('full_name', 'Неизвестно')
-                    if emp.get('id') == new_executor_id:
-                        new_name = emp.get('full_name', 'Неизвестно')
+                    if emp.get("id") == old_executor_id:
+                        old_name = emp.get("full_name", "Неизвестно")
+                    if emp.get("id") == new_executor_id:
+                        new_name = emp.get("full_name", "Неизвестно")
             except Exception as e:
                 print(f"[WARN] Не удалось получить имена сотрудников: {e}")
 
@@ -3279,15 +3232,9 @@ class ReassignExecutorDialog(QDialog):
             # Записываем в историю через DataAccess
             try:
                 user_data = self.data.get_current_user()
-                user_id = user_data.get('id', 1) if user_data else 1
+                user_id = user_data.get("id", 1) if user_data else 1
 
-                self.data.add_action_history(
-                    user_id=user_id,
-                    action_type='reassign',
-                    entity_type='crm_card',
-                    entity_id=self.card_id,
-                    description=description
-                )
+                self.data.add_action_history(user_id=user_id, action_type="reassign", entity_type="crm_card", entity_id=self.card_id, description=description)
                 print(f"[DataAccess] Записано в историю: {description}")
             except Exception as e:
                 print(f"[WARN] Ошибка записи в историю: {e}")
@@ -3295,15 +3242,17 @@ class ReassignExecutorDialog(QDialog):
         except Exception as e:
             print(f"[ERROR] Ошибка добавления в историю: {e}")
             import traceback
+
             traceback.print_exc()
 
 
 class SurveyDateDialog(QDialog):
     """Диалог установки даты замера"""
+
     def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
 
@@ -3355,7 +3304,7 @@ class SurveyDateDialog(QDialog):
         layout.setContentsMargins(10, 10, 10, 10)
 
         # Дата замера
-        date_label = QLabel('Дата замера:')
+        date_label = QLabel("Дата замера:")
         layout.addWidget(date_label)
 
         self.survey_date = CustomDateEdit()
@@ -3371,8 +3320,9 @@ class SurveyDateDialog(QDialog):
 
             if result and result[0]:
                 from datetime import datetime
+
                 try:
-                    existing_date = datetime.strptime(result[0], '%Y-%m-%d')
+                    existing_date = datetime.strptime(result[0], "%Y-%m-%d")
                     self.survey_date.setDate(QDate(existing_date.year, existing_date.month, existing_date.day))
                 except Exception:
                     self.survey_date.setDate(QDate.currentDate())
@@ -3382,8 +3332,9 @@ class SurveyDateDialog(QDialog):
             print(f"[ERROR] Ошибка загрузки даты замера: {e}")
             self.survey_date.setDate(QDate.currentDate())
 
-        self.survey_date.setDisplayFormat('dd.MM.yyyy')
+        self.survey_date.setDisplayFormat("dd.MM.yyyy")
         from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
+
         self.survey_date.setStyleSheet(CALENDAR_STYLE)
         add_today_button_to_dateedit(self.survey_date)
         layout.addWidget(self.survey_date)
@@ -3392,7 +3343,7 @@ class SurveyDateDialog(QDialog):
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
 
-        save_btn = QPushButton('Сохранить')
+        save_btn = QPushButton("Сохранить")
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -3407,7 +3358,7 @@ class SurveyDateDialog(QDialog):
             }
         """)
 
-        cancel_btn = QPushButton('Отмена')
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -3438,23 +3389,22 @@ class SurveyDateDialog(QDialog):
 
     def save(self):
         """Сохранение даты замера"""
-        survey_date = self.survey_date.date().toString('yyyy-MM-dd')
+        survey_date = self.survey_date.date().toString("yyyy-MM-dd")
 
         # Обновляем карточку
-        updates = {
-            'survey_date': survey_date
-        }
+        updates = {"survey_date": survey_date}
 
         try:
             self.data.update_crm_card(self.card_id, updates)
             self.accept()
         except Exception as e:
             from ui.custom_message_box import CustomMessageBox
-            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить дату замера:\n{str(e)}', 'error').exec_()
+
+            CustomMessageBox(self, "Ошибка", f"Не удалось сохранить дату замера:\n{str(e)}", "error").exec_()
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self._center_on_parent()
 
@@ -3470,6 +3420,7 @@ class SurveyDateDialog(QDialog):
             self.move(x, y)
         else:
             from PyQt5.QtWidgets import QDesktopWidget
+
             screen = QDesktopWidget().availableGeometry()
             x = (screen.width() - self.width()) // 2 + screen.left()
             y = (screen.height() - self.height()) // 3 + screen.top()
@@ -3478,6 +3429,7 @@ class SurveyDateDialog(QDialog):
 
 class TechTaskDialog(QDialog):
     """Диалог добавления технического задания"""
+
     # Сигналы для обработки загрузки файлов из фонового потока
     tech_task_upload_completed = pyqtSignal(str, str, str, int)  # public_link, yandex_path, file_name, contract_id
     tech_task_upload_error = pyqtSignal(str)  # error_msg
@@ -3485,7 +3437,7 @@ class TechTaskDialog(QDialog):
     def __init__(self, parent, card_id, api_client=None):
         super().__init__(parent)
         self.card_id = card_id
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
         self.uploaded_file_link = None
@@ -3508,6 +3460,7 @@ class TechTaskDialog(QDialog):
 
         # Разделяем имя и расширение
         import os
+
         name, ext = os.path.splitext(filename)
 
         # Рассчитываем сколько символов оставить в начале и конце
@@ -3515,7 +3468,7 @@ class TechTaskDialog(QDialog):
         available = max_length - ext_len - 3  # 3 для "..."
 
         if available <= 0:
-            return filename[:max_length - 3] + "..."
+            return filename[: max_length - 3] + "..."
 
         # Половину символов в начало, половину в конец (перед расширением)
         start_len = available // 2
@@ -3565,16 +3518,16 @@ class TechTaskDialog(QDialog):
         layout.setContentsMargins(10, 10, 10, 10)
 
         # Виджет загрузки файла ТЗ
-        file_label = QLabel('Файл ТЗ (PDF):')
+        file_label = QLabel("Файл ТЗ (PDF):")
         layout.addWidget(file_label)
 
         file_row = QHBoxLayout()
         file_row.setSpacing(10)
 
-        self.file_label_display = QLabel('Не загружен')
+        self.file_label_display = QLabel("Не загружен")
         # ИСПРАВЛЕНИЕ 07.02.2026: Фиксированная высота 28px как у кнопки (#8)
         self.file_label_display.setFixedHeight(28)
-        self.file_label_display.setStyleSheet('''
+        self.file_label_display.setStyleSheet("""
             QLabel {
                 background-color: #F8F9FA;
                 padding: 4px 12px;
@@ -3593,18 +3546,18 @@ class TechTaskDialog(QDialog):
                 color: #2980B9;
                 text-decoration: underline;
             }
-        ''')
+        """)
         self.file_label_display.setWordWrap(False)
         self.file_label_display.setOpenExternalLinks(True)
         self.file_label_display.setTextInteractionFlags(Qt.TextBrowserInteraction)
         file_row.addWidget(self.file_label_display, 1)
 
-        upload_btn = QPushButton('Загрузить PDF')
+        upload_btn = QPushButton("Загрузить PDF")
         upload_btn.setFixedWidth(130)
         upload_btn.setFixedHeight(28)
         upload_btn.clicked.connect(self.upload_file)
         # ИСПРАВЛЕНИЕ 07.02.2026: Стили по unified_styles (#8, #11, #12)
-        upload_btn.setStyleSheet('''
+        upload_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffd93c;
                 color: #333333;
@@ -3621,20 +3574,21 @@ class TechTaskDialog(QDialog):
             QPushButton:pressed {
                 background-color: #d4b42e;
             }
-        ''')
+        """)
         file_row.addWidget(upload_btn)
 
         layout.addLayout(file_row)
 
         # Дата добавления ТЗ
-        date_label = QLabel('Дата добавления ТЗ:')
+        date_label = QLabel("Дата добавления ТЗ:")
         layout.addWidget(date_label)
 
         self.tech_task_date = CustomDateEdit()
         self.tech_task_date.setCalendarPopup(True)
         self.tech_task_date.setDate(QDate.currentDate())
-        self.tech_task_date.setDisplayFormat('dd.MM.yyyy')
+        self.tech_task_date.setDisplayFormat("dd.MM.yyyy")
         from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
+
         self.tech_task_date.setStyleSheet(CALENDAR_STYLE)
         add_today_button_to_dateedit(self.tech_task_date)
         layout.addWidget(self.tech_task_date)
@@ -3643,7 +3597,7 @@ class TechTaskDialog(QDialog):
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
 
-        save_btn = QPushButton('Сохранить')
+        save_btn = QPushButton("Сохранить")
         save_btn.setFixedHeight(28)
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("""
@@ -3665,7 +3619,7 @@ class TechTaskDialog(QDialog):
             }
         """)
 
-        cancel_btn = QPushButton('Отмена')
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.setFixedHeight(28)
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
@@ -3706,24 +3660,24 @@ class TechTaskDialog(QDialog):
     def load_existing_file(self):
         """Загрузка существующего файла ТЗ из договора"""
         # ИСПРАВЛЕНИЕ 07.02.2026: Сбрасываем значение перед загрузкой (#8)
-        self.file_label_display.setText('Не загружен')
+        self.file_label_display.setText("Не загружен")
         self.uploaded_file_link = None
 
         try:
             # Получаем contract_id из карточки
             card = self.data.get_crm_card(self.card_id)
-            if not card or not card.get('contract_id'):
+            if not card or not card.get("contract_id"):
                 return
 
-            contract_id = card['contract_id']
+            contract_id = card["contract_id"]
             # Получаем tech_task_link и tech_task_file_name из договора
             contract = self.data.get_contract(contract_id)
 
-            if contract and contract.get('tech_task_link'):
-                tech_task_link = contract['tech_task_link']
+            if contract and contract.get("tech_task_link"):
+                tech_task_link = contract["tech_task_link"]
                 self.uploaded_file_link = tech_task_link
                 # Используем сохраненное имя файла, если оно есть
-                file_name = contract.get('tech_task_file_name') or 'ТехЗадание.pdf'
+                file_name = contract.get("tech_task_file_name") or "ТехЗадание.pdf"
                 truncated_name = self.truncate_filename(file_name)
                 self.file_label_display.setText(f'<a href="{tech_task_link}" title="{file_name}">{truncated_name}</a>')
         except Exception as e:
@@ -3736,14 +3690,14 @@ class TechTaskDialog(QDialog):
 
         # Проверяем кэш родительского диалога
         parent = self.parent()
-        if parent and hasattr(parent, '_cached_contract'):
+        if parent and hasattr(parent, "_cached_contract"):
             cached = parent._cached_contract
-            if cached and cached.get('yandex_folder_path'):
-                return cached['yandex_folder_path']
+            if cached and cached.get("yandex_folder_path"):
+                return cached["yandex_folder_path"]
 
         try:
             contract = self.data.get_contract(contract_id)
-            folder = contract.get('yandex_folder_path') if contract else None
+            folder = contract.get("yandex_folder_path") if contract else None
             if folder:
                 return folder
 
@@ -3751,16 +3705,17 @@ class TechTaskDialog(QDialog):
             if contract:
                 from config import YANDEX_DISK_TOKEN
                 from utils.yandex_disk import YandexDiskManager
+
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
                 folder = yd.build_contract_folder_path(
-                    agent_type=contract.get('agent_type') or '',
-                    project_type=contract.get('project_type') or '',
-                    city=contract.get('city') or '',
-                    address=contract.get('address') or '',
-                    area=contract.get('area') or 0
+                    agent_type=contract.get("agent_type") or "",
+                    project_type=contract.get("project_type") or "",
+                    city=contract.get("city") or "",
+                    address=contract.get("address") or "",
+                    area=contract.get("area") or 0,
                 )
                 if folder:
-                    self.data.update_contract(contract_id, {'yandex_folder_path': folder})
+                    self.data.update_contract(contract_id, {"yandex_folder_path": folder})
                     return folder
 
             return None
@@ -3772,12 +3727,7 @@ class TechTaskDialog(QDialog):
         """Загрузка файла ТЗ на Яндекс.Диск"""
         from PyQt5.QtWidgets import QFileDialog
 
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Выберите PDF файл тех.задания",
-            "",
-            "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)"
-        )
+        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите PDF файл тех.задания", "", "Документы и изображения (*.pdf *.jpg *.jpeg *.png);;PDF (*.pdf);;Все файлы (*.*)")
 
         if not file_path:
             return
@@ -3785,26 +3735,22 @@ class TechTaskDialog(QDialog):
         try:
             # Получаем contract_id из crm_cards
             card = self.data.get_crm_card(self.card_id)
-            contract_id = card.get('contract_id') if card else None
+            contract_id = card.get("contract_id") if card else None
 
             if not contract_id:
-                CustomMessageBox(self, 'Ошибка', 'Договор не найден', 'error').exec_()
+                CustomMessageBox(self, "Ошибка", "Договор не найден", "error").exec_()
                 return
 
             contract_folder = self._get_contract_yandex_folder(contract_id)
 
             if not contract_folder:
-                CustomMessageBox(
-                    self,
-                    'Ошибка',
-                    'Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.',
-                    'warning'
-                ).exec_()
+                CustomMessageBox(self, "Ошибка", "Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.", "warning").exec_()
                 return
 
             file_name = os.path.basename(file_path)
 
-            from PyQt5.QtWidgets import QProgressDialog, QApplication
+            from PyQt5.QtWidgets import QApplication, QProgressDialog
+
             progress = QProgressDialog("Загрузка файла ТЗ на Яндекс.Диск...", None, 0, 0, self)
             progress.setWindowTitle("Загрузка")
             progress.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -3856,18 +3802,14 @@ class TechTaskDialog(QDialog):
                 def run(self):
                     try:
                         yd = YandexDiskManager(YANDEX_DISK_TOKEN)
-                        result = yd.upload_file_to_contract_folder(
-                            self.file_path,
-                            self.contract_folder,
-                            "Анкета",
-                            self.file_name
-                        )
+                        result = yd.upload_file_to_contract_folder(self.file_path, self.contract_folder, "Анкета", self.file_name)
                         if result:
                             self.finished.emit(result)
                         else:
                             self.error.emit("Не удалось загрузить файл")
                     except Exception as e:
                         import traceback
+
                         print(f"[ERROR] Ошибка загрузки ТЗ на Яндекс.Диск:")
                         traceback.print_exc()
                         self.error.emit(str(e))
@@ -3876,9 +3818,9 @@ class TechTaskDialog(QDialog):
 
             def on_upload_finished(result):
                 progress.close()
-                public_link = result.get('public_link')
-                yandex_path = result.get('yandex_path')
-                file_name_result = result.get('file_name')
+                public_link = result.get("public_link")
+                yandex_path = result.get("yandex_path")
+                file_name_result = result.get("file_name")
                 self.tech_task_upload_completed.emit(public_link, yandex_path, file_name_result, contract_id)
 
             def on_upload_error(error_msg):
@@ -3892,22 +3834,19 @@ class TechTaskDialog(QDialog):
         except Exception as e:
             print(f"[ERROR] Критическая ошибка загрузки ТЗ: {e}")
             import traceback
+
             traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось загрузить файл:\n{str(e)}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось загрузить файл:\n{str(e)}", "error").exec_()
 
     def _on_file_uploaded(self, public_link, yandex_path, file_name, contract_id):
         """Обработчик успешной загрузки файла"""
         if not public_link:
-            self.file_label_display.setText('Не загружен')
-            CustomMessageBox(self, 'Ошибка', 'Не удалось загрузить файл на Яндекс.Диск', 'error').exec_()
+            self.file_label_display.setText("Не загружен")
+            CustomMessageBox(self, "Ошибка", "Не удалось загрузить файл на Яндекс.Диск", "error").exec_()
             return
 
         try:
-            update_data = {
-                'tech_task_link': public_link,
-                'tech_task_yandex_path': yandex_path,
-                'tech_task_file_name': file_name
-            }
+            update_data = {"tech_task_link": public_link, "tech_task_yandex_path": yandex_path, "tech_task_file_name": file_name}
             self.data.update_contract(contract_id, update_data)
             print(f"[OK] ТЗ обновлено для договора {contract_id}")
 
@@ -3920,57 +3859,51 @@ class TechTaskDialog(QDialog):
         except Exception as e:
             print(f"[ERROR] Критическая ошибка сохранения ТЗ: {e}")
             import traceback
+
             traceback.print_exc()
-            self.file_label_display.setText('Не загружен')
-            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить данные ТЗ:\n{str(e)}', 'error').exec_()
+            self.file_label_display.setText("Не загружен")
+            CustomMessageBox(self, "Ошибка", f"Не удалось сохранить данные ТЗ:\n{str(e)}", "error").exec_()
 
     def _on_file_upload_error(self, error_msg):
         """Обработчик ошибки загрузки файла"""
-        self.file_label_display.setText('Не загружен')
-        CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки файла: {error_msg}', 'error').exec_()
+        self.file_label_display.setText("Не загружен")
+        CustomMessageBox(self, "Ошибка", f"Ошибка загрузки файла: {error_msg}", "error").exec_()
 
     def save(self):
         """Сохранение ТЗ"""
         if not self.uploaded_file_link:
-            CustomMessageBox(self, 'Ошибка', 'Сначала загрузите файл ТЗ', 'warning').exec_()
+            CustomMessageBox(self, "Ошибка", "Сначала загрузите файл ТЗ", "warning").exec_()
             return
 
-        tech_task_date = self.tech_task_date.date().toString('yyyy-MM-dd')
+        tech_task_date = self.tech_task_date.date().toString("yyyy-MM-dd")
 
         # Обновляем карточку
-        updates = {
-            'tech_task_file': self.uploaded_file_link,
-            'tech_task_date': tech_task_date
-        }
+        updates = {"tech_task_file": self.uploaded_file_link, "tech_task_date": tech_task_date}
 
         try:
             self.data.update_crm_card(self.card_id, updates)
 
             # Записываем в историю
             parent = self.parent()
-            if parent and hasattr(parent, 'employee') and parent.employee:
+            if parent and hasattr(parent, "employee") and parent.employee:
                 from datetime import datetime
-                user_id = parent.employee.get('id')
-                date_display = self.tech_task_date.date().toString('dd.MM.yyyy')
-                self.data.add_action_history(
-                    user_id=user_id,
-                    action_type='tech_task_date_changed',
-                    entity_type='crm_card',
-                    entity_id=self.card_id,
-                    description=f"ТЗ загружено: {date_display}"
-                )
+
+                user_id = parent.employee.get("id")
+                date_display = self.tech_task_date.date().toString("dd.MM.yyyy")
+                self.data.add_action_history(user_id=user_id, action_type="tech_task_date_changed", entity_type="crm_card", entity_id=self.card_id, description=f"ТЗ загружено: {date_display}")
 
             self.accept()
 
         except Exception as e:
             print(f"[ERROR] Критическая ошибка сохранения ТЗ: {e}")
             import traceback
+
             traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить ТЗ:\n{str(e)}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось сохранить ТЗ:\n{str(e)}", "error").exec_()
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self._center_on_parent()
 
@@ -3986,6 +3919,7 @@ class TechTaskDialog(QDialog):
             self.move(x, y)
         else:
             from PyQt5.QtWidgets import QDesktopWidget
+
             screen = QDesktopWidget().availableGeometry()
             x = (screen.width() - self.width()) // 2 + screen.left()
             y = (screen.height() - self.height()) // 3 + screen.top()
@@ -3994,6 +3928,7 @@ class TechTaskDialog(QDialog):
 
 class MeasurementDialog(QDialog):
     """Диалог добавления замера с загрузкой изображения"""
+
     # Сигналы для межпоточного взаимодействия
     upload_completed = pyqtSignal(str, str, str, int)  # public_link, yandex_path, file_name, contract_id
     upload_error = pyqtSignal(str)  # error_msg
@@ -4008,12 +3943,12 @@ class MeasurementDialog(QDialog):
         super().__init__(parent)
         self.card_id = card_id
         self.employee = employee
-        self.data = getattr(parent, 'data', None) or DataAccess(api_client=api_client)
+        self.data = getattr(parent, "data", None) or DataAccess(api_client=api_client)
         self.db = self.data.db
         self.api_client = self.data.api_client
         self.uploaded_image_link = None
         self.link_files = []  # Файлы из публичной ссылки
-        self._public_url = ''  # Текущая публичная ссылка
+        self._public_url = ""  # Текущая публичная ссылка
 
         # Подключаем сигналы к обработчикам
         self.upload_completed.connect(self._on_image_uploaded)
@@ -4039,6 +3974,7 @@ class MeasurementDialog(QDialog):
 
         # Разделяем имя и расширение
         import os
+
         name, ext = os.path.splitext(filename)
 
         # Рассчитываем сколько символов оставить в начале и конце
@@ -4046,7 +3982,7 @@ class MeasurementDialog(QDialog):
         available = max_length - ext_len - 3  # 3 для "..."
 
         if available <= 0:
-            return filename[:max_length - 3] + "..."
+            return filename[: max_length - 3] + "..."
 
         # Половину символов в начало, половину в конец (перед расширением)
         start_len = available // 2
@@ -4098,10 +4034,10 @@ class MeasurementDialog(QDialog):
         # === Переключатель режима загрузки ===
         mode_layout = QHBoxLayout()
         mode_layout.setSpacing(16)
-        self.mode_manual = QRadioButton('Загрузить файл')
-        self.mode_link = QRadioButton('По ссылке от замерщика')
+        self.mode_manual = QRadioButton("Загрузить файл")
+        self.mode_link = QRadioButton("По ссылке от замерщика")
         self.mode_manual.setChecked(True)
-        radio_style = 'QRadioButton { font-size: 12px; spacing: 6px; } QRadioButton::indicator { width: 16px; height: 16px; }'
+        radio_style = "QRadioButton { font-size: 12px; spacing: 6px; } QRadioButton::indicator { width: 16px; height: 16px; }"
         self.mode_manual.setStyleSheet(radio_style)
         self.mode_link.setStyleSheet(radio_style)
         mode_layout.addWidget(self.mode_manual)
@@ -4117,34 +4053,34 @@ class MeasurementDialog(QDialog):
         manual_layout.setContentsMargins(0, 0, 0, 0)
         manual_layout.setSpacing(8)
 
-        file_label = QLabel('Изображение замера:')
+        file_label = QLabel("Изображение замера:")
         manual_layout.addWidget(file_label)
 
         file_row = QHBoxLayout()
         file_row.setSpacing(10)
-        self.file_label_display = QLabel('Не загружено')
+        self.file_label_display = QLabel("Не загружено")
         self.file_label_display.setFixedHeight(28)
-        self.file_label_display.setStyleSheet('''
+        self.file_label_display.setStyleSheet("""
             QLabel { background-color: #F8F9FA; padding: 0px 8px; border: 1px solid #E0E0E0;
                 border-radius: 4px; font-size: 11px; max-width: 300px; max-height: 28px; min-height: 28px; }
             QLabel a { color: #2C3E50; text-decoration: none; }
             QLabel a:hover { color: #2980B9; text-decoration: underline; }
-        ''')
+        """)
         self.file_label_display.setWordWrap(False)
         self.file_label_display.setOpenExternalLinks(True)
         self.file_label_display.setTextInteractionFlags(Qt.TextBrowserInteraction)
         file_row.addWidget(self.file_label_display, 1)
 
-        upload_btn = QPushButton('Загрузить')
+        upload_btn = QPushButton("Загрузить")
         upload_btn.setFixedWidth(120)
         upload_btn.setFixedHeight(28)
         upload_btn.clicked.connect(self.upload_image)
-        upload_btn.setStyleSheet('''
+        upload_btn.setStyleSheet("""
             QPushButton { background-color: #E0E0E0; color: #333333; border: none;
                 padding: 0px 12px; border-radius: 4px; font-weight: bold; max-height: 28px; min-height: 28px; }
             QPushButton:hover { background-color: #D0D0D0; }
             QPushButton:pressed { background-color: #C0C0C0; }
-        ''')
+        """)
         file_row.addWidget(upload_btn)
         manual_layout.addLayout(file_row)
         manual_layout.addStretch()
@@ -4156,36 +4092,36 @@ class MeasurementDialog(QDialog):
         link_page_layout.setContentsMargins(0, 0, 0, 0)
         link_page_layout.setSpacing(6)
 
-        link_label = QLabel('Ссылка на папку замерщика:')
+        link_label = QLabel("Ссылка на папку замерщика:")
         link_page_layout.addWidget(link_label)
 
         link_row = QHBoxLayout()
         link_row.setSpacing(8)
         self.link_input = QLineEdit()
-        self.link_input.setPlaceholderText('Вставьте публичную ссылку ЯД или Google Drive...')
+        self.link_input.setPlaceholderText("Вставьте публичную ссылку ЯД или Google Drive...")
         self.link_input.setFixedHeight(28)
-        self.link_input.setStyleSheet('''
+        self.link_input.setStyleSheet("""
             QLineEdit { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px; font-size: 12px; }
             QLineEdit:focus { border-color: #4096FF; }
-        ''')
+        """)
         link_row.addWidget(self.link_input, 1)
 
-        fetch_btn = QPushButton('Получить файлы')
+        fetch_btn = QPushButton("Получить файлы")
         fetch_btn.setFixedHeight(28)
         fetch_btn.setFixedWidth(130)
         fetch_btn.clicked.connect(self._fetch_files_from_link)
-        fetch_btn.setStyleSheet('''
+        fetch_btn.setStyleSheet("""
             QPushButton { background-color: #E0E0E0; color: #333333; border: none;
                 padding: 0px 12px; border-radius: 4px; font-weight: bold; max-height: 28px; min-height: 28px; }
             QPushButton:hover { background-color: #D0D0D0; }
-        ''')
+        """)
         link_row.addWidget(fetch_btn)
         link_page_layout.addLayout(link_row)
 
         # Таблица файлов с распределением
         self.files_table = QTableWidget()
         self.files_table.setColumnCount(4)
-        self.files_table.setHorizontalHeaderLabels(['Файл', 'Размер', 'Назначение', ''])
+        self.files_table.setHorizontalHeaderLabels(["Файл", "Размер", "Назначение", ""])
         self.files_table.horizontalHeader().setStretchLastSection(False)
         self.files_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.files_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -4198,28 +4134,28 @@ class MeasurementDialog(QDialog):
         self.files_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.files_table.verticalHeader().setVisible(False)
         self.files_table.setMinimumHeight(120)
-        self.files_table.setStyleSheet('''
+        self.files_table.setStyleSheet("""
             QTableWidget { border: 1px solid #d9d9d9; border-radius: 4px; font-size: 11px; }
             QHeaderView::section { background-color: #fafafa; border: none;
                 border-bottom: 1px solid #e6e6e6; padding: 4px; font-size: 11px; }
-        ''')
+        """)
         link_page_layout.addWidget(self.files_table)
 
         upload_row = QHBoxLayout()
-        self.link_status = QLabel('')
-        self.link_status.setStyleSheet('font-size: 11px; color: #666;')
+        self.link_status = QLabel("")
+        self.link_status.setStyleSheet("font-size: 11px; color: #666;")
         upload_row.addWidget(self.link_status, 1)
 
-        self.link_upload_btn = QPushButton('Загрузить на Яндекс.Диск')
+        self.link_upload_btn = QPushButton("Загрузить на Яндекс.Диск")
         self.link_upload_btn.setFixedHeight(28)
         self.link_upload_btn.setEnabled(False)
         self.link_upload_btn.clicked.connect(self._upload_from_link)
-        self.link_upload_btn.setStyleSheet('''
+        self.link_upload_btn.setStyleSheet("""
             QPushButton { background-color: #1677FF; color: white; border: none;
                 padding: 0px 16px; border-radius: 4px; font-weight: bold; max-height: 28px; min-height: 28px; }
             QPushButton:hover { background-color: #0958D9; }
             QPushButton:disabled { background-color: #BAD7FF; color: #FFFFFF; }
-        ''')
+        """)
         upload_row.addWidget(self.link_upload_btn)
         link_page_layout.addLayout(upload_row)
 
@@ -4227,11 +4163,11 @@ class MeasurementDialog(QDialog):
         self.link_progress.setFixedHeight(16)
         self.link_progress.setVisible(False)
         self.link_progress.setTextVisible(True)
-        self.link_progress.setStyleSheet('''
+        self.link_progress.setStyleSheet("""
             QProgressBar { border: none; background-color: #F0F0F0; border-radius: 4px;
                 font-size: 10px; text-align: center; color: #333; }
             QProgressBar::chunk { background-color: #1677FF; border-radius: 4px; }
-        ''')
+        """)
         link_page_layout.addWidget(self.link_progress)
         self.mode_stack.addWidget(link_page)
 
@@ -4241,33 +4177,35 @@ class MeasurementDialog(QDialog):
         self.mode_manual.toggled.connect(self._on_mode_changed)
 
         # Замерщик
-        surveyor_label = QLabel('Замерщик:')
+        surveyor_label = QLabel("Замерщик:")
         layout.addWidget(surveyor_label)
 
         self.surveyor_combo = CustomComboBox()
         self.surveyor_combo.setFixedHeight(28)
         # Загружаем замерщиков
-        surveyors = self.data.get_employees_by_position('Замерщик')
-        self.surveyor_combo.addItem('Не назначен', None)
+        surveyors = self.data.get_employees_by_position("Замерщик")
+        self.surveyor_combo.addItem("Не назначен", None)
         for surv in surveyors:
-            self.surveyor_combo.addItem(surv['full_name'], surv['id'])
+            self.surveyor_combo.addItem(surv["full_name"], surv["id"])
 
         # Блокируем выбор замерщика если нет прав на назначение
         from utils.permissions import _has_perm
-        if not _has_perm(self.employee, getattr(self, 'api_client', None), 'crm_cards.assign_executor'):
+
+        if not _has_perm(self.employee, getattr(self, "api_client", None), "crm_cards.assign_executor"):
             self.surveyor_combo.setEnabled(False)
 
         layout.addWidget(self.surveyor_combo)
 
         # Дата замера
-        date_label = QLabel('Дата замера:')
+        date_label = QLabel("Дата замера:")
         layout.addWidget(date_label)
 
         self.measurement_date = CustomDateEdit()
         self.measurement_date.setCalendarPopup(True)
         self.measurement_date.setDate(QDate.currentDate())
-        self.measurement_date.setDisplayFormat('dd.MM.yyyy')
+        self.measurement_date.setDisplayFormat("dd.MM.yyyy")
         from utils.calendar_helpers import CALENDAR_STYLE, add_today_button_to_dateedit
+
         self.measurement_date.setStyleSheet(CALENDAR_STYLE)
         add_today_button_to_dateedit(self.measurement_date)
         layout.addWidget(self.measurement_date)
@@ -4276,7 +4214,7 @@ class MeasurementDialog(QDialog):
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
 
-        save_btn = QPushButton('Сохранить')
+        save_btn = QPushButton("Сохранить")
         save_btn.setFixedHeight(28)
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("""
@@ -4298,7 +4236,7 @@ class MeasurementDialog(QDialog):
             }
         """)
 
-        cancel_btn = QPushButton('Отмена')
+        cancel_btn = QPushButton("Отмена")
         cancel_btn.setFixedHeight(28)
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
@@ -4341,11 +4279,11 @@ class MeasurementDialog(QDialog):
         try:
             # Получаем contract_id и surveyor_id из карточки
             card = self.data.get_crm_card(self.card_id)
-            if not card or not card.get('contract_id'):
+            if not card or not card.get("contract_id"):
                 return
 
-            contract_id = card['contract_id']
-            surveyor_id = card.get('surveyor_id')
+            contract_id = card["contract_id"]
+            surveyor_id = card.get("surveyor_id")
 
             # Устанавливаем surveyor_id в ComboBox
             if surveyor_id:
@@ -4357,15 +4295,15 @@ class MeasurementDialog(QDialog):
             # Получаем данные замера из договора
             contract = self.data.get_contract(contract_id)
             if contract:
-                if contract.get('measurement_image_link'):
-                    measurement_link = contract['measurement_image_link']
+                if contract.get("measurement_image_link"):
+                    measurement_link = contract["measurement_image_link"]
                     self.uploaded_image_link = measurement_link
-                    file_name = contract.get('measurement_file_name') or 'Замер'
+                    file_name = contract.get("measurement_file_name") or "Замер"
                     truncated_name = self.truncate_filename(file_name)
                     self.file_label_display.setText(f'<a href="{measurement_link}" title="{file_name}">{truncated_name}</a>')
 
-                if contract.get('measurement_date'):
-                    measurement_date = QDate.fromString(contract['measurement_date'], 'yyyy-MM-dd')
+                if contract.get("measurement_date"):
+                    measurement_date = QDate.fromString(contract["measurement_date"], "yyyy-MM-dd")
                     self.measurement_date.setDate(measurement_date)
 
         except Exception as e:
@@ -4378,14 +4316,14 @@ class MeasurementDialog(QDialog):
 
         # Проверяем кэш родительского диалога (папка могла быть создана при назначении замерщика)
         parent = self.parent()
-        if parent and hasattr(parent, '_cached_contract'):
+        if parent and hasattr(parent, "_cached_contract"):
             cached = parent._cached_contract
-            if cached and cached.get('yandex_folder_path'):
-                return cached['yandex_folder_path']
+            if cached and cached.get("yandex_folder_path"):
+                return cached["yandex_folder_path"]
 
         try:
             contract = self.data.get_contract(contract_id)
-            folder = contract.get('yandex_folder_path') if contract else None
+            folder = contract.get("yandex_folder_path") if contract else None
             if folder:
                 return folder
 
@@ -4393,17 +4331,18 @@ class MeasurementDialog(QDialog):
             if contract:
                 from config import YANDEX_DISK_TOKEN
                 from utils.yandex_disk import YandexDiskManager
+
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
                 folder = yd.build_contract_folder_path(
-                    agent_type=contract.get('agent_type') or '',
-                    project_type=contract.get('project_type') or '',
-                    city=contract.get('city') or '',
-                    address=contract.get('address') or '',
-                    area=contract.get('area') or 0
+                    agent_type=contract.get("agent_type") or "",
+                    project_type=contract.get("project_type") or "",
+                    city=contract.get("city") or "",
+                    address=contract.get("address") or "",
+                    area=contract.get("area") or 0,
                 )
                 if folder:
                     # Сохраняем для будущих вызовов
-                    self.data.update_contract(contract_id, {'yandex_folder_path': folder})
+                    self.data.update_contract(contract_id, {"yandex_folder_path": folder})
                     return folder
 
             return None
@@ -4413,15 +4352,10 @@ class MeasurementDialog(QDialog):
 
     def upload_image(self):
         """Загрузка изображения замера на Яндекс.Диск"""
-        from PyQt5.QtWidgets import QFileDialog, QProgressDialog
         from PyQt5.QtCore import Qt, QThread, pyqtSignal
+        from PyQt5.QtWidgets import QFileDialog, QProgressDialog
 
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Выберите изображение замера",
-            "",
-            "Image Files (*.png *.jpg *.jpeg *.gif *.bmp)"
-        )
+        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите изображение замера", "", "Image Files (*.png *.jpg *.jpeg *.gif *.bmp)")
 
         if not file_path:
             return
@@ -4429,21 +4363,16 @@ class MeasurementDialog(QDialog):
         try:
             # Получаем contract_id из crm_cards
             card = self.data.get_crm_card(self.card_id)
-            contract_id = card.get('contract_id') if card else None
+            contract_id = card.get("contract_id") if card else None
 
             if not contract_id:
-                CustomMessageBox(self, 'Ошибка', 'Договор не найден', 'error').exec_()
+                CustomMessageBox(self, "Ошибка", "Договор не найден", "error").exec_()
                 return
 
             contract_folder = self._get_contract_yandex_folder(contract_id)
 
             if not contract_folder:
-                CustomMessageBox(
-                    self,
-                    'Ошибка',
-                    'Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.',
-                    'warning'
-                ).exec_()
+                CustomMessageBox(self, "Ошибка", "Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.", "warning").exec_()
                 return
 
             file_name = os.path.basename(file_path)
@@ -4509,22 +4438,17 @@ class MeasurementDialog(QDialog):
                         def update_progress(step, fname, phase):
                             self.progress_signal.emit(step, fname, phase)
 
-                        result = yd.upload_file_to_contract_folder(
-                            self.file_path,
-                            self.contract_folder,
-                            "Замер",
-                            self.file_name,
-                            progress_callback=update_progress
-                        )
+                        result = yd.upload_file_to_contract_folder(self.file_path, self.contract_folder, "Замер", self.file_name, progress_callback=update_progress)
 
                         if result:
-                            result['contract_id'] = self.contract_id
+                            result["contract_id"] = self.contract_id
                             self.finished_signal.emit(result)
                         else:
                             self.error_signal.emit("Не удалось загрузить файл")
 
                     except Exception as e:
                         import traceback
+
                         print(f"[ERROR] Ошибка загрузки замера на Яндекс.Диск:")
                         traceback.print_exc()
                         self.error_signal.emit(str(e))
@@ -4532,23 +4456,19 @@ class MeasurementDialog(QDialog):
             self.upload_thread = UploadThread(file_path, contract_folder, file_name, contract_id)
 
             def on_progress_update(step, fname, phase):
-                if hasattr(self, 'progress') and self.progress:
+                if hasattr(self, "progress") and self.progress:
                     self.progress.setValue(step)
-                    phase_names = {
-                        'preparing': 'Подготовка...',
-                        'uploading': 'Загрузка на Яндекс.Диск...',
-                        'finalizing': 'Завершение...'
-                    }
+                    phase_names = {"preparing": "Подготовка...", "uploading": "Загрузка на Яндекс.Диск...", "finalizing": "Завершение..."}
                     percent = int((step / 3) * 100)
                     self.progress.setLabelText(f"{phase_names.get(phase, phase)}\n{fname} ({percent}%)")
 
             def on_upload_finished(result):
-                if hasattr(self, 'progress') and self.progress:
+                if hasattr(self, "progress") and self.progress:
                     self.progress.setValue(3)
-                public_link = result.get('public_link')
-                yandex_path = result.get('yandex_path')
-                file_name_result = result.get('file_name')
-                contract_id_result = result.get('contract_id')
+                public_link = result.get("public_link")
+                yandex_path = result.get("yandex_path")
+                file_name_result = result.get("file_name")
+                contract_id_result = result.get("contract_id")
                 self.upload_completed.emit(public_link, yandex_path, file_name_result, contract_id_result)
 
             def on_upload_error(error_msg):
@@ -4562,29 +4482,27 @@ class MeasurementDialog(QDialog):
         except Exception as e:
             print(f"[ERROR] Критическая ошибка загрузки замера: {e}")
             import traceback
+
             traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось загрузить файл:\n{str(e)}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось загрузить файл:\n{str(e)}", "error").exec_()
 
     def _on_image_uploaded(self, public_link, yandex_path, file_name, contract_id):
         """Обработчик успешной загрузки изображения"""
 
         # Закрываем прогресс-диалог
-        if hasattr(self, 'progress') and self.progress:
+        if hasattr(self, "progress") and self.progress:
             from PyQt5.QtCore import QTimer
+
             QTimer.singleShot(0, self.progress.close)
             self.progress = None
 
         if not public_link:
-            self.file_label_display.setText('Не загружено')
-            CustomMessageBox(self, 'Ошибка', 'Не удалось загрузить изображение на Яндекс.Диск', 'error').exec_()
+            self.file_label_display.setText("Не загружено")
+            CustomMessageBox(self, "Ошибка", "Не удалось загрузить изображение на Яндекс.Диск", "error").exec_()
             return
 
         try:
-            update_data = {
-                'measurement_image_link': public_link,
-                'measurement_yandex_path': yandex_path,
-                'measurement_file_name': file_name
-            }
+            update_data = {"measurement_image_link": public_link, "measurement_yandex_path": yandex_path, "measurement_file_name": file_name}
             self.data.update_contract(contract_id, update_data)
             print(f"[OK] Замер обновлен для договора {contract_id}")
 
@@ -4596,26 +4514,28 @@ class MeasurementDialog(QDialog):
 
             # Обновляем данные в родительском окне
             parent = self.parent()
-            if parent and hasattr(parent, 'reload_measurement_data'):
+            if parent and hasattr(parent, "reload_measurement_data"):
                 parent.reload_measurement_data()
 
         except Exception as e:
             print(f"[ERROR] Критическая ошибка сохранения замера: {e}")
             import traceback
+
             traceback.print_exc()
-            self.file_label_display.setText('Не загружено')
-            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить данные замера:\n{str(e)}', 'error').exec_()
+            self.file_label_display.setText("Не загружено")
+            CustomMessageBox(self, "Ошибка", f"Не удалось сохранить данные замера:\n{str(e)}", "error").exec_()
 
     def _on_image_upload_error(self, error_msg):
         """Обработчик ошибки загрузки изображения"""
         # Закрываем прогресс-диалог
-        if hasattr(self, 'progress') and self.progress:
+        if hasattr(self, "progress") and self.progress:
             # ИСПРАВЛЕНИЕ: Закрываем прогресс через QTimer для безопасности
             from PyQt5.QtCore import QTimer
+
             QTimer.singleShot(0, self.progress.close)
             self.progress = None
 
-        CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки изображения: {error_msg}', 'error').exec_()
+        CustomMessageBox(self, "Ошибка", f"Ошибка загрузки изображения: {error_msg}", "error").exec_()
 
     # === Методы режима загрузки по ссылке ===
 
@@ -4631,30 +4551,29 @@ class MeasurementDialog(QDialog):
     def _classify_file(self, filename):
         """Определить назначение файла: Замер или Фотофиксация."""
         name_lower = filename.lower()
-        if 'замер' in name_lower or 'зам_' in name_lower or 'обмер' in name_lower:
-            return 'Замер'
-        return 'Фотофиксация'
+        if "замер" in name_lower or "зам_" in name_lower or "обмер" in name_lower:
+            return "Замер"
+        return "Фотофиксация"
 
     def _fetch_files_from_link(self):
         """Получить список файлов из публичной ссылки."""
         url = self.link_input.text().strip()
         if not url:
-            CustomMessageBox(self, 'Ошибка', 'Вставьте ссылку на папку замерщика', 'warning').exec_()
+            CustomMessageBox(self, "Ошибка", "Вставьте ссылку на папку замерщика", "warning").exec_()
             return
 
-        self.link_status.setText('Получение списка файлов...')
+        self.link_status.setText("Получение списка файлов...")
         self.files_table.setRowCount(0)
         self.link_upload_btn.setEnabled(False)
         self.link_files = []
 
-        if 'yandex' in url or 'disk.yandex' in url or 'yadi.sk' in url:
+        if "yandex" in url or "disk.yandex" in url or "yadi.sk" in url:
             self._fetch_yandex_files(url)
-        elif 'drive.google' in url:
+        elif "drive.google" in url:
             self._fetch_google_drive_files(url)
         else:
-            CustomMessageBox(self, 'Ошибка',
-                'Поддерживаются ссылки Яндекс.Диска и Google Drive', 'warning').exec_()
-            self.link_status.setText('')
+            CustomMessageBox(self, "Ошибка", "Поддерживаются ссылки Яндекс.Диска и Google Drive", "warning").exec_()
+            self.link_status.setText("")
 
     def _remove_file_row(self, row):
         """Удалить файл из списка загрузки"""
@@ -4672,19 +4591,20 @@ class MeasurementDialog(QDialog):
             # Обновляем статус
             count = self.files_table.rowCount()
             if count > 0:
-                self.link_status.setText('Файлов для загрузки: ' + str(count))
+                self.link_status.setText("Файлов для загрузки: " + str(count))
             else:
-                self.link_status.setText('Список пуст')
+                self.link_status.setText("Список пуст")
                 self.link_upload_btn.setEnabled(False)
 
     def _fetch_yandex_files(self, public_url):
         """Получить файлы из публичной папки ЯД."""
+
         def fetch_thread():
             try:
                 yd = YandexDiskManager(YANDEX_DISK_TOKEN)
                 items = yd.get_public_folder_contents(public_url)
                 # Все элементы кроме папок (dir)
-                files = [f for f in items if f.get('type') != 'dir']
+                files = [f for f in items if f.get("type") != "dir"]
                 print(f"[LINK] Всего: {len(items)}, файлов: {len(files)}")
                 self.files_fetched.emit(files, public_url)
             except Exception as e:
@@ -4694,11 +4614,8 @@ class MeasurementDialog(QDialog):
 
     def _fetch_google_drive_files(self, url):
         """Получить файлы из Google Drive (будет реализовано)."""
-        CustomMessageBox(self, 'Google Drive',
-            'Поддержка Google Drive будет добавлена в следующем обновлении.\n'
-            'Пока используйте ссылки Яндекс.Диска.',
-            'info').exec_()
-        self.link_status.setText('')
+        CustomMessageBox(self, "Google Drive", "Поддержка Google Drive будет добавлена в следующем обновлении.\nПока используйте ссылки Яндекс.Диска.", "info").exec_()
+        self.link_status.setText("")
 
     def _display_fetched_files(self, files, public_url):
         """Отобразить полученные файлы в таблице с распределением."""
@@ -4710,17 +4627,17 @@ class MeasurementDialog(QDialog):
         photo_count = 0
 
         for i, f in enumerate(files):
-            name = f.get('name', '')
-            size = f.get('size', 0)
+            name = f.get("name", "")
+            size = f.get("size", 0)
             dest = self._classify_file(name)
 
-            if dest == 'Замер':
+            if dest == "Замер":
                 measurement_count += 1
             else:
                 photo_count += 1
 
             name_item = QTableWidgetItem(name)
-            size_str = f'{size / 1024 / 1024:.1f} МБ' if size > 1024 * 1024 else f'{size / 1024:.0f} КБ'
+            size_str = f"{size / 1024 / 1024:.1f} МБ" if size > 1024 * 1024 else f"{size / 1024:.0f} КБ"
             size_item = QTableWidgetItem(size_str)
 
             self.files_table.setItem(i, 0, name_item)
@@ -4728,12 +4645,12 @@ class MeasurementDialog(QDialog):
 
             # Комбобокс для выбора назначения (Замер / Фотофиксация)
             dest_combo = QComboBox()
-            dest_combo.addItems(['Фотофиксация', 'Замер'])
+            dest_combo.addItems(["Фотофиксация", "Замер"])
             dest_combo.setCurrentText(dest)
 
             def _apply_dest_style(cb, text):
-                color = '#1677FF' if text == 'Замер' else '#52C41A'
-                cb.setStyleSheet(f'''
+                color = "#1677FF" if text == "Замер" else "#52C41A"
+                cb.setStyleSheet(f"""
                     QComboBox {{
                         border: none; background: transparent; font-size: 11px;
                         padding: 2px 4px; color: {color};
@@ -4742,33 +4659,31 @@ class MeasurementDialog(QDialog):
                     QComboBox::drop-down {{ border: none; width: 16px; }}
                     QComboBox::down-arrow {{ image: none; border: none; width: 0; }}
                     QComboBox QAbstractItemView {{ font-size: 11px; }}
-                ''')
+                """)
 
             _apply_dest_style(dest_combo, dest)
-            dest_combo.currentTextChanged.connect(
-                lambda text, cb=dest_combo: _apply_dest_style(cb, text))
+            dest_combo.currentTextChanged.connect(lambda text, cb=dest_combo: _apply_dest_style(cb, text))
             self.files_table.setCellWidget(i, 2, dest_combo)
 
             # Кнопка удаления строки из списка
-            del_btn = IconLoader.create_icon_button('delete-red', '', 'Убрать из загрузки', icon_size=12)
+            del_btn = IconLoader.create_icon_button("delete-red", "", "Убрать из загрузки", icon_size=12)
             del_btn.setFixedSize(20, 20)
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setToolTip('Убрать из загрузки')
+            del_btn.setToolTip("Убрать из загрузки")
             row_idx = i
             del_btn.clicked.connect(lambda checked, r=row_idx: self._remove_file_row(r))
             self.files_table.setCellWidget(i, 3, del_btn)
 
         if files:
             self.link_upload_btn.setEnabled(True)
-            self.link_status.setText(
-                f'Найдено файлов: {len(files)} (замер: {measurement_count}, фото: {photo_count})')
+            self.link_status.setText(f"Найдено файлов: {len(files)} (замер: {measurement_count}, фото: {photo_count})")
         else:
-            self.link_status.setText('Файлы не найдены в указанной папке')
+            self.link_status.setText("Файлы не найдены в указанной папке")
 
     def _on_fetch_error(self, error_msg):
         """Ошибка получения файлов из ссылки."""
-        self.link_status.setText('')
-        CustomMessageBox(self, 'Ошибка', f'Не удалось получить файлы:\n{error_msg}', 'error').exec_()
+        self.link_status.setText("")
+        CustomMessageBox(self, "Ошибка", f"Не удалось получить файлы:\n{error_msg}", "error").exec_()
 
     def _upload_from_link(self):
         """Скачать файлы из публичной ссылки и загрузить на ЯД владельца."""
@@ -4776,25 +4691,24 @@ class MeasurementDialog(QDialog):
             return
 
         card = self.data.get_crm_card(self.card_id)
-        contract_id = card.get('contract_id') if card else None
+        contract_id = card.get("contract_id") if card else None
         if not contract_id:
-            CustomMessageBox(self, 'Ошибка', 'Договор не найден', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", "Договор не найден", "error").exec_()
             return
 
         contract_folder = self._get_contract_yandex_folder(contract_id)
         if not contract_folder:
-            CustomMessageBox(self, 'Ошибка',
-                'Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.',
-                'warning').exec_()
+            CustomMessageBox(self, "Ошибка", "Папка договора на Яндекс.Диске не найдена.\nСначала сохраните договор.", "warning").exec_()
             return
 
         self.link_upload_btn.setEnabled(False)
         self.link_progress.setVisible(True)
         self.link_progress.setMaximum(len(self.link_files))
         self.link_progress.setValue(0)
-        self.link_status.setText('Загрузка файлов...')
+        self.link_status.setText("Загрузка файлов...")
 
         import tempfile
+
         files_copy = list(self.link_files)
         public_url = self._public_url
 
@@ -4802,7 +4716,7 @@ class MeasurementDialog(QDialog):
         file_destinations = []
         for i in range(len(files_copy)):
             combo = self.files_table.cellWidget(i, 2)
-            dest = combo.currentText() if combo else self._classify_file(files_copy[i].get('name', ''))
+            dest = combo.currentText() if combo else self._classify_file(files_copy[i].get("name", ""))
             file_destinations.append(dest)
 
         def upload_thread():
@@ -4820,15 +4734,15 @@ class MeasurementDialog(QDialog):
                 errors = []
 
                 for i, f in enumerate(files_copy):
-                    name = f.get('name', '')
-                    file_path_in_folder = f.get('path', f'/{name}')
+                    name = f.get("name", "")
+                    file_path_in_folder = f.get("path", f"/{name}")
                     dest = file_destinations[i]
-                    dest_path = meas_path if dest == 'Замер' else photo_path
+                    dest_path = meas_path if dest == "Замер" else photo_path
 
                     self.link_upload_progress.emit(i + 1, name)
 
                     # Скачиваем во временный файл
-                    tmp_path = os.path.join(tempfile.gettempdir(), f'crm_upload_{name}')
+                    tmp_path = os.path.join(tempfile.gettempdir(), f"crm_upload_{name}")
                     try:
                         ok = yd.download_public_file(public_url, file_path_in_folder, tmp_path)
                         if ok:
@@ -4847,6 +4761,7 @@ class MeasurementDialog(QDialog):
 
                 # Получаем публичные ссылки
                 import time
+
                 time.sleep(0.3)
                 meas_link = yd.get_public_link(meas_path)
                 time.sleep(0.3)
@@ -4855,10 +4770,10 @@ class MeasurementDialog(QDialog):
                 # Сохраняем в БД
                 update_data = {}
                 if meas_link:
-                    update_data['measurement_image_link'] = meas_link
-                    update_data['measurement_folder_public_link'] = meas_link
+                    update_data["measurement_image_link"] = meas_link
+                    update_data["measurement_folder_public_link"] = meas_link
                 if photo_link:
-                    update_data['photo_folder_public_link'] = photo_link
+                    update_data["photo_folder_public_link"] = photo_link
                 if update_data:
                     self.data.update_contract(contract_id, update_data)
 
@@ -4866,6 +4781,7 @@ class MeasurementDialog(QDialog):
 
             except Exception as e:
                 import traceback
+
                 traceback.print_exc()
                 self.link_upload_failed.emit(str(e))
 
@@ -4874,7 +4790,7 @@ class MeasurementDialog(QDialog):
     def _update_link_progress(self, step, filename):
         """Обновить прогресс загрузки."""
         self.link_progress.setValue(step)
-        self.link_status.setText(f'Загрузка: {filename}...')
+        self.link_status.setText(f"Загрузка: {filename}...")
 
     def _on_link_upload_done(self, count, errors, meas_link, contract_id):
         """Завершение загрузки по ссылке."""
@@ -4882,12 +4798,10 @@ class MeasurementDialog(QDialog):
         self.link_upload_btn.setEnabled(True)
 
         if errors:
-            self.link_status.setText(f'Загружено {count} файлов, ошибки: {len(errors)}')
-            CustomMessageBox(self, 'Частичная загрузка',
-                f'Загружено файлов: {count}\nОшибки:\n' + '\n'.join(errors[:5]),
-                'warning').exec_()
+            self.link_status.setText(f"Загружено {count} файлов, ошибки: {len(errors)}")
+            CustomMessageBox(self, "Частичная загрузка", f"Загружено файлов: {count}\nОшибки:\n" + "\n".join(errors[:5]), "warning").exec_()
         else:
-            self.link_status.setText(f'Успешно загружено: {count} файлов')
+            self.link_status.setText(f"Успешно загружено: {count} файлов")
 
         if meas_link:
             self.uploaded_image_link = meas_link
@@ -4895,89 +4809,77 @@ class MeasurementDialog(QDialog):
         # Обновляем родительское окно
         parent = self.parent()
         if parent:
-            if hasattr(parent, '_cached_contract') and parent._cached_contract:
+            if hasattr(parent, "_cached_contract") and parent._cached_contract:
                 if meas_link:
-                    parent._cached_contract['measurement_folder_public_link'] = meas_link
-            if hasattr(parent, 'reload_measurement_data'):
+                    parent._cached_contract["measurement_folder_public_link"] = meas_link
+            if hasattr(parent, "reload_measurement_data"):
                 parent.reload_measurement_data()
 
     def _on_link_upload_error(self, error_msg):
         """Ошибка загрузки по ссылке."""
         self.link_progress.setVisible(False)
         self.link_upload_btn.setEnabled(True)
-        self.link_status.setText('Ошибка загрузки')
-        CustomMessageBox(self, 'Ошибка', f'Ошибка загрузки файлов:\n{error_msg}', 'error').exec_()
+        self.link_status.setText("Ошибка загрузки")
+        CustomMessageBox(self, "Ошибка", f"Ошибка загрузки файлов:\n{error_msg}", "error").exec_()
 
     def save(self):
         """Сохранение данных замера"""
         if not self.uploaded_image_link:
-            msg = 'загрузите файлы по ссылке' if self.mode_link.isChecked() else 'загрузите изображение замера'
-            CustomMessageBox(self, 'Ошибка', f'Сначала {msg}', 'warning').exec_()
+            msg = "загрузите файлы по ссылке" if self.mode_link.isChecked() else "загрузите изображение замера"
+            CustomMessageBox(self, "Ошибка", f"Сначала {msg}", "warning").exec_()
             return
 
-        measurement_date = self.measurement_date.date().toString('yyyy-MM-dd')
+        measurement_date = self.measurement_date.date().toString("yyyy-MM-dd")
         surveyor_id = self.surveyor_combo.currentData()
 
         try:
             # Получаем contract_id из карточки
             card = self.data.get_crm_card(self.card_id)
-            contract_id = card.get('contract_id') if card else None
+            contract_id = card.get("contract_id") if card else None
 
             if contract_id:
                 # Обновляем дату в contracts
-                self.data.update_contract(contract_id, {'measurement_date': measurement_date})
+                self.data.update_contract(contract_id, {"measurement_date": measurement_date})
                 # Обновляем surveyor_id и survey_date в crm_cards
-                self.data.update_crm_card(self.card_id, {
-                    'surveyor_id': surveyor_id,
-                    'survey_date': measurement_date
-                })
+                self.data.update_crm_card(self.card_id, {"surveyor_id": surveyor_id, "survey_date": measurement_date})
                 print(f"[OK] Данные замера обновлены")
 
             # Обновляем данные в родительском окне
             parent = self.parent()
 
             # Добавляем запись в историю проекта
-            if parent and hasattr(parent, 'employee') and parent.employee:
+            if parent and hasattr(parent, "employee") and parent.employee:
                 from datetime import datetime
-                user_id = parent.employee.get('id')
+
+                user_id = parent.employee.get("id")
 
                 # Получаем имя замерщика
-                surveyor_name = ''
+                surveyor_name = ""
                 if surveyor_id:
                     try:
-                        emps = self.data.get_employees_by_position('Замерщик')
+                        emps = self.data.get_employees_by_position("Замерщик")
                         for e in emps:
-                            if e.get('id') == surveyor_id:
-                                surveyor_name = e.get('full_name', '')
+                            if e.get("id") == surveyor_id:
+                                surveyor_name = e.get("full_name", "")
                                 break
                     except Exception:
                         pass
 
-                date_obj = datetime.strptime(measurement_date, '%Y-%m-%d')
-                date_display = date_obj.strftime('%d.%m.%Y')
+                date_obj = datetime.strptime(measurement_date, "%Y-%m-%d")
+                date_display = date_obj.strftime("%d.%m.%Y")
                 description = f"Замер выполнен: {date_display} | Замерщик: {surveyor_name}"
 
-                self.data.add_action_history(
-                    user_id=user_id,
-                    action_type='survey_complete',
-                    entity_type='crm_card',
-                    entity_id=self.card_id,
-                    description=description
-                )
+                self.data.add_action_history(user_id=user_id, action_type="survey_complete", entity_type="crm_card", entity_id=self.card_id, description=description)
 
                 # Обновляем report_month у существующей оплаты замерщика (НЕ создаём новую —
                 # оплата создаётся при назначении замерщика через on_employee_changed)
                 if surveyor_id and contract_id:
                     try:
-                        report_month = datetime.strptime(measurement_date, '%Y-%m-%d').strftime('%Y-%m')
+                        report_month = datetime.strptime(measurement_date, "%Y-%m-%d").strftime("%Y-%m")
                         payments = self.data.get_payments_for_contract(contract_id)
-                        existing = next(
-                            (p for p in (payments or [])
-                             if p.get('employee_id') == surveyor_id and p.get('role') == 'Замерщик'),
-                            None
-                        )
+                        existing = next((p for p in (payments or []) if p.get("employee_id") == surveyor_id and p.get("role") == "Замерщик"), None)
                         if existing:
-                            self.data.update_payment(existing['id'], {'report_month': report_month})
+                            self.data.update_payment(existing["id"], {"report_month": report_month})
                             print(f"[OK] report_month замерщика обновлён: {report_month}")
                         else:
                             print(f"[INFO] Оплата замерщика не найдена — будет создана при назначении")
@@ -4985,26 +4887,27 @@ class MeasurementDialog(QDialog):
                         print(f"[WARNING] Ошибка обновления report_month замерщика: {e}")
 
                 # Обновляем историю в родительском окне
-                if hasattr(parent, 'reload_project_history'):
+                if hasattr(parent, "reload_project_history"):
                     parent.reload_project_history()
                 print(f"[OK] Добавлена запись в историю: {description}")
 
             if parent:
                 # Обновляем card_data с новыми значениями
-                if hasattr(parent, 'card_data'):
-                    parent.card_data['surveyor_id'] = surveyor_id
-                    parent.card_data['survey_date'] = measurement_date
+                if hasattr(parent, "card_data"):
+                    parent.card_data["surveyor_id"] = surveyor_id
+                    parent.card_data["survey_date"] = measurement_date
                 # Обновляем отображение данных замера
-                if hasattr(parent, 'reload_measurement_data'):
+                if hasattr(parent, "reload_measurement_data"):
                     parent.reload_measurement_data()
                 # Принудительно обновляем labels с датой и замерщиком
                 from datetime import datetime
+
                 try:
-                    date_obj = datetime.strptime(measurement_date, '%Y-%m-%d')
-                    date_str = date_obj.strftime('%d.%m.%Y')
-                    if hasattr(parent, 'survey_date_label'):
+                    date_obj = datetime.strptime(measurement_date, "%Y-%m-%d")
+                    date_str = date_obj.strftime("%d.%m.%Y")
+                    if hasattr(parent, "survey_date_label"):
                         parent.survey_date_label.setText(date_str)
-                    if hasattr(parent, 'project_data_survey_date_label'):
+                    if hasattr(parent, "project_data_survey_date_label"):
                         parent.project_data_survey_date_label.setText(date_str)
                 except Exception:
                     pass
@@ -5014,12 +4917,13 @@ class MeasurementDialog(QDialog):
         except Exception as e:
             print(f"[ERROR] Критическая ошибка сохранения замера: {e}")
             import traceback
+
             traceback.print_exc()
-            CustomMessageBox(self, 'Ошибка', f'Не удалось сохранить данные замера:\n{str(e)}', 'error').exec_()
+            CustomMessageBox(self, "Ошибка", f"Не удалось сохранить данные замера:\n{str(e)}", "error").exec_()
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not hasattr(self, '_centered'):
+        if not hasattr(self, "_centered"):
             self._centered = True
             self._center_on_parent()
 
@@ -5035,20 +4939,21 @@ class MeasurementDialog(QDialog):
             self.move(x, y)
         else:
             from PyQt5.QtWidgets import QDesktopWidget
+
             screen = QDesktopWidget().availableGeometry()
             x = (screen.width() - self.width()) // 2 + screen.left()
             y = (screen.height() - self.height()) // 3 + screen.top()
             self.move(x, y)
 
 
-
-
 # ===========================================================================
 # ScriptPreviewDialog
 # ===========================================================================
 
+
 class ScriptPreviewDialog(QDialog):
     """Диалог предпросмотра скрипта перед отправкой в групповой чат."""
+
     _send_done = pyqtSignal(object, bool, str)
     _send_error = pyqtSignal(str)
 
@@ -5072,9 +4977,7 @@ class ScriptPreviewDialog(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
         frame = QFrame()
         frame.setObjectName("borderFrame")
-        frame.setStyleSheet(
-            "QFrame#borderFrame { background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px; }"
-        )
+        frame.setStyleSheet("QFrame#borderFrame { background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px; }")
         outer.addWidget(frame)
         frame_layout = QVBoxLayout(frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
@@ -5082,15 +4985,11 @@ class ScriptPreviewDialog(QDialog):
 
         stage = self.card_data.get("column_name", "")
         title_bar = CustomTitleBar(self, "Отправить клиенту: " + stage, simple_mode=True)
-        title_bar.setStyleSheet(
-            "background-color: #F5F5F5; border-top-left-radius: 10px; border-top-right-radius: 10px;"
-        )
+        title_bar.setStyleSheet("background-color: #F5F5F5; border-top-left-radius: 10px; border-top-right-radius: 10px;")
         frame_layout.addWidget(title_bar)
 
         content = QWidget()
-        content.setStyleSheet(
-            "background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;"
-        )
+        content.setStyleSheet("background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
         c_layout = QVBoxLayout(content)
         c_layout.setContentsMargins(16, 12, 16, 12)
         c_layout.setSpacing(10)
@@ -5101,10 +5000,7 @@ class ScriptPreviewDialog(QDialog):
 
         self._text_edit = QTextEdit()
         self._text_edit.setMinimumHeight(160)
-        self._text_edit.setStyleSheet(
-            "QTextEdit { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px;"
-            " font-size: 12px; background-color: #FAFAFA; }"
-        )
+        self._text_edit.setStyleSheet("QTextEdit { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px; font-size: 12px; background-color: #FAFAFA; }")
         c_layout.addWidget(self._text_edit)
 
         lbl_files = QLabel("Файлы для отправки:")
@@ -5114,9 +5010,7 @@ class ScriptPreviewDialog(QDialog):
         self._files_scroll = QScrollArea()
         self._files_scroll.setWidgetResizable(True)
         self._files_scroll.setMaximumHeight(140)
-        self._files_scroll.setStyleSheet(
-            "QScrollArea { border: 1px solid #d9d9d9; border-radius: 6px; background-color: #FAFAFA; }"
-        )
+        self._files_scroll.setStyleSheet("QScrollArea { border: 1px solid #d9d9d9; border-radius: 6px; background-color: #FAFAFA; }")
         self._files_container = QWidget()
         self._files_layout = QVBoxLayout(self._files_container)
         self._files_layout.setContentsMargins(8, 6, 8, 6)
@@ -5140,10 +5034,7 @@ class ScriptPreviewDialog(QDialog):
         self._deadline_edit.setDate(QDate.currentDate())
         self._deadline_edit.setFixedWidth(140)
         self._deadline_edit.dateChanged.connect(self._on_deadline_changed)
-        self._deadline_edit.setStyleSheet(
-            "QDateEdit { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px;"
-            " font-size: 12px; background-color: white; }"
-        )
+        self._deadline_edit.setStyleSheet("QDateEdit { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px; font-size: 12px; background-color: white; }")
         deadline_row.addWidget(self._deadline_edit)
         self._norm_days_label = QLabel("")
         self._norm_days_label.setStyleSheet("font-size: 11px; color: #888;")
@@ -5202,6 +5093,7 @@ class ScriptPreviewDialog(QDialog):
             if dl:
                 try:
                     from datetime import datetime as dt
+
                     d = dt.strptime(dl, "%d.%m.%Y")
                     self._deadline_edit.setDate(QDate(d.year, d.month, d.day))
                     self._original_deadline = dl
@@ -5247,7 +5139,7 @@ class ScriptPreviewDialog(QDialog):
         new_dl = new_date.toString("dd.MM.yyyy")
         text = self._text_edit.toPlainText()
         # Заменить текущую дату дедлайна в тексте на новую
-        current_dl = getattr(self, '_current_text_deadline', self._original_deadline)
+        current_dl = getattr(self, "_current_text_deadline", self._original_deadline)
         if current_dl and current_dl in text:
             text = text.replace(current_dl, new_dl)
             self._text_edit.setPlainText(text)
@@ -5265,7 +5157,7 @@ class ScriptPreviewDialog(QDialog):
                 if fid:
                     selected_ids.append(fid)
         current_dl = self._deadline_edit.date().toString("dd.MM.yyyy")
-        custom_deadline = (self._original_deadline and current_dl != self._original_deadline)
+        custom_deadline = self._original_deadline and current_dl != self._original_deadline
         card_id = self.card_data.get("id")
 
         # Блокируем кнопку чтобы не нажали дважды
@@ -5283,7 +5175,9 @@ class ScriptPreviewDialog(QDialog):
         def _do_send():
             try:
                 result = self.data.send_edited_script(
-                    card_id=card_id, text=text, file_ids=selected_ids,
+                    card_id=card_id,
+                    text=text,
+                    file_ids=selected_ids,
                     deadline_date=current_dl if custom_deadline else None,
                     custom_deadline=bool(custom_deadline),
                 )
@@ -5294,7 +5188,7 @@ class ScriptPreviewDialog(QDialog):
         threading.Thread(target=_do_send, daemon=True).start()
 
     def _on_send_finished(self, result, custom_deadline, current_dl):
-        if hasattr(self, '_progress') and self._progress:
+        if hasattr(self, "_progress") and self._progress:
             self._progress.close()
         if result and result.get("status") == "sent":
             sent_files = result.get("sent_files", 0)
@@ -5311,7 +5205,7 @@ class ScriptPreviewDialog(QDialog):
             CustomMessageBox(self, "Ошибка", "Не удалось отправить сообщение", "error").exec_()
 
     def _on_send_error(self, error_text):
-        if hasattr(self, '_progress') and self._progress:
+        if hasattr(self, "_progress") and self._progress:
             self._progress.close()
         self._send_btn.setEnabled(True)
         self._send_btn.setText("Отправить в чат")
@@ -5326,6 +5220,7 @@ class ActSendDialog(QDialog):
       2         — пользователь нажал "Пропустить" (продолжить без акта)
       Rejected  — отмена
     """
+
     SKIP_RESULT = 2
     _send_done = pyqtSignal(object)
     _send_error = pyqtSignal(str)
@@ -5349,9 +5244,7 @@ class ActSendDialog(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
         frame = QFrame()
         frame.setObjectName("borderFrame")
-        frame.setStyleSheet(
-            "QFrame#borderFrame { background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px; }"
-        )
+        frame.setStyleSheet("QFrame#borderFrame { background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px; }")
         outer.addWidget(frame)
         frame_layout = QVBoxLayout(frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
@@ -5359,15 +5252,11 @@ class ActSendDialog(QDialog):
 
         stage = self.card_data.get("column_name", "")
         title_bar = CustomTitleBar(self, "Отправить акт: " + stage, simple_mode=True)
-        title_bar.setStyleSheet(
-            "background-color: #F5F5F5; border-top-left-radius: 10px; border-top-right-radius: 10px;"
-        )
+        title_bar.setStyleSheet("background-color: #F5F5F5; border-top-left-radius: 10px; border-top-right-radius: 10px;")
         frame_layout.addWidget(title_bar)
 
         content = QWidget()
-        content.setStyleSheet(
-            "background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;"
-        )
+        content.setStyleSheet("background-color: #FFFFFF; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
         c_layout = QVBoxLayout(content)
         c_layout.setContentsMargins(16, 12, 16, 12)
         c_layout.setSpacing(10)
@@ -5378,10 +5267,7 @@ class ActSendDialog(QDialog):
 
         self._text_edit = QTextEdit()
         self._text_edit.setMinimumHeight(180)
-        self._text_edit.setStyleSheet(
-            "QTextEdit { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px;"
-            " font-size: 12px; background-color: #FAFAFA; }"
-        )
+        self._text_edit.setStyleSheet("QTextEdit { border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px; font-size: 12px; background-color: #FAFAFA; }")
         c_layout.addWidget(self._text_edit)
 
         lbl_files = QLabel("Файлы актов:")
@@ -5391,9 +5277,7 @@ class ActSendDialog(QDialog):
         self._files_scroll = QScrollArea()
         self._files_scroll.setWidgetResizable(True)
         self._files_scroll.setMaximumHeight(100)
-        self._files_scroll.setStyleSheet(
-            "QScrollArea { border: 1px solid #d9d9d9; border-radius: 6px; background-color: #FAFAFA; }"
-        )
+        self._files_scroll.setStyleSheet("QScrollArea { border: 1px solid #d9d9d9; border-radius: 6px; background-color: #FAFAFA; }")
         self._files_container = QWidget()
         self._files_layout = QVBoxLayout(self._files_container)
         self._files_layout.setContentsMargins(8, 6, 8, 6)
@@ -5494,11 +5378,7 @@ class ActSendDialog(QDialog):
 
     def _on_skip(self):
         """Пропустить — спрашиваем подтверждение, как в sign_act."""
-        reply = CustomQuestionBox(
-            self, 'Пропустить акт',
-            'Продолжить без отправки акта?\n\n'
-            'Этап подписания акта будет пропущен.'
-        ).exec_()
+        reply = CustomQuestionBox(self, "Пропустить акт", "Продолжить без отправки акта?\n\nЭтап подписания акта будет пропущен.").exec_()
         if reply == QDialog.Accepted:
             self.done(self.SKIP_RESULT)
 
@@ -5525,9 +5405,7 @@ class ActSendDialog(QDialog):
 
         def _do_send():
             try:
-                result = self.data.send_act(
-                    card_id=card_id, text=text, act_prefixes=selected_prefixes
-                )
+                result = self.data.send_act(card_id=card_id, text=text, act_prefixes=selected_prefixes)
                 self._send_done.emit(result)
             except Exception as e:
                 self._send_error.emit(str(e))
@@ -5535,7 +5413,7 @@ class ActSendDialog(QDialog):
         threading.Thread(target=_do_send, daemon=True).start()
 
     def _on_send_finished(self, result):
-        if hasattr(self, '_progress') and self._progress:
+        if hasattr(self, "_progress") and self._progress:
             self._progress.close()
         if result and result.get("status") == "sent":
             sent_files = result.get("sent_files", 0)
@@ -5550,7 +5428,7 @@ class ActSendDialog(QDialog):
             CustomMessageBox(self, "Ошибка", "Не удалось отправить акт", "error").exec_()
 
     def _on_send_error(self, error_text):
-        if hasattr(self, '_progress') and self._progress:
+        if hasattr(self, "_progress") and self._progress:
             self._progress.close()
         self._send_btn.setEnabled(True)
         self._send_btn.setText("Отправить акт")

@@ -11,8 +11,8 @@ const $q = useQuasar()
 useMeta({
   title: 'Interior Studio CRM',
   meta: {
-    description: { name: 'description', content: 'CRM для интерьерного бюро Festival Color' }
-  }
+    description: { name: 'description', content: 'CRM для интерьерного бюро Festival Color' },
+  },
 })
 
 // Реактивный статус сети — provide для дочерних компонентов

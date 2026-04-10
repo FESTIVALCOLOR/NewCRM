@@ -17,7 +17,13 @@
     <div v-if="isRecording" class="row items-center q-gutter-sm">
       <div class="recording-pulse" />
       <span class="text-caption text-weight-medium" style="color: #E74C3C; min-width: 36px">{{ formattedTime }}</span>
-      <q-btn round icon="stop" color="negative" size="sm" @click="stopRecording">
+      <q-btn
+        round
+        icon="stop"
+        color="negative"
+        size="sm"
+        @click="stopRecording"
+      >
         <q-tooltip>Остановить</q-tooltip>
       </q-btn>
     </div>
@@ -25,10 +31,23 @@
     <!-- Превью записанного аудио -->
     <div v-if="audioBlob && !isRecording" class="row items-center q-gutter-sm" style="flex-wrap: nowrap">
       <audio ref="audioPlayer" :src="audioUrl" controls style="height: 32px; max-width: 180px" />
-      <q-btn round icon="send" color="positive" size="sm" @click="uploadAndSend" :loading="uploading">
+      <q-btn
+        round
+        icon="send"
+        color="positive"
+        size="sm"
+        :loading="uploading"
+        @click="uploadAndSend"
+      >
         <q-tooltip>Отправить</q-tooltip>
       </q-btn>
-      <q-btn round icon="delete" color="negative" size="sm" @click="discardRecording">
+      <q-btn
+        round
+        icon="delete"
+        color="negative"
+        size="sm"
+        @click="discardRecording"
+      >
         <q-tooltip>Удалить</q-tooltip>
       </q-btn>
     </div>
@@ -44,8 +63,8 @@ const props = defineProps({
   /** Путь к папке на Яндекс.Диске (без disk: префикса) для загрузки заметок */
   yandexFolderPath: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 
 const emit = defineEmits(['recorded'])
@@ -152,7 +171,7 @@ async function uploadAndSend() {
       url: uploadedUrl,
       duration,
       fileName,
-      path: uploadPath
+      path: uploadPath,
     })
 
     $q.notify({ type: 'positive', message: 'Голосовая заметка загружена' })
