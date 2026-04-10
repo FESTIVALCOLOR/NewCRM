@@ -305,7 +305,7 @@
                     dense
                     no-caps
                     icon="skip_next"
-                    label="Следующий круг"
+                    label="Следующий подэтап"
                     style="background: #5DADE2; color: white; font-size: 11px; font-weight: bold; height: 36px; border-radius: 4px; flex: 1"
                     :loading="actionLoading"
                     @click="doAdvanceRound"
@@ -3167,7 +3167,7 @@ async function doAdvanceRound() {
   actionLoading.value = true
   try {
     await crmApi.advanceRound(card.value.id)
-    $q.notify({ type: 'positive', message: 'Переход на следующий круг' })
+    $q.notify({ type: 'positive', message: 'Переход к следующему подэтапу' })
     await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   finally { actionLoading.value = false }

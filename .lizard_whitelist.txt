@@ -1,0 +1,13 @@
+# Whitelist давно существующих сложных функций (pre-existing)
+# Добавлять сюда только функции, которые были превышением ДО commit
+get_crm_cards
+move_crm_card_to_column
+workflow_reject_work
+workflow_client_send
+workflow_client_approved
+workflow_sign_act
+_do_card_move
+create_archive_board
+apply_archive_filters
+init_ui
+accept_work

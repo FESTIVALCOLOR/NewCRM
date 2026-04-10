@@ -2470,7 +2470,17 @@ async def workflow_client_send(card_id: int, current_user: Employee = Depends(re
     db.commit()
 
     # Хук: уведомление в чат об отправке клиенту (с дедлайном)
-    asyncio.create_task(trigger_messenger_notification(card_id, "stage_complete", stage_name=f"{stage_name} (отправлено клиенту)", extra_context={"deadline": deadline_str} if deadline_str else None))
+    # Строим имя скрипта в формате БД: "Стадия N, подэтап N.M" или "Стадия N"
+    _script_stage_name = None
+    _sn_for_script = _extract_stage_number(stage_name)
+    _sub_group = wf.current_substage_group if wf else ""
+    if _sn_for_script and _sub_group:
+        # "Подэтап 2.1" → "Стадия 2, подэтап 2.1"
+        _sub_lower = _sub_group.strip().lower()  # "подэтап 2.1"
+        _script_stage_name = f"Стадия {_sn_for_script}, {_sub_lower}"
+    elif _sn_for_script:
+        _script_stage_name = f"Стадия {_sn_for_script}"
+    asyncio.create_task(trigger_messenger_notification(card_id, "stage_complete", stage_name=_script_stage_name, extra_context={"deadline": deadline_str} if deadline_str else None))
 
     # Личные уведомления: "Отправлено клиенту" → ст.менеджер + исполнитель (для Стадии 2 инд.)
     # Руководство §2/§3: тексты зависят от подэтапа и типа проекта

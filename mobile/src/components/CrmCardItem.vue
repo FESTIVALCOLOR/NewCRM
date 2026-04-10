@@ -132,12 +132,38 @@
         </div>
         <!-- Решение после согласования клиента (pending_decision) -->
         <div v-if="canPendingDecision" class="q-mb-xs">
-          <div style="font-size: 9px; color: #888; text-align: center; margin-bottom: 3px">Клиент согласовал. Выберите действие:</div>
-          <div class="row q-gutter-xs q-mb-xs">
-            <q-btn unelevated dense no-caps icon="skip_next" label="След. круг" style="background: #5DADE2; color: white; font-size: 10px; font-weight: bold; height: 30px; border-radius: 4px; flex: 1" @click.stop="emit('advance-round')" />
-            <q-btn unelevated dense no-caps icon="done_all" label="Закрыть этап" style="background: #27AE60; color: white; font-size: 10px; font-weight: bold; height: 30px; border-radius: 4px; flex: 1" @click.stop="emit('close-stage')" />
+          <div style="font-size: 9px; color: #888; text-align: center; margin-bottom: 3px">
+            Клиент согласовал. Выберите действие:
           </div>
-          <q-btn unelevated dense no-caps icon="add_circle_outline" label="Доп. круг" style="background: #D5D8DC; color: #333; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; width: 100%" @click.stop="emit('add-extra-round')" />
+          <div class="row q-gutter-xs q-mb-xs">
+            <q-btn
+              unelevated
+              dense
+              no-caps
+              icon="skip_next"
+              label="Следующий подэтап"
+              style="background: #5DADE2; color: white; font-size: 10px; font-weight: bold; height: 30px; border-radius: 4px; flex: 1"
+              @click.stop="emit('advance-round')"
+            />
+            <q-btn
+              unelevated
+              dense
+              no-caps
+              icon="done_all"
+              label="Закрыть этап"
+              style="background: #27AE60; color: white; font-size: 10px; font-weight: bold; height: 30px; border-radius: 4px; flex: 1"
+              @click.stop="emit('close-stage')"
+            />
+          </div>
+          <q-btn
+            unelevated
+            dense
+            no-caps
+            icon="add_circle_outline"
+            label="Доп. круг"
+            style="background: #D5D8DC; color: #333; font-size: 10px; font-weight: bold; height: 28px; border-radius: 4px; width: 100%"
+            @click.stop="emit('add-extra-round')"
+          />
         </div>
         <div v-if="canSignAct" class="row q-gutter-xs q-mb-xs">
           <q-btn
