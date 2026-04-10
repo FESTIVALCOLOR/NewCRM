@@ -58,12 +58,12 @@
             </q-banner>
 
             <!-- Кнопка — белая с чёрной рамкой, по ширине полей -->
-            <div>
+            <div class="login-btn-wrap">
               <q-btn
                 type="submit"
                 label="Войти"
                 :loading="authStore.loading"
-                class="full-width login-btn"
+                class="full-width"
                 no-caps
                 outline
                 color="dark"
@@ -130,8 +130,8 @@ async function handleLogin() {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-.login-btn :deep(.q-btn__wrapper) {
+.login-btn-wrap :deep(.q-btn) {
   min-height: 56px !important;
-  padding: 0;
+  height: 56px !important;
 }
 </style>
