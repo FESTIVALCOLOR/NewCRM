@@ -131,7 +131,7 @@ async function handleLogin() {
 }
 
 .login-btn-wrap :deep(.q-btn) {
-  min-height: 56px !important;
-  height: 56px !important;
+  min-height: 40px !important;
+  height: 40px !important;
 }
 </style>
