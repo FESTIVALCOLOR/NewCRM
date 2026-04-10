@@ -63,11 +63,11 @@
                 type="submit"
                 label="Войти"
                 :loading="authStore.loading"
-                class="full-width"
+                class="full-width login-btn"
                 no-caps
                 outline
                 color="dark"
-                style="border-radius: 4px; font-weight: 600; height: 56px; font-size: 14px"
+                style="border-radius: 4px; font-weight: 600; font-size: 14px"
               />
             </div>
           </q-form>
@@ -128,5 +128,10 @@ async function handleLogin() {
   border-radius: 10px;
   border: 1px solid #E0E0E0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.login-btn {
+  min-height: 56px !important;
+  height: 56px !important;
 }
 </style>
