@@ -130,8 +130,8 @@ async function handleLogin() {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-.login-btn {
+.login-btn :deep(.q-btn__wrapper) {
   min-height: 56px !important;
-  height: 56px !important;
+  padding: 0;
 }
 </style>
