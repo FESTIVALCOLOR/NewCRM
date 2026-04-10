@@ -104,6 +104,9 @@
                   @reject="doCardAction(card.id, 'reject')"
                   @client-send="doCardAction(card.id, 'client-send')"
                   @client-approved="doCardAction(card.id, 'client-approved')"
+                  @advance-round="doCardAction(card.id, 'advance-round')"
+                  @close-stage="doCardAction(card.id, 'close-stage')"
+                  @add-extra-round="doCardAction(card.id, 'add-extra-round')"
                   @sign-act="doCardAction(card.id, 'sign-act')"
                   @add-measurement="openMeasurementDialog(card)"
                   @add-tech-task="openTechTaskDialog(card)"
@@ -151,6 +154,9 @@
                   @reject="doCardAction(card.id, 'reject')"
                   @client-send="doCardAction(card.id, 'client-send')"
                   @client-approved="doCardAction(card.id, 'client-approved')"
+                  @advance-round="doCardAction(card.id, 'advance-round')"
+                  @close-stage="doCardAction(card.id, 'close-stage')"
+                  @add-extra-round="doCardAction(card.id, 'add-extra-round')"
                   @sign-act="doCardAction(card.id, 'sign-act')"
                   @add-measurement="openMeasurementDialog(card)"
                   @add-tech-task="openTechTaskDialog(card)"
@@ -555,6 +561,9 @@ async function doCardAction(cardId, action) {
       reject: () => { openBoardReject(cardId); return null },
       'client-send': () => crmApi.sendToClient(cardId),
       'client-approved': () => crmApi.clientApproved(cardId),
+      'advance-round': () => crmApi.advanceRound(cardId),
+      'close-stage': () => crmApi.closeStage(cardId),
+      'add-extra-round': () => crmApi.addExtraRound(cardId),
       'sign-act': () => crmApi.signAct(cardId),
       'send-act': () => { $q.notify({ type: 'info', message: 'Акт отправлен клиенту' }); return { ok: true } },
     }

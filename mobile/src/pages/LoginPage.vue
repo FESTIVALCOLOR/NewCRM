@@ -67,7 +67,7 @@
                 no-caps
                 outline
                 color="dark"
-                style="border-radius: 4px; font-weight: 600; height: 40px; font-size: 14px"
+                style="border-radius: 4px; font-weight: 600; height: 56px; font-size: 14px"
               />
             </div>
           </q-form>
