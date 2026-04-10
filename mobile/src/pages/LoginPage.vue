@@ -64,11 +64,10 @@
                 label="Войти"
                 :loading="authStore.loading"
                 class="full-width"
-                size="lg"
                 no-caps
                 outline
                 color="dark"
-                style="border-radius: 8px; font-weight: 600"
+                style="border-radius: 4px; font-weight: 600; height: 40px; font-size: 14px"
               />
             </div>
           </q-form>
