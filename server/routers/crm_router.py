@@ -957,7 +957,8 @@ async def move_crm_card_to_column(card_id: int, move_request: ColumnMoveRequest,
                 # Автоматически отправляется только опрос (Яндекс Формы).
                 asyncio.create_task(send_survey_to_chat(card.id))
             elif "Стадия" in new_column:
-                asyncio.create_task(trigger_messenger_notification(card.id, "stage_complete", stage_name=old_column, sender_id=current_user.id))
+                # Передаём new_column (куда пришла карточка), а не old_column
+                asyncio.create_task(trigger_messenger_notification(card.id, "stage_complete", stage_name=new_column, sender_id=current_user.id))
 
         # Личные уведомления при перемещении в новую стадию / выполненный проект
         if old_column != new_column and new_column != "В ожидании" and old_column != "В ожидании":
@@ -3375,6 +3376,13 @@ async def workflow_add_extra_round(card_id: int, request: Request, current_user:
         _sync_workflow_substep(db, card_id, stage_name, contract_id)
 
         db.commit()
+
+        # Хук: уведомление в чат о добавлении платного круга
+        # Скрипты в БД именуются "Стадия N, платный круг"
+        _extra_stage_num = _extract_stage_number(stage_name)
+        _extra_script_stage = f"Стадия {_extra_stage_num}, платный круг" if _extra_stage_num else stage_name
+        asyncio.create_task(trigger_messenger_notification(card_id, "stage_complete", stage_name=_extra_script_stage))
+
         return {"status": "extra_round_added", "round_number": ext_num}
 
     except HTTPException:

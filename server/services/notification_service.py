@@ -30,6 +30,22 @@ from database import (
 
 logger = logging.getLogger(__name__)
 
+# Суффиксы, которые добавляются к stage_name при вызовах workflow-событий.
+# Нормализуем перед поиском скрипта, чтобы точное совпадение работало корректно.
+_STAGE_NAME_SUFFIXES = (
+    " (клиент согласовал)",
+    " (акт подписан)",
+    " (отправлено клиенту)",
+)
+
+
+def _strip_stage_suffix(stage_name: str) -> str:
+    """Убрать известный суффикс из stage_name перед поиском скрипта."""
+    for suffix in _STAGE_NAME_SUFFIXES:
+        if stage_name.endswith(suffix):
+            return stage_name[: -len(suffix)]
+    return stage_name
+
 
 def decline_name_dative(full_name: str) -> str:
     """Склоняет ФИО в дательный падеж (кому?)."""
@@ -356,11 +372,23 @@ async def trigger_messenger_notification(
         # Определить тип проекта для фильтрации скриптов
         card_project_type = contract.project_type or ""
 
+        # Нормализуем stage_name: убираем суффиксы типа " (клиент согласовал)"
+        # чтобы точное совпадение с записями в БД работало корректно.
+        lookup_stage = _strip_stage_suffix(stage_name or "")
+
         # Найти подходящий скрипт с фильтром по project_type
-        script = _find_matching_script(own_db, script_type, stage_name, card_project_type)
+        script = _find_matching_script(own_db, script_type, lookup_stage, card_project_type)
 
         if not script:
-            return  # Нет включённого скрипта для этого события
+            logger.warning(
+                "[trigger_messenger] Скрипт не найден: card=%s, type=%r, stage=%r (lookup=%r), project_type=%r",
+                crm_card_id,
+                script_type,
+                stage_name,
+                lookup_stage,
+                card_project_type,
+            )
+            return
 
         # Собрать контекст
         ctx = build_script_context(own_db, card, contract)
