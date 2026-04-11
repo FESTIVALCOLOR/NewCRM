@@ -104,8 +104,8 @@ export const crmApi = {
   closeStage: (cardId) =>
     api.post(`/api/v1/crm/cards/${cardId}/workflow/close-stage`),
 
-  addExtraRound: (cardId) =>
-    api.post(`/api/v1/crm/cards/${cardId}/workflow/add-extra-round`),
+  addExtraRound: (cardId, data = {}) =>
+    api.post(`/api/v1/crm/cards/${cardId}/workflow/add-extra-round`, data),
   managerAcceptance: (cardId) =>
     api.post(`/api/v1/crm/cards/${cardId}/manager-acceptance`),
   completeApprovalStage: (cardId, data) =>

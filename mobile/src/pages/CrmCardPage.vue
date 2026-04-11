@@ -2424,7 +2424,14 @@ const substepProgress = computed(() => {
       seen.add(group)
       let label
       if (e.substage_group) {
-        label = e.substage_group.replace('Подэтап ', '')
+        // "Подэтап 2.1" → "2.1", "Доп. круг 1" → "+1" (короткий лейбл для бейджа)
+        if (e.substage_group.startsWith('Подэтап ')) {
+          label = e.substage_group.replace('Подэтап ', '')
+        } else if (e.substage_group.startsWith('Доп. круг ')) {
+          label = '+' + e.substage_group.replace('Доп. круг ', '')
+        } else {
+          label = e.substage_group
+        }
       } else {
         // Плоская стадия — показываем номер стадии (STAGE3 → "3")
         label = (group || '').replace('STAGE', '')
@@ -3186,7 +3193,10 @@ async function doCloseStage() {
 async function doAddExtraRound() {
   actionLoading.value = true
   try {
-    await crmApi.addExtraRound(card.value.id)
+    const colLower = (card.value.column_name || '').toLowerCase()
+    const isDesign = colLower.includes('концепция') || colLower.includes('визуализац') || colLower.includes('3д')
+    const executorRole = isDesign ? 'Дизайнер' : 'Чертёжник'
+    await crmApi.addExtraRound(card.value.id, { executor_role: executorRole })
     $q.notify({ type: 'positive', message: 'Добавлен дополнительный круг' })
     await reloadCard()
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
