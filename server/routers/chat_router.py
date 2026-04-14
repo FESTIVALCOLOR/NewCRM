@@ -527,7 +527,7 @@ def _check_member(db: Session, chat_id: int, employee_id: int):
 def _require_perm(user: Employee, perm: str, db: Session):
     from permissions import get_employee_permissions
 
-    perms = get_employee_permissions(user, db)
+    perms = get_employee_permissions(user.id, db)
     if perm not in perms:
         raise HTTPException(403, f"Нет права: {perm}")
 
