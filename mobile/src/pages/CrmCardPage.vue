@@ -94,8 +94,8 @@
         <q-tab name="data" label="Данные" />
         <q-tab name="history" label="История" />
         <q-tab v-if="can('crm_cards.payments')" name="payments" label="Оплаты" />
-        <q-tab v-if="!isExecutor && can('messenger.view_chat')" name="chat" label="Чат" />
-        <q-tab name="notes" label="Заметки" />
+        <q-tab v-if="can('chat.client.view')" name="chat" label="Чат с клиентом" />
+        <q-tab v-if="can('chat.employee.view')" name="notes" label="Чат сотрудников" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent" style="padding-bottom: 80px">
@@ -1017,87 +1017,25 @@
           </q-card-section>
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА: Заметки (текстовые + голосовые) ====== -->
+        <!-- ====== ВКЛАДКА: Чат сотрудников ====== -->
         <q-tab-panel name="notes" class="q-pa-none">
-          <!-- Добавить текстовую заметку -->
-          <q-card class="is-card q-mb-md">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                Новая заметка
-              </div>
-            </q-card-section>
-            <q-card-section>
-              <q-input
-                v-model="noteText"
-                outlined
-                dense
-                type="textarea"
-                autogrow
-                placeholder="Введите текст заметки..."
-                class="q-mb-sm"
-              />
-              <div class="row items-center q-gutter-sm">
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="send"
-                  label="Отправить"
-                  style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px; flex: 1"
-                  :loading="noteSending"
-                  :disable="!noteText?.trim()"
-                  @click="submitNote"
-                />
-                <VoiceRecorder :yandex-folder-path="contractData?.yandex_folder_path || ''" @recorded="onVoiceRecorded" />
-              </div>
-            </q-card-section>
-          </q-card>
-
-          <!-- Список заметок -->
-          <q-card class="is-card">
-            <q-card-section class="q-pb-none">
-              <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                Все заметки
-              </div>
-            </q-card-section>
-            <q-list v-if="notesList.length > 0" dense separator>
-              <q-item v-for="n in notesList" :key="n.id">
-                <q-item-section avatar>
-                  <q-icon :name="n.action_type === 'voice_note' ? 'mic' : 'comment'" :color="n.action_type === 'voice_note' ? 'purple' : 'blue-grey'" size="18px" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label style="font-size: 12px; color: #333">
-                    {{ (n.description || 'Заметка').replace(/\[voice:[^\]]*\]\s*/, '') }}
-                  </q-item-label>
-                  <q-item-label caption style="color: #888">
-                    {{ n.user_name || 'Неизвестный' }}
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section v-if="n.action_type === 'voice_note' && noteVoiceUrl(n)" side>
-                  <audio :src="voiceStreamUrl(noteVoiceUrl(n))" controls preload="none" style="height: 36px; width: 120px" />
-                </q-item-section>
-                <q-item-section side>
-                  <div class="text-caption" style="color: #888">
-                    {{ fmtDateTime(n.action_date) }}
-                  </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
-            <q-card-section v-else class="text-center" style="color: #999; padding: 24px">
-              <q-icon name="speaker_notes_off" size="32px" color="grey-4" class="q-mb-sm" /><div>Нет заметок</div>
-            </q-card-section>
-          </q-card>
+          <InlineChatRoom
+            v-if="notesTabVisited && card?.id"
+            chat-type="employee"
+            :card-id="card.id"
+          />
         </q-tab-panel>
 
-        <!-- ====== ВКЛАДКА: Telegram-чат ====== -->
+        <!-- ====== ВКЛАДКА: Чат с клиентом ====== -->
         <q-tab-panel name="chat" class="q-pa-none">
-          <!-- Загрузка -->
-          <div v-if="chatLoading" class="q-pa-md text-center">
-            <q-spinner color="grey-5" size="24px" />
-          </div>
+          <InlineChatRoom
+            v-if="chatTabVisited && card?.id"
+            chat-type="client"
+            :card-id="card.id"
+          />
 
-          <!-- Чат существует -->
-          <template v-else-if="chatData">
+          <!-- DEPRECATED: старый Telegram-чат (скрыт) — оставлен для возможного восстановления -->
+          <template v-if="false && chatData">
             <q-card class="is-card q-mb-md">
               <q-card-section>
                 <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">
@@ -1196,7 +1134,7 @@
             </q-card>
           </template>
 
-          <!-- Чат не создан -->
+          <!-- Чат не создан (старый Telegram) -->
           <template v-else>
             <q-card class="is-card q-mb-md">
               <q-card-section class="text-center q-pa-lg">
@@ -1802,7 +1740,7 @@ import { usePermission } from 'src/composables/usePermission'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
 import MeasurementDialog from 'src/components/MeasurementDialog.vue'
-import VoiceRecorder from 'src/components/VoiceRecorder.vue'
+import InlineChatRoom from 'src/components/InlineChatRoom.vue'
 import { addToCalendar } from 'src/composables/useCalendar'
 
 const { can, isSuperuser } = usePermission()
@@ -1881,6 +1819,8 @@ const restoreStageOptions = computed(() => {
   ]
 })
 const activeTab = ref('executors')
+const chatTabVisited = ref(false)
+const notesTabVisited = ref(false)
 const actionLoading = ref(false)
 const employeeOptions = ref([])
 const cardPayments = ref([])
@@ -1939,9 +1879,8 @@ const historyFilter = ref('all')
 // Загрузка чата при переключении на вкладку + сохранение вкладки в URL
 watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } })
-  if (tab === 'chat' && !chatData.value && !chatLoading.value) loadChat()
-  // Заметки подгружаются из actionHistory — при переходе обновляем если данных ещё нет
-  if (tab === 'notes' && actionHistory.value.length === 0 && card.value?.id) reloadCard()
+  if (tab === 'chat') chatTabVisited.value = true
+  if (tab === 'notes') notesTabVisited.value = true
 })
 
 // Диалог назначения
@@ -3507,7 +3446,11 @@ async function releaseLock() {
 onMounted(async () => {
   try {
     const id = route.params.id
-    if (route.query.tab) activeTab.value = route.query.tab
+    if (route.query.tab) {
+      activeTab.value = route.query.tab
+      if (route.query.tab === 'chat') chatTabVisited.value = true
+      if (route.query.tab === 'notes') notesTabVisited.value = true
+    }
     await crmStore.loadCard(id)
     await loadAdditionalData(id)
     await acquireLock(id)
