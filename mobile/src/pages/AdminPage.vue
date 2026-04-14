@@ -137,7 +137,7 @@
                     size="xs"
                     icon="edit"
                     color="grey-7"
-                    @click="editCity(city.name)"
+                    @click="editCity(city)"
                   />
                   <q-btn
                     flat
@@ -681,9 +681,16 @@ function deleteCity(city) {
 }
 
 function editCity(city) {
-  $q.dialog({ title: 'Редактировать', prompt: { model: city, type: 'text' }, cancel: true }).onOk(() => {
-    $q.notify({ type: 'info', message: 'Переименование: удалите старый и создайте новый' })
-  })
+  $q.dialog({ title: 'Переименовать город', prompt: { model: city.name, type: 'text', label: 'Название' }, cancel: true })
+    .onOk(async (name) => {
+      if (!name || name.trim() === city.name) return
+      try {
+        await api.patch(`/api/v1/cities/${city.id}`, { name: name.trim() })
+        $q.notify({ type: 'positive', message: 'Город переименован' })
+        refs.loaded = false
+        await Promise.all([refs.loadAll(), loadCitiesFull()])
+      } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+    })
 }
 
 async function loadTgInfo() {

@@ -149,11 +149,10 @@
       <div class="col-auto" style="display: flex; align-items: stretch">
         <q-btn
           outline
-          dense
           no-caps
           label="Сбросить"
           color="grey"
-          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 80px; height: 40px"
+          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 80px; height: 40px; min-height: 40px; padding: 0 12px"
           @click="resetFilters"
         />
       </div>
@@ -292,33 +291,18 @@
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
                         <!-- Статус (только информация, не кнопка) -->
-                        <q-chip
+                        <span
                           v-if="p.is_paid || p.payment_status === 'paid'"
-                          dense
-                          color="positive"
-                          text-color="white"
-                          style="font-size: 10px; height: 24px; padding: 0 8px; border-radius: 4px; cursor: default; margin: 0"
-                        >
-                          Оплачено
-                        </q-chip>
-                        <q-chip
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#21BA45;color:#fff;white-space:nowrap"
+                        >Оплачено</span>
+                        <span
                           v-else-if="p.payment_status === 'to_pay'"
-                          dense
-                          color="warning"
-                          text-color="dark"
-                          style="font-size: 10px; height: 24px; padding: 0 8px; border-radius: 4px; cursor: default; margin: 0"
-                        >
-                          К оплате
-                        </q-chip>
-                        <q-chip
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#F2C037;color:#333;white-space:nowrap"
+                        >К оплате</span>
+                        <span
                           v-else
-                          dense
-                          color="grey-3"
-                          text-color="grey-7"
-                          style="font-size: 10px; height: 24px; padding: 0 8px; border-radius: 4px; cursor: default; margin: 0"
-                        >
-                          В работе
-                        </q-chip>
+                          style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#EEEEEE;color:#666;white-space:nowrap"
+                        >В работе</span>
                         <!-- Кнопка действия по статусу -->
                         <q-btn
                           v-if="can('salaries.mark_paid') && (p.is_paid || p.payment_status === 'paid')"
