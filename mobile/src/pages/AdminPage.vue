@@ -79,6 +79,9 @@
         <div v-if="filteredRates.length === 0" class="text-center q-pa-md" style="color: #999">
           Нет тарифов
         </div>
+        <q-page-sticky position="bottom-right" :offset="[18, 18]">
+          <q-btn fab icon="add" style="background: #ffd93c; color: #333" @click="addRate" />
+        </q-page-sticky>
       </q-tab-panel>
 
       <!-- АГЕНТЫ -->
@@ -95,7 +98,17 @@
                 {{ agent.name }}
               </q-item-section>
               <q-item-section side>
-                <input type="color" :value="agent.color || '#95A5A6'" style="width: 28px; height: 28px; border: none; cursor: pointer; border-radius: 4px" @change="updateAgentColor(agent, $event.target.value)">
+                <div class="row items-center q-gutter-xs">
+                  <input type="color" :value="agent.color || '#95A5A6'" style="width: 28px; height: 28px; border: none; cursor: pointer; border-radius: 4px" @change="updateAgentColor(agent, $event.target.value)">
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    @click="deleteAgent(agent)"
+                  />
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
@@ -109,22 +122,32 @@
       <q-tab-panel name="cities" class="q-pa-none">
         <q-card class="is-card">
           <q-list separator>
-            <q-item v-for="city in refs.cities" :key="city">
+            <q-item v-for="city in citiesFull" :key="city.id">
               <q-item-section avatar>
                 <q-icon name="location_on" color="grey-7" />
               </q-item-section>
               <q-item-section style="color: #333">
-                {{ city }}
+                {{ city.name }}
               </q-item-section>
               <q-item-section side>
-                <q-btn
-                  flat
-                  dense
-                  size="sm"
-                  icon="edit"
-                  color="grey-7"
-                  @click="editCity(city)"
-                />
+                <div class="row items-center q-gutter-xs">
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="edit"
+                    color="grey-7"
+                    @click="editCity(city.name)"
+                  />
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="delete"
+                    color="negative"
+                    @click="deleteCity(city)"
+                  />
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
@@ -399,46 +422,69 @@
           </q-toolbar-title>
         </q-toolbar>
         <q-card-section v-if="editingRate">
-          <q-select
-            v-model="editingRate.role"
-            :options="refs.positions"
-            label="Роль"
-            outlined
-            dense
-            class="q-mb-sm"
-          />
-          <q-input
-            v-model.number="editingRate.rate_per_m2"
-            label="₽/м²"
-            outlined
-            dense
-            type="number"
-            class="q-mb-sm"
-          />
-          <q-input
-            v-model.number="editingRate.fixed_price"
-            label="Фикс. цена"
-            outlined
-            dense
-            type="number"
-            class="q-mb-sm"
-          />
-          <q-input
-            v-model="editingRate.stage_name"
-            label="Стадия"
-            outlined
-            dense
-            class="q-mb-sm"
-          />
-          <q-select
-            v-model="editingRate.city"
-            :options="refs.cities"
-            label="Город"
-            outlined
-            dense
-            clearable
-            class="q-mb-sm"
-          />
+          <!-- Тариф замерщика: только цена и город -->
+          <template v-if="rateTab === 'surveyor' || editingRate.surveyor_price">
+            <q-input
+              v-model.number="editingRate.surveyor_price"
+              label="Цена замера (₽)"
+              outlined
+              dense
+              type="number"
+              class="q-mb-sm"
+            />
+            <q-select
+              v-model="editingRate.city"
+              :options="refs.cities"
+              label="Город"
+              outlined
+              dense
+              clearable
+              class="q-mb-sm"
+            />
+          </template>
+          <!-- Остальные тарифы -->
+          <template v-else>
+            <q-select
+              v-model="editingRate.role"
+              :options="refs.positions"
+              label="Роль"
+              outlined
+              dense
+              class="q-mb-sm"
+            />
+            <q-input
+              v-model.number="editingRate.rate_per_m2"
+              label="₽/м²"
+              outlined
+              dense
+              type="number"
+              class="q-mb-sm"
+            />
+            <q-input
+              v-model.number="editingRate.fixed_price"
+              label="Фикс. цена"
+              outlined
+              dense
+              type="number"
+              class="q-mb-sm"
+            />
+            <q-input
+              v-model="editingRate.stage_name"
+              label="Стадия"
+              outlined
+              dense
+              class="q-mb-sm"
+            />
+            <q-select
+              v-model="editingRate.city"
+              :options="refs.cities"
+              label="Город"
+              outlined
+              dense
+              clearable
+              class="q-mb-sm"
+            />
+          </template>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn v-close-popup flat label="Отмена" no-caps />
@@ -535,10 +581,23 @@ function editRate(rate) {
   showRateDialog.value = true
 }
 
+function addRate() {
+  if (rateTab.value === 'surveyor') {
+    editingRate.value = { role: 'Замерщик', surveyor_price: null, city: null }
+  } else {
+    editingRate.value = { role: null, rate_per_m2: null, fixed_price: null, stage_name: '', city: null }
+  }
+  showRateDialog.value = true
+}
+
 async function saveRate() {
   if (!editingRate.value) return
   try {
-    if (editingRate.value.id) {
+    const isSurveyor = rateTab.value === 'surveyor' || !!editingRate.value.surveyor_price
+    if (isSurveyor) {
+      // Замерщик: upsert по городу через специальный endpoint
+      await api.post('/api/v1/rates/surveyor', { city: editingRate.value.city, price: editingRate.value.surveyor_price })
+    } else if (editingRate.value.id) {
       await api.put(`/api/v1/rates/${editingRate.value.id}`, editingRate.value)
     } else {
       await api.post('/api/v1/rates', editingRate.value)
@@ -590,14 +649,32 @@ function addAgent() {
   })
 }
 
+function deleteAgent(agent) {
+  $q.dialog({ title: 'Удалить агента?', message: agent.name, cancel: true }).onOk(async () => {
+    try { await api.delete(`/api/v1/agents/${agent.id}`); $q.notify({ type: 'positive', message: 'Удалён' }); refs.loaded = false; refs.loadAll() }
+    catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  })
+}
+
 async function updateAgentColor(agent, color) {
   try { await api.patch(`/api/v1/agents/${encodeURIComponent(agent.name)}/color`, { color }); refs.loaded = false; refs.loadAll() }
   catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
 }
 
+async function loadCitiesFull() {
+  try { const { data } = await api.get('/api/v1/cities'); citiesFull.value = data.filter(c => c.status === 'активный') } catch { citiesFull.value = [] }
+}
+
 function addCity() {
   $q.dialog({ title: 'Новый город', prompt: { model: '', type: 'text', label: 'Название' }, cancel: true }).onOk(async (name) => {
-    try { await api.post('/api/v1/cities', { name }); $q.notify({ type: 'positive', message: 'Добавлен' }); refs.loaded = false; refs.loadAll() }
+    try { await api.post('/api/v1/cities', { name }); $q.notify({ type: 'positive', message: 'Добавлен' }); refs.loaded = false; await Promise.all([refs.loadAll(), loadCitiesFull()]) }
+    catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
+  })
+}
+
+function deleteCity(city) {
+  $q.dialog({ title: 'Удалить город?', message: city.name, cancel: true }).onOk(async () => {
+    try { await api.delete(`/api/v1/cities/${city.id}`); $q.notify({ type: 'positive', message: 'Удалён' }); refs.loaded = false; await Promise.all([refs.loadAll(), loadCitiesFull()]) }
     catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
   })
 }
@@ -644,6 +721,7 @@ async function sendInvite() {
 
 onMounted(async () => {
   loadRates()
+  loadCitiesFull()
   try {
     const { data } = await api.get('/api/v1/employees')
     inviteEmployeeOpts.value = data.filter(e => e.status === 'активный').map(e => ({ label: `${e.full_name} (${e.email || 'нет email'})`, value: e.id }))

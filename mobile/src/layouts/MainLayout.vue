@@ -591,6 +591,8 @@ const menuItems = [
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты по сотрудникам' },
   { to: '/files', icon: 'folder', label: 'Файлы' },
+  { to: '/employee-chats', icon: 'chat', label: 'Чат сотрудников' },
+  { to: '/client-chats', icon: 'support_agent', label: 'Чат с клиентами' },
   { to: '/admin', icon: 'admin_panel_settings', label: 'Администрирование' },
 ]
 
@@ -606,6 +608,7 @@ const bottomTabs = [
   { to: '/salaries', icon: 'payments', label: 'Зарплаты' },
   { to: '/employee-reports', icon: 'assessment', label: 'Отчёты сотр.' },
   { to: '/notifications', icon: 'notifications', label: 'Уведомления' },
+  { to: '/employee-chats', icon: 'chat', label: 'Чат' },
   { to: '/admin', icon: 'admin_panel_settings', label: 'Админ' },
 ]
 

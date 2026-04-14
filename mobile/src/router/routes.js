@@ -124,6 +124,58 @@ export default [
         component: () => import('src/pages/ProfilePage.vue'),
         meta: { title: 'Профиль', icon: 'person' },
       },
+      // === Чаты сотрудников ===
+      {
+        path: 'employee-chats',
+        name: 'employee-chats',
+        component: () => import('src/pages/EmployeeChatsPage.vue'),
+        meta: { title: 'Чат сотрудников', icon: 'chat', requiresPermission: 'chat.employee.view' },
+      },
+      {
+        path: 'employee-chats/:chatId',
+        name: 'employee-chat-room',
+        component: () => import('src/pages/EmployeeChatRoomPage.vue'),
+        meta: { title: 'Чат', requiresPermission: 'chat.employee.view' },
+      },
+      // === Чаты с клиентами ===
+      {
+        path: 'client-chats',
+        name: 'client-chats',
+        component: () => import('src/pages/ClientChatsPage.vue'),
+        meta: { title: 'Чат с клиентами', icon: 'support_agent', requiresPermission: 'chat.client.view' },
+      },
+      {
+        path: 'client-chats/:chatId',
+        name: 'client-chat-room',
+        component: () => import('src/pages/ClientChatRoomPage.vue'),
+        meta: { title: 'Чат с клиентом', requiresPermission: 'chat.client.view' },
+      },
+    ],
+  },
+
+  // === Клиентский PWA (без авторизации) ===
+  {
+    path: '/c/:token',
+    component: () => import('src/layouts/ClientLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'client-chat',
+        component: () => import('src/pages/ClientChatPage.vue'),
+        meta: { requiresAuth: false },
+      },
+    ],
+  },
+  {
+    path: '/c/:token/register',
+    component: () => import('src/layouts/ClientLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'client-register',
+        component: () => import('src/pages/ClientRegisterPage.vue'),
+        meta: { requiresAuth: false },
+      },
     ],
   },
 

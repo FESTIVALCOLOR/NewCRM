@@ -1079,6 +1079,104 @@ class EmployeeKpiSnapshot(Base):
     employee = relationship("Employee")
 
 
+# =========================
+# ВНУТРЕННИЙ ЧАТ
+# =========================
+
+
+class InternalChat(Base):
+    """Внутренние чаты проектов (сотрудники и клиенты)"""
+
+    __tablename__ = "internal_chats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # employee — чат сотрудников по заказу, client — чат с клиентом
+    chat_type = Column(String(20), nullable=False)  # 'employee' / 'client'
+
+    crm_card_id = Column(Integer, ForeignKey("crm_cards.id", ondelete="CASCADE"), nullable=True, index=True)
+    supervision_card_id = Column(Integer, nullable=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    title = Column(String(255), nullable=True)  # Адрес объекта — заполняется автоматически
+
+    # Подпапка ВНУТРИ папки карточки:
+    # employee: {contract.yandex_folder_path}/Чат сотрудников
+    # client:   {contract.yandex_folder_path}/Чат с клиентом
+    yandex_folder_path = Column(String, nullable=True)
+
+    # UUID-токен для доступа клиента по ссылке (только chat_type='client')
+    client_access_token = Column(String(36), nullable=True, unique=True, index=True)
+
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    members = relationship("InternalChatMember", back_populates="chat", cascade="all, delete-orphan")
+    messages = relationship("InternalChatMessage", back_populates="chat", cascade="all, delete-orphan")
+
+
+class InternalChatMember(Base):
+    """Участники внутреннего чата"""
+
+    __tablename__ = "internal_chat_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("internal_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Тип участника: employee (сотрудник) или client_guest (представитель заказчика)
+    member_type = Column(String(20), nullable=False)  # 'employee' / 'client_guest'
+
+    # Для сотрудников
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+    # Для клиентов/гостей (заполняются при регистрации по ссылке)
+    guest_name = Column(String(100), nullable=True)
+    guest_phone = Column(String(20), nullable=True)
+    # Каждый представитель имеет свой уникальный токен доступа
+    guest_access_token = Column(String(36), nullable=True, unique=True, index=True)
+
+    # ID последнего прочитанного сообщения (для подсчёта непрочитанных)
+    last_read_message_id = Column(Integer, nullable=True)
+
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    chat = relationship("InternalChat", back_populates="members")
+    employee = relationship("Employee")
+
+
+class InternalChatMessage(Base):
+    """Сообщения внутреннего чата"""
+
+    __tablename__ = "internal_chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("internal_chats.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Отправитель: либо сотрудник, либо гость-клиент
+    sender_employee_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    sender_guest_token = Column(String(36), nullable=True)  # guest_access_token участника-гостя
+    sender_display_name = Column(String(100), nullable=False)  # Имя для отображения
+
+    # Тип: text / voice / image / file / system
+    message_type = Column(String(20), nullable=False, default="text")
+
+    content = Column(Text, nullable=True)  # Текст сообщения
+
+    # Файл/медиа (голос, изображение, документ)
+    file_url = Column(String, nullable=True)  # Публичная ссылка ЯД
+    file_name = Column(String(255), nullable=True)
+    file_size = Column(Integer, nullable=True)  # Байты
+    # Путь внутри папки карточки: {contract.yandex_folder_path}/Чат сотрудников/...
+    yandex_path = Column(String, nullable=True)
+
+    is_deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    chat = relationship("InternalChat", back_populates="messages")
+    sender = relationship("Employee", foreign_keys=[sender_employee_id])
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 

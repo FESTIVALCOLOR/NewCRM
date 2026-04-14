@@ -1,0 +1,417 @@
+<template>
+  <q-page class="column" style="height: 100vh; overflow: hidden">
+    <!-- Шапка -->
+    <div class="row items-center q-px-md q-py-sm bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
+      <q-btn
+        flat
+        round
+        dense
+        icon="arrow_back"
+        @click="$router.back()"
+      />
+      <div class="q-ml-sm column" style="flex: 1; min-width: 0">
+        <div class="text-subtitle2 text-weight-bold ellipsis">
+          {{ chatTitle }}
+        </div>
+        <div v-if="typingText" class="text-caption text-grey ellipsis">
+          {{ typingText }}
+        </div>
+        <div v-else class="text-caption text-grey">
+          <q-icon name="people" size="10px" class="q-mr-xs" />{{ membersCount }} участников
+        </div>
+      </div>
+
+      <!-- Кнопка: ссылка клиенту (только при наличии прав) -->
+      <q-btn
+        v-if="canManage && clientToken"
+        flat
+        round
+        dense
+        icon="link"
+        @click="showInviteMenu = true"
+      >
+        <q-tooltip>Ссылка для клиента</q-tooltip>
+      </q-btn>
+
+      <!-- Кнопка: отправить скрипт -->
+      <q-btn
+        v-if="canScript"
+        flat
+        round
+        dense
+        icon="text_snippet"
+        @click="showScriptDialog = true"
+      >
+        <q-tooltip>Отправить скрипт</q-tooltip>
+      </q-btn>
+    </div>
+
+    <!-- Список сообщений -->
+    <div
+      ref="messagesEl"
+      class="col q-pa-md"
+      style="overflow-y: auto; background: #F5F5F5"
+    >
+      <div v-if="loadingMessages" class="text-center q-mt-lg">
+        <q-spinner size="24px" color="grey" />
+      </div>
+
+      <div v-else-if="!messages.length" class="text-center text-grey q-mt-xl">
+        <q-icon name="chat_bubble_outline" size="40px" />
+        <div class="q-mt-sm">
+          Нет сообщений
+        </div>
+      </div>
+
+      <template v-else>
+        <div
+          v-for="msg in messages"
+          :key="msg.id"
+          class="q-mb-sm"
+          :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
+        >
+          <!-- Системные -->
+          <div v-if="msg.message_type === 'system'" class="text-center full-width">
+            <q-chip dense size="sm" color="grey-3" text-color="grey-7">
+              {{ msg.content }}
+            </q-chip>
+          </div>
+
+          <div
+            v-else
+            :class="isOwn(msg) ? 'bubble-own' : 'bubble-other'"
+            style="max-width: 75%"
+          >
+            <div
+              v-if="!isOwn(msg)"
+              class="text-caption text-weight-bold q-mb-xs"
+              :style="{ color: isGuest(msg) ? '#2E7D32' : '#1565C0' }"
+            >
+              {{ msg.sender_display_name }}
+              <q-chip
+                v-if="isGuest(msg)"
+                dense
+                size="xs"
+                color="green-2"
+                text-color="green-9"
+              >
+                клиент
+              </q-chip>
+            </div>
+
+            <template v-if="msg.message_type === 'file' || msg.message_type === 'image'">
+              <div class="row items-center q-gutter-xs">
+                <q-icon :name="msg.message_type === 'image' ? 'image' : 'attach_file'" size="20px" />
+                <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 200px; color: inherit">
+                  {{ msg.file_name || 'Файл' }}
+                </a>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="text-body2" style="white-space: pre-wrap; word-break: break-word">
+                {{ msg.content }}
+              </div>
+            </template>
+
+            <div class="text-caption q-mt-xs" :class="isOwn(msg) ? 'text-right' : 'text-left'" style="color: #888; font-size: 10px">
+              {{ formatTime(msg.created_at) }}
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Панель ввода -->
+    <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
+      <div class="row items-end q-gutter-xs">
+        <q-btn
+          flat
+          round
+          dense
+          icon="attach_file"
+          @click="pickFile"
+        >
+          <q-tooltip>Прикрепить файл</q-tooltip>
+        </q-btn>
+        <input ref="fileInput" type="file" class="hidden" @change="onFileSelected">
+        <q-input
+          v-model="inputText"
+          outlined
+          dense
+          autogrow
+          placeholder="Сообщение…"
+          style="flex: 1"
+          @keydown.enter.exact.prevent="sendText"
+          @input="onTyping"
+        />
+        <q-btn
+          round
+          dense
+          icon="send"
+          color="green"
+          :disable="!inputText.trim()"
+          @click="sendText"
+        />
+      </div>
+    </div>
+
+    <!-- Диалог скрипта -->
+    <q-dialog v-model="showScriptDialog">
+      <q-card style="min-width: 340px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">
+            Отправить скрипт
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-separator />
+        <q-card-section>
+          <q-input
+            v-model="scriptText"
+            type="textarea"
+            outlined
+            label="Текст скрипта"
+            rows="5"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat label="Отмена" />
+          <q-btn
+            color="primary"
+            label="Отправить"
+            :disable="!scriptText.trim()"
+            @click="sendScript"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Меню ссылок -->
+    <q-dialog v-model="showInviteMenu">
+      <q-card style="min-width: 340px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">
+            Доступ клиента
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-separator />
+        <q-card-section>
+          <div class="text-body2 q-mb-md">
+            Основная ссылка:
+          </div>
+          <q-input :model-value="clientLink" readonly outlined dense>
+            <template #append>
+              <q-btn flat dense icon="content_copy" @click="copyText(clientLink)" />
+            </template>
+          </q-input>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat label="Закрыть" />
+          <q-btn color="primary" label="Создать доп. ссылку" @click="createExtraLink" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+  </q-page>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import { api } from 'src/boot/axios'
+import { useChatWebSocket } from 'src/composables/useChatWebSocket'
+import { usePermission } from 'src/composables/usePermission'
+import { useAuthStore } from 'src/stores/auth'
+import { useQuasar } from 'quasar'
+
+const route = useRoute()
+const authStore = useAuthStore()
+const { can } = usePermission()
+const $q = useQuasar()
+const chatId = Number(route.params.chatId)
+
+const { isConnected, connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
+
+const chatTitle = ref('Чат с клиентом')
+const messages = ref([])
+const members = ref([])
+const inputText = ref('')
+const loadingMessages = ref(false)
+const messagesEl = ref(null)
+const fileInput = ref(null)
+const clientToken = ref('')
+const showScriptDialog = ref(false)
+const showInviteMenu = ref(false)
+const scriptText = ref('')
+
+const canManage = computed(() => can('chat.client.manage'))
+const canScript = computed(() => can('chat.client.send_script'))
+const membersCount = computed(() => members.value.length)
+
+const clientLink = computed(() => {
+  if (!clientToken.value) return ''
+  return `${window.location.origin}/c/${clientToken.value}`
+})
+
+const typingText = computed(() => {
+  if (!typingUsers.value.length) return ''
+  const names = typingUsers.value.map(u => u.name)
+  if (names.length === 1) return `${names[0]} печатает…`
+  return `${names.join(', ')} печатают…`
+})
+
+function isOwn(msg) {
+  return msg.sender_employee_id === authStore.employee?.id
+}
+
+function isGuest(msg) {
+  return !!msg.sender_guest_token
+}
+
+function formatTime(dt) {
+  if (!dt) return ''
+  return new Date(dt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  })
+}
+
+async function loadMessages() {
+  loadingMessages.value = true
+  try {
+    const { data } = await api.get(`/api/v1/chats/${chatId}`)
+    chatTitle.value = data.title || `Чат #${chatId}`
+    messages.value = data.messages || []
+    members.value = data.members || []
+    clientToken.value = data.client_access_token || ''
+    scrollToBottom()
+
+    if (messages.value.length) {
+      sendRead(messages.value[messages.value.length - 1].id)
+    }
+  } catch (e) {
+    console.error('[ClientChatRoom] Ошибка:', e)
+  } finally {
+    loadingMessages.value = false
+  }
+}
+
+function sendText() {
+  const text = inputText.value.trim()
+  if (!text) return
+  sendMessage(text)
+  inputText.value = ''
+}
+
+let typingTimer = null
+function onTyping() {
+  sendTypingStart()
+  if (typingTimer) clearTimeout(typingTimer)
+  typingTimer = setTimeout(() => sendTypingStop(), 2000)
+}
+
+function pickFile() {
+  fileInput.value?.click()
+}
+
+async function onFileSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    await api.post(`/api/v1/chats/${chatId}/files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
+  } finally {
+    event.target.value = ''
+  }
+}
+
+async function sendScript() {
+  const text = scriptText.value.trim()
+  if (!text) return
+  try {
+    await api.post(`/api/v1/chats/${chatId}/messages`, {
+      content: text,
+      message_type: 'system',
+    })
+    scriptText.value = ''
+    showScriptDialog.value = false
+    $q.notify({ type: 'positive', message: 'Скрипт отправлен' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка отправки скрипта' })
+  }
+}
+
+async function createExtraLink() {
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/invite-links`)
+    const token = data.access_token
+    const link = `${window.location.origin}/c/${token}`
+    copyText(link)
+    $q.notify({ type: 'positive', message: 'Новая ссылка скопирована' })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка создания ссылки' })
+  }
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => { })
+}
+
+onMounted(() => {
+  loadMessages()
+  const token = localStorage.getItem('access_token')
+  if (token) {
+    connectEmployee(chatId, token, {
+      onMessage: (msg) => {
+        messages.value.push(msg)
+        scrollToBottom()
+      },
+    })
+  }
+})
+
+onUnmounted(() => {
+  disconnect()
+  if (typingTimer) clearTimeout(typingTimer)
+})
+</script>
+
+<style scoped>
+.bubble-own {
+  background: #E8F5E9;
+  border-radius: 12px 12px 2px 12px;
+  padding: 8px 12px;
+}
+.bubble-other {
+  background: #fff;
+  border-radius: 12px 12px 12px 2px;
+  padding: 8px 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.hidden {
+  display: none;
+}
+</style>

@@ -13,3 +13,16 @@ init_ui
 accept_work
 build_script_context
 trigger_supervision_notification
+create_project_data_widget
+create_project_info_widget
+load_data
+validate
+refresh_file_labels
+auto_save_field
+on_employee_changed
+_update_chat_buttons_state
+create_payments_tab
+adjust_payment_amount
+reload_stage_files
+startup_event
+validate_stage_files_on_yandex.validate

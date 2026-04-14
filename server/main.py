@@ -2,47 +2,47 @@
 FastAPI приложение - главный файл
 REST API для многопользовательской CRM
 """
+
 import asyncio
+from datetime import datetime
 import logging
 import os
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
-from datetime import datetime
 from typing import List, Optional
 
-from slowapi.errors import RateLimitExceeded
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from rate_limit import limiter
-
+from slowapi.errors import RateLimitExceeded
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from config import get_settings
-from database import (
-    get_db, init_db, SessionLocal,
-    Employee, Client, Contract, Notification,
-)
-from schemas import NotificationResponse, SyncRequest, SyncResponse
-from telegram_service import get_telegram_service
-from email_service import get_email_service
 from auth import get_current_user
 from constants import POSITION_STUDIO_DIRECTOR
+from email_service import get_email_service
 from permissions import seed_permissions
+from schemas import NotificationResponse, SyncRequest, SyncResponse
+from telegram_service import get_telegram_service
+
+from config import get_settings
+from database import (
+    Client,
+    Contract,
+    Employee,
+    Notification,
+    SessionLocal,
+    get_db,
+    init_db,
+)
 
 settings = get_settings()
 
 
-
-
 # Создание приложения
-app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-    description="REST API для многопользовательской CRM Interior Studio"
-)
+app = FastAPI(title=settings.app_name, version=settings.app_version, description="REST API для многопользовательской CRM Interior Studio")
 
 # CORS middleware — ЗАПРЕЩЁН wildcard "*" при allow_credentials=True
 _allowed_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
@@ -70,10 +70,8 @@ app.state.limiter = limiter
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     """Обработчик превышения лимита запросов"""
     from starlette.responses import JSONResponse
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Слишком много запросов. Повторите позже."}
-    )
+
+    return JSONResponse(status_code=429, content={"detail": "Слишком много запросов. Повторите позже."})
 
 
 # Security headers настроены в nginx.conf (server_tokens off, X-Frame-Options, CSP, HSTS и т.д.)
@@ -86,6 +84,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 # Все эндпоинты теперь под /api/v1/.
 # Middleware перезаписывает /api/... → /api/v1/... для обратной совместимости
 # со старыми клиентами, которые ещё используют /api/ без версии.
+
 
 @app.middleware("http")
 async def api_version_compat(request, call_next):
@@ -108,7 +107,8 @@ async def api_version_compat(request, call_next):
 def seed_cities(db):
     """Заполнить таблицу городов дефолтными значениями"""
     from database import City
-    defaults = ['СПБ', 'МСК', 'ВН']
+
+    defaults = ["СПБ", "МСК", "ВН"]
     for name in defaults:
         existing = db.query(City).filter(City.name == name).first()
         if not existing:
@@ -124,8 +124,10 @@ async def startup_event():
     logger.info("База данных инициализирована")
 
     # Миграция таблицы user_permissions: переименование колонок
-    from database import engine, UserPermission
     from sqlalchemy import inspect, text
+
+    from database import UserPermission, engine
+
     try:
         insp = inspect(engine)
         if insp.has_table("user_permissions"):
@@ -144,6 +146,7 @@ async def startup_event():
     # Миграция activity_log: employee_id должен быть nullable (для login_failed без сотрудника)
     try:
         from sqlalchemy import text as _text
+
         with engine.begin() as conn:
             conn.execute(_text("ALTER TABLE activity_log ALTER COLUMN employee_id DROP NOT NULL"))
             logger.info("Migrated activity_log: employee_id is now nullable")
@@ -154,6 +157,7 @@ async def startup_event():
     # Миграция project_files: добавить stage_code
     try:
         from sqlalchemy import text as _text2
+
         with engine.begin() as conn:
             conn.execute(_text2("ALTER TABLE project_files ADD COLUMN IF NOT EXISTS stage_code VARCHAR"))
             logger.info("Migrated project_files: added stage_code column")
@@ -164,6 +168,7 @@ async def startup_event():
     # Миграция: добавить actual_date и visit_type в supervision_visits
     try:
         from sqlalchemy import text as _text3
+
         with engine.begin() as conn:
             conn.execute(_text3("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS actual_date VARCHAR(30)"))
             conn.execute(_text3("ALTER TABLE supervision_visits ADD COLUMN IF NOT EXISTS visit_type VARCHAR(50) DEFAULT 'На объект'"))
@@ -173,8 +178,10 @@ async def startup_event():
             logger.debug(f"supervision_visits migration note: {e}")
 
     # Seed дефолтных прав и admin-пользователя
-    from database import SessionLocal, Employee
     from auth import get_password_hash
+
+    from database import Employee, SessionLocal
+
     db = SessionLocal()
     try:
         # Создаём admin если не существует (нужен для CI и первого запуска)
@@ -207,12 +214,15 @@ async def startup_event():
 
         # Seed агентов по умолчанию (ПЕТРОВИЧ, ФЕСТИВАЛЬ)
         from database import Agent
+
         try:
             if db.query(Agent).count() == 0:
-                db.add_all([
-                    Agent(name='ПЕТРОВИЧ', color='#FFA500'),
-                    Agent(name='ФЕСТИВАЛЬ', color='#FF69B4'),
-                ])
+                db.add_all(
+                    [
+                        Agent(name="ПЕТРОВИЧ", color="#FFA500"),
+                        Agent(name="ФЕСТИВАЛЬ", color="#FF69B4"),
+                    ]
+                )
                 db.commit()
                 logger.info("Default agents seeded (ПЕТРОВИЧ, ФЕСТИВАЛЬ)")
         except Exception as e:
@@ -244,6 +254,7 @@ async def startup_event():
     # N3: Запуск фонового планировщика дедлайнов
     try:
         from services.deadline_checker import deadline_checker_loop
+
         asyncio.create_task(deadline_checker_loop())
         logger.info("Deadline checker: задача запущена")
     except Exception as e:
@@ -252,18 +263,31 @@ async def startup_event():
     # N4: Запуск фонового расчёта KPI (ежедневные снимки)
     try:
         from services.kpi_snapshot import kpi_snapshot_loop
+
         asyncio.create_task(kpi_snapshot_loop())
         logger.info("KPI snapshot: задача запущена")
     except Exception as e:
         logger.warning(f"KPI snapshot: {e}")
 
+    # N5: Обслуживание чатов — удаление старых файлов ЯД (раз в сутки в 03:00)
+    try:
+        from services.maintenance_service import chat_maintenance_loop
+
+        asyncio.create_task(chat_maintenance_loop())
+        logger.info("Chat maintenance: задача запущена (ежедневно 03:00 UTC)")
+    except Exception as e:
+        logger.warning(f"Chat maintenance: {e}")
+
     # Запуск Telegram Bot polling для обработки /start (привязка аккаунтов)
     # Используем file-lock чтобы только ОДИН воркер Uvicorn запускал polling
     # (иначе TelegramConflictError при --workers > 1)
     try:
-        from telegram_bot_handlers import router as bot_router, AIOGRAM_AVAILABLE as BOT_AVAILABLE
+        from telegram_bot_handlers import AIOGRAM_AVAILABLE as BOT_AVAILABLE
+        from telegram_bot_handlers import router as bot_router
+
         if BOT_AVAILABLE and bot_router is not None:
             import fcntl
+
             lock_path = "/tmp/telegram_polling.lock"
             try:
                 _polling_lock_fd = open(lock_path, "w")
@@ -272,6 +296,7 @@ async def startup_event():
                 # Сохраняем fd в app.state чтобы не собрал GC
                 app.state._polling_lock_fd = _polling_lock_fd
                 from aiogram import Dispatcher as BotDispatcher
+
                 tg = get_telegram_service()
                 if tg.bot_available:
                     dp = BotDispatcher()
@@ -285,16 +310,10 @@ async def startup_event():
         logger.warning(f"Telegram Bot polling: {e}")
 
 
-
-
 @app.get("/")
 async def root():
     """Корневой эндпоинт"""
-    return {
-        "app": settings.app_name,
-        "version": settings.app_version,
-        "status": "running"
-    }
+    return {"app": settings.app_name, "version": settings.app_version, "status": "running"}
 
 
 @app.get("/health")
@@ -306,16 +325,13 @@ async def health_check():
 @app.get("/api/v1/version")
 async def get_app_version():
     """Получить текущую версию серверного приложения для сверки клиентами"""
-    return {
-        "version": settings.app_version,
-        "app": settings.app_name
-    }
+    return {"version": settings.app_version, "app": settings.app_name}
 
 
 @app.put("/api/v1/version")
 async def set_app_version(data: dict, current_user=Depends(get_current_user)):
     """Обновить версию сервера (только для администратора)"""
-    if current_user.position not in ('Руководитель студии', 'СДП'):
+    if current_user.position not in ("Руководитель студии", "СДП"):
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     new_version = data.get("version", "").strip()
     if not new_version:
@@ -328,14 +344,9 @@ async def set_app_version(data: dict, current_user=Depends(get_current_user)):
 # ГЛОБАЛЬНЫЙ ПОИСК
 # =========================
 
+
 @app.get("/api/v1/search")
-async def global_search(
-    q: str,
-    limit: int = 50,
-    entity_types: Optional[str] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def global_search(q: str, limit: int = 50, entity_types: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Полнотекстовый поиск по клиентам, договорам, CRM карточкам и карточкам надзора.
     entity_types — через запятую: clients,contracts,crm_cards,supervision_cards
@@ -346,12 +357,11 @@ async def global_search(
     query_text = q.strip()
     search_pattern = f"%{query_text}%"
     results = []
-    types_filter = entity_types.split(",") if entity_types else [
-        "clients", "contracts", "crm_cards", "supervision_cards"
-    ]
+    types_filter = entity_types.split(",") if entity_types else ["clients", "contracts", "crm_cards", "supervision_cards"]
 
     # Фильтрация типов по access.* правам пользователя
     from permissions import check_permission
+
     access_map = {
         "clients": "access.clients",
         "contracts": "access.contracts",
@@ -365,108 +375,130 @@ async def global_search(
     # Поиск по клиентам
     if "clients" in types_filter:
         from database import Client as ClientModel
-        clients = db.query(ClientModel).filter(
-            or_(
-                ClientModel.full_name.ilike(search_pattern),
-                ClientModel.phone.ilike(search_pattern),
-                ClientModel.email.ilike(search_pattern),
-                ClientModel.organization_name.ilike(search_pattern)
+
+        clients = (
+            db.query(ClientModel)
+            .filter(
+                or_(ClientModel.full_name.ilike(search_pattern), ClientModel.phone.ilike(search_pattern), ClientModel.email.ilike(search_pattern), ClientModel.organization_name.ilike(search_pattern))
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
         for c in clients:
-            results.append({
-                "type": "client",
-                "id": c.id,
-                "title": c.full_name or "",
-                "subtitle": c.phone or c.email or "",
-            })
+            results.append(
+                {
+                    "type": "client",
+                    "id": c.id,
+                    "title": c.full_name or "",
+                    "subtitle": c.phone or c.email or "",
+                }
+            )
 
     # Поиск по договорам
     if "contracts" in types_filter:
         from database import Contract as ContractModel
-        contracts = db.query(ContractModel).filter(
-            or_(
-                ContractModel.contract_number.ilike(search_pattern),
-                ContractModel.address.ilike(search_pattern),
+
+        contracts = (
+            db.query(ContractModel)
+            .filter(
+                or_(
+                    ContractModel.contract_number.ilike(search_pattern),
+                    ContractModel.address.ilike(search_pattern),
+                )
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
         for ct in contracts:
-            results.append({
-                "type": "contract",
-                "id": ct.id,
-                "title": ct.contract_number or "",
-                "subtitle": ct.address or "",
-            })
+            results.append(
+                {
+                    "type": "contract",
+                    "id": ct.id,
+                    "title": ct.contract_number or "",
+                    "subtitle": ct.address or "",
+                }
+            )
 
     # Поиск по CRM карточкам (через join с договором)
     if "crm_cards" in types_filter:
-        from database import CRMCard as CRMCardModel, Contract as ContractModel2
-        cards = db.query(CRMCardModel).join(
-            ContractModel2, CRMCardModel.contract_id == ContractModel2.id
-        ).filter(
-            or_(
-                ContractModel2.address.ilike(search_pattern),
-                ContractModel2.contract_number.ilike(search_pattern),
+        from database import Contract as ContractModel2
+        from database import CRMCard as CRMCardModel
+
+        cards = (
+            db.query(CRMCardModel)
+            .join(ContractModel2, CRMCardModel.contract_id == ContractModel2.id)
+            .filter(
+                or_(
+                    ContractModel2.address.ilike(search_pattern),
+                    ContractModel2.contract_number.ilike(search_pattern),
+                )
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
         for card in cards:
             contract = db.query(ContractModel2).filter(ContractModel2.id == card.contract_id).first()
             is_archive = (contract.status in ARCHIVE_STATUSES) if contract and contract.status else False
             project_type = contract.project_type if contract else None
-            results.append({
-                "type": "crm_card",
-                "id": card.id,
-                "title": f"Проект #{card.id}",
-                "subtitle": f"{contract.address if contract else ''} ({card.column_name})",
-                "is_archive": is_archive,
-                "project_type": project_type,
-            })
+            results.append(
+                {
+                    "type": "crm_card",
+                    "id": card.id,
+                    "title": f"Проект #{card.id}",
+                    "subtitle": f"{contract.address if contract else ''} ({card.column_name})",
+                    "is_archive": is_archive,
+                    "project_type": project_type,
+                }
+            )
 
     # Поиск по карточкам авторского надзора (через join с договором)
     if "supervision_cards" in types_filter:
-        from database import SupervisionCard as SupervisionCardModel, Contract as ContractModel3
-        sup_cards = db.query(SupervisionCardModel).join(
-            ContractModel3, SupervisionCardModel.contract_id == ContractModel3.id
-        ).filter(
-            or_(
-                ContractModel3.address.ilike(search_pattern),
-                ContractModel3.contract_number.ilike(search_pattern),
+        from database import Contract as ContractModel3
+        from database import SupervisionCard as SupervisionCardModel
+
+        sup_cards = (
+            db.query(SupervisionCardModel)
+            .join(ContractModel3, SupervisionCardModel.contract_id == ContractModel3.id)
+            .filter(
+                or_(
+                    ContractModel3.address.ilike(search_pattern),
+                    ContractModel3.contract_number.ilike(search_pattern),
+                )
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
         for sc in sup_cards:
             contract = db.query(ContractModel3).filter(ContractModel3.id == sc.contract_id).first()
-            results.append({
-                "type": "supervision_card",
-                "id": sc.id,
-                "title": f"Надзор #{sc.id}",
-                "subtitle": f"{contract.address if contract else ''} ({sc.column_name})",
-            })
+            results.append(
+                {
+                    "type": "supervision_card",
+                    "id": sc.id,
+                    "title": f"Надзор #{sc.id}",
+                    "subtitle": f"{contract.address if contract else ''} ({sc.column_name})",
+                }
+            )
 
-    return {
-        "results": results[:limit],
-        "total": len(results),
-        "query": q
-    }
-
+    return {"results": results[:limit], "total": len(results), "query": q}
 
 
 # =========================
 # РОУТЕРЫ (вынесены из main.py)
 # =========================
 from routers.auth_router import router as auth_router
-from routers.employees_router import router as employees_router
 from routers.clients_router import router as clients_router
 from routers.contracts_router import router as contracts_router
+from routers.employees_router import router as employees_router
 
 app.include_router(auth_router, prefix="/api/v1/auth")
 app.include_router(employees_router, prefix="/api/v1")
 app.include_router(clients_router, prefix="/api/v1/clients")
 app.include_router(contracts_router, prefix="/api/v1/contracts")
 
+from routers.dashboard_router import router as dashboard_router
 from routers.rates_router import router as rates_router
 from routers.salaries_router import router as salaries_router
 from routers.statistics_router import router as statistics_router
-from routers.dashboard_router import router as dashboard_router
 from routers.sync_router import router as sync_router
 
 app.include_router(rates_router, prefix="/api/v1/rates")
@@ -475,12 +507,12 @@ app.include_router(statistics_router, prefix="/api/v1/statistics")
 app.include_router(dashboard_router, prefix="/api/v1/dashboard")
 app.include_router(sync_router, prefix="/api/v1/sync")
 
-from routers.payments_router import router as payments_router
-from routers.files_router import router as files_router
 from routers.agents_router import router as agents_router
 from routers.cities_router import router as cities_router
+from routers.files_router import router as files_router
 from routers.heartbeat_router import router as heartbeat_router
 from routers.locks_router import router as locks_router
+from routers.payments_router import router as payments_router
 
 app.include_router(payments_router, prefix="/api/v1/payments")
 app.include_router(files_router, prefix="/api/v1/files")
@@ -489,13 +521,13 @@ app.include_router(cities_router, prefix="/api/v1/cities")
 app.include_router(heartbeat_router, prefix="/api/v1")
 app.include_router(locks_router, prefix="/api/v1/locks")
 
-from routers.timeline_router import router as timeline_router
-from routers.norm_days_router import router as norm_days_router
-from routers.supervision_timeline_router import router as supervision_timeline_router
-from routers.project_templates_router import router as project_templates_router
-from routers.supervision_router import router as supervision_router
 from routers.action_history_router import router as action_history_router
+from routers.norm_days_router import router as norm_days_router
+from routers.project_templates_router import router as project_templates_router
 from routers.reports_router import router as reports_router
+from routers.supervision_router import router as supervision_router
+from routers.supervision_timeline_router import router as supervision_timeline_router
+from routers.timeline_router import router as timeline_router
 
 app.include_router(timeline_router, prefix="/api/v1/timeline")
 app.include_router(norm_days_router, prefix="/api/v1/norm-days")
@@ -504,14 +536,19 @@ app.include_router(project_templates_router, prefix="/api/v1/project-templates")
 app.include_router(supervision_router, prefix="/api/v1/supervision")
 
 from routers.supervision_visits_router import router as supervision_visits_router
+
 app.include_router(supervision_visits_router, prefix="/api/v1/supervision-visits")
 app.include_router(action_history_router, prefix="/api/v1/action-history")
 app.include_router(reports_router, prefix="/api/v1/reports")
 
 from routers.crm_router import router as crm_router
 from routers.messenger_router import (
-    router as messenger_router, sync_messenger_router,
-    load_messenger_settings, seed_default_messenger_scripts,
+    load_messenger_settings,
+    seed_default_messenger_scripts,
+    sync_messenger_router,
+)
+from routers.messenger_router import (
+    router as messenger_router,
 )
 
 app.include_router(crm_router, prefix="/api/v1/crm")
@@ -519,27 +556,34 @@ app.include_router(messenger_router, prefix="/api/v1/messenger")
 app.include_router(sync_messenger_router, prefix="/api/v1/sync")
 
 from routers.notifications_router import router as notifications_router
+
 app.include_router(notifications_router, prefix="/api/v1")
 
 from routers.websocket_router import router as websocket_router
+
 app.include_router(websocket_router, prefix="/api/v1")
 
 from routers.employee_analytics_router import router as employee_analytics_router
 from routers.survey_router import router as survey_router
+
 app.include_router(employee_analytics_router, prefix="/api/v1/employee-analytics")
 app.include_router(survey_router, prefix="/api/v1/surveys")
+
+from routers.chat_router import router as chat_router
+from routers.client_chat_router import router as client_chat_router
+
+app.include_router(chat_router, prefix="/api/v1/chats")
+# Клиентский доступ без JWT + WebSocket эндпоинты — отдельный роутер
+app.include_router(client_chat_router, prefix="/api/v1")
 
 
 # =========================
 # СИНХРОНИЗАЦИЯ
 # =========================
 
+
 @app.post("/api/v1/sync", response_model=SyncResponse)
-async def sync_data(
-    sync_request: SyncRequest,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def sync_data(sync_request: SyncRequest, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Синхронизация данных
     Возвращает все изменения после указанного timestamp
@@ -547,31 +591,22 @@ async def sync_data(
     response = SyncResponse(timestamp=datetime.utcnow())
 
     # Клиенты
-    if 'clients' in sync_request.entity_types:
-        clients = db.query(Client).filter(
-            Client.updated_at > sync_request.last_sync_timestamp
-        ).all()
+    if "clients" in sync_request.entity_types:
+        clients = db.query(Client).filter(Client.updated_at > sync_request.last_sync_timestamp).all()
         response.clients = clients
 
     # Договоры
-    if 'contracts' in sync_request.entity_types:
-        contracts = db.query(Contract).filter(
-            Contract.updated_at > sync_request.last_sync_timestamp
-        ).all()
+    if "contracts" in sync_request.entity_types:
+        contracts = db.query(Contract).filter(Contract.updated_at > sync_request.last_sync_timestamp).all()
         response.contracts = contracts
 
     # Сотрудники
-    if 'employees' in sync_request.entity_types:
-        employees = db.query(Employee).filter(
-            Employee.updated_at > sync_request.last_sync_timestamp
-        ).all()
+    if "employees" in sync_request.entity_types:
+        employees = db.query(Employee).filter(Employee.updated_at > sync_request.last_sync_timestamp).all()
         response.employees = employees
 
     # Уведомления
-    notifications = db.query(Notification).filter(
-        Notification.employee_id == current_user.id,
-        Notification.created_at > sync_request.last_sync_timestamp
-    ).all()
+    notifications = db.query(Notification).filter(Notification.employee_id == current_user.id, Notification.created_at > sync_request.last_sync_timestamp).all()
     response.notifications = notifications
 
     return response
@@ -581,12 +616,9 @@ async def sync_data(
 # УВЕДОМЛЕНИЯ
 # =========================
 
-@app.get("/api/v1/notifications", response_model=List[NotificationResponse])
-async def get_notifications(
-    unread_only: bool = False,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+
+@app.get("/api/v1/notifications", response_model=list[NotificationResponse])
+async def get_notifications(unread_only: bool = False, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить уведомления текущего пользователя"""
     query = db.query(Notification).filter(Notification.employee_id == current_user.id)
 
@@ -598,16 +630,9 @@ async def get_notifications(
 
 
 @app.put("/api/v1/notifications/{notification_id}/read")
-async def mark_notification_read(
-    notification_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def mark_notification_read(notification_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Отметить уведомление как прочитанное"""
-    notification = db.query(Notification).filter(
-        Notification.id == notification_id,
-        Notification.employee_id == current_user.id
-    ).first()
+    notification = db.query(Notification).filter(Notification.id == notification_id, Notification.employee_id == current_user.id).first()
 
     if not notification:
         raise HTTPException(status_code=404, detail="Уведомление не найдено")
@@ -617,5 +642,3 @@ async def mark_notification_read(
     db.commit()
 
     return {"message": "Уведомление прочитано"}
-
-

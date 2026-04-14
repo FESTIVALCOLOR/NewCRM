@@ -37,7 +37,7 @@
           </template>
         </q-select>
       </div>
-      <div class="col">
+      <div class="col" style="min-width: 0; overflow: hidden">
         <q-select
           v-model="filters.employee_id"
           :options="employeeOpts"
@@ -49,7 +49,7 @@
           use-input
           input-debounce="200"
           placeholder="Исполнитель"
-          style="font-size: 12px"
+          style="font-size: 12px; min-width: 0"
           @filter="filterEmployees"
           @update:model-value="onEmployeeFilter"
           @clear="filters.employee_id = null; loadData()"
@@ -146,14 +146,14 @@
           </template>
         </q-select>
       </div>
-      <div class="col-auto" style="display: flex; align-items: center">
+      <div class="col-auto" style="display: flex; align-items: stretch">
         <q-btn
           outline
           dense
           no-caps
           label="Сбросить"
           color="grey"
-          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 90px; height: 40px"
+          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 80px"
           @click="resetFilters"
         />
       </div>
@@ -291,45 +291,48 @@
                         </div>
                       </div>
                       <div class="row items-center justify-end q-gutter-xs q-mt-xs" style="flex-wrap: wrap">
-                        <!-- Статус -->
-                        <q-btn
+                        <!-- Статус (только информация, не кнопка) -->
+                        <q-chip
                           v-if="p.is_paid || p.payment_status === 'paid'"
-                          unelevated
+                          dense
+                          color="positive"
+                          text-color="white"
+                          style="font-size: 10px; height: 20px; padding: 0 8px; border-radius: 4px; cursor: default"
+                        >
+                          Оплачено
+                        </q-chip>
+                        <q-chip
+                          v-else-if="p.payment_status === 'to_pay'"
+                          dense
+                          color="warning"
+                          text-color="dark"
+                          style="font-size: 10px; height: 20px; padding: 0 8px; border-radius: 4px; cursor: default"
+                        >
+                          К оплате
+                        </q-chip>
+                        <q-chip
+                          v-else
+                          dense
+                          color="grey-3"
+                          text-color="grey-7"
+                          style="font-size: 10px; height: 20px; padding: 0 8px; border-radius: 4px; cursor: default"
+                        >
+                          В работе
+                        </q-chip>
+                        <!-- Кнопка действия по статусу -->
+                        <q-btn
+                          v-if="can('salaries.mark_paid') && (p.is_paid || p.payment_status === 'paid')"
+                          outline
                           dense
                           size="xs"
-                          label="Оплачено"
+                          label="Снять оплату"
                           no-caps
-                          color="positive"
+                          color="grey-7"
                           style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
                           @click.stop="undoPaid(p)"
                         />
                         <q-btn
-                          v-else-if="p.report_month || p.payment_status === 'to_pay'"
-                          unelevated
-                          dense
-                          size="xs"
-                          label="К оплате"
-                          no-caps
-                          color="warning"
-                          text-color="dark"
-                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                          @click.stop="setPayStatus(p)"
-                        />
-                        <q-btn
-                          v-else
-                          unelevated
-                          dense
-                          size="xs"
-                          label="В работе"
-                          no-caps
-                          color="grey-3"
-                          text-color="grey-7"
-                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
-                          disable
-                        />
-                        <!-- Действия -->
-                        <q-btn
-                          v-if="can('salaries.mark_paid') && !p.is_paid && (p.report_month || p.payment_status === 'to_pay')"
+                          v-else-if="can('salaries.mark_paid') && p.payment_status === 'to_pay'"
                           outline
                           dense
                           size="xs"
@@ -341,11 +344,10 @@
                           @click.stop="markPaid(p)"
                         />
                         <q-btn
-                          v-if="can('salaries.mark_to_pay') && !p.is_paid && !p.report_month && p.payment_status !== 'to_pay'"
+                          v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid'"
                           outline
                           dense
                           size="xs"
-                          icon="schedule"
                           label="К оплате"
                           no-caps
                           color="warning"

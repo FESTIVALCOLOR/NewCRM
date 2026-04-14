@@ -2006,7 +2006,12 @@ function filterAssignEmployees(val, update) {
   // Фильтр по роли назначения
   const posFilters = ROLE_POSITION_FILTER[assignRoleKey.value]
   if (posFilters) {
-    const filtered = list.filter(e => posFilters.some(pf => (e.position || '').toLowerCase().includes(pf.toLowerCase())))
+    const filtered = list.filter(e =>
+      posFilters.some(pf =>
+        (e.position || '').toLowerCase().includes(pf.toLowerCase()) ||
+        (e.secondary_position || '').toLowerCase().includes(pf.toLowerCase()),
+      ),
+    )
     if (filtered.length > 0) list = filtered // fallback на всех если никто не подходит
   }
   const makeOpts = (emps) => {

@@ -636,23 +636,11 @@ async function loadData() {
 
 function exportPDF() { window.print() }
 watch(projectTab, () => loadData())
-watch(filters, () => { if (auth.token) loadData() }, { deep: true })
+watch(filters, () => loadData(), { deep: true })
 function onRefresh(done) { loadData().finally(done) }
 
 const auth = useAuthStore()
-onMounted(async () => {
-  // Подождать восстановления сессии если токен ещё не готов
-  if (!auth.token && auth.restoreSession) {
-    await auth.restoreSession()
-  }
-  if (auth.token) {
-    await loadData()
-  }
-})
-// Если токен появится позже (после restoreSession) — загрузить данные
-watch(() => auth.token, (val) => {
-  if (val) loadData()
-})
+onMounted(() => loadData())
 </script>
 
 <style>
