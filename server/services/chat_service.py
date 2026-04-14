@@ -214,7 +214,7 @@ def create_employee_chat(db: Session, crm_card_id: int, created_by_id: int, supe
     if card:
         contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
         if contract:
-            title = contract.object_address or f"Договор #{contract.id}"
+            title = contract.address or f"Договор #{contract.id}"
             contract_id = contract.id
 
     # Папка ЯД
@@ -281,7 +281,7 @@ def create_client_chat(db: Session, crm_card_id: int, created_by_id: int, superv
     if card:
         contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
         if contract:
-            title = contract.object_address or f"Договор #{contract.id}"
+            title = contract.address or f"Договор #{contract.id}"
             contract_id = contract.id
 
     base_folder = _get_card_folder(db, crm_card_id=crm_card_id)
