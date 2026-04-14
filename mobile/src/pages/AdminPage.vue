@@ -522,6 +522,7 @@ const rolePermissions = ref([])
 const showRateDialog = ref(false)
 const editingRate = ref(null)
 
+const citiesFull = ref([])
 const rolesList = refs.positions
 const inviteEmployeeId = ref(null)
 const inviteEmployeeOpts = ref([])
@@ -546,7 +547,7 @@ const PERMISSION_GROUPS = {
 const rateTypeMap = { individual: 'Индивидуальный', template: 'Шаблонный', supervision: 'Авторский надзор', surveyor: 'Замерщик' }
 
 const filteredRates = computed(() => {
-  if (rateTab.value === 'surveyor') return rates.value.filter(r => r.surveyor_price)
+  if (rateTab.value === 'surveyor') return rates.value.filter(r => r.role === 'Замерщик')
   return rates.value.filter(r => r.project_type === rateTypeMap[rateTab.value])
 })
 

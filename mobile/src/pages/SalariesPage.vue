@@ -153,7 +153,7 @@
           no-caps
           label="Сбросить"
           color="grey"
-          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 80px"
+          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 80px; height: 40px"
           @click="resetFilters"
         />
       </div>
@@ -297,7 +297,7 @@
                           dense
                           color="positive"
                           text-color="white"
-                          style="font-size: 10px; height: 20px; padding: 0 8px; border-radius: 4px; cursor: default"
+                          style="font-size: 10px; height: 24px; padding: 0 8px; border-radius: 4px; cursor: default; margin: 0"
                         >
                           Оплачено
                         </q-chip>
@@ -306,7 +306,7 @@
                           dense
                           color="warning"
                           text-color="dark"
-                          style="font-size: 10px; height: 20px; padding: 0 8px; border-radius: 4px; cursor: default"
+                          style="font-size: 10px; height: 24px; padding: 0 8px; border-radius: 4px; cursor: default; margin: 0"
                         >
                           К оплате
                         </q-chip>
@@ -315,7 +315,7 @@
                           dense
                           color="grey-3"
                           text-color="grey-7"
-                          style="font-size: 10px; height: 20px; padding: 0 8px; border-radius: 4px; cursor: default"
+                          style="font-size: 10px; height: 24px; padding: 0 8px; border-radius: 4px; cursor: default; margin: 0"
                         >
                           В работе
                         </q-chip>
