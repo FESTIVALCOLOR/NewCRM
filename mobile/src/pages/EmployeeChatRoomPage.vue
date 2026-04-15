@@ -69,7 +69,7 @@
           <div
             v-else
             :class="isOwn(msg) ? 'bubble-own' : 'bubble-other'"
-            style="max-width: 75%"
+            style="max-width: 75%; position: relative"
           >
             <!-- Имя отправителя (чужие) -->
             <div
@@ -87,7 +87,7 @@
                   :name="msg.message_type === 'image' ? 'image' : 'attach_file'"
                   size="20px"
                 />
-                <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 200px; color: inherit">
+                <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 180px; color: inherit">
                   {{ msg.file_name || 'Файл' }}
                 </a>
               </div>
@@ -115,9 +115,36 @@
               </div>
             </template>
 
-            <!-- Время -->
-            <div class="text-caption q-mt-xs" :class="isOwn(msg) ? 'text-right' : 'text-left'" style="color: #888; font-size: 10px">
-              {{ formatTime(msg.created_at) }}
+            <!-- Время + кнопка переслать клиенту -->
+            <div class="row items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-between'">
+              <q-btn
+                v-if="clientChatId && !isOwn(msg)"
+                flat
+                dense
+                size="xs"
+                icon="forward"
+                color="blue-5"
+                class="q-mr-xs"
+                :loading="forwardingMsgId === msg.id"
+                @click="forwardToClient(msg)"
+              >
+                <q-tooltip>Переслать клиенту</q-tooltip>
+              </q-btn>
+              <q-btn
+                v-if="clientChatId && isOwn(msg)"
+                flat
+                dense
+                size="xs"
+                icon="forward"
+                color="blue-5"
+                :loading="forwardingMsgId === msg.id"
+                @click="forwardToClient(msg)"
+              >
+                <q-tooltip>Переслать клиенту</q-tooltip>
+              </q-btn>
+              <div class="text-caption" style="color: #888; font-size: 10px">
+                {{ formatTime(msg.created_at) }}
+              </div>
             </div>
           </div>
         </div>
@@ -183,12 +210,24 @@
         <q-list>
           <q-item v-for="m in members" :key="m.id">
             <q-item-section avatar>
-              <q-avatar color="blue-2" text-color="blue-9" icon="person" size="32px" />
+              <q-avatar
+                :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
+                :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
+                icon="person"
+                size="32px"
+              />
             </q-item-section>
             <q-item-section>
-              <q-item-label>{{ m.guest_name || m.employee_name || `#${m.id}` }}</q-item-label>
+              <q-item-label>{{ m.display_name || m.guest_name || `#${m.id}` }}</q-item-label>
               <q-item-label caption>
                 {{ m.member_type === 'employee' ? 'Сотрудник' : 'Клиент' }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!members.length">
+            <q-item-section>
+              <q-item-label class="text-grey">
+                Нет участников
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -204,9 +243,11 @@ import { useRoute } from 'vue-router'
 import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { useAuthStore } from 'src/stores/auth'
+import { useQuasar } from 'quasar'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const $q = useQuasar()
 const chatId = Number(route.params.chatId)
 
 const { isConnected: wsConnected, connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
@@ -219,6 +260,8 @@ const loadingMessages = ref(false)
 const showMembers = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
+const clientChatId = ref(null)
+const forwardingMsgId = ref(null)
 
 let typingTimer = null
 
@@ -261,10 +304,45 @@ async function loadMessages() {
       const lastId = messages.value[messages.value.length - 1].id
       sendRead(lastId)
     }
+
+    // Загрузить клиентский чат для той же карточки (для пересылки)
+    if (data.crm_card_id) {
+      loadClientChat(data.crm_card_id)
+    }
   } catch (e) {
     console.error('[ChatRoom] Ошибка загрузки:', e)
   } finally {
     loadingMessages.value = false
+  }
+}
+
+async function loadClientChat(cardId) {
+  try {
+    const { data } = await api.get('/api/v1/chats/', {
+      params: { chat_type: 'client', crm_card_id: cardId },
+    })
+    const list = Array.isArray(data) ? data : (data.items || [])
+    if (list.length > 0) {
+      clientChatId.value = list[0].id
+    }
+  } catch {
+    // Клиентский чат не найден — кнопка не показывается
+  }
+}
+
+async function forwardToClient(msg) {
+  if (!clientChatId.value || forwardingMsgId.value) return
+  forwardingMsgId.value = msg.id
+  try {
+    const formData = new FormData()
+    formData.append('msg_id', msg.id)
+    await api.post(`/api/v1/chats/${chatId}/forward/${clientChatId.value}`, formData)
+    $q.notify({ type: 'positive', message: 'Переслано в чат клиента' })
+  } catch (e) {
+    const detail = e.response?.data?.detail || 'Ошибка пересылки'
+    $q.notify({ type: 'negative', message: detail })
+  } finally {
+    forwardingMsgId.value = null
   }
 }
 
@@ -273,7 +351,6 @@ function sendText() {
   if (!text) return
   sendMessage(text)
   inputText.value = ''
-  // Оптимистично добавляем сообщение (WS вернёт подтверждение)
 }
 
 function onTyping() {
@@ -300,6 +377,7 @@ async function onFileSelected(event) {
     // Сообщение придёт через WS
   } catch (e) {
     console.error('[ChatRoom] Ошибка загрузки файла:', e)
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
   } finally {
     event.target.value = ''
   }
@@ -315,8 +393,12 @@ onMounted(() => {
   if (token) {
     connectEmployee(chatId, token, {
       onMessage: (msg) => {
-        messages.value.push(msg)
-        scrollToBottom()
+        const exists = messages.value.some(m => m.id === msg.id)
+        if (!exists) {
+          messages.value.push(msg)
+          scrollToBottom()
+          sendRead(msg.id)
+        }
       },
     })
   }

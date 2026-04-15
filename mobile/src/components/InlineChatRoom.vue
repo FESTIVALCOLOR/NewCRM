@@ -26,7 +26,7 @@
   </div>
 
   <!-- Чат существует -->
-  <div v-else class="column" style="height: calc(100vh - 270px); min-height: 320px">
+  <div v-else ref="chatContainerEl" class="column" :style="{ height: containerHeight, minHeight: '320px' }">
     <!-- Панель: ссылка для клиента -->
     <div
       v-if="chatType === 'client' && clientLink"
@@ -128,12 +128,35 @@
               </div>
             </template>
 
-            <div
-              class="text-caption"
-              :class="isOwn(msg) ? 'text-right' : 'text-left'"
-              style="color: #888; font-size: 10px; margin-top: 2px"
-            >
-              {{ formatTime(msg.created_at) }}
+            <!-- Время + кнопка переслать клиенту (только в чате сотрудников) -->
+            <div class="row items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-between'">
+              <q-btn
+                v-if="chatType === 'employee' && clientChatId && !isOwn(msg)"
+                flat
+                dense
+                size="xs"
+                icon="forward"
+                color="blue-5"
+                :loading="forwardingMsgId === msg.id"
+                @click="forwardToClient(msg)"
+              >
+                <q-tooltip>Переслать клиенту</q-tooltip>
+              </q-btn>
+              <q-btn
+                v-if="chatType === 'employee' && clientChatId && isOwn(msg)"
+                flat
+                dense
+                size="xs"
+                icon="forward"
+                color="blue-5"
+                :loading="forwardingMsgId === msg.id"
+                @click="forwardToClient(msg)"
+              >
+                <q-tooltip>Переслать клиенту</q-tooltip>
+              </q-btn>
+              <div class="text-caption" style="color: #888; font-size: 10px">
+                {{ formatTime(msg.created_at) }}
+              </div>
             </div>
           </div>
         </div>
@@ -179,7 +202,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { useAuthStore } from 'src/stores/auth'
@@ -207,6 +230,17 @@ const messages = ref([])
 const inputText = ref('')
 const messagesEl = ref(null)
 const fileInput = ref(null)
+const chatContainerEl = ref(null)
+const containerHeight = ref('calc(100vh - 270px)')
+const clientChatId = ref(null)
+const forwardingMsgId = ref(null)
+
+function recalcHeight() {
+  if (!chatContainerEl.value) return
+  const rect = chatContainerEl.value.getBoundingClientRect()
+  const h = Math.max(320, window.innerHeight - rect.top - 8)
+  containerHeight.value = h + 'px'
+}
 
 const clientLink = computed(() => {
   if (props.chatType !== 'client' || !chat.value?.client_access_token) return ''
@@ -260,6 +294,11 @@ async function openChat(chatId) {
     messages.value = data.messages || []
     scrollToBottom()
 
+    // Для чата сотрудников загрузить клиентский чат (для пересылки)
+    if (props.chatType === 'employee' && data.crm_card_id) {
+      loadClientChat(data.crm_card_id)
+    }
+
     const token = localStorage.getItem('access_token')
     if (token) {
       connectEmployee(chatId, token, {
@@ -278,6 +317,34 @@ async function openChat(chatId) {
     }
   } catch (e) {
     console.error('[InlineChatRoom] openChat:', e)
+  }
+}
+
+async function loadClientChat(cardId) {
+  try {
+    const { data } = await api.get('/api/v1/chats/', {
+      params: { chat_type: 'client', crm_card_id: cardId },
+    })
+    const list = Array.isArray(data) ? data : (data.items || [])
+    if (list.length > 0) clientChatId.value = list[0].id
+  } catch {
+    // Нет клиентского чата
+  }
+}
+
+async function forwardToClient(msg) {
+  if (!clientChatId.value || forwardingMsgId.value) return
+  forwardingMsgId.value = msg.id
+  try {
+    const formData = new FormData()
+    formData.append('msg_id', msg.id)
+    await api.post(`/api/v1/chats/${chat.value.id}/forward/${clientChatId.value}`, formData)
+    $q.notify({ type: 'positive', message: 'Переслано в чат клиента' })
+  } catch (e) {
+    const detail = e.response?.data?.detail || 'Ошибка пересылки'
+    $q.notify({ type: 'negative', message: detail })
+  } finally {
+    forwardingMsgId.value = null
   }
 }
 
@@ -340,10 +407,20 @@ function copyClientLink() {
   }).catch(() => {})
 }
 
-onMounted(loadChat)
+onMounted(() => {
+  loadChat()
+  nextTick(() => {
+    recalcHeight()
+    window.addEventListener('resize', recalcHeight)
+  })
+})
+
+// Пересчитываем высоту когда чат загружается (переход из skeleton → контент)
+watch(chat, () => nextTick(recalcHeight))
 
 onUnmounted(() => {
   disconnect()
+  window.removeEventListener('resize', recalcHeight)
   if (typingTimer) clearTimeout(typingTimer)
 })
 </script>

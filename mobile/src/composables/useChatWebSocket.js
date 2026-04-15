@@ -143,22 +143,30 @@ export function useChatWebSocket() {
   }
 
   function _handleEvent(msg) {
-    const { type, data = {} } = msg
+    const { type } = msg
 
-    if (type === 'message') {
-      messages.value.push(data)
-      if (_handlers.onMessage) _handlers.onMessage(data)
-    } else if (type === 'typing_start') {
-      const existing = typingUsers.value.find(u => u.name === data.sender_name)
-      if (!existing) {
-        typingUsers.value.push({ name: data.sender_name })
+    // Сервер отправляет type: "new_message", data в поле msg.message
+    if (type === 'new_message') {
+      const messageData = msg.message
+      if (messageData) {
+        messages.value.push(messageData)
+        if (_handlers.onMessage) _handlers.onMessage(messageData)
       }
-      if (_handlers.onTyping) _handlers.onTyping(data, true)
+    } else if (type === 'typing_start') {
+      const senderName = msg.sender_name
+      if (senderName) {
+        const existing = typingUsers.value.find(u => u.name === senderName)
+        if (!existing) typingUsers.value.push({ name: senderName })
+      }
+      if (_handlers.onTyping) _handlers.onTyping(msg, true)
     } else if (type === 'typing_stop') {
-      typingUsers.value = typingUsers.value.filter(u => u.name !== data.sender_name)
-      if (_handlers.onTyping) _handlers.onTyping(data, false)
+      const senderName = msg.sender_name
+      if (senderName) {
+        typingUsers.value = typingUsers.value.filter(u => u.name !== senderName)
+      }
+      if (_handlers.onTyping) _handlers.onTyping(msg, false)
     } else if (type === 'read') {
-      if (_handlers.onRead) _handlers.onRead(data)
+      if (_handlers.onRead) _handlers.onRead(msg)
     }
   }
 
