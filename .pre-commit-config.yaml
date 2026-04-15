@@ -89,7 +89,8 @@ repos:
             .venv/|
             server/alembic/|
             testsprite_tests/|
-            ui/crm_dialogs\.py
+            ui/crm_dialogs\.py|
+            ui/contract_dialogs\.py
           )
 
       # -----------------------------------------------------------------------

@@ -3,16 +3,43 @@
 Автоматически выбирает источник данных в зависимости от наличия api_client
 Поддерживает offline-режим с очередью отложенных операций
 """
+
 import json as _json
 import os as _os
 import time as _time
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from database.db_manager import DatabaseManager
-from PyQt5.QtCore import QObject, pyqtSignal
+
+try:
+    from PyQt5.QtCore import QObject, pyqtSignal
+except ImportError:
+
+    class QObject:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class _NoSignal:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def emit(self, *a, **kw):
+            pass
+
+        def connect(self, *a, **kw):
+            pass
+
+        def disconnect(self, *a, **kw):
+            pass
+
+    def pyqtSignal(*args, **kwargs):  # type: ignore[no-redef]
+        return _NoSignal()
+
+
 from utils.api_client import APIAuthError
 
-
 # ==================== КЕШИРОВАНИЕ ====================
+
 
 class _DataCache:
     """Простой кеш с TTL для данных DataAccess.
@@ -22,6 +49,7 @@ class _DataCache:
     По умолчанию TTL = 30 сек — данные считаются свежими.
     При записи (create/update/delete) — инвалидируем связанные ключи.
     """
+
     DEFAULT_TTL = 30  # секунд
 
     def __init__(self):
@@ -51,15 +79,17 @@ class _DataCache:
             for k in keys_to_del:
                 del self._store[k]
 
+
 # Глобальный кеш — общий для всех экземпляров DataAccess
 _global_cache = _DataCache()
 
 
 # ==================== OFFLINE-КЭШ АНАЛИТИКИ ====================
 
+
 def _analytics_cache_dir() -> str:
     """Папка для offline-кэша аналитики."""
-    base = _os.path.join(_os.path.expanduser('~'), '.interior_studio', 'analytics_cache')
+    base = _os.path.join(_os.path.expanduser("~"), ".interior_studio", "analytics_cache")
     _os.makedirs(base, exist_ok=True)
     return base
 
@@ -67,9 +97,9 @@ def _analytics_cache_dir() -> str:
 def _analytics_cache_save(key: str, data):
     """Сохраняет аналитические данные в файл для offline-доступа."""
     try:
-        safe_key = key.replace('/', '_').replace('\\', '_').replace(':', '_')
+        safe_key = key.replace("/", "_").replace("\\", "_").replace(":", "_")
         path = _os.path.join(_analytics_cache_dir(), f"{safe_key}.json")
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, "w", encoding="utf-8") as f:
             _json.dump(data, f, ensure_ascii=False, default=str)
     except Exception:
         pass
@@ -78,10 +108,10 @@ def _analytics_cache_save(key: str, data):
 def _analytics_cache_load(key: str):
     """Загружает аналитические данные из offline-кэша."""
     try:
-        safe_key = key.replace('/', '_').replace('\\', '_').replace(':', '_')
+        safe_key = key.replace("/", "_").replace("\\", "_").replace(":", "_")
         path = _os.path.join(_analytics_cache_dir(), f"{safe_key}.json")
         if _os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 return _json.load(f)
     except Exception:
         pass
@@ -95,6 +125,7 @@ def _safe_log(msg):
     except (UnicodeEncodeError, OSError, AttributeError):
         pass
 
+
 # Импорт OfflineManager (ленивый для избежания циклических импортов)
 _offline_manager = None
 
@@ -105,6 +136,7 @@ def get_offline_manager():
     if _offline_manager is None:
         try:
             from utils.offline_manager import get_offline_manager as get_om
+
             _offline_manager = get_om()
         except ImportError:
             pass
@@ -152,7 +184,7 @@ class DataAccess(QObject):
             return om.is_online()
         return self._is_online and self.api_client is not None
 
-    def _queue_operation(self, op_type: str, entity_type: str, entity_id: int, data: Dict):
+    def _queue_operation(self, op_type: str, entity_type: str, entity_id: int, data: dict):
         """Добавить операцию в очередь для синхронизации.
 
         ВАЖНО: Если вызывается из except-блока, проверяет тип исключения.
@@ -161,10 +193,12 @@ class DataAccess(QObject):
         т.к. при синхронизации они снова вернут ту же ошибку (бесконечный retry).
         """
         import sys
+
         exc_type, exc_value, _ = sys.exc_info()
         if exc_type is not None:
             # Вызвано из except-блока — проверяем тип ошибки
             from utils.api_client.exceptions import APIConnectionError, APITimeoutError
+
             if not issubclass(exc_type, (APIConnectionError, APITimeoutError)):
                 _safe_log(f"[DataAccess] Бизнес-ошибка ({exc_type.__name__}), НЕ в очередь: {exc_value}")
                 return
@@ -172,6 +206,7 @@ class DataAccess(QObject):
         om = get_offline_manager()
         if om:
             from utils.offline_manager import OperationType
+
             op_enum = OperationType(op_type)
             om.queue_operation(op_enum, entity_type, entity_id, data)
             self.operation_queued.emit(entity_type, op_type)
@@ -199,7 +234,7 @@ class DataAccess(QObject):
         Предотвращает возврат устаревших API-данных при потере сети."""
         try:
             current = self._should_use_api()
-            prev = self.__dict__.get('_prev_api_mode')
+            prev = self.__dict__.get("_prev_api_mode")
             if prev is not None and prev != current:
                 _global_cache.invalidate()
             self._prev_api_mode = current
@@ -212,13 +247,13 @@ class DataAccess(QObject):
         """Удалить из локальной SQLite записи, которых нет на сервере.
         Вызывается только при полной загрузке всех записей с API."""
         try:
-            valid_ids = [r['id'] for r in api_records if isinstance(r, dict) and 'id' in r]
+            valid_ids = [r["id"] for r in api_records if isinstance(r, dict) and "id" in r]
             if valid_ids:
                 self.db.remove_stale_records(table, valid_ids)
         except Exception as e:
             _safe_log(f"[DataAccess] reconcile {table}: {e}")
 
-    def get_all_clients(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
+    def get_all_clients(self, skip: int = 0, limit: int = 10000) -> list[dict]:
         """Получить всех клиентов.
 
         Параметры skip/limit позволяют получать данные постранично.
@@ -234,7 +269,7 @@ class DataAccess(QObject):
                 result = self.api_client.get_clients(skip=skip, limit=limit)
                 _global_cache.set(cache_key, result)
                 if skip == 0 and limit >= 10000:
-                    self._reconcile_local('clients', result)
+                    self._reconcile_local("clients", result)
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_clients, fallback: {e}")
@@ -242,9 +277,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_clients_paginated(
-        self, skip: int = 0, limit: int = 100
-    ) -> tuple:
+    def get_clients_paginated(self, skip: int = 0, limit: int = 100) -> tuple:
         """Получить клиентов с информацией о пагинации.
 
         Возвращает кортеж (список клиентов, общее количество записей).
@@ -261,7 +294,7 @@ class DataAccess(QObject):
         total = self.db.get_clients_count()
         return clients, total
 
-    def get_client(self, client_id: int) -> Optional[Dict]:
+    def get_client(self, client_id: int) -> Optional[dict]:
         """Получить клиента по ID"""
         if self._should_use_api():
             try:
@@ -275,41 +308,28 @@ class DataAccess(QObject):
         if self._should_use_api():
             try:
                 contracts = self.api_client.get_contracts()
-                return sum(1 for c in contracts if c.get('client_id') == client_id)
+                return sum(1 for c in contracts if c.get("client_id") == client_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_contracts_count_by_client, fallback: {e}")
-        if hasattr(self.db, 'get_contracts_count_by_client'):
+        if hasattr(self.db, "get_contracts_count_by_client"):
             return self.db.get_contracts_count_by_client(client_id)
         return 0
 
-    def get_contracts_count(
-        self,
-        status: Optional[str] = None,
-        project_type: Optional[str] = None,
-        year: Optional[int] = None
-    ) -> int:
+    def get_contracts_count(self, status: Optional[str] = None, project_type: Optional[str] = None, year: Optional[int] = None) -> int:
         """Получить общее количество договоров (API-first, fallback на локальную БД)"""
         if self._should_use_api():
             try:
-                return self.api_client.get_contracts_count(
-                    status=status,
-                    project_type=project_type,
-                    year=year
-                )
+                return self.api_client.get_contracts_count(status=status, project_type=project_type, year=year)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_contracts_count, fallback: {e}")
-        if self.db and hasattr(self.db, 'get_contracts_count'):
+        if self.db and hasattr(self.db, "get_contracts_count"):
             try:
-                return self.db.get_contracts_count(
-                    status=status,
-                    project_type=project_type,
-                    year=year
-                )
+                return self.db.get_contracts_count(status=status, project_type=project_type, year=year)
             except Exception as e:
                 _safe_log(f"[DataAccess] DB error get_contracts_count: {e}")
         return 0
 
-    def create_client(self, client_data: Dict) -> Optional[Dict]:
+    def create_client(self, client_data: dict) -> Optional[dict]:
         """Создать клиента"""
         _global_cache.invalidate("clients")
         # Сначала сохраняем локально
@@ -323,18 +343,18 @@ class DataAccess(QObject):
                     if isinstance(result, list):
                         result = result[0] if result else {}
                     # Обновляем локальный ID на серверный если отличается
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != client_id:
-                        self._update_local_id('clients', client_id, server_id)
+                        self._update_local_id("clients", client_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_client: {e}")
-                self._queue_operation('create', 'client', client_id, client_data)
+                self._queue_operation("create", "client", client_id, client_data)
         elif self.api_client:
             # Offline режим - добавляем в очередь
-            self._queue_operation('create', 'client', client_id, client_data)
+            self._queue_operation("create", "client", client_id, client_data)
 
-        return {'id': client_id, **client_data} if client_id else None
+        return {"id": client_id, **client_data} if client_id else None
 
     def _update_local_id(self, table: str, local_id: int, server_id: int):
         """Обновить локальный ID на серверный"""
@@ -359,7 +379,7 @@ class DataAccess(QObject):
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка обновления ID: {e}")
 
-    def update_client(self, client_id: int, client_data: Dict) -> bool:
+    def update_client(self, client_id: int, client_data: dict) -> bool:
         """Обновить клиента"""
         _global_cache.invalidate("clients")
         # Сначала обновляем локально
@@ -371,10 +391,10 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_client: {e}")
-                self._queue_operation('update', 'client', client_id, client_data)
+                self._queue_operation("update", "client", client_id, client_data)
         elif self.api_client:
             # Offline режим
-            self._queue_operation('update', 'client', client_id, client_data)
+            self._queue_operation("update", "client", client_id, client_data)
 
         return True
 
@@ -389,15 +409,15 @@ class DataAccess(QObject):
                 return self.api_client.delete_client(client_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_client: {e}")
-                self._queue_operation('delete', 'client', client_id, {})
+                self._queue_operation("delete", "client", client_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'client', client_id, {})
+            self._queue_operation("delete", "client", client_id, {})
 
         return True
 
     # ==================== ДОГОВОРА ====================
 
-    def get_all_contracts(self, skip: int = 0, limit: int = 10000) -> List[Dict]:
+    def get_all_contracts(self, skip: int = 0, limit: int = 10000) -> list[dict]:
         """Получить все договора.
 
         Параметры skip/limit позволяют получать данные постранично.
@@ -413,7 +433,7 @@ class DataAccess(QObject):
                 result = self.api_client.get_contracts(skip=skip, limit=limit)
                 _global_cache.set(cache_key, result)
                 if skip == 0 and limit >= 10000:
-                    self._reconcile_local('contracts', result)
+                    self._reconcile_local("contracts", result)
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_contracts, fallback: {e}")
@@ -421,9 +441,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_contracts_paginated(
-        self, skip: int = 0, limit: int = 100
-    ) -> tuple:
+    def get_contracts_paginated(self, skip: int = 0, limit: int = 100) -> tuple:
         """Получить договора с информацией о пагинации.
 
         Возвращает кортеж (список договоров, общее количество записей).
@@ -440,7 +458,7 @@ class DataAccess(QObject):
         total = self.db.get_contracts_count()
         return contracts, total
 
-    def get_contract(self, contract_id: int) -> Optional[Dict]:
+    def get_contract(self, contract_id: int) -> Optional[dict]:
         """Получить договор по ID"""
         if self._should_use_api():
             try:
@@ -449,7 +467,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_contract, fallback: {e}")
         return self.db.get_contract_by_id(contract_id)
 
-    def create_contract(self, contract_data: Dict) -> Optional[Dict]:
+    def create_contract(self, contract_data: dict) -> Optional[dict]:
         """Создать договор"""
         _global_cache.invalidate("contracts")
         _global_cache.invalidate("crm_cards")
@@ -463,9 +481,9 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != contract_id:
-                        self._update_local_id('contracts', contract_id, server_id)
+                        self._update_local_id("contracts", contract_id, server_id)
 
                     # Проверяем что CRM карточка была создана на сервере
                     # (сервер создаёт её атомарно, но на всякий случай)
@@ -475,63 +493,52 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_contract: {e}")
                 import traceback
+
                 _safe_log(f"[DataAccess] Traceback: {traceback.format_exc()}")
-                self._queue_operation('create', 'contract', contract_id, contract_data)
+                self._queue_operation("create", "contract", contract_id, contract_data)
 
                 # FIX: При offline-создании договора также создаём CRM-карточку локально,
                 # чтобы она отобразилась на канбане до синхронизации с сервером
-                if contract_id and contract_data.get('project_type') != 'Авторский надзор':
+                if contract_id and contract_data.get("project_type") != "Авторский надзор":
                     try:
-                        self.db.add_crm_card({
-                            'contract_id': contract_id,
-                            'column_name': 'Новый заказ'
-                        })
+                        self.db.add_crm_card({"contract_id": contract_id, "column_name": "Новый заказ"})
                         _safe_log(f"[DataAccess] Создана локальная CRM карточка для offline-договора {contract_id}")
                     except Exception as card_err:
                         _safe_log(f"[DataAccess] Ошибка создания локальной CRM карточки: {card_err}")
         elif self.api_client:
-            self._queue_operation('create', 'contract', contract_id, contract_data)
+            self._queue_operation("create", "contract", contract_id, contract_data)
             # Также создаём CRM-карточку локально для offline-режима
-            if contract_id and contract_data.get('project_type') != 'Авторский надзор':
+            if contract_id and contract_data.get("project_type") != "Авторский надзор":
                 try:
-                    self.db.add_crm_card({
-                        'contract_id': contract_id,
-                        'column_name': 'Новый заказ'
-                    })
+                    self.db.add_crm_card({"contract_id": contract_id, "column_name": "Новый заказ"})
                 except Exception:
                     pass
 
-        return {'id': contract_id, **contract_data} if contract_id else None
+        return {"id": contract_id, **contract_data} if contract_id else None
 
-    def _ensure_crm_card_exists(self, contract_result: Dict, contract_data: Dict):
+    def _ensure_crm_card_exists(self, contract_result: dict, contract_data: dict):
         """Проверить что CRM карточка создана для договора, создать если нет"""
         try:
-            project_type = contract_data.get('project_type', '')
-            if project_type == 'Авторский надзор':
+            project_type = contract_data.get("project_type", "")
+            if project_type == "Авторский надзор":
                 return  # Для надзора используется SupervisionCard
 
-            contract_id = contract_result.get('id') if isinstance(contract_result, dict) else None
+            contract_id = contract_result.get("id") if isinstance(contract_result, dict) else None
             if not contract_id:
                 return
 
             # Проверяем наличие CRM карточки через API
             cards = self.api_client.get_crm_cards(project_type)
-            has_card = any(
-                (c.get('contract_id') == contract_id)
-                for c in (cards if isinstance(cards, list) else [])
-            )
+            has_card = any((c.get("contract_id") == contract_id) for c in (cards if isinstance(cards, list) else []))
 
             if not has_card:
                 _safe_log(f"[DataAccess] CRM карточка для договора {contract_id} не найдена, создаём...")
-                self.api_client.create_crm_card({
-                    'contract_id': contract_id,
-                    'column_name': 'Новый заказ'
-                })
+                self.api_client.create_crm_card({"contract_id": contract_id, "column_name": "Новый заказ"})
                 _safe_log(f"[DataAccess] CRM карточка для договора {contract_id} создана")
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка проверки CRM карточки: {e}")
 
-    def update_contract(self, contract_id: int, contract_data: Dict) -> bool:
+    def update_contract(self, contract_id: int, contract_data: dict) -> bool:
         """Обновить договор"""
         _global_cache.invalidate("contracts")
         # Сначала обновляем локально
@@ -543,9 +550,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_contract: {e}")
-                self._queue_operation('update', 'contract', contract_id, contract_data)
+                self._queue_operation("update", "contract", contract_id, contract_data)
         elif self.api_client:
-            self._queue_operation('update', 'contract', contract_id, contract_data)
+            self._queue_operation("update", "contract", contract_id, contract_data)
 
         return True
 
@@ -564,12 +571,12 @@ class DataAccess(QObject):
                 return False
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_contract: {e}")
-                self._queue_operation('delete', 'contract', contract_id, {})
+                self._queue_operation("delete", "contract", contract_id, {})
                 crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
                 return self.db.delete_order(contract_id, crm_card_id)
         elif self.api_client:
             # Offline-режим: удаляем локально и ставим в очередь
-            self._queue_operation('delete', 'contract', contract_id, {})
+            self._queue_operation("delete", "contract", contract_id, {})
             crm_card_id = self.db.get_crm_card_id_by_contract(contract_id)
             return self.db.delete_order(contract_id, crm_card_id)
         # Только локальная БД
@@ -587,7 +594,7 @@ class DataAccess(QObject):
 
     # ==================== СОТРУДНИКИ ====================
 
-    def get_all_employees(self) -> List[Dict]:
+    def get_all_employees(self) -> list[dict]:
         """Получить всех сотрудников"""
         cache_key = "employees:all"
         self._check_cache_on_mode_change()
@@ -598,7 +605,7 @@ class DataAccess(QObject):
             try:
                 result = self.api_client.get_employees(skip=0, limit=10000)
                 _global_cache.set(cache_key, result)
-                self._reconcile_local('employees', result)
+                self._reconcile_local("employees", result)
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_all_employees, fallback: {e}")
@@ -606,7 +613,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_employees_by_position(self, position: str) -> List[Dict]:
+    def get_employees_by_position(self, position: str) -> list[dict]:
         """Получить сотрудников по должности"""
         if self._should_use_api():
             try:
@@ -615,7 +622,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_employees_by_position, fallback: {e}")
         return self.db.get_employees_by_position(position)
 
-    def get_employee(self, employee_id: int) -> Optional[Dict]:
+    def get_employee(self, employee_id: int) -> Optional[dict]:
         """Получить сотрудника по ID"""
         if self._should_use_api():
             try:
@@ -624,7 +631,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_employee, fallback: {e}")
         return self.db.get_employee_by_id(employee_id)
 
-    def create_employee(self, employee_data: Dict) -> Optional[Dict]:
+    def create_employee(self, employee_data: dict) -> Optional[dict]:
         """Создать сотрудника"""
         _global_cache.invalidate("employees")
         employee_id = self.db.add_employee(employee_data)
@@ -636,19 +643,19 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != employee_id:
-                        self._update_local_id('employees', employee_id, server_id)
+                        self._update_local_id("employees", employee_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error create_employee: {e}")
-                self._queue_operation('create', 'employee', employee_id, employee_data)
+                self._queue_operation("create", "employee", employee_id, employee_data)
         elif self.api_client:
-            self._queue_operation('create', 'employee', employee_id, employee_data)
+            self._queue_operation("create", "employee", employee_id, employee_data)
 
-        return {'id': employee_id, **employee_data} if employee_id else None
+        return {"id": employee_id, **employee_data} if employee_id else None
 
-    def update_employee(self, employee_id: int, employee_data: Dict) -> bool:
+    def update_employee(self, employee_id: int, employee_data: dict) -> bool:
         """Обновить сотрудника"""
         _global_cache.invalidate("employees")
         self.db.update_employee(employee_id, employee_data)
@@ -659,29 +666,29 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_employee: {e}")
-                self._queue_operation('update', 'employee', employee_id, employee_data)
+                self._queue_operation("update", "employee", employee_id, employee_data)
         elif self.api_client:
-            self._queue_operation('update', 'employee', employee_id, employee_data)
+            self._queue_operation("update", "employee", employee_id, employee_data)
 
         return True
 
-    def get_employee_active_assignments(self, employee_id: int) -> List[Dict]:
+    def get_employee_active_assignments(self, employee_id: int) -> list[dict]:
         """Получить список активных назначений сотрудника"""
         try:
             if self._should_use_api():
                 try:
-                    cards = self.api_client.get_crm_cards('Индивидуальный') + self.api_client.get_crm_cards('Шаблонный')
+                    cards = self.api_client.get_crm_cards("Индивидуальный") + self.api_client.get_crm_cards("Шаблонный")
                     result = []
                     for card in cards:
-                        team = card.get('team', []) or []
+                        team = card.get("team", []) or []
                         for member in team:
-                            if member.get('executor_id') == employee_id and member.get('status') != 'completed':
-                                result.append({'card_id': card.get('id'), 'contract_number': card.get('contract_number', ''), 'stage': member.get('stage_name', '')})
+                            if member.get("executor_id") == employee_id and member.get("status") != "completed":
+                                result.append({"card_id": card.get("id"), "contract_number": card.get("contract_number", ""), "stage": member.get("stage_name", "")})
                     return result
                 except Exception:
                     pass
             # Fallback: локальная БД
-            return self.db.get_employee_active_assignments(employee_id) if hasattr(self.db, 'get_employee_active_assignments') else []
+            return self.db.get_employee_active_assignments(employee_id) if hasattr(self.db, "get_employee_active_assignments") else []
         except Exception:
             return []
 
@@ -695,15 +702,15 @@ class DataAccess(QObject):
                 return self.api_client.delete_employee(employee_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error delete_employee: {e}")
-                self._queue_operation('delete', 'employee', employee_id, {})
+                self._queue_operation("delete", "employee", employee_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'employee', employee_id, {})
+            self._queue_operation("delete", "employee", employee_id, {})
 
         return True
 
     # ==================== CRM КАРТОЧКИ ====================
 
-    def get_crm_cards(self, project_type: str) -> List[Dict]:
+    def get_crm_cards(self, project_type: str) -> list[dict]:
         """Получить CRM карточки по типу проекта"""
         cache_key = f"crm_cards:{project_type}"
         self._check_cache_on_mode_change()
@@ -721,7 +728,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_crm_card(self, card_id: int) -> Optional[Dict]:
+    def get_crm_card(self, card_id: int) -> Optional[dict]:
         """Получить CRM карточку по ID"""
         if self._should_use_api():
             try:
@@ -730,7 +737,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_crm_card, fallback: {e}")
         return self.db.get_crm_card_data(card_id)
 
-    def get_archived_crm_cards(self, project_type: str) -> List[Dict]:
+    def get_archived_crm_cards(self, project_type: str) -> list[dict]:
         """Получить архивные CRM карточки"""
         cache_key = f"crm_cards_archived:{project_type}"
         self._check_cache_on_mode_change()
@@ -748,7 +755,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def create_crm_card(self, card_data: Dict) -> Optional[Dict]:
+    def create_crm_card(self, card_data: dict) -> Optional[dict]:
         """Создать CRM карточку"""
         _global_cache.invalidate("crm_cards")
         # Сначала сохраняем локально
@@ -761,19 +768,19 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != card_id:
-                        self._update_local_id('crm_cards', card_id, server_id)
+                        self._update_local_id("crm_cards", card_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_crm_card: {e}")
-                self._queue_operation('create', 'crm_card', card_id, card_data)
+                self._queue_operation("create", "crm_card", card_id, card_data)
         elif self.api_client:
-            self._queue_operation('create', 'crm_card', card_id, card_data)
+            self._queue_operation("create", "crm_card", card_id, card_data)
 
-        return {'id': card_id, **card_data} if card_id else None
+        return {"id": card_id, **card_data} if card_id else None
 
-    def update_crm_card(self, card_id: int, updates: Dict) -> bool:
+    def update_crm_card(self, card_id: int, updates: dict) -> bool:
         """Обновить CRM карточку"""
         _global_cache.invalidate("crm_cards")
         # Сначала обновляем локально
@@ -785,9 +792,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_crm_card: {e}")
-                self._queue_operation('update', 'crm_card', card_id, updates)
+                self._queue_operation("update", "crm_card", card_id, updates)
         elif self.api_client:
-            self._queue_operation('update', 'crm_card', card_id, updates)
+            self._queue_operation("update", "crm_card", card_id, updates)
 
         return True
 
@@ -805,21 +812,21 @@ class DataAccess(QObject):
                 return True
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_crm_card: {e}")
-                self._queue_operation('delete', 'crm_card', card_id, {})
+                self._queue_operation("delete", "crm_card", card_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'crm_card', card_id, {})
+            self._queue_operation("delete", "crm_card", card_id, {})
 
         return True
 
     def update_crm_card_column(self, card_id: int, column: str) -> bool:
         """Переместить карточку в другую колонку"""
-        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
+        from utils.api_client.exceptions import APIConnectionError, APIResponseError, APITimeoutError
 
         _global_cache.invalidate("crm_cards")
 
         if self.is_online and self.api_client:
             try:
-                result = self.api_client.update_crm_card(card_id, {'column_name': column})
+                result = self.api_client.update_crm_card(card_id, {"column_name": column})
                 # API успешно — обновляем локально
                 try:
                     self.db.update_crm_card_column(card_id, column)
@@ -834,14 +841,14 @@ class DataAccess(QObject):
                     self.db.update_crm_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+                self._queue_operation("update", "crm_card", card_id, {"column_name": column})
             except (APIConnectionError, APITimeoutError) as e:
                 _safe_log(f"[DataAccess] Сеть update_crm_card_column: {e}")
                 try:
                     self.db.update_crm_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+                self._queue_operation("update", "crm_card", card_id, {"column_name": column})
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка update_crm_card_column: {e}")
                 try:
@@ -852,7 +859,7 @@ class DataAccess(QObject):
             # Оффлайн — обновляем локально
             self.db.update_crm_card_column(card_id, column)
             if self.api_client:
-                self._queue_operation('update', 'crm_card', card_id, {'column_name': column})
+                self._queue_operation("update", "crm_card", card_id, {"column_name": column})
 
         return True
 
@@ -864,7 +871,7 @@ class DataAccess(QObject):
         Raises:
             APIResponseError: При бизнес-ошибках (422/400/409) — запрещённое перемещение.
         """
-        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
+        from utils.api_client.exceptions import APIConnectionError, APIResponseError, APITimeoutError
 
         _global_cache.invalidate("crm_cards")
         _global_cache.invalidate("contracts")
@@ -880,17 +887,17 @@ class DataAccess(QObject):
                 # Обновить статус контракта локально (сервер уже обновил в PostgreSQL)
                 try:
                     if result and isinstance(result, dict):
-                        contract_id = result.get('contract_id')
+                        contract_id = result.get("contract_id")
                         if contract_id:
                             new_status = None
-                            if column == 'Выполненный проект':
-                                new_status = 'Выполненный проект'
-                            elif column == 'В ожидании':
-                                new_status = 'В ожидании'
-                            elif 'Стадия' in column:
-                                new_status = 'В работе'
+                            if column == "Выполненный проект":
+                                new_status = "Выполненный проект"
+                            elif column == "В ожидании":
+                                new_status = "В ожидании"
+                            elif "Стадия" in column:
+                                new_status = "В работе"
                             if new_status:
-                                self.db.update_contract(contract_id, {'status': new_status})
+                                self.db.update_contract(contract_id, {"status": new_status})
                 except Exception:
                     pass
                 return result is not None
@@ -903,14 +910,14 @@ class DataAccess(QObject):
                     self.db.update_crm_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+                self._queue_operation("update", "crm_card", card_id, {"column_name": column, "_action": "move"})
             except (APIConnectionError, APITimeoutError) as e:
                 _safe_log(f"[DataAccess] Сеть move_crm_card: {e}")
                 try:
                     self.db.update_crm_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+                self._queue_operation("update", "crm_card", card_id, {"column_name": column, "_action": "move"})
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка move_crm_card: {e}")
                 try:
@@ -918,11 +925,11 @@ class DataAccess(QObject):
                 except Exception:
                     pass
         elif self.api_client:
-            self._queue_operation('update', 'crm_card', card_id, {'column_name': column, '_action': 'move'})
+            self._queue_operation("update", "crm_card", card_id, {"column_name": column, "_action": "move"})
 
         return True
 
-    def get_workflow_state(self, card_id: int) -> Optional[Dict]:
+    def get_workflow_state(self, card_id: int) -> Optional[dict]:
         """Получить состояние workflow карточки (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] get_workflow_state: API недоступен")
@@ -933,7 +940,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API get_workflow_state: {e}")
             return None
 
-    def workflow_submit(self, card_id: int) -> Optional[Dict]:
+    def workflow_submit(self, card_id: int) -> Optional[dict]:
         """Отправить карточку на проверку (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_submit: API недоступен")
@@ -946,7 +953,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_submit: {e}")
             return None
 
-    def workflow_accept(self, card_id: int) -> Optional[Dict]:
+    def workflow_accept(self, card_id: int) -> Optional[dict]:
         """Принять карточку (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_accept: API недоступен")
@@ -959,8 +966,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_accept: {e}")
             return None
 
-    def workflow_reject(self, card_id: int, stage_name: str = None, reason: str = None,
-                        corrections_path: str = None) -> Optional[Dict]:
+    def workflow_reject(self, card_id: int, stage_name: str = None, reason: str = None, corrections_path: str = None) -> Optional[dict]:
         """Отклонить карточку (только API).
         stage_name и reason — не передаются на сервер (сервер авто-определяет стадию из карточки).
         corrections_path — путь к папке правок на Яндекс.Диске."""
@@ -968,14 +974,14 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] workflow_reject: API недоступен")
             return None
         try:
-            result = self.api_client.workflow_reject(card_id, corrections_path=corrections_path or '')
+            result = self.api_client.workflow_reject(card_id, corrections_path=corrections_path or "")
             _global_cache.invalidate("crm_cards")
             return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_reject: {e}")
             return None
 
-    def workflow_client_send(self, card_id: int) -> Optional[Dict]:
+    def workflow_client_send(self, card_id: int) -> Optional[dict]:
         """Отправить клиенту (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_client_send: API недоступен")
@@ -988,7 +994,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_client_send: {e}")
             return None
 
-    def workflow_client_ok(self, card_id: int) -> Optional[Dict]:
+    def workflow_client_ok(self, card_id: int) -> Optional[dict]:
         """Подтверждение от клиента (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_client_ok: API недоступен")
@@ -1001,7 +1007,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_client_ok: {e}")
             return None
 
-    def workflow_advance_round(self, card_id: int) -> Optional[Dict]:
+    def workflow_advance_round(self, card_id: int) -> Optional[dict]:
         """Перейти к следующему кругу правок (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_advance_round: API недоступен")
@@ -1014,7 +1020,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_advance_round: {e}")
             return None
 
-    def workflow_close_stage(self, card_id: int) -> Optional[Dict]:
+    def workflow_close_stage(self, card_id: int) -> Optional[dict]:
         """Закрыть этап — пропустить оставшиеся круги (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_close_stage: API недоступен")
@@ -1027,7 +1033,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_close_stage: {e}")
             return None
 
-    def workflow_sign_act(self, card_id: int) -> Optional[Dict]:
+    def workflow_sign_act(self, card_id: int) -> Optional[dict]:
         """Подписание акта — финальный шаг стадии (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_sign_act: API недоступен")
@@ -1040,25 +1046,22 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка API workflow_sign_act: {e}")
             return None
 
-    def workflow_add_extra_round(self, card_id: int, stage_name: str,
-                                  executor_role: str = 'Чертежник', reviewer_role: str = 'СДП',
-                                  norm_days_work: int = 3, norm_days_review: int = 1) -> Optional[Dict]:
+    def workflow_add_extra_round(
+        self, card_id: int, stage_name: str, executor_role: str = "Чертежник", reviewer_role: str = "СДП", norm_days_work: int = 3, norm_days_review: int = 1
+    ) -> Optional[dict]:
         """Добавить дополнительный платный круг правок (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_add_extra_round: API недоступен")
             return None
         try:
-            result = self.api_client.workflow_add_extra_round(
-                card_id, stage_name, executor_role, reviewer_role,
-                norm_days_work, norm_days_review
-            )
+            result = self.api_client.workflow_add_extra_round(card_id, stage_name, executor_role, reviewer_role, norm_days_work, norm_days_review)
             _global_cache.invalidate("crm_cards")
             return result
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка API workflow_add_extra_round: {e}")
             return None
 
-    def workflow_repair(self, card_id: int) -> Optional[Dict]:
+    def workflow_repair(self, card_id: int) -> Optional[dict]:
         """Восстановить застрявшую карточку — пересчёт substep из таймлайна (только API)"""
         if not self.api_client:
             _safe_log("[DataAccess] workflow_repair: API недоступен")
@@ -1076,14 +1079,14 @@ class DataAccess(QObject):
         if self._should_use_api():
             try:
                 card = self.api_client.get_crm_card(card_id)
-                return card.get('contract_id') if card else None
+                return card.get("contract_id") if card else None
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_contract_id_by_crm_card, fallback: {e}")
         return self.db.get_contract_id_by_crm_card(card_id)
 
     # ==================== SUPERVISION КАРТОЧКИ ====================
 
-    def get_supervision_cards_active(self) -> List[Dict]:
+    def get_supervision_cards_active(self) -> list[dict]:
         """Получить активные карточки надзора"""
         cache_key = "supervision:active"
         self._check_cache_on_mode_change()
@@ -1101,7 +1104,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_supervision_cards_archived(self) -> List[Dict]:
+    def get_supervision_cards_archived(self) -> list[dict]:
         """Получить архивные карточки надзора"""
         cache_key = "supervision:archived"
         self._check_cache_on_mode_change()
@@ -1119,7 +1122,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_supervision_card(self, card_id: int) -> Optional[Dict]:
+    def get_supervision_card(self, card_id: int) -> Optional[dict]:
         """Получить карточку надзора по ID"""
         if self._should_use_api():
             try:
@@ -1128,11 +1131,11 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_supervision_card, fallback: {e}")
         return self.db.get_supervision_card_data(card_id)
 
-    def create_supervision_card(self, card_data) -> Optional[Dict]:
+    def create_supervision_card(self, card_data) -> Optional[dict]:
         """Создать карточку надзора (принимает Dict или int contract_id)"""
         _global_cache.invalidate("supervision")
         if isinstance(card_data, int):
-            card_data = {'contract_id': card_data, 'column_name': 'Новый заказ'}
+            card_data = {"contract_id": card_data, "column_name": "Новый заказ"}
         # Сначала сохраняем локально
         card_id = self.db.add_supervision_card(card_data)
 
@@ -1143,19 +1146,19 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != card_id:
-                        self._update_local_id('supervision_cards', card_id, server_id)
+                        self._update_local_id("supervision_cards", card_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_supervision_card: {e}")
-                self._queue_operation('create', 'supervision_card', card_id, card_data)
+                self._queue_operation("create", "supervision_card", card_id, card_data)
         elif self.api_client:
-            self._queue_operation('create', 'supervision_card', card_id, card_data)
+            self._queue_operation("create", "supervision_card", card_id, card_data)
 
-        return {'id': card_id, **card_data} if card_id else None
+        return {"id": card_id, **card_data} if card_id else None
 
-    def update_supervision_card(self, card_id: int, updates: Dict) -> bool:
+    def update_supervision_card(self, card_id: int, updates: dict) -> bool:
         """Обновить карточку надзора"""
         _global_cache.invalidate("supervision")
         # Сначала обновляем локально
@@ -1167,9 +1170,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_supervision_card: {e}")
-                self._queue_operation('update', 'supervision_card', card_id, updates)
+                self._queue_operation("update", "supervision_card", card_id, updates)
         elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id, updates)
+            self._queue_operation("update", "supervision_card", card_id, updates)
 
         return True
 
@@ -1181,13 +1184,13 @@ class DataAccess(QObject):
 
         if self.is_online and self.api_client:
             try:
-                result = self.api_client.update_supervision_card(card_id, {'column_name': column})
+                result = self.api_client.update_supervision_card(card_id, {"column_name": column})
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_supervision_card_column: {e}")
-                self._queue_operation('update', 'supervision_card', card_id, {'column_name': column})
+                self._queue_operation("update", "supervision_card", card_id, {"column_name": column})
         elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id, {'column_name': column})
+            self._queue_operation("update", "supervision_card", card_id, {"column_name": column})
 
         return True
 
@@ -1199,7 +1202,7 @@ class DataAccess(QObject):
         Raises:
             APIResponseError: При бизнес-ошибках (422) — запрещённое перемещение.
         """
-        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
+        from utils.api_client.exceptions import APIConnectionError, APIResponseError, APITimeoutError
 
         if self.is_online and self.api_client:
             try:
@@ -1220,24 +1223,21 @@ class DataAccess(QObject):
                     self.db.update_supervision_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'column_name': column, '_action': 'move'})
+                self._queue_operation("update", "supervision_card", card_id, {"column_name": column, "_action": "move"})
             except (APIConnectionError, APITimeoutError) as e:
                 _safe_log(f"[DataAccess] Сеть move_supervision_card: {e}")
                 try:
                     self.db.update_supervision_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'column_name': column, '_action': 'move'})
+                self._queue_operation("update", "supervision_card", card_id, {"column_name": column, "_action": "move"})
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка move_supervision_card: {e}")
                 try:
                     self.db.update_supervision_card_column(card_id, column)
                 except Exception:
                     pass
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'column_name': column, '_action': 'move'})
+                self._queue_operation("update", "supervision_card", card_id, {"column_name": column, "_action": "move"})
         else:
             # Офлайн — обновляем локально + очередь
             try:
@@ -1245,15 +1245,14 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка DB move_supervision_card: {e}")
             if self.api_client:
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'column_name': column, '_action': 'move'})
+                self._queue_operation("update", "supervision_card", card_id, {"column_name": column, "_action": "move"})
 
         return True
 
-    def complete_supervision_stage(self, card_id: int, **kwargs) -> Optional[Dict]:
+    def complete_supervision_stage(self, card_id: int, **kwargs) -> Optional[dict]:
         """Завершить стадию надзора"""
         # Сначала сохраняем локально
-        stage_name = kwargs.get('stage_name')
+        stage_name = kwargs.get("stage_name")
         try:
             self.db.complete_supervision_stage(card_id, stage_name=stage_name)
         except Exception as e:
@@ -1264,13 +1263,11 @@ class DataAccess(QObject):
                 return self.api_client.complete_supervision_stage(card_id, **kwargs)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API complete_supervision_stage: {e}")
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'_action': 'complete_stage', 'stage_name': stage_name})
+                self._queue_operation("update", "supervision_card", card_id, {"_action": "complete_stage", "stage_name": stage_name})
         elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id,
-                                  {'_action': 'complete_stage', 'stage_name': stage_name})
+            self._queue_operation("update", "supervision_card", card_id, {"_action": "complete_stage", "stage_name": stage_name})
 
-        return {'success': True}
+        return {"success": True}
 
     def reset_supervision_stage_completion(self, card_id: int) -> bool:
         """Сбросить отметку выполнения стадии надзора"""
@@ -1286,20 +1283,18 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_supervision_stage_completion: {e}")
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'_action': 'reset_stage_completion'})
+                self._queue_operation("update", "supervision_card", card_id, {"_action": "reset_stage_completion"})
         elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id,
-                                  {'_action': 'reset_stage_completion'})
+            self._queue_operation("update", "supervision_card", card_id, {"_action": "reset_stage_completion"})
 
         return True
 
-    def pause_supervision_card(self, card_id: int, reason: str = None, employee_id: int = None) -> Optional[Dict]:
+    def pause_supervision_card(self, card_id: int, reason: str = None, employee_id: int = None) -> Optional[dict]:
         """Поставить карточку надзора на паузу.
         employee_id — используется только в offline (DB). В online сервер определяет из JWT."""
         # Сначала сохраняем локально
         try:
-            self.db.pause_supervision_card(card_id, reason or '', employee_id or 0)
+            self.db.pause_supervision_card(card_id, reason or "", employee_id or 0)
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB pause_supervision_card: {e}")
 
@@ -1308,18 +1303,16 @@ class DataAccess(QObject):
 
         if self.is_online and self.api_client:
             try:
-                return self.api_client.pause_supervision_card(card_id, reason or '')
+                return self.api_client.pause_supervision_card(card_id, reason or "")
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API pause_supervision_card: {e}")
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'_action': 'pause', 'reason': reason or ''})
+                self._queue_operation("update", "supervision_card", card_id, {"_action": "pause", "reason": reason or ""})
         elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id,
-                                  {'_action': 'pause', 'reason': reason or ''})
+            self._queue_operation("update", "supervision_card", card_id, {"_action": "pause", "reason": reason or ""})
 
-        return {'success': True}
+        return {"success": True}
 
-    def resume_supervision_card(self, card_id: int, employee_id: int = None) -> Optional[Dict]:
+    def resume_supervision_card(self, card_id: int, employee_id: int = None) -> Optional[dict]:
         """Возобновить карточку надзора после паузы"""
         # Сначала возобновляем локально
         try:
@@ -1332,20 +1325,19 @@ class DataAccess(QObject):
 
         if self.is_online and self.api_client:
             from utils.api_client.exceptions import APIConnectionError, APITimeoutError
+
             try:
                 return self.api_client.resume_supervision_card(card_id, employee_id)
             except (APIConnectionError, APITimeoutError) as e:
                 _safe_log(f"[DataAccess] Сетевая ошибка resume_supervision_card: {e}")
-                self._queue_operation('update', 'supervision_card', card_id,
-                                      {'_action': 'resume', 'employee_id': employee_id})
+                self._queue_operation("update", "supervision_card", card_id, {"_action": "resume", "employee_id": employee_id})
             except Exception as e:
                 # Бизнес-ошибки (422/400) — НЕ ставим в очередь (правило #12)
                 _safe_log(f"[DataAccess] Бизнес-ошибка resume_supervision_card: {e}")
         elif self.api_client:
-            self._queue_operation('update', 'supervision_card', card_id,
-                                  {'_action': 'resume', 'employee_id': employee_id})
+            self._queue_operation("update", "supervision_card", card_id, {"_action": "resume", "employee_id": employee_id})
 
-        return {'success': True}
+        return {"success": True}
 
     def delete_supervision_order(self, contract_id: int, supervision_card_id: int = None) -> bool:
         """Удалить выезд из карточки надзора"""
@@ -1361,11 +1353,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_supervision_order: {e}")
-                self._queue_operation('delete', 'supervision_card', supervision_card_id or contract_id,
-                                      {'contract_id': contract_id, '_action': 'delete_order'})
+                self._queue_operation("delete", "supervision_card", supervision_card_id or contract_id, {"contract_id": contract_id, "_action": "delete_order"})
         elif self.api_client:
-            self._queue_operation('delete', 'supervision_card', supervision_card_id or contract_id,
-                                  {'contract_id': contract_id, '_action': 'delete_order'})
+            self._queue_operation("delete", "supervision_card", supervision_card_id or contract_id, {"contract_id": contract_id, "_action": "delete_order"})
 
         return True
 
@@ -1382,7 +1372,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка DB get_contract_id_by_supervision_card: {e}")
             return None
 
-    def get_supervision_addresses(self) -> List[str]:
+    def get_supervision_addresses(self) -> list[str]:
         """Получить список адресов карточек надзора"""
         if self.api_client:
             try:
@@ -1395,28 +1385,24 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка DB get_supervision_addresses: {e}")
             return []
 
-    def get_supervision_statistics_filtered(self, period=None, year=None, quarter=None, month=None,
-                                            address_id=None, stage=None, executor_id=None,
-                                            manager_id=None, status=None) -> Dict:
+    def get_supervision_statistics_filtered(self, period=None, year=None, quarter=None, month=None, address_id=None, stage=None, executor_id=None, manager_id=None, status=None) -> dict:
         """Получить отфильтрованную статистику надзора"""
         if self.api_client:
             try:
                 return self.api_client.get_supervision_statistics_filtered(
-                    year=year, quarter=quarter, month=month,
-                    agent_type=stage, city=None, address=address_id,
-                    executor_id=executor_id, manager_id=manager_id, status=status)
+                    year=year, quarter=quarter, month=month, agent_type=stage, city=None, address=address_id, executor_id=executor_id, manager_id=manager_id, status=status
+                )
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API get_supervision_statistics_filtered: {e}")
         try:
-            return self.db.get_supervision_statistics_filtered(
-                period, year, quarter, month, address_id, stage, executor_id, manager_id, status)
+            return self.db.get_supervision_statistics_filtered(period, year, quarter, month, address_id, stage, executor_id, manager_id, status)
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB get_supervision_statistics_filtered: {e}")
             return {}
 
     # ==================== ПЛАТЕЖИ ====================
 
-    def get_payments_for_contract(self, contract_id: int) -> List[Dict]:
+    def get_payments_for_contract(self, contract_id: int) -> list[dict]:
         """Получить платежи по договору"""
         if self._should_use_api():
             try:
@@ -1425,7 +1411,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payments_for_contract, fallback: {e}")
         return self.db.get_payments_for_contract(contract_id)
 
-    def create_payment(self, payment_data: Dict) -> Optional[Dict]:
+    def create_payment(self, payment_data: dict) -> Optional[dict]:
         """Создать платёж"""
         _global_cache.invalidate("payments")
         # Сначала сохраняем локально
@@ -1438,19 +1424,19 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != payment_id:
-                        self._update_local_id('payments', payment_id, server_id)
+                        self._update_local_id("payments", payment_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_payment: {e}")
-                self._queue_operation('create', 'payment', payment_id, payment_data)
+                self._queue_operation("create", "payment", payment_id, payment_data)
         elif self.api_client:
-            self._queue_operation('create', 'payment', payment_id, payment_data)
+            self._queue_operation("create", "payment", payment_id, payment_data)
 
-        return {'id': payment_id, **payment_data} if payment_id else None
+        return {"id": payment_id, **payment_data} if payment_id else None
 
-    def update_payment(self, payment_id: int, payment_data: Dict) -> bool:
+    def update_payment(self, payment_id: int, payment_data: dict) -> bool:
         """Обновить платёж"""
         _global_cache.invalidate("payments")
         # Сначала обновляем локально
@@ -1462,9 +1448,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_payment: {e}")
-                self._queue_operation('update', 'payment', payment_id, payment_data)
+                self._queue_operation("update", "payment", payment_id, payment_data)
         elif self.api_client:
-            self._queue_operation('update', 'payment', payment_id, payment_data)
+            self._queue_operation("update", "payment", payment_id, payment_data)
 
         return True
 
@@ -1480,13 +1466,13 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_payment: {e}")
-                self._queue_operation('delete', 'payment', payment_id, {})
+                self._queue_operation("delete", "payment", payment_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'payment', payment_id, {})
+            self._queue_operation("delete", "payment", payment_id, {})
 
         return True
 
-    def get_payment(self, payment_id: int) -> Optional[Dict]:
+    def get_payment(self, payment_id: int) -> Optional[dict]:
         """Получить платёж по ID"""
         if self._should_use_api():
             try:
@@ -1495,7 +1481,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payment, fallback: {e}")
         return self.db.get_payment(payment_id)
 
-    def get_payments_by_type(self, payment_type: str, project_type_filter: str = None) -> List[Dict]:
+    def get_payments_by_type(self, payment_type: str, project_type_filter: str = None) -> list[dict]:
         """Получить платежи по типу"""
         if self._should_use_api():
             try:
@@ -1504,7 +1490,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payments_by_type, fallback: {e}")
         return self.db.get_payments_by_type(payment_type, project_type_filter)
 
-    def get_payments_by_supervision_card(self, card_id: int) -> List[Dict]:
+    def get_payments_by_supervision_card(self, card_id: int) -> list[dict]:
         """Получить платежи по карточке надзора"""
         if self._should_use_api():
             try:
@@ -1513,7 +1499,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payments_by_supervision_card, fallback: {e}")
         return self.db.get_payments_by_supervision_card(card_id)
 
-    def get_payments_for_supervision(self, contract_id: int) -> List[Dict]:
+    def get_payments_for_supervision(self, contract_id: int) -> list[dict]:
         """Получить платежи надзора по договору"""
         if self._should_use_api():
             try:
@@ -1522,7 +1508,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payments_for_supervision, fallback: {e}")
         return self.db.get_payments_for_supervision(contract_id)
 
-    def get_payments_for_crm(self, contract_id: int) -> List[Dict]:
+    def get_payments_for_crm(self, contract_id: int) -> list[dict]:
         """Получить платежи CRM по договору"""
         if self._should_use_api():
             try:
@@ -1531,7 +1517,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_payments_for_crm, fallback: {e}")
         return self.db.get_payments_for_crm(contract_id)
 
-    def get_year_payments(self, year: int = None, include_null_month: bool = False) -> List[Dict]:
+    def get_year_payments(self, year: int = None, include_null_month: bool = False) -> list[dict]:
         """Получить платежи за год (или все, если year=None)"""
         cache_key = f"payments:year:{year}:{include_null_month}"
         self._check_cache_on_mode_change()
@@ -1561,49 +1547,56 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API mark_payment_as_paid: {e}")
-                self._queue_operation('update', 'payment', payment_id,
-                                      {'_action': 'mark_paid', 'employee_id': employee_id})
+                self._queue_operation("update", "payment", payment_id, {"_action": "mark_paid", "employee_id": employee_id})
         elif self.api_client:
-            self._queue_operation('update', 'payment', payment_id,
-                                  {'_action': 'mark_paid', 'employee_id': employee_id})
+            self._queue_operation("update", "payment", payment_id, {"_action": "mark_paid", "employee_id": employee_id})
 
         return True
 
-    def create_payment_record(self, contract_id: int, employee_id: int, role: str,
-                             stage_name: str = None, payment_type: str = 'Полная оплата',
-                             report_month: str = None, crm_card_id: int = None,
-                             supervision_card_id: int = None) -> Optional[Dict]:
+    def create_payment_record(
+        self,
+        contract_id: int,
+        employee_id: int,
+        role: str,
+        stage_name: str = None,
+        payment_type: str = "Полная оплата",
+        report_month: str = None,
+        crm_card_id: int = None,
+        supervision_card_id: int = None,
+    ) -> Optional[dict]:
         """Создать платёж с расширенными параметрами"""
         payment_data = {
-            'contract_id': contract_id, 'employee_id': employee_id, 'role': role,
-            'stage_name': stage_name, 'payment_type': payment_type,
-            'report_month': report_month, 'crm_card_id': crm_card_id,
-            'supervision_card_id': supervision_card_id
+            "contract_id": contract_id,
+            "employee_id": employee_id,
+            "role": role,
+            "stage_name": stage_name,
+            "payment_type": payment_type,
+            "report_month": report_month,
+            "crm_card_id": crm_card_id,
+            "supervision_card_id": supervision_card_id,
         }
         # Сначала сохраняем локально
         local_result = None
         try:
             local_result = self.db.create_payment_record(
-                contract_id, employee_id, role, stage_name=stage_name,
-                payment_type=payment_type, report_month=report_month,
-                crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
+                contract_id, employee_id, role, stage_name=stage_name, payment_type=payment_type, report_month=report_month, crm_card_id=crm_card_id, supervision_card_id=supervision_card_id
+            )
         except Exception as e:
             _safe_log(f"[DataAccess] DB error create_payment_record: {e}")
 
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.create_payment_record(
-                    contract_id, employee_id, role, stage_name=stage_name,
-                    payment_type=payment_type, report_month=report_month,
-                    crm_card_id=crm_card_id, supervision_card_id=supervision_card_id)
+                    contract_id, employee_id, role, stage_name=stage_name, payment_type=payment_type, report_month=report_month, crm_card_id=crm_card_id, supervision_card_id=supervision_card_id
+                )
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error create_payment_record: {e}")
-                payment_id = local_result.get('id') if isinstance(local_result, dict) else 0
-                self._queue_operation('create', 'payment', payment_id, payment_data)
+                payment_id = local_result.get("id") if isinstance(local_result, dict) else 0
+                self._queue_operation("create", "payment", payment_id, payment_data)
         elif self.api_client:
-            payment_id = local_result.get('id') if isinstance(local_result, dict) else 0
-            self._queue_operation('create', 'payment', payment_id, payment_data)
+            payment_id = local_result.get("id") if isinstance(local_result, dict) else 0
+            self._queue_operation("create", "payment", payment_id, payment_data)
 
         return local_result
 
@@ -1619,31 +1612,22 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_payment_manual: {e}")
-                self._queue_operation('update', 'payment', payment_id,
-                                      {'_action': 'manual_amount', 'amount': amount,
-                                       'report_month': report_month})
+                self._queue_operation("update", "payment", payment_id, {"_action": "manual_amount", "amount": amount, "report_month": report_month})
         elif self.api_client:
-            self._queue_operation('update', 'payment', payment_id,
-                                  {'_action': 'manual_amount', 'amount': amount,
-                                   'report_month': report_month})
+            self._queue_operation("update", "payment", payment_id, {"_action": "manual_amount", "amount": amount, "report_month": report_month})
 
         return True
 
-    def calculate_payment_amount(self, contract_id, employee_id, role,
-                                  stage_name=None, supervision_card_id=None) -> Optional[Dict]:
+    def calculate_payment_amount(self, contract_id, employee_id, role, stage_name=None, supervision_card_id=None) -> Optional[dict]:
         """Рассчитать сумму платежа"""
         if self._should_use_api():
             try:
-                return self.api_client.calculate_payment_amount(
-                    contract_id, employee_id, role,
-                    stage_name=stage_name, supervision_card_id=supervision_card_id)
+                return self.api_client.calculate_payment_amount(contract_id, employee_id, role, stage_name=stage_name, supervision_card_id=supervision_card_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error calculate_payment_amount, fallback: {e}")
-        return self.db.calculate_payment_amount(
-            contract_id, employee_id, role,
-            stage_name=stage_name, supervision_card_id=supervision_card_id)
+        return self.db.calculate_payment_amount(contract_id, employee_id, role, stage_name=stage_name, supervision_card_id=supervision_card_id)
 
-    def recalculate_payments(self, contract_id: int = None, role: str = None) -> Optional[Dict]:
+    def recalculate_payments(self, contract_id: int = None, role: str = None) -> Optional[dict]:
         """Пересчитать платежи (только API)"""
         if self.api_client:
             try:
@@ -1668,7 +1652,7 @@ class DataAccess(QObject):
 
     # ==================== ИСТОРИЯ ДЕЙСТВИЙ ====================
 
-    def get_action_history(self, entity_type: str, entity_id: int) -> List[Dict]:
+    def get_action_history(self, entity_type: str, entity_id: int) -> list[dict]:
         """Получить историю действий"""
         if self._should_use_api():
             try:
@@ -1677,16 +1661,9 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_action_history, fallback: {e}")
         return self.db.get_action_history(entity_type, entity_id)
 
-    def add_action_history(self, user_id: int, action_type: str, entity_type: str,
-                          entity_id: int, description: str = None) -> bool:
+    def add_action_history(self, user_id: int, action_type: str, entity_type: str, entity_id: int, description: str = None) -> bool:
         """Добавить запись в историю действий"""
-        history_data = {
-            'user_id': user_id,
-            'action_type': action_type,
-            'entity_type': entity_type,
-            'entity_id': entity_id,
-            'description': description
-        }
+        history_data = {"user_id": user_id, "action_type": action_type, "entity_type": entity_type, "entity_id": entity_id, "description": description}
         # Сначала сохраняем локально
         self.db.add_action_history(user_id, action_type, entity_type, entity_id, description)
 
@@ -1695,15 +1672,15 @@ class DataAccess(QObject):
                 self.api_client.create_action_history(history_data)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API add_action_history: {e}")
-                self._queue_operation('create', 'action_history', entity_id, history_data)
+                self._queue_operation("create", "action_history", entity_id, history_data)
         elif self.api_client:
-            self._queue_operation('create', 'action_history', entity_id, history_data)
+            self._queue_operation("create", "action_history", entity_id, history_data)
 
         return True
 
     # ==================== ИСТОРИЯ НАДЗОРА ====================
 
-    def get_supervision_history(self, card_id: int) -> List[Dict]:
+    def get_supervision_history(self, card_id: int) -> list[dict]:
         """Получить историю карточки надзора"""
         if self._should_use_api():
             try:
@@ -1712,34 +1689,26 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_supervision_history, fallback: {e}")
         return self.db.get_supervision_history(card_id)
 
-    def add_supervision_history(self, card_id: int, user_id: int, action_type: str,
-                               description: str = None) -> bool:
+    def add_supervision_history(self, card_id: int, user_id: int, action_type: str, description: str = None) -> bool:
         """Добавить запись в историю надзора"""
-        history_data = {
-            'card_id': card_id,
-            'entry_type': action_type,
-            'message': description or "",
-            'employee_id': user_id
-        }
+        history_data = {"card_id": card_id, "entry_type": action_type, "message": description or "", "employee_id": user_id}
         # Сначала сохраняем локально
         self.db.add_supervision_history(card_id, action_type, description or "", user_id)
 
         if self.is_online and self.api_client:
             try:
-                self.api_client.add_supervision_history(
-                    card_id, entry_type=action_type,
-                    message=description or "", employee_id=user_id)
+                self.api_client.add_supervision_history(card_id, entry_type=action_type, message=description or "", employee_id=user_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API add_supervision_history: {e}")
-                self._queue_operation('create', 'supervision_history', card_id, history_data)
+                self._queue_operation("create", "supervision_history", card_id, history_data)
         elif self.api_client:
-            self._queue_operation('create', 'supervision_history', card_id, history_data)
+            self._queue_operation("create", "supervision_history", card_id, history_data)
 
         return True
 
     # ==================== СТАВКИ ====================
 
-    def get_rates(self, project_type: str = None, role: str = None) -> List[Dict]:
+    def get_rates(self, project_type: str = None, role: str = None) -> list[dict]:
         """Получить ставки"""
         if self._should_use_api():
             try:
@@ -1748,7 +1717,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_rates, fallback: {e}")
         return self.db.get_rates(project_type, role)
 
-    def get_rate(self, rate_id: int) -> Optional[Dict]:
+    def get_rate(self, rate_id: int) -> Optional[dict]:
         """Получить ставку по ID"""
         if self._should_use_api():
             try:
@@ -1757,7 +1726,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_rate, fallback: {e}")
         return self.db.get_rate_by_id(rate_id)
 
-    def create_rate(self, rate_data: Dict) -> Optional[Dict]:
+    def create_rate(self, rate_data: dict) -> Optional[dict]:
         """Создать ставку"""
         # Сначала сохраняем локально
         rate_id = self.db.add_rate(rate_data)
@@ -1769,19 +1738,19 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != rate_id:
-                        self._update_local_id('rates', rate_id, server_id)
+                        self._update_local_id("rates", rate_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_rate: {e}")
-                self._queue_operation('create', 'rate', rate_id, rate_data)
+                self._queue_operation("create", "rate", rate_id, rate_data)
         elif self.api_client:
-            self._queue_operation('create', 'rate', rate_id, rate_data)
+            self._queue_operation("create", "rate", rate_id, rate_data)
 
-        return {'id': rate_id, **rate_data} if rate_id else None
+        return {"id": rate_id, **rate_data} if rate_id else None
 
-    def update_rate(self, rate_id: int, rate_data: Dict) -> bool:
+    def update_rate(self, rate_id: int, rate_data: dict) -> bool:
         """Обновить ставку"""
         # Сначала обновляем локально
         self.db.update_rate(rate_id, rate_data)
@@ -1792,9 +1761,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_rate: {e}")
-                self._queue_operation('update', 'rate', rate_id, rate_data)
+                self._queue_operation("update", "rate", rate_id, rate_data)
         elif self.api_client:
-            self._queue_operation('update', 'rate', rate_id, rate_data)
+            self._queue_operation("update", "rate", rate_id, rate_data)
 
         return True
 
@@ -1809,13 +1778,13 @@ class DataAccess(QObject):
                 return result if isinstance(result, bool) else True
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_rate: {e}")
-                self._queue_operation('delete', 'rate', rate_id, {})
+                self._queue_operation("delete", "rate", rate_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'rate', rate_id, {})
+            self._queue_operation("delete", "rate", rate_id, {})
 
         return True
 
-    def get_template_rates(self, role: str = None) -> List[Dict]:
+    def get_template_rates(self, role: str = None) -> list[dict]:
         """Получить шаблонные ставки"""
         if self._should_use_api():
             try:
@@ -1824,7 +1793,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_template_rates, fallback: {e}")
         return self.db.get_template_rates(role)
 
-    def save_template_rate(self, role: str, area_from: float, area_to: float, price: float) -> Optional[Dict]:
+    def save_template_rate(self, role: str, area_from: float, area_to: float, price: float) -> Optional[dict]:
         """Сохранить шаблонную ставку (только API)"""
         if self.api_client:
             try:
@@ -1835,7 +1804,7 @@ class DataAccess(QObject):
         _safe_log("[DataAccess] save_template_rate: API недоступен")
         return None
 
-    def save_individual_rate(self, role: str, rate_per_m2: float, stage_name: str = None) -> Optional[Dict]:
+    def save_individual_rate(self, role: str, rate_per_m2: float, stage_name: str = None) -> Optional[dict]:
         """Сохранить индивидуальную ставку (только API)"""
         if self.api_client:
             try:
@@ -1858,7 +1827,7 @@ class DataAccess(QObject):
         _safe_log("[DataAccess] delete_individual_rate: API недоступен")
         return False
 
-    def save_surveyor_rate(self, city: str, price: float) -> Optional[Dict]:
+    def save_surveyor_rate(self, city: str, price: float) -> Optional[dict]:
         """Сохранить ставку геодезиста (только API)"""
         if self.api_client:
             try:
@@ -1869,7 +1838,7 @@ class DataAccess(QObject):
         _safe_log("[DataAccess] save_surveyor_rate: API недоступен")
         return None
 
-    def save_supervision_rate(self, stage: str, exec_rate: float, mgr_rate: float) -> Optional[Dict]:
+    def save_supervision_rate(self, stage: str, exec_rate: float, mgr_rate: float) -> Optional[dict]:
         """Сохранить ставку надзора (только API)"""
         if self.api_client:
             try:
@@ -1882,7 +1851,7 @@ class DataAccess(QObject):
 
     # ==================== ЗАРПЛАТЫ ====================
 
-    def get_salaries(self, report_month: str = None, employee_id: int = None) -> List[Dict]:
+    def get_salaries(self, report_month: str = None, employee_id: int = None) -> list[dict]:
         """Получить зарплаты"""
         cache_key = f"salaries:{report_month}:{employee_id}"
         self._check_cache_on_mode_change()
@@ -1900,7 +1869,7 @@ class DataAccess(QObject):
         _global_cache.set(cache_key, result)
         return result
 
-    def get_salary(self, salary_id: int) -> Optional[Dict]:
+    def get_salary(self, salary_id: int) -> Optional[dict]:
         """Получить зарплату по ID"""
         if self._should_use_api():
             try:
@@ -1909,7 +1878,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_salary, fallback: {e}")
         return self.db.get_salary_by_id(salary_id)
 
-    def create_salary(self, salary_data: Dict) -> Optional[Dict]:
+    def create_salary(self, salary_data: dict) -> Optional[dict]:
         """Создать запись о зарплате"""
         _global_cache.invalidate("salaries")
         # Сначала сохраняем локально
@@ -1922,19 +1891,19 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != salary_id:
-                        self._update_local_id('salaries', salary_id, server_id)
+                        self._update_local_id("salaries", salary_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_salary: {e}")
-                self._queue_operation('create', 'salary', salary_id, salary_data)
+                self._queue_operation("create", "salary", salary_id, salary_data)
         elif self.api_client:
-            self._queue_operation('create', 'salary', salary_id, salary_data)
+            self._queue_operation("create", "salary", salary_id, salary_data)
 
-        return {'id': salary_id, **salary_data} if salary_id else None
+        return {"id": salary_id, **salary_data} if salary_id else None
 
-    def update_salary(self, salary_id: int, salary_data: Dict) -> bool:
+    def update_salary(self, salary_id: int, salary_data: dict) -> bool:
         """Обновить запись о зарплате"""
         _global_cache.invalidate("salaries")
         # Сначала обновляем локально
@@ -1946,9 +1915,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_salary: {e}")
-                self._queue_operation('update', 'salary', salary_id, salary_data)
+                self._queue_operation("update", "salary", salary_id, salary_data)
         elif self.api_client:
-            self._queue_operation('update', 'salary', salary_id, salary_data)
+            self._queue_operation("update", "salary", salary_id, salary_data)
 
         return True
 
@@ -1963,15 +1932,15 @@ class DataAccess(QObject):
                 return self.api_client.delete_salary(salary_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_salary: {e}")
-                self._queue_operation('delete', 'salary', salary_id, {})
+                self._queue_operation("delete", "salary", salary_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'salary', salary_id, {})
+            self._queue_operation("delete", "salary", salary_id, {})
 
         return True
 
     # ==================== АГЕНТЫ ====================
 
-    def get_all_agents(self) -> List[Dict]:
+    def get_all_agents(self) -> list[dict]:
         """Получить всех агентов (с id, name, color)"""
         if self.api_client:
             try:
@@ -1999,7 +1968,7 @@ class DataAccess(QObject):
                 pass
         return None
 
-    def add_agent(self, name: str, color: str = None) -> Optional[Dict]:
+    def add_agent(self, name: str, color: str = None) -> Optional[dict]:
         """Добавить агента"""
         # Сначала сохраняем локально
         local_result = None
@@ -2013,9 +1982,9 @@ class DataAccess(QObject):
                 return self.api_client.add_agent(name, color)
             except Exception as e:
                 _safe_log(f"[DataAccess] API add_agent: {e}")
-                self._queue_operation('create', 'agent', 0, {'name': name, 'color': color})
+                self._queue_operation("create", "agent", 0, {"name": name, "color": color})
         elif self.api_client:
-            self._queue_operation('create', 'agent', 0, {'name': name, 'color': color})
+            self._queue_operation("create", "agent", 0, {"name": name, "color": color})
 
         return local_result
 
@@ -2032,9 +2001,9 @@ class DataAccess(QObject):
                 return self.api_client.update_agent_color(name, color)
             except Exception as e:
                 _safe_log(f"[DataAccess] API update_agent_color: {e}")
-                self._queue_operation('update', 'agent', 0, {'name': name, 'color': color})
+                self._queue_operation("update", "agent", 0, {"name": name, "color": color})
         elif self.api_client:
-            self._queue_operation('update', 'agent', 0, {'name': name, 'color': color})
+            self._queue_operation("update", "agent", 0, {"name": name, "color": color})
 
         return True
 
@@ -2050,7 +2019,7 @@ class DataAccess(QObject):
                         self.db.delete_agent(agent_id)
                     except Exception:
                         pass
-                self._queue_operation('delete', 'agent', agent_id, {})
+                self._queue_operation("delete", "agent", agent_id, {})
                 return True
             except Exception as e:
                 _safe_log(f"[DataAccess] API delete_agent error: {e}")
@@ -2061,7 +2030,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB delete_agent error: {e}")
         return False
 
-    def get_agent_types(self) -> List[str]:
+    def get_agent_types(self) -> list[str]:
         """Получить типы агентов"""
         if self.api_client:
             try:
@@ -2077,7 +2046,7 @@ class DataAccess(QObject):
 
     # ==================== ГОРОДА ====================
 
-    def get_all_cities(self) -> List[Dict]:
+    def get_all_cities(self) -> list[dict]:
         """Получить все города"""
         if self.api_client:
             try:
@@ -2095,6 +2064,7 @@ class DataAccess(QObject):
         # Последний fallback — config.py
         try:
             from config import CITIES
+
             return [{"id": i, "name": c, "status": "активный"} for i, c in enumerate(CITIES, 1)]
         except Exception:
             return []
@@ -2117,7 +2087,7 @@ class DataAccess(QObject):
                         self.db.add_city(name)
                     except Exception:
                         pass
-                self._queue_operation('create', 'city', None, {'name': name})
+                self._queue_operation("create", "city", None, {"name": name})
                 return True
             except Exception as e:
                 _safe_log(f"[DataAccess] API add_city error: {e}")
@@ -2140,7 +2110,7 @@ class DataAccess(QObject):
                         self.db.delete_city(city_id)
                     except Exception:
                         pass
-                self._queue_operation('delete', 'city', city_id, {})
+                self._queue_operation("delete", "city", city_id, {})
                 return True
             except Exception as e:
                 _safe_log(f"[DataAccess] API delete_city error: {e}")
@@ -2153,7 +2123,7 @@ class DataAccess(QObject):
 
     # ==================== СТАДИИ ====================
 
-    def get_stage_history(self, card_id: int) -> List[Dict]:
+    def get_stage_history(self, card_id: int) -> list[dict]:
         """Получить историю стадий"""
         if self._should_use_api():
             try:
@@ -2162,7 +2132,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_stage_history, fallback: {e}")
         return self.db.get_stage_history(card_id)
 
-    def get_accepted_stages(self, card_id: int) -> List[Dict]:
+    def get_accepted_stages(self, card_id: int) -> list[dict]:
         """Получить принятые стадии"""
         if self._should_use_api():
             try:
@@ -2175,7 +2145,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] DB get_accepted_stages: {e}")
             return []
 
-    def get_submitted_stages(self, card_id: int) -> List[Dict]:
+    def get_submitted_stages(self, card_id: int) -> list[dict]:
         """Получить сданные стадии"""
         if self._should_use_api():
             try:
@@ -2188,57 +2158,44 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] DB get_submitted_stages: {e}")
             return []
 
-    def update_stage_executor_deadline(self, card_id: int, stage_name: str,
-                                       deadline: str = None, executor_id: int = None) -> bool:
+    def update_stage_executor_deadline(self, card_id: int, stage_name: str, deadline: str = None, executor_id: int = None) -> bool:
         """Обновить дедлайн исполнителя стадии"""
         # Сначала сохраняем локально
-        self.db.update_stage_executor_deadline(card_id, stage_name, deadline,
-                                               executor_id=executor_id)
+        self.db.update_stage_executor_deadline(card_id, stage_name, deadline, executor_id=executor_id)
 
         if self.is_online and self.api_client:
             try:
                 update_data = {}
                 if deadline is not None:
-                    update_data['deadline'] = deadline
+                    update_data["deadline"] = deadline
                 if executor_id is not None:
-                    update_data['executor_id'] = executor_id
+                    update_data["executor_id"] = executor_id
                 result = self.api_client.update_stage_executor(card_id, stage_name, update_data)
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_stage_executor_deadline: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, 'stage_name': stage_name,
-                                       'deadline': deadline, 'executor_id': executor_id,
-                                       '_action': 'update'})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "deadline": deadline, "executor_id": executor_id, "_action": "update"})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, 'stage_name': stage_name,
-                                   'deadline': deadline, 'executor_id': executor_id,
-                                   '_action': 'update'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "deadline": deadline, "executor_id": executor_id, "_action": "update"})
 
         return True
 
     # ==================== STAGE EXECUTORS ====================
 
-    def assign_stage_executor(self, card_id: int, data: Dict) -> Optional[Dict]:
+    def assign_stage_executor(self, card_id: int, data: dict) -> Optional[dict]:
         """Назначить исполнителя на стадию.
 
         Raises:
             APIResponseError: При бизнес-ошибках (422/400/409) — назначение отклонено сервером.
         """
-        from utils.api_client.exceptions import APIResponseError, APIConnectionError, APITimeoutError
+        from utils.api_client.exceptions import APIConnectionError, APIResponseError, APITimeoutError
 
         if self.is_online and self.api_client:
             try:
                 result = self.api_client.assign_stage_executor(card_id, data)
                 # API успешно — сохраняем локально
                 try:
-                    self.db.assign_stage_executor(
-                        card_id,
-                        data.get('stage_name', ''),
-                        data.get('executor_id'),
-                        data.get('assigned_by'),
-                        data.get('deadline'))
+                    self.db.assign_stage_executor(card_id, data.get("stage_name", ""), data.get("executor_id"), data.get("assigned_by"), data.get("deadline"))
                 except Exception as e:
                     _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
                 return result
@@ -2249,50 +2206,35 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка API assign_stage_executor: {e}")
                 # Прочие ошибки — сохраняем локально + очередь
                 try:
-                    self.db.assign_stage_executor(
-                        card_id, data.get('stage_name', ''),
-                        data.get('executor_id'), data.get('assigned_by'),
-                        data.get('deadline'))
+                    self.db.assign_stage_executor(card_id, data.get("stage_name", ""), data.get("executor_id"), data.get("assigned_by"), data.get("deadline"))
                 except Exception:
                     pass
-                self._queue_operation('create', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'assign', **data})
+                self._queue_operation("create", "stage_executor", card_id, {"card_id": card_id, "_action": "assign", **data})
             except (APIConnectionError, APITimeoutError) as e:
                 _safe_log(f"[DataAccess] Сеть assign_stage_executor: {e}")
                 try:
-                    self.db.assign_stage_executor(
-                        card_id, data.get('stage_name', ''),
-                        data.get('executor_id'), data.get('assigned_by'),
-                        data.get('deadline'))
+                    self.db.assign_stage_executor(card_id, data.get("stage_name", ""), data.get("executor_id"), data.get("assigned_by"), data.get("deadline"))
                 except Exception:
                     pass
-                self._queue_operation('create', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'assign', **data})
+                self._queue_operation("create", "stage_executor", card_id, {"card_id": card_id, "_action": "assign", **data})
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка assign_stage_executor: {e}")
                 try:
-                    self.db.assign_stage_executor(
-                        card_id, data.get('stage_name', ''),
-                        data.get('executor_id'), data.get('assigned_by'),
-                        data.get('deadline'))
+                    self.db.assign_stage_executor(card_id, data.get("stage_name", ""), data.get("executor_id"), data.get("assigned_by"), data.get("deadline"))
                 except Exception:
                     pass
         else:
             # Оффлайн — сохраняем локально
             try:
-                self.db.assign_stage_executor(
-                    card_id, data.get('stage_name', ''),
-                    data.get('executor_id'), data.get('assigned_by'),
-                    data.get('deadline'))
+                self.db.assign_stage_executor(card_id, data.get("stage_name", ""), data.get("executor_id"), data.get("assigned_by"), data.get("deadline"))
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка DB assign_stage_executor: {e}")
             if self.api_client:
-                self._queue_operation('create', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'assign', **data})
+                self._queue_operation("create", "stage_executor", card_id, {"card_id": card_id, "_action": "assign", **data})
 
-        return {'success': True}
+        return {"success": True}
 
-    def complete_stage_for_executor(self, card_id: int, stage_name: str, executor_id: int = None) -> Optional[Dict]:
+    def complete_stage_for_executor(self, card_id: int, stage_name: str, executor_id: int = None) -> Optional[dict]:
         """Отметить стадию выполненной для исполнителя"""
         # Сначала сохраняем локально
         try:
@@ -2305,20 +2247,16 @@ class DataAccess(QObject):
                 result = self.api_client.complete_stage_for_executor(card_id, stage_name, executor_id)
                 _global_cache.invalidate("crm_cards")
                 if isinstance(result, bool):
-                    return {'success': result} if result else None
+                    return {"success": result} if result else None
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API complete_stage_for_executor: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, 'stage_name': stage_name,
-                                       'executor_id': executor_id, '_action': 'complete'})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "executor_id": executor_id, "_action": "complete"})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, 'stage_name': stage_name,
-                                   'executor_id': executor_id, '_action': 'complete'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "executor_id": executor_id, "_action": "complete"})
 
         _global_cache.invalidate("crm_cards")
-        return {'success': True}
+        return {"success": True}
 
     def get_incomplete_stage_executors(self, card_id: int, stage_name: str) -> list:
         """S-05: Получить незавершённых исполнителей стадии"""
@@ -2334,7 +2272,7 @@ class DataAccess(QObject):
             return self.db.get_stage_completion_info(card_id, stage_name)
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка get_stage_completion_info: {e}")
-            return {'stage': None, 'approval': None}
+            return {"stage": None, "approval": None}
 
     def auto_accept_stage(self, card_id: int, stage_name: str, accepted_by_id: int, project_type: str = None) -> int:
         """S-05: Автоматическое принятие стадии руководителем"""
@@ -2358,11 +2296,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_stage_completion: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'reset'})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset"})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, '_action': 'reset'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset"})
 
         return True
 
@@ -2392,11 +2328,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_designer_completion: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'reset_designer'})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset_designer"})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, '_action': 'reset_designer'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset_designer"})
 
         return True
 
@@ -2415,11 +2349,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_draftsman_completion: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'reset_draftsman'})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset_draftsman"})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, '_action': 'reset_draftsman'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset_draftsman"})
 
         return True
 
@@ -2437,16 +2369,13 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API reset_approval_stages: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, '_action': 'reset_approval'})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset_approval"})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, '_action': 'reset_approval'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "_action": "reset_approval"})
 
         return True
 
-    def save_manager_acceptance(self, card_id: int, stage_name: str,
-                               executor_name: str, manager_id: int) -> Optional[Dict]:
+    def save_manager_acceptance(self, card_id: int, stage_name: str, executor_name: str, manager_id: int) -> Optional[dict]:
         """Сохранить приёмку менеджера"""
         # Сначала сохраняем локально
         try:
@@ -2459,23 +2388,19 @@ class DataAccess(QObject):
                 result = self.api_client.save_manager_acceptance(card_id, stage_name, executor_name, manager_id)
                 _global_cache.invalidate("crm_cards")
                 if isinstance(result, bool):
-                    return {'success': result} if result else None
+                    return {"success": result} if result else None
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API save_manager_acceptance: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, 'stage_name': stage_name,
-                                       'executor_name': executor_name, 'manager_id': manager_id,
-                                       '_action': 'accept'})
+                self._queue_operation(
+                    "update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "executor_name": executor_name, "manager_id": manager_id, "_action": "accept"}
+                )
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, 'stage_name': stage_name,
-                                   'executor_name': executor_name, 'manager_id': manager_id,
-                                   '_action': 'accept'})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "executor_name": executor_name, "manager_id": manager_id, "_action": "accept"})
 
-        return {'success': True}
+        return {"success": True}
 
-    def get_previous_executor_by_position(self, card_id: int, position: str) -> Optional[Dict]:
+    def get_previous_executor_by_position(self, card_id: int, position: str) -> Optional[dict]:
         """Получить предыдущего исполнителя по должности (только локальная БД)"""
         try:
             return self.db.get_previous_executor_by_position(card_id, position)
@@ -2483,29 +2408,24 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Ошибка DB get_previous_executor_by_position: {e}")
             return None
 
-    def get_crm_statistics_filtered(self, project_type=None, period=None, year=None,
-                                     quarter=None, month=None, project_id=None,
-                                     executor_id=None, stage_name=None, status_filter=None) -> Dict:
+    def get_crm_statistics_filtered(self, project_type=None, period=None, year=None, quarter=None, month=None, project_id=None, executor_id=None, stage_name=None, status_filter=None) -> dict:
         """Получить отфильтрованную статистику CRM"""
         if self.api_client:
             try:
                 return self.api_client.get_crm_statistics_filtered(
-                    project_type, period, year, quarter=quarter, month=month,
-                    project_id=project_id, executor_id=executor_id,
-                    stage_name=stage_name, status_filter=status_filter)
+                    project_type, period, year, quarter=quarter, month=month, project_id=project_id, executor_id=executor_id, stage_name=stage_name, status_filter=status_filter
+                )
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API get_crm_statistics_filtered: {e}")
         try:
-            return self.db.get_crm_statistics_filtered(
-                project_type, period, year, quarter, month, project_id,
-                executor_id, stage_name, status_filter)
+            return self.db.get_crm_statistics_filtered(project_type, period, year, quarter, month, project_id, executor_id, stage_name, status_filter)
         except Exception as e:
             _safe_log(f"[DataAccess] Ошибка DB get_crm_statistics_filtered: {e}")
             return {}
 
     # ==================== ФАЙЛЫ ====================
 
-    def get_contract_files(self, contract_id: int, stage: str = None) -> List[Dict]:
+    def get_contract_files(self, contract_id: int, stage: str = None) -> list[dict]:
         """Получить файлы договора"""
         if self._should_use_api():
             try:
@@ -2514,7 +2434,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_contract_files, fallback: {e}")
         return self.db.get_contract_files(contract_id, stage)
 
-    def create_file_record(self, file_data: Dict) -> Optional[Dict]:
+    def create_file_record(self, file_data: dict) -> Optional[dict]:
         """Создать запись о файле"""
         # Сначала сохраняем локально
         file_id = self.db.add_contract_file(file_data)
@@ -2526,17 +2446,17 @@ class DataAccess(QObject):
                     # Защита: API может вернуть list вместо dict
                     if isinstance(result, list):
                         result = result[0] if result else {}
-                    server_id = result.get('id') if isinstance(result, dict) else None
+                    server_id = result.get("id") if isinstance(result, dict) else None
                     if server_id and server_id != file_id:
-                        self._update_local_id('project_files', file_id, server_id)
+                        self._update_local_id("project_files", file_id, server_id)
                     return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API create_file_record: {e}")
-                self._queue_operation('create', 'project_file', file_id, file_data)
+                self._queue_operation("create", "project_file", file_id, file_data)
         elif self.api_client:
-            self._queue_operation('create', 'project_file', file_id, file_data)
+            self._queue_operation("create", "project_file", file_id, file_data)
 
-        return {'id': file_id, **file_data} if file_id else None
+        return {"id": file_id, **file_data} if file_id else None
 
     def delete_file_record(self, file_id: int) -> bool:
         """Удалить запись о файле"""
@@ -2548,13 +2468,13 @@ class DataAccess(QObject):
                 return self.api_client.delete_file_record(file_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_file_record: {e}")
-                self._queue_operation('delete', 'project_file', file_id, {})
+                self._queue_operation("delete", "project_file", file_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'project_file', file_id, {})
+            self._queue_operation("delete", "project_file", file_id, {})
 
         return True
 
-    def get_project_files(self, contract_id: int, stage: str = None) -> List[Dict]:
+    def get_project_files(self, contract_id: int, stage: str = None) -> list[dict]:
         """Получить файлы проекта"""
         if self._should_use_api():
             try:
@@ -2568,10 +2488,11 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_project_files, fallback: {e}")
         return self.db.get_project_files(contract_id, stage)
 
-    def _sync_project_files_to_local(self, contract_id: int, api_files: List[Dict]):
+    def _sync_project_files_to_local(self, contract_id: int, api_files: list[dict]):
         """Синхронизировать файлы проекта из API в локальную SQLite"""
         try:
             from database.db_manager import DatabaseManager
+
             db = DatabaseManager()
             conn = db.connect()
             cursor = conn.cursor()
@@ -2579,59 +2500,72 @@ class DataAccess(QObject):
             # Получаем существующие локальные файлы по contract_id
             cursor.execute("SELECT id FROM project_files WHERE contract_id = ?", (contract_id,))
             local_ids = set(row[0] for row in cursor.fetchall())
-            server_ids = set(f['id'] for f in api_files if f.get('id'))
+            server_ids = set(f["id"] for f in api_files if f.get("id"))
 
             # Удаляем локальные записи, которых нет на сервере
             ids_to_delete = local_ids - server_ids
             if ids_to_delete:
-                cursor.execute(
-                    f"DELETE FROM project_files WHERE id IN ({','.join('?' * len(ids_to_delete))})",
-                    tuple(ids_to_delete)
-                )
+                cursor.execute(f"DELETE FROM project_files WHERE id IN ({','.join('?' * len(ids_to_delete))})", tuple(ids_to_delete))
 
             # Upsert серверных файлов
             for f in api_files:
-                fid = f.get('id')
+                fid = f.get("id")
                 if not fid:
                     continue
                 if fid in local_ids:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE project_files SET
                             contract_id=?, stage=?, file_type=?, public_link=?,
                             yandex_path=?, file_name=?, file_order=?, variation=?
                         WHERE id=?
-                    """, (
-                        f.get('contract_id', contract_id), f.get('stage', ''),
-                        f.get('file_type', ''), f.get('public_link', ''),
-                        f.get('yandex_path', ''), f.get('file_name', ''),
-                        f.get('file_order', 0), f.get('variation', 1), fid
-                    ))
+                    """,
+                        (
+                            f.get("contract_id", contract_id),
+                            f.get("stage", ""),
+                            f.get("file_type", ""),
+                            f.get("public_link", ""),
+                            f.get("yandex_path", ""),
+                            f.get("file_name", ""),
+                            f.get("file_order", 0),
+                            f.get("variation", 1),
+                            fid,
+                        ),
+                    )
                 else:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT OR REPLACE INTO project_files
                             (id, contract_id, stage, file_type, public_link,
                              yandex_path, file_name, file_order, variation)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        fid, f.get('contract_id', contract_id), f.get('stage', ''),
-                        f.get('file_type', ''), f.get('public_link', ''),
-                        f.get('yandex_path', ''), f.get('file_name', ''),
-                        f.get('file_order', 0), f.get('variation', 1)
-                    ))
+                    """,
+                        (
+                            fid,
+                            f.get("contract_id", contract_id),
+                            f.get("stage", ""),
+                            f.get("file_type", ""),
+                            f.get("public_link", ""),
+                            f.get("yandex_path", ""),
+                            f.get("file_name", ""),
+                            f.get("file_order", 0),
+                            f.get("variation", 1),
+                        ),
+                    )
 
             conn.commit()
             db.close()
             inserted = len(server_ids - local_ids)
             updated = len(server_ids & local_ids)
             deleted = len(ids_to_delete) if ids_to_delete else 0
-            _safe_log(f"[DataAccess] sync_project_files_to_local: contract={contract_id}, "
-                       f"вставлено={inserted}, обновлено={updated}, удалено={deleted}")
+            _safe_log(f"[DataAccess] sync_project_files_to_local: contract={contract_id}, вставлено={inserted}, обновлено={updated}, удалено={deleted}")
         except Exception as e:
             _safe_log(f"[DataAccess] _sync_project_files_to_local ОШИБКА: {e}")
             import traceback
+
             traceback.print_exc()
 
-    def add_project_file(self, data: Dict = None, **kwargs) -> Optional[Dict]:
+    def add_project_file(self, data: dict = None, **kwargs) -> Optional[dict]:
         """Добавить файл проекта (принимает Dict или именованные аргументы)"""
         if data is None:
             data = kwargs
@@ -2642,7 +2576,7 @@ class DataAccess(QObject):
         except Exception as e:
             _safe_log(f"[DataAccess] DB error add_project_file: {e}")
 
-        file_id = (local_result.get('id') if isinstance(local_result, dict) else local_result) if local_result else 0
+        file_id = (local_result.get("id") if isinstance(local_result, dict) else local_result) if local_result else 0
 
         if self.is_online and self.api_client:
             try:
@@ -2650,13 +2584,13 @@ class DataAccess(QObject):
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API add_project_file: {e}")
-                self._queue_operation('create', 'project_file', file_id, data)
+                self._queue_operation("create", "project_file", file_id, data)
         elif self.api_client:
-            self._queue_operation('create', 'project_file', file_id, data)
+            self._queue_operation("create", "project_file", file_id, data)
 
         return local_result
 
-    def scan_contract_files(self, contract_id: int, scope: str = None) -> Optional[Dict]:
+    def scan_contract_files(self, contract_id: int, scope: str = None) -> Optional[dict]:
         """Сканировать файлы договора на Яндекс.Диске (только API)"""
         if self.api_client:
             try:
@@ -2674,7 +2608,7 @@ class DataAccess(QObject):
                 result = self.api_client.get_yandex_public_link(path)
                 # API возвращает Dict — извлекаем URL
                 if isinstance(result, dict):
-                    return result.get('public_url') or result.get('url') or result.get('href')
+                    return result.get("public_url") or result.get("url") or result.get("href")
                 return result
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_yandex_public_link: {e}")
@@ -2706,7 +2640,7 @@ class DataAccess(QObject):
 
     # ==================== ШАБЛОНЫ ПРОЕКТОВ ====================
 
-    def get_project_templates(self, contract_id: int) -> List[Dict]:
+    def get_project_templates(self, contract_id: int) -> list[dict]:
         """Получить шаблоны проекта"""
         if self._should_use_api():
             try:
@@ -2733,11 +2667,9 @@ class DataAccess(QObject):
                 return result is not None
             except Exception as e:
                 _safe_log(f"[DataAccess] API add_project_template: {e}")
-                self._queue_operation('create', 'project_template', contract_id,
-                                      {'contract_id': contract_id, 'url': url})
+                self._queue_operation("create", "project_template", contract_id, {"contract_id": contract_id, "url": url})
         elif self.api_client:
-            self._queue_operation('create', 'project_template', contract_id,
-                                  {'contract_id': contract_id, 'url': url})
+            self._queue_operation("create", "project_template", contract_id, {"contract_id": contract_id, "url": url})
 
         return True
 
@@ -2755,37 +2687,32 @@ class DataAccess(QObject):
                 return bool(result)
             except Exception as e:
                 _safe_log(f"[DataAccess] API delete_project_template: {e}")
-                self._queue_operation('delete', 'project_template', template_id, {})
+                self._queue_operation("delete", "project_template", template_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'project_template', template_id, {})
+            self._queue_operation("delete", "project_template", template_id, {})
 
         return True
 
     # ==================== СТАТИСТИКА ====================
 
-    def get_dashboard_statistics(self, year: int = None, month: int = None,
-                                 quarter: int = None, project_type: str = None) -> Dict:
+    def get_dashboard_statistics(self, year: int = None, month: int = None, quarter: int = None, project_type: str = None) -> dict:
         """Получить статистику для дашборда"""
         if self._should_use_api():
             try:
-                return self.api_client.get_dashboard_statistics(
-                    year=year, month=month, quarter=quarter, agent_type=project_type)
+                return self.api_client.get_dashboard_statistics(year=year, month=month, quarter=quarter, agent_type=project_type)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error get_dashboard_statistics, fallback: {e}")
-        return self.db.get_dashboard_statistics(year=year, month=month,
-                                                quarter=quarter, project_type=project_type)
+        return self.db.get_dashboard_statistics(year=year, month=month, quarter=quarter, project_type=project_type)
 
-    def get_supervision_statistics(self, address: str = None, dan_id: int = None,
-                                  manager_id: int = None) -> Dict:
+    def get_supervision_statistics(self, address: str = None, dan_id: int = None, manager_id: int = None) -> dict:
         """Получить статистику надзора (упрощённая версия)"""
         try:
-            return self.db.get_supervision_statistics_filtered(
-                None, None, None, None, address, None, dan_id, manager_id, None)
+            return self.db.get_supervision_statistics_filtered(None, None, None, None, address, None, dan_id, manager_id, None)
         except Exception as e:
             _safe_log(f"[DataAccess] DB error get_supervision_statistics: {e}")
             return {}
 
-    def get_clients_dashboard_stats(self, **kwargs) -> Dict:
+    def get_clients_dashboard_stats(self, **kwargs) -> dict:
         """Получить статистику дашборда клиентов"""
         if self.api_client:
             try:
@@ -2799,7 +2726,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_clients_dashboard_stats: {e}")
         return {}
 
-    def get_contracts_dashboard_stats(self, **kwargs) -> Dict:
+    def get_contracts_dashboard_stats(self, **kwargs) -> dict:
         """Получить статистику дашборда договоров"""
         if self.api_client:
             try:
@@ -2813,7 +2740,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_contracts_dashboard_stats: {e}")
         return {}
 
-    def get_crm_dashboard_stats(self, **kwargs) -> Dict:
+    def get_crm_dashboard_stats(self, **kwargs) -> dict:
         """Получить статистику дашборда CRM"""
         if self.api_client:
             try:
@@ -2827,7 +2754,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_crm_dashboard_stats: {e}")
         return {}
 
-    def get_employees_dashboard_stats(self) -> Dict:
+    def get_employees_dashboard_stats(self) -> dict:
         """Получить статистику дашборда сотрудников"""
         if self.api_client:
             try:
@@ -2841,7 +2768,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_employees_dashboard_stats: {e}")
         return {}
 
-    def get_salaries_dashboard_stats(self, **kwargs) -> Dict:
+    def get_salaries_dashboard_stats(self, **kwargs) -> dict:
         """Получить сводную статистику дашборда зарплат"""
         if self.api_client:
             try:
@@ -2855,7 +2782,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_salaries_dashboard_stats: {e}")
         return {}
 
-    def get_salaries_individual_stats(self, **kwargs) -> Dict:
+    def get_salaries_individual_stats(self, **kwargs) -> dict:
         """Получить индивидуальную статистику зарплат"""
         if self.api_client:
             try:
@@ -2869,7 +2796,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_salaries_individual_stats: {e}")
         return {}
 
-    def get_salaries_salary_stats(self, **kwargs) -> Dict:
+    def get_salaries_salary_stats(self, **kwargs) -> dict:
         """Получить статистику по выплатам зарплат"""
         if self.api_client:
             try:
@@ -2883,7 +2810,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_salaries_salary_stats: {e}")
         return {}
 
-    def get_salaries_supervision_stats(self, **kwargs) -> Dict:
+    def get_salaries_supervision_stats(self, **kwargs) -> dict:
         """Получить статистику зарплат по надзору"""
         if self.api_client:
             try:
@@ -2897,7 +2824,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_salaries_supervision_stats: {e}")
         return {}
 
-    def get_salaries_template_stats(self, **kwargs) -> Dict:
+    def get_salaries_template_stats(self, **kwargs) -> dict:
         """Получить статистику зарплат по шаблонам"""
         if self.api_client:
             try:
@@ -2911,7 +2838,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_salaries_template_stats: {e}")
         return {}
 
-    def get_salaries_all_payments_stats(self, **kwargs) -> Dict:
+    def get_salaries_all_payments_stats(self, **kwargs) -> dict:
         """Получить статистику по всем выплатам"""
         if self.api_client:
             try:
@@ -2925,37 +2852,31 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_salaries_all_payments_stats: {e}")
         return {}
 
-    def get_employee_report_data(self, employee_id: int = None, project_type: str = None,
-                                period: str = None, year: int = None,
-                                quarter: int = None, month: int = None) -> Dict:
+    def get_employee_report_data(self, employee_id: int = None, project_type: str = None, period: str = None, year: int = None, quarter: int = None, month: int = None) -> dict:
         """Получить данные отчёта по сотруднику
 
         Примечание: employee_id пока не поддерживается ни API, ни DB — зарезервирован для будущего
         """
         if self.api_client:
             try:
-                return self.api_client.get_employee_report_data(
-                    project_type, period, year, quarter=quarter, month=month)
+                return self.api_client.get_employee_report_data(project_type, period, year, quarter=quarter, month=month)
             except Exception as e:
                 _safe_log(f"[DataAccess] API get_employee_report_data: {e}")
         if self.db:
             try:
-                return self.db.get_employee_report_data(
-                    project_type, period, year, quarter, month)
+                return self.db.get_employee_report_data(project_type, period, year, quarter, month)
             except Exception as e:
                 _safe_log(f"[DataAccess] DB get_employee_report_data: {e}")
         return {}
 
     # ── Аналитика сотрудников ────────────────────────────────────────
 
-    def get_analytics_dashboard(self, project_type: str, year: int = None,
-                                quarter: int = None, month: int = None) -> Dict:
+    def get_analytics_dashboard(self, project_type: str, year: int = None, quarter: int = None, month: int = None) -> dict:
         """Дашборд аналитики по сотрудникам."""
         cache_key = f"analytics_dashboard_{project_type}_{year}_{quarter}_{month}"
         if self._should_use_api():
             try:
-                result = self.api_client.get_analytics_dashboard(
-                    project_type, year=year, quarter=quarter, month=month)
+                result = self.api_client.get_analytics_dashboard(project_type, year=year, quarter=quarter, month=month)
                 _analytics_cache_save(cache_key, result)
                 return result
             except Exception as e:
@@ -2967,15 +2888,12 @@ class DataAccess(QObject):
             return cached
         return {}
 
-    def get_analytics_by_role(self, role_code: str, project_type: str,
-                              year: int = None, quarter: int = None,
-                              month: int = None) -> Dict:
+    def get_analytics_by_role(self, role_code: str, project_type: str, year: int = None, quarter: int = None, month: int = None) -> dict:
         """Сравнительная аналитика по роли."""
         cache_key = f"analytics_role_{role_code}_{project_type}_{year}_{quarter}_{month}"
         if self._should_use_api():
             try:
-                result = self.api_client.get_analytics_by_role(
-                    role_code, project_type, year=year, quarter=quarter, month=month)
+                result = self.api_client.get_analytics_by_role(role_code, project_type, year=year, quarter=quarter, month=month)
                 _analytics_cache_save(cache_key, result)
                 return result
             except Exception as e:
@@ -2987,15 +2905,12 @@ class DataAccess(QObject):
             return cached
         return {}
 
-    def get_analytics_employee_detail(self, employee_id: int, project_type: str,
-                                      year: int = None, quarter: int = None,
-                                      month: int = None) -> Dict:
+    def get_analytics_employee_detail(self, employee_id: int, project_type: str, year: int = None, quarter: int = None, month: int = None) -> dict:
         """Детальная карточка сотрудника."""
         cache_key = f"analytics_detail_{employee_id}_{project_type}_{year}_{quarter}_{month}"
         if self._should_use_api():
             try:
-                result = self.api_client.get_analytics_employee_detail(
-                    employee_id, project_type, year=year, quarter=quarter, month=month)
+                result = self.api_client.get_analytics_employee_detail(employee_id, project_type, year=year, quarter=quarter, month=month)
                 _analytics_cache_save(cache_key, result)
                 return result
             except Exception as e:
@@ -3007,7 +2922,7 @@ class DataAccess(QObject):
             return cached
         return {}
 
-    def get_survey_stats(self, project_type: str = None) -> Dict:
+    def get_survey_stats(self, project_type: str = None) -> dict:
         """Статистика опросов."""
         if self._should_use_api():
             try:
@@ -3016,7 +2931,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API get_survey_stats: {e}")
         return {}
 
-    def create_survey(self, contract_id: int, project_type: str) -> Optional[Dict]:
+    def create_survey(self, contract_id: int, project_type: str) -> Optional[dict]:
         """Создаёт опрос для договора."""
         if self._should_use_api():
             try:
@@ -3025,7 +2940,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API create_survey: {e}")
         return None
 
-    def get_surveys_by_contract(self, contract_id: int, project_type: str = None) -> List:
+    def get_surveys_by_contract(self, contract_id: int, project_type: str = None) -> list:
         """Получает опросы по договору."""
         if self._should_use_api():
             try:
@@ -3035,7 +2950,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API get_surveys_by_contract: {e}")
         return []
 
-    def resend_survey(self, survey_id: int) -> Optional[Dict]:
+    def resend_survey(self, survey_id: int) -> Optional[dict]:
         """Переотправляет ссылку на опрос."""
         if self._should_use_api():
             try:
@@ -3044,7 +2959,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API resend_survey: {e}")
         return None
 
-    def get_project_statistics(self, **kwargs) -> Dict:
+    def get_project_statistics(self, **kwargs) -> dict:
         """Получить статистику по проектам"""
         if self.api_client:
             try:
@@ -3058,7 +2973,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_project_statistics: {e}")
         return {}
 
-    def get_supervision_statistics_report(self, **kwargs) -> Dict:
+    def get_supervision_statistics_report(self, **kwargs) -> dict:
         """Получить отчёт по статистике надзора"""
         if self.api_client:
             try:
@@ -3074,7 +2989,7 @@ class DataAccess(QObject):
 
     # ==================== ОТЧЁТЫ (REPORTS DASHBOARD) ====================
 
-    def get_reports_summary(self, **kwargs) -> Dict:
+    def get_reports_summary(self, **kwargs) -> dict:
         """KPI-метрики для страницы отчётов"""
         # API-first
         if self.is_multi_user and self.api_client:
@@ -3092,7 +3007,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_reports_summary ошибка: {e}")
         return {}
 
-    def get_reports_clients_dynamics(self, **kwargs) -> Dict:
+    def get_reports_clients_dynamics(self, **kwargs) -> dict:
         """Динамика клиентов по месяцам/кварталам"""
         # API-first
         if self.is_multi_user and self.api_client:
@@ -3110,7 +3025,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_reports_clients_dynamics ошибка: {e}")
         return {}
 
-    def get_reports_contracts_dynamics(self, **kwargs) -> Dict:
+    def get_reports_contracts_dynamics(self, **kwargs) -> dict:
         """Динамика договоров по месяцам"""
         # API-first
         if self.is_multi_user and self.api_client:
@@ -3128,7 +3043,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_reports_contracts_dynamics ошибка: {e}")
         return {}
 
-    def get_reports_crm_analytics(self, **kwargs) -> Dict:
+    def get_reports_crm_analytics(self, **kwargs) -> dict:
         """CRM аналитика: воронка, просрочки, время стадий"""
         # API-first
         if self.is_multi_user and self.api_client:
@@ -3146,7 +3061,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_reports_crm_analytics ошибка: {e}")
         return {}
 
-    def get_reports_supervision_analytics(self, **kwargs) -> Dict:
+    def get_reports_supervision_analytics(self, **kwargs) -> dict:
         """Аналитика авторского надзора"""
         # API-first
         if self.is_multi_user and self.api_client:
@@ -3164,7 +3079,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_reports_supervision_analytics ошибка: {e}")
         return {}
 
-    def get_reports_distribution(self, dimension, **kwargs) -> Dict:
+    def get_reports_distribution(self, dimension, **kwargs) -> dict:
         """Распределение по измерению (city/agent/project_type/subtype)"""
         # API-first
         if self.is_multi_user and self.api_client:
@@ -3184,7 +3099,7 @@ class DataAccess(QObject):
 
     # ==================== ТАБЛИЦА СРОКОВ (CRM) ====================
 
-    def get_project_timeline(self, contract_id: int) -> List[Dict]:
+    def get_project_timeline(self, contract_id: int) -> list[dict]:
         """Получить таблицу сроков проекта"""
         if self._should_use_api():
             try:
@@ -3193,7 +3108,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_project_timeline, fallback: {e}")
         return self.db.get_project_timeline(contract_id)
 
-    def init_project_timeline(self, contract_id: int, data: Dict) -> Optional[Dict]:
+    def init_project_timeline(self, contract_id: int, data: dict) -> Optional[dict]:
         """Инициализировать таблицу сроков из шаблона"""
         if self._should_use_api():
             try:
@@ -3202,7 +3117,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error init_project_timeline, fallback local: {e}")
         # K5: Offline fallback — сохраняем в локальную БД
         try:
-            entries = data.get('entries', [])
+            entries = data.get("entries", [])
             if entries:
                 self.db.init_project_timeline(contract_id, entries)
                 return {"status": "ok_local", "count": len(entries)}
@@ -3210,7 +3125,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Local fallback init_project_timeline error: {e}")
         return None
 
-    def reinit_project_timeline(self, contract_id: int, data: Dict) -> Optional[Dict]:
+    def reinit_project_timeline(self, contract_id: int, data: dict) -> Optional[dict]:
         """Пересоздать таблицу сроков (удалить и создать заново)"""
         if self._should_use_api():
             try:
@@ -3219,7 +3134,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error reinit_project_timeline: {e}")
         return None
 
-    def update_timeline_entry(self, contract_id: int, stage_code: str, data: Dict) -> bool:
+    def update_timeline_entry(self, contract_id: int, stage_code: str, data: dict) -> bool:
         """Обновить запись таблицы сроков"""
         # Сначала обновляем локально
         self.db.update_timeline_entry(contract_id, stage_code, data)
@@ -3230,21 +3145,13 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_timeline_entry: {e}")
                 # Добавляем в очередь для синхронизации при восстановлении связи
-                self._queue_operation('update', 'timeline_entry', contract_id, {
-                    'contract_id': contract_id,
-                    'stage_code': stage_code,
-                    **data
-                })
+                self._queue_operation("update", "timeline_entry", contract_id, {"contract_id": contract_id, "stage_code": stage_code, **data})
         elif self.api_client:
-            self._queue_operation('update', 'timeline_entry', contract_id, {
-                'contract_id': contract_id,
-                'stage_code': stage_code,
-                **data
-            })
+            self._queue_operation("update", "timeline_entry", contract_id, {"contract_id": contract_id, "stage_code": stage_code, **data})
 
         return True
 
-    def get_timeline_summary(self, contract_id: int) -> Dict:
+    def get_timeline_summary(self, contract_id: int) -> dict:
         """Получить сводку по таблице сроков"""
         if self._should_use_api():
             try:
@@ -3255,9 +3162,9 @@ class DataAccess(QObject):
         try:
             entries = self.db.get_project_timeline(contract_id)
             if entries:
-                total = len([e for e in entries if e.get('executor_role') != 'header'])
-                filled = len([e for e in entries if e.get('actual_date')])
-                return {'total_entries': total, 'filled_entries': filled, 'progress': round(filled / total * 100, 1) if total else 0}
+                total = len([e for e in entries if e.get("executor_role") != "header"])
+                filled = len([e for e in entries if e.get("actual_date")])
+                return {"total_entries": total, "filled_entries": filled, "progress": round(filled / total * 100, 1) if total else 0}
         except Exception:
             pass
         return {}
@@ -3269,7 +3176,7 @@ class DataAccess(QObject):
                 return self.api_client.export_timeline_excel(contract_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_timeline_excel: {e}")
-        return b''
+        return b""
 
     def export_timeline_pdf(self, contract_id: int) -> bytes:
         """Экспорт таблицы сроков в PDF"""
@@ -3278,11 +3185,11 @@ class DataAccess(QObject):
                 return self.api_client.export_timeline_pdf(contract_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_timeline_pdf: {e}")
-        return b''
+        return b""
 
     # ==================== ТАБЛИЦА СРОКОВ (НАДЗОР) ====================
 
-    def get_supervision_timeline(self, card_id: int) -> Dict:
+    def get_supervision_timeline(self, card_id: int) -> dict:
         """Получить таблицу сроков надзора.
 
         Возвращает {"entries": [...], "totals": {...}}.
@@ -3297,9 +3204,9 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error get_supervision_timeline, fallback: {e}")
         # Локальная БД возвращает список
         entries = self.db.get_supervision_timeline(card_id)
-        return {'entries': entries or [], 'totals': {}}
+        return {"entries": entries or [], "totals": {}}
 
-    def init_supervision_timeline(self, card_id: int, data: Dict = None) -> Optional[Dict]:
+    def init_supervision_timeline(self, card_id: int, data: dict = None) -> Optional[dict]:
         """Инициализировать таблицу сроков надзора"""
         if self._should_use_api():
             try:
@@ -3308,7 +3215,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] API error init_supervision_timeline, fallback local: {e}")
         # K5: Offline fallback — сохраняем в локальную БД
         try:
-            entries = (data or {}).get('entries', [])
+            entries = (data or {}).get("entries", [])
             if entries:
                 self.db.init_supervision_timeline(card_id, entries)
                 return {"status": "ok_local", "count": len(entries)}
@@ -3316,7 +3223,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] Local fallback init_supervision_timeline error: {e}")
         return None
 
-    def update_supervision_timeline_entry(self, card_id: int, stage_code: str, data: Dict) -> bool:
+    def update_supervision_timeline_entry(self, card_id: int, stage_code: str, data: dict) -> bool:
         """Обновить запись таблицы сроков надзора"""
         # Сначала обновляем локально
         self.db.update_supervision_timeline_entry(card_id, stage_code, data)
@@ -3327,21 +3234,13 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_supervision_timeline_entry: {e}")
                 # Добавляем в очередь для синхронизации при восстановлении связи
-                self._queue_operation('update', 'supervision_timeline_entry', card_id, {
-                    'card_id': card_id,
-                    'stage_code': stage_code,
-                    **data
-                })
+                self._queue_operation("update", "supervision_timeline_entry", card_id, {"card_id": card_id, "stage_code": stage_code, **data})
         elif self.api_client:
-            self._queue_operation('update', 'supervision_timeline_entry', card_id, {
-                'card_id': card_id,
-                'stage_code': stage_code,
-                **data
-            })
+            self._queue_operation("update", "supervision_timeline_entry", card_id, {"card_id": card_id, "stage_code": stage_code, **data})
 
         return True
 
-    def get_supervision_timeline_summary(self, card_id: int) -> Dict:
+    def get_supervision_timeline_summary(self, card_id: int) -> dict:
         """Получить сводку по таблице сроков надзора"""
         if self._should_use_api():
             try:
@@ -3353,9 +3252,9 @@ class DataAccess(QObject):
             entries = self.db.get_supervision_timeline(card_id)
             if entries:
                 total = len(entries)
-                filled = sum(1 for e in entries if e.get('actual_date'))
+                filled = sum(1 for e in entries if e.get("actual_date"))
                 progress = round(filled / total * 100) if total > 0 else 0
-                return {'total_stages': total, 'completed_stages': filled, 'progress': progress}
+                return {"total_stages": total, "completed_stages": filled, "progress": progress}
         except Exception:
             pass
         return {}
@@ -3367,7 +3266,7 @@ class DataAccess(QObject):
                 return self.api_client.export_supervision_timeline_excel(card_id, include_commission)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_supervision_timeline_excel: {e}")
-        return b''
+        return b""
 
     def export_supervision_timeline_pdf(self, card_id: int, include_commission: bool = False) -> bytes:
         """Экспорт таблицы сроков надзора в PDF (с/без комиссии)"""
@@ -3376,7 +3275,7 @@ class DataAccess(QObject):
                 return self.api_client.export_supervision_timeline_pdf(card_id, include_commission)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_supervision_timeline_pdf: {e}")
-        return b''
+        return b""
 
     # ==================== ВЫЕЗДЫ НАДЗОРА ====================
 
@@ -3397,12 +3296,10 @@ class DataAccess(QObject):
                 return self.api_client.create_supervision_visit(card_id, data)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error create_supervision_visit: {e}")
-                self._queue_operation('create', 'supervision_visit', card_id,
-                                      {'card_id': card_id, **data})
+                self._queue_operation("create", "supervision_visit", card_id, {"card_id": card_id, **data})
         elif self.api_client:
-            self._queue_operation('create', 'supervision_visit', card_id,
-                                  {'card_id': card_id, **data})
-        return {'id': local_id} if local_id else None
+            self._queue_operation("create", "supervision_visit", card_id, {"card_id": card_id, **data})
+        return {"id": local_id} if local_id else None
 
     def update_supervision_visit(self, card_id: int, visit_id: int, data: dict) -> bool:
         """Обновить запись выезда"""
@@ -3412,11 +3309,9 @@ class DataAccess(QObject):
                 self.api_client.update_supervision_visit(card_id, visit_id, data)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error update_supervision_visit: {e}")
-                self._queue_operation('update', 'supervision_visit', visit_id,
-                                      {'card_id': card_id, 'visit_id': visit_id, **data})
+                self._queue_operation("update", "supervision_visit", visit_id, {"card_id": card_id, "visit_id": visit_id, **data})
         elif self.api_client:
-            self._queue_operation('update', 'supervision_visit', visit_id,
-                                  {'card_id': card_id, 'visit_id': visit_id, **data})
+            self._queue_operation("update", "supervision_visit", visit_id, {"card_id": card_id, "visit_id": visit_id, **data})
         return True
 
     def delete_supervision_visit(self, card_id: int, visit_id: int) -> bool:
@@ -3427,11 +3322,9 @@ class DataAccess(QObject):
                 self.api_client.delete_supervision_visit(card_id, visit_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error delete_supervision_visit: {e}")
-                self._queue_operation('delete', 'supervision_visit', visit_id,
-                                      {'card_id': card_id, 'visit_id': visit_id})
+                self._queue_operation("delete", "supervision_visit", visit_id, {"card_id": card_id, "visit_id": visit_id})
         elif self.api_client:
-            self._queue_operation('delete', 'supervision_visit', visit_id,
-                                  {'card_id': card_id, 'visit_id': visit_id})
+            self._queue_operation("delete", "supervision_visit", visit_id, {"card_id": card_id, "visit_id": visit_id})
         return True
 
     def export_supervision_visits_excel(self, card_id: int) -> bytes:
@@ -3441,7 +3334,7 @@ class DataAccess(QObject):
                 return self.api_client.export_supervision_visits_excel(card_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_supervision_visits_excel: {e}")
-        return b''
+        return b""
 
     def export_supervision_visits_pdf(self, card_id: int) -> bytes:
         """Экспорт выездов в PDF"""
@@ -3450,11 +3343,11 @@ class DataAccess(QObject):
                 return self.api_client.export_supervision_visits_pdf(card_id)
             except Exception as e:
                 _safe_log(f"[DataAccess] API error export_supervision_visits_pdf: {e}")
-        return b''
+        return b""
 
     # ==================== ПРЯМОЙ ДОСТУП К БД (для сложных запросов) ====================
 
-    def execute_raw_query(self, query: str, params: tuple = None) -> List[Dict]:
+    def execute_raw_query(self, query: str, params: tuple = None) -> list[dict]:
         """
         Выполнить прямой SQL запрос к локальной БД.
         ВНИМАНИЕ: Используйте только когда нет API-эквивалента!
@@ -3490,7 +3383,7 @@ class DataAccess(QObject):
     # ГЛОБАЛЬНЫЙ ПОИСК
     # =========================
 
-    def global_search(self, query: str, limit: int = 50) -> Dict[str, Any]:
+    def global_search(self, query: str, limit: int = 50) -> dict[str, Any]:
         """Полнотекстовый поиск по клиентам, договорам, CRM карточкам"""
         if self.api_client:
             try:
@@ -3504,7 +3397,7 @@ class DataAccess(QObject):
     # СТАТИСТИКА (расширенная)
     # =========================
 
-    def get_funnel_statistics(self, year: int = None, project_type: str = None) -> Dict[str, Any]:
+    def get_funnel_statistics(self, year: int = None, project_type: str = None) -> dict[str, Any]:
         """Статистика воронки проектов"""
         if self.api_client:
             try:
@@ -3513,7 +3406,7 @@ class DataAccess(QObject):
                 pass
         return self.db.get_funnel_statistics(year, project_type)
 
-    def get_executor_load(self, year: int = None, month: int = None) -> List[Dict[str, Any]]:
+    def get_executor_load(self, year: int = None, month: int = None) -> list[dict[str, Any]]:
         """Нагрузка на исполнителей"""
         if self.api_client:
             try:
@@ -3526,23 +3419,21 @@ class DataAccess(QObject):
     # МЕССЕНДЖЕР
     # =========================
 
-    def create_messenger_chat(self, crm_card_id: int, messenger_type: str = "telegram",
-                               members: list = None, chat_title: str = None) -> Optional[Dict]:
+    def create_messenger_chat(self, crm_card_id: int, messenger_type: str = "telegram", members: list = None, chat_title: str = None) -> Optional[dict]:
         """Создать чат автоматически"""
         if self._should_use_api():
             # Не глотаем исключения — пусть дойдут до UI для показа текста ошибки
             return self.api_client.create_messenger_chat(crm_card_id, messenger_type, members, chat_title)
         return None
 
-    def bind_messenger_chat(self, crm_card_id: int, invite_link: str,
-                             messenger_type: str = "telegram", members: list = None) -> Optional[Dict]:
+    def bind_messenger_chat(self, crm_card_id: int, invite_link: str, messenger_type: str = "telegram", members: list = None) -> Optional[dict]:
         """Привязать существующий чат"""
         if self._should_use_api():
             # Не глотаем исключения — пусть дойдут до UI для показа текста ошибки
             return self.api_client.bind_messenger_chat(crm_card_id, invite_link, messenger_type, members)
         return None
 
-    def get_messenger_chat(self, crm_card_id: int) -> Optional[Dict]:
+    def get_messenger_chat(self, crm_card_id: int) -> Optional[dict]:
         """Получить чат по CRM-карточке"""
         if self.api_client:
             try:
@@ -3551,7 +3442,7 @@ class DataAccess(QObject):
                 pass
         return None
 
-    def get_supervision_chat(self, supervision_card_id: int) -> Optional[Dict]:
+    def get_supervision_chat(self, supervision_card_id: int) -> Optional[dict]:
         """Получить чат по карточке надзора"""
         if self.api_client:
             try:
@@ -3560,8 +3451,7 @@ class DataAccess(QObject):
                 pass
         return None
 
-    def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram",
-                                 members: list = None, chat_title: str = None) -> Optional[Dict]:
+    def create_supervision_chat(self, supervision_card_id: int, messenger_type: str = "telegram", members: list = None, chat_title: str = None) -> Optional[dict]:
         """Создать чат для карточки надзора"""
         if self._should_use_api():
             try:
@@ -3570,13 +3460,13 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка create_supervision_chat: {e}")
         return None
 
-    def add_member_to_chat(self, chat_id: int, employee_id: int, role_in_project: str = "") -> Optional[Dict]:
+    def add_member_to_chat(self, chat_id: int, employee_id: int, role_in_project: str = "") -> Optional[dict]:
         """Добавить сотрудника в существующий чат. Пробрасывает ошибки для UI."""
         if self._should_use_api():
             return self.api_client.add_member_to_chat(chat_id, employee_id, role_in_project)
         return None
 
-    def delete_messenger_chat(self, chat_id: int) -> Optional[Dict]:
+    def delete_messenger_chat(self, chat_id: int) -> Optional[dict]:
         """Удалить чат"""
         if self._should_use_api():
             try:
@@ -3585,7 +3475,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка delete_messenger_chat: {e}")
         return None
 
-    def send_messenger_message(self, chat_id: int, text: str) -> Optional[Dict]:
+    def send_messenger_message(self, chat_id: int, text: str) -> Optional[dict]:
         """Отправить сообщение в чат"""
         if self._should_use_api():
             try:
@@ -3594,7 +3484,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка send_messenger_message: {e}")
         return None
 
-    def get_messenger_scripts(self, project_type: str = None) -> List[Dict]:
+    def get_messenger_scripts(self, project_type: str = None) -> list[dict]:
         """Получить скрипты мессенджера"""
         if self.api_client:
             try:
@@ -3603,7 +3493,7 @@ class DataAccess(QObject):
                 pass
         return []
 
-    def get_messenger_settings(self) -> List[Dict]:
+    def get_messenger_settings(self) -> list[dict]:
         """Получить настройки мессенджера"""
         if self.api_client:
             try:
@@ -3612,7 +3502,7 @@ class DataAccess(QObject):
                 pass
         return []
 
-    def update_messenger_settings(self, settings: list) -> Optional[Dict]:
+    def update_messenger_settings(self, settings: list) -> Optional[dict]:
         """Обновить настройки мессенджера"""
         if self._should_use_api():
             try:
@@ -3621,7 +3511,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка update_messenger_settings: {e}")
         return None
 
-    def get_messenger_status(self) -> Dict:
+    def get_messenger_status(self) -> dict:
         """Статус сервисов мессенджера"""
         if self.api_client:
             try:
@@ -3630,7 +3520,7 @@ class DataAccess(QObject):
                 pass
         return {"telegram_bot_available": False, "telegram_mtproto_available": False, "email_available": False}
 
-    def trigger_script(self, card_id: int, script_type: str, entity_type: str = 'crm') -> bool:
+    def trigger_script(self, card_id: int, script_type: str, entity_type: str = "crm") -> bool:
         """Отправить скрипт мессенджера (начальный/завершающий)"""
         if self.api_client:
             try:
@@ -3639,8 +3529,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] trigger_script error: {e}")
         return False
 
-    def preview_script(self, card_id: int, script_type: str = 'stage_complete',
-                       stage_name: str = None) -> Optional[Dict]:
+    def preview_script(self, card_id: int, script_type: str = "stage_complete", stage_name: str = None) -> Optional[dict]:
         """Предпросмотр скрипта с рендерингом переменных и файлами"""
         if self.api_client:
             try:
@@ -3649,7 +3538,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] preview_script error: {e}")
         return None
 
-    def preview_act(self, card_id: int) -> Optional[Dict]:
+    def preview_act(self, card_id: int) -> Optional[dict]:
         """Предпросмотр скрипта отправки акта клиенту"""
         if self.api_client:
             try:
@@ -3658,7 +3547,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] preview_act error: {e}")
         return None
 
-    def send_act(self, card_id: int, text: str, act_prefixes: list = None) -> Optional[Dict]:
+    def send_act(self, card_id: int, text: str, act_prefixes: list = None) -> Optional[dict]:
         """Отправить акт в групповой чат"""
         if self.api_client:
             try:
@@ -3667,19 +3556,16 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] send_act error: {e}")
         return None
 
-    def send_edited_script(self, card_id: int, text: str, file_ids: list = None,
-                           deadline_date: str = None, custom_deadline: bool = False) -> Optional[Dict]:
+    def send_edited_script(self, card_id: int, text: str, file_ids: list = None, deadline_date: str = None, custom_deadline: bool = False) -> Optional[dict]:
         """Отправить отредактированный скрипт в групповой чат"""
         if self.api_client:
             try:
-                return self.api_client.send_edited_script(
-                    card_id, text, file_ids, deadline_date, custom_deadline
-                )
+                return self.api_client.send_edited_script(card_id, text, file_ids, deadline_date, custom_deadline)
             except Exception as e:
                 _safe_log(f"[DataAccess] send_edited_script error: {e}")
         return None
 
-    def create_messenger_script(self, data: Dict) -> Optional[Dict]:
+    def create_messenger_script(self, data: dict) -> Optional[dict]:
         """Создать скрипт мессенджера"""
         if self.api_client:
             try:
@@ -3690,7 +3576,7 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] create_messenger_script: API недоступен")
         return None
 
-    def update_messenger_script(self, script_id: int, data: Dict) -> Optional[Dict]:
+    def update_messenger_script(self, script_id: int, data: dict) -> Optional[dict]:
         """Обновить скрипт мессенджера"""
         if self.api_client:
             try:
@@ -3712,7 +3598,7 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] delete_messenger_script: API недоступен")
         return False
 
-    def mtproto_send_code(self) -> Dict:
+    def mtproto_send_code(self) -> dict:
         """Шаг 1: Отправить код подтверждения для MTProto"""
         if self.api_client:
             try:
@@ -3722,7 +3608,7 @@ class DataAccess(QObject):
                 return {"error": str(e)}
         return {"error": "API не доступен"}
 
-    def mtproto_resend_sms(self) -> Dict:
+    def mtproto_resend_sms(self) -> dict:
         """Переотправить код по SMS"""
         if self.api_client:
             try:
@@ -3732,7 +3618,7 @@ class DataAccess(QObject):
                 return {"error": str(e)}
         return {"error": "API не доступен"}
 
-    def mtproto_verify_code(self, code: str) -> Dict:
+    def mtproto_verify_code(self, code: str) -> dict:
         """Шаг 2: Подтвердить код MTProto"""
         if self.api_client:
             try:
@@ -3742,7 +3628,7 @@ class DataAccess(QObject):
                 return {"error": str(e)}
         return {"error": "API не доступен"}
 
-    def mtproto_session_status(self) -> Dict:
+    def mtproto_session_status(self) -> dict:
         """Проверить статус MTProto сессии"""
         if self.api_client:
             try:
@@ -3756,7 +3642,7 @@ class DataAccess(QObject):
     # АДМИНИСТРИРОВАНИЕ
     # =========================
 
-    def get_role_permissions_matrix(self) -> Dict[str, Any]:
+    def get_role_permissions_matrix(self) -> dict[str, Any]:
         """Получить матрицу прав по ролям"""
         if self.api_client:
             try:
@@ -3765,7 +3651,7 @@ class DataAccess(QObject):
                 pass
         return {"roles": {}}
 
-    def save_role_permissions_matrix(self, data: dict) -> Optional[Dict]:
+    def save_role_permissions_matrix(self, data: dict) -> Optional[dict]:
         """Сохранить матрицу прав по ролям"""
         if self._should_use_api():
             try:
@@ -3774,7 +3660,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка save_role_permissions_matrix: {e}")
         return None
 
-    def get_employee_permissions(self, employee_id: int) -> Optional[Dict]:
+    def get_employee_permissions(self, employee_id: int) -> Optional[dict]:
         """Получить персональные права сотрудника"""
         if self.api_client:
             try:
@@ -3797,7 +3683,7 @@ class DataAccess(QObject):
         """
         # Нормализация: извлекаем список из dict если передан dict
         if isinstance(permissions, dict):
-            permissions = permissions.get('permissions', list(permissions.values()))
+            permissions = permissions.get("permissions", list(permissions.values()))
 
         # Сначала сохраняем локально
         try:
@@ -3810,11 +3696,9 @@ class DataAccess(QObject):
                 return self.api_client.set_employee_permissions(employee_id, permissions)
             except Exception as e:
                 _safe_log(f"[DataAccess] API set_employee_permissions: {e}")
-                self._queue_operation('update', 'permission', employee_id,
-                                      {'employee_id': employee_id, 'permissions': permissions})
+                self._queue_operation("update", "permission", employee_id, {"employee_id": employee_id, "permissions": permissions})
         elif self.api_client:
-            self._queue_operation('update', 'permission', employee_id,
-                                  {'employee_id': employee_id, 'permissions': permissions})
+            self._queue_operation("update", "permission", employee_id, {"employee_id": employee_id, "permissions": permissions})
 
         return True
 
@@ -3829,7 +3713,7 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] reset_employee_permissions: API недоступен")
         return False
 
-    def get_permission_definitions(self) -> List[Dict]:
+    def get_permission_definitions(self) -> list[dict]:
         """Получить описание всех прав системы (только API)"""
         if self.api_client:
             try:
@@ -3840,7 +3724,7 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] get_permission_definitions: API недоступен")
         return []
 
-    def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Dict[str, Any]:
+    def get_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = "Все агенты") -> dict[str, Any]:
         """Получить шаблон нормо-дней"""
         if self._should_use_api():
             try:
@@ -3852,22 +3736,22 @@ class DataAccess(QObject):
             conn = self.db.connect()
             cursor = conn.cursor()
             cursor.execute(
-                '''SELECT * FROM norm_days_templates
+                """SELECT * FROM norm_days_templates
                    WHERE project_type = ? AND project_subtype = ? AND agent_type = ?
-                   ORDER BY sort_order''',
-                (project_type, project_subtype, agent_type)
+                   ORDER BY sort_order""",
+                (project_type, project_subtype, agent_type),
             )
             rows = cursor.fetchall()
             self.db.close()
             entries = [dict(r) for r in rows]
-            if not entries and agent_type != 'Все агенты':
+            if not entries and agent_type != "Все агенты":
                 # Fallback на "Все агенты"
                 cursor2 = self.db.connect().cursor()
                 cursor2.execute(
-                    '''SELECT * FROM norm_days_templates
+                    """SELECT * FROM norm_days_templates
                        WHERE project_type = ? AND project_subtype = ? AND agent_type = ?
-                       ORDER BY sort_order''',
-                    (project_type, project_subtype, 'Все агенты')
+                       ORDER BY sort_order""",
+                    (project_type, project_subtype, "Все агенты"),
                 )
                 entries = [dict(r) for r in cursor2.fetchall()]
                 self.db.close()
@@ -3876,7 +3760,7 @@ class DataAccess(QObject):
             _safe_log(f"[DataAccess] SQLite get_norm_days_template: {e}")
         return {"entries": []}
 
-    def save_norm_days_template(self, data: Dict[str, Any]) -> Optional[Dict]:
+    def save_norm_days_template(self, data: dict[str, Any]) -> Optional[dict]:
         """Сохранить шаблон нормо-дней"""
         if self._should_use_api():
             try:
@@ -3885,7 +3769,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка save_norm_days_template: {e}")
         return None
 
-    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = 'Все агенты') -> Dict[str, Any]:
+    def preview_norm_days_template(self, project_type: str, project_subtype: str, area: float, agent_type: str = "Все агенты") -> dict[str, Any]:
         """Превью нормо-дней для конкретной площади"""
         if self.api_client:
             try:
@@ -3894,7 +3778,7 @@ class DataAccess(QObject):
                 pass
         return {"entries": [], "contract_term": 0, "k_coefficient": 0}
 
-    def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = 'Все агенты') -> Optional[Dict]:
+    def reset_norm_days_template(self, project_type: str, project_subtype: str, agent_type: str = "Все агенты") -> Optional[dict]:
         """Сбросить шаблон нормо-дней к формулам"""
         if self._should_use_api():
             try:
@@ -3905,7 +3789,7 @@ class DataAccess(QObject):
 
     # ==================== ПРОЧЕЕ ====================
 
-    def get_contract_years(self) -> List[int]:
+    def get_contract_years(self) -> list[int]:
         """Получить список лет, в которых есть договора"""
         if self.api_client:
             try:
@@ -3919,7 +3803,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] DB get_contract_years: {e}")
         return []
 
-    def get_cities(self) -> List[str]:
+    def get_cities(self) -> list[str]:
         """Получить список городов (только API)"""
         if self.api_client:
             try:
@@ -3930,7 +3814,7 @@ class DataAccess(QObject):
             _safe_log("[DataAccess] get_cities: API недоступен")
         return []
 
-    def get_current_user(self) -> Optional[Dict]:
+    def get_current_user(self) -> Optional[dict]:
         """Получить текущего авторизованного пользователя (только API)"""
         if self.api_client:
             try:
@@ -3957,16 +3841,16 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_order: {e}")
                 if crm_card_id:
-                    self._queue_operation('delete', 'crm_card', crm_card_id, {})
-                self._queue_operation('delete', 'contract', contract_id, {})
+                    self._queue_operation("delete", "crm_card", crm_card_id, {})
+                self._queue_operation("delete", "contract", contract_id, {})
         elif self.api_client:
             if crm_card_id:
-                self._queue_operation('delete', 'crm_card', crm_card_id, {})
-            self._queue_operation('delete', 'contract', contract_id, {})
+                self._queue_operation("delete", "crm_card", crm_card_id, {})
+            self._queue_operation("delete", "contract", contract_id, {})
 
         return True
 
-    def delete_project_file(self, file_id: int) -> Optional[Dict]:
+    def delete_project_file(self, file_id: int) -> Optional[dict]:
         """Удалить файл стадии проекта. Возвращает данные файла (yandex_path и т.д.)"""
         # Сначала удаляем локально (получаем данные файла для возврата)
         local_result = self.db.delete_project_file(file_id)
@@ -3977,13 +3861,13 @@ class DataAccess(QObject):
                 return result or local_result
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API delete_project_file: {e}")
-                self._queue_operation('delete', 'project_file', file_id, {})
+                self._queue_operation("delete", "project_file", file_id, {})
         elif self.api_client:
-            self._queue_operation('delete', 'project_file', file_id, {})
+            self._queue_operation("delete", "project_file", file_id, {})
 
         return local_result
 
-    def get_projects_by_type(self, project_type: str) -> List[Dict]:
+    def get_projects_by_type(self, project_type: str) -> list[dict]:
         """Получить список проектов по типу для статистики"""
         if self.api_client:
             try:
@@ -3992,7 +3876,7 @@ class DataAccess(QObject):
                 _safe_log(f"[DataAccess] Ошибка API get_projects_by_type: {e}")
         return self.db.get_projects_by_type(project_type)
 
-    def get_supervision_cards(self, status: str = "active") -> List[Dict]:
+    def get_supervision_cards(self, status: str = "active") -> list[dict]:
         """Получить карточки авторского надзора (active/archived/all)"""
         if self.api_client:
             try:
@@ -4000,23 +3884,23 @@ class DataAccess(QObject):
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API get_supervision_cards: {e}")
         if status == "archived":
-            return self.db.get_archived_supervision_cards() if hasattr(self.db, 'get_archived_supervision_cards') else []
-        return self.db.get_active_supervision_cards() if hasattr(self.db, 'get_active_supervision_cards') else []
+            return self.db.get_archived_supervision_cards() if hasattr(self.db, "get_archived_supervision_cards") else []
+        return self.db.get_active_supervision_cards() if hasattr(self.db, "get_active_supervision_cards") else []
 
-    def update_stage_executor(self, card_id: int, stage_name: str, update_data: Dict) -> Optional[Dict]:
+    def update_stage_executor(self, card_id: int, stage_name: str, update_data: dict) -> Optional[dict]:
         """Обновить исполнителя стадии (переназначение)"""
         # Сначала обновляем локально
-        executor_id = update_data.get('executor_id')
-        deadline = update_data.get('deadline')
-        completed = update_data.get('completed', False)
+        executor_id = update_data.get("executor_id")
+        deadline = update_data.get("deadline")
+        completed = update_data.get("completed", False)
         try:
             conn = self.db.connect()
             cursor = conn.cursor()
             # M3: Точное совпадение stage_name вместо LIKE
             cursor.execute(
-                '''UPDATE stage_executors SET executor_id=?, deadline=?, completed=?, completed_date=NULL
-                   WHERE crm_card_id=? AND stage_name=?''',
-                (executor_id, deadline, 1 if completed else 0, card_id, stage_name)
+                """UPDATE stage_executors SET executor_id=?, deadline=?, completed=?, completed_date=NULL
+                   WHERE crm_card_id=? AND stage_name=?""",
+                (executor_id, deadline, 1 if completed else 0, card_id, stage_name),
             )
             conn.commit()
             self.db.close()
@@ -4032,15 +3916,11 @@ class DataAccess(QObject):
                 return self.api_client.update_stage_executor(card_id, stage_name, update_data)
             except Exception as e:
                 _safe_log(f"[DataAccess] Ошибка API update_stage_executor: {e}")
-                self._queue_operation('update', 'stage_executor', card_id,
-                                      {'card_id': card_id, 'stage_name': stage_name,
-                                       '_action': 'update', **update_data})
+                self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "_action": "update", **update_data})
         elif self.api_client:
-            self._queue_operation('update', 'stage_executor', card_id,
-                                  {'card_id': card_id, 'stage_name': stage_name,
-                                   '_action': 'update', **update_data})
+            self._queue_operation("update", "stage_executor", card_id, {"card_id": card_id, "stage_name": stage_name, "_action": "update", **update_data})
 
-        return {'success': True}
+        return {"success": True}
 
     def get_notification_settings(self, employee_id: int):
         """Получить настройки уведомлений сотрудника"""
@@ -4077,6 +3957,7 @@ class DataAccess(QObject):
         if self._should_use_api():
             return self.api_client.send_employee_invite(employee_id)
         return False
+
     def invite_client_to_chat(self, card_id: int) -> dict:
         """Отправить клиенту email-приглашение в Telegram-чат проекта"""
         if self._should_use_api():
