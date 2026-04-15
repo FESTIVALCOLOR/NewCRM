@@ -220,7 +220,7 @@
             <q-item-section>
               <q-item-label>{{ m.display_name || m.guest_name || `#${m.id}` }}</q-item-label>
               <q-item-label caption>
-                {{ m.member_type === 'employee' ? 'Сотрудник' : 'Клиент' }}
+                {{ m.role_in_project || (m.member_type === 'employee' ? 'Сотрудник' : 'Клиент') }}
               </q-item-label>
             </q-item-section>
           </q-item>

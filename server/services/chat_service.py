@@ -155,7 +155,7 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "file_name": msg.file_name,
         "file_size": msg.file_size,
         "is_deleted": msg.is_deleted,
-        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "created_at": (msg.created_at.isoformat() + "Z") if msg.created_at else None,
     }
 
 

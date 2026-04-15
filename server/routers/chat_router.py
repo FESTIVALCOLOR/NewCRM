@@ -446,7 +446,7 @@ async def forward_message(
     _get_chat_or_404(db, chat_id)
     _get_chat_or_404(db, target_chat_id)
     _check_member(db, chat_id, current_user.id)
-    _check_member(db, target_chat_id, current_user.id)
+    # Проверяем только членство в исходном чате; целевой может быть клиентским
 
     src_msg = (
         db.query(InternalChatMessage)
@@ -587,9 +587,14 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
     member_responses = []
     for m in members:
         display = m.guest_name or ""
+        role_in_project = None
         if m.employee_id:
             emp = db.query(Employee).filter(Employee.id == m.employee_id).first()
-            display = _get_employee_display_name(emp) if emp else ""
+            if emp:
+                display = _get_employee_display_name(emp)
+                role_in_project = emp.position or emp.secondary_position
+        elif m.member_type == "guest":
+            role_in_project = "Клиент"
         member_responses.append(
             InternalChatMemberResponse(
                 id=m.id,
@@ -600,6 +605,7 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 joined_at=m.joined_at,
                 is_active=m.is_active,
                 display_name=display,
+                role_in_project=role_in_project,
             )
         )
     return InternalChatDetailResponse(

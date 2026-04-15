@@ -1,1 +1,0 @@
-import{s as e}from"./runtime-core.esm-bundler-DuyRRN_M.js";import{N as t}from"./index-pNaurK8u.js";function n(){let n=t(),r=e(()=>n.isSuperuser);function i(e){return n.has(e)}function a(...e){return e.some(e=>n.has(e))}return{can:i,canAny:a,isSuperuser:r}}export{n as t};

@@ -157,8 +157,8 @@
     </div>
 
     <!-- Диалог скрипта -->
-    <q-dialog v-model="showScriptDialog">
-      <q-card style="min-width: 340px">
+    <q-dialog v-model="showScriptDialog" @show="loadScripts">
+      <q-card style="min-width: 380px; max-width: 520px">
         <q-card-section class="row items-center">
           <div class="text-h6">
             Отправить скрипт
@@ -173,18 +173,64 @@
           />
         </q-card-section>
         <q-separator />
-        <q-card-section>
+
+        <!-- Выбор скрипта -->
+        <q-card-section v-if="!selectedScript" class="q-pb-sm">
+          <div v-if="loadingScripts" class="text-center q-pa-md">
+            <q-spinner size="24px" color="primary" />
+          </div>
+          <q-list v-else separator>
+            <q-item
+              v-for="s in scripts"
+              :key="s.id"
+              v-ripple
+              clickable
+              @click="selectScript(s)"
+            >
+              <q-item-section>
+                <q-item-label>{{ s.name || s.script_type }}</q-item-label>
+                <q-item-label caption lines="2">
+                  {{ s.message_template?.substring(0, 80) }}…
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-icon name="chevron_right" color="grey" />
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!scripts.length">
+              <q-item-section>
+                <q-item-label class="text-grey">
+                  Скрипты не найдены
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <!-- Редактирование и отправка выбранного скрипта -->
+        <q-card-section v-else class="q-pt-sm">
+          <div class="text-caption text-grey q-mb-sm">
+            {{ selectedScript.name || selectedScript.script_type }}
+          </div>
           <q-input
             v-model="scriptText"
             type="textarea"
             outlined
-            label="Текст скрипта"
-            rows="5"
+            label="Текст (можно отредактировать)"
+            rows="6"
           />
         </q-card-section>
+
         <q-card-actions align="right">
+          <q-btn
+            v-if="selectedScript"
+            flat
+            label="Назад"
+            @click="selectedScript = null"
+          />
           <q-btn v-close-popup flat label="Отмена" />
           <q-btn
+            v-if="selectedScript"
             color="primary"
             label="Отправить"
             :disable="!scriptText.trim()"
@@ -262,6 +308,10 @@ const scriptText = ref('')
 const canManage = computed(() => can('chat.client.manage'))
 const canScript = computed(() => can('chat.client.send_script'))
 const membersCount = computed(() => members.value.length)
+
+const scripts = ref([])
+const loadingScripts = ref(false)
+const selectedScript = ref(null)
 
 const clientLink = computed(() => {
   if (!clientToken.value) return ''
@@ -348,15 +398,34 @@ async function onFileSelected(event) {
   }
 }
 
+async function loadScripts() {
+  if (scripts.value.length) return
+  loadingScripts.value = true
+  try {
+    const { data } = await api.get('/api/v1/messenger/scripts')
+    scripts.value = Array.isArray(data) ? data : (data.items || [])
+  } catch (e) {
+    console.error('[ClientChatRoom] Ошибка загрузки скриптов:', e)
+  } finally {
+    loadingScripts.value = false
+  }
+}
+
+function selectScript(s) {
+  selectedScript.value = s
+  scriptText.value = s.message_template || ''
+}
+
 async function sendScript() {
   const text = scriptText.value.trim()
   if (!text) return
   try {
     await api.post(`/api/v1/chats/${chatId}/messages`, {
       content: text,
-      message_type: 'system',
+      message_type: 'text',
     })
     scriptText.value = ''
+    selectedScript.value = null
     showScriptDialog.value = false
     $q.notify({ type: 'positive', message: 'Скрипт отправлен' })
   } catch (e) {
