@@ -177,8 +177,8 @@ def _get_assigned_employee_ids(db: Session, crm_card_id: int) -> list:
 
 
 def _get_employee_display_name(emp: Employee) -> str:
-    if emp.last_name and emp.first_name:
-        return f"{emp.last_name} {emp.first_name}"
+    if emp.full_name:
+        return emp.full_name
     return emp.login or f"Сотрудник #{emp.id}"
 
 
