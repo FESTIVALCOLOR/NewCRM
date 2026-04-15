@@ -13,7 +13,7 @@
         no-caps
         label="Пересчёт"
         color="grey-7"
-        style="font-size: 12px; border-color: #d9d9d9; border-radius: 6px; height: 34px; min-height: 34px; padding: 0 10px; margin-left: 6px; color: #E65100"
+        style="font-size: 12px; border-color: #d9d9d9; border-radius: 6px; height: 36px; min-height: 36px; padding: 0 10px; margin-left: 6px; color: #E65100"
         @click="recalculatePayments"
       />
     </div>
@@ -146,14 +146,9 @@
         </q-select>
       </div>
       <div class="col-auto" style="display: flex; align-items: stretch">
-        <q-btn
-          outline
-          no-caps
-          label="Сбросить"
-          color="grey"
-          style="font-size: 12px; border-color: #bdbdbd; border-radius: 4px; min-width: 80px; height: 40px; min-height: 40px; padding: 0 12px"
-          @click="resetFilters"
-        />
+        <button class="sal-reset-native" @click="resetFilters">
+          Сбросить
+        </button>
       </div>
     </div>
 
@@ -303,52 +298,41 @@
                           style="display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:4px;font-size:10px;background:#EEEEEE;color:#666;white-space:nowrap"
                         >В работе</span>
                         <!-- Кнопка действия по статусу -->
-                        <q-btn
+                        <button
                           v-if="can('salaries.mark_paid') && (p.is_paid || p.payment_status === 'paid')"
-                          outline
-                          no-caps
-                          label="Снять оплату"
-                          color="grey-7"
-                          style="font-size: 10px; padding: 0 8px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
+                          class="sal-act-btn sal-act-grey"
                           @click.stop="undoPaid(p)"
-                        />
-                        <q-btn
+                        >
+                          Снять оплату
+                        </button>
+                        <button
                           v-else-if="can('salaries.mark_paid') && p.payment_status === 'to_pay'"
-                          outline
-                          no-caps
-                          icon="check"
-                          label="Оплатить"
-                          color="positive"
-                          style="font-size: 10px; padding: 0 8px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
+                          class="sal-act-btn sal-act-green"
                           @click.stop="markPaid(p)"
-                        />
-                        <q-btn
+                        >
+                          <span class="material-icons" style="font-size:12px;line-height:1">check</span> Оплатить
+                        </button>
+                        <button
                           v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid'"
-                          outline
-                          no-caps
-                          label="К оплате"
-                          color="warning"
-                          style="font-size: 10px; padding: 0 8px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
+                          class="sal-act-btn sal-act-orange"
                           @click.stop="setPayStatus(p)"
-                        />
-                        <q-btn
+                        >
+                          К оплате
+                        </button>
+                        <button
                           v-if="can('salaries.update')"
-                          outline
-                          no-caps
-                          icon="edit"
-                          color="grey-7"
-                          style="font-size: 10px; padding: 0 6px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
+                          class="sal-act-btn sal-act-icon sal-act-grey"
                           @click.stop="openEditDialog(p)"
-                        />
-                        <q-btn
+                        >
+                          <span class="material-icons" style="font-size:14px;line-height:1">edit</span>
+                        </button>
+                        <button
                           v-if="can('salaries.delete')"
-                          outline
-                          no-caps
-                          icon="delete_outline"
-                          color="negative"
-                          style="font-size: 10px; padding: 0 6px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
+                          class="sal-act-btn sal-act-icon sal-act-red"
                           @click.stop="deletePayment(p)"
-                        />
+                        >
+                          <span class="material-icons" style="font-size:14px;line-height:1">delete_outline</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -990,6 +974,18 @@ onMounted(async () => {
 .payment-card:last-child { border-radius: 0 0 8px 8px; border-bottom: 1px solid #E0E0E0 }
 /* Единая высота фильтров */
 .q-col-gutter-xs .q-field--outlined .q-field__control { min-height: 40px; height: 40px; }
-/* Кнопка сбросить — ровно как фильтры */
-.sal-reset-btn { font-size: 12px !important; height: 100% !important; min-height: 40px !important; border: 1px solid #bdbdbd !important; border-radius: 4px !important; min-width: 90px; padding: 0 12px !important; }
+/* Нативная кнопка Сбросить — точная высота как у q-select (40px) */
+.sal-reset-native { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 40px; min-width: 80px; padding: 0 12px; border: 1px solid #bdbdbd; border-radius: 4px; background: white; color: #555; font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s; }
+.sal-reset-native:hover { background: #f5f5f5; }
+/* Нативные кнопки действий — одинаковая высота 26px со span-чипами */
+.sal-act-btn { display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 8px; border-radius: 4px; border: 1px solid; background: white; font-size: 10px; cursor: pointer; font-family: inherit; white-space: nowrap; line-height: 1; transition: background 0.15s; }
+.sal-act-icon { padding: 0 5px; }
+.sal-act-grey { border-color: #9E9E9E; color: #555; }
+.sal-act-grey:hover { background: #f5f5f5; }
+.sal-act-green { border-color: #21BA45; color: #21BA45; }
+.sal-act-green:hover { background: #f0faf3; }
+.sal-act-orange { border-color: #F2C037; color: #9a6700; }
+.sal-act-orange:hover { background: #fff8e1; }
+.sal-act-red { border-color: #C10015; color: #C10015; }
+.sal-act-red:hover { background: #fff0f0; }
 </style>
