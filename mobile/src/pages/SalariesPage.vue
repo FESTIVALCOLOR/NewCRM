@@ -9,12 +9,11 @@
       </div>
       <q-btn
         v-if="isSuperuser"
-        flat
-        dense
+        outline
         no-caps
         label="Пересчёт"
-        color="orange"
-        style="font-size: 11px"
+        color="grey-7"
+        style="font-size: 12px; border-color: #d9d9d9; border-radius: 6px; height: 34px; min-height: 34px; padding: 0 10px; margin-left: 6px; color: #E65100"
         @click="recalculatePayments"
       />
     </div>
@@ -307,57 +306,47 @@
                         <q-btn
                           v-if="can('salaries.mark_paid') && (p.is_paid || p.payment_status === 'paid')"
                           outline
-                          dense
-                          size="xs"
-                          label="Снять оплату"
                           no-caps
+                          label="Снять оплату"
                           color="grey-7"
-                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          style="font-size: 10px; padding: 0 8px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
                           @click.stop="undoPaid(p)"
                         />
                         <q-btn
                           v-else-if="can('salaries.mark_paid') && p.payment_status === 'to_pay'"
                           outline
-                          dense
-                          size="xs"
+                          no-caps
                           icon="check"
                           label="Оплатить"
-                          no-caps
                           color="positive"
-                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          style="font-size: 10px; padding: 0 8px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
                           @click.stop="markPaid(p)"
                         />
                         <q-btn
                           v-else-if="can('salaries.mark_to_pay') && !p.is_paid && p.payment_status !== 'paid'"
                           outline
-                          dense
-                          size="xs"
-                          label="К оплате"
                           no-caps
+                          label="К оплате"
                           color="warning"
-                          style="font-size: 10px; padding: 2px 8px; border-radius: 4px"
+                          style="font-size: 10px; padding: 0 8px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
                           @click.stop="setPayStatus(p)"
                         />
                         <q-btn
                           v-if="can('salaries.update')"
                           outline
-                          dense
-                          size="xs"
-                          icon="edit"
                           no-caps
+                          icon="edit"
                           color="grey-7"
-                          style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                          style="font-size: 10px; padding: 0 6px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
                           @click.stop="openEditDialog(p)"
                         />
                         <q-btn
                           v-if="can('salaries.delete')"
                           outline
-                          dense
-                          size="xs"
-                          icon="delete_outline"
                           no-caps
+                          icon="delete_outline"
                           color="negative"
-                          style="font-size: 10px; padding: 2px 6px; border-radius: 4px"
+                          style="font-size: 10px; padding: 0 6px; height: 26px; min-height: 26px; border-radius: 4px; line-height: 1"
                           @click.stop="deletePayment(p)"
                         />
                       </div>

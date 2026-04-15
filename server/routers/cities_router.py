@@ -6,7 +6,7 @@ from permissions import require_permission
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from database import City, Contract, Employee, get_db
+from database import City, Contract, Employee, Rate, get_db
 
 
 class CityCreate(BaseModel):
@@ -59,14 +59,18 @@ async def add_city(data: CityCreate, current_user: Employee = Depends(require_pe
 
 @router.patch("/{city_id}")
 async def update_city(city_id: int, data: CityUpdate, current_user: Employee = Depends(require_permission("cities.create")), db: Session = Depends(get_db)):
-    """Переименовать город"""
+    """Переименовать город (каскадно обновляет contracts и rates)"""
     city = db.query(City).filter(City.id == city_id).first()
     if not city:
         raise HTTPException(status_code=404, detail="Город не найден")
     existing = db.query(City).filter(City.name == data.name, City.id != city_id, City.status == "активный").first()
     if existing:
         raise HTTPException(status_code=400, detail="Город с таким названием уже существует")
-    city.name = data.name
+    old_name = city.name
+    new_name = data.name.strip()
+    city.name = new_name
+    db.query(Contract).filter(Contract.city == old_name).update({"city": new_name})
+    db.query(Rate).filter(Rate.city == old_name).update({"city": new_name})
     db.commit()
     return {"status": "success", "id": city.id, "name": city.name}
 
