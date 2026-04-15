@@ -171,8 +171,8 @@ def _get_assigned_employee_ids(db: Session, crm_card_id: int) -> list:
     # StageExecutor — дизайнеры, чертёжники
     executors = db.query(StageExecutor).filter(StageExecutor.crm_card_id == crm_card_id).all()
     for ex in executors:
-        if ex.employee_id and ex.employee_id not in ids:
-            ids.append(ex.employee_id)
+        if ex.executor_id and ex.executor_id not in ids:
+            ids.append(ex.executor_id)
     return ids
 
 
