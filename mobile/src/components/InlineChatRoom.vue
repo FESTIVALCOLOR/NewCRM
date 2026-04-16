@@ -28,17 +28,26 @@
   <!-- Чат существует -->
   <div v-else ref="chatContainerEl" class="column" :style="{ height: containerHeight, minHeight: '320px' }">
     <!-- Шапка чата: ссылка и участники -->
-    <div class="row no-wrap items-center q-px-md q-py-xs bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px">
-      <!-- Блок ссылки (занимает всё оставшееся место, внутри обрезает) -->
-      <div v-if="chatType === 'client' && clientLink" class="row no-wrap items-center" style="flex: 1; min-width: 0">
+    <div
+      class="q-px-md q-py-xs bg-white"
+      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden"
+    >
+      <!-- Блок ссылки: flex: 1 1 0% + overflow:hidden гарантирует обрезку -->
+      <div
+        v-if="chatType === 'client' && clientLink"
+        style="flex: 1 1 0%; min-width: 0; display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden"
+      >
         <q-icon
           name="link"
           size="14px"
           color="green-7"
           class="q-mr-xs"
-          style="flex-shrink: 0"
+          style="flex: 0 0 auto"
         />
-        <span class="text-caption text-green-8" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+        <span
+          class="text-caption text-green-8"
+          style="flex: 1 1 0%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+        >
           {{ clientLink }}
         </span>
         <q-btn
@@ -47,23 +56,23 @@
           size="xs"
           icon="content_copy"
           color="green-7"
-          style="flex-shrink: 0"
+          style="flex: 0 0 auto; margin-left: 4px"
           @click="copyClientLink"
         >
           <q-tooltip>Копировать ссылку</q-tooltip>
         </q-btn>
       </div>
-      <span v-else class="text-caption text-grey-6" style="flex: 1; min-width: 0">
+      <span v-else class="text-caption text-grey-6" style="flex: 1 1 0%; min-width: 0">
         {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
       </span>
-      <!-- Кнопка участников — всегда справа, не сжимается -->
+      <!-- Кнопка участников: всегда справа, никогда не сжимается -->
       <q-btn
         flat
         dense
         size="xs"
         icon="people"
         color="grey-7"
-        style="flex-shrink: 0"
+        style="flex: 0 0 auto; margin-left: 4px"
         @click="showMembers = true"
       >
         <q-tooltip>Участники</q-tooltip>
