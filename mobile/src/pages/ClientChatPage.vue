@@ -69,7 +69,8 @@
             <template v-if="msg.message_type === 'image'">
               <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                 <img
-                  :src="msg.file_url"
+                  v-if="imgStreamUrl(msg)"
+                  :src="imgStreamUrl(msg)"
                   style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
                   @error="$event.target.style.display='none'"
                 >
@@ -202,6 +203,12 @@ function isOwn(msg) {
   // Сравниваем по персональному токену (после регистрации) или основной ссылке
   if (memberToken) return msg.sender_guest_token === memberToken
   return msg.sender_guest_token === mainToken
+}
+
+function imgStreamUrl(msg) {
+  if (!msg.yandex_path) return ''
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  return `/api/v1/client-chat/${activeToken}/stream?yandex_path=${encodeURIComponent(path)}`
 }
 
 function formatTime(dt) {

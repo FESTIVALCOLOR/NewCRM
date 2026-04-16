@@ -221,6 +221,53 @@ async def client_upload_file(
     return _message_to_dict(msg)
 
 
+@router.get("/client-chat/{token}/stream")
+async def client_stream_file(
+    token: str,
+    yandex_path: str,
+    db: Session = Depends(get_db),
+):
+    """Стримить файл чата для клиента (аутентификация по chat-токену, без JWT)."""
+    chat = get_chat_by_token(db, token)
+    if not chat:
+        raise HTTPException(404, "Чат не найден")
+    if ".." in yandex_path:
+        raise HTTPException(400, "Недопустимый путь")
+    try:
+        import tempfile
+
+        from fastapi.responses import FileResponse as _FileResponse
+        from yandex_disk_service import get_yandex_disk_service
+
+        yd_svc = get_yandex_disk_service()
+        if not yd_svc or not yd_svc.token:
+            raise HTTPException(503, "Яндекс.Диск не настроен")
+        clean_path = yandex_path.replace("disk:", "").strip()
+        if not clean_path.startswith("/"):
+            clean_path = "/" + clean_path
+        ext = os.path.splitext(clean_path)[1].lower()
+        ct_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+            ".heic": "image/heic",
+        }
+        ct = ct_map.get(ext, "application/octet-stream")
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+        tmp_path = tmp.name
+        tmp.close()
+        yd_svc.download_file(f"disk:{clean_path}", tmp_path)
+        return _FileResponse(tmp_path, media_type=ct, filename=os.path.basename(clean_path))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Ошибка стриминга файла клиента: {e}")
+        raise HTTPException(500, "Ошибка получения файла")
+
+
 # ==============================================================
 # WebSocket — сотрудник
 # ==============================================================

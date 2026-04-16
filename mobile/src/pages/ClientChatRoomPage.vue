@@ -113,7 +113,8 @@
             <template v-if="msg.message_type === 'image'">
               <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                 <img
-                  :src="msg.file_url"
+                  v-if="imgStreamUrl(msg)"
+                  :src="imgStreamUrl(msg)"
                   style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
                   @error="$event.target.style.display='none'"
                 >
@@ -491,6 +492,13 @@ function isOwn(msg) {
   return msg.sender_employee_id === authStore.employee?.id
 }
 
+function imgStreamUrl(msg) {
+  if (!msg.yandex_path) return ''
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
 function isGuest(msg) {
   return !!msg.sender_guest_token
 }
@@ -720,9 +728,7 @@ async function addMemberToChat(emp) {
   if (addingMemberId.value) return
   addingMemberId.value = emp.id
   try {
-    const params = new URLSearchParams()
-    params.append('employee_id', emp.id)
-    await api.post(`/api/v1/chats/${chatId}/members`, params)
+    await api.post(`/api/v1/chats/${chatId}/members`, { employee_id: emp.id })
     const { data } = await api.get(`/api/v1/chats/${chatId}`)
     members.value = data.members || []
     availableEmployees.value = availableEmployees.value.filter(e => e.id !== emp.id)

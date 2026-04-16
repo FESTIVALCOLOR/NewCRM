@@ -32,7 +32,7 @@
       <!-- Ссылка для клиента -->
       <template v-if="chatType === 'client' && clientLink">
         <q-icon name="link" size="14px" color="green-7" class="q-mr-xs" />
-        <span class="text-caption text-green-8" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+        <span class="text-caption text-green-8" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
           {{ clientLink }}
         </span>
         <q-btn
@@ -134,7 +134,8 @@
             <template v-if="msg.message_type === 'image'">
               <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                 <img
-                  :src="msg.file_url"
+                  v-if="imgStreamUrl(msg)"
+                  :src="imgStreamUrl(msg)"
                   style="max-width: 100%; max-height: 180px; border-radius: 6px; display: block; cursor: pointer"
                   @error="$event.target.style.display='none'"
                 >
@@ -414,6 +415,13 @@ function isOwn(msg) {
   return msg.sender_employee_id === authStore.employee?.id
 }
 
+function imgStreamUrl(msg) {
+  if (!msg.yandex_path) return ''
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
 function formatTime(dt) {
   if (!dt) return ''
   return new Date(dt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -530,9 +538,7 @@ async function addMemberToChat(emp) {
   if (addingMemberId.value || !chat.value) return
   addingMemberId.value = emp.id
   try {
-    const params = new URLSearchParams()
-    params.append('employee_id', emp.id)
-    await api.post(`/api/v1/chats/${chat.value.id}/members`, params)
+    await api.post(`/api/v1/chats/${chat.value.id}/members`, { employee_id: emp.id })
     // Обновляем список участников чата
     const { data } = await api.get(`/api/v1/chats/${chat.value.id}`)
     chatMembers.value = data.members || []

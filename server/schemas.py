@@ -1488,6 +1488,7 @@ class InternalMessageResponse(BaseModel):
     file_url: Optional[str] = None
     file_name: Optional[str] = None
     file_size: Optional[int] = None
+    yandex_path: Optional[str] = None
     is_deleted: bool = False
     created_at: datetime
 

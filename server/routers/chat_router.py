@@ -40,6 +40,7 @@ from typing import List, Optional
 from auth import get_current_user
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from permissions import require_permission
+from pydantic import BaseModel as PydanticBaseModel
 from schemas import (
     ChatInviteLinkResponse,
     FileUploadToDataRequest,
@@ -335,16 +336,20 @@ async def upload_file(
 # ==============================================================
 
 
+class AddMemberBody(PydanticBaseModel):
+    employee_id: int
+
+
 @router.post("/{chat_id}/members")
 def add_member(
     chat_id: int,
-    employee_id: int = Form(...),
+    body: AddMemberBody,
     current_user: Employee = Depends(require_permission("chat.employee.manage")),
     db: Session = Depends(get_db),
 ):
     _get_chat_or_404(db, chat_id)
     try:
-        member = add_member_to_chat(db, chat_id, employee_id)
+        member = add_member_to_chat(db, chat_id, body.employee_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
     return {"status": "ok", "member_id": member.id}
