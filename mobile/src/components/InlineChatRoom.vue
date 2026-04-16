@@ -28,10 +28,16 @@
   <!-- Чат существует -->
   <div v-else ref="chatContainerEl" class="column" :style="{ height: containerHeight, minHeight: '320px' }">
     <!-- Шапка чата: ссылка и участники -->
-    <div class="row items-center q-px-md q-py-xs bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px">
-      <!-- Ссылка для клиента -->
-      <template v-if="chatType === 'client' && clientLink">
-        <q-icon name="link" size="14px" color="green-7" class="q-mr-xs" />
+    <div class="row no-wrap items-center q-px-md q-py-xs bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px">
+      <!-- Блок ссылки (занимает всё оставшееся место, внутри обрезает) -->
+      <div v-if="chatType === 'client' && clientLink" class="row no-wrap items-center" style="flex: 1; min-width: 0">
+        <q-icon
+          name="link"
+          size="14px"
+          color="green-7"
+          class="q-mr-xs"
+          style="flex-shrink: 0"
+        />
         <span class="text-caption text-green-8" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
           {{ clientLink }}
         </span>
@@ -41,23 +47,23 @@
           size="xs"
           icon="content_copy"
           color="green-7"
+          style="flex-shrink: 0"
           @click="copyClientLink"
         >
           <q-tooltip>Копировать ссылку</q-tooltip>
         </q-btn>
-      </template>
-      <template v-else>
-        <span class="text-caption text-grey-6" style="flex: 1">
-          {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
-        </span>
-      </template>
-      <!-- Кнопка участников -->
+      </div>
+      <span v-else class="text-caption text-grey-6" style="flex: 1; min-width: 0">
+        {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+      </span>
+      <!-- Кнопка участников — всегда справа, не сжимается -->
       <q-btn
         flat
         dense
         size="xs"
         icon="people"
         color="grey-7"
+        style="flex-shrink: 0"
         @click="showMembers = true"
       >
         <q-tooltip>Участники</q-tooltip>
