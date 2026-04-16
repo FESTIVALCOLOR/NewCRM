@@ -6,7 +6,7 @@
       style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0"
     >
       <div class="column" style="flex: 1; min-width: 0">
-        <div class="text-subtitle2 text-weight-bold ellipsis">
+        <div class="text-subtitle2 text-weight-bold" style="word-break: break-word; line-height: 1.3">
           {{ chatTitle }}
         </div>
         <div v-if="typingText" class="text-caption text-grey ellipsis">
@@ -67,16 +67,19 @@
             </div>
 
             <template v-if="msg.message_type === 'image'">
-              <a :href="msg.file_url" target="_blank">
+              <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                 <img
                   :src="msg.file_url"
                   style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
                   @error="$event.target.style.display='none'"
                 >
+                <div class="row items-center q-gutter-xs q-mt-xs">
+                  <q-icon name="image" size="16px" color="grey-6" />
+                  <span class="text-caption text-grey-7 ellipsis" style="max-width: 200px">
+                    {{ msg.file_name || 'Изображение' }}
+                  </span>
+                </div>
               </a>
-              <div v-if="msg.file_name" class="text-caption q-mt-xs" style="color: #888">
-                {{ msg.file_name }}
-              </div>
             </template>
             <template v-else-if="msg.message_type === 'file'">
               <div class="row items-center q-gutter-xs">

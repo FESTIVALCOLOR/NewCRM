@@ -10,7 +10,7 @@
         @click="$router.back()"
       />
       <div class="q-ml-sm column" style="flex: 1; min-width: 0">
-        <div class="text-subtitle2 text-weight-bold ellipsis">
+        <div class="text-subtitle2 text-weight-bold" style="word-break: break-word; line-height: 1.3">
           {{ chatTitle }}
         </div>
         <div v-if="typingText" class="text-caption text-grey ellipsis">
@@ -111,16 +111,19 @@
             </div>
 
             <template v-if="msg.message_type === 'image'">
-              <a :href="msg.file_url" target="_blank">
+              <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                 <img
                   :src="msg.file_url"
                   style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
                   @error="$event.target.style.display='none'"
                 >
+                <div class="row items-center q-gutter-xs q-mt-xs">
+                  <q-icon name="image" size="16px" color="grey-6" />
+                  <span class="text-caption text-grey-7 ellipsis" style="max-width: 200px">
+                    {{ msg.file_name || 'Изображение' }}
+                  </span>
+                </div>
               </a>
-              <div v-if="msg.file_name" class="text-caption q-mt-xs" style="color: #888">
-                {{ msg.file_name }}
-              </div>
             </template>
             <template v-else-if="msg.message_type === 'file'">
               <div class="row items-center q-gutter-xs">
@@ -340,6 +343,20 @@
                 {{ m.role_in_project || (m.member_type === 'employee' ? 'Сотрудник' : 'Клиент') }}
               </q-item-label>
             </q-item-section>
+            <q-item-section side>
+              <q-btn
+                flat
+                round
+                dense
+                size="xs"
+                icon="close"
+                color="red-4"
+                :loading="removingMemberId === m.id"
+                @click.stop="removeMember(m)"
+              >
+                <q-tooltip>Удалить из чата</q-tooltip>
+              </q-btn>
+            </q-item-section>
           </q-item>
           <q-item v-if="!members.length">
             <q-item-section>
@@ -353,13 +370,13 @@
         <template v-if="availableEmployees !== null">
           <q-separator class="q-mt-sm" />
           <q-card-section class="q-py-sm">
-            <div class="text-caption text-grey-6 q-mb-xs">
-              Сотрудники карточки — не в чате
+            <div class="text-body2 text-weight-medium text-blue-grey-7 q-mb-xs">
+              Добавить в чат
             </div>
             <div v-if="loadingAvailableEmps" class="text-center q-py-sm">
               <q-spinner size="20px" color="grey" />
             </div>
-            <div v-else-if="!availableEmployees.length" class="text-caption text-grey q-py-xs">
+            <div v-else-if="!availableEmployees.length" class="text-caption text-grey-5 q-py-xs" style="font-style: italic">
               Все сотрудники карточки уже в чате
             </div>
             <q-list v-else dense>
@@ -436,6 +453,7 @@ const uploadProgress = ref(0)
 const availableEmployees = ref(null)
 const loadingAvailableEmps = ref(false)
 const addingMemberId = ref(null)
+const removingMemberId = ref(null)
 const chatCrmCardId = ref(null)
 
 function recalcChatH() {
@@ -702,9 +720,9 @@ async function addMemberToChat(emp) {
   if (addingMemberId.value) return
   addingMemberId.value = emp.id
   try {
-    const formData = new FormData()
-    formData.append('employee_id', emp.id)
-    await api.post(`/api/v1/chats/${chatId}/members`, formData)
+    const params = new URLSearchParams()
+    params.append('employee_id', emp.id)
+    await api.post(`/api/v1/chats/${chatId}/members`, params)
     const { data } = await api.get(`/api/v1/chats/${chatId}`)
     members.value = data.members || []
     availableEmployees.value = availableEmployees.value.filter(e => e.id !== emp.id)
@@ -713,6 +731,20 @@ async function addMemberToChat(emp) {
     $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка добавления' })
   } finally {
     addingMemberId.value = null
+  }
+}
+
+async function removeMember(m) {
+  if (removingMemberId.value) return
+  removingMemberId.value = m.id
+  try {
+    await api.delete(`/api/v1/chats/${chatId}/members/${m.id}`)
+    members.value = members.value.filter(mb => mb.id !== m.id)
+    $q.notify({ type: 'positive', message: `${m.display_name || 'Участник'} удалён из чата` })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка удаления' })
+  } finally {
+    removingMemberId.value = null
   }
 }
 
