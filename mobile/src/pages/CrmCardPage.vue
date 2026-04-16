@@ -1515,8 +1515,8 @@
         @saved="onMeasurementSaved"
       />
 
-      <!-- FAB кнопки (скрыты в архиве) -->
-      <q-page-sticky v-if="!isArchived" position="bottom-right" :offset="[18, 72]">
+      <!-- FAB кнопки (скрыты в архиве и на вкладках чата) -->
+      <q-page-sticky v-if="!isArchived && !isChatTab" position="bottom-right" :offset="[18, 72]">
         <q-fab icon="more_vert" direction="up" style="background: #ffd93c; color: #333" vertical-actions-align="right">
           <q-fab-action
             v-if="canRestore"

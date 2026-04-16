@@ -175,8 +175,18 @@ const loadingMessages = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
 const clientName = localStorage.getItem('client_name') || 'Клиент'
-const chatPageH = ref(window.innerHeight + 'px')
+const chatPageH = ref('100dvh')
 const uploadProgress = ref(0)
+
+function recalcChatH() {
+  const vh = window.visualViewport?.height ?? window.innerHeight
+  const header = document.querySelector('.q-header')
+  const footer = document.querySelector('.q-footer')
+  const headerH = header?.offsetHeight ?? 0
+  const footerH = footer?.offsetHeight ?? 0
+  chatPageH.value = Math.max(300, vh - headerH - footerH) + 'px'
+  scrollToBottom()
+}
 
 const typingText = computed(() => {
   if (!typingUsers.value.length) return ''
@@ -277,13 +287,12 @@ async function onFileSelected(event) {
 }
 
 onMounted(async () => {
-  const header = document.querySelector('.q-header')
-  chatPageH.value = (window.innerHeight - (header?.offsetHeight ?? 50)) + 'px'
+  recalcChatH()
+  window.addEventListener('resize', recalcChatH)
+  window.visualViewport?.addEventListener('resize', recalcChatH)
   await loadMessages()
-  // Подключаем WS как клиент (без JWT) — используем персональный токен
   connectClient(activeToken, {
     onMessage: (msg) => {
-      // Не дублируем оптимистичные сообщения
       const exists = messages.value.some(m => m.id === msg.id)
       if (!exists) {
         messages.value.push(msg)
@@ -295,6 +304,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnect()
+  window.removeEventListener('resize', recalcChatH)
+  window.visualViewport?.removeEventListener('resize', recalcChatH)
   if (typingTimer) clearTimeout(typingTimer)
 })
 </script>

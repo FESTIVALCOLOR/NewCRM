@@ -226,11 +226,11 @@
     </div>
 
     <!-- Диалог участников -->
-    <q-dialog v-model="showMembers">
-      <q-card style="min-width: 300px">
-        <q-card-section class="row items-center">
+    <q-dialog v-model="showMembers" @show="onMembersDialogOpen">
+      <q-card style="min-width: 300px; max-width: 400px; width: 90vw">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
-            Участники чата
+            Участники
           </div>
           <q-space />
           <q-btn
@@ -241,15 +241,16 @@
             icon="close"
           />
         </q-card-section>
-        <q-separator />
-        <q-list>
+
+        <!-- Текущие участники -->
+        <q-list dense>
           <q-item v-for="m in chatMembers" :key="m.id">
             <q-item-section avatar>
               <q-avatar
                 :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
                 :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
                 icon="person"
-                size="32px"
+                size="28px"
               />
             </q-item-section>
             <q-item-section>
@@ -267,6 +268,55 @@
             </q-item-section>
           </q-item>
         </q-list>
+
+        <!-- Секция добавления сотрудников карточки -->
+        <template v-if="cardEmployees !== null">
+          <q-separator class="q-mt-sm" />
+          <q-card-section class="q-py-sm">
+            <div class="text-caption text-grey-6 q-mb-xs">
+              Сотрудники карточки — не в чате
+            </div>
+            <div v-if="loadingCardEmployees" class="text-center q-py-sm">
+              <q-spinner size="20px" color="grey" />
+            </div>
+            <div v-else-if="!cardEmployees.length" class="text-caption text-grey q-py-xs">
+              Все сотрудники карточки уже в чате
+            </div>
+            <q-list v-else dense>
+              <q-item
+                v-for="emp in cardEmployees"
+                :key="emp.id"
+                clickable
+                class="rounded-borders"
+                @click="addMemberToChat(emp)"
+              >
+                <q-item-section avatar>
+                  <q-avatar color="grey-3" text-color="grey-8" icon="person_add" size="28px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ emp.name }}</q-item-label>
+                  <q-item-label caption>
+                    {{ emp.role }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-spinner v-if="addingMemberId === emp.id" size="18px" color="blue-6" />
+                  <q-icon v-else name="add_circle_outline" color="blue-6" size="20px" />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card-section>
+        </template>
+
+        <q-card-actions align="right" class="q-pt-none">
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            label="Закрыть"
+            color="grey-7"
+          />
+        </q-card-actions>
       </q-card>
     </q-dialog>
   </div>
@@ -308,6 +358,10 @@ const forwardingMsgId = ref(null)
 const uploadProgress = ref(0)
 const showMembers = ref(false)
 const chatMembers = ref([])
+// null = секция не показывалась; [] = загружено, но все уже в чате
+const cardEmployees = ref(null)
+const loadingCardEmployees = ref(false)
+const addingMemberId = ref(null)
 
 function recalcHeight() {
   // Двойной requestAnimationFrame — ждём стабилизации layout
@@ -319,7 +373,8 @@ function recalcHeight() {
       // Учитываем нижнюю панель навигации
       const footer = document.querySelector('.q-footer')
       const footerH = footer ? footer.offsetHeight : 0
-      const h = Math.max(320, window.innerHeight - topOffset - footerH - 4)
+      const vh = window.visualViewport?.height ?? window.innerHeight
+      const h = Math.max(320, vh - topOffset - footerH - 4)
       containerHeight.value = h + 'px'
     })
   })
@@ -416,6 +471,64 @@ async function loadClientChat(cardId) {
   }
 }
 
+// Открытие диалога участников — сразу грузим сотрудников карточки
+async function onMembersDialogOpen() {
+  if (!props.cardId || !chat.value) return
+  cardEmployees.value = null
+  loadingCardEmployees.value = true
+  try {
+    const { data } = await api.get(`/api/v1/crm/cards/${props.cardId}`)
+    const emps = new Map()
+    // Менеджеры и другие роли из полей карточки
+    const roles = [
+      { id: data.senior_manager_id, name: data.senior_manager_name, role: 'Старший менеджер' },
+      { id: data.sdp_id, name: data.sdp_name, role: 'СДП' },
+      { id: data.gap_id, name: data.gap_name, role: 'ГАП' },
+      { id: data.manager_id, name: data.manager_name, role: 'Менеджер' },
+      { id: data.surveyor_id, name: data.surveyor_name, role: 'Замерщик' },
+    ]
+    for (const r of roles) {
+      if (r.id && r.name) emps.set(r.id, { name: r.name, role: r.role })
+    }
+    // Исполнители этапов
+    for (const se of (data.stage_executors || [])) {
+      if (se.executor_id && se.executor_name) {
+        emps.set(se.executor_id, { name: se.executor_name, role: se.stage_name || 'Исполнитель' })
+      }
+    }
+    // Исключаем тех, кто уже в чате
+    const memberIds = new Set(chatMembers.value.filter(m => m.employee_id).map(m => m.employee_id))
+    cardEmployees.value = [...emps.entries()]
+      .filter(([id]) => !memberIds.has(id))
+      .map(([id, info]) => ({ id, name: info.name, role: info.role }))
+  } catch {
+    cardEmployees.value = []
+  } finally {
+    loadingCardEmployees.value = false
+  }
+}
+
+async function addMemberToChat(emp) {
+  if (addingMemberId.value || !chat.value) return
+  addingMemberId.value = emp.id
+  try {
+    const formData = new FormData()
+    formData.append('employee_id', emp.id)
+    await api.post(`/api/v1/chats/${chat.value.id}/members`, formData)
+    // Обновляем список участников чата
+    const { data } = await api.get(`/api/v1/chats/${chat.value.id}`)
+    chatMembers.value = data.members || []
+    // Убираем из списка доступных
+    cardEmployees.value = cardEmployees.value.filter(e => e.id !== emp.id)
+    $q.notify({ type: 'positive', message: `${emp.name} добавлен в чат` })
+  } catch (e) {
+    const msg = e.response?.data?.detail || 'Ошибка добавления'
+    $q.notify({ type: 'negative', message: String(msg) })
+  } finally {
+    addingMemberId.value = null
+  }
+}
+
 async function forwardToClient(msg) {
   if (!clientChatId.value || forwardingMsgId.value) return
   forwardingMsgId.value = msg.id
@@ -506,6 +619,7 @@ onMounted(() => {
   nextTick(() => {
     recalcHeight()
     window.addEventListener('resize', recalcHeight)
+    window.visualViewport?.addEventListener('resize', recalcHeight)
     document.addEventListener('scroll', recalcHeight, true)
   })
 })
@@ -521,6 +635,7 @@ watch(chat, (newVal) => {
 onUnmounted(() => {
   disconnect()
   window.removeEventListener('resize', recalcHeight)
+  window.visualViewport?.removeEventListener('resize', recalcHeight)
   document.removeEventListener('scroll', recalcHeight, true)
   if (typingTimer) clearTimeout(typingTimer)
 })
