@@ -131,7 +131,14 @@
               </q-chip>
             </div>
 
-            <template v-if="msg.message_type === 'image'">
+            <!-- Загрузка файла (оптимистичное сообщение) -->
+            <template v-if="msg._uploading">
+              <div class="row items-center q-gutter-xs">
+                <q-spinner size="14px" color="grey-5" />
+                <span class="text-caption text-grey-6" style="word-break: break-word">{{ msg.file_name }}…</span>
+              </div>
+            </template>
+            <template v-else-if="msg.message_type === 'image'">
               <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                 <img
                   v-if="imgStreamUrl(msg)"
@@ -622,23 +629,48 @@ function pickFile() {
 async function onFileSelected(event) {
   const file = event.target.files?.[0]
   if (!file || !chat.value) return
-  try {
-    const ext = file.name.split('.').pop()?.toLowerCase() || ''
-    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
-    const msgType = imageExts.includes(ext) ? 'image' : 'file'
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+  const msgType = imageExts.includes(ext) ? 'image' : 'file'
 
+  // Оптимистичное сообщение — показываем сразу
+  const tempId = `temp_${Date.now()}`
+  messages.value.push({
+    id: tempId,
+    sender_employee_id: authStore.employee?.id,
+    sender_display_name: authStore.employee?.name || 'Вы',
+    message_type: msgType,
+    content: null,
+    file_url: '',
+    file_name: file.name,
+    file_size: file.size,
+    yandex_path: null,
+    is_deleted: false,
+    created_at: new Date().toISOString(),
+    _uploading: true,
+  })
+  scrollToBottom()
+
+  try {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('message_type', msgType)
 
-    uploadProgress.value = 1 // показать прогресс-бар
-    await api.post(`/api/v1/chats/${chat.value.id}/files`, formData, {
+    uploadProgress.value = 1
+    const { data: savedMsg } = await api.post(`/api/v1/chats/${chat.value.id}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
       },
     })
+    // Заменяем временное сообщение реальным (или удаляем если WS уже добавил)
+    const idx = messages.value.findIndex(m => m.id === tempId)
+    if (idx !== -1) {
+      const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
+      alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
+    }
   } catch {
+    messages.value = messages.value.filter(m => m.id !== tempId)
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
   } finally {
     uploadProgress.value = 0
