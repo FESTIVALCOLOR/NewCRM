@@ -388,7 +388,13 @@ def create_invite_link(db: Session, chat_id: int) -> InternalChatMember:
 
 
 def register_guest(db: Session, guest_token: str, name: str, phone: str) -> InternalChatMember:
-    """Первый вход гостя по ссылке — сохранить имя и телефон."""
+    """Первый вход гостя по ссылке — сохранить имя и телефон.
+
+    Поддерживает два сценария:
+    1. guest_token — персональный токен гостя (InternalChatMember.guest_access_token)
+    2. guest_token — основная ссылка чата (InternalChat.client_access_token)
+       В этом случае создаётся новый участник с уникальным персональным токеном.
+    """
     member = (
         db.query(InternalChatMember)
         .filter(
@@ -397,14 +403,35 @@ def register_guest(db: Session, guest_token: str, name: str, phone: str) -> Inte
         )
         .first()
     )
+
     if not member:
-        raise ValueError("Ссылка недействительна или устарела")
+        # Проверяем: возможно, это основная ссылка чата
+        chat = (
+            db.query(InternalChat)
+            .filter(
+                InternalChat.client_access_token == guest_token,
+                InternalChat.is_active == True,
+            )
+            .first()
+        )
+        if not chat:
+            raise ValueError("Ссылка недействительна или устарела")
+        # Создаём нового участника-гостя с уникальным персональным токеном
+        member = InternalChatMember(
+            chat_id=chat.id,
+            member_type="client_guest",
+            guest_access_token=str(uuid.uuid4()),
+            is_active=True,
+        )
+        db.add(member)
+        db.flush()
+
     member.guest_name = name
     member.guest_phone = phone
     db.commit()
     db.refresh(member)
-    # Системное сообщение в чат
-    _add_system_message(db, db.query(InternalChat).filter(InternalChat.id == member.chat_id).first(), f"{name} присоединился к чату")
+    chat_obj = db.query(InternalChat).filter(InternalChat.id == member.chat_id).first()
+    _add_system_message(db, chat_obj, f"{name} присоединился к чату")
     db.commit()
     return member
 
@@ -594,8 +621,13 @@ def get_chat_by_card(db: Session, crm_card_id: int, chat_type: str) -> Optional[
 
 
 def get_chat_by_token(db: Session, token: str) -> Optional[InternalChat]:
-    """Найти клиентский чат по токену доступа."""
-    return (
+    """Найти клиентский чат по токену.
+
+    Поддерживает два типа токенов:
+    - InternalChat.client_access_token  — основная ссылка чата
+    - InternalChatMember.guest_access_token — персональный токен гостя
+    """
+    chat = (
         db.query(InternalChat)
         .filter(
             InternalChat.client_access_token == token,
@@ -603,6 +635,20 @@ def get_chat_by_token(db: Session, token: str) -> Optional[InternalChat]:
         )
         .first()
     )
+    if chat:
+        return chat
+    # Fallback: токен принадлежит конкретному гостю
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.guest_access_token == token,
+            InternalChatMember.is_active == True,
+        )
+        .first()
+    )
+    if member:
+        return db.query(InternalChat).filter(InternalChat.id == member.chat_id, InternalChat.is_active == True).first()
+    return None
 
 
 def get_guest_by_token(db: Session, guest_token: str) -> Optional[InternalChatMember]:

@@ -109,6 +109,7 @@ def client_register(
         "status": "ok",
         "guest_name": member.guest_name,
         "chat_id": member.chat_id,
+        "access_token": member.guest_access_token,  # персональный токен для повторных входов
     }
 
 

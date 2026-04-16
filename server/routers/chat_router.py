@@ -43,6 +43,7 @@ from permissions import require_permission
 from schemas import (
     ChatInviteLinkResponse,
     FileUploadToDataRequest,
+    ForwardRequest,
     GuestRegistration,
     InternalChatCreate,
     InternalChatDetailResponse,
@@ -438,7 +439,7 @@ def list_links(
 async def forward_message(
     chat_id: int,
     target_chat_id: int,
-    msg_id: int = Form(...),
+    data: ForwardRequest,
     current_user: Employee = Depends(require_permission("chat.employee.send")),
     db: Session = Depends(get_db),
 ):
@@ -451,7 +452,7 @@ async def forward_message(
     src_msg = (
         db.query(InternalChatMessage)
         .filter(
-            InternalChatMessage.id == msg_id,
+            InternalChatMessage.id == data.msg_id,
             InternalChatMessage.chat_id == chat_id,
             InternalChatMessage.is_deleted == False,
         )

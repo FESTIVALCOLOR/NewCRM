@@ -1,5 +1,5 @@
 <template>
-  <q-page class="column" style="height: 100vh; overflow: hidden">
+  <q-page class="column" :style="{ height: chatPageH, overflow: 'hidden' }">
     <!-- Шапка -->
     <div
       class="row items-center q-px-md q-py-sm bg-white"
@@ -66,9 +66,21 @@
               {{ msg.sender_display_name }}
             </div>
 
-            <template v-if="msg.message_type === 'file' || msg.message_type === 'image'">
+            <template v-if="msg.message_type === 'image'">
+              <a :href="msg.file_url" target="_blank">
+                <img
+                  :src="msg.file_url"
+                  style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
+                  @error="$event.target.style.display='none'"
+                >
+              </a>
+              <div v-if="msg.file_name" class="text-caption q-mt-xs" style="color: #888">
+                {{ msg.file_name }}
+              </div>
+            </template>
+            <template v-else-if="msg.message_type === 'file'">
               <div class="row items-center q-gutter-xs">
-                <q-icon :name="msg.message_type === 'image' ? 'image' : 'attach_file'" size="20px" />
+                <q-icon name="attach_file" size="20px" />
                 <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 200px; color: inherit">
                   {{ msg.file_name || 'Файл' }}
                 </a>
@@ -139,7 +151,10 @@ import axios from 'axios'
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
-const accessToken = route.params.token  // UUID из URL /c/{token}
+const mainToken = route.params.token  // UUID из URL /c/{token}
+// Персональный токен гостя (создаётся при регистрации, сохраняется в localStorage)
+const memberToken = localStorage.getItem(`chat_member_token_${mainToken}`) || null
+const activeToken = memberToken || mainToken  // токен для API/WS
 
 const { isConnected: wsConnected, connectClient, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers, messages: wsMessages } = useChatWebSocket()
 
@@ -149,7 +164,8 @@ const inputText = ref('')
 const loadingMessages = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
-const clientName = sessionStorage.getItem('client_name') || 'Клиент'
+const clientName = localStorage.getItem('client_name') || 'Клиент'
+const chatPageH = ref(window.innerHeight + 'px')
 
 const typingText = computed(() => {
   if (!typingUsers.value.length) return ''
@@ -159,8 +175,9 @@ const typingText = computed(() => {
 })
 
 function isOwn(msg) {
-  // Сообщение принадлежит этому клиенту — по guestToken совпадению
-  return msg.sender_guest_token === accessToken
+  // Сравниваем по персональному токену (после регистрации) или основной ссылке
+  if (memberToken) return msg.sender_guest_token === memberToken
+  return msg.sender_guest_token === mainToken
 }
 
 function formatTime(dt) {
@@ -178,10 +195,10 @@ async function loadMessages() {
   loadingMessages.value = true
   try {
     const baseURL = window.location.origin
-    const { data } = await axios.get(`${baseURL}/api/v1/client-chat/${accessToken}`)
-    if (data.requires_registration) {
-      // Клиент не зарегистрирован → на страницу регистрации
-      router.replace({ name: 'client-register', params: { token: accessToken } })
+    const { data } = await axios.get(`${baseURL}/api/v1/client-chat/${activeToken}`)
+    if (data.requires_registration && !memberToken) {
+      // Не зарегистрирован и нет сохранённого токена → на страницу регистрации
+      router.replace({ name: 'client-register', params: { token: mainToken } })
       return
     }
     chatTitle.value = data.title || 'Чат с бюро'
@@ -211,7 +228,7 @@ function sendText() {
     id: Date.now(),
     message_type: 'text',
     content: text,
-    sender_guest_token: accessToken,
+    sender_guest_token: memberToken || mainToken,
     sender_display_name: clientName,
     created_at: new Date().toISOString(),
   })
@@ -237,7 +254,7 @@ async function onFileSelected(event) {
     const baseURL = window.location.origin
     const formData = new FormData()
     formData.append('file', file)
-    await axios.post(`${baseURL}/api/v1/client-chat/${accessToken}/files`, formData)
+    await axios.post(`${baseURL}/api/v1/client-chat/${activeToken}/files`, formData)
     $q.notify({ type: 'positive', message: 'Файл отправлен' })
   } catch (e) {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
@@ -247,9 +264,11 @@ async function onFileSelected(event) {
 }
 
 onMounted(async () => {
+  const header = document.querySelector('.q-header')
+  chatPageH.value = (window.innerHeight - (header?.offsetHeight ?? 50)) + 'px'
   await loadMessages()
-  // Подключаем WS как клиент (без JWT)
-  connectClient(accessToken, {
+  // Подключаем WS как клиент (без JWT) — используем персональный токен
+  connectClient(activeToken, {
     onMessage: (msg) => {
       // Не дублируем оптимистичные сообщения
       const exists = messages.value.some(m => m.id === msg.id)

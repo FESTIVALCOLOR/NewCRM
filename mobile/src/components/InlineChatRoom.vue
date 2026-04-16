@@ -108,9 +108,21 @@
               </q-chip>
             </div>
 
-            <template v-if="msg.message_type === 'file' || msg.message_type === 'image'">
+            <template v-if="msg.message_type === 'image'">
+              <a :href="msg.file_url" target="_blank">
+                <img
+                  :src="msg.file_url"
+                  style="max-width: 100%; max-height: 180px; border-radius: 6px; display: block; cursor: pointer"
+                  @error="$event.target.style.display='none'"
+                >
+              </a>
+              <div v-if="msg.file_name" class="text-caption q-mt-xs" style="color: #888; font-size: 11px">
+                {{ msg.file_name }}
+              </div>
+            </template>
+            <template v-else-if="msg.message_type === 'file'">
               <div class="row items-center q-gutter-xs">
-                <q-icon :name="msg.message_type === 'image' ? 'image' : 'attach_file'" size="18px" />
+                <q-icon name="attach_file" size="18px" />
                 <a
                   :href="msg.file_url"
                   target="_blank"
@@ -238,7 +250,9 @@ const forwardingMsgId = ref(null)
 function recalcHeight() {
   if (!chatContainerEl.value) return
   const rect = chatContainerEl.value.getBoundingClientRect()
-  const h = Math.max(320, window.innerHeight - rect.top - 8)
+  // Если элемент выше видимой области — clamp top к 0
+  const topOffset = Math.max(0, rect.top)
+  const h = Math.max(320, window.innerHeight - topOffset - 8)
   containerHeight.value = h + 'px'
 }
 
@@ -336,13 +350,12 @@ async function forwardToClient(msg) {
   if (!clientChatId.value || forwardingMsgId.value) return
   forwardingMsgId.value = msg.id
   try {
-    const formData = new FormData()
-    formData.append('msg_id', msg.id)
-    await api.post(`/api/v1/chats/${chat.value.id}/forward/${clientChatId.value}`, formData)
+    await api.post(`/api/v1/chats/${chat.value.id}/forward/${clientChatId.value}`, { msg_id: msg.id })
     $q.notify({ type: 'positive', message: 'Переслано в чат клиента' })
   } catch (e) {
-    const detail = e.response?.data?.detail || 'Ошибка пересылки'
-    $q.notify({ type: 'negative', message: detail })
+    const raw = e.response?.data?.detail
+    const message = Array.isArray(raw) ? raw.map(d => d.msg || String(d)).join('; ') : (raw || 'Ошибка пересылки')
+    $q.notify({ type: 'negative', message: String(message) })
   } finally {
     forwardingMsgId.value = null
   }
@@ -412,6 +425,7 @@ onMounted(() => {
   nextTick(() => {
     recalcHeight()
     window.addEventListener('resize', recalcHeight)
+    document.addEventListener('scroll', recalcHeight, true)
   })
 })
 
@@ -421,6 +435,7 @@ watch(chat, () => nextTick(recalcHeight))
 onUnmounted(() => {
   disconnect()
   window.removeEventListener('resize', recalcHeight)
+  document.removeEventListener('scroll', recalcHeight, true)
   if (typingTimer) clearTimeout(typingTimer)
 })
 </script>

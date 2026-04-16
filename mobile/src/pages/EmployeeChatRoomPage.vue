@@ -1,5 +1,5 @@
 <template>
-  <q-page class="column" style="height: 100vh; overflow: hidden">
+  <q-page class="column" :style="{ height: chatPageH, overflow: 'hidden' }">
     <!-- Шапка -->
     <div class="row items-center q-px-md q-py-sm bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
       <q-btn
@@ -81,12 +81,21 @@
             </div>
 
             <!-- Файл -->
-            <template v-if="msg.message_type === 'file' || msg.message_type === 'image'">
+            <template v-if="msg.message_type === 'image'">
+              <a :href="msg.file_url" target="_blank">
+                <img
+                  :src="msg.file_url"
+                  style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
+                  @error="$event.target.style.display='none'"
+                >
+              </a>
+              <div v-if="msg.file_name" class="text-caption q-mt-xs" style="color: #888">
+                {{ msg.file_name }}
+              </div>
+            </template>
+            <template v-else-if="msg.message_type === 'file'">
               <div class="row items-center q-gutter-xs">
-                <q-icon
-                  :name="msg.message_type === 'image' ? 'image' : 'attach_file'"
-                  size="20px"
-                />
+                <q-icon name="attach_file" size="20px" />
                 <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 180px; color: inherit">
                   {{ msg.file_name || 'Файл' }}
                 </a>
@@ -262,6 +271,7 @@ const messagesEl = ref(null)
 const fileInput = ref(null)
 const clientChatId = ref(null)
 const forwardingMsgId = ref(null)
+const chatPageH = ref(window.innerHeight + 'px')
 
 let typingTimer = null
 
@@ -334,13 +344,12 @@ async function forwardToClient(msg) {
   if (!clientChatId.value || forwardingMsgId.value) return
   forwardingMsgId.value = msg.id
   try {
-    const formData = new FormData()
-    formData.append('msg_id', msg.id)
-    await api.post(`/api/v1/chats/${chatId}/forward/${clientChatId.value}`, formData)
+    await api.post(`/api/v1/chats/${chatId}/forward/${clientChatId.value}`, { msg_id: msg.id })
     $q.notify({ type: 'positive', message: 'Переслано в чат клиента' })
   } catch (e) {
-    const detail = e.response?.data?.detail || 'Ошибка пересылки'
-    $q.notify({ type: 'negative', message: detail })
+    const raw = e.response?.data?.detail
+    const message = Array.isArray(raw) ? raw.map(d => d.msg || String(d)).join('; ') : (raw || 'Ошибка пересылки')
+    $q.notify({ type: 'negative', message: String(message) })
   } finally {
     forwardingMsgId.value = null
   }
@@ -388,6 +397,8 @@ function playVoice(url) {
 }
 
 onMounted(() => {
+  const header = document.querySelector('.q-header')
+  chatPageH.value = (window.innerHeight - (header?.offsetHeight ?? 44)) + 'px'
   loadMessages()
   const token = localStorage.getItem('access_token')
   if (token) {

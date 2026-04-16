@@ -1,5 +1,5 @@
 <template>
-  <q-page class="column" style="height: 100vh; overflow: hidden">
+  <q-page class="column" :style="{ height: chatPageH, overflow: 'hidden' }">
     <!-- Шапка -->
     <div class="row items-center q-px-md q-py-sm bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0">
       <q-btn
@@ -99,9 +99,21 @@
               </q-chip>
             </div>
 
-            <template v-if="msg.message_type === 'file' || msg.message_type === 'image'">
+            <template v-if="msg.message_type === 'image'">
+              <a :href="msg.file_url" target="_blank">
+                <img
+                  :src="msg.file_url"
+                  style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
+                  @error="$event.target.style.display='none'"
+                >
+              </a>
+              <div v-if="msg.file_name" class="text-caption q-mt-xs" style="color: #888">
+                {{ msg.file_name }}
+              </div>
+            </template>
+            <template v-else-if="msg.message_type === 'file'">
               <div class="row items-center q-gutter-xs">
-                <q-icon :name="msg.message_type === 'image' ? 'image' : 'attach_file'" size="20px" />
+                <q-icon name="attach_file" size="20px" />
                 <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 200px; color: inherit">
                   {{ msg.file_name || 'Файл' }}
                 </a>
@@ -304,6 +316,7 @@ const clientToken = ref('')
 const showScriptDialog = ref(false)
 const showInviteMenu = ref(false)
 const scriptText = ref('')
+const chatPageH = ref(window.innerHeight + 'px')
 
 const canManage = computed(() => can('chat.client.manage'))
 const canScript = computed(() => can('chat.client.send_script'))
@@ -450,6 +463,8 @@ function copyText(text) {
 }
 
 onMounted(() => {
+  const header = document.querySelector('.q-header')
+  chatPageH.value = (window.innerHeight - (header?.offsetHeight ?? 44)) + 'px'
   loadMessages()
   const token = localStorage.getItem('access_token')
   if (token) {

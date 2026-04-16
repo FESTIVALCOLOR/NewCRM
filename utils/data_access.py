@@ -926,6 +926,12 @@ class DataAccess(QObject):
                     pass
         elif self.api_client:
             self._queue_operation("update", "crm_card", card_id, {"column_name": column, "_action": "move"})
+        else:
+            # Локальный режим (нет api_client) — обновляем только БД
+            try:
+                self.db.update_crm_card_column(card_id, column)
+            except Exception:
+                pass
 
         return True
 

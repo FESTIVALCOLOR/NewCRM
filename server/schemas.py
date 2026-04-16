@@ -1533,6 +1533,12 @@ class InternalMessageCreate(BaseModel):
     message_type: str = "text"
 
 
+class ForwardRequest(BaseModel):
+    """Пересылка сообщения в другой чат"""
+
+    msg_id: int
+
+
 class GuestRegistration(BaseModel):
     """Регистрация гостя (клиента) при первом входе по ссылке"""
 

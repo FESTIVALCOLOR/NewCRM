@@ -99,13 +99,15 @@ async function register() {
   loading.value = true
   try {
     const baseURL = window.location.origin
-    await axios.post(`${baseURL}/api/v1/client-chat/${accessToken}/register`, {
+    const resp = await axios.post(`${baseURL}/api/v1/client-chat/${accessToken}/register`, {
       guest_name: name.value.trim(),
       guest_phone: phone.value.trim(),
     })
-    sessionStorage.setItem('client_name', name.value.trim())
-    sessionStorage.setItem('client_phone', phone.value.trim())
-    sessionStorage.setItem('client_token', accessToken)
+    // Сохраняем персональный токен гостя для повторных входов по той же ссылке
+    if (resp.data.access_token) {
+      localStorage.setItem(`chat_member_token_${accessToken}`, resp.data.access_token)
+    }
+    localStorage.setItem('client_name', name.value.trim())
     router.replace({ name: 'client-chat', params: { token: accessToken } })
   } catch (e) {
     const detail = e.response?.data?.detail
