@@ -181,11 +181,8 @@ async def client_upload_file(
     if len(file_bytes) > MAX_FILE_SIZE_MB * 1024 * 1024:
         raise HTTPException(413, f"Файл превышает {MAX_FILE_SIZE_MB} МБ")
 
-    if not chat.yandex_folder_path:
-        raise HTTPException(503, "Папка ЯД для чата не настроена")
-
+    folder_clean = chat.yandex_folder_path.replace("disk:", "").rstrip("/") if chat.yandex_folder_path else f"/CRM/Chats/{chat.id}"
     safe_name = os.path.basename(file.filename or "unnamed")
-    folder_clean = chat.yandex_folder_path.replace("disk:", "").rstrip("/")
     yd_path = f"{folder_clean}/{safe_name}"
 
     try:

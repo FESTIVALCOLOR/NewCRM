@@ -290,12 +290,9 @@ async def upload_file(
     if len(file_bytes) > MAX_FILE_SIZE_MB * 1024 * 1024:
         raise HTTPException(413, f"Файл превышает {MAX_FILE_SIZE_MB} МБ")
 
-    if not chat.yandex_folder_path:
-        raise HTTPException(503, "Папка ЯД для чата не настроена")
-
     # Путь: disk:{contract_folder}/Чат .../filename
     safe_name = os.path.basename(file.filename or "unnamed")
-    folder_clean = chat.yandex_folder_path.replace("disk:", "").rstrip("/")
+    folder_clean = chat.yandex_folder_path.replace("disk:", "").rstrip("/") if chat.yandex_folder_path else f"/CRM/Chats/{chat_id}"
     yd_path = f"{folder_clean}/{safe_name}"
 
     try:
@@ -461,13 +458,14 @@ async def forward_message(
     if not src_msg:
         raise HTTPException(404, "Сообщение не найдено")
 
-    fwd_prefix = f"[Переслано от {src_msg.sender_display_name}]\n"
+    fwd_display = f"{_get_employee_display_name(current_user)} (переслано)"
     if src_msg.message_type == "text":
         new_msg = add_text_message(
             db,
             target_chat_id,
-            content=fwd_prefix + (src_msg.content or ""),
+            content=src_msg.content or "",
             sender_employee_id=current_user.id,
+            sender_display_name=fwd_display,
         )
     else:
         new_msg = add_file_message(
@@ -479,7 +477,7 @@ async def forward_message(
             file_size=src_msg.file_size,
             message_type=src_msg.message_type,
             sender_employee_id=current_user.id,
-            sender_display_name=f"{_get_employee_display_name(current_user)} (переслано)",
+            sender_display_name=fwd_display,
         )
 
     await ws_manager.broadcast(

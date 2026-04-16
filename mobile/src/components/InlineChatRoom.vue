@@ -27,25 +27,40 @@
 
   <!-- Чат существует -->
   <div v-else ref="chatContainerEl" class="column" :style="{ height: containerHeight, minHeight: '320px' }">
-    <!-- Панель: ссылка для клиента -->
-    <div
-      v-if="chatType === 'client' && clientLink"
-      class="row items-center q-px-md q-py-xs"
-      style="background: #E8F5E9; border-bottom: 1px solid #C8E6C9; flex-shrink: 0"
-    >
-      <q-icon name="link" size="14px" color="green-7" class="q-mr-xs" />
-      <span class="text-caption text-green-8" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-        {{ clientLink }}
-      </span>
+    <!-- Шапка чата: ссылка и участники -->
+    <div class="row items-center q-px-md q-py-xs bg-white" style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; min-height: 36px">
+      <!-- Ссылка для клиента -->
+      <template v-if="chatType === 'client' && clientLink">
+        <q-icon name="link" size="14px" color="green-7" class="q-mr-xs" />
+        <span class="text-caption text-green-8" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+          {{ clientLink }}
+        </span>
+        <q-btn
+          flat
+          dense
+          size="xs"
+          icon="content_copy"
+          color="green-7"
+          @click="copyClientLink"
+        >
+          <q-tooltip>Копировать ссылку</q-tooltip>
+        </q-btn>
+      </template>
+      <template v-else>
+        <span class="text-caption text-grey-6" style="flex: 1">
+          {{ chatType === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+        </span>
+      </template>
+      <!-- Кнопка участников -->
       <q-btn
         flat
         dense
         size="xs"
-        icon="content_copy"
-        color="green-7"
-        @click="copyClientLink"
+        icon="people"
+        color="grey-7"
+        @click="showMembers = true"
       >
-        <q-tooltip>Копировать ссылку</q-tooltip>
+        <q-tooltip>Участники</q-tooltip>
       </q-btn>
     </div>
 
@@ -57,6 +72,14 @@
     >
       {{ typingText }}
     </div>
+
+    <!-- Прогресс загрузки файла -->
+    <q-linear-progress
+      v-if="uploadProgress > 0 && uploadProgress < 100"
+      :value="uploadProgress / 100"
+      color="blue-5"
+      style="flex-shrink: 0"
+    />
 
     <!-- Список сообщений -->
     <div
@@ -143,25 +166,14 @@
             <!-- Время + кнопка переслать клиенту (только в чате сотрудников) -->
             <div class="row items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-between'">
               <q-btn
-                v-if="chatType === 'employee' && clientChatId && !isOwn(msg)"
+                v-if="chatType === 'employee' && clientChatId"
                 flat
                 dense
                 size="xs"
                 icon="forward"
-                color="blue-5"
+                color="blue-6"
                 :loading="forwardingMsgId === msg.id"
-                @click="forwardToClient(msg)"
-              >
-                <q-tooltip>Переслать клиенту</q-tooltip>
-              </q-btn>
-              <q-btn
-                v-if="chatType === 'employee' && clientChatId && isOwn(msg)"
-                flat
-                dense
-                size="xs"
-                icon="forward"
-                color="blue-5"
-                :loading="forwardingMsgId === msg.id"
+                style="border: 1px solid #90CAF9; border-radius: 4px; padding: 1px 3px; min-height: 20px"
                 @click="forwardToClient(msg)"
               >
                 <q-tooltip>Переслать клиенту</q-tooltip>
@@ -184,6 +196,7 @@
           dense
           size="sm"
           icon="attach_file"
+          :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
@@ -211,6 +224,51 @@
         />
       </div>
     </div>
+
+    <!-- Диалог участников -->
+    <q-dialog v-model="showMembers">
+      <q-card style="min-width: 300px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">
+            Участники чата
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-separator />
+        <q-list>
+          <q-item v-for="m in chatMembers" :key="m.id">
+            <q-item-section avatar>
+              <q-avatar
+                :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
+                :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
+                icon="person"
+                size="32px"
+              />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ m.display_name || m.guest_name || `#${m.id}` }}</q-item-label>
+              <q-item-label caption>
+                {{ m.role_in_project || (m.member_type === 'employee' ? 'Сотрудник' : 'Клиент') }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!chatMembers.length">
+            <q-item-section>
+              <q-item-label class="text-grey">
+                Нет участников
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -247,16 +305,21 @@ const chatContainerEl = ref(null)
 const containerHeight = ref('calc(100vh - 270px)')
 const clientChatId = ref(null)
 const forwardingMsgId = ref(null)
+const uploadProgress = ref(0)
+const showMembers = ref(false)
+const chatMembers = ref([])
 
 function recalcHeight() {
-  // Используем requestAnimationFrame дважды — ждём когда layout стабилизируется
+  // Двойной requestAnimationFrame — ждём стабилизации layout
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       if (!chatContainerEl.value) return
       const rect = chatContainerEl.value.getBoundingClientRect()
-      // Если элемент выше видимой области — clamp top к 0
       const topOffset = Math.max(0, rect.top)
-      const h = Math.max(320, window.innerHeight - topOffset - 8)
+      // Учитываем нижнюю панель навигации
+      const footer = document.querySelector('.q-footer')
+      const footerH = footer ? footer.offsetHeight : 0
+      const h = Math.max(320, window.innerHeight - topOffset - footerH - 4)
       containerHeight.value = h + 'px'
     })
   })
@@ -312,6 +375,7 @@ async function openChat(chatId) {
     const { data } = await api.get(`/api/v1/chats/${chatId}`)
     chat.value = data
     messages.value = data.messages || []
+    chatMembers.value = data.members || []
     scrollToBottom()
 
     // Для чата сотрудников загрузить клиентский чат (для пересылки)
@@ -407,14 +471,25 @@ async function onFileSelected(event) {
   const file = event.target.files?.[0]
   if (!file || !chat.value) return
   try {
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+    const msgType = imageExts.includes(ext) ? 'image' : 'file'
+
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('message_type', msgType)
+
+    uploadProgress.value = 1 // показать прогресс-бар
     await api.post(`/api/v1/chats/${chat.value.id}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
+      },
     })
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
   } finally {
+    uploadProgress.value = 0
     event.target.value = ''
   }
 }
@@ -435,8 +510,7 @@ onMounted(() => {
   })
 })
 
-// Пересчитываем высоту когда чат загружается (переход из skeleton → контент)
-// Несколько триггеров — элемент может оказаться в финальной позиции не сразу
+// Пересчитываем высоту когда чат загружается
 watch(chat, (newVal) => {
   if (!newVal) return
   nextTick(recalcHeight)

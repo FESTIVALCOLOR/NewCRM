@@ -44,6 +44,17 @@
       >
         <q-tooltip>Отправить скрипт</q-tooltip>
       </q-btn>
+
+      <!-- Кнопка: участники -->
+      <q-btn
+        flat
+        round
+        dense
+        icon="people"
+        @click="showMembers = true"
+      >
+        <q-tooltip>Участники</q-tooltip>
+      </q-btn>
     </div>
 
     <!-- Список сообщений -->
@@ -134,6 +145,14 @@
       </template>
     </div>
 
+    <!-- Прогресс загрузки файла -->
+    <q-linear-progress
+      v-if="uploadProgress > 0 && uploadProgress < 100"
+      :value="uploadProgress / 100"
+      color="green-6"
+      style="flex-shrink: 0"
+    />
+
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
       <div class="row items-center q-gutter-xs">
@@ -142,6 +161,7 @@
           round
           dense
           icon="attach_file"
+          :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
@@ -286,6 +306,51 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог участников -->
+    <q-dialog v-model="showMembers">
+      <q-card style="min-width: 300px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">
+            Участники чата
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-separator />
+        <q-list>
+          <q-item v-for="m in members" :key="m.id">
+            <q-item-section avatar>
+              <q-avatar
+                :color="m.member_type === 'employee' ? 'blue-2' : 'green-2'"
+                :text-color="m.member_type === 'employee' ? 'blue-9' : 'green-9'"
+                icon="person"
+                size="32px"
+              />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ m.display_name || m.guest_name || `#${m.id}` }}</q-item-label>
+              <q-item-label caption>
+                {{ m.role_in_project || (m.member_type === 'employee' ? 'Сотрудник' : 'Клиент') }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!members.length">
+            <q-item-section>
+              <q-item-label class="text-grey">
+                Нет участников
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -316,8 +381,10 @@ const fileInput = ref(null)
 const clientToken = ref('')
 const showScriptDialog = ref(false)
 const showInviteMenu = ref(false)
+const showMembers = ref(false)
 const scriptText = ref('')
 const chatPageH = ref(window.innerHeight + 'px')
+const uploadProgress = ref(0)
 
 const canManage = computed(() => can('chat.client.manage'))
 const canScript = computed(() => can('chat.client.send_script'))
@@ -397,7 +464,7 @@ function fillScriptVars(template) {
   if (!template) return ''
   const d = cardData.value || {}
   const clientFullName = d.client_name || ''
-  const clientFirstName = clientFullName.split(' ').filter(Boolean)[1] || clientFullName.split(' ')[0] || 'Клиент'
+  const clientFirstName = clientFullName.split(' ').filter(Boolean)[1] || clientFullName.split(' ')[0] || ''
   const vars = {
     client_name: clientFullName,
     client_first_name: clientFirstName,
@@ -415,7 +482,20 @@ function fillScriptVars(template) {
     sender_name: authStore.employee?.full_name || '',
     role_name: authStore.employee?.position || '',
   }
-  return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`)
+  // Обрабатываем построчно: строки с незаполненными переменными убираем
+  return template.split('\n').map(line => {
+    const varMatches = [...line.matchAll(/\{(\w+)\}/g)]
+    if (!varMatches.length) return line
+    let hasEmptyVar = false
+    const substituted = line.replace(/\{(\w+)\}/g, (match, key) => {
+      if (key in vars) {
+        if (!vars[key]) hasEmptyVar = true
+        return vars[key]
+      }
+      return match // Неизвестная переменная — оставляем
+    })
+    return hasEmptyVar ? null : substituted
+  }).filter(line => line !== null).join('\n').trim()
 }
 
 function sendText() {
@@ -440,14 +520,25 @@ async function onFileSelected(event) {
   const file = event.target.files?.[0]
   if (!file) return
   try {
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+    const msgType = imageExts.includes(ext) ? 'image' : 'file'
+
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('message_type', msgType)
+
+    uploadProgress.value = 1
     await api.post(`/api/v1/chats/${chatId}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
+      },
     })
   } catch (e) {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
   } finally {
+    uploadProgress.value = 0
     event.target.value = ''
   }
 }
@@ -474,14 +565,21 @@ async function sendScript() {
   const text = scriptText.value.trim()
   if (!text) return
   try {
-    await api.post(`/api/v1/chats/${chatId}/messages`, {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/messages`, {
       content: text,
       message_type: 'text',
     })
+    // Добавляем сообщение сразу из ответа REST (не ждём WS)
+    if (data && data.id) {
+      const exists = messages.value.some(m => m.id === data.id)
+      if (!exists) {
+        messages.value.push(data)
+        scrollToBottom()
+      }
+    }
     scriptText.value = ''
     selectedScript.value = null
     showScriptDialog.value = false
-    $q.notify({ type: 'positive', message: 'Скрипт отправлен' })
   } catch (e) {
     $q.notify({ type: 'negative', message: 'Ошибка отправки скрипта' })
   }
@@ -511,8 +609,11 @@ onMounted(() => {
   if (token) {
     connectEmployee(chatId, token, {
       onMessage: (msg) => {
-        messages.value.push(msg)
-        scrollToBottom()
+        const exists = messages.value.some(m => m.id === msg.id)
+        if (!exists) {
+          messages.value.push(msg)
+          scrollToBottom()
+        }
       },
     })
   }

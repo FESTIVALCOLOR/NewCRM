@@ -98,7 +98,7 @@
         <q-tab v-if="can('chat.employee.view')" name="notes" label="Чат сотрудников" />
       </q-tabs>
 
-      <q-tab-panels v-model="activeTab" animated class="bg-transparent" style="padding-bottom: 80px">
+      <q-tab-panels v-model="activeTab" animated class="bg-transparent" :style="isChatTab ? {} : { paddingBottom: '80px' }">
         <!-- ====== ВКЛАДКА 1: Исполнители и дедлайн ====== -->
         <q-tab-panel name="executors" class="q-pa-none">
           <!-- Информация -->
@@ -1786,11 +1786,19 @@ const crmSyncing = ref(false)
 const crmUploadVariation = ref(1)
 const historyFilter = ref('all')
 
+const isChatTab = computed(() => ['chat', 'notes'].includes(activeTab.value))
+
+function _setChatScrollLock(lock) {
+  const el = document.querySelector('.q-page-container')
+  if (el) el.style.overflowY = lock ? 'hidden' : ''
+}
+
 // Загрузка чата при переключении на вкладку + сохранение вкладки в URL
 watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } })
   if (tab === 'chat') chatTabVisited.value = true
   if (tab === 'notes') notesTabVisited.value = true
+  _setChatScrollLock(['chat', 'notes'].includes(tab))
 })
 
 // Диалог назначения
@@ -3364,8 +3372,15 @@ onMounted(async () => {
     await crmStore.loadCard(id)
     await loadAdditionalData(id)
     await acquireLock(id)
+    // Блокируем внешний скролл если стартуем на вкладке чата
+    if (['chat', 'notes'].includes(activeTab.value)) {
+      _setChatScrollLock(true)
+    }
   } catch (e) { console.error('Ошибка загрузки карточки:', e) }
 })
 
-onBeforeUnmount(() => { releaseLock() })
+onBeforeUnmount(() => {
+  releaseLock()
+  _setChatScrollLock(false) // Восстанавливаем скролл при уходе со страницы
+})
 </script>

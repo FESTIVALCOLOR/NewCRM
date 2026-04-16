@@ -105,6 +105,14 @@
       </template>
     </div>
 
+    <!-- Прогресс загрузки файла -->
+    <q-linear-progress
+      v-if="uploadProgress > 0 && uploadProgress < 100"
+      :value="uploadProgress / 100"
+      color="green-6"
+      style="flex-shrink: 0"
+    />
+
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
       <div class="row items-center q-gutter-xs">
@@ -113,6 +121,7 @@
           round
           dense
           icon="attach_file"
+          :loading="uploadProgress > 0 && uploadProgress < 100"
           @click="pickFile"
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
@@ -167,6 +176,7 @@ const messagesEl = ref(null)
 const fileInput = ref(null)
 const clientName = localStorage.getItem('client_name') || 'Клиент'
 const chatPageH = ref(window.innerHeight + 'px')
+const uploadProgress = ref(0)
 
 const typingText = computed(() => {
   if (!typingUsers.value.length) return ''
@@ -243,14 +253,25 @@ async function onFileSelected(event) {
   const file = event.target.files?.[0]
   if (!file) return
   try {
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+    const msgType = imageExts.includes(ext) ? 'image' : 'file'
+
     const baseURL = window.location.origin
     const formData = new FormData()
     formData.append('file', file)
-    await axios.post(`${baseURL}/api/v1/client-chat/${activeToken}/files`, formData)
-    $q.notify({ type: 'positive', message: 'Файл отправлен' })
+    formData.append('message_type', msgType)
+
+    uploadProgress.value = 1
+    await axios.post(`${baseURL}/api/v1/client-chat/${activeToken}/files`, formData, {
+      onUploadProgress: (e) => {
+        uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
+      },
+    })
   } catch (e) {
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
   } finally {
+    uploadProgress.value = 0
     event.target.value = ''
   }
 }

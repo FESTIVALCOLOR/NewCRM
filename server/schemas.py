@@ -6,7 +6,7 @@ from datetime import date, datetime
 import re
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_serializer, field_validator, model_validator
 
 # =========================
 # ОБЩИЕ ОТВЕТЫ
@@ -1491,8 +1491,12 @@ class InternalMessageResponse(BaseModel):
     is_deleted: bool = False
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, dt: datetime) -> str:
+        """Всегда возвращаем UTC с суффиксом Z, чтобы браузер корректно конвертировал в локальное время."""
+        return dt.isoformat() + "Z"
 
 
 class InternalChatResponse(BaseModel):
