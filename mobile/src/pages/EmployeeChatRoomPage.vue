@@ -162,7 +162,7 @@
 
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
-      <div class="row items-end q-gutter-xs">
+      <div class="row items-center q-gutter-xs">
         <!-- Прикрепить файл -->
         <q-btn
           flat
@@ -181,6 +181,7 @@
           outlined
           dense
           autogrow
+          hide-bottom-space
           placeholder="Сообщение…"
           style="flex: 1"
           @keydown.enter.exact.prevent="sendText"

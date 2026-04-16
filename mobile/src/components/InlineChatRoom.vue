@@ -177,7 +177,7 @@
 
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
-      <div class="row items-end q-gutter-xs">
+      <div class="row items-center q-gutter-xs">
         <q-btn
           flat
           round
@@ -194,6 +194,7 @@
           outlined
           dense
           autogrow
+          hide-bottom-space
           placeholder="Сообщение…"
           style="flex: 1"
           @keydown.enter.exact.prevent="sendText"
@@ -248,12 +249,17 @@ const clientChatId = ref(null)
 const forwardingMsgId = ref(null)
 
 function recalcHeight() {
-  if (!chatContainerEl.value) return
-  const rect = chatContainerEl.value.getBoundingClientRect()
-  // Если элемент выше видимой области — clamp top к 0
-  const topOffset = Math.max(0, rect.top)
-  const h = Math.max(320, window.innerHeight - topOffset - 8)
-  containerHeight.value = h + 'px'
+  // Используем requestAnimationFrame дважды — ждём когда layout стабилизируется
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!chatContainerEl.value) return
+      const rect = chatContainerEl.value.getBoundingClientRect()
+      // Если элемент выше видимой области — clamp top к 0
+      const topOffset = Math.max(0, rect.top)
+      const h = Math.max(320, window.innerHeight - topOffset - 8)
+      containerHeight.value = h + 'px'
+    })
+  })
 }
 
 const clientLink = computed(() => {
@@ -430,7 +436,13 @@ onMounted(() => {
 })
 
 // Пересчитываем высоту когда чат загружается (переход из skeleton → контент)
-watch(chat, () => nextTick(recalcHeight))
+// Несколько триггеров — элемент может оказаться в финальной позиции не сразу
+watch(chat, (newVal) => {
+  if (!newVal) return
+  nextTick(recalcHeight)
+  setTimeout(recalcHeight, 150)
+  setTimeout(recalcHeight, 500)
+})
 
 onUnmounted(() => {
   disconnect()

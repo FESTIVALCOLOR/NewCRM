@@ -148,6 +148,7 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "id": msg.id,
         "chat_id": msg.chat_id,
         "sender_employee_id": msg.sender_employee_id,
+        "sender_guest_token": msg.sender_guest_token,
         "sender_display_name": msg.sender_display_name,
         "message_type": msg.message_type,
         "content": msg.content,

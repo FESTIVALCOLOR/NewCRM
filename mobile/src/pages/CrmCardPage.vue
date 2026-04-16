@@ -1028,133 +1028,32 @@
 
         <!-- ====== ВКЛАДКА: Чат с клиентом ====== -->
         <q-tab-panel name="chat" class="q-pa-none">
+          <!-- Кнопка Telegram-чата — дополнительный канал, отдельно от внутреннего чата -->
+          <div
+            v-if="can('chat.client.manage')"
+            class="row items-center q-px-md q-py-xs"
+            style="background: #FFF9C4; border-bottom: 1px solid #FFE082; flex-shrink: 0"
+          >
+            <q-icon name="send" size="14px" color="amber-8" class="q-mr-xs" />
+            <span class="text-caption text-amber-9" style="flex: 1">Telegram-чат (дополнительный канал)</span>
+            <q-btn
+              flat
+              dense
+              size="xs"
+              no-caps
+              icon="add"
+              label="Создать"
+              color="amber-9"
+              :loading="chatCreating"
+              @click="openCreateChatDlg"
+            />
+          </div>
+
           <InlineChatRoom
             v-if="chatTabVisited && card?.id"
             chat-type="client"
             :card-id="card.id"
           />
-
-          <!-- DEPRECATED: старый Telegram-чат (скрыт) — оставлен для возможного восстановления -->
-          <template v-if="false && chatData">
-            <q-card class="is-card q-mb-md">
-              <q-card-section>
-                <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color: #333">
-                  {{ chatData.chat_title || 'Проектный чат' }}
-                </div>
-                <div v-if="chatData.invite_link" class="q-mb-sm">
-                  <a :href="tgDeepLink(chatData.invite_link)" style="color: #1677FF; text-decoration: none; font-size: 13px">
-                    <q-icon name="open_in_new" size="14px" class="q-mr-xs" />Открыть в Telegram
-                  </a>
-                </div>
-                <div class="text-caption" style="color: #888">
-                  {{ chatMembers.length }} участник(ов)
-                </div>
-              </q-card-section>
-            </q-card>
-
-            <!-- Участники -->
-            <q-card class="is-card q-mb-md">
-              <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Участники
-                </div>
-              </q-card-section>
-              <q-list dense separator>
-                <q-item v-for="member in chatMembers" :key="member.id || member.user_id">
-                  <q-item-section avatar>
-                    <q-avatar size="28px" color="grey-3" text-color="grey-8">
-                      {{ (member.name || member.username || '?')[0] }}
-                    </q-avatar>
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label style="font-size: 12px; color: #333">
-                      {{ member.name || member.username || 'Неизвестный' }}
-                    </q-item-label>
-                    <q-item-label caption>
-                      {{ member.role || 'участник' }}
-                    </q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-              <q-card-section v-if="chatMembers.length === 0" class="text-center" style="color: #999; font-size: 12px">
-                Нет участников
-              </q-card-section>
-            </q-card>
-
-            <!-- Действия с чатом -->
-            <q-card class="is-card q-mb-md">
-              <q-card-section class="q-pb-none">
-                <div class="text-subtitle2 text-weight-bold" style="color: #333">
-                  Действия
-                </div>
-              </q-card-section>
-              <q-card-section>
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="send"
-                  label="Отправить сообщение"
-                  class="full-width q-mb-sm"
-                  style="background: #5DADE2; color: white; font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="showSendMessageDlg = true"
-                />
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="smart_toy"
-                  label="Запустить скрипт"
-                  class="full-width q-mb-sm"
-                  style="background: #58D68D; color: white; font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="loadScriptsAndShow"
-                />
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="person_add"
-                  label="Добавить участника"
-                  class="full-width q-mb-sm"
-                  style="background: #AAB7B8; color: white; font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="showAddMemberDlg = true"
-                />
-                <q-btn
-                  outline
-                  dense
-                  no-caps
-                  icon="delete"
-                  label="Удалить чат"
-                  class="full-width"
-                  color="negative"
-                  style="font-size: 12px; height: 36px; border-radius: 4px"
-                  @click="confirmDeleteChat"
-                />
-              </q-card-section>
-            </q-card>
-          </template>
-
-          <!-- Чат не создан (старый Telegram) -->
-          <template v-else>
-            <q-card class="is-card q-mb-md">
-              <q-card-section class="text-center q-pa-lg">
-                <q-icon name="chat_bubble_outline" size="48px" color="grey-4" class="q-mb-sm" />
-                <div style="color: #999; font-size: 13px" class="q-mb-md">
-                  Telegram-чат не создан
-                </div>
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  icon="add"
-                  label="Создать чат"
-                  style="background: #ffd93c; color: #333; font-size: 12px; font-weight: bold; height: 36px; border-radius: 4px; padding: 0 24px"
-                  :loading="chatCreating"
-                  @click="openCreateChatDlg"
-                />
-              </q-card-section>
-            </q-card>
-          </template>
         </q-tab-panel>
       </q-tab-panels>
 
@@ -1232,6 +1131,17 @@
             />
           </q-toolbar>
           <q-card-section>
+            <q-banner
+              dense
+              rounded
+              class="q-mb-sm text-body2"
+              style="background: #FFF3E0; color: #E65100; font-size: 12px"
+            >
+              <template #avatar>
+                <q-icon name="warning" color="orange-8" />
+              </template>
+              Внутренний чат с клиентом уже создан. При создании Telegram-чата у клиента будет два канала связи — информацию нужно будет синхронизировать вручную.
+            </q-banner>
             <q-input
               v-model="newChatTitle"
               label="Название чата"

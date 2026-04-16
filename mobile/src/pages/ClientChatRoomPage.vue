@@ -136,7 +136,7 @@
 
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
-      <div class="row items-end q-gutter-xs">
+      <div class="row items-center q-gutter-xs">
         <q-btn
           flat
           round
@@ -152,6 +152,7 @@
           outlined
           dense
           autogrow
+          hide-bottom-space
           placeholder="Сообщение…"
           style="flex: 1"
           @keydown.enter.exact.prevent="sendText"
@@ -325,6 +326,7 @@ const membersCount = computed(() => members.value.length)
 const scripts = ref([])
 const loadingScripts = ref(false)
 const selectedScript = ref(null)
+const cardData = ref(null)
 
 const clientLink = computed(() => {
   if (!clientToken.value) return ''
@@ -370,11 +372,50 @@ async function loadMessages() {
     if (messages.value.length) {
       sendRead(messages.value[messages.value.length - 1].id)
     }
+
+    // Загружаем данные карточки для подстановки переменных в скрипты
+    if (data.crm_card_id) {
+      loadCardData(data.crm_card_id)
+    }
   } catch (e) {
     console.error('[ClientChatRoom] Ошибка:', e)
   } finally {
     loadingMessages.value = false
   }
+}
+
+async function loadCardData(cardId) {
+  try {
+    const { data } = await api.get(`/api/v1/crm/cards/${cardId}`)
+    cardData.value = data
+  } catch {
+    // Не критично — переменные останутся незаполненными
+  }
+}
+
+function fillScriptVars(template) {
+  if (!template) return ''
+  const d = cardData.value || {}
+  const clientFullName = d.client_name || ''
+  const clientFirstName = clientFullName.split(' ').filter(Boolean)[1] || clientFullName.split(' ')[0] || 'Клиент'
+  const vars = {
+    client_name: clientFullName,
+    client_first_name: clientFirstName,
+    address: d.address || '',
+    area: d.area ? `${d.area} м²` : '',
+    contract_number: d.contract_number || '',
+    deadline: d.deadline || '',
+    deadline_date: d.deadline || '',
+    senior_manager: d.senior_manager_name || '',
+    senior_manager_username: d.senior_manager_name || '',
+    manager_name: d.manager_name || '',
+    manager_username: d.manager_name || '',
+    sdp: d.sdp_name || '',
+    sdp_username: d.sdp_name || '',
+    sender_name: authStore.employee?.full_name || '',
+    role_name: authStore.employee?.position || '',
+  }
+  return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`)
 }
 
 function sendText() {
@@ -426,7 +467,7 @@ async function loadScripts() {
 
 function selectScript(s) {
   selectedScript.value = s
-  scriptText.value = s.message_template || ''
+  scriptText.value = fillScriptVars(s.message_template || '')
 }
 
 async function sendScript() {

@@ -107,7 +107,7 @@
 
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
-      <div class="row items-end q-gutter-xs">
+      <div class="row items-center q-gutter-xs">
         <q-btn
           flat
           round
@@ -123,6 +123,7 @@
           outlined
           dense
           autogrow
+          hide-bottom-space
           placeholder="Ваше сообщение…"
           style="flex: 1"
           @keydown.enter.exact.prevent="sendText"
@@ -223,17 +224,8 @@ function sendText() {
   const text = inputText.value.trim()
   if (!text) return
   sendMessage(text)
-  // Оптимистично добавляем в список
-  messages.value.push({
-    id: Date.now(),
-    message_type: 'text',
-    content: text,
-    sender_guest_token: memberToken || mainToken,
-    sender_display_name: clientName,
-    created_at: new Date().toISOString(),
-  })
   inputText.value = ''
-  scrollToBottom()
+  // Сообщение придёт обратно через WS broadcast (сервер отправляет всем, включая отправителя)
 }
 
 let typingTimer = null
