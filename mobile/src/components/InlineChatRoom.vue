@@ -26,7 +26,7 @@
   </div>
 
   <!-- Чат существует -->
-  <div v-else ref="chatContainerEl" class="column" :style="{ height: containerHeight, minHeight: '320px' }">
+  <div v-else ref="chatContainerEl" class="column" :style="{ height: containerHeight, minHeight: '320px', minWidth: 0, overflow: 'hidden' }">
     <!-- Шапка чата: ссылка и участники -->
     <div
       class="q-px-md q-py-xs bg-white"
@@ -297,7 +297,7 @@
 
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
-      <div class="row items-center q-gutter-xs">
+      <div class="row items-center q-gutter-xs" style="min-width: 0">
         <q-btn
           flat
           round
@@ -323,7 +323,7 @@
           autogrow
           hide-bottom-space
           placeholder="Сообщение…"
-          style="flex: 1"
+          style="flex: 1; min-width: 0"
           @keydown.enter.exact.prevent="sendText"
           @input="onTyping"
         />
