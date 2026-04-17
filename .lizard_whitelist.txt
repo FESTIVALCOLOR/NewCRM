@@ -26,3 +26,4 @@ adjust_payment_amount
 reload_stage_files
 startup_event
 validate_stage_files_on_yandex.validate
+scan_contract_files_on_yandex

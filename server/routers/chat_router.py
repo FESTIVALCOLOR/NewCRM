@@ -342,13 +342,20 @@ async def copy_message_file_to_card(
     if not msg or not msg.yandex_path:
         raise HTTPException(404, "Файл сообщения не найден")
 
-    from database import CRMCard, ProjectFile
+    from database import Contract, CRMCard, ProjectFile
 
     card = db.query(CRMCard).filter(CRMCard.id == body.crm_card_id).first()
     if not card:
         raise HTTPException(404, "Карточка не найдена")
-    if not card.yandex_folder_path:
-        raise HTTPException(400, "У карточки нет папки на Яндекс.Диске")
+    if not card.contract_id:
+        raise HTTPException(400, "У карточки нет привязанного договора")
+
+    # Поля назначения (yandex_path, акты, чеки и т.д.) хранятся в Contract, не в CRMCard
+    contract = db.query(Contract).filter(Contract.id == card.contract_id).first()
+    if not contract:
+        raise HTTPException(404, "Договор карточки не найден")
+    if not contract.yandex_folder_path:
+        raise HTTPException(400, "У договора нет папки на Яндекс.Диске")
 
     try:
         from yandex_disk_service import get_yandex_disk_service
@@ -362,7 +369,7 @@ async def copy_message_file_to_card(
         else:
             subfolder = _CARD_FILE_DESTINATIONS[body.destination]
 
-        card_root = card.yandex_folder_path.replace("disk:", "").rstrip("/")
+        card_root = contract.yandex_folder_path.replace("disk:", "").rstrip("/")
         file_name = os.path.basename(msg.yandex_path.replace("disk:", ""))
         dest_clean = f"{card_root}/{subfolder}/{file_name}"
         dest_yd = f"disk:{dest_clean}"
@@ -377,17 +384,13 @@ async def copy_message_file_to_card(
         raise HTTPException(500, "Ошибка копирования на Яндекс.Диске")
 
     if is_stage:
-        # Сохраняем в ProjectFile (привязка к договору)
-        if not card.contract_id:
-            raise HTTPException(400, "У карточки нет привязанного договора")
         ext = os.path.splitext(file_name)[1].lower()
         file_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "pdf" if ext == ".pdf" else "file"
         stage_name = _STAGE_FILE_DESTINATIONS[body.destination]
-        # Автоинкремент variation
-        last = db.query(ProjectFile).filter(ProjectFile.contract_id == card.contract_id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
+        last = db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
         variation = (last.variation + 1) if last else 1
         pf = ProjectFile(
-            contract_id=card.contract_id,
+            contract_id=contract.id,
             stage=stage_name,
             file_type=file_type,
             yandex_path=dest_yd,
@@ -398,7 +401,8 @@ async def copy_message_file_to_card(
         db.add(pf)
         db.commit()
     else:
-        setattr(card, body.destination, dest_yd)
+        # Поля хранятся в Contract (contract_file_yandex_path, act_planning_yandex_path и т.д.)
+        setattr(contract, body.destination, dest_yd)
         db.commit()
 
     return {"status": "ok", "yandex_path": dest_yd, "file_url": public_url}

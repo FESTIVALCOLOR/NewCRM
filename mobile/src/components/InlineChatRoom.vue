@@ -364,32 +364,42 @@
           <div class="text-caption text-grey-6 q-mb-sm">
             Файл будет скопирован в папку карточки на Яндекс.Диске и сохранён в выбранном поле.
           </div>
-          <q-list dense>
-            <template v-for="group in COPY_DESTINATIONS" :key="group.group">
-              <q-item-label header class="text-caption text-weight-bold text-grey-7 q-px-none q-pt-sm q-pb-xs">
-                {{ group.group }}
-              </q-item-label>
-              <q-item
-                v-for="dest in group.items"
-                :key="dest.value"
-                clickable
-                :active="selectedDestination === dest.value"
-                active-class="bg-green-1 text-green-9"
-                class="rounded-borders"
-                style="min-height: 36px"
-                @click="selectedDestination = dest.value"
-              >
-                <q-item-section avatar style="min-width: 28px">
-                  <q-icon
-                    :name="selectedDestination === dest.value ? 'radio_button_checked' : 'radio_button_unchecked'"
-                    size="18px"
-                    :color="selectedDestination === dest.value ? 'green-7' : 'grey-5'"
-                  />
-                </q-item-section>
-                <q-item-section>{{ dest.label }}</q-item-section>
-              </q-item>
-            </template>
-          </q-list>
+          <div style="max-height: 52vh; overflow-y: auto">
+            <q-expansion-item
+              v-for="group in COPY_DESTINATIONS"
+              :key="group.group"
+              :label="group.group"
+              :model-value="group.items.some(d => d.value === selectedDestination)"
+              dense
+              dense-toggle
+              header-class="text-caption text-weight-bold text-grey-8 q-px-xs"
+              class="q-mb-xs"
+            >
+              <q-list dense>
+                <q-item
+                  v-for="dest in group.items"
+                  :key="dest.value"
+                  clickable
+                  :active="selectedDestination === dest.value"
+                  active-class="bg-green-1 text-green-9"
+                  class="rounded-borders q-pl-md"
+                  style="min-height: 34px"
+                  @click="selectedDestination = dest.value"
+                >
+                  <q-item-section avatar style="min-width: 24px">
+                    <q-icon
+                      :name="selectedDestination === dest.value ? 'radio_button_checked' : 'radio_button_unchecked'"
+                      size="16px"
+                      :color="selectedDestination === dest.value ? 'green-7' : 'grey-5'"
+                    />
+                  </q-item-section>
+                  <q-item-section style="font-size: 13px">
+                    {{ dest.label }}
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-expansion-item>
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn
@@ -642,7 +652,9 @@ const typingText = computed(() => {
 })
 
 function isOwn(msg) {
-  return msg.sender_employee_id === authStore.employee?.id
+  const myId = authStore.user?.id
+  if (!myId) return false
+  return Number(msg.sender_employee_id) === Number(myId)
 }
 
 function imgStreamUrl(msg) {
@@ -951,8 +963,8 @@ async function _uploadSingleFile(file) {
   const tempId = `temp_${Date.now()}_${Math.random()}`
   messages.value.push({
     id: tempId,
-    sender_employee_id: authStore.employee?.id,
-    sender_display_name: authStore.employee?.name || 'Вы',
+    sender_employee_id: authStore.user?.id,
+    sender_display_name: authStore.user?.full_name || 'Вы',
     message_type: msgType,
     content: null,
     file_url: '',

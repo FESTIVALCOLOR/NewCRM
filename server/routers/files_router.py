@@ -4,17 +4,19 @@
 
 ВАЖНО: Статические пути ПЕРЕД динамическими (правило проекта).
 """
-import os
-import logging
-import threading
+
 from datetime import datetime
-from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
+import logging
+import os
+import threading
 from typing import List, Optional
 
-from database import get_db, Employee, Contract, ProjectFile
 from auth import get_current_user
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from schemas import ProjectFileCreate, ProjectFileResponse
+from sqlalchemy.orm import Session
+
+from database import Contract, Employee, ProjectFile, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ _scanning_contracts = set()
 # Подключение сервиса Яндекс.Диска
 try:
     from yandex_disk_service import get_yandex_disk_service
+
     yandex_disk_available = True
 except ImportError:
     yandex_disk_available = False
@@ -37,28 +40,29 @@ router = APIRouter()
 # СТАТИЧЕСКИЕ ПУТИ (ПЕРЕД ДИНАМИЧЕСКИМИ)
 # =========================
 
+
 @router.get("/all")
-async def get_all_project_files(
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_all_project_files(current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить все файлы проектов для синхронизации"""
     try:
         files = db.query(ProjectFile).all()
 
-        return [{
-            'id': f.id,
-            'contract_id': f.contract_id,
-            'stage': f.stage,
-            'file_type': f.file_type,
-            'public_link': f.public_link,
-            'yandex_path': f.yandex_path,
-            'file_name': f.file_name,
-            'preview_cache_path': f.preview_cache_path,
-            'file_order': f.file_order,
-            'variation': f.variation,
-            'upload_date': f.upload_date.isoformat() if f.upload_date else None
-        } for f in files]
+        return [
+            {
+                "id": f.id,
+                "contract_id": f.contract_id,
+                "stage": f.stage,
+                "file_type": f.file_type,
+                "public_link": f.public_link,
+                "yandex_path": f.yandex_path,
+                "file_name": f.file_name,
+                "preview_cache_path": f.preview_cache_path,
+                "file_order": f.file_order,
+                "variation": f.variation,
+                "upload_date": f.upload_date.isoformat() if f.upload_date else None,
+            }
+            for f in files
+        ]
 
     except Exception as e:
         logger.exception(f"Ошибка при получении файлов проектов: {e}")
@@ -66,23 +70,17 @@ async def get_all_project_files(
 
 
 @router.get("/updated")
-async def get_updated_files(
-    since: str = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_updated_files(since: str = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить файлы, загруженные после указанного timestamp"""
     if not since:
         raise HTTPException(status_code=400, detail="Parameter 'since' is required")
 
     try:
-        since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid timestamp format")
 
-    files = db.query(ProjectFile).filter(
-        ProjectFile.upload_date > since_dt
-    ).all()
+    files = db.query(ProjectFile).filter(ProjectFile.upload_date > since_dt).all()
 
     return [
         {
@@ -94,7 +92,7 @@ async def get_updated_files(
             "yandex_path": f.yandex_path,
             "file_name": f.file_name,
             "upload_date": f.upload_date.isoformat() if f.upload_date else None,
-            "variation": f.variation
+            "variation": f.variation,
         }
         for f in files
     ]
@@ -114,11 +112,7 @@ async def get_public_link(
         public_link = yd_service.get_public_link(yandex_path)
 
         if public_link:
-            return {
-                "status": "success",
-                "public_link": public_link,
-                "yandex_path": yandex_path
-            }
+            return {"status": "success", "public_link": public_link, "yandex_path": yandex_path}
         else:
             raise HTTPException(status_code=404, detail="File not found or cannot create public link")
 
@@ -150,11 +144,7 @@ async def list_yandex_files(
         yd_service = get_yandex_disk_service()
         files = yd_service.list_files(resolved_path)
 
-        return {
-            "status": "success",
-            "folder_path": resolved_path,
-            "files": files
-        }
+        return {"status": "success", "folder_path": resolved_path, "files": files}
 
     except HTTPException:
         raise
@@ -172,35 +162,34 @@ async def list_public_folder(
 ):
     """Получить список файлов из публичной ссылки Яндекс.Диска (как десктоп get_public_folder_contents)"""
     import requests as req
+
     try:
         # ЯД Public API — не требует OAuth для чтения
-        resp = req.get(
-            'https://cloud-api.yandex.net/v1/disk/public/resources',
-            params={'public_key': url, 'limit': 1000},
-            timeout=15
-        )
+        resp = req.get("https://cloud-api.yandex.net/v1/disk/public/resources", params={"public_key": url, "limit": 1000}, timeout=15)
         if resp.status_code != 200:
             raise HTTPException(status_code=resp.status_code, detail=f"ЯД API: {resp.text[:200]}")
 
         data = resp.json()
-        items = data.get('_embedded', {}).get('items', [])
+        items = data.get("_embedded", {}).get("items", [])
         files = []
         for item in items:
-            if item.get('type') == 'file':
-                name = item.get('name', '')
-                size = item.get('size', 0)
+            if item.get("type") == "file":
+                name = item.get("name", "")
+                size = item.get("size", 0)
                 # Автоклассификация: замер vs фотофиксация (как десктоп _classify_file)
                 name_lower = name.lower()
-                dest = 'Замер' if any(w in name_lower for w in ['замер', 'зам_', 'обмер']) else 'Фотофиксация'
-                files.append({
-                    'name': name,
-                    'path': item.get('path', ''),
-                    'size': size,
-                    'size_display': f"{size / 1024 / 1024:.1f} МБ" if size >= 1024 * 1024 else f"{size / 1024:.0f} КБ",
-                    'mime_type': item.get('mime_type', ''),
-                    'destination': dest,
-                })
-        return {'status': 'success', 'files': files, 'total': len(files)}
+                dest = "Замер" if any(w in name_lower for w in ["замер", "зам_", "обмер"]) else "Фотофиксация"
+                files.append(
+                    {
+                        "name": name,
+                        "path": item.get("path", ""),
+                        "size": size,
+                        "size_display": f"{size / 1024 / 1024:.1f} МБ" if size >= 1024 * 1024 else f"{size / 1024:.0f} КБ",
+                        "mime_type": item.get("mime_type", ""),
+                        "destination": dest,
+                    }
+                )
+        return {"status": "success", "files": files, "total": len(files)}
     except HTTPException:
         raise
     except Exception as e:
@@ -217,54 +206,52 @@ async def download_public_to_yd(
     """Скачать файл из публичной ссылки ЯД и загрузить в свою папку (как десктоп download_public_file + upload)"""
     if not yandex_disk_available:
         raise HTTPException(status_code=503, detail="Yandex Disk service not available")
-    import requests as req
-    import tempfile
     import os
+    import tempfile
+
+    import requests as req
+
     try:
         yd_service = get_yandex_disk_service()
         token = yd_service.token
 
         # 1. Получить ссылку на скачивание из публичной папки
-        dl_resp = req.get(
-            'https://cloud-api.yandex.net/v1/disk/public/resources/download',
-            params={'public_key': public_url, 'path': file_path},
-            timeout=15
-        )
+        dl_resp = req.get("https://cloud-api.yandex.net/v1/disk/public/resources/download", params={"public_key": public_url, "path": file_path}, timeout=15)
         if dl_resp.status_code != 200:
             raise HTTPException(status_code=dl_resp.status_code, detail=f"Download URL error: {dl_resp.text[:200]}")
 
-        download_url = dl_resp.json().get('href')
+        download_url = dl_resp.json().get("href")
         if not download_url:
             raise HTTPException(status_code=500, detail="Не удалось получить ссылку на скачивание")
 
         # 2. Скачать во временный файл
-        file_name = file_path.split('/')[-1] if '/' in file_path else file_path
-        tmp_path = os.path.join(tempfile.gettempdir(), f'crm_upload_{file_name}')
+        file_name = file_path.split("/")[-1] if "/" in file_path else file_path
+        tmp_path = os.path.join(tempfile.gettempdir(), f"crm_upload_{file_name}")
         try:
             with req.get(download_url, stream=True, timeout=120) as r:
                 r.raise_for_status()
-                with open(tmp_path, 'wb') as f:
+                with open(tmp_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
 
             # 3. Загрузить на свой ЯД
             # Создаём папку если нет
-            dest_folder = '/'.join(dest_path.replace('disk:', '').split('/')[:-1])
+            dest_folder = "/".join(dest_path.replace("disk:", "").split("/")[:-1])
             try:
                 yd_service.create_folder(dest_folder)
             except Exception:
                 pass
 
-            yd_service.upload_file(tmp_path, dest_path.replace('disk:', ''))
+            yd_service.upload_file(tmp_path, dest_path.replace("disk:", ""))
 
             # 4. Получить публичную ссылку
-            public_link = ''
+            public_link = ""
             try:
                 public_link = yd_service.get_public_link(dest_folder)
             except Exception:
                 pass
 
-            return {'status': 'success', 'dest_path': dest_path, 'public_link': public_link, 'file_name': file_name}
+            return {"status": "success", "dest_path": dest_path, "public_link": public_link, "file_name": file_name}
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -276,20 +263,13 @@ async def download_public_to_yd(
 
 
 @router.post("/", response_model=ProjectFileResponse)
-async def create_file_record(
-    file_data: ProjectFileCreate,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def create_file_record(file_data: ProjectFileCreate, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Создать запись о файле"""
     # Проверяем дубликат по (contract_id, yandex_path) перед вставкой
     data = file_data.model_dump()
-    yp = data.get('yandex_path', '')
+    yp = data.get("yandex_path", "")
     if yp:
-        existing = db.query(ProjectFile).filter(
-            ProjectFile.contract_id == data.get('contract_id'),
-            ProjectFile.yandex_path == yp
-        ).first()
+        existing = db.query(ProjectFile).filter(ProjectFile.contract_id == data.get("contract_id"), ProjectFile.yandex_path == yp).first()
         if existing:
             # Дубликат — возвращаем существующую запись
             return existing
@@ -302,10 +282,7 @@ async def create_file_record(
         db.rollback()
         # После rollback пробуем найти существующую запись
         if yp:
-            existing = db.query(ProjectFile).filter(
-                ProjectFile.contract_id == data.get('contract_id'),
-                ProjectFile.yandex_path == yp
-            ).first()
+            existing = db.query(ProjectFile).filter(ProjectFile.contract_id == data.get("contract_id"), ProjectFile.yandex_path == yp).first()
             if existing:
                 return existing
         raise HTTPException(status_code=409, detail="Дубликат файла")
@@ -325,20 +302,42 @@ async def upload_file_to_yandex(
 
     # Whitelist разрешённых типов файлов
     ALLOWED_EXTENSIONS = {
-        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp',
-        '.dwg', '.dxf', '.skp', '.3ds', '.max', '.blend',
-        '.zip', '.rar', '.7z',
-        '.txt', '.csv', '.rtf',
-        '.webm', '.ogg', '.mp3', '.wav', '.m4a',  # аудио (голосовые заметки)
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".webp",
+        ".dwg",
+        ".dxf",
+        ".skp",
+        ".3ds",
+        ".max",
+        ".blend",
+        ".zip",
+        ".rar",
+        ".7z",
+        ".txt",
+        ".csv",
+        ".rtf",
+        ".webm",
+        ".ogg",
+        ".mp3",
+        ".wav",
+        ".m4a",  # аудио (голосовые заметки)
     }
     if file.filename:
         ext = os.path.splitext(file.filename)[1].lower()
         if ext and ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Тип файла '{ext}' не разрешён для загрузки"
-            )
+            raise HTTPException(status_code=400, detail=f"Тип файла '{ext}' не разрешён для загрузки")
 
     try:
         yd_service = get_yandex_disk_service()
@@ -349,10 +348,7 @@ async def upload_file_to_yandex(
         # Проверка размера файла
         max_size = int(os.environ.get("MAX_FILE_SIZE_MB", 50)) * 1024 * 1024
         if len(file_bytes) > max_size:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 50)} МБ)"
-            )
+            raise HTTPException(status_code=413, detail=f"Размер файла превышает максимально допустимый ({os.environ.get('MAX_FILE_SIZE_MB', 50)} МБ)")
 
         if not yandex_path:
             # Защита от path traversal в имени файла
@@ -367,12 +363,7 @@ async def upload_file_to_yandex(
 
         if result:
             public_link = yd_service.get_public_link(yandex_path)
-            return {
-                "status": "success",
-                "yandex_path": yandex_path,
-                "public_link": public_link,
-                "file_name": file.filename
-            }
+            return {"status": "success", "yandex_path": yandex_path, "public_link": public_link, "file_name": file.filename}
         else:
             raise HTTPException(status_code=500, detail="Failed to upload file")
 
@@ -403,10 +394,7 @@ async def create_yandex_folder(
         yd_service = get_yandex_disk_service()
         result = yd_service.create_folder(folder_path)
 
-        return {
-            "status": "success" if result else "exists",
-            "folder_path": folder_path
-        }
+        return {"status": "success" if result else "exists", "folder_path": folder_path}
 
     except HTTPException:
         raise
@@ -432,33 +420,27 @@ async def move_yandex_folder(
     try:
         yd_service = get_yandex_disk_service()
         import requests as req
+
         token = yd_service.token
         resp = req.post(
-            'https://cloud-api.yandex.net/v1/disk/resources/move',
-            params={'from': from_path, 'path': to_path, 'overwrite': 'false'},
-            headers={'Authorization': f'OAuth {token}'},
-            timeout=15
+            "https://cloud-api.yandex.net/v1/disk/resources/move", params={"from": from_path, "path": to_path, "overwrite": "false"}, headers={"Authorization": f"OAuth {token}"}, timeout=15
         )
         if resp.status_code in [201, 202]:
             # Обновляем пути в project_files и contracts
             try:
-                from_clean = from_path.replace('disk:', '')
-                to_clean = to_path.replace('disk:', '')
+                from_clean = from_path.replace("disk:", "")
+                to_clean = to_path.replace("disk:", "")
                 # Обновляем yandex_path во всех project_files
-                affected = db.query(ProjectFile).filter(
-                    ProjectFile.yandex_path.like(f'%{from_clean}%')
-                ).all()
+                affected = db.query(ProjectFile).filter(ProjectFile.yandex_path.like(f"%{from_clean}%")).all()
                 for pf in affected:
                     pf.yandex_path = pf.yandex_path.replace(from_clean, to_clean)
                 # Обновляем поля contracts (все *_yandex_path)
-                contracts = db.query(Contract).filter(
-                    Contract.yandex_folder_path.in_([from_path, f'disk:{from_clean}'])
-                ).all()
+                contracts = db.query(Contract).filter(Contract.yandex_folder_path.in_([from_path, f"disk:{from_clean}"])).all()
                 for c in contracts:
                     # Обновляем все поля с путями
                     for attr in dir(c):
-                        if attr.endswith('_yandex_path') and attr != 'yandex_folder_path':
-                            val = getattr(c, attr, '')
+                        if attr.endswith("_yandex_path") and attr != "yandex_folder_path":
+                            val = getattr(c, attr, "")
                             if val and from_clean in val:
                                 setattr(c, attr, val.replace(from_clean, to_clean))
                     c.yandex_folder_path = to_path
@@ -478,11 +460,7 @@ async def move_yandex_folder(
 
 
 @router.post("/validate")
-async def validate_files(
-    request: dict,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def validate_files(request: dict, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Пакетная проверка существования файлов на Яндекс.Диске"""
     file_ids = request.get("file_ids", [])
     auto_clean = request.get("auto_clean", False)
@@ -517,11 +495,11 @@ async def validate_files(
             check_path = yandex_path
             exists = yd.file_exists(check_path)
             # Если не найден с disk: префиксом — попробуем без
-            if not exists and check_path.startswith('disk:'):
+            if not exists and check_path.startswith("disk:"):
                 exists = yd.file_exists(check_path[5:])
             # И наоборот
-            if not exists and not check_path.startswith('disk:'):
-                exists = yd.file_exists('disk:' + check_path)
+            if not exists and not check_path.startswith("disk:"):
+                exists = yd.file_exists("disk:" + check_path)
         except Exception as e:
             logger.warning(f"Ошибка проверки файла {file_id} на YD: {e}")
             results.append({"file_id": file_id, "exists": True, "reason": "check_error"})
@@ -552,10 +530,7 @@ async def delete_yandex_file(
         yd_service = get_yandex_disk_service()
         result = yd_service.delete_file(yandex_path)
 
-        return {
-            "status": "success" if result else "not_found",
-            "yandex_path": yandex_path
-        }
+        return {"status": "success" if result else "not_found", "yandex_path": yandex_path}
 
     except HTTPException:
         raise
@@ -570,13 +545,9 @@ async def delete_yandex_file(
 # ПУТИ С SUB-PREFIX (contract, scan)
 # =========================
 
-@router.get("/contract/{contract_id}", response_model=List[ProjectFileResponse])
-async def get_contract_files(
-    contract_id: int,
-    stage: Optional[str] = None,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+
+@router.get("/contract/{contract_id}", response_model=list[ProjectFileResponse])
+async def get_contract_files(contract_id: int, stage: Optional[str] = None, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить файлы договора"""
     query = db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id)
     if stage:
@@ -584,13 +555,61 @@ async def get_contract_files(
     return query.order_by(ProjectFile.file_order).all()
 
 
+# Точный маппинг папок ЯД → стадий (используется при сканировании)
+_FOLDER_TO_STAGE_EXACT = {
+    "Замер": "measurement",
+    "Замеры": "measurement",
+    "1 стадия - Планировочное решение": "stage1",
+    "Планировочное решение": "stage1",
+    "Концепция-коллажи": "stage2_concept",
+    "Коллажи": "stage2_concept",
+    "3D визуализация": "stage2_3d",
+    "3D": "stage2_3d",
+    "3 стадия - Чертежный проект": "stage3",
+    "Чертежный проект": "stage3",
+    "Чертежи": "stage3",
+    "Референсы": "references",
+    "Фотофиксация": "photo_documentation",
+    "Фото": "photo_documentation",
+    "Анкета": "questionnaire",
+    "Анкеты": "questionnaire",
+    "Документы": "documents",
+    "Акты": "acts",
+    "Информационные письма": "info_letters",
+    "Доп. соглашения": "supervision",
+    "Техническое задание": "tech_task",
+    "ТЗ": "tech_task",
+    "Авторский надзор": "supervision",
+}
+
+# Нечёткий маппинг: ключевые слова → стадия
+_FOLDER_KEYWORDS_TO_STAGE = [
+    ("замер", "measurement"),
+    ("1 стадия", "stage1"),
+    ("1стадия", "stage1"),
+    ("планировочн", "stage1"),
+    ("концепция", "stage2_concept"),
+    ("коллаж", "stage2_concept"),
+    ("3d", "stage2_3d"),
+    ("визуализ", "stage2_3d"),
+    ("2 стадия", "stage2_concept"),
+    ("2стадия", "stage2_concept"),
+    ("3 стадия", "stage3"),
+    ("3стадия", "stage3"),
+    ("чертеж", "stage3"),
+    ("рабочи", "stage3"),
+    ("референ", "references"),
+    ("фотофикс", "photo_documentation"),
+    ("фото", "photo_documentation"),
+    ("анкет", "questionnaire"),
+    ("документ", "documents"),
+    ("техническ", "tech_task"),
+    ("надзор", "supervision"),
+]
+
+
 @router.post("/scan/{contract_id}")
-async def scan_contract_files_on_yandex(
-    contract_id: int,
-    scope: str = "all",
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def scan_contract_files_on_yandex(contract_id: int, scope: str = "all", current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Сканирование файлов на Яндекс.Диске для договора.
 
     Находит файлы, которые есть на ЯД но отсутствуют в БД, и создаёт записи.
@@ -611,78 +630,18 @@ async def scan_contract_files_on_yandex(
     # Защита от параллельных сканирований одного договора
     with _scanning_contracts_lock:
         if contract_id in _scanning_contracts:
-            return {
-                "status": "already_scanning",
-                "total_on_disk": 0,
-                "already_in_db": 0,
-                "new_files_added": 0,
-                "new_files": []
-            }
+            return {"status": "already_scanning", "total_on_disk": 0, "already_in_db": 0, "new_files_added": 0, "new_files": []}
         _scanning_contracts.add(contract_id)
 
     try:
         yd_service = get_yandex_disk_service()
 
-        # Точный маппинг папок → стадий
-        folder_to_stage_exact = {
-            'Замер': 'measurement',
-            'Замеры': 'measurement',
-            '1 стадия - Планировочное решение': 'stage1',
-            'Планировочное решение': 'stage1',
-            'Концепция-коллажи': 'stage2_concept',
-            'Коллажи': 'stage2_concept',
-            '3D визуализация': 'stage2_3d',
-            '3D': 'stage2_3d',
-            '3 стадия - Чертежный проект': 'stage3',
-            'Чертежный проект': 'stage3',
-            'Чертежи': 'stage3',
-            'Референсы': 'references',
-            'Фотофиксация': 'photo_documentation',
-            'Фото': 'photo_documentation',
-            'Анкета': 'questionnaire',
-            'Анкеты': 'questionnaire',
-            'Документы': 'documents',
-            'Акты': 'acts',
-            'Информационные письма': 'info_letters',
-            'Доп. соглашения': 'supervision',
-            'Техническое задание': 'tech_task',
-            'ТЗ': 'tech_task',
-            'Авторский надзор': 'supervision',
-        }
-
-        # Нечёткий маппинг: ключевые слова → стадия (для папок с нестандартными именами)
-        folder_keywords_to_stage = [
-            ('замер', 'measurement'),
-            ('1 стадия', 'stage1'),
-            ('1стадия', 'stage1'),
-            ('планировочн', 'stage1'),
-            ('концепция', 'stage2_concept'),
-            ('коллаж', 'stage2_concept'),
-            ('3d', 'stage2_3d'),
-            ('визуализ', 'stage2_3d'),
-            ('2 стадия', 'stage2_concept'),
-            ('2стадия', 'stage2_concept'),
-            ('3 стадия', 'stage3'),
-            ('3стадия', 'stage3'),
-            ('чертеж', 'stage3'),
-            ('рабочи', 'stage3'),
-            ('референ', 'references'),
-            ('фотофикс', 'photo_documentation'),
-            ('фото', 'photo_documentation'),
-            ('анкет', 'questionnaire'),
-            ('документ', 'documents'),
-            ('техническ', 'tech_task'),
-            ('надзор', 'supervision'),
-        ]
-
         def match_folder_to_stage(folder_name):
             """Определить стадию по имени папки: сначала точное, потом нечёткое"""
-            # Точное совпадение
-            if folder_name in folder_to_stage_exact:
-                return folder_to_stage_exact[folder_name]
-            # Нечёткое: ищем ключевое слово в нижнем регистре
+            if folder_name in _FOLDER_TO_STAGE_EXACT:
+                return _FOLDER_TO_STAGE_EXACT[folder_name]
             name_lower = folder_name.lower()
-            for keyword, stage_id in folder_keywords_to_stage:
+            for keyword, stage_id in _FOLDER_KEYWORDS_TO_STAGE:
                 if keyword in name_lower:
                     return stage_id
             return None
@@ -691,60 +650,60 @@ async def scan_contract_files_on_yandex(
             """Определяет точный stage файла по его имени (для актов, писем, соглашений).
             Если не удалось — возвращает parent_stage."""
             name = file_name.lower()
-            is_signed = any(w in name for w in ['подпис', 'signed', 'с подпис'])
+            is_signed = any(w in name for w in ["подпис", "signed", "с подпис"])
 
             # Акты
-            if parent_stage in ('acts', 'documents'):
-                if any(w in name for w in ['планировоч', ' пр', 'акт_пр', 'акт пр', 'stage1', 'стадия 1', 'стадия1']):
-                    return 'stage1_signed' if is_signed else 'stage1'
-                if any(w in name for w in ['концепц', 'дизайн', ' кд', 'акт_кд', 'акт кд', 'stage2', 'стадия 2', 'стадия2']):
-                    return 'stage2_signed' if is_signed else 'stage2_concept'
-                if any(w in name for w in ['чертеж', 'чертёж', 'рабоч', ' рч', 'акт_рч', 'акт рч', 'финал', 'stage3', 'стадия 3', 'стадия3']):
-                    return 'stage3_signed' if is_signed else 'stage3'
+            if parent_stage in ("acts", "documents"):
+                if any(w in name for w in ["планировоч", " пр", "акт_пр", "акт пр", "stage1", "стадия 1", "стадия1"]):
+                    return "stage1_signed" if is_signed else "stage1"
+                if any(w in name for w in ["концепц", "дизайн", " кд", "акт_кд", "акт кд", "stage2", "стадия 2", "стадия2"]):
+                    return "stage2_signed" if is_signed else "stage2_concept"
+                if any(w in name for w in ["чертеж", "чертёж", "рабоч", " рч", "акт_рч", "акт рч", "финал", "stage3", "стадия 3", "стадия3"]):
+                    return "stage3_signed" if is_signed else "stage3"
                 # Общее: если есть слово "акт" но тип не определён
-                if 'акт' in name:
-                    return 'stage1_signed' if is_signed else 'stage1'
+                if "акт" in name:
+                    return "stage1_signed" if is_signed else "stage1"
 
             # Информационные письма
-            if parent_stage == 'info_letters':
-                return 'info_letter_signed' if is_signed else 'info_letter'
+            if parent_stage == "info_letters":
+                return "info_letter_signed" if is_signed else "info_letter"
 
             # Доп. соглашения
-            if parent_stage == 'supervision':
-                return 'additional_agreement_signed' if is_signed else 'supervision'
+            if parent_stage == "supervision":
+                return "additional_agreement_signed" if is_signed else "supervision"
 
             # Договор vs ТЗ в папке Документы
-            if parent_stage == 'documents':
-                if any(w in name for w in ['договор', 'contract', 'контракт']):
-                    return 'documents'
-                if any(w in name for w in ['тз', 'техническ', 'задани', 'анкет']):
-                    return 'tech_task'
-                if any(w in name for w in ['доп', 'соглашен', 'дополнит']):
-                    return 'supervision'
-                if any(w in name for w in ['информ', 'письм']):
-                    return 'info_letter'
+            if parent_stage == "documents":
+                if any(w in name for w in ["договор", "contract", "контракт"]):
+                    return "documents"
+                if any(w in name for w in ["тз", "техническ", "задани", "анкет"]):
+                    return "tech_task"
+                if any(w in name for w in ["доп", "соглашен", "дополнит"]):
+                    return "supervision"
+                if any(w in name for w in ["информ", "письм"]):
+                    return "info_letter"
 
             return parent_stage
 
         def detect_file_type(name):
-            ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
-            if ext in ('png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg'):
-                return 'image'
-            elif ext == 'pdf':
-                return 'pdf'
-            elif ext in ('xls', 'xlsx', 'csv'):
-                return 'excel'
-            elif ext in ('doc', 'docx'):
-                return 'word'
-            elif ext in ('dwg', 'dxf'):
-                return 'cad'
-            return 'other'
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            if ext in ("png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "svg"):
+                return "image"
+            elif ext == "pdf":
+                return "pdf"
+            elif ext in ("xls", "xlsx", "csv"):
+                return "excel"
+            elif ext in ("doc", "docx"):
+                return "word"
+            elif ext in ("dwg", "dxf"):
+                return "cad"
+            return "other"
 
         def normalize_path(p):
             """Нормализация пути: убираем 'disk:' префикс для сравнения"""
-            if p and p.startswith('disk:'):
+            if p and p.startswith("disk:"):
                 return p[5:]
-            return p or ''
+            return p or ""
 
         found_files = []
 
@@ -752,26 +711,27 @@ async def scan_contract_files_on_yandex(
             try:
                 items = yd_service.list_files(path)
                 for item in items:
-                    item_name = item.get('name', '')
-                    item_path = item.get('path', '')
-                    item_type = item.get('type', '')
+                    item_name = item.get("name", "")
+                    item_path = item.get("path", "")
+                    item_type = item.get("type", "")
 
-                    if item_type == 'dir':
+                    if item_type == "dir":
                         # Пропускаем папку "правки" — файлы правок отображаются отдельно
-                        if item_name.lower() == 'правки':
+                        if item_name.lower() == "правки":
                             continue
                         child_stage = match_folder_to_stage(item_name)
                         child_variation = variation
                         if child_stage is None:
                             child_stage = stage  # наследуем стадию от родителя
                         # Внутри Авторского надзора подпапки "Стадия ..." остаются supervision
-                        if stage == 'supervision' and item_name.startswith('Стадия'):
-                            child_stage = 'supervision'
+                        if stage == "supervision" and item_name.startswith("Стадия"):
+                            child_stage = "supervision"
                         # Подпапки "Вариация N" — извлекаем номер вариации
-                        if item_name.lower().startswith('вариация'):
+                        if item_name.lower().startswith("вариация"):
                             child_stage = stage
                             import re
-                            m = re.search(r'(\d+)', item_name)
+
+                            m = re.search(r"(\d+)", item_name)
                             child_variation = int(m.group(1)) if m else 1
                         # Валидация: пропускаем папки с нераспознанным stage и нестандартными именами
                         # (пользователь мог создать произвольную папку)
@@ -779,27 +739,29 @@ async def scan_contract_files_on_yandex(
                             logger.info(f"Скан: пропуск нераспознанной папки '{item_name}'")
                             continue
                         scan_folder(item_path, child_stage, child_variation)
-                    elif item_type == 'file':
+                    elif item_type == "file":
                         # Файлы с определённой стадией добавляем
                         # Файлы в корне (stage=None) — пропускаем
                         if stage:
                             # Классифицируем файл по имени (акты, письма, соглашения)
                             classified_stage = classify_document_by_name(item_name, stage)
-                            found_files.append({
-                                'yandex_path': item_path,
-                                'file_name': item_name,
-                                'stage': classified_stage,
-                                'file_type': detect_file_type(item_name),
-                                'variation': variation,
-                            })
+                            found_files.append(
+                                {
+                                    "yandex_path": item_path,
+                                    "file_name": item_name,
+                                    "stage": classified_stage,
+                                    "file_type": detect_file_type(item_name),
+                                    "variation": variation,
+                                }
+                            )
             except Exception as e:
                 logger.warning(f"Ошибка сканирования {path}: {e}")
 
-        if scope == 'supervision':
+        if scope == "supervision":
             # Для надзора сканируем только подпапку "Авторский надзор"
-            supervision_path = folder_path.rstrip('/') + '/Авторский надзор'
+            supervision_path = folder_path.rstrip("/") + "/Авторский надзор"
             logger.info(f"Scan scope=supervision: сканируем только {supervision_path}")
-            scan_folder(supervision_path, stage='supervision')
+            scan_folder(supervision_path, stage="supervision")
         else:
             scan_folder(folder_path)
 
@@ -811,15 +773,15 @@ async def scan_contract_files_on_yandex(
                 # Добавляем оба варианта пути (с disk: и без) для надёжного сравнения
                 norm = normalize_path(rec.yandex_path)
                 existing_paths_normalized.add(norm)
-                if not norm.startswith('/'):
-                    existing_paths_normalized.add('/' + norm)
+                if not norm.startswith("/"):
+                    existing_paths_normalized.add("/" + norm)
                 else:
-                    existing_paths_normalized.add(norm.lstrip('/'))
+                    existing_paths_normalized.add(norm.lstrip("/"))
 
         # Создаём записи для новых файлов (сравнение по нормализованному пути)
         new_files = []
         for f in found_files:
-            yp = f['yandex_path']
+            yp = f["yandex_path"]
             yp_normalized = normalize_path(yp)
 
             if yp_normalized in existing_paths_normalized:
@@ -832,35 +794,26 @@ async def scan_contract_files_on_yandex(
             try:
                 public_link = yd_service.get_public_link(yp)
             except Exception:
-                public_link = ''
+                public_link = ""
 
             # Для файлов надзора file_type хранит название стадии
-            file_type_val = f['file_type']
-            if f['stage'] == 'supervision':
+            file_type_val = f["file_type"]
+            if f["stage"] == "supervision":
                 # Определяем стадию надзора из пути
-                parts = yp.split('/')
+                parts = yp.split("/")
                 for part in parts:
-                    if part.startswith('Стадия'):
+                    if part.startswith("Стадия"):
                         file_type_val = part
                         break
 
             # Дополнительная проверка: прямой запрос в БД (защита от дубликатов)
-            existing_exact = db.query(ProjectFile).filter(
-                ProjectFile.contract_id == contract_id,
-                ProjectFile.yandex_path == yp
-            ).first()
+            existing_exact = db.query(ProjectFile).filter(ProjectFile.contract_id == contract_id, ProjectFile.yandex_path == yp).first()
             if existing_exact:
                 logger.info(f"Scan: файл уже есть в БД (exact match), пропускаем: {f['file_name']}")
                 continue
 
             new_record = ProjectFile(
-                contract_id=contract_id,
-                stage=f['stage'],
-                file_type=file_type_val,
-                yandex_path=yp,
-                public_link=public_link,
-                file_name=f['file_name'],
-                variation=f.get('variation', 1)
+                contract_id=contract_id, stage=f["stage"], file_type=file_type_val, yandex_path=yp, public_link=public_link, file_name=f["file_name"], variation=f.get("variation", 1)
             )
             try:
                 # Используем savepoint чтобы rollback не затронул предыдущие записи
@@ -871,13 +824,15 @@ async def scan_contract_files_on_yandex(
                 savepoint.rollback()
                 logger.warning(f"Scan: не удалось добавить файл (дубликат?): {f['file_name']}: {insert_err}")
                 continue
-            new_files.append({
-                'yandex_path': yp,
-                'file_name': f['file_name'],
-                'stage': f['stage'],
-                'file_type': file_type_val,
-                'public_link': public_link,
-            })
+            new_files.append(
+                {
+                    "yandex_path": yp,
+                    "file_name": f["file_name"],
+                    "stage": f["stage"],
+                    "file_type": file_type_val,
+                    "public_link": public_link,
+                }
+            )
 
         # Синхронизация полей contracts с project_files (для совместимости с десктопом)
         # Десктоп читает файлы из полей contracts, мобиль — из project_files
@@ -885,44 +840,44 @@ async def scan_contract_files_on_yandex(
 
         # Полный маппинг stage → поля contracts (link, yandex_path, file_name)
         STAGE_CONTRACT_FIELDS = {
-            'documents': ('contract_file_link', 'contract_file_yandex_path', 'contract_file_name'),
-            'tech_task': ('tech_task_link', 'tech_task_yandex_path', 'tech_task_file_name'),
-            'questionnaire': ('tech_task_link', 'tech_task_yandex_path', 'tech_task_file_name'),
-            'measurement': ('measurement_image_link', 'measurement_yandex_path', 'measurement_file_name'),
-            'stage1': ('act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'),
-            'stage2_concept': ('act_concept_link', 'act_concept_yandex_path', 'act_concept_file_name'),
-            'stage3': ('act_final_link', 'act_final_yandex_path', 'act_final_file_name'),
-            'stage1_signed': ('act_planning_signed_link', 'act_planning_signed_yandex_path', 'act_planning_signed_file_name'),
-            'stage2_signed': ('act_concept_signed_link', 'act_concept_signed_yandex_path', 'act_concept_signed_file_name'),
-            'stage3_signed': ('act_final_signed_link', 'act_final_signed_yandex_path', 'act_final_signed_file_name'),
-            'supervision': ('additional_agreement_link', 'additional_agreement_yandex_path', 'additional_agreement_file_name'),
-            'acts': ('act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'),
-            'info_letter': ('info_letter_link', 'info_letter_yandex_path', 'info_letter_file_name'),
-            'info_letters': ('info_letter_link', 'info_letter_yandex_path', 'info_letter_file_name'),
-            'info_letter_signed': ('info_letter_signed_link', 'info_letter_signed_yandex_path', 'info_letter_signed_file_name'),
-            'additional_agreement_signed': ('additional_agreement_signed_link', 'additional_agreement_signed_yandex_path', 'additional_agreement_signed_file_name'),
+            "documents": ("contract_file_link", "contract_file_yandex_path", "contract_file_name"),
+            "tech_task": ("tech_task_link", "tech_task_yandex_path", "tech_task_file_name"),
+            "questionnaire": ("tech_task_link", "tech_task_yandex_path", "tech_task_file_name"),
+            "measurement": ("measurement_image_link", "measurement_yandex_path", "measurement_file_name"),
+            "stage1": ("act_planning_link", "act_planning_yandex_path", "act_planning_file_name"),
+            "stage2_concept": ("act_concept_link", "act_concept_yandex_path", "act_concept_file_name"),
+            "stage3": ("act_final_link", "act_final_yandex_path", "act_final_file_name"),
+            "stage1_signed": ("act_planning_signed_link", "act_planning_signed_yandex_path", "act_planning_signed_file_name"),
+            "stage2_signed": ("act_concept_signed_link", "act_concept_signed_yandex_path", "act_concept_signed_file_name"),
+            "stage3_signed": ("act_final_signed_link", "act_final_signed_yandex_path", "act_final_signed_file_name"),
+            "supervision": ("additional_agreement_link", "additional_agreement_yandex_path", "additional_agreement_file_name"),
+            "acts": ("act_planning_link", "act_planning_yandex_path", "act_planning_file_name"),
+            "info_letter": ("info_letter_link", "info_letter_yandex_path", "info_letter_file_name"),
+            "info_letters": ("info_letter_link", "info_letter_yandex_path", "info_letter_file_name"),
+            "info_letter_signed": ("info_letter_signed_link", "info_letter_signed_yandex_path", "info_letter_signed_file_name"),
+            "additional_agreement_signed": ("additional_agreement_signed_link", "additional_agreement_signed_yandex_path", "additional_agreement_signed_file_name"),
         }
         for stage_key, (link_field, path_field, name_field) in STAGE_CONTRACT_FIELDS.items():
             if not getattr(contract, link_field, None):
                 pf = next((f for f in all_db_files if f.stage == stage_key), None)
                 if pf:
-                    setattr(contract, link_field, pf.public_link or '')
-                    setattr(contract, path_field, pf.yandex_path or '')
-                    setattr(contract, name_field, pf.file_name or '')
+                    setattr(contract, link_field, pf.public_link or "")
+                    setattr(contract, path_field, pf.yandex_path or "")
+                    setattr(contract, name_field, pf.file_name or "")
                     logger.info(f"Scan: обновлён {link_field} для contract {contract_id}")
 
         # Обновляем references_yandex_path и photo_documentation_yandex_path
         # Логика: файлы есть → создать ссылку; файлов нет → очистить ссылку
         contract_updated = False
 
-        if scope == 'all':
-            ref_files = [f for f in found_files if f['stage'] == 'references']
+        if scope == "all":
+            ref_files = [f for f in found_files if f["stage"] == "references"]
             if ref_files:
                 # Файлы есть — создаём ссылку если нет
                 if not contract.references_yandex_path:
                     try:
-                        first_ref_path = ref_files[0]['yandex_path']
-                        ref_folder = '/'.join(first_ref_path.split('/')[:-1])
+                        first_ref_path = ref_files[0]["yandex_path"]
+                        ref_folder = "/".join(first_ref_path.split("/")[:-1])
                         logger.info(f"Scan: публикуем папку референсов: {ref_folder}")
                         ref_link = yd_service.get_public_link(ref_folder)
                         if ref_link:
@@ -934,13 +889,13 @@ async def scan_contract_files_on_yandex(
             # НЕ очищаем ссылку — она устанавливается клиентом при upload
             # и ведёт на папку, а не на отдельный файл в project_files
 
-            photo_files = [f for f in found_files if f['stage'] == 'photo_documentation']
+            photo_files = [f for f in found_files if f["stage"] == "photo_documentation"]
             if photo_files:
                 # Файлы есть — создаём ссылку если нет
                 if not contract.photo_documentation_yandex_path:
                     try:
-                        first_photo_path = photo_files[0]['yandex_path']
-                        photo_folder = '/'.join(first_photo_path.split('/')[:-1])
+                        first_photo_path = photo_files[0]["yandex_path"]
+                        photo_folder = "/".join(first_photo_path.split("/")[:-1])
                         logger.info(f"Scan: публикуем папку фотофиксации: {photo_folder}")
                         photo_link = yd_service.get_public_link(photo_folder)
                         if photo_link:
@@ -961,7 +916,7 @@ async def scan_contract_files_on_yandex(
             "already_in_db": len(existing_records),
             "new_files_added": len(new_files),
             "new_files": new_files,
-            "contract_updated": contract_updated
+            "contract_updated": contract_updated,
         }
 
     except HTTPException:
@@ -978,17 +933,52 @@ async def scan_contract_files_on_yandex(
 # ДИНАМИЧЕСКИЕ ПУТИ (ПОСЛЕ СТАТИЧЕСКИХ)
 # =========================
 
+# Кеш превью: 7 дней
+_STREAM_CACHE_DIR = "/tmp/interior_stream_cache"
+_STREAM_CACHE_TTL = 7 * 24 * 3600  # секунд
+
+
+def _stream_cache_path(yandex_path: str, ext: str) -> str:
+    import hashlib
+
+    key = hashlib.sha256(yandex_path.encode()).hexdigest()
+    return os.path.join(_STREAM_CACHE_DIR, f"{key}{ext}")
+
+
+def _init_stream_cache():
+    os.makedirs(_STREAM_CACHE_DIR, exist_ok=True)
+
+
+def _evict_stream_cache():
+    """Удалить из кеша файлы старше TTL (вызывается лениво при каждом промахе)."""
+    import time
+
+    now = time.time()
+    try:
+        for fname in os.listdir(_STREAM_CACHE_DIR):
+            fpath = os.path.join(_STREAM_CACHE_DIR, fname)
+            try:
+                if now - os.path.getmtime(fpath) > _STREAM_CACHE_TTL:
+                    os.remove(fpath)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 # ВАЖНО: /stream ПЕРЕД /{file_id} — иначе FastAPI матчит "stream" как file_id
 @router.get("/stream")
 async def stream_file_from_yandex(
     yandex_path: str,
     token: str = None,
 ):
-    """Стримить файл с Яндекс.Диска для проигрывания в браузере (audio/video).
-    Принимает JWT token как query param (т.к. <audio src> не может передать Header)."""
+    """Стримить файл с Яндекс.Диска для проигрывания в браузере (audio/video/image).
+    Принимает JWT token как query param (т.к. <audio src>/<img src> не могут передать Header).
+    Кеш на диске 7 дней — повторные запросы не скачивают файл повторно."""
     if not token:
         raise HTTPException(status_code=401, detail="Требуется авторизация")
     from auth import decode_token
+
     try:
         payload = decode_token(token)
         user_id = payload.get("sub")
@@ -1001,31 +991,55 @@ async def stream_file_from_yandex(
     if ".." in yandex_path:
         raise HTTPException(status_code=400, detail="Недопустимый путь")
     try:
-        import tempfile
+        import time
+
         from fastapi.responses import FileResponse
+
         yd_svc = get_yandex_disk_service()
-        clean_path = yandex_path.replace('disk:', '').strip()
-        if not clean_path.startswith('/'):
-            clean_path = '/' + clean_path
+        clean_path = yandex_path.replace("disk:", "").strip()
+        if not clean_path.startswith("/"):
+            clean_path = "/" + clean_path
         ext = os.path.splitext(clean_path)[1].lower()
         content_types = {
-            '.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg',
-            '.wav': 'audio/wav', '.m4a': 'audio/mp4',
-            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-            '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
-            '.heic': 'image/heic',
+            ".webm": "audio/webm",
+            ".ogg": "audio/ogg",
+            ".mp3": "audio/mpeg",
+            ".wav": "audio/wav",
+            ".m4a": "audio/mp4",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+            ".heic": "image/heic",
         }
-        ct = content_types.get(ext, 'application/octet-stream')
-        # Скачиваем во временный файл
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-        tmp_path = tmp.name
-        tmp.close()
-        yd_svc.download_file(f"disk:{clean_path}", tmp_path)
+        ct = content_types.get(ext, "application/octet-stream")
+
+        # Проверяем кеш
+        _init_stream_cache()
+        cache_file = _stream_cache_path(yandex_path, ext)
+        cache_hit = False
+        if os.path.exists(cache_file):
+            age = time.time() - os.path.getmtime(cache_file)
+            if age <= _STREAM_CACHE_TTL:
+                cache_hit = True
+            else:
+                # Файл устарел — удаляем и перекачиваем
+                try:
+                    os.remove(cache_file)
+                except OSError:
+                    pass
+
+        if not cache_hit:
+            _evict_stream_cache()
+            yd_svc.download_file(f"disk:{clean_path}", cache_file)
+
         return FileResponse(
-            tmp_path,
+            cache_file,
             media_type=ct,
             filename=os.path.basename(clean_path),
-            headers={'Accept-Ranges': 'bytes'}
+            headers={"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=604800"},
         )
     except HTTPException:
         raise
@@ -1035,49 +1049,38 @@ async def stream_file_from_yandex(
 
 
 @router.get("/{file_id}")
-async def get_file_record(
-    file_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_file_record(file_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Получить информацию о файле"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="Файл не найден")
     return {
-        'id': file_record.id,
-        'contract_id': file_record.contract_id,
-        'stage': file_record.stage,
-        'file_type': file_record.file_type,
-        'public_link': file_record.public_link,
-        'yandex_path': file_record.yandex_path,
-        'file_name': file_record.file_name,
-        'file_order': file_record.file_order,
-        'variation': file_record.variation,
-        'uploaded_by': file_record.uploaded_by
+        "id": file_record.id,
+        "contract_id": file_record.contract_id,
+        "stage": file_record.stage,
+        "file_type": file_record.file_type,
+        "public_link": file_record.public_link,
+        "yandex_path": file_record.yandex_path,
+        "file_name": file_record.file_name,
+        "file_order": file_record.file_order,
+        "variation": file_record.variation,
+        "uploaded_by": file_record.uploaded_by,
     }
 
 
 @router.delete("/{file_id}")
-async def delete_file_record(
-    file_id: int,
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def delete_file_record(file_id: int, current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Удалить запись о файле и файл с Яндекс.Диска"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="Файл не найден")
 
     # Проверка прав: исполнители могут удалять только свои файлы
-    manager_positions = {'Руководитель студии', 'Старший менеджер проектов', 'СДП', 'ГАП', 'Менеджер'}
-    user_position = current_user.position or ''
+    manager_positions = {"Руководитель студии", "Старший менеджер проектов", "СДП", "ГАП", "Менеджер"}
+    user_position = current_user.position or ""
     is_manager = user_position in manager_positions
     if not is_manager and file_record.uploaded_by != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Вы можете удалять только загруженные вами файлы"
-        )
+        raise HTTPException(status_code=403, detail="Вы можете удалять только загруженные вами файлы")
 
     # Удаляем файл с Яндекс.Диска (до удаления из БД!)
     yandex_path = file_record.yandex_path
@@ -1100,12 +1103,7 @@ async def delete_file_record(
 
 
 @router.patch("/{file_id}/order")
-async def update_file_order(
-    file_id: int,
-    file_order: int = Body(embed=True),
-    current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def update_file_order(file_id: int, file_order: int = Body(embed=True), current_user: Employee = Depends(get_current_user), db: Session = Depends(get_db)):
     """Обновить порядок файла в галерее"""
     file_record = db.query(ProjectFile).filter(ProjectFile.id == file_id).first()
     if not file_record:
