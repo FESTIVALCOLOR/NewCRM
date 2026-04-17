@@ -155,7 +155,9 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "file_url": msg.file_url,
         "file_name": msg.file_name,
         "file_size": msg.file_size,
+        "yandex_path": msg.yandex_path,
         "is_deleted": msg.is_deleted,
+        "is_edited": getattr(msg, "is_edited", False),
         "created_at": (msg.created_at.isoformat() + "Z") if msg.created_at else None,
     }
 
@@ -521,6 +523,27 @@ def add_file_message(
         yandex_path=yandex_path,
     )
     db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+
+def edit_message(db: Session, message_id: int, employee_id: int, content: str) -> "InternalChatMessage | None":
+    """Редактировать своё текстовое сообщение."""
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == message_id,
+            InternalChatMessage.sender_employee_id == employee_id,
+            InternalChatMessage.message_type == "text",
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not msg:
+        return None
+    msg.content = content.strip()
+    msg.is_edited = True
     db.commit()
     db.refresh(msg)
     return msg

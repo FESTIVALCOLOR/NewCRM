@@ -167,6 +167,10 @@ export function useChatWebSocket() {
       if (_handlers.onTyping) _handlers.onTyping(msg, false)
     } else if (type === 'read') {
       if (_handlers.onRead) _handlers.onRead(msg)
+    } else if (type === 'message_updated') {
+      if (msg.message && _handlers.onMessageUpdated) _handlers.onMessageUpdated(msg.message)
+    } else if (type === 'message_deleted') {
+      if (msg.message_id && _handlers.onMessageDeleted) _handlers.onMessageDeleted(msg.message_id)
     }
   }
 

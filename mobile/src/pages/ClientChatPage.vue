@@ -104,12 +104,34 @@
               </div>
             </template>
 
-            <div
-              class="text-caption q-mt-xs"
-              :class="isOwn(msg) ? 'text-right' : 'text-left'"
-              style="color: #888; font-size: 10px"
-            >
-              {{ formatTime(msg.created_at) }}
+            <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
+              <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
+              <div class="text-caption q-mr-xs" style="color: #888; font-size: 10px">
+                {{ formatTime(msg.created_at) }}
+              </div>
+              <q-btn
+                v-if="isOwn(msg) && !msg.is_deleted"
+                flat
+                round
+                dense
+                size="xs"
+                icon="more_vert"
+                color="grey-5"
+                style="margin: -2px -4px"
+              >
+                <q-menu auto-close>
+                  <q-list dense style="min-width: 140px">
+                    <q-item clickable @click="deleteClientMsg(msg)">
+                      <q-item-section avatar>
+                        <q-icon name="delete_outline" size="16px" color="red-5" />
+                      </q-item-section>
+                      <q-item-section class="text-red-6">
+                        Удалить
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
             </div>
           </div>
         </div>
@@ -137,7 +159,13 @@
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
         </q-btn>
-        <input ref="fileInput" type="file" class="hidden" @change="onFileSelected">
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          class="hidden"
+          @change="onFileSelected"
+        >
         <q-input
           v-model="inputText"
           outlined
@@ -276,15 +304,19 @@ function pickFile() {
   fileInput.value?.click()
 }
 
-async function onFileSelected(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
+async function deleteClientMsg(msg) {
+  // Клиент не имеет JWT — только локально скрываем (сервер не поддерживает delete без JWT)
+  const idx = messages.value.findIndex(m => m.id === msg.id)
+  if (idx !== -1) {
+    messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+  }
+}
+
+async function _uploadClientFile(file) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
   const msgType = imageExts.includes(ext) ? 'image' : 'file'
-
-  // Оптимистичное сообщение — показываем сразу
-  const tempId = `temp_${Date.now()}`
+  const tempId = `temp_${Date.now()}_${Math.random()}`
   messages.value.push({
     id: tempId,
     sender_guest_token: activeToken,
@@ -296,36 +328,43 @@ async function onFileSelected(event) {
     file_size: file.size,
     yandex_path: null,
     is_deleted: false,
+    is_edited: false,
     created_at: new Date().toISOString(),
     _uploading: true,
   })
   scrollToBottom()
-
   try {
     const baseURL = window.location.origin
     const formData = new FormData()
     formData.append('file', file)
     formData.append('message_type', msgType)
-
-    uploadProgress.value = 1
     const { data: savedMsg } = await axios.post(`${baseURL}/api/v1/client-chat/${activeToken}/files`, formData, {
       onUploadProgress: (e) => {
         uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
       },
     })
-    // Заменяем временное сообщение реальным (или удаляем если WS уже добавил)
     const idx = messages.value.findIndex(m => m.id === tempId)
     if (idx !== -1) {
       const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
       alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
     }
-  } catch (e) {
+  } catch {
     messages.value = messages.value.filter(m => m.id !== tempId)
-    $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
-  } finally {
-    uploadProgress.value = 0
-    event.target.value = ''
+    throw new Error(file.name)
   }
+}
+
+async function onFileSelected(event) {
+  const files = [...(event.target.files || [])]
+  if (!files.length) return
+  uploadProgress.value = 1
+  const errors = []
+  for (const file of files) {
+    try { await _uploadClientFile(file) } catch { errors.push(file.name) }
+  }
+  uploadProgress.value = 0
+  event.target.value = ''
+  if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
 }
 
 onMounted(async () => {

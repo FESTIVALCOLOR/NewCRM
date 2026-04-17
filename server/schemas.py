@@ -1490,6 +1490,7 @@ class InternalMessageResponse(BaseModel):
     file_size: Optional[int] = None
     yandex_path: Optional[str] = None
     is_deleted: bool = False
+    is_edited: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

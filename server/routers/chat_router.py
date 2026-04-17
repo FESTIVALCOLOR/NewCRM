@@ -64,6 +64,7 @@ from services.chat_service import (
     create_invite_link,
     delete_chat,
     delete_message,
+    edit_message,
     get_chat_by_card,
     get_chat_by_token,
     get_employee_chats,
@@ -253,6 +254,110 @@ async def remove_message(
         },
     )
     return {"status": "ok"}
+
+
+class EditMessageBody(PydanticBaseModel):
+    content: str
+
+
+@router.patch("/{chat_id}/messages/{msg_id}", response_model=InternalMessageResponse)
+async def edit_message_endpoint(
+    chat_id: int,
+    msg_id: int,
+    body: EditMessageBody,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Редактировать своё текстовое сообщение."""
+    msg = edit_message(db, msg_id, current_user.id, body.content)
+    if not msg:
+        raise HTTPException(403, "Нет доступа или сообщение не найдено")
+    await ws_manager.broadcast(
+        chat_id,
+        {"type": "message_updated", "message": _message_to_dict(msg)},
+    )
+    return msg
+
+
+# Допустимые назначения при копировании файла в данные карточки
+_CARD_FILE_DESTINATIONS: dict[str, str] = {
+    "measurement_yandex_path": "Замер",
+    "tech_task_yandex_path": "ТЗ",
+    "photo_documentation_yandex_path": "Фото",
+    "references_yandex_path": "Референсы",
+    "act_planning_yandex_path": "Акты",
+    "act_concept_yandex_path": "Акты",
+    "act_final_yandex_path": "Акты",
+    "info_letter_yandex_path": "Акты",
+    "contract_file_yandex_path": "Договор",
+    "additional_agreement_yandex_path": "Договор",
+    "advance_receipt_yandex_path": "Чеки",
+    "additional_receipt_yandex_path": "Чеки",
+    "third_receipt_yandex_path": "Чеки",
+}
+
+
+class CopyToCardBody(PydanticBaseModel):
+    crm_card_id: int
+    destination: str  # ключ поля CRMCard, напр. 'measurement_yandex_path'
+
+
+@router.post("/{chat_id}/messages/{msg_id}/copy-to-card")
+async def copy_message_file_to_card(
+    chat_id: int,
+    msg_id: int,
+    body: CopyToCardBody,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Скопировать файл из сообщения в данные карточки CRM."""
+    if body.destination not in _CARD_FILE_DESTINATIONS:
+        raise HTTPException(400, f"Неизвестное поле: {body.destination}")
+
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == msg_id,
+            InternalChatMessage.chat_id == chat_id,
+        )
+        .first()
+    )
+    if not msg or not msg.yandex_path:
+        raise HTTPException(404, "Файл сообщения не найден")
+
+    from database import CRMCard
+
+    card = db.query(CRMCard).filter(CRMCard.id == body.crm_card_id).first()
+    if not card:
+        raise HTTPException(404, "Карточка не найдена")
+    if not card.yandex_folder_path:
+        raise HTTPException(400, "У карточки нет папки на Яндекс.Диске")
+
+    try:
+        from yandex_disk_service import get_yandex_disk_service
+
+        yd = get_yandex_disk_service()
+        if not yd or not yd.token:
+            raise HTTPException(503, "Яндекс.Диск не настроен")
+
+        subfolder = _CARD_FILE_DESTINATIONS[body.destination]
+        card_root = card.yandex_folder_path.replace("disk:", "").rstrip("/")
+        file_name = os.path.basename(msg.yandex_path.replace("disk:", ""))
+        dest_clean = f"{card_root}/{subfolder}/{file_name}"
+        dest_yd = f"disk:{dest_clean}"
+
+        _ensure_yd_folder(f"disk:{card_root}/{subfolder}")
+        yd.copy_file(msg.yandex_path, dest_yd, overwrite=True)
+        public_url = yd.get_public_link(dest_clean) or ""
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Ошибка копирования файла в карточку: {e}")
+        raise HTTPException(500, "Ошибка копирования на Яндекс.Диске")
+
+    setattr(card, body.destination, dest_yd)
+    db.commit()
+    return {"status": "ok", "yandex_path": dest_yd, "file_url": public_url}
 
 
 @router.post("/{chat_id}/messages/{msg_id}/read")

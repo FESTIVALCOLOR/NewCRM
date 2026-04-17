@@ -189,24 +189,106 @@
               </div>
             </template>
 
-            <!-- Время + кнопка переслать клиенту (только в чате сотрудников) -->
-            <div class="row items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-between'">
-              <q-btn
-                v-if="chatType === 'employee' && clientChatId"
-                flat
+            <!-- Редактирование сообщения -->
+            <div v-if="editingMsgId === msg.id" class="q-mt-xs">
+              <q-input
+                v-model="editContent"
                 dense
-                size="xs"
-                icon="forward"
-                color="blue-6"
-                :loading="forwardingMsgId === msg.id"
-                style="border: 1px solid #90CAF9; border-radius: 4px; padding: 1px 3px; min-height: 20px"
-                @click="forwardToClient(msg)"
-              >
-                <q-tooltip>Переслать клиенту</q-tooltip>
-              </q-btn>
-              <div class="text-caption" style="color: #888; font-size: 10px">
+                outlined
+                autofocus
+                autogrow
+                hide-bottom-space
+                style="font-size: 13px"
+                @keydown.enter.exact.prevent="saveEdit"
+                @keydown.escape="cancelEdit"
+              />
+              <div class="row justify-end q-gutter-xs q-mt-xs">
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  label="Отмена"
+                  color="grey-6"
+                  @click="cancelEdit"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  size="sm"
+                  label="Сохранить"
+                  color="blue-6"
+                  :loading="savingEdit"
+                  @click="saveEdit"
+                />
+              </div>
+            </div>
+
+            <!-- Нижняя строка: время + меню -->
+            <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
+              <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
+              <div class="text-caption q-mr-xs" style="color: #888; font-size: 10px">
                 {{ formatTime(msg.created_at) }}
               </div>
+              <q-btn
+                v-if="!msg.is_deleted"
+                flat
+                round
+                dense
+                size="xs"
+                icon="more_vert"
+                color="grey-5"
+                style="margin: -2px -4px"
+              >
+                <q-menu auto-close>
+                  <q-list dense style="min-width: 180px">
+                    <q-item
+                      v-if="isOwn(msg) && msg.message_type === 'text'"
+                      clickable
+                      @click="startEdit(msg)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="edit" size="16px" color="blue-6" />
+                      </q-item-section>
+                      <q-item-section>Редактировать</q-item-section>
+                    </q-item>
+                    <q-item
+                      v-if="isOwn(msg)"
+                      clickable
+                      @click="deleteMsg(msg)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="delete_outline" size="16px" color="red-5" />
+                      </q-item-section>
+                      <q-item-section class="text-red-6">
+                        Удалить
+                      </q-item-section>
+                    </q-item>
+                    <q-item
+                      v-if="chatType === 'employee' && clientChatId"
+                      clickable
+                      :disable="!!forwardingMsgId"
+                      @click="forwardToClient(msg)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="forward" size="16px" color="blue-5" />
+                      </q-item-section>
+                      <q-item-section>Переслать клиенту</q-item-section>
+                    </q-item>
+                    <q-item
+                      v-if="msg.yandex_path && chat && chat.crm_card_id"
+                      clickable
+                      @click="openCopyToCard(msg)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="drive_file_move" size="16px" color="green-6" />
+                      </q-item-section>
+                      <q-item-section>Скопировать в карточку</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
             </div>
           </div>
         </div>
@@ -227,7 +309,13 @@
         >
           <q-tooltip>Прикрепить файл</q-tooltip>
         </q-btn>
-        <input ref="fileInput" type="file" style="display: none" @change="onFileSelected">
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          style="display: none"
+          @change="onFileSelected"
+        >
         <q-input
           v-model="inputText"
           outlined
@@ -250,6 +338,74 @@
         />
       </div>
     </div>
+
+    <!-- Диалог: скопировать файл в карточку -->
+    <q-dialog v-model="showCopyToCard" persistent>
+      <q-card style="min-width: 300px; max-width: 420px; width: 92vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle2">
+            Скопировать в карточку
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-card-section class="q-pt-sm">
+          <div class="text-caption text-grey-6 q-mb-sm">
+            Файл будет скопирован в папку карточки на Яндекс.Диске и сохранён в выбранном поле.
+          </div>
+          <q-list dense>
+            <template v-for="group in COPY_DESTINATIONS" :key="group.group">
+              <q-item-label header class="text-caption text-weight-bold text-grey-7 q-px-none q-pt-sm q-pb-xs">
+                {{ group.group }}
+              </q-item-label>
+              <q-item
+                v-for="dest in group.items"
+                :key="dest.value"
+                clickable
+                :active="selectedDestination === dest.value"
+                active-class="bg-green-1 text-green-9"
+                class="rounded-borders"
+                style="min-height: 36px"
+                @click="selectedDestination = dest.value"
+              >
+                <q-item-section avatar style="min-width: 28px">
+                  <q-icon
+                    :name="selectedDestination === dest.value ? 'radio_button_checked' : 'radio_button_unchecked'"
+                    size="18px"
+                    :color="selectedDestination === dest.value ? 'green-7' : 'grey-5'"
+                  />
+                </q-item-section>
+                <q-item-section>{{ dest.label }}</q-item-section>
+              </q-item>
+            </template>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            label="Отмена"
+            color="grey-7"
+          />
+          <q-btn
+            unelevated
+            no-caps
+            label="Скопировать"
+            color="green-7"
+            :disable="!selectedDestination"
+            :loading="copyingToCard"
+            @click="confirmCopyToCard"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Диалог участников -->
     <q-dialog v-model="showMembers" @show="onMembersDialogOpen">
@@ -404,6 +560,44 @@ const loadingCardEmployees = ref(false)
 const addingMemberId = ref(null)
 const removingMemberId = ref(null)
 
+// Редактирование сообщений
+const editingMsgId = ref(null)
+const editContent = ref('')
+const savingEdit = ref(false)
+
+// Удаление
+const deletingMsgId = ref(null)
+
+// Копирование в карточку
+const showCopyToCard = ref(false)
+const copyToCardMsg = ref(null)
+const selectedDestination = ref(null)
+const copyingToCard = ref(false)
+
+const COPY_DESTINATIONS = [
+  { group: 'Документы', items: [
+    { label: 'Замер', value: 'measurement_yandex_path' },
+    { label: 'ТЗ', value: 'tech_task_yandex_path' },
+    { label: 'Фото-документация', value: 'photo_documentation_yandex_path' },
+    { label: 'Референсы', value: 'references_yandex_path' },
+  ] },
+  { group: 'Акты', items: [
+    { label: 'Акт планировочного', value: 'act_planning_yandex_path' },
+    { label: 'Акт концептуального', value: 'act_concept_yandex_path' },
+    { label: 'Акт финального', value: 'act_final_yandex_path' },
+    { label: 'Информационное письмо', value: 'info_letter_yandex_path' },
+  ] },
+  { group: 'Договор', items: [
+    { label: 'Договор', value: 'contract_file_yandex_path' },
+    { label: 'Доп. соглашение', value: 'additional_agreement_yandex_path' },
+  ] },
+  { group: 'Оплаты', items: [
+    { label: 'Чек аванса', value: 'advance_receipt_yandex_path' },
+    { label: 'Чек доплаты', value: 'additional_receipt_yandex_path' },
+    { label: 'Чек (3-й платёж)', value: 'third_receipt_yandex_path' },
+  ] },
+]
+
 function recalcHeight() {
   // Двойной requestAnimationFrame — ждём стабилизации layout
   requestAnimationFrame(() => {
@@ -494,6 +688,16 @@ async function openChat(chatId) {
           if (!exists) {
             messages.value.push(msg)
             scrollToBottom()
+          }
+        },
+        onMessageUpdated: (msg) => {
+          const idx = messages.value.findIndex(m => m.id === msg.id)
+          if (idx !== -1) messages.value.splice(idx, 1, msg)
+        },
+        onMessageDeleted: (msgId) => {
+          const idx = messages.value.findIndex(m => m.id === msgId)
+          if (idx !== -1) {
+            messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
           }
         },
       })
@@ -637,19 +841,88 @@ function onTyping() {
   typingTimer = setTimeout(() => sendTypingStop(), 2000)
 }
 
+// ── Edit ──────────────────────────────────────────────────────────────────
+function startEdit(msg) {
+  editingMsgId.value = msg.id
+  editContent.value = msg.content || ''
+}
+
+function cancelEdit() {
+  editingMsgId.value = null
+  editContent.value = ''
+}
+
+async function saveEdit() {
+  if (!editContent.value.trim() || !chat.value) return
+  savingEdit.value = true
+  try {
+    const { data: updated } = await api.patch(
+      `/api/v1/chats/${chat.value.id}/messages/${editingMsgId.value}`,
+      { content: editContent.value.trim() },
+    )
+    const idx = messages.value.findIndex(m => m.id === editingMsgId.value)
+    if (idx !== -1) messages.value.splice(idx, 1, updated)
+    cancelEdit()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка редактирования' })
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────
+async function deleteMsg(msg) {
+  if (deletingMsgId.value || !chat.value) return
+  deletingMsgId.value = msg.id
+  try {
+    await api.delete(`/api/v1/chats/${chat.value.id}/messages/${msg.id}`)
+    const idx = messages.value.findIndex(m => m.id === msg.id)
+    if (idx !== -1) {
+      messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+    }
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка удаления' })
+  } finally {
+    deletingMsgId.value = null
+  }
+}
+
+// ── Copy to card ──────────────────────────────────────────────────────────
+function openCopyToCard(msg) {
+  copyToCardMsg.value = msg
+  selectedDestination.value = null
+  showCopyToCard.value = true
+}
+
+async function confirmCopyToCard() {
+  if (!selectedDestination.value || !copyToCardMsg.value || !chat.value?.crm_card_id) return
+  copyingToCard.value = true
+  try {
+    await api.post(
+      `/api/v1/chats/${chat.value.id}/messages/${copyToCardMsg.value.id}/copy-to-card`,
+      { crm_card_id: chat.value.crm_card_id, destination: selectedDestination.value },
+    )
+    $q.notify({ type: 'positive', message: 'Файл скопирован в карточку' })
+    showCopyToCard.value = false
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка копирования' })
+  } finally {
+    copyingToCard.value = false
+  }
+}
+
+// ── File upload ───────────────────────────────────────────────────────────
 function pickFile() {
   fileInput.value?.click()
 }
 
-async function onFileSelected(event) {
-  const file = event.target.files?.[0]
-  if (!file || !chat.value) return
+async function _uploadSingleFile(file) {
+  if (!chat.value) return
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
   const msgType = imageExts.includes(ext) ? 'image' : 'file'
 
-  // Оптимистичное сообщение — показываем сразу
-  const tempId = `temp_${Date.now()}`
+  const tempId = `temp_${Date.now()}_${Math.random()}`
   messages.value.push({
     id: tempId,
     sender_employee_id: authStore.employee?.id,
@@ -661,6 +934,7 @@ async function onFileSelected(event) {
     file_size: file.size,
     yandex_path: null,
     is_deleted: false,
+    is_edited: false,
     created_at: new Date().toISOString(),
     _uploading: true,
   })
@@ -670,15 +944,12 @@ async function onFileSelected(event) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('message_type', msgType)
-
-    uploadProgress.value = 1
     const { data: savedMsg } = await api.post(`/api/v1/chats/${chat.value.id}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
       },
     })
-    // Заменяем временное сообщение реальным (или удаляем если WS уже добавил)
     const idx = messages.value.findIndex(m => m.id === tempId)
     if (idx !== -1) {
       const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
@@ -686,10 +957,26 @@ async function onFileSelected(event) {
     }
   } catch {
     messages.value = messages.value.filter(m => m.id !== tempId)
-    $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
-  } finally {
-    uploadProgress.value = 0
-    event.target.value = ''
+    throw new Error(file.name)
+  }
+}
+
+async function onFileSelected(event) {
+  const files = [...(event.target.files || [])]
+  if (!files.length || !chat.value) return
+  uploadProgress.value = 1
+  const errors = []
+  for (const file of files) {
+    try {
+      await _uploadSingleFile(file)
+    } catch {
+      errors.push(file.name)
+    }
+  }
+  uploadProgress.value = 0
+  event.target.value = ''
+  if (errors.length) {
+    $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
   }
 }
 

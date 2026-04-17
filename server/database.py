@@ -1171,6 +1171,7 @@ class InternalChatMessage(Base):
     yandex_path = Column(String, nullable=True)
 
     is_deleted = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     chat = relationship("InternalChat", back_populates="messages")
