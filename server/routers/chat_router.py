@@ -279,27 +279,43 @@ async def edit_message_endpoint(
     return msg
 
 
-# Допустимые назначения при копировании файла в данные карточки
+# Допустимые назначения при копировании файла в поля CRMCard
 _CARD_FILE_DESTINATIONS: dict[str, str] = {
-    "measurement_yandex_path": "Замер",
-    "tech_task_yandex_path": "ТЗ",
-    "photo_documentation_yandex_path": "Фото",
-    "references_yandex_path": "Референсы",
+    # Договор
+    "contract_file_yandex_path": "Договор",
+    "additional_agreement_yandex_path": "Договор",
+    # Акты (неподписанные)
     "act_planning_yandex_path": "Акты",
     "act_concept_yandex_path": "Акты",
     "act_final_yandex_path": "Акты",
     "info_letter_yandex_path": "Акты",
-    "contract_file_yandex_path": "Договор",
-    "additional_agreement_yandex_path": "Договор",
+    # Акты (подписанные)
+    "act_planning_signed_yandex_path": "Акты подписанные",
+    "act_concept_signed_yandex_path": "Акты подписанные",
+    "act_final_signed_yandex_path": "Акты подписанные",
+    "info_letter_signed_yandex_path": "Акты подписанные",
+    # Чеки
     "advance_receipt_yandex_path": "Чеки",
     "additional_receipt_yandex_path": "Чеки",
     "third_receipt_yandex_path": "Чеки",
+    # Общие данные
+    "tech_task_yandex_path": "ТЗ",
+    "photo_documentation_yandex_path": "Фотофиксация",
+    "references_yandex_path": "Референсы",
+    "measurement_yandex_path": "Замер",
+}
+
+# Назначения в файлы стадий (ProjectFile), ключ → имя стадии
+_STAGE_FILE_DESTINATIONS: dict[str, str] = {
+    "stage_1": "Стадия 1",
+    "stage_2": "Стадия 2",
+    "stage_3": "Стадия 3",
 }
 
 
 class CopyToCardBody(PydanticBaseModel):
     crm_card_id: int
-    destination: str  # ключ поля CRMCard, напр. 'measurement_yandex_path'
+    destination: str  # ключ поля CRMCard или stage_1/stage_2/stage_3
 
 
 @router.post("/{chat_id}/messages/{msg_id}/copy-to-card")
@@ -310,9 +326,10 @@ async def copy_message_file_to_card(
     current_user: Employee = Depends(require_permission("chat.employee.send")),
     db: Session = Depends(get_db),
 ):
-    """Скопировать файл из сообщения в данные карточки CRM."""
-    if body.destination not in _CARD_FILE_DESTINATIONS:
-        raise HTTPException(400, f"Неизвестное поле: {body.destination}")
+    """Скопировать файл из сообщения в данные карточки CRM или ProjectFile."""
+    is_stage = body.destination in _STAGE_FILE_DESTINATIONS
+    if not is_stage and body.destination not in _CARD_FILE_DESTINATIONS:
+        raise HTTPException(400, f"Неизвестное назначение: {body.destination}")
 
     msg = (
         db.query(InternalChatMessage)
@@ -325,7 +342,7 @@ async def copy_message_file_to_card(
     if not msg or not msg.yandex_path:
         raise HTTPException(404, "Файл сообщения не найден")
 
-    from database import CRMCard
+    from database import CRMCard, ProjectFile
 
     card = db.query(CRMCard).filter(CRMCard.id == body.crm_card_id).first()
     if not card:
@@ -340,7 +357,11 @@ async def copy_message_file_to_card(
         if not yd or not yd.token:
             raise HTTPException(503, "Яндекс.Диск не настроен")
 
-        subfolder = _CARD_FILE_DESTINATIONS[body.destination]
+        if is_stage:
+            subfolder = _STAGE_FILE_DESTINATIONS[body.destination]
+        else:
+            subfolder = _CARD_FILE_DESTINATIONS[body.destination]
+
         card_root = card.yandex_folder_path.replace("disk:", "").rstrip("/")
         file_name = os.path.basename(msg.yandex_path.replace("disk:", ""))
         dest_clean = f"{card_root}/{subfolder}/{file_name}"
@@ -348,15 +369,38 @@ async def copy_message_file_to_card(
 
         _ensure_yd_folder(f"disk:{card_root}/{subfolder}")
         yd.copy_file(msg.yandex_path, dest_yd, overwrite=True)
-        public_url = yd.get_public_link(dest_clean) or ""
+        public_url = yd.get_public_link(dest_yd) or ""
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"Ошибка копирования файла в карточку: {e}")
         raise HTTPException(500, "Ошибка копирования на Яндекс.Диске")
 
-    setattr(card, body.destination, dest_yd)
-    db.commit()
+    if is_stage:
+        # Сохраняем в ProjectFile (привязка к договору)
+        if not card.contract_id:
+            raise HTTPException(400, "У карточки нет привязанного договора")
+        ext = os.path.splitext(file_name)[1].lower()
+        file_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "pdf" if ext == ".pdf" else "file"
+        stage_name = _STAGE_FILE_DESTINATIONS[body.destination]
+        # Автоинкремент variation
+        last = db.query(ProjectFile).filter(ProjectFile.contract_id == card.contract_id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
+        variation = (last.variation + 1) if last else 1
+        pf = ProjectFile(
+            contract_id=card.contract_id,
+            stage=stage_name,
+            file_type=file_type,
+            yandex_path=dest_yd,
+            file_name=file_name,
+            public_link=public_url,
+            variation=variation,
+        )
+        db.add(pf)
+        db.commit()
+    else:
+        setattr(card, body.destination, dest_yd)
+        db.commit()
+
     return {"status": "ok", "yandex_path": dest_yd, "file_url": public_url}
 
 
@@ -446,7 +490,7 @@ class AddMemberBody(PydanticBaseModel):
 
 
 @router.post("/{chat_id}/members")
-def add_member(
+async def add_member(
     chat_id: int,
     body: AddMemberBody,
     current_user: Employee = Depends(require_permission("chat.employee.manage")),
@@ -457,11 +501,16 @@ def add_member(
         member = add_member_to_chat(db, chat_id, body.employee_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
+    # Рассылаем системное сообщение (созданное add_member_to_chat) через WS
+    sys_msg = db.query(InternalChatMessage).filter(InternalChatMessage.chat_id == chat_id, InternalChatMessage.message_type == "system").order_by(InternalChatMessage.id.desc()).first()
+    if sys_msg:
+        await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(sys_msg)})
+    await ws_manager.broadcast(chat_id, {"type": "member_added", "employee_id": body.employee_id, "member_id": member.id})
     return {"status": "ok", "member_id": member.id}
 
 
 @router.delete("/{chat_id}/members/{member_id}")
-def remove_member(
+async def remove_member(
     chat_id: int,
     member_id: int,
     current_user: Employee = Depends(require_permission("chat.employee.manage")),
@@ -477,8 +526,25 @@ def remove_member(
     )
     if not member:
         raise HTTPException(404, "Участник не найден")
+    # Имя участника для системного сообщения
+    display_name = member.guest_name or ""
+    if member.employee_id:
+        emp = db.query(Employee).filter(Employee.id == member.employee_id).first()
+        if emp:
+            display_name = _get_employee_display_name(emp)
     member.is_active = False
+    # Создаём системное сообщение об удалении
+    sys_msg = InternalChatMessage(
+        chat_id=chat_id,
+        sender_display_name="Система",
+        message_type="system",
+        content=f"{display_name or 'Участник'} удалён из чата",
+    )
+    db.add(sys_msg)
     db.commit()
+    db.refresh(sys_msg)
+    await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(sys_msg)})
+    await ws_manager.broadcast(chat_id, {"type": "member_removed", "member_id": member_id})
     return {"status": "ok"}
 
 

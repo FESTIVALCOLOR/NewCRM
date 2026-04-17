@@ -58,12 +58,39 @@
             :class="isOwn(msg) ? 'bubble-own' : 'bubble-staff'"
             style="max-width: 80%"
           >
-            <div
-              v-if="!isOwn(msg)"
-              class="text-caption text-weight-bold q-mb-xs"
-              style="color: #1565C0"
-            >
-              {{ msg.sender_display_name }}
+            <!-- Верхняя строка: имя отправителя + кнопка меню -->
+            <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
+              <div
+                v-if="!isOwn(msg)"
+                class="text-caption text-weight-bold"
+                style="color: #1565C0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+              >
+                {{ msg.sender_display_name }}
+              </div>
+              <div v-else style="flex: 1" />
+              <q-btn
+                v-if="isOwn(msg) && !msg.is_deleted"
+                flat
+                round
+                dense
+                size="xs"
+                icon="more_vert"
+                color="grey-5"
+                style="margin: -4px -6px -2px 2px; flex-shrink: 0"
+              >
+                <q-menu auto-close>
+                  <q-list dense style="min-width: 140px">
+                    <q-item clickable @click="deleteClientMsg(msg)">
+                      <q-item-section avatar>
+                        <q-icon name="delete_outline" size="16px" color="red-5" />
+                      </q-item-section>
+                      <q-item-section class="text-red-6">
+                        Удалить
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
             </div>
 
             <!-- Загрузка файла (оптимистичное сообщение) -->
@@ -104,34 +131,12 @@
               </div>
             </template>
 
+            <!-- Нижняя строка: время -->
             <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
               <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
-              <div class="text-caption q-mr-xs" style="color: #888; font-size: 10px">
+              <div class="text-caption" style="color: #888; font-size: 10px">
                 {{ formatTime(msg.created_at) }}
               </div>
-              <q-btn
-                v-if="isOwn(msg) && !msg.is_deleted"
-                flat
-                round
-                dense
-                size="xs"
-                icon="more_vert"
-                color="grey-5"
-                style="margin: -2px -4px"
-              >
-                <q-menu auto-close>
-                  <q-list dense style="min-width: 140px">
-                    <q-item clickable @click="deleteClientMsg(msg)">
-                      <q-item-section avatar>
-                        <q-icon name="delete_outline" size="16px" color="red-5" />
-                      </q-item-section>
-                      <q-item-section class="text-red-6">
-                        Удалить
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-menu>
-              </q-btn>
             </div>
           </div>
         </div>

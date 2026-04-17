@@ -153,17 +153,12 @@ export function useChatWebSocket() {
         if (_handlers.onMessage) _handlers.onMessage(messageData)
       }
     } else if (type === 'typing_start') {
-      const senderName = msg.sender_name
-      if (senderName) {
-        const existing = typingUsers.value.find(u => u.name === senderName)
-        if (!existing) typingUsers.value.push({ name: senderName })
-      }
+      const sn = msg.sender_name
+      if (sn && !typingUsers.value.find(u => u.name === sn)) typingUsers.value.push({ name: sn })
       if (_handlers.onTyping) _handlers.onTyping(msg, true)
     } else if (type === 'typing_stop') {
-      const senderName = msg.sender_name
-      if (senderName) {
-        typingUsers.value = typingUsers.value.filter(u => u.name !== senderName)
-      }
+      const sn = msg.sender_name
+      if (sn) typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
       if (_handlers.onTyping) _handlers.onTyping(msg, false)
     } else if (type === 'read') {
       if (_handlers.onRead) _handlers.onRead(msg)
@@ -171,6 +166,10 @@ export function useChatWebSocket() {
       if (msg.message && _handlers.onMessageUpdated) _handlers.onMessageUpdated(msg.message)
     } else if (type === 'message_deleted') {
       if (msg.message_id && _handlers.onMessageDeleted) _handlers.onMessageDeleted(msg.message_id)
+    } else if (type === 'member_added') {
+      if (_handlers.onMemberAdded) _handlers.onMemberAdded(msg)
+    } else if (type === 'member_removed') {
+      if (_handlers.onMemberRemoved) _handlers.onMemberRemoved(msg)
     }
   }
 
