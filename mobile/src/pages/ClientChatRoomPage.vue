@@ -93,21 +93,64 @@
             :class="isOwn(msg) ? 'bubble-own' : 'bubble-other'"
             style="max-width: 75%"
           >
-            <div
-              v-if="!isOwn(msg)"
-              class="text-caption text-weight-bold q-mb-xs"
-              :style="{ color: isGuest(msg) ? '#2E7D32' : '#1565C0' }"
-            >
-              {{ msg.sender_display_name }}
-              <q-chip
-                v-if="isGuest(msg)"
+            <!-- Верхняя строка: имя + меню -->
+            <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
+              <div
+                class="text-caption text-weight-bold"
+                :style="{ color: isOwn(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
+                style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+              >
+                {{ msg.sender_display_name }}
+                <q-chip
+                  v-if="isGuest(msg)"
+                  dense
+                  size="xs"
+                  color="green-2"
+                  text-color="green-9"
+                >
+                  клиент
+                </q-chip>
+              </div>
+              <q-btn
+                v-if="isOwn(msg) && !msg.is_deleted"
+                flat
+                round
                 dense
                 size="xs"
-                color="green-2"
-                text-color="green-9"
+                icon="more_vert"
+                color="grey-6"
+                style="margin: -4px -6px -2px 2px; flex-shrink: 0"
               >
-                клиент
-              </q-chip>
+                <q-menu auto-close>
+                  <q-list dense style="min-width: 150px; font-size: 12px">
+                    <q-item
+                      v-if="msg.message_type === 'text'"
+                      clickable
+                      dense
+                      @click="startEdit(msg)"
+                    >
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="edit" size="14px" color="grey-8" />
+                      </q-item-section>
+                      <q-item-section style="font-size: 12px">
+                        Редактировать
+                      </q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      dense
+                      @click="deleteMsg(msg)"
+                    >
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="delete_outline" size="14px" color="grey-8" />
+                      </q-item-section>
+                      <q-item-section class="text-red-7" style="font-size: 12px">
+                        Удалить
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
             </div>
 
             <template v-if="msg.message_type === 'image'">
@@ -136,13 +179,50 @@
             </template>
 
             <template v-else>
-              <div class="text-body2" style="white-space: pre-wrap; word-break: break-word">
+              <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
                 {{ msg.content }}
               </div>
             </template>
 
-            <div class="text-caption q-mt-xs" :class="isOwn(msg) ? 'text-right' : 'text-left'" style="color: #888; font-size: 10px">
-              {{ formatTime(msg.created_at) }}
+            <!-- Редактирование сообщения -->
+            <div v-if="editingMsgId === msg.id" class="q-mt-xs">
+              <q-input
+                v-model="editContent"
+                dense
+                outlined
+                autofocus
+                autogrow
+                hide-bottom-space
+                style="font-size: 13px"
+                @keydown.enter.exact.prevent="saveEdit"
+                @keydown.escape="cancelEdit"
+              />
+              <div class="row justify-end q-gutter-xs q-mt-xs">
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  label="Отмена"
+                  color="grey-6"
+                  @click="cancelEdit"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  size="sm"
+                  label="Сохранить"
+                  color="blue-6"
+                  :loading="savingEdit"
+                  @click="saveEdit"
+                />
+              </div>
+            </div>
+
+            <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'" style="color: #888; font-size: 10px">
+              <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
+              <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
             </div>
           </div>
         </div>
@@ -456,6 +536,9 @@ const loadingAvailableEmps = ref(false)
 const addingMemberId = ref(null)
 const removingMemberId = ref(null)
 const chatCrmCardId = ref(null)
+const editingMsgId = ref(null)
+const editContent = ref('')
+const savingEdit = ref(false)
 
 function recalcChatH() {
   const vh = window.visualViewport?.height ?? window.innerHeight
@@ -489,7 +572,50 @@ const typingText = computed(() => {
 })
 
 function isOwn(msg) {
-  return msg.sender_employee_id === authStore.employee?.id
+  const myId = authStore.user?.id
+  if (!myId) return false
+  return Number(msg.sender_employee_id) === Number(myId)
+}
+
+function startEdit(msg) {
+  editingMsgId.value = msg.id
+  editContent.value = msg.content
+}
+
+function cancelEdit() {
+  editingMsgId.value = null
+  editContent.value = ''
+}
+
+async function saveEdit() {
+  if (!editContent.value.trim() || !editingMsgId.value) return
+  savingEdit.value = true
+  try {
+    await api.patch(`/api/v1/chats/${chatId}/messages/${editingMsgId.value}`, { content: editContent.value.trim() })
+    const msg = messages.value.find(m => m.id === editingMsgId.value)
+    if (msg) {
+      msg.content = editContent.value.trim()
+      msg.is_edited = true
+    }
+    cancelEdit()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка редактирования' })
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+async function deleteMsg(msg) {
+  try {
+    await api.delete(`/api/v1/chats/${chatId}/messages/${msg.id}`)
+    const m = messages.value.find(m => m.id === msg.id)
+    if (m) {
+      m.is_deleted = true
+      m.content = 'Сообщение удалено'
+    }
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка удаления' })
+  }
 }
 
 function imgStreamUrl(msg) {

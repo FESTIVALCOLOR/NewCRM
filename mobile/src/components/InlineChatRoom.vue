@@ -132,9 +132,8 @@
             <!-- Верхняя строка: имя отправителя + кнопка меню -->
             <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
               <div
-                v-if="!isOwn(msg)"
                 class="text-caption text-weight-bold"
-                :style="{ color: msg.sender_guest_token ? '#2E7D32' : '#1565C0' }"
+                :style="{ color: isOwn(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
                 style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
               >
                 {{ msg.sender_display_name }}
@@ -148,61 +147,70 @@
                   клиент
                 </q-chip>
               </div>
-              <div v-else style="flex: 1" />
               <q-btn
-                v-if="!msg.is_deleted && !msg._uploading"
+                v-if="!msg.is_deleted && !msg._uploading && (isOwn(msg) || clientChatId || (msg.yandex_path && chat && chat.crm_card_id))"
                 flat
                 round
                 dense
                 size="xs"
                 icon="more_vert"
-                color="grey-5"
+                color="grey-6"
                 style="margin: -4px -6px -2px 2px; flex-shrink: 0"
               >
                 <q-menu auto-close>
-                  <q-list dense style="min-width: 180px">
+                  <q-list dense style="min-width: 150px; font-size: 12px">
                     <q-item
                       v-if="isOwn(msg) && msg.message_type === 'text'"
                       clickable
+                      dense
                       @click="startEdit(msg)"
                     >
-                      <q-item-section avatar>
-                        <q-icon name="edit" size="16px" color="blue-6" />
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="edit" size="14px" color="grey-8" />
                       </q-item-section>
-                      <q-item-section>Редактировать</q-item-section>
+                      <q-item-section style="font-size: 12px">
+                        Редактировать
+                      </q-item-section>
                     </q-item>
                     <q-item
                       v-if="isOwn(msg)"
                       clickable
+                      dense
                       @click="deleteMsg(msg)"
                     >
-                      <q-item-section avatar>
-                        <q-icon name="delete_outline" size="16px" color="red-5" />
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="delete_outline" size="14px" color="grey-8" />
                       </q-item-section>
-                      <q-item-section class="text-red-6">
+                      <q-item-section class="text-red-7" style="font-size: 12px">
                         Удалить
                       </q-item-section>
                     </q-item>
                     <q-item
-                      v-if="chatType === 'employee' && clientChatId"
+                      v-if="clientChatId"
                       clickable
+                      dense
                       :disable="!!forwardingMsgId"
                       @click="forwardToClient(msg)"
                     >
-                      <q-item-section avatar>
-                        <q-icon name="forward" size="16px" color="blue-5" />
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="forward" size="14px" color="grey-8" />
                       </q-item-section>
-                      <q-item-section>Переслать клиенту</q-item-section>
+                      <q-item-section style="font-size: 12px">
+                        Переслать клиенту
+                      </q-item-section>
                     </q-item>
                     <q-item
                       v-if="msg.yandex_path && chat && chat.crm_card_id"
                       clickable
+                      dense
                       @click="openCopyToCard(msg)"
                     >
-                      <q-item-section avatar>
-                        <q-icon name="drive_file_move" size="16px" color="green-6" />
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="drive_file_move" size="14px" color="grey-8" />
                       </q-item-section>
-                      <q-item-section>Скопировать в карточку</q-item-section>
+                      <q-item-section style="font-size: 12px">
+                        Скопировать в карточку
+                      </q-item-section>
                     </q-item>
                   </q-list>
                 </q-menu>
@@ -617,8 +625,11 @@ const COPY_DESTINATIONS = [
   ] },
   { group: 'Стадии', items: [
     { label: 'Стадия 1: Планировочное решение', value: 'stage_1' },
+    { label: 'Стадия 1: Правки', value: 'stage_1_revisions' },
     { label: 'Стадия 2: Концепция дизайна', value: 'stage_2' },
+    { label: 'Стадия 2: Правки', value: 'stage_2_revisions' },
     { label: 'Стадия 3: Чертёжная документация', value: 'stage_3' },
+    { label: 'Стадия 3: Правки', value: 'stage_3_revisions' },
   ] },
 ]
 

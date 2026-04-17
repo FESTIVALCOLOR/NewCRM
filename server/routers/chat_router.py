@@ -305,11 +305,16 @@ _CARD_FILE_DESTINATIONS: dict[str, str] = {
     "measurement_yandex_path": "Замер",
 }
 
-# Назначения в файлы стадий (ProjectFile), ключ → имя стадии
-_STAGE_FILE_DESTINATIONS: dict[str, str] = {
-    "stage_1": "Стадия 1",
-    "stage_2": "Стадия 2",
-    "stage_3": "Стадия 3",
+# Назначения в файлы стадий (ProjectFile)
+# yd_folder — подпапка в папке договора на ЯД
+# db_stage  — значение поля ProjectFile.stage (должно совпадать с ContractDetailPage)
+_STAGE_FILE_DESTINATIONS: dict[str, dict[str, str]] = {
+    "stage_1": {"yd_folder": "1 стадия - Планировочное решение", "db_stage": "stage1"},
+    "stage_2": {"yd_folder": "Концепция-коллажи", "db_stage": "stage2_concept"},
+    "stage_3": {"yd_folder": "3 стадия - Чертежный проект", "db_stage": "stage3"},
+    "stage_1_revisions": {"yd_folder": "1 стадия - Планировочное решение/Правки", "db_stage": "stage1"},
+    "stage_2_revisions": {"yd_folder": "Концепция-коллажи/Правки", "db_stage": "stage2_concept"},
+    "stage_3_revisions": {"yd_folder": "3 стадия - Чертежный проект/Правки", "db_stage": "stage3"},
 }
 
 
@@ -365,7 +370,7 @@ async def copy_message_file_to_card(
             raise HTTPException(503, "Яндекс.Диск не настроен")
 
         if is_stage:
-            subfolder = _STAGE_FILE_DESTINATIONS[body.destination]
+            subfolder = _STAGE_FILE_DESTINATIONS[body.destination]["yd_folder"]
         else:
             subfolder = _CARD_FILE_DESTINATIONS[body.destination]
 
@@ -386,7 +391,7 @@ async def copy_message_file_to_card(
     if is_stage:
         ext = os.path.splitext(file_name)[1].lower()
         file_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "pdf" if ext == ".pdf" else "file"
-        stage_name = _STAGE_FILE_DESTINATIONS[body.destination]
+        stage_name = _STAGE_FILE_DESTINATIONS[body.destination]["db_stage"]
         last = db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
         variation = (last.variation + 1) if last else 1
         pf = ProjectFile(
