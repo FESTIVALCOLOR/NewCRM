@@ -540,7 +540,9 @@ const PERMISSION_GROUPS = {
   'Платежи': ['payments.create', 'payments.update', 'payments.delete'],
   'Зарплаты': ['salaries.create', 'salaries.update', 'salaries.delete', 'salaries.mark_to_pay', 'salaries.mark_paid'],
   'Тарифы': ['rates.create', 'rates.delete'],
-  'Мессенджер': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat', 'messenger.manage_scripts'],
+  'Чат сотрудников': ['chat.employee.view', 'chat.employee.send', 'chat.employee.manage', 'chat.employee.upload_to_data'],
+  'Чат с клиентами': ['chat.client.view', 'chat.client.send', 'chat.client.manage', 'chat.client.send_script'],
+  'Мессенджер (Telegram)': ['messenger.create_chat', 'messenger.delete_chat', 'messenger.view_chat', 'messenger.manage_scripts'],
   'Уведомления': ['notifications.settings_projects', 'notifications.settings_duplication', 'notifications.settings_supervision', 'notifications.settings_payment'],
 }
 
