@@ -435,27 +435,31 @@ def load_permissions(employee_id: int, db: Session) -> set[str]:
         if not employee:
             perms = set()
         else:
-            perms = _get_default_permissions(employee)
+            perms = _get_default_permissions(employee, db)
 
     _set_cached(employee_id, perms)
     return perms
 
 
-def _get_default_permissions(employee: Employee) -> set[str]:
-    """Получить дефолтные права по роли и должности сотрудника"""
+def _get_default_permissions(employee: Employee, db: Session) -> set[str]:
+    """Получить дефолтные права по роли и должности из матрицы ролей в БД.
+    Fallback на хардкод DEFAULT_ROLE_PERMISSIONS если таблица пуста."""
     perms = set()
 
+    # Читаем матрицу из БД (load_role_matrix сам падает на хардкод если пусто)
+    role_matrix = load_role_matrix(db)
+
     # По роли
-    role_perms = DEFAULT_ROLE_PERMISSIONS.get(employee.role, set())
+    role_perms = set(role_matrix.get(employee.role, []))
     perms |= role_perms
 
-    # По основной должности (для reset_designer/draftsman)
-    pos_perms = DEFAULT_ROLE_PERMISSIONS.get(employee.position, set())
+    # По основной должности
+    pos_perms = set(role_matrix.get(employee.position, []))
     perms |= pos_perms
 
     # По совмещённой должности
     if employee.secondary_position:
-        sec_perms = DEFAULT_ROLE_PERMISSIONS.get(employee.secondary_position, set())
+        sec_perms = set(role_matrix.get(employee.secondary_position, []))
         perms |= sec_perms
 
     return perms
@@ -730,16 +734,17 @@ def load_role_matrix(db: Session) -> dict[str, list[str]]:
 def save_role_matrix(matrix: dict[str, list[str]], updated_by: int, db: Session):
     """
     Сохранить матрицу прав по ролям в БД.
-    Полная замена: удаляет старые записи, создаёт новые.
+    Частичная замена: удаляет и заново вставляет строки только для переданных ролей.
+    Остальные роли в БД не трогает — это защита от UI-бага, когда фронтенд
+    отправляет только одну роль вместо всей матрицы.
     """
     from datetime import datetime
 
-    # Удаляем все старые записи
-    db.query(RoleDefaultPermission).delete(synchronize_session=False)
-
-    # Создаём новые записи
     now = datetime.utcnow()
     for role, permissions in matrix.items():
+        # Удаляем старые записи только для этой роли
+        db.query(RoleDefaultPermission).filter(RoleDefaultPermission.role == role).delete(synchronize_session=False)
+        # Создаём новые записи для этой роли
         for perm_name in permissions:
             if perm_name in PERMISSION_NAMES:
                 db.add(

@@ -81,7 +81,7 @@
                 {{ msg.sender_display_name }}
               </div>
               <q-btn
-                v-if="!msg.is_deleted && !msg._uploading && (isOwn(msg) || clientChatId || (msg.yandex_path && chatCrmCardId))"
+                v-if="!msg.is_deleted && !msg._uploading"
                 flat
                 round
                 dense
@@ -119,17 +119,15 @@
                       </q-item-section>
                     </q-item>
                     <q-item
-                      v-if="clientChatId"
                       clickable
                       dense
-                      :disable="!!forwardingMsgId"
-                      @click="forwardToClient(msg)"
+                      @click="openForwardDialog(msg)"
                     >
                       <q-item-section avatar style="min-width: 28px">
                         <q-icon name="forward" size="14px" color="grey-8" />
                       </q-item-section>
                       <q-item-section style="font-size: 12px">
-                        Переслать клиенту
+                        Переслать
                       </q-item-section>
                     </q-item>
                     <q-item
@@ -308,12 +306,12 @@
       </div>
     </div>
 
-    <!-- Диалог: скопировать файл в карточку -->
-    <q-dialog v-model="showCopyToCard" persistent>
-      <q-card style="min-width: 300px; max-width: 420px; width: 92vw">
+    <!-- Диалог: переслать сообщение -->
+    <q-dialog v-model="showForwardDialog">
+      <q-card style="min-width: 300px; max-width: 400px; width: 90vw">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-subtitle2">
-            Скопировать в карточку
+            Переслать сообщение
           </div>
           <q-space />
           <q-btn
@@ -324,48 +322,36 @@
             icon="close"
           />
         </q-card-section>
-        <q-card-section class="q-pt-sm">
-          <div class="text-caption text-grey-6 q-mb-sm">
-            Файл будет скопирован в папку карточки на Яндекс.Диске и сохранён в выбранном поле.
+        <q-separator class="q-mt-sm" />
+        <q-card-section style="max-height: 50vh; overflow-y: auto; padding: 0">
+          <div v-if="loadingForwardChats" class="text-center q-pa-md">
+            <q-spinner size="24px" color="grey" />
           </div>
-          <div style="max-height: 52vh; overflow-y: auto">
-            <q-expansion-item
-              v-for="group in COPY_DESTINATIONS"
-              :key="group.group"
-              :label="group.group"
-              :model-value="group.items.some(d => d.value === selectedDestination)"
-              dense
-              dense-toggle
-              header-class="text-caption text-weight-bold text-grey-8 q-px-xs"
-              class="q-mb-xs"
+          <q-list v-else separator>
+            <q-item
+              v-for="c in forwardTargetChats"
+              :key="c.id"
+              clickable
+              :active="selectedForwardChatId === c.id"
+              active-class="bg-blue-1"
+              @click="selectedForwardChatId = c.id"
             >
-              <q-list dense>
-                <q-item
-                  v-for="dest in group.items"
-                  :key="dest.value"
-                  clickable
-                  :active="selectedDestination === dest.value"
-                  active-class="bg-green-1 text-green-9"
-                  class="rounded-borders q-pl-md"
-                  style="min-height: 34px"
-                  @click="selectedDestination = dest.value"
-                >
-                  <q-item-section avatar style="min-width: 24px">
-                    <q-icon
-                      :name="selectedDestination === dest.value ? 'radio_button_checked' : 'radio_button_unchecked'"
-                      size="16px"
-                      :color="selectedDestination === dest.value ? 'green-7' : 'grey-5'"
-                    />
-                  </q-item-section>
-                  <q-item-section style="font-size: 13px">
-                    {{ dest.label }}
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-expansion-item>
-          </div>
+              <q-item-section>
+                <q-item-label>{{ c.title || `Чат #${c.id}` }}</q-item-label>
+                <q-item-label caption>
+                  {{ c.chat_type === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-icon v-if="selectedForwardChatId === c.id" name="check_circle" color="blue-6" />
+              </q-item-section>
+            </q-item>
+            <div v-if="!loadingForwardChats && !forwardTargetChats.length" class="text-center text-grey q-pa-md">
+              Нет доступных чатов
+            </div>
+          </q-list>
         </q-card-section>
-        <q-card-actions align="right">
+        <q-card-actions align="right" class="q-pt-sm">
           <q-btn
             v-close-popup
             flat
@@ -376,13 +362,169 @@
           <q-btn
             unelevated
             no-caps
-            label="Скопировать"
-            color="green-7"
-            :disable="!selectedDestination"
-            :loading="copyingToCard"
-            @click="confirmCopyToCard"
+            label="Переслать"
+            color="blue-6"
+            :disable="!selectedForwardChatId"
+            :loading="sendingForward"
+            @click="doForward"
           />
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Диалог: скопировать файл в карточку -->
+    <q-dialog v-model="showCopyToCard" persistent>
+      <q-card style="min-width: 300px; max-width: 420px; width: 92vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle2">
+            {{ copyStep === 1 ? 'Скопировать в карточку' : 'Выбрать вариацию' }}
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+
+        <!-- Шаг 1: выбор назначения -->
+        <template v-if="copyStep === 1">
+          <q-card-section class="q-pt-sm">
+            <div class="text-caption text-grey-6 q-mb-sm">
+              Файл будет скопирован в папку карточки на Яндекс.Диске и сохранён в выбранном поле.
+            </div>
+            <div style="max-height: 52vh; overflow-y: auto">
+              <q-expansion-item
+                v-for="group in COPY_DESTINATIONS"
+                :key="group.group"
+                :label="group.group"
+                :model-value="group.items.some(d => d.value === selectedDestination)"
+                dense
+                dense-toggle
+                header-class="text-caption text-weight-bold text-grey-8 q-px-xs"
+                class="q-mb-xs"
+              >
+                <q-list dense>
+                  <q-item
+                    v-for="dest in group.items"
+                    :key="dest.value"
+                    clickable
+                    :active="selectedDestination === dest.value"
+                    active-class="bg-green-1 text-green-9"
+                    class="rounded-borders q-pl-md"
+                    style="min-height: 34px"
+                    @click="selectedDestination = dest.value"
+                  >
+                    <q-item-section avatar style="min-width: 24px">
+                      <q-icon
+                        :name="selectedDestination === dest.value ? 'radio_button_checked' : 'radio_button_unchecked'"
+                        size="16px"
+                        :color="selectedDestination === dest.value ? 'green-7' : 'grey-5'"
+                      />
+                    </q-item-section>
+                    <q-item-section style="font-size: 13px">
+                      {{ dest.label }}
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-expansion-item>
+            </div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn
+              v-close-popup
+              flat
+              no-caps
+              label="Отмена"
+              color="grey-7"
+            />
+            <q-btn
+              unelevated
+              no-caps
+              :label="STAGE_KEYS.has(selectedDestination) ? 'Далее' : 'Скопировать'"
+              color="green-7"
+              :disable="!selectedDestination"
+              :loading="copyingToCard || loadingVariations"
+              @click="goToVariationStep"
+            />
+          </q-card-actions>
+        </template>
+
+        <!-- Шаг 2: выбор вариации (только для стадий) -->
+        <template v-else>
+          <q-card-section class="q-pt-sm">
+            <div class="text-caption text-grey-6 q-mb-sm">
+              Выберите вариацию для добавления файла или создайте новую.
+            </div>
+            <q-list dense>
+              <q-item
+                v-for="v in stageVariations"
+                :key="v.variation"
+                clickable
+                :active="selectedVariation === v.variation"
+                active-class="bg-green-1 text-green-9"
+                class="rounded-borders"
+                style="min-height: 36px"
+                @click="selectedVariation = v.variation"
+              >
+                <q-item-section avatar style="min-width: 24px">
+                  <q-icon
+                    :name="selectedVariation === v.variation ? 'radio_button_checked' : 'radio_button_unchecked'"
+                    size="16px"
+                    :color="selectedVariation === v.variation ? 'green-7' : 'grey-5'"
+                  />
+                </q-item-section>
+                <q-item-section>
+                  <div style="font-size: 13px">
+                    Вариация {{ v.variation }}
+                  </div>
+                  <div class="text-caption text-grey-6" style="font-size: 11px">
+                    {{ v.files.slice(0, 2).join(', ') }}{{ v.files.length > 2 ? ` +${v.files.length - 2}` : '' }}
+                  </div>
+                </q-item-section>
+              </q-item>
+              <!-- Новая вариация -->
+              <q-item
+                clickable
+                :active="selectedVariation === null"
+                active-class="bg-green-1 text-green-9"
+                class="rounded-borders"
+                style="min-height: 36px"
+                @click="selectedVariation = null"
+              >
+                <q-item-section avatar style="min-width: 24px">
+                  <q-icon
+                    :name="selectedVariation === null ? 'radio_button_checked' : 'radio_button_unchecked'"
+                    size="16px"
+                    :color="selectedVariation === null ? 'green-7' : 'grey-5'"
+                  />
+                </q-item-section>
+                <q-item-section style="font-size: 13px">
+                  Создать новую (Вариация {{ nextVariation }})
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn
+              flat
+              no-caps
+              label="Назад"
+              color="grey-7"
+              @click="copyStep = 1"
+            />
+            <q-btn
+              unelevated
+              no-caps
+              label="Скопировать"
+              color="green-7"
+              :loading="copyingToCard"
+              @click="confirmCopyToCard"
+            />
+          </q-card-actions>
+        </template>
       </q-card>
     </q-dialog>
 
@@ -524,9 +666,15 @@ const removingMemberId = ref(null)
 const chatCrmCardId = ref(null)
 const fileInput = ref(null)
 const clientChatId = ref(null)
-const forwardingMsgId = ref(null)
 const chatPageH = ref('100dvh')
 const uploadProgress = ref(0)
+// Диалог пересылки
+const showForwardDialog = ref(false)
+const forwardingMsg = ref(null)
+const forwardTargetChats = ref([])
+const loadingForwardChats = ref(false)
+const selectedForwardChatId = ref(null)
+const sendingForward = ref(false)
 
 // Редактирование
 const editingMsgId = ref(null)
@@ -539,6 +687,17 @@ const showCopyToCard = ref(false)
 const copyToCardMsg = ref(null)
 const selectedDestination = ref(null)
 const copyingToCard = ref(false)
+const copyStep = ref(1) // 1 = выбор назначения, 2 = выбор вариации
+const stageVariations = ref([]) // [{variation: N, files: [...]}]
+const nextVariation = ref(1)
+const selectedVariation = ref(null) // число = конкретная вариация, null = новая
+const loadingVariations = ref(false)
+
+const STAGE_KEYS = new Set([
+  'stage_1', 'stage_1_revisions',
+  'stage_2', 'stage_2_revisions',
+  'stage_3', 'stage_3_revisions',
+])
 
 const COPY_DESTINATIONS = [
   { group: 'Договор', items: [
@@ -664,18 +823,35 @@ async function loadClientChat(cardId) {
   }
 }
 
-async function forwardToClient(msg) {
-  if (!clientChatId.value || forwardingMsgId.value) return
-  forwardingMsgId.value = msg.id
+async function openForwardDialog(msg) {
+  forwardingMsg.value = msg
+  selectedForwardChatId.value = null
+  showForwardDialog.value = true
+  loadingForwardChats.value = true
   try {
-    await api.post(`/api/v1/chats/${chatId}/forward/${clientChatId.value}`, { msg_id: msg.id })
-    $q.notify({ type: 'positive', message: 'Переслано в чат клиента' })
+    const { data } = await api.get('/api/v1/chats/')
+    forwardTargetChats.value = (Array.isArray(data) ? data : (data.items || []))
+      .filter(c => c.id !== chatId)
+  } catch {
+    forwardTargetChats.value = []
+  } finally {
+    loadingForwardChats.value = false
+  }
+}
+
+async function doForward() {
+  if (!forwardingMsg.value || !selectedForwardChatId.value) return
+  sendingForward.value = true
+  try {
+    await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: forwardingMsg.value.id })
+    $q.notify({ type: 'positive', message: 'Переслано' })
+    showForwardDialog.value = false
   } catch (e) {
     const raw = e.response?.data?.detail
     const message = Array.isArray(raw) ? raw.map(d => d.msg || String(d)).join('; ') : (raw || 'Ошибка пересылки')
     $q.notify({ type: 'negative', message: String(message) })
   } finally {
-    forwardingMsgId.value = null
+    sendingForward.value = false
   }
 }
 
@@ -742,15 +918,45 @@ async function deleteMsg(msg) {
 function openCopyToCard(msg) {
   copyToCardMsg.value = msg
   selectedDestination.value = null
+  copyStep.value = 1
+  stageVariations.value = []
+  selectedVariation.value = null
   showCopyToCard.value = true
 }
+
+async function goToVariationStep() {
+  if (!selectedDestination.value || !chatCrmCardId.value) return
+  if (!STAGE_KEYS.has(selectedDestination.value)) {
+    await confirmCopyToCard()
+    return
+  }
+  loadingVariations.value = true
+  try {
+    const { data } = await api.get(`/api/v1/chats/${chatId}/card-stage-variations`, {
+      params: { crm_card_id: chatCrmCardId.value, destination: selectedDestination.value },
+    })
+    stageVariations.value = data.variations || []
+    nextVariation.value = data.next_variation || 1
+    selectedVariation.value = stageVariations.value.length > 0 ? stageVariations.value[0].variation : null
+    copyStep.value = 2
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка загрузки вариаций' })
+  } finally {
+    loadingVariations.value = false
+  }
+}
+
 async function confirmCopyToCard() {
   if (!selectedDestination.value || !copyToCardMsg.value || !chatCrmCardId.value) return
   copyingToCard.value = true
   try {
+    const body = { crm_card_id: chatCrmCardId.value, destination: selectedDestination.value }
+    if (STAGE_KEYS.has(selectedDestination.value) && selectedVariation.value !== null) {
+      body.variation = selectedVariation.value
+    }
     await api.post(
       `/api/v1/chats/${chatId}/messages/${copyToCardMsg.value.id}/copy-to-card`,
-      { crm_card_id: chatCrmCardId.value, destination: selectedDestination.value },
+      body,
     )
     $q.notify({ type: 'positive', message: 'Файл скопирован в карточку' })
     showCopyToCard.value = false
@@ -939,7 +1145,7 @@ onUnmounted(() => {
 
 <style scoped>
 .bubble-own {
-  background: #FFF8DC;
+  background: #E8F5E9;
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
 }

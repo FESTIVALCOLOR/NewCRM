@@ -320,7 +320,8 @@ _STAGE_FILE_DESTINATIONS: dict[str, dict[str, str]] = {
 
 class CopyToCardBody(PydanticBaseModel):
     crm_card_id: int
-    destination: str  # ключ поля CRMCard или stage_1/stage_2/stage_3
+    destination: str  # ключ поля Contract или stage_1/stage_2/stage_3
+    variation: Optional[int] = None  # None = auto-increment, число = конкретная вариация
 
 
 @router.post("/{chat_id}/messages/{msg_id}/copy-to-card")
@@ -392,8 +393,11 @@ async def copy_message_file_to_card(
         ext = os.path.splitext(file_name)[1].lower()
         file_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "pdf" if ext == ".pdf" else "file"
         stage_name = _STAGE_FILE_DESTINATIONS[body.destination]["db_stage"]
-        last = db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
-        variation = (last.variation + 1) if last else 1
+        if body.variation is not None:
+            variation = body.variation
+        else:
+            last = db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
+            variation = (last.variation + 1) if last else 1
         pf = ProjectFile(
             contract_id=contract.id,
             stage=stage_name,
@@ -411,6 +415,45 @@ async def copy_message_file_to_card(
         db.commit()
 
     return {"status": "ok", "yandex_path": dest_yd, "file_url": public_url}
+
+
+@router.get("/{chat_id}/card-stage-variations")
+def get_card_stage_variations(
+    chat_id: int,
+    crm_card_id: int = Query(...),
+    destination: str = Query(...),
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Получить существующие вариации для стадии карточки CRM."""
+    if destination not in _STAGE_FILE_DESTINATIONS:
+        return {"variations": [], "next_variation": 1}
+    from database import CRMCard, ProjectFile
+
+    card = db.query(CRMCard).filter(CRMCard.id == crm_card_id).first()
+    if not card or not card.contract_id:
+        return {"variations": [], "next_variation": 1}
+    stage_name = _STAGE_FILE_DESTINATIONS[destination]["db_stage"]
+    rows = (
+        db.query(ProjectFile)
+        .filter(
+            ProjectFile.contract_id == card.contract_id,
+            ProjectFile.stage == stage_name,
+        )
+        .order_by(ProjectFile.variation.asc(), ProjectFile.id.asc())
+        .all()
+    )
+    var_dict: dict[int, list[str]] = {}
+    for pf in rows:
+        v = pf.variation or 1
+        if v not in var_dict:
+            var_dict[v] = []
+        var_dict[v].append(pf.file_name or "")
+    next_var = (max(var_dict.keys()) + 1) if var_dict else 1
+    return {
+        "variations": [{"variation": v, "files": fnames} for v, fnames in sorted(var_dict.items())],
+        "next_variation": next_var,
+    }
 
 
 @router.post("/{chat_id}/messages/{msg_id}/read")

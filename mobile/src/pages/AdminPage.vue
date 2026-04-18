@@ -637,8 +637,15 @@ async function viewRolePermissions(role) {
 async function saveRolePermissions() {
   const granted = rolePermissions.value.filter(p => p.granted).map(p => p.name)
   try {
-    await api.put('/api/v1/permissions/role-matrix', { roles: { [selectedRole.value]: granted } })
-    $q.notify({ type: 'positive', message: 'Права сохранены' })
+    // Загружаем полную текущую матрицу, чтобы не затереть другие роли
+    const { data: currentData } = await api.get('/api/v1/permissions/role-matrix')
+    const fullMatrix = currentData.roles || {}
+    fullMatrix[selectedRole.value] = granted
+    await api.put('/api/v1/permissions/role-matrix', {
+      roles: fullMatrix,
+      apply_to_employees: true,
+    })
+    $q.notify({ type: 'positive', message: 'Права сохранены и применены к сотрудникам' })
     showRoleDialog.value = false
   } catch (err) { $q.notify({ type: 'negative', message: err.response?.data?.detail || 'Ошибка' }) }
 }
