@@ -750,11 +750,9 @@ const nextVariation = ref(1)
 const selectedVariation = ref(null) // число = конкретная вариация, null = новая
 const loadingVariations = ref(false)
 
-const STAGE_KEYS = new Set([
-  'stage_1', 'stage_1_revisions',
-  'stage_2', 'stage_2_revisions',
-  'stage_3', 'stage_3_revisions',
-])
+// Только для этих назначений показываем шаг выбора вариации
+// Правки не нуждаются в вариации (файл идёт прямо в папку правки)
+const STAGE_KEYS = new Set(['stage_1', 'stage_2', 'stage_3'])
 
 const COPY_DESTINATIONS = [
   { group: 'Договор', items: [

@@ -306,16 +306,21 @@ _CARD_FILE_DESTINATIONS: dict[str, str] = {
 }
 
 # Назначения в файлы стадий (ProjectFile)
-# yd_folder — подпапка в папке договора на ЯД
+# yd_folder — подпапка в папке договора на ЯД (точно как в десктопной версии)
 # db_stage  — значение поля ProjectFile.stage (должно совпадать с ContractDetailPage)
+# Только stage_2 / stage_2_concept использует подпапку "Вариация N" (как в get_stage_folder_path)
 _STAGE_FILE_DESTINATIONS: dict[str, dict[str, str]] = {
     "stage_1": {"yd_folder": "1 стадия - Планировочное решение", "db_stage": "stage1"},
-    "stage_2": {"yd_folder": "Концепция-коллажи", "db_stage": "stage2_concept"},
+    "stage_2": {"yd_folder": "2 стадия - Концепция дизайна/Концепция-коллажи", "db_stage": "stage2_concept"},
     "stage_3": {"yd_folder": "3 стадия - Чертежный проект", "db_stage": "stage3"},
-    "stage_1_revisions": {"yd_folder": "1 стадия - Планировочное решение/Правки", "db_stage": "stage1"},
-    "stage_2_revisions": {"yd_folder": "Концепция-коллажи/Правки", "db_stage": "stage2_concept"},
-    "stage_3_revisions": {"yd_folder": "3 стадия - Чертежный проект/Правки", "db_stage": "stage3"},
+    # правки (lowercase, как в десктопе) — без подпапки "Вариация N"
+    "stage_1_revisions": {"yd_folder": "1 стадия - Планировочное решение/правки", "db_stage": "stage1"},
+    "stage_2_revisions": {"yd_folder": "2 стадия - Концепция дизайна/Концепция-коллажи/правки", "db_stage": "stage2_concept"},
+    "stage_3_revisions": {"yd_folder": "3 стадия - Чертежный проект/правки", "db_stage": "stage3"},
 }
+
+# Только эти назначения добавляют "Вариация N" подпапку на ЯД (как в desktopver. get_stage_folder_path)
+_STAGES_WITH_VARIATION_FOLDER = {"stage_2"}
 
 
 class CopyToCardBody(PydanticBaseModel):
@@ -370,16 +375,35 @@ async def copy_message_file_to_card(
         if not yd or not yd.token:
             raise HTTPException(503, "Яндекс.Диск не настроен")
 
+        card_root = contract.yandex_folder_path.replace("disk:", "").rstrip("/")
+        file_name = os.path.basename(msg.yandex_path.replace("disk:", ""))
+
         if is_stage:
-            subfolder = _STAGE_FILE_DESTINATIONS[body.destination]["yd_folder"]
+            info = _STAGE_FILE_DESTINATIONS[body.destination]
+            base_subfolder = info["yd_folder"]
+            stage_name = info["db_stage"]
+            is_revisions = body.destination.endswith("_revisions")
+            uses_var_folder = body.destination in _STAGES_WITH_VARIATION_FOLDER
+
+            # Определяем номер вариации для ProjectFile
+            if body.variation is not None:
+                variation = body.variation
+            else:
+                last = db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
+                variation = (last.variation + 1) if last else 1
+
+            # Физическая подпапка на ЯД: только stage_2 добавляет "Вариация N" (не правки)
+            if uses_var_folder and not is_revisions:
+                subfolder = f"{base_subfolder}/Вариация {variation}"
+            else:
+                subfolder = base_subfolder
         else:
             subfolder = _CARD_FILE_DESTINATIONS[body.destination]
 
-        card_root = contract.yandex_folder_path.replace("disk:", "").rstrip("/")
-        file_name = os.path.basename(msg.yandex_path.replace("disk:", ""))
         dest_clean = f"{card_root}/{subfolder}/{file_name}"
         dest_yd = f"disk:{dest_clean}"
 
+        # Создаём все промежуточные папки (рекурсивно)
         _ensure_yd_folder(f"disk:{card_root}/{subfolder}")
         yd.copy_file(msg.yandex_path, dest_yd, overwrite=True)
         public_url = yd.get_public_link(dest_yd) or ""
@@ -392,12 +416,6 @@ async def copy_message_file_to_card(
     if is_stage:
         ext = os.path.splitext(file_name)[1].lower()
         file_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "pdf" if ext == ".pdf" else "file"
-        stage_name = _STAGE_FILE_DESTINATIONS[body.destination]["db_stage"]
-        if body.variation is not None:
-            variation = body.variation
-        else:
-            last = db.query(ProjectFile).filter(ProjectFile.contract_id == contract.id, ProjectFile.stage == stage_name).order_by(ProjectFile.variation.desc()).first()
-            variation = (last.variation + 1) if last else 1
         pf = ProjectFile(
             contract_id=contract.id,
             stage=stage_name,

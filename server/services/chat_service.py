@@ -129,15 +129,15 @@ def _chat_folder_name(chat_type: str) -> str:
 
 
 def _ensure_yd_folder(folder_path: str) -> bool:
-    """Создать папку на ЯД если не существует. Возвращает True при успехе."""
+    """Создать папку на ЯД если не существует (рекурсивно). Возвращает True при успехе."""
     try:
         from yandex_disk_service import get_yandex_disk_service
 
         yd = get_yandex_disk_service()
         if not yd or not yd.token:
             return False
-        yd.create_folder(folder_path)
-        return True
+        # ensure_folder_exists создаёт все промежуточные папки (аналог os.makedirs)
+        return yd.ensure_folder_exists(folder_path)
     except Exception as e:
         logger.warning(f"ЯД: не удалось создать папку {folder_path}: {e}")
         return False

@@ -1,29 +1,34 @@
-import requests
 import json
 import os
-import urllib.parse
 import time
+import urllib.parse
+
+import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
 class YandexDiskError(Exception):
     """Базовая ошибка Яндекс.Диска"""
+
     pass
 
 
 class YandexDiskTokenError(YandexDiskError):
     """Токен невалиден или истёк (401)"""
+
     pass
 
 
 class YandexDiskRateLimitError(YandexDiskError):
     """Превышен лимит запросов (429)"""
+
     pass
 
 
 class YandexDiskNetworkError(YandexDiskError):
     """Сетевая ошибка (timeout, connection reset)"""
+
     pass
 
 
@@ -37,6 +42,7 @@ class YandexDiskManager:
         """Get or create a singleton instance for the given token"""
         if not token:
             from config import YANDEX_DISK_TOKEN
+
             token = YANDEX_DISK_TOKEN
         if token not in cls._instances:
             cls._instances[token] = cls(token)
@@ -44,9 +50,10 @@ class YandexDiskManager:
 
     def __init__(self, token=None):
         self.token = token  # OAuth токен
-        self.base_url = 'https://cloud-api.yandex.net/v1/disk'
+        self.base_url = "https://cloud-api.yandex.net/v1/disk"
         # Корневая папка для проектов на Яндекс.Диске
         from config import YANDEX_DISK_PROJECTS
+
         self.archive_root = YANDEX_DISK_PROJECTS
 
         # Создаем сессию с повторными попытками
@@ -57,7 +64,7 @@ class YandexDiskManager:
             total=3,  # Максимум 3 попытки
             backoff_factor=1,  # Задержка между попытками: 1, 2, 4 секунды
             status_forcelist=[429, 500, 502, 503, 504],  # Повторять при этих HTTP кодах
-            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"]
+            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
         )
 
         adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -73,7 +80,7 @@ class YandexDiskManager:
         if response.status_code == 429:
             raise YandexDiskRateLimitError(f"Yandex Disk: rate limit ({operation_name})")
         return response
-    
+
     def upload_file(self, local_path, yandex_path):
         """Загрузка файла на Яндекс.Диск"""
         # Validate file size
@@ -85,9 +92,9 @@ class YandexDiskManager:
         # Dynamic timeout: at least 60s, add 3 seconds per MB (для больших файлов)
         dynamic_timeout = max(120, int(file_size_mb) * 3 + 120)
 
-        url = f'{self.base_url}/resources/upload'
-        params = {'path': yandex_path, 'overwrite': 'true'}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources/upload"
+        params = {"path": yandex_path, "overwrite": "true"}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         for attempt in range(3):
             # Свежий upload URL на каждую попытку (URL одноразовый)
@@ -98,36 +105,32 @@ class YandexDiskManager:
                 raise Exception(f"Ошибка получения ссылки для загрузки: {response.status_code} - {response.text}")
 
             response_data = response.json()
-            if 'href' not in response_data:
+            if "href" not in response_data:
                 raise Exception(f"В ответе API нет поля 'href': {response_data}")
 
-            upload_url = response_data['href']
+            upload_url = response_data["href"]
 
             try:
                 # requests.put БЕЗ session — чтобы избежать auto-retry
                 # на 5xx с пустым телом (file handle уже прочитан)
-                with open(local_path, 'rb') as f:
-                    upload_response = requests.put(
-                        upload_url, data=f, timeout=dynamic_timeout
-                    )
+                with open(local_path, "rb") as f:
+                    upload_response = requests.put(upload_url, data=f, timeout=dynamic_timeout)
                 if upload_response.status_code in [200, 201, 202]:
                     return True
-                print(f"[WARN] Upload attempt {attempt+1}: status {upload_response.status_code}")
+                print(f"[WARN] Upload attempt {attempt + 1}: status {upload_response.status_code}")
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-                print(f"[WARN] Сетевая ошибка при загрузке (попытка {attempt+1}): {e}")
+                print(f"[WARN] Сетевая ошибка при загрузке (попытка {attempt + 1}): {e}")
 
             if attempt < 2:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
             else:
-                raise YandexDiskNetworkError(
-                    f"Ошибка загрузки файла после 3 попыток: {yandex_path}"
-                )
+                raise YandexDiskNetworkError(f"Ошибка загрузки файла после 3 попыток: {yandex_path}")
 
     def download_file(self, yandex_path, local_path):
         """Скачивание файла с Яндекс.Диска"""
-        url = f'{self.base_url}/resources/download'
-        params = {'path': yandex_path}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources/download"
+        params = {"path": yandex_path}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         response = self.session.get(url, params=params, headers=headers, timeout=10)
         self._check_response(response, "get_download_link")
@@ -136,7 +139,7 @@ class YandexDiskManager:
             raise Exception(f"Failed to get download link: {response.status_code}")
 
         data = response.json()
-        download_url = data.get('href')
+        download_url = data.get("href")
         if not download_url:
             raise Exception("No download URL in response")
 
@@ -145,19 +148,19 @@ class YandexDiskManager:
         if file_response.status_code != 200:
             raise Exception(f"Download failed: {file_response.status_code}")
 
-        with open(local_path, 'wb') as f:
+        with open(local_path, "wb") as f:
             for chunk in file_response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
     def get_public_link(self, yandex_path, max_retries=3):
         """Получение публичной ссылки с retry"""
-        headers = {'Authorization': f'OAuth {self.token}'}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         for attempt in range(max_retries):
             try:
                 # Шаг 1: Публикуем файл
-                publish_url = f'{self.base_url}/resources/publish'
-                publish_params = {'path': yandex_path}
+                publish_url = f"{self.base_url}/resources/publish"
+                publish_params = {"path": yandex_path}
 
                 publish_response = self.session.put(publish_url, params=publish_params, headers=headers, timeout=15)
                 self._check_response(publish_response, "publish_file")
@@ -168,8 +171,8 @@ class YandexDiskManager:
                     time.sleep(0.3)
 
                     # Шаг 2: Получаем метаданные с public_url
-                    meta_url = f'{self.base_url}/resources'
-                    meta_params = {'path': yandex_path, 'fields': 'public_url,public_key'}
+                    meta_url = f"{self.base_url}/resources"
+                    meta_params = {"path": yandex_path, "fields": "public_url,public_key"}
 
                     meta_response = self.session.get(meta_url, params=meta_params, headers=headers, timeout=15)
                     self._check_response(meta_response, "get_public_metadata")
@@ -178,39 +181,40 @@ class YandexDiskManager:
                         meta_data = meta_response.json()
 
                         # Извлекаем public_url
-                        public_url = meta_data.get('public_url', '')
+                        public_url = meta_data.get("public_url", "")
 
                         if public_url:
                             print(f"[YD] Получена публичная ссылка: {public_url}")
                             return public_url
 
                         # Если public_url нет, пробуем сформировать из public_key
-                        public_key = meta_data.get('public_key', '')
+                        public_key = meta_data.get("public_key", "")
                         if public_key:
                             public_url = f"https://disk.yandex.ru/i/{public_key}"
                             print(f"[YD] Сформирована ссылка из public_key: {public_url}")
                             return public_url
 
                     else:
-                        print(f"[WARN] Ошибка получения метаданных (попытка {attempt+1}): {meta_response.status_code}")
+                        print(f"[WARN] Ошибка получения метаданных (попытка {attempt + 1}): {meta_response.status_code}")
 
                 else:
-                    print(f"[WARN] Ошибка публикации (попытка {attempt+1}): {publish_response.status_code}")
+                    print(f"[WARN] Ошибка публикации (попытка {attempt + 1}): {publish_response.status_code}")
 
                 # Retry с увеличивающейся задержкой
                 if attempt < max_retries - 1:
                     time.sleep(2.0 * (attempt + 1))
 
             except Exception as e:
-                print(f"[WARN] Ошибка получения публичной ссылки (попытка {attempt+1}): {e}")
+                print(f"[WARN] Ошибка получения публичной ссылки (попытка {attempt + 1}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2.0 * (attempt + 1))
                 else:
                     import traceback
+
                     traceback.print_exc()
 
         print(f"[ERROR] Не удалось получить публичную ссылку после {max_retries} попыток")
-        return ''
+        return ""
 
     def share_folder_writable(self, folder_path, yandex_uid=None):
         """Расшаривание папки с правом записи через allow_address_access.
@@ -232,44 +236,23 @@ class YandexDiskManager:
             return False
 
         # Убираем disk: префикс
-        if folder_path.startswith('disk:'):
+        if folder_path.startswith("disk:"):
             folder_path = folder_path[5:]
 
-        headers = {
-            'Authorization': f'OAuth {self.token}',
-            'Content-Type': 'application/json'
-        }
+        headers = {"Authorization": f"OAuth {self.token}", "Content-Type": "application/json"}
 
-        url = f'{self.base_url}/resources/publish'
-        params = {
-            'path': folder_path,
-            'allow_address_access': 'true'
-        }
+        url = f"{self.base_url}/resources/publish"
+        params = {"path": folder_path, "allow_address_access": "true"}
 
         # Формируем настройки доступа
         if yandex_uid:
-            body = {
-                'public_settings': {
-                    'accesses': [
-                        {'user_ids': [str(yandex_uid)], 'rights': ['write']}
-                    ]
-                }
-            }
+            body = {"public_settings": {"accesses": [{"user_ids": [str(yandex_uid)], "rights": ["write"]}]}}
         else:
             # Доступ для всех с правом записи (как публичная папка-дропбокс)
-            body = {
-                'public_settings': {
-                    'accesses': [
-                        {'macros': ['all'], 'rights': ['write']}
-                    ]
-                }
-            }
+            body = {"public_settings": {"accesses": [{"macros": ["all"], "rights": ["write"]}]}}
 
         try:
-            response = self.session.put(
-                url, params=params, headers=headers,
-                json=body, timeout=15
-            )
+            response = self.session.put(url, params=params, headers=headers, json=body, timeout=15)
 
             if response.status_code in [200, 201]:
                 print(f"[YD] Папка расшарена с правом записи: {folder_path}")
@@ -280,13 +263,12 @@ class YandexDiskManager:
                 return True
             else:
                 # Может быть 403/400 если аккаунт не поддерживает allow_address_access
-                error_text = ''
+                error_text = ""
                 try:
-                    error_text = response.json().get('message', response.text[:200])
+                    error_text = response.json().get("message", response.text[:200])
                 except Exception:
                     error_text = response.text[:200]
-                print(f"[WARN] Не удалось расшарить папку с правом записи "
-                      f"(HTTP {response.status_code}): {error_text}")
+                print(f"[WARN] Не удалось расшарить папку с правом записи (HTTP {response.status_code}): {error_text}")
                 print("[INFO] Для расшаривания с правом записи может потребоваться Яндекс 360 для Бизнеса")
                 return False
 
@@ -320,7 +302,7 @@ class YandexDiskManager:
 
             # Обновляем прогресс: подготовка
             if progress_callback:
-                progress_callback(0, file_name, 'preparing')
+                progress_callback(0, file_name, "preparing")
 
             # Создаем подпапку
             subfolder_path = f"{contract_folder_path}/{subfolder_name}"
@@ -331,7 +313,7 @@ class YandexDiskManager:
 
             # Обновляем прогресс: загрузка
             if progress_callback:
-                progress_callback(1, file_name, 'uploading')
+                progress_callback(1, file_name, "uploading")
 
             # Загружаем файл
             print(f"[INFO] Загрузка файла {file_name} на Яндекс.Диск...")
@@ -339,7 +321,7 @@ class YandexDiskManager:
 
             # Обновляем прогресс: получение ссылки
             if progress_callback:
-                progress_callback(2, file_name, 'finalizing')
+                progress_callback(2, file_name, "finalizing")
 
             # Получаем публичную ссылку на ПАПКУ (а не на файл)
             # чтобы можно было загружать несколько файлов в одну папку
@@ -347,18 +329,10 @@ class YandexDiskManager:
 
             if folder_link:
                 print(f"[OK] Файл загружен: {yandex_file_path}, ссылка на папку: {subfolder_path}")
-                return {
-                    'public_link': folder_link,
-                    'yandex_path': subfolder_path,
-                    'file_name': file_name
-                }
+                return {"public_link": folder_link, "yandex_path": subfolder_path, "file_name": file_name}
             else:
                 print(f"[WARN] Файл загружен, но не удалось получить публичную ссылку на папку")
-                return {
-                    'public_link': subfolder_path,
-                    'yandex_path': subfolder_path,
-                    'file_name': file_name
-                }
+                return {"public_link": subfolder_path, "yandex_path": subfolder_path, "file_name": file_name}
 
         except Exception as e:
             print(f"[ERROR] Ошибка загрузки файла: {e}")
@@ -370,9 +344,9 @@ class YandexDiskManager:
             print("[ERROR] Токен не установлен")
             return False
 
-        url = f'{self.base_url}/resources'
-        params = {'path': folder_path}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources"
+        params = {"path": folder_path}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.put(url, params=params, headers=headers, timeout=10)
@@ -384,10 +358,10 @@ class YandexDiskManager:
                 # 409 может быть "уже существует" или "родительская папка не существует"
                 try:
                     err_data = response.json()
-                    err_code = err_data.get('error', '')
+                    err_code = err_data.get("error", "")
                 except Exception:
-                    err_code = ''
-                if 'DoesntExist' in err_code or 'not found' in err_code.lower():
+                    err_code = ""
+                if "DoesntExist" in err_code or "not found" in err_code.lower():
                     print(f"[YD] Родительская папка не существует, создаём рекурсивно: {folder_path}")
                     return self.ensure_folder_exists(folder_path)
                 print(f"[YD] Папка уже существует: {folder_path}")
@@ -403,7 +377,7 @@ class YandexDiskManager:
         """Рекурсивное создание папки (создаёт все промежуточные папки).
         Аналог os.makedirs — если родительских папок нет, создаёт их по цепочке.
         """
-        if not folder_path or folder_path in ('disk:', 'disk:/'):
+        if not folder_path or folder_path in ("disk:", "disk:/"):
             return True
 
         # Попытка создать папку напрямую
@@ -413,10 +387,10 @@ class YandexDiskManager:
 
         # Если не удалось (родительская не существует) — создаём рекурсивно
         # Разбиваем путь: disk:/A/B/C → parent = disk:/A/B
-        parts = folder_path.rstrip('/').rsplit('/', 1)
+        parts = folder_path.rstrip("/").rsplit("/", 1)
         if len(parts) == 2:
             parent = parts[0]
-            if parent and parent not in ('disk:', 'disk:'):
+            if parent and parent not in ("disk:", "disk:"):
                 if self.ensure_folder_exists(parent):
                     return self.create_folder(folder_path)
         return False
@@ -427,13 +401,9 @@ class YandexDiskManager:
             print("[ERROR] Токен не установлен")
             return False
 
-        url = f'{self.base_url}/resources/move'
-        params = {
-            'from': from_path,
-            'path': to_path,
-            'overwrite': 'false'
-        }
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources/move"
+        params = {"from": from_path, "path": to_path, "overwrite": "false"}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.post(url, params=params, headers=headers, timeout=10)
@@ -454,9 +424,9 @@ class YandexDiskManager:
             print("[ERROR] Токен не установлен")
             return False
 
-        url = f'{self.base_url}/resources'
-        params = {'path': folder_path, 'permanently': 'true'}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources"
+        params = {"path": folder_path, "permanently": "true"}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.delete(url, params=params, headers=headers, timeout=10)
@@ -480,9 +450,9 @@ class YandexDiskManager:
             print("[ERROR] Токен не установлен")
             return False
 
-        url = f'{self.base_url}/resources'
-        params = {'path': file_path}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources"
+        params = {"path": file_path}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
@@ -504,9 +474,9 @@ class YandexDiskManager:
             print("[ERROR] Токен не установлен")
             return False
 
-        url = f'{self.base_url}/resources'
-        params = {'path': file_path, 'permanently': 'true'}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources"
+        params = {"path": file_path, "permanently": "true"}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.delete(url, params=params, headers=headers, timeout=10)
@@ -529,9 +499,9 @@ class YandexDiskManager:
         if not self.token:
             return False
 
-        url = f'{self.base_url}/resources'
-        params = {'path': folder_path}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources"
+        params = {"path": folder_path}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
@@ -545,16 +515,16 @@ class YandexDiskManager:
         if not self.token:
             return []
 
-        url = f'{self.base_url}/resources'
-        params = {'path': folder_path, 'limit': 1000}
-        headers = {'Authorization': f'OAuth {self.token}'}
+        url = f"{self.base_url}/resources"
+        params = {"path": folder_path, "limit": 1000}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
             self._check_response(response, "get_folder_contents")
             if response.status_code == 200:
                 data = response.json()
-                return data.get('_embedded', {}).get('items', [])
+                return data.get("_embedded", {}).get("items", [])
             return []
         except Exception as e:
             print(f"[ERROR] Ошибка получения содержимого папки: {e}")
@@ -564,8 +534,8 @@ class YandexDiskManager:
         """Получение списка файлов из ПУБЛИЧНОЙ папки ЯД (без OAuth).
         API: GET /v1/disk/public/resources?public_key=URL
         Returns: список dict с ключами name, path, type, size, mime_type"""
-        url = f'{self.base_url}/public/resources'
-        params = {'public_key': public_url, 'limit': 1000}
+        url = f"{self.base_url}/public/resources"
+        params = {"public_key": public_url, "limit": 1000}
 
         try:
             response = self.session.get(url, params=params, timeout=15)
@@ -573,16 +543,18 @@ class YandexDiskManager:
                 print(f"[ERROR] Ошибка получения публичной папки: {response.status_code} {response.text[:200]}")
                 return []
             data = response.json()
-            items = data.get('_embedded', {}).get('items', [])
+            items = data.get("_embedded", {}).get("items", [])
             result = []
             for item in items:
-                result.append({
-                    'name': item.get('name', ''),
-                    'path': item.get('path', ''),
-                    'type': item.get('type', ''),
-                    'size': item.get('size', 0),
-                    'mime_type': item.get('mime_type', ''),
-                })
+                result.append(
+                    {
+                        "name": item.get("name", ""),
+                        "path": item.get("path", ""),
+                        "type": item.get("type", ""),
+                        "size": item.get("size", 0),
+                        "mime_type": item.get("mime_type", ""),
+                    }
+                )
             print(f"[YD] Получено {len(result)} файлов из публичной папки")
             return result
         except Exception as e:
@@ -597,8 +569,8 @@ class YandexDiskManager:
             file_path_in_folder: путь файла внутри папки (напр. '/file.jpg')
             local_path: локальный путь для сохранения
         Returns: True при успехе"""
-        url = f'{self.base_url}/public/resources/download'
-        params = {'public_key': public_url, 'path': file_path_in_folder}
+        url = f"{self.base_url}/public/resources/download"
+        params = {"public_key": public_url, "path": file_path_in_folder}
 
         try:
             response = self.session.get(url, params=params, timeout=15)
@@ -606,7 +578,7 @@ class YandexDiskManager:
                 print(f"[ERROR] Ошибка получения ссылки скачивания: {response.status_code}")
                 return False
             data = response.json()
-            download_url = data.get('href')
+            download_url = data.get("href")
             if not download_url:
                 print("[ERROR] Нет href в ответе download")
                 return False
@@ -617,7 +589,7 @@ class YandexDiskManager:
                 print(f"[ERROR] Ошибка скачивания файла: {file_response.status_code}")
                 return False
 
-            with open(local_path, 'wb') as f:
+            with open(local_path, "wb") as f:
                 for chunk in file_response.iter_content(chunk_size=8192):
                     f.write(chunk)
             print(f"[YD] Файл скачан: {file_path_in_folder} → {local_path}")
@@ -626,18 +598,18 @@ class YandexDiskManager:
             print(f"[ERROR] Ошибка скачивания публичного файла: {e}")
             return False
 
-    def copy_file(self, from_path, to_path):
+    def copy_file(self, from_path, to_path, overwrite=False):
         """Копирование файла на Яндекс.Диске"""
         if not self.token:
             return False
 
-        url = f'{self.base_url}/resources/copy'
+        url = f"{self.base_url}/resources/copy"
         params = {
-            'from': from_path,
-            'path': to_path,
-            'overwrite': 'false'
+            "from": from_path,
+            "path": to_path,
+            "overwrite": "true" if overwrite else "false",
         }
-        headers = {'Authorization': f'OAuth {self.token}'}
+        headers = {"Authorization": f"OAuth {self.token}"}
 
         try:
             response = self.session.post(url, params=params, headers=headers, timeout=10)
@@ -665,16 +637,16 @@ class YandexDiskManager:
 
             copied_count = 0
             for item in items:
-                item_name = item.get('name')
-                item_type = item.get('type')
-                from_path = item.get('path')
+                item_name = item.get("name")
+                item_type = item.get("type")
+                from_path = item.get("path")
 
                 if not item_name or not from_path:
                     continue
 
                 to_path = f"{to_folder}/{item_name}"
 
-                if item_type == 'dir':
+                if item_type == "dir":
                     # Создаем подпапку
                     self.create_folder(to_path)
                     time.sleep(0.2)
@@ -709,18 +681,18 @@ class YandexDiskManager:
             Полный путь к папке договора
         """
         # Определяем тип проекта для структуры папок
-        if status == 'АВТОРСКИЙ НАДЗОР':
-            project_folder = 'Авторские надзоры'
-        elif project_type == 'Индивидуальный':
-            project_folder = 'Индивидуальные'
-        elif project_type == 'Шаблонный':
-            project_folder = 'Шаблонные'
+        if status == "АВТОРСКИЙ НАДЗОР":
+            project_folder = "Авторские надзоры"
+        elif project_type == "Индивидуальный":
+            project_folder = "Индивидуальные"
+        elif project_type == "Шаблонный":
+            project_folder = "Шаблонные"
         else:
             project_folder = project_type
 
         # Формируем название папки проекта
         # Очищаем адрес от лишних символов
-        clean_address = address.replace('/', '-').replace('\\', '-')
+        clean_address = address.replace("/", "-").replace("\\", "-")
         folder_name = f"{city}-{clean_address}-{area}м2"
 
         # Полный путь
@@ -738,12 +710,12 @@ class YandexDiskManager:
             return None
 
         # Определяем тип проекта для структуры папок
-        if status == 'АВТОРСКИЙ НАДЗОР':
-            project_folder = 'Авторские надзоры'
-        elif project_type == 'Индивидуальный':
-            project_folder = 'Индивидуальные'
-        elif project_type == 'Шаблонный':
-            project_folder = 'Шаблонные'
+        if status == "АВТОРСКИЙ НАДЗОР":
+            project_folder = "Авторские надзоры"
+        elif project_type == "Индивидуальный":
+            project_folder = "Индивидуальные"
+        elif project_type == "Шаблонный":
+            project_folder = "Шаблонные"
         else:
             project_folder = project_type
 
@@ -764,7 +736,7 @@ class YandexDiskManager:
         time.sleep(0.3)
 
         # Уровень 4: Папка проекта
-        clean_address = address.replace('/', '-').replace('\\', '-')
+        clean_address = address.replace("/", "-").replace("\\", "-")
         folder_name = f"{city}-{clean_address}-{area}м2"
         level4 = f"{level3}/{folder_name}"
 
@@ -780,7 +752,7 @@ class YandexDiskManager:
         docs_folder = f"{contract_folder_path}/Документы"
         self.create_folder(docs_folder)
         time.sleep(0.2)
-        for subfolder in ('Акты', 'Информационные письма', 'Доп. соглашения'):
+        for subfolder in ("Акты", "Информационные письма", "Доп. соглашения"):
             self.create_folder(f"{docs_folder}/{subfolder}")
             time.sleep(0.2)
 
@@ -798,15 +770,15 @@ class YandexDiskManager:
             return {}
 
         # Убираем префикс disk: если он есть
-        if contract_folder_path.startswith('disk:'):
+        if contract_folder_path.startswith("disk:"):
             contract_folder_path = contract_folder_path[5:]
 
         stage_folders = {
-            'measurement': f"{contract_folder_path}/Замер",
-            'stage1': f"{contract_folder_path}/1 стадия - Планировочное решение",
-            'stage2_concept': f"{contract_folder_path}/2 стадия - Концепция дизайна/Концепция-коллажи",
-            'stage2_3d': f"{contract_folder_path}/2 стадия - Концепция дизайна/3D визуализация",
-            'stage3': f"{contract_folder_path}/3 стадия - Чертежный проект"
+            "measurement": f"{contract_folder_path}/Замер",
+            "stage1": f"{contract_folder_path}/1 стадия - Планировочное решение",
+            "stage2_concept": f"{contract_folder_path}/2 стадия - Концепция дизайна/Концепция-коллажи",
+            "stage2_3d": f"{contract_folder_path}/2 стадия - Концепция дизайна/3D визуализация",
+            "stage3": f"{contract_folder_path}/3 стадия - Чертежный проект",
         }
 
         # Создаем родительскую папку для 2 стадии
@@ -834,39 +806,39 @@ class YandexDiskManager:
             str: путь к папке правок или пустая строка
         """
         if not self.token:
-            return ''
+            return ""
 
         print(f"[YD] create_corrections_folder: contract={contract_folder_path}, stage={stage_name}")
 
         # Маппинг колонки CRM → идентификатор стадии (как в upload_stage_files)
         sl = stage_name.lower()
-        if 'стадия 1' in sl or 'планировочн' in sl:
-            stage_id = 'stage1'
-        elif 'стадия 2' in sl and ('концепция' in sl or 'дизайн' in sl):
-            stage_id = 'stage2_concept'  # Индивидуальный: Стадия 2
-        elif 'стадия 2' in sl and ('чертеж' in sl or 'рабоч' in sl):
-            stage_id = 'stage3'  # Шаблонный: Стадия 2: рабочие чертежи
-        elif 'стадия 3' in sl and ('3д' in sl or 'визуализ' in sl):
-            stage_id = 'stage2_3d'  # Шаблонный: Стадия 3: 3д визуализация
-        elif 'стадия 3' in sl:
-            stage_id = 'stage3'  # Индивидуальный: Стадия 3
-        elif 'стадия 2' in sl:
-            stage_id = 'stage2_concept'
+        if "стадия 1" in sl or "планировочн" in sl:
+            stage_id = "stage1"
+        elif "стадия 2" in sl and ("концепция" in sl or "дизайн" in sl):
+            stage_id = "stage2_concept"  # Индивидуальный: Стадия 2
+        elif "стадия 2" in sl and ("чертеж" in sl or "рабоч" in sl):
+            stage_id = "stage3"  # Шаблонный: Стадия 2: рабочие чертежи
+        elif "стадия 3" in sl and ("3д" in sl or "визуализ" in sl):
+            stage_id = "stage2_3d"  # Шаблонный: Стадия 3: 3д визуализация
+        elif "стадия 3" in sl:
+            stage_id = "stage3"  # Индивидуальный: Стадия 3
+        elif "стадия 2" in sl:
+            stage_id = "stage2_concept"
         else:
-            stage_id = 'stage1'  # fallback
+            stage_id = "stage1"  # fallback
 
         # Используем тот же метод что и upload_stage_files для получения пути
         stage_folder = self.get_stage_folder_path(contract_folder_path, stage_id)
         if not stage_folder:
             print(f"[ERROR] Не удалось определить путь стадии для stage_id={stage_id}")
-            return ''
+            return ""
 
         print(f"[YD] Папка стадии: {stage_folder} (stage_id={stage_id})")
 
         # Создаём родительские папки (как в upload_stage_files)
-        if stage_id in ['stage2_concept', 'stage2_3d']:
+        if stage_id in ["stage2_concept", "stage2_3d"]:
             clean = contract_folder_path
-            if clean.startswith('disk:'):
+            if clean.startswith("disk:"):
                 clean = clean[5:]
             parent_folder = f"{clean}/2 стадия - Концепция дизайна"
             self.create_folder(parent_folder)
@@ -883,7 +855,7 @@ class YandexDiskManager:
             return corrections_path
 
         print(f"[ERROR] Не удалось создать папку правок: {corrections_path}")
-        return ''
+        return ""
 
     def upload_stage_files(self, local_files, contract_folder_path, stage, variation=None, progress_callback=None, skip_per_file_publish=False):
         """Загрузка множественных файлов для стадии
@@ -915,14 +887,14 @@ class YandexDiskManager:
 
             # Уведомляем о подготовке папки
             if progress_callback:
-                progress_callback(0, len(local_files), '', 'preparing')
+                progress_callback(0, len(local_files), "", "preparing")
 
             # Создаем все родительские папки и саму папку стадии
             # Для stage2_concept и stage2_3d нужно создать родительскую папку "2 стадия"
-            if stage in ['stage2_concept', 'stage2_3d']:
+            if stage in ["stage2_concept", "stage2_3d"]:
                 # Убираем префикс disk: если он есть
                 clean_contract_folder = contract_folder_path
-                if clean_contract_folder.startswith('disk:'):
+                if clean_contract_folder.startswith("disk:"):
                     clean_contract_folder = clean_contract_folder[5:]
 
                 parent_folder = f"{clean_contract_folder}/2 стадия - Концепция дизайна"
@@ -950,7 +922,7 @@ class YandexDiskManager:
 
                     # Вызываем callback для обновления прогресса (загрузка на Яндекс.Диск)
                     if progress_callback:
-                        progress_callback(index, total_files, file_name, 'uploading')
+                        progress_callback(index, total_files, file_name, "uploading")
 
                     # Загружаем файл
                     self.upload_file(local_file, yandex_path)
@@ -961,12 +933,7 @@ class YandexDiskManager:
                     else:
                         public_link = self.get_public_link(yandex_path)
 
-                    uploaded_files.append({
-                        'file_name': file_name,
-                        'yandex_path': yandex_path,
-                        'public_link': public_link if public_link else yandex_path,
-                        'local_path': local_file
-                    })
+                    uploaded_files.append({"file_name": file_name, "yandex_path": yandex_path, "public_link": public_link if public_link else yandex_path, "local_path": local_file})
 
                     print(f"[OK] {file_name} загружен")
 
@@ -992,17 +959,17 @@ class YandexDiskManager:
             Путь к папке стадии или None
         """
         # Убираем префикс disk: если он есть
-        if contract_folder_path.startswith('disk:'):
+        if contract_folder_path.startswith("disk:"):
             contract_folder_path = contract_folder_path[5:]  # Убираем 'disk:'
 
         stage_map = {
-            'measurement': 'Замер',
-            'stage1': '1 стадия - Планировочное решение',
-            'stage2_concept': '2 стадия - Концепция дизайна/Концепция-коллажи',
-            'stage2_3d': '2 стадия - Концепция дизайна/3D визуализация',
-            'stage3': '3 стадия - Чертежный проект',
-            'references': 'Референсы',
-            'photo_documentation': 'Фотофиксация'
+            "measurement": "Замер",
+            "stage1": "1 стадия - Планировочное решение",
+            "stage2_concept": "2 стадия - Концепция дизайна/Концепция-коллажи",
+            "stage2_3d": "2 стадия - Концепция дизайна/3D визуализация",
+            "stage3": "3 стадия - Чертежный проект",
+            "references": "Референсы",
+            "photo_documentation": "Фотофиксация",
         }
 
         subfolder = stage_map.get(stage)
@@ -1010,7 +977,7 @@ class YandexDiskManager:
             base_path = f"{contract_folder_path}/{subfolder}"
 
             # Если указана вариация для stage2_concept или stage2_3d, добавляем подпапку
-            if variation and stage in ['stage2_concept', 'stage2_3d']:
+            if variation and stage in ["stage2_concept", "stage2_3d"]:
                 base_path = f"{base_path}/Вариация {variation}"
 
             return base_path
@@ -1036,56 +1003,56 @@ class YandexDiskManager:
 
         # Убираем disk: для маппинга стадий
         clean_path = contract_folder_path
-        if clean_path.startswith('disk:'):
+        if clean_path.startswith("disk:"):
             clean_path = clean_path[5:]
 
         # Точный маппинг папок → стадий
         folder_to_stage_exact = {
-            'Замер': 'measurement',
-            'Замеры': 'measurement',
-            '1 стадия - Планировочное решение': 'stage1',
-            'Планировочное решение': 'stage1',
-            'Концепция-коллажи': 'stage2_concept',
-            'Коллажи': 'stage2_concept',
-            '3D визуализация': 'stage2_3d',
-            '3D': 'stage2_3d',
-            '3 стадия - Чертежный проект': 'stage3',
-            'Чертежный проект': 'stage3',
-            'Чертежи': 'stage3',
-            'Референсы': 'references',
-            'Фотофиксация': 'photo_documentation',
-            'Фото': 'photo_documentation',
-            'Анкета': 'questionnaire',
-            'Анкеты': 'questionnaire',
-            'Документы': 'documents',
-            'Техническое задание': 'tech_task',
-            'ТЗ': 'tech_task',
-            'Авторский надзор': 'supervision',
+            "Замер": "measurement",
+            "Замеры": "measurement",
+            "1 стадия - Планировочное решение": "stage1",
+            "Планировочное решение": "stage1",
+            "Концепция-коллажи": "stage2_concept",
+            "Коллажи": "stage2_concept",
+            "3D визуализация": "stage2_3d",
+            "3D": "stage2_3d",
+            "3 стадия - Чертежный проект": "stage3",
+            "Чертежный проект": "stage3",
+            "Чертежи": "stage3",
+            "Референсы": "references",
+            "Фотофиксация": "photo_documentation",
+            "Фото": "photo_documentation",
+            "Анкета": "questionnaire",
+            "Анкеты": "questionnaire",
+            "Документы": "documents",
+            "Техническое задание": "tech_task",
+            "ТЗ": "tech_task",
+            "Авторский надзор": "supervision",
         }
 
         # Нечёткий маппинг: ключевые слова → стадия
         folder_keywords_to_stage = [
-            ('замер', 'measurement'),
-            ('1 стадия', 'stage1'),
-            ('1стадия', 'stage1'),
-            ('планировочн', 'stage1'),
-            ('концепция', 'stage2_concept'),
-            ('коллаж', 'stage2_concept'),
-            ('3d', 'stage2_3d'),
-            ('визуализ', 'stage2_3d'),
-            ('2 стадия', 'stage2_concept'),
-            ('2стадия', 'stage2_concept'),
-            ('3 стадия', 'stage3'),
-            ('3стадия', 'stage3'),
-            ('чертеж', 'stage3'),
-            ('рабочи', 'stage3'),
-            ('референ', 'references'),
-            ('фотофикс', 'photo_documentation'),
-            ('фото', 'photo_documentation'),
-            ('анкет', 'questionnaire'),
-            ('документ', 'documents'),
-            ('техническ', 'tech_task'),
-            ('надзор', 'supervision'),
+            ("замер", "measurement"),
+            ("1 стадия", "stage1"),
+            ("1стадия", "stage1"),
+            ("планировочн", "stage1"),
+            ("концепция", "stage2_concept"),
+            ("коллаж", "stage2_concept"),
+            ("3d", "stage2_3d"),
+            ("визуализ", "stage2_3d"),
+            ("2 стадия", "stage2_concept"),
+            ("2стадия", "stage2_concept"),
+            ("3 стадия", "stage3"),
+            ("3стадия", "stage3"),
+            ("чертеж", "stage3"),
+            ("рабочи", "stage3"),
+            ("референ", "references"),
+            ("фотофикс", "photo_documentation"),
+            ("фото", "photo_documentation"),
+            ("анкет", "questionnaire"),
+            ("документ", "documents"),
+            ("техническ", "tech_task"),
+            ("надзор", "supervision"),
         ]
 
         def match_folder_to_stage(folder_name):
@@ -1100,18 +1067,18 @@ class YandexDiskManager:
 
         # Определение типа файла по расширению
         def detect_file_type(name):
-            ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
-            if ext in ('png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg'):
-                return 'image'
-            elif ext == 'pdf':
-                return 'pdf'
-            elif ext in ('xls', 'xlsx', 'csv'):
-                return 'excel'
-            elif ext in ('doc', 'docx'):
-                return 'word'
-            elif ext in ('dwg', 'dxf'):
-                return 'cad'
-            return 'other'
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            if ext in ("png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "svg"):
+                return "image"
+            elif ext == "pdf":
+                return "pdf"
+            elif ext in ("xls", "xlsx", "csv"):
+                return "excel"
+            elif ext in ("doc", "docx"):
+                return "word"
+            elif ext in ("dwg", "dxf"):
+                return "cad"
+            return "other"
 
         found_files = []
 
@@ -1120,26 +1087,28 @@ class YandexDiskManager:
             try:
                 items = self.get_folder_contents(folder_path)
                 for item in items:
-                    item_name = item.get('name', '')
-                    item_path = item.get('path', '')
-                    item_type = item.get('type', '')
+                    item_name = item.get("name", "")
+                    item_path = item.get("path", "")
+                    item_type = item.get("type", "")
 
-                    if item_type == 'dir':
+                    if item_type == "dir":
                         child_stage = match_folder_to_stage(item_name)
                         if child_stage is None:
                             child_stage = stage  # наследуем от родителя
-                        if stage == 'supervision' and item_name.startswith('Стадия'):
-                            child_stage = 'supervision'
-                        if item_name.startswith('Вариация') or item_name.startswith('вариация'):
+                        if stage == "supervision" and item_name.startswith("Стадия"):
+                            child_stage = "supervision"
+                        if item_name.startswith("Вариация") or item_name.startswith("вариация"):
                             child_stage = stage
                         scan_folder(item_path, child_stage)
-                    elif item_type == 'file' and stage:
-                        found_files.append({
-                            'yandex_path': item_path,
-                            'file_name': item_name,
-                            'stage': stage,
-                            'file_type': detect_file_type(item_name),
-                        })
+                    elif item_type == "file" and stage:
+                        found_files.append(
+                            {
+                                "yandex_path": item_path,
+                                "file_name": item_name,
+                                "stage": stage,
+                                "file_type": detect_file_type(item_name),
+                            }
+                        )
             except Exception as e:
                 print(f"[YD-SCAN] Ошибка сканирования {folder_path}: {e}")
 
