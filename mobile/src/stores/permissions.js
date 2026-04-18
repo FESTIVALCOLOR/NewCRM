@@ -34,6 +34,8 @@ export const usePermissionsStore = defineStore('permissions', () => {
     if (has('access.employees')) pages.push('/employees')
     if (has('access.salaries')) pages.push('/salaries')
     if (has('access.employee_reports') || has('access.employee_analytics')) pages.push('/employee-reports')
+    if (has('chat.employee.view')) pages.push('/employee-chats')
+    if (has('chat.client.view')) pages.push('/client-chats')
     pages.push('/notifications', '/profile')
     if (isSuperuser.value) pages.push('/admin', '/files')
     return pages

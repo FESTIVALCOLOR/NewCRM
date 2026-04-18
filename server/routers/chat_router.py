@@ -65,6 +65,8 @@ from services.chat_service import (
     delete_chat,
     delete_message,
     edit_message,
+    get_all_accessible_chats,
+    get_card_chat_for_employee,
     get_chat_by_card,
     get_chat_by_token,
     get_employee_chats,
@@ -157,8 +159,19 @@ def list_chats(
     current_user: Employee = Depends(require_permission("chat.employee.view")),
     db: Session = Depends(get_db),
 ):
-    """Список чатов текущего сотрудника."""
-    chats = get_employee_chats(db, current_user.id, chat_type=chat_type)
+    """Список чатов текущего сотрудника.
+
+    Если передан crm_card_id: возвращает чат карточки напрямую (без фильтра по членству),
+    для чата сотрудников — авто-добавляет текущего сотрудника как участника.
+    Иначе: возвращает все доступные чаты (участник ИЛИ назначен на карточку).
+    """
+    if crm_card_id and chat_type:
+        chat = get_card_chat_for_employee(db, crm_card_id, chat_type, current_user.id)
+        if not chat:
+            return []
+        return [_chat_to_response(db, chat, current_user.id)]
+
+    chats = get_all_accessible_chats(db, current_user.id, chat_type=chat_type)
     if crm_card_id:
         chats = [c for c in chats if c.crm_card_id == crm_card_id]
     return [_chat_to_response(db, c, current_user.id) for c in chats]
