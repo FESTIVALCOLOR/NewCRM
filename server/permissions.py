@@ -118,6 +118,7 @@ PERMISSION_NAMES: dict[str, str] = {
     "chat.client.send": "Отправка сообщений клиенту",
     "chat.client.manage": "Управление клиентским чатом (создание, ссылки, участники)",
     "chat.client.send_script": "Отправка скриптов клиенту через чат",
+    "chat.client.show_phone": "Просмотр номера телефона клиента в чате",
     # === Уведомления (видимость блоков настроек) ===
     "notifications.settings_projects": "Настройка каналов по типам проектов",
     "notifications.settings_duplication": "Настройка дублирования уведомлений",
@@ -223,6 +224,7 @@ _BASE_MANAGER = {
     "chat.client.send",
     "chat.client.manage",
     "chat.client.send_script",
+    "chat.client.show_phone",
 }
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -276,6 +278,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.view",
         "chat.client.send",
         "chat.client.send_script",
+        "chat.client.show_phone",
         "notifications.settings_projects",
     },
     POSITION_GAP: {
@@ -301,6 +304,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.view",
         "chat.client.send",
         "chat.client.send_script",
+        "chat.client.show_phone",
         "notifications.settings_projects",
     },
     POSITION_MANAGER: {
@@ -331,6 +335,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "chat.client.send",
         "chat.client.manage",
         "chat.client.send_script",
+        "chat.client.show_phone",
         "notifications.settings_projects",
         "notifications.settings_supervision",
     },

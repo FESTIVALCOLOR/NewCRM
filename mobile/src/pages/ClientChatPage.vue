@@ -64,13 +64,11 @@
             <!-- Верхняя строка: имя отправителя + кнопка меню -->
             <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
               <div
-                v-if="!isOwn(msg)"
                 class="text-caption text-weight-bold"
-                style="color: #1565C0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                :style="{ color: isOwn(msg) ? '#1B5E20' : '#1565C0', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }"
               >
-                {{ msg.sender_display_name }}
+                {{ msg.sender_display_name || (isOwn(msg) ? clientName : '') }}
               </div>
-              <div v-else style="flex: 1" />
               <q-btn
                 v-if="isOwn(msg) && !msg.is_deleted"
                 flat
@@ -82,12 +80,24 @@
                 style="margin: -4px -6px -2px 2px; flex-shrink: 0"
               >
                 <q-menu auto-close>
-                  <q-list dense style="min-width: 140px">
+                  <q-list dense style="min-width: 150px">
+                    <q-item
+                      v-if="msg.message_type === 'text'"
+                      clickable
+                      @click="startClientEdit(msg)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon name="edit" size="16px" color="grey-7" />
+                      </q-item-section>
+                      <q-item-section style="font-size: 13px">
+                        Редактировать
+                      </q-item-section>
+                    </q-item>
                     <q-item clickable @click="deleteClientMsg(msg)">
                       <q-item-section avatar>
                         <q-icon name="delete_outline" size="16px" color="red-5" />
                       </q-item-section>
-                      <q-item-section class="text-red-6">
+                      <q-item-section class="text-red-6" style="font-size: 13px">
                         Удалить
                       </q-item-section>
                     </q-item>
@@ -133,6 +143,42 @@
                 {{ msg.content }}
               </div>
             </template>
+
+            <!-- Inline-редактирование -->
+            <div v-if="editingClientMsgId === msg.id" class="q-mt-xs">
+              <q-input
+                v-model="editClientContent"
+                dense
+                outlined
+                autofocus
+                autogrow
+                hide-bottom-space
+                style="font-size: 13px"
+                @keydown.enter.exact.prevent="saveClientEdit"
+                @keydown.escape="cancelClientEdit"
+              />
+              <div class="row justify-end q-gutter-xs q-mt-xs">
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  size="sm"
+                  label="Отмена"
+                  color="grey-6"
+                  @click="cancelClientEdit"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  no-caps
+                  size="sm"
+                  label="Сохранить"
+                  color="green-7"
+                  :loading="savingClientEdit"
+                  @click="saveClientEdit"
+                />
+              </div>
+            </div>
 
             <!-- Нижняя строка: время -->
             <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
@@ -225,6 +271,9 @@ const fileInput = ref(null)
 const clientName = localStorage.getItem('client_name') || 'Клиент'
 const chatPageH = ref('100dvh')
 const uploadProgress = ref(0)
+const editingClientMsgId = ref(null)
+const editClientContent = ref('')
+const savingClientEdit = ref(false)
 
 function recalcChatH() {
   const vh = window.visualViewport?.height ?? window.innerHeight
@@ -311,6 +360,36 @@ function onTyping() {
 
 function pickFile() {
   fileInput.value?.click()
+}
+
+function startClientEdit(msg) {
+  editingClientMsgId.value = msg.id
+  editClientContent.value = msg.content || ''
+}
+
+function cancelClientEdit() {
+  editingClientMsgId.value = null
+  editClientContent.value = ''
+}
+
+async function saveClientEdit() {
+  const text = editClientContent.value.trim()
+  if (!text || !editingClientMsgId.value) return
+  savingClientEdit.value = true
+  try {
+    const baseURL = window.location.origin
+    const { data } = await axios.patch(
+      `${baseURL}/api/v1/client-chat/${activeToken}/messages/${editingClientMsgId.value}`,
+      { content: text, message_type: 'text' },
+    )
+    const idx = messages.value.findIndex(m => m.id === editingClientMsgId.value)
+    if (idx !== -1) messages.value.splice(idx, 1, data)
+    cancelClientEdit()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Ошибка редактирования' })
+  } finally {
+    savingClientEdit.value = false
+  }
 }
 
 async function deleteClientMsg(msg) {

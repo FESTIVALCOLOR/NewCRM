@@ -158,6 +158,51 @@ async def client_send_message(
     return _message_to_dict(msg)
 
 
+@router.patch("/client-chat/{token}/messages/{msg_id}")
+async def client_edit_message(
+    token: str,
+    msg_id: int,
+    data: InternalMessageCreate,
+    db: Session = Depends(get_db),
+):
+    """Клиент редактирует своё текстовое сообщение."""
+    from database import InternalChatMessage
+
+    chat = get_chat_by_token(db, token)
+    if not chat:
+        raise HTTPException(404, "Чат не найден")
+    guest = get_guest_by_token(db, token)
+    if not guest or not guest.guest_name:
+        raise HTTPException(403, "Сначала пройдите регистрацию")
+
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == msg_id,
+            InternalChatMessage.chat_id == chat.id,
+            InternalChatMessage.sender_guest_token == token,
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+            InternalChatMessage.message_type == "text",
+        )
+        .first()
+    )
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено или не принадлежит вам")
+
+    new_content = (data.content or "").strip()
+    if not new_content:
+        raise HTTPException(400, "Сообщение не может быть пустым")
+
+    msg.content = new_content
+    msg.is_edited = True
+    db.commit()
+    db.refresh(msg)
+
+    updated = _message_to_dict(msg)
+    await ws_manager.broadcast(chat.id, {"type": "message_edited", "message": updated})
+    return updated
+
+
 @router.post("/client-chat/{token}/files")
 async def client_upload_file(
     token: str,

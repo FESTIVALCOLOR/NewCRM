@@ -98,7 +98,7 @@
               <div
                 class="text-caption text-weight-bold"
                 :style="{ color: isOwn(msg) ? '#999' : (isGuest(msg) ? '#2E7D32' : '#1565C0') }"
-                style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default"
               >
                 {{ msg.sender_display_name }}
                 <q-chip
@@ -110,9 +110,18 @@
                 >
                   клиент
                 </q-chip>
+                <!-- Телефон клиента (только при наличии прав) -->
+                <q-tooltip
+                  v-if="isGuest(msg) && canShowPhone && guestPhone(msg)"
+                  anchor="top middle"
+                  self="bottom middle"
+                >
+                  <q-icon name="phone" size="12px" class="q-mr-xs" />{{ guestPhone(msg) }}
+                </q-tooltip>
               </div>
+              <!-- 3-точечное меню для ВСЕХ сообщений (не только своих) -->
               <q-btn
-                v-if="isOwn(msg) && !msg.is_deleted"
+                v-if="!msg.is_deleted && !msg._uploading"
                 flat
                 round
                 dense
@@ -124,7 +133,7 @@
                 <q-menu auto-close>
                   <q-list dense style="min-width: 150px; font-size: 12px">
                     <q-item
-                      v-if="msg.message_type === 'text'"
+                      v-if="isOwn(msg) && msg.message_type === 'text'"
                       clickable
                       dense
                       @click="startEdit(msg)"
@@ -137,6 +146,7 @@
                       </q-item-section>
                     </q-item>
                     <q-item
+                      v-if="isOwn(msg)"
                       clickable
                       dense
                       @click="deleteMsg(msg)"
@@ -146,6 +156,18 @@
                       </q-item-section>
                       <q-item-section class="text-red-7" style="font-size: 12px">
                         Удалить
+                      </q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      dense
+                      @click="openForwardDialog(msg)"
+                    >
+                      <q-item-section avatar style="min-width: 28px">
+                        <q-icon name="forward" size="14px" color="grey-8" />
+                      </q-item-section>
+                      <q-item-section style="font-size: 12px">
+                        Переслать
                       </q-item-section>
                     </q-item>
                   </q-list>
@@ -272,6 +294,72 @@
         />
       </div>
     </div>
+
+    <!-- Диалог: переслать сообщение -->
+    <q-dialog v-model="showForwardDialog">
+      <q-card style="min-width: 300px; max-width: 400px; width: 90vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle2">
+            Переслать сообщение
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-separator class="q-mt-sm" />
+        <q-card-section style="max-height: 50vh; overflow-y: auto; padding: 0">
+          <div v-if="loadingForwardChats" class="text-center q-pa-md">
+            <q-spinner size="24px" color="grey" />
+          </div>
+          <q-list v-else separator>
+            <q-item
+              v-for="c in forwardTargetChats"
+              :key="c.id"
+              clickable
+              :active="selectedForwardChatId === c.id"
+              active-class="bg-blue-1"
+              @click="selectedForwardChatId = c.id"
+            >
+              <q-item-section>
+                <q-item-label>{{ c.title || `Чат #${c.id}` }}</q-item-label>
+                <q-item-label caption>
+                  {{ c.chat_type === 'client' ? 'Чат с клиентом' : 'Чат сотрудников' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-icon v-if="selectedForwardChatId === c.id" name="check_circle" color="blue-6" />
+              </q-item-section>
+            </q-item>
+            <div v-if="!loadingForwardChats && !forwardTargetChats.length" class="text-center text-grey q-pa-md">
+              Нет доступных чатов
+            </div>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pt-sm">
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            label="Отмена"
+            color="grey-7"
+          />
+          <q-btn
+            unelevated
+            no-caps
+            label="Переслать"
+            color="blue-6"
+            :disable="!selectedForwardChatId"
+            :loading="sendingForward"
+            @click="doForward"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Диалог скрипта -->
     <q-dialog v-model="showScriptDialog" @show="loadScripts">
@@ -539,6 +627,13 @@ const chatCrmCardId = ref(null)
 const editingMsgId = ref(null)
 const editContent = ref('')
 const savingEdit = ref(false)
+// Пересылка сообщений
+const showForwardDialog = ref(false)
+const forwardingMsg = ref(null)
+const forwardTargetChats = ref([])
+const loadingForwardChats = ref(false)
+const selectedForwardChatId = ref(null)
+const sendingForward = ref(false)
 
 function recalcChatH() {
   const vh = window.visualViewport?.height ?? window.innerHeight
@@ -552,6 +647,23 @@ function recalcChatH() {
 
 const canManage = computed(() => can('chat.client.manage'))
 const canScript = computed(() => can('chat.client.send_script'))
+const canShowPhone = computed(() => can('chat.client.show_phone'))
+
+// Карта guest_name → phone из списка участников (token не передаётся в ответе API)
+const guestPhoneMap = computed(() => {
+  const map = {}
+  for (const m of members.value) {
+    if (!m.employee_id && m.guest_phone && m.guest_name) {
+      map[m.guest_name] = m.guest_phone
+    }
+  }
+  return map
+})
+
+function guestPhone(msg) {
+  if (!isGuest(msg) || !msg.sender_display_name) return ''
+  return guestPhoneMap.value[msg.sender_display_name] || ''
+}
 const membersCount = computed(() => members.value.length)
 
 const scripts = ref([])
@@ -602,6 +714,38 @@ async function saveEdit() {
     $q.notify({ type: 'negative', message: 'Ошибка редактирования' })
   } finally {
     savingEdit.value = false
+  }
+}
+
+async function openForwardDialog(msg) {
+  forwardingMsg.value = msg
+  selectedForwardChatId.value = null
+  showForwardDialog.value = true
+  loadingForwardChats.value = true
+  try {
+    const { data } = await api.get('/api/v1/chats/')
+    forwardTargetChats.value = (Array.isArray(data) ? data : (data.items || []))
+      .filter(c => c.id !== chatId)
+  } catch {
+    forwardTargetChats.value = []
+  } finally {
+    loadingForwardChats.value = false
+  }
+}
+
+async function doForward() {
+  if (!forwardingMsg.value || !selectedForwardChatId.value) return
+  sendingForward.value = true
+  try {
+    await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: forwardingMsg.value.id })
+    $q.notify({ type: 'positive', message: 'Переслано' })
+    showForwardDialog.value = false
+  } catch (e) {
+    const raw = e.response?.data?.detail
+    const message = Array.isArray(raw) ? raw.map(d => d.msg || String(d)).join('; ') : (raw || 'Ошибка пересылки')
+    $q.notify({ type: 'negative', message: String(message) })
+  } finally {
+    sendingForward.value = false
   }
 }
 
