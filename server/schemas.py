@@ -1530,6 +1530,7 @@ class InternalChatDetailResponse(InternalChatResponse):
 
     members: list[InternalChatMemberResponse] = []
     messages: list[InternalMessageResponse] = []
+    first_unread_message_id: Optional[int] = None
 
 
 class InternalMessageCreate(BaseModel):

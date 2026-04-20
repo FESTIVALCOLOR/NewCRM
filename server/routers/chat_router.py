@@ -70,6 +70,7 @@ from services.chat_service import (
     get_chat_by_card,
     get_chat_by_token,
     get_employee_chats,
+    get_first_unread_message_id,
     get_guest_by_token,
     get_messages,
     get_unread_count,
@@ -88,6 +89,13 @@ from database import (
     InternalChatMessage,
     get_db,
 )
+
+# Маппинг db_stage → префикс stage_name в StageWorkflowState
+_DB_STAGE_TO_WF_PREFIX = {
+    "stage1": "Стадия 1",
+    "stage2_concept": "Стадия 2",
+    "stage3": "Стадия 3",
+}
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -439,6 +447,27 @@ async def copy_message_file_to_card(
             variation=variation,
         )
         db.add(pf)
+
+        # Для правок: обновляем StageWorkflowState → revision_file_path + status='revision'
+        if is_revisions:
+            from database import StageWorkflowState
+
+            wf_prefix = _DB_STAGE_TO_WF_PREFIX.get(stage_name, "")
+            if wf_prefix:
+                wf = (
+                    db.query(StageWorkflowState)
+                    .filter(
+                        StageWorkflowState.crm_card_id == card.id,
+                        StageWorkflowState.stage_name.like(f"{wf_prefix}%"),
+                    )
+                    .order_by(StageWorkflowState.id.desc())
+                    .first()
+                )
+                if wf:
+                    wf.revision_file_path = dest_yd
+                    if wf.status != "revision":
+                        wf.status = "revision"
+
         db.commit()
     else:
         # Поля хранятся в Contract (contract_file_yandex_path, act_planning_yandex_path и т.д.)
@@ -866,8 +895,10 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
                 role_in_project=role_in_project,
             )
         )
+    first_unread_id = get_first_unread_message_id(db, chat.id, employee_id)
     return InternalChatDetailResponse(
         **base.model_dump(),
         members=member_responses,
         messages=msgs,
+        first_unread_message_id=first_unread_id,
     )

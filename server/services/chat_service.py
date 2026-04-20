@@ -611,6 +611,34 @@ def get_unread_count(db: Session, chat_id: int, employee_id: int) -> int:
     return count
 
 
+def get_first_unread_message_id(db: Session, chat_id: int, employee_id: int) -> Optional[int]:
+    """ID первого непрочитанного сообщения для сотрудника (не своего, не системного)."""
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.employee_id == employee_id,
+        )
+        .first()
+    )
+    if not member:
+        return None
+    last_read = member.last_read_message_id or 0
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.id > last_read,
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+            InternalChatMessage.sender_employee_id != employee_id,
+            InternalChatMessage.message_type != "system",
+        )
+        .order_by(InternalChatMessage.id.asc())
+        .first()
+    )
+    return msg.id if msg else None
+
+
 # =========================
 # Список чатов сотрудника
 # =========================
