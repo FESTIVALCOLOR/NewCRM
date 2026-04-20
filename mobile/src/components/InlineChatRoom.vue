@@ -534,13 +534,26 @@
           />
         </q-card-section>
         <q-separator class="q-mt-sm" />
+        <q-card-section class="q-pb-none q-pt-sm">
+          <q-input
+            v-model="forwardSearchQuery"
+            dense
+            outlined
+            placeholder="Поиск чата..."
+            clearable
+          >
+            <template #prepend>
+              <q-icon name="search" size="18px" />
+            </template>
+          </q-input>
+        </q-card-section>
         <q-card-section style="max-height: 50vh; overflow-y: auto; padding: 0">
           <div v-if="loadingForwardChats" class="text-center q-pa-md">
             <q-spinner size="24px" color="grey" />
           </div>
           <q-list v-else separator>
             <q-item
-              v-for="c in forwardTargetChats"
+              v-for="c in filteredForwardChats"
               :key="c.id"
               clickable
               :active="selectedForwardChatId === c.id"
@@ -737,6 +750,12 @@ const forwardTargetChats = ref([])
 const loadingForwardChats = ref(false)
 const selectedForwardChatId = ref(null)
 const sendingForward = ref(false)
+const forwardSearchQuery = ref('')
+const filteredForwardChats = computed(() => {
+  if (!forwardSearchQuery.value.trim()) return forwardTargetChats.value
+  const q = forwardSearchQuery.value.toLowerCase()
+  return forwardTargetChats.value.filter(c => (c.title || '').toLowerCase().includes(q))
+})
 const showMembers = ref(false)
 const chatMembers = ref([])
 // null = секция не показывалась; [] = загружено, но все уже в чате
@@ -1037,6 +1056,7 @@ async function removeMember(m) {
 async function openForwardDialog(msg) {
   forwardingMsg.value = msg
   selectedForwardChatId.value = null
+  forwardSearchQuery.value = ''
   showForwardDialog.value = true
   loadingForwardChats.value = true
   try {
