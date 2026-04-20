@@ -94,8 +94,28 @@
         <q-tab name="data" label="Данные" />
         <q-tab name="history" label="История" />
         <q-tab v-if="can('crm_cards.payments')" name="payments" label="Оплаты" />
-        <q-tab v-if="can('chat.client.view')" name="chat" label="Чат с клиентом" />
-        <q-tab v-if="can('chat.employee.view')" name="notes" label="Чат сотрудников" />
+        <q-tab v-if="can('chat.client.view')" name="chat">
+          <span>Чат с клиентом</span>
+          <q-badge
+            v-if="card && chatUnreadStore.unreadByCardAndType(card.id, 'client') > 0"
+            color="negative"
+            floating
+            style="font-size: 9px; top: 2px; right: 0"
+          >
+            {{ chatUnreadStore.unreadByCardAndType(card.id, 'client') }}
+          </q-badge>
+        </q-tab>
+        <q-tab v-if="can('chat.employee.view')" name="notes">
+          <span>Чат сотрудников</span>
+          <q-badge
+            v-if="card && chatUnreadStore.unreadByCardAndType(card.id, 'employee') > 0"
+            color="negative"
+            floating
+            style="font-size: 9px; top: 2px; right: 0"
+          >
+            {{ chatUnreadStore.unreadByCardAndType(card.id, 'employee') }}
+          </q-badge>
+        </q-tab>
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated class="bg-transparent" :style="isChatTab ? {} : { paddingBottom: '80px' }">
@@ -1646,6 +1666,7 @@ import { useQuasar } from 'quasar'
 import { useCrmStore } from 'src/stores/crm'
 import { useAuthStore } from 'src/stores/auth'
 import { useReferencesStore } from 'src/stores/references'
+import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermission } from 'src/composables/usePermission'
 import { calcDeadlineFromTimeline } from 'src/composables/useDeadline'
 import { crmApi, employeesApi, filesApi, contractsApi, paymentsApi, locksApi, messengerApi } from 'src/services/api'
@@ -1702,6 +1723,7 @@ const router = useRouter()
 const $q = useQuasar()
 const crmStore = useCrmStore()
 const refs = useReferencesStore()
+const chatUnreadStore = useChatUnreadStore()
 
 const card = computed(() => crmStore.selectedCard)
 const ARCHIVE_COLUMNS = ['Выполненный проект', 'СДАН', 'РАСТОРГНУТ', 'АВТОРСКИЙ НАДЗОР']

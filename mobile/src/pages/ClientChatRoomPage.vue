@@ -79,10 +79,11 @@
           <!-- Разделитель «Непрочитанные сообщения» -->
           <div
             v-if="firstUnreadId && msg.id === firstUnreadId"
+            data-unread-divider
             class="row items-center q-my-sm"
           >
             <div class="col" style="height: 1px; background: #E53935" />
-            <span class="q-px-sm text-caption text-negative text-weight-medium">Непрочитанные</span>
+            <span class="q-px-sm text-caption text-negative text-weight-medium">Непрочитанные сообщения</span>
             <div class="col" style="height: 1px; background: #E53935" />
           </div>
           <div
@@ -619,10 +620,12 @@ import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { usePermission } from 'src/composables/usePermission'
 import { useAuthStore } from 'src/stores/auth'
+import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { useQuasar } from 'quasar'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const chatUnreadStore = useChatUnreadStore()
 const { can } = usePermission()
 const $q = useQuasar()
 const chatId = Number(route.params.chatId)
@@ -820,15 +823,19 @@ function scrollToBottom() {
 
 function scrollToFirstUnread() {
   nextTick(() => {
-    if (!messagesEl.value) return
+    const container = messagesEl.value
+    if (!container) return
     if (firstUnreadId.value) {
-      const el = messagesEl.value.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
-      if (el) {
-        el.scrollIntoView({ block: 'start' })
+      const divider = container.querySelector('[data-unread-divider]')
+      const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
+      if (target) {
+        const containerRect = container.getBoundingClientRect()
+        const targetRect = target.getBoundingClientRect()
+        container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
         return
       }
     }
-    messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    container.scrollTop = container.scrollHeight
   })
 }
 
@@ -846,6 +853,7 @@ async function loadMessages() {
     if (messages.value.length) {
       sendRead(messages.value[messages.value.length - 1].id)
     }
+    chatUnreadStore.markChatRead(chatId)
 
     chatCrmCardId.value = data.crm_card_id || null
 

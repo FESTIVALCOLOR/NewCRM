@@ -110,199 +110,210 @@
       </div>
 
       <template v-else>
-        <div
-          v-for="msg in messages"
-          :key="msg.id"
-          class="q-mb-sm"
-          :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
-        >
-          <!-- Системные -->
-          <div v-if="msg.message_type === 'system'" class="text-center full-width">
-            <q-chip dense size="sm" color="grey-3" text-color="grey-7">
-              {{ msg.content }}
-            </q-chip>
-          </div>
-
-          <!-- Обычные -->
+        <template v-for="msg in messages" :key="msg.id">
+          <!-- Разделитель «Непрочитанные сообщения» -->
           <div
-            v-else
-            :class="isOwn(msg) ? 'bubble-own' : 'bubble-other'"
-            style="max-width: 80%"
+            v-if="firstUnreadId && msg.id === firstUnreadId"
+            data-unread-divider
+            class="row items-center q-my-sm"
           >
-            <!-- Верхняя строка: имя отправителя + кнопка меню -->
-            <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
-              <div
-                class="text-caption text-weight-bold"
-                :style="{ color: isOwn(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
-                style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
-              >
-                {{ msg.sender_display_name }}
-                <q-chip
-                  v-if="msg.sender_guest_token"
+            <div class="col" style="height: 1px; background: #E53935" />
+            <span class="q-px-sm text-caption text-negative text-weight-medium">Непрочитанные сообщения</span>
+            <div class="col" style="height: 1px; background: #E53935" />
+          </div>
+          <div
+            :data-msg-id="msg.id"
+            class="q-mb-sm"
+            :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
+          >
+            <!-- Системные -->
+            <div v-if="msg.message_type === 'system'" class="text-center full-width">
+              <q-chip dense size="sm" color="grey-3" text-color="grey-7">
+                {{ msg.content }}
+              </q-chip>
+            </div>
+
+            <!-- Обычные -->
+            <div
+              v-else
+              :class="isOwn(msg) ? 'bubble-own' : 'bubble-other'"
+              style="max-width: 80%"
+            >
+              <!-- Верхняя строка: имя отправителя + кнопка меню -->
+              <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
+                <div
+                  class="text-caption text-weight-bold"
+                  :style="{ color: isOwn(msg) ? '#999' : (msg.sender_guest_token ? '#2E7D32' : '#1565C0') }"
+                  style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                >
+                  {{ msg.sender_display_name }}
+                  <q-chip
+                    v-if="msg.sender_guest_token"
+                    dense
+                    size="xs"
+                    color="green-2"
+                    text-color="green-9"
+                  >
+                    клиент
+                  </q-chip>
+                </div>
+                <q-btn
+                  v-if="!msg.is_deleted && !msg._uploading"
+                  flat
+                  round
                   dense
                   size="xs"
-                  color="green-2"
-                  text-color="green-9"
-                >
-                  клиент
-                </q-chip>
-              </div>
-              <q-btn
-                v-if="!msg.is_deleted && !msg._uploading"
-                flat
-                round
-                dense
-                size="xs"
-                icon="more_vert"
-                color="grey-6"
-                style="margin: -4px -6px -2px 2px; flex-shrink: 0"
-              >
-                <q-menu auto-close>
-                  <q-list dense style="min-width: 150px; font-size: 12px">
-                    <q-item
-                      v-if="isOwn(msg) && msg.message_type === 'text'"
-                      clickable
-                      dense
-                      @click="startEdit(msg)"
-                    >
-                      <q-item-section avatar style="min-width: 28px">
-                        <q-icon name="edit" size="14px" color="grey-8" />
-                      </q-item-section>
-                      <q-item-section style="font-size: 12px">
-                        Редактировать
-                      </q-item-section>
-                    </q-item>
-                    <q-item
-                      v-if="isOwn(msg)"
-                      clickable
-                      dense
-                      @click="deleteMsg(msg)"
-                    >
-                      <q-item-section avatar style="min-width: 28px">
-                        <q-icon name="delete_outline" size="14px" color="grey-8" />
-                      </q-item-section>
-                      <q-item-section class="text-red-7" style="font-size: 12px">
-                        Удалить
-                      </q-item-section>
-                    </q-item>
-                    <q-item
-                      clickable
-                      dense
-                      @click="openForwardDialog(msg)"
-                    >
-                      <q-item-section avatar style="min-width: 28px">
-                        <q-icon name="forward" size="14px" color="grey-8" />
-                      </q-item-section>
-                      <q-item-section style="font-size: 12px">
-                        Переслать
-                      </q-item-section>
-                    </q-item>
-                    <q-item
-                      v-if="msg.yandex_path && chat && chat.crm_card_id"
-                      clickable
-                      dense
-                      @click="openCopyToCard(msg)"
-                    >
-                      <q-item-section avatar style="min-width: 28px">
-                        <q-icon name="drive_file_move" size="14px" color="grey-8" />
-                      </q-item-section>
-                      <q-item-section style="font-size: 12px">
-                        Скопировать в карточку
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-menu>
-              </q-btn>
-            </div>
-
-            <!-- Загрузка файла (оптимистичное сообщение) -->
-            <template v-if="msg._uploading">
-              <div class="row items-center q-gutter-xs">
-                <q-spinner size="14px" color="grey-5" />
-                <span class="text-caption text-grey-6" style="word-break: break-word">{{ msg.file_name }}…</span>
-              </div>
-            </template>
-            <template v-else-if="msg.message_type === 'image'">
-              <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
-                <img
-                  v-if="imgStreamUrl(msg)"
-                  :src="imgStreamUrl(msg)"
-                  style="max-width: 100%; max-height: 180px; border-radius: 6px; display: block; cursor: pointer"
-                  @error="$event.target.style.display='none'"
-                >
-                <div class="row items-center q-gutter-xs q-mt-xs">
-                  <q-icon name="image" size="14px" color="grey-6" />
-                  <span class="text-caption text-grey-7 ellipsis" style="max-width: 180px; font-size: 11px">
-                    {{ msg.file_name || 'Изображение' }}
-                  </span>
-                </div>
-              </a>
-            </template>
-            <template v-else-if="msg.message_type === 'file'">
-              <div class="row items-center q-gutter-xs">
-                <q-icon name="attach_file" size="18px" />
-                <a
-                  :href="msg.file_url"
-                  target="_blank"
-                  class="text-body2 ellipsis"
-                  style="max-width: 180px; color: inherit; font-size: 12px"
-                >
-                  {{ msg.file_name || 'Файл' }}
-                </a>
-              </div>
-            </template>
-
-            <template v-else>
-              <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
-                {{ msg.content }}
-              </div>
-            </template>
-
-            <!-- Редактирование сообщения -->
-            <div v-if="editingMsgId === msg.id" class="q-mt-xs">
-              <q-input
-                v-model="editContent"
-                dense
-                outlined
-                autofocus
-                autogrow
-                hide-bottom-space
-                style="font-size: 13px"
-                @keydown.enter.exact.prevent="saveEdit"
-                @keydown.escape="cancelEdit"
-              />
-              <div class="row justify-end q-gutter-xs q-mt-xs">
-                <q-btn
-                  flat
-                  dense
-                  no-caps
-                  size="sm"
-                  label="Отмена"
+                  icon="more_vert"
                   color="grey-6"
-                  @click="cancelEdit"
-                />
-                <q-btn
-                  unelevated
-                  dense
-                  no-caps
-                  size="sm"
-                  label="Сохранить"
-                  color="blue-6"
-                  :loading="savingEdit"
-                  @click="saveEdit"
-                />
+                  style="margin: -4px -6px -2px 2px; flex-shrink: 0"
+                >
+                  <q-menu auto-close>
+                    <q-list dense style="min-width: 150px; font-size: 12px">
+                      <q-item
+                        v-if="isOwn(msg) && msg.message_type === 'text'"
+                        clickable
+                        dense
+                        @click="startEdit(msg)"
+                      >
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="edit" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Редактировать
+                        </q-item-section>
+                      </q-item>
+                      <q-item
+                        v-if="isOwn(msg)"
+                        clickable
+                        dense
+                        @click="deleteMsg(msg)"
+                      >
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="delete_outline" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section class="text-red-7" style="font-size: 12px">
+                          Удалить
+                        </q-item-section>
+                      </q-item>
+                      <q-item
+                        clickable
+                        dense
+                        @click="openForwardDialog(msg)"
+                      >
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="forward" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Переслать
+                        </q-item-section>
+                      </q-item>
+                      <q-item
+                        v-if="msg.yandex_path && chat && chat.crm_card_id"
+                        clickable
+                        dense
+                        @click="openCopyToCard(msg)"
+                      >
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="drive_file_move" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Скопировать в карточку
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-menu>
+                </q-btn>
               </div>
-            </div>
 
-            <!-- Нижняя строка: время -->
-            <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
-              <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
-              <div class="text-caption" style="color: #888; font-size: 10px">
-                {{ formatTime(msg.created_at) }}
+              <!-- Загрузка файла (оптимистичное сообщение) -->
+              <template v-if="msg._uploading">
+                <div class="row items-center q-gutter-xs">
+                  <q-spinner size="14px" color="grey-5" />
+                  <span class="text-caption text-grey-6" style="word-break: break-word">{{ msg.file_name }}…</span>
+                </div>
+              </template>
+              <template v-else-if="msg.message_type === 'image'">
+                <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
+                  <img
+                    v-if="imgStreamUrl(msg)"
+                    :src="imgStreamUrl(msg)"
+                    style="max-width: 100%; max-height: 180px; border-radius: 6px; display: block; cursor: pointer"
+                    @error="$event.target.style.display='none'"
+                  >
+                  <div class="row items-center q-gutter-xs q-mt-xs">
+                    <q-icon name="image" size="14px" color="grey-6" />
+                    <span class="text-caption text-grey-7 ellipsis" style="max-width: 180px; font-size: 11px">
+                      {{ msg.file_name || 'Изображение' }}
+                    </span>
+                  </div>
+                </a>
+              </template>
+              <template v-else-if="msg.message_type === 'file'">
+                <div class="row items-center q-gutter-xs">
+                  <q-icon name="attach_file" size="18px" />
+                  <a
+                    :href="msg.file_url"
+                    target="_blank"
+                    class="text-body2 ellipsis"
+                    style="max-width: 180px; color: inherit; font-size: 12px"
+                  >
+                    {{ msg.file_name || 'Файл' }}
+                  </a>
+                </div>
+              </template>
+
+              <template v-else>
+                <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
+                  {{ msg.content }}
+                </div>
+              </template>
+
+              <!-- Редактирование сообщения -->
+              <div v-if="editingMsgId === msg.id" class="q-mt-xs">
+                <q-input
+                  v-model="editContent"
+                  dense
+                  outlined
+                  autofocus
+                  autogrow
+                  hide-bottom-space
+                  style="font-size: 13px"
+                  @keydown.enter.exact.prevent="saveEdit"
+                  @keydown.escape="cancelEdit"
+                />
+                <div class="row justify-end q-gutter-xs q-mt-xs">
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    size="sm"
+                    label="Отмена"
+                    color="grey-6"
+                    @click="cancelEdit"
+                  />
+                  <q-btn
+                    unelevated
+                    dense
+                    no-caps
+                    size="sm"
+                    label="Сохранить"
+                    color="blue-6"
+                    :loading="savingEdit"
+                    @click="saveEdit"
+                  />
+                </div>
+              </div>
+
+              <!-- Нижняя строка: время -->
+              <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
+                <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
+                <div class="text-caption" style="color: #888; font-size: 10px">
+                  {{ formatTime(msg.created_at) }}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </template>
       </template>
     </div>
 
@@ -688,6 +699,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { useAuthStore } from 'src/stores/auth'
+import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { useQuasar } from 'quasar'
 
 const props = defineProps({
@@ -702,6 +714,7 @@ const props = defineProps({
 })
 
 const authStore = useAuthStore()
+const chatUnreadStore = useChatUnreadStore()
 const $q = useQuasar()
 const { connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
 
@@ -709,6 +722,7 @@ const loading = ref(false)
 const creating = ref(false)
 const chat = ref(null)
 const messages = ref([])
+const firstUnreadId = ref(null)
 const inputText = ref('')
 const messagesEl = ref(null)
 const fileInput = ref(null)
@@ -843,6 +857,24 @@ function scrollToBottom() {
   })
 }
 
+function scrollToFirstUnread() {
+  nextTick(() => {
+    const container = messagesEl.value
+    if (!container) return
+    if (firstUnreadId.value) {
+      const divider = container.querySelector('[data-unread-divider]')
+      const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
+      if (target) {
+        const containerRect = container.getBoundingClientRect()
+        const targetRect = target.getBoundingClientRect()
+        container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
+        return
+      }
+    }
+    container.scrollTop = container.scrollHeight
+  })
+}
+
 async function loadChat() {
   if (!props.cardId) return
   loading.value = true
@@ -867,7 +899,9 @@ async function openChat(chatId) {
     chat.value = data
     messages.value = data.messages || []
     chatMembers.value = data.members || []
-    scrollToBottom()
+    firstUnreadId.value = data.first_unread_message_id || null
+    scrollToFirstUnread()
+    chatUnreadStore.markChatRead(chatId)
 
     // Для чата сотрудников загрузить клиентский чат (для пересылки)
     if (props.chatType === 'employee' && data.crm_card_id) {

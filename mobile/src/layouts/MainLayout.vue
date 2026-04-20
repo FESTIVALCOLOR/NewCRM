@@ -153,6 +153,9 @@
           <q-item-section style="font-size: 13px">
             {{ item.label }}
           </q-item-section>
+          <q-item-section v-if="chatBadge(item.to)" side>
+            <q-badge color="negative" :label="chatBadge(item.to) > 99 ? '99+' : chatBadge(item.to)" rounded />
+          </q-item-section>
         </q-item>
       </q-list>
       <q-separator />
@@ -205,6 +208,14 @@
           size="sm"
           @click="$router.push(tab.to)"
         >
+          <q-badge
+            v-if="chatBadge(tab.to)"
+            color="negative"
+            floating
+            style="font-size: 9px"
+          >
+            {{ chatBadge(tab.to) > 99 ? '99+' : chatBadge(tab.to) }}
+          </q-badge>
           <q-tooltip>{{ tab.label }}</q-tooltip>
         </q-btn>
       </div>
@@ -455,6 +466,7 @@ import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 import { useNotificationsStore } from 'src/stores/notifications'
 import { useReferencesStore } from 'src/stores/references'
+import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { usePermissionsStore } from 'src/stores/permissions'
 import { useWebSocket } from 'src/composables/useWebSocket'
 import { pendingCount as getOfflinePendingCount, syncAll as syncOfflineAll, clearAll as clearOfflineAll } from 'src/services/offlineQueue'
@@ -468,8 +480,16 @@ const referencesStore = useReferencesStore()
 const permsStore = usePermissionsStore()
 const { connect: wsConnect, disconnect: wsDisconnect, isConnected: wsConnected } = useWebSocket()
 
+const chatUnreadStore = useChatUnreadStore()
 const drawerOpen = ref(!$q.screen.lt.md)
 const unreadCount = computed(() => notificationsStore.unreadCount)
+
+// Бейдж непрочитанных чатов для пункта меню по пути
+function chatBadge(to) {
+  if (to === '/employee-chats') return chatUnreadStore.totalEmployeeUnread || 0
+  if (to === '/client-chats') return chatUnreadStore.totalClientUnread || 0
+  return 0
+}
 
 // Offline-очередь: количество ожидающих операций
 const offlinePending = ref(0)
@@ -554,11 +574,17 @@ function goToResult(r) {
   else if (r.type === 'supervision_card') router.push(`/supervision/${r.id}`)
 }
 
+let _chatUnreadTimer = null
+
 onMounted(() => {
   notificationsStore.load()
   referencesStore.loadAll()
   permsStore.load()
   setInterval(() => notificationsStore.load(), 60000)
+
+  // Загружать счётчики непрочитанных чатов каждые 30 секунд
+  chatUnreadStore.fetchUnreadCounts()
+  _chatUnreadTimer = setInterval(() => chatUnreadStore.fetchUnreadCounts(), 30000)
 
   // WebSocket для real-time обновлений (дополняет polling, не заменяет)
   _connectWebSocket()
@@ -888,6 +914,7 @@ function _connectWebSocket() {
 onUnmounted(() => {
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (offlinePendingTimer) clearInterval(offlinePendingTimer)
+  if (_chatUnreadTimer) clearInterval(_chatUnreadTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   wsDisconnect()
 })
