@@ -667,16 +667,16 @@ def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[
     card_ids_exec = [r[0] for r in db.query(StageExecutor.crm_card_id).filter(StageExecutor.executor_id == employee_id).all()]
     all_card_ids = list(set(card_ids_fields + card_ids_exec))
 
-    # Чаты для этих карточек (исключаем уже найденные через членство)
+    # Чаты для этих карточек (исключаем уже найденные через членство).
+    # ВАЖНО: только чаты сотрудников — клиентские чаты доступны только явным участникам.
     extra_ids: set[int] = set()
-    if all_card_ids:
+    if all_card_ids and (chat_type is None or chat_type == "employee"):
         q_card = db.query(InternalChat.id).filter(
             InternalChat.crm_card_id.in_(all_card_ids),
             InternalChat.is_active == True,  # noqa: E712
             InternalChat.id.notin_(member_chat_ids),
+            InternalChat.chat_type == "employee",  # только чаты сотрудников
         )
-        if chat_type:
-            q_card = q_card.filter(InternalChat.chat_type == chat_type)
         extra_ids = {r[0] for r in q_card.all()}
 
     all_ids = member_chat_ids | extra_ids
@@ -688,27 +688,37 @@ def get_all_accessible_chats(db: Session, employee_id: int, chat_type: Optional[
 
 
 def get_card_chat_for_employee(db: Session, crm_card_id: int, chat_type: str, employee_id: int) -> Optional[InternalChat]:
-    """Получить чат карточки; для чата сотрудников — авто-добавить если не участник."""
+    """Получить чат карточки.
+
+    Чат сотрудников: авто-добавляет сотрудника в участники при первом доступе.
+    Чат с клиентом: возвращает только если сотрудник уже явный участник (membership required).
+    """
     chat = get_chat_by_card(db, crm_card_id, chat_type)
     if not chat:
         return None
-    if chat_type == "employee":
-        existing = (
-            db.query(InternalChatMember)
-            .filter(
-                InternalChatMember.chat_id == chat.id,
-                InternalChatMember.employee_id == employee_id,
-                InternalChatMember.is_active == True,  # noqa: E712
-            )
-            .first()
+
+    existing = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.chat_id == chat.id,
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
         )
+        .first()
+    )
+
+    if chat_type == "employee":
+        # Авто-добавляем сотрудника если ещё не участник
         if not existing:
             emp = db.query(Employee).filter(Employee.id == employee_id).first()
             if emp:
                 _add_employee_member(db, chat, emp)
                 _add_system_message(db, chat, f"{_get_employee_display_name(emp)} присоединился к чату")
                 db.commit()
-    return chat
+        return chat
+    else:
+        # Клиентский чат: только для явных участников
+        return chat if existing else None
 
 
 def get_chat_by_card(db: Session, crm_card_id: int, chat_type: str) -> Optional[InternalChat]:
