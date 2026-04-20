@@ -21,6 +21,9 @@
       </div>
     </div>
 
+    <!-- Баннер установки PWA (inline, чтобы не перекрывать поле ввода) -->
+    <PwaInstallBanner inline />
+
     <!-- Список сообщений -->
     <div
       ref="messagesEl"
@@ -201,6 +204,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { useQuasar } from 'quasar'
 import axios from 'axios'
+import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
 
 const route = useRoute()
 const router = useRouter()

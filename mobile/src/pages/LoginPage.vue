@@ -80,6 +80,9 @@
         </q-card-section>
       </q-card>
     </div>
+
+    <!-- Баннер установки PWA на рабочий стол -->
+    <PwaInstallBanner />
   </q-page>
 </template>
 
@@ -87,6 +90,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
+import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
 
 const router = useRouter()
 const route = useRoute()

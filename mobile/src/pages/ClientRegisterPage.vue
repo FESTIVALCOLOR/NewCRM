@@ -74,6 +74,9 @@
         </q-card-section>
       </q-card>
     </div>
+
+    <!-- Баннер установки PWA -->
+    <PwaInstallBanner />
   </q-page>
 </template>
 
@@ -82,6 +85,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import axios from 'axios'
+import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
 
 const route = useRoute()
 const router = useRouter()
