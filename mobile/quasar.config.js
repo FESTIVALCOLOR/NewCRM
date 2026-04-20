@@ -115,7 +115,7 @@ export default configure(function (/* ctx */) {
         json.display = 'standalone'
         json.orientation = 'any'
         json.background_color = '#ffffff'
-        json.theme_color = '#1a1a2e'
+        json.theme_color = '#2e7d32'
         json.lang = 'ru'
         json.start_url = '/?source=pwa'
         json.scope = '/'
@@ -147,10 +147,10 @@ export default configure(function (/* ctx */) {
             type: 'image/png'
           },
           {
-            src: '/icons/icon-maskable-512x512.png',
+            src: '/icons/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'maskable'
+            purpose: 'any'
           }
         ]
       }
