@@ -1,7 +1,17 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { api } from 'src/boot/axios'
+
+/** Обновить бейдж иконки PWA (Web App Badging API) */
+function _setAppBadge(count) {
+  if (!('setAppBadge' in navigator)) return
+  if (count > 0) {
+    navigator.setAppBadge(count).catch(() => {})
+  } else {
+    navigator.clearAppBadge().catch(() => {})
+  }
+}
 
 export const useChatUnreadStore = defineStore('chatUnread', () => {
   const employeeChats = ref([])
@@ -57,6 +67,11 @@ export const useChatUnreadStore = defineStore('chatUnread', () => {
     const cc = clientChats.value.find(c => c.id === chatId)
     if (cc) cc.unread_count = (cc.unread_count || 0) + 1
   }
+
+  // Синхронизировать бейдж иконки PWA при изменении общего числа непрочитанных
+  watch(totalUnread, (count) => {
+    _setAppBadge(count)
+  }, { immediate: true })
 
   return {
     employeeChats,

@@ -597,13 +597,14 @@ def get_unread_count(db: Session, chat_id: int, employee_id: int) -> int:
     if not member:
         return 0
     last_read = member.last_read_message_id or 0
+    # IS DISTINCT FROM: корректно обрабатывает NULL (сообщения от клиентов имеют sender_employee_id=NULL)
     count = (
         db.query(InternalChatMessage)
         .filter(
             InternalChatMessage.chat_id == chat_id,
             InternalChatMessage.id > last_read,
             InternalChatMessage.is_deleted == False,
-            InternalChatMessage.sender_employee_id != employee_id,
+            InternalChatMessage.sender_employee_id.is_distinct_from(employee_id),
             InternalChatMessage.message_type != "system",
         )
         .count()
@@ -630,7 +631,7 @@ def get_first_unread_message_id(db: Session, chat_id: int, employee_id: int) -> 
             InternalChatMessage.chat_id == chat_id,
             InternalChatMessage.id > last_read,
             InternalChatMessage.is_deleted == False,  # noqa: E712
-            InternalChatMessage.sender_employee_id != employee_id,
+            InternalChatMessage.sender_employee_id.is_distinct_from(employee_id),
             InternalChatMessage.message_type != "system",
         )
         .order_by(InternalChatMessage.id.asc())

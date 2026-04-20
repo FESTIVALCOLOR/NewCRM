@@ -290,6 +290,17 @@ const savingClientEdit = ref(false)
 const _lastReadKey = `chat_last_read_${activeToken}`
 const firstUnreadId = ref(null)
 
+/** Бейдж иконки PWA для клиента */
+function _updateClientAppBadge(msgList, lastReadId) {
+  if (!('setAppBadge' in navigator)) return
+  const unread = msgList.filter(m => m.id > lastReadId && !m.sender_guest_token).length
+  if (unread > 0) {
+    navigator.setAppBadge(unread).catch(() => {})
+  } else {
+    navigator.clearAppBadge().catch(() => {})
+  }
+}
+
 function recalcChatH() {
   const vh = window.visualViewport?.height ?? window.innerHeight
   const header = document.querySelector('.q-header')
@@ -365,13 +376,16 @@ async function loadMessages() {
     const lastRead = parseInt(localStorage.getItem(_lastReadKey) || '0', 10)
     const firstUnread = messages.value.find(m => m.id > lastRead && !m.sender_guest_token)
     firstUnreadId.value = firstUnread?.id || null
+    // Показать бейдж иконки ДО сохранения прочитанного (чтоб увидеть счётчик)
+    _updateClientAppBadge(messages.value, lastRead)
     scrollToFirstUnread()
 
     if (messages.value.length) {
       const lastId = messages.value[messages.value.length - 1].id
       sendRead(lastId)
-      // Сохраняем последний id прочитанного для следующего визита
+      // Сохраняем последний id прочитанного для следующего визита → очищаем бейдж
       localStorage.setItem(_lastReadKey, String(lastId))
+      if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {})
     }
   } catch (e) {
     if (e.response?.status === 404) {
@@ -507,6 +521,11 @@ onMounted(async () => {
       if (!exists) {
         messages.value.push(msg)
         scrollToBottom()
+        // Если новое сообщение от сотрудника — обновить бейдж иконки
+        if (!msg.sender_guest_token && 'setAppBadge' in navigator) {
+          const lastRead = parseInt(localStorage.getItem(_lastReadKey) || '0', 10)
+          _updateClientAppBadge(messages.value, lastRead)
+        }
       }
     },
   })
