@@ -157,6 +157,8 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "file_name": msg.file_name,
         "file_size": msg.file_size,
         "yandex_path": msg.yandex_path,
+        "group_id": getattr(msg, "group_id", None),
+        "is_pinned": getattr(msg, "is_pinned", False),
         "is_deleted": msg.is_deleted,
         "is_edited": getattr(msg, "is_edited", False),
         "created_at": (msg.created_at.isoformat() + "Z") if msg.created_at else None,
@@ -500,6 +502,8 @@ def add_file_message(
     sender_employee_id: Optional[int] = None,
     sender_guest_token: Optional[str] = None,
     sender_display_name: Optional[str] = None,
+    group_id: Optional[str] = None,
+    content: Optional[str] = None,
 ) -> InternalChatMessage:
     """Сохранить сообщение с файлом/голосом/изображением."""
     if not sender_display_name:
@@ -518,15 +522,49 @@ def add_file_message(
         sender_guest_token=sender_guest_token,
         sender_display_name=sender_display_name,
         message_type=message_type,
+        content=content,
         file_url=file_url,
         file_name=file_name,
         file_size=file_size,
         yandex_path=yandex_path,
+        group_id=group_id,
     )
     db.add(msg)
     db.commit()
     db.refresh(msg)
     return msg
+
+
+def pin_message(db: Session, chat_id: int, message_id: int) -> Optional[dict]:
+    """Закрепить/открепить сообщение. Один чат = одно закреплённое сообщение."""
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == message_id,
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not msg:
+        return None
+
+    currently_pinned = getattr(msg, "is_pinned", False)
+    if currently_pinned:
+        # Открепить
+        msg.is_pinned = False
+        db.commit()
+        return {"pinned": False, "message_id": message_id}
+    else:
+        # Снять все старые закрепления в этом чате
+        db.query(InternalChatMessage).filter(
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.is_pinned == True,  # noqa: E712
+        ).update({InternalChatMessage.is_pinned: False}, synchronize_session=False)
+        msg.is_pinned = True
+        db.commit()
+        db.refresh(msg)
+        return {"pinned": True, "message_id": message_id, "message": _message_to_dict(msg)}
 
 
 def edit_message(db: Session, message_id: int, employee_id: int, content: str) -> "InternalChatMessage | None":

@@ -1489,6 +1489,8 @@ class InternalMessageResponse(BaseModel):
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     yandex_path: Optional[str] = None
+    group_id: Optional[str] = None
+    is_pinned: bool = False
     is_deleted: bool = False
     is_edited: bool = False
     created_at: datetime
@@ -1531,6 +1533,7 @@ class InternalChatDetailResponse(InternalChatResponse):
     members: list[InternalChatMemberResponse] = []
     messages: list[InternalMessageResponse] = []
     first_unread_message_id: Optional[int] = None
+    pinned_message: Optional[InternalMessageResponse] = None
 
 
 class InternalMessageCreate(BaseModel):

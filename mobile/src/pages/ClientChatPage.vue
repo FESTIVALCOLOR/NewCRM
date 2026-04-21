@@ -133,7 +133,7 @@
                   <q-img
                     v-if="imgStreamUrl(msg)"
                     :src="imgStreamUrl(msg)"
-                    style="width: 100%; max-height: 320px; display: block; cursor: pointer; min-height: 80px"
+                    style="width: 100%; max-height: clamp(160px, 35vh, 480px); display: block; cursor: pointer; min-height: 80px"
                     fit="contain"
                     spinner-color="grey-4"
                     spinner-size="28px"

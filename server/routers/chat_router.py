@@ -75,6 +75,7 @@ from services.chat_service import (
     get_messages,
     get_unread_count,
     mark_read,
+    pin_message,
     register_guest,
 )
 from services.chat_service import (
@@ -537,6 +538,8 @@ async def upload_file(
     chat_id: int,
     file: UploadFile = File(...),
     message_type: str = Form("file"),  # file / image / voice
+    group_id: Optional[str] = Form(None),  # UUID медиа-группы (несколько изображений за раз)
+    caption: Optional[str] = Form(None),  # Подпись к изображению/файлу
     current_user: Employee = Depends(require_permission("chat.employee.send")),
     db: Session = Depends(get_db),
 ):
@@ -581,6 +584,8 @@ async def upload_file(
         file_size=len(file_bytes),
         message_type=message_type,
         sender_employee_id=current_user.id,
+        group_id=group_id or None,
+        content=caption.strip() if caption else None,
     )
     await ws_manager.broadcast(
         chat_id,
@@ -590,6 +595,36 @@ async def upload_file(
         },
     )
     return msg
+
+
+# ==============================================================
+# REST — закрепление сообщения
+# ==============================================================
+
+
+@router.post("/{chat_id}/messages/{msg_id}/pin")
+async def pin_message_endpoint(
+    chat_id: int,
+    msg_id: int,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Закрепить / открепить сообщение (toggle). Один чат — одно закреплённое сообщение."""
+    _check_member(db, chat_id, current_user.id)
+    result = pin_message(db, chat_id, msg_id)
+    if result is None:
+        raise HTTPException(404, "Сообщение не найдено")
+    # Уведомить остальных участников
+    await ws_manager.broadcast(
+        chat_id,
+        {
+            "type": "message_pinned",
+            "message_id": msg_id,
+            "pinned": result["pinned"],
+            "message": result.get("message"),
+        },
+    )
+    return result
 
 
 # ==============================================================
@@ -896,9 +931,26 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
             )
         )
     first_unread_id = get_first_unread_message_id(db, chat.id, employee_id)
+
+    # Найти закреплённое сообщение (если есть)
+    pinned_msg_obj = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.chat_id == chat.id,
+            InternalChatMessage.is_pinned == True,  # noqa: E712
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .order_by(InternalChatMessage.id.desc())
+        .first()
+    )
+    from schemas import InternalMessageResponse
+
+    pinned_msg_response = InternalMessageResponse.model_validate(pinned_msg_obj) if pinned_msg_obj else None
+
     return InternalChatDetailResponse(
         **base.model_dump(),
         members=member_responses,
         messages=msgs,
         first_unread_message_id=first_unread_id,
+        pinned_message=pinned_msg_response,
     )

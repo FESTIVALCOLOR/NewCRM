@@ -1170,6 +1170,11 @@ class InternalChatMessage(Base):
     # Путь внутри папки карточки: {contract.yandex_folder_path}/Чат сотрудников/...
     yandex_path = Column(String, nullable=True)
 
+    # Группировка медиа (несколько изображений одной отправкой)
+    group_id = Column(String(36), nullable=True, index=True)
+    # Закреплённое сообщение
+    is_pinned = Column(Boolean, default=False)
+
     is_deleted = Column(Boolean, default=False)
     is_edited = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
