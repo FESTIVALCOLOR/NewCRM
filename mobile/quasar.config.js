@@ -77,35 +77,19 @@ export default configure(function (/* ctx */) {
     ],
 
     pwa: {
-      workboxMode: 'GenerateSW',
+      // InjectManifest: custom-service-worker.js — главный SW-файл.
+      // Workbox inject-ит в него precache-манифест через self.__WB_MANIFEST.
+      // Позволяет использовать registerRoute + CacheFirst для кеширования картинок.
+      workboxMode: 'InjectManifest',
 
       injectPwaMetaTags: true,
       swFilename: 'sw.js',
       manifestFilename: 'manifest.json',
       useCredentialsForManifestTag: false,
 
-      extendGenerateSWOptions(cfg) {
-        cfg.skipWaiting = true
-        cfg.clientsClaim = true
-        cfg.cleanupOutdatedCaches = true
-        cfg.navigateFallback = '/index.html'
-        cfg.navigateFallbackDenylist = [/^\/api/]
-
-        // Runtime caching для API
-        cfg.runtimeCaching = [
-          {
-            urlPattern: /\/api\/v1\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 300 },
-              networkTimeoutSeconds: 5
-            }
-          }
-        ]
-
-        // Инжектировать push обработчик в SW
-        cfg.importScripts = ['/custom-sw-push.js']
+      extendInjectManifestOptions(cfg) {
+        // Входной файл SW — src-pwa/custom-service-worker.js (по умолчанию в Quasar)
+        // Никаких дополнительных настроек не требуется
       },
 
       extendManifestJson(json) {

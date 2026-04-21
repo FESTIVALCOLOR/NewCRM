@@ -6,8 +6,8 @@
  * - Runtime caching для API
  */
 
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
-import { registerRoute } from 'workbox-routing'
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching'
+import { registerRoute, NavigationRoute } from 'workbox-routing'
 import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { clientsClaim } from 'workbox-core'
@@ -19,6 +19,13 @@ clientsClaim()
 // Precache — Workbox inject-ит манифест при сборке
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
+
+// SPA fallback: все навигационные запросы кроме /api → index.html
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('/index.html'), {
+    denylist: [/^\/api/],
+  }),
+)
 
 // === Кеш изображений и файлов из Yandex Disk (chat) ===
 // ВАЖНО: этот route должен быть ПЕРЕД общим /api/v1/ route
