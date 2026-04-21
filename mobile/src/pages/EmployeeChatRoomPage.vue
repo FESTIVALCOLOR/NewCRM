@@ -119,7 +119,7 @@
                     style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                   >
                     <q-menu auto-close>
-                      <q-list dense style="min-width: 180px; font-size: 12px">
+                      <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
                         <q-item clickable dense @click="togglePin(item.msgs[0])">
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="push_pin" size="14px" :color="item.msgs[0].is_pinned ? 'orange-8' : 'grey-8'" />
@@ -135,6 +135,19 @@
                           </q-item-section>
                           <q-item-section style="font-size: 12px">
                             Переслать
+                          </q-item-section>
+                        </q-item>
+                        <q-item
+                          v-if="chatYdFolder"
+                          clickable
+                          dense
+                          @click="openInGallery(chatYdFolder)"
+                        >
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="photo_library" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            Открыть в галерее
                           </q-item-section>
                         </q-item>
                         <q-item
@@ -253,7 +266,7 @@
                       style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                     >
                       <q-menu auto-close>
-                        <q-list dense style="min-width: 180px; font-size: 12px">
+                        <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
                           <q-item
                             clickable
                             dense
@@ -903,6 +916,7 @@ const loadingAvailableEmps = ref(false)
 const addingMemberId = ref(null)
 const removingMemberId = ref(null)
 const chatCrmCardId = ref(null)
+const chatYdFolder = ref(null)
 const fileInput = ref(null)
 const clientChatId = ref(null)
 const chatPageH = ref('100dvh')
@@ -1112,6 +1126,7 @@ async function loadMessages() {
     chatUnreadStore.markChatRead(chatId)
 
     chatCrmCardId.value = data.crm_card_id || null
+    chatYdFolder.value = data.yandex_folder_path || null
 
     // Загрузить клиентский чат для той же карточки (для пересылки)
     if (data.crm_card_id) {
@@ -1230,6 +1245,13 @@ async function deleteMsg(msg) {
   }
 }
 
+function openInGallery(ydPath) {
+  if (!ydPath) return
+  const path = ydPath.startsWith('disk:') ? ydPath.slice(5) : ydPath
+  const encoded = path.split('/').map(seg => encodeURIComponent(seg)).join('/')
+  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+}
+
 // ── Copy to card ──────────────────────────────────────────────────────────
 function openCopyToCard(msg) {
   copyToCardMsg.value = msg
@@ -1298,7 +1320,13 @@ function pickFile() {
 function onFileSelected(event) {
   const files = [...(event.target.files || [])]
   if (!files.length) return
-  pendingFiles.value = [...pendingFiles.value, ...files]
+  const combined = [...pendingFiles.value, ...files]
+  if (combined.length > 20) {
+    $q.notify({ type: 'warning', message: 'Максимум 20 файлов за раз', timeout: 2500 })
+    pendingFiles.value = combined.slice(0, 20)
+  } else {
+    pendingFiles.value = combined
+  }
   event.target.value = ''
 }
 

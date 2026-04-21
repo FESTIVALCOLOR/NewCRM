@@ -177,7 +177,7 @@
                     style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                   >
                     <q-menu auto-close>
-                      <q-list dense style="min-width: 180px; font-size: 12px">
+                      <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
                         <q-item clickable dense @click="togglePin(item.msgs[0])">
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="push_pin" size="14px" :color="item.msgs[0].is_pinned ? 'orange-8' : 'grey-8'" />
@@ -193,6 +193,19 @@
                           </q-item-section>
                           <q-item-section style="font-size: 12px">
                             Переслать
+                          </q-item-section>
+                        </q-item>
+                        <q-item
+                          v-if="chat && chat.yandex_folder_path"
+                          clickable
+                          dense
+                          @click="openInGallery(chat)"
+                        >
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="photo_library" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            Открыть в галерее
                           </q-item-section>
                         </q-item>
                         <q-item
@@ -320,7 +333,7 @@
                       style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                     >
                       <q-menu auto-close>
-                        <q-list dense style="min-width: 180px; font-size: 12px">
+                        <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
                           <q-item
                             clickable
                             dense
@@ -1134,21 +1147,28 @@ function scrollToBottom() {
   })
 }
 
+function _doScrollToFirstUnread() {
+  const container = messagesEl.value
+  if (!container) return false
+  if (firstUnreadId.value) {
+    const divider = container.querySelector('[data-unread-divider]')
+    const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
+    if (target) {
+      const containerRect = container.getBoundingClientRect()
+      const targetRect = target.getBoundingClientRect()
+      container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
+      return true
+    }
+  }
+  container.scrollTop = container.scrollHeight
+  return true
+}
+
 function scrollToFirstUnread() {
   nextTick(() => {
-    const container = messagesEl.value
-    if (!container) return
-    if (firstUnreadId.value) {
-      const divider = container.querySelector('[data-unread-divider]')
-      const target = divider || container.querySelector(`[data-msg-id="${firstUnreadId.value}"]`)
-      if (target) {
-        const containerRect = container.getBoundingClientRect()
-        const targetRect = target.getBoundingClientRect()
-        container.scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 8
-        return
-      }
+    if (!_doScrollToFirstUnread()) {
+      setTimeout(_doScrollToFirstUnread, 150)
     }
-    container.scrollTop = container.scrollHeight
   })
 }
 
@@ -1494,7 +1514,13 @@ function pickFile() {
 function onFileSelected(event) {
   const files = [...(event.target.files || [])]
   if (!files.length) return
-  pendingFiles.value = [...pendingFiles.value, ...files]
+  const combined = [...pendingFiles.value, ...files]
+  if (combined.length > 20) {
+    $q.notify({ type: 'warning', message: 'Максимум 20 файлов за раз', timeout: 2500 })
+    pendingFiles.value = combined.slice(0, 20)
+  } else {
+    pendingFiles.value = combined
+  }
   event.target.value = ''
 }
 
@@ -1597,6 +1623,14 @@ function scrollToPinned() {
     const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsg.value.id}"]`)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   })
+}
+
+function openInGallery(chatObj) {
+  const ydPath = chatObj?.yandex_folder_path
+  if (!ydPath) return
+  const path = ydPath.startsWith('disk:') ? ydPath.slice(5) : ydPath
+  const encoded = path.split('/').map(seg => encodeURIComponent(seg)).join('/')
+  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
 }
 
 function copyClientLink() {

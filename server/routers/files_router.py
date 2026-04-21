@@ -652,17 +652,17 @@ async def scan_contract_files_on_yandex(contract_id: int, scope: str = "all", cu
             name = file_name.lower()
             is_signed = any(w in name for w in ["подпис", "signed", "с подпис"])
 
-            # Акты
+            # Акты: используем stage-ID без коллизии с рабочими папками стадий проекта
             if parent_stage in ("acts", "documents"):
                 if any(w in name for w in ["планировоч", " пр", "акт_пр", "акт пр", "stage1", "стадия 1", "стадия1"]):
-                    return "stage1_signed" if is_signed else "stage1"
+                    return "act_pr_signed" if is_signed else "act_pr"
                 if any(w in name for w in ["концепц", "дизайн", " кд", "акт_кд", "акт кд", "stage2", "стадия 2", "стадия2"]):
-                    return "stage2_signed" if is_signed else "stage2_concept"
+                    return "act_kd_signed" if is_signed else "act_kd"
                 if any(w in name for w in ["чертеж", "чертёж", "рабоч", " рч", "акт_рч", "акт рч", "финал", "stage3", "стадия 3", "стадия3"]):
-                    return "stage3_signed" if is_signed else "stage3"
-                # Общее: если есть слово "акт" но тип не определён
+                    return "act_rch_signed" if is_signed else "act_rch"
+                # Общее: если есть слово "акт" но тип не определён → Акт ПР
                 if "акт" in name:
-                    return "stage1_signed" if is_signed else "stage1"
+                    return "act_pr_signed" if is_signed else "act_pr"
 
             # Информационные письма
             if parent_stage == "info_letters":
@@ -844,6 +844,14 @@ async def scan_contract_files_on_yandex(contract_id: int, scope: str = "all", cu
             "tech_task": ("tech_task_link", "tech_task_yandex_path", "tech_task_file_name"),
             "questionnaire": ("tech_task_link", "tech_task_yandex_path", "tech_task_file_name"),
             "measurement": ("measurement_image_link", "measurement_yandex_path", "measurement_file_name"),
+            # Новые stage-ID для актов (без коллизии с рабочими папками)
+            "act_pr": ("act_planning_link", "act_planning_yandex_path", "act_planning_file_name"),
+            "act_kd": ("act_concept_link", "act_concept_yandex_path", "act_concept_file_name"),
+            "act_rch": ("act_final_link", "act_final_yandex_path", "act_final_file_name"),
+            "act_pr_signed": ("act_planning_signed_link", "act_planning_signed_yandex_path", "act_planning_signed_file_name"),
+            "act_kd_signed": ("act_concept_signed_link", "act_concept_signed_yandex_path", "act_concept_signed_file_name"),
+            "act_rch_signed": ("act_final_signed_link", "act_final_signed_yandex_path", "act_final_signed_file_name"),
+            # Старые stage-ID (совместимость с существующими ProjectFile-записями)
             "stage1": ("act_planning_link", "act_planning_yandex_path", "act_planning_file_name"),
             "stage2_concept": ("act_concept_link", "act_concept_yandex_path", "act_concept_file_name"),
             "stage3": ("act_final_link", "act_final_yandex_path", "act_final_file_name"),

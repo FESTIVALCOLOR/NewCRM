@@ -511,7 +511,7 @@
                 no-caps
                 class="full-width"
                 dense
-                @click="uploadFor('stage1')"
+                @click="uploadFor('act_pr')"
               />
             </div>
             <div class="col-4">
@@ -522,7 +522,7 @@
                 no-caps
                 class="full-width"
                 dense
-                @click="uploadFor('stage2_concept')"
+                @click="uploadFor('act_kd')"
               />
             </div>
             <div class="col-4">
@@ -533,7 +533,7 @@
                 no-caps
                 class="full-width"
                 dense
-                @click="uploadFor('stage3')"
+                @click="uploadFor('act_rch')"
               />
             </div>
           </div>
@@ -592,7 +592,7 @@
                 no-caps
                 class="full-width"
                 dense
-                @click="uploadFor('stage1_signed')"
+                @click="uploadFor('act_pr_signed')"
               />
             </div>
             <div class="col-4">
@@ -603,7 +603,7 @@
                 no-caps
                 class="full-width"
                 dense
-                @click="uploadFor('stage2_signed')"
+                @click="uploadFor('act_kd_signed')"
               />
             </div>
             <div class="col-4">
@@ -614,7 +614,7 @@
                 no-caps
                 class="full-width"
                 dense
-                @click="uploadFor('stage3_signed')"
+                @click="uploadFor('act_rch_signed')"
               />
             </div>
           </div>
@@ -744,22 +744,30 @@ const clientPayments = computed(() => {
 // Файлы, сгруппированные по блокам
 const filesByGroup = computed(() => {
   const groups = { documents: [], tech_task: [], supervision: [], acts: [], actsSigned: [] }
+  const ACT_STAGES = ['act_pr', 'act_kd', 'act_rch', 'acts']
+  const ACT_SIGNED_STAGES = ['act_pr_signed', 'act_kd_signed', 'act_rch_signed']
   for (const f of files.value) {
     if (f.stage === 'documents') groups.documents.push(f)
     else if (f.stage === 'tech_task') groups.tech_task.push(f)
     else if (f.stage === 'supervision') groups.supervision.push(f)
-    else if (['stage1_signed', 'stage2_signed', 'stage3_signed'].includes(f.stage)) groups.actsSigned.push(f)
-    else if (['stage1', 'stage2_concept', 'stage3'].includes(f.stage)) groups.acts.push(f)
+    else if (ACT_SIGNED_STAGES.includes(f.stage)) groups.actsSigned.push(f)
+    else if (ACT_STAGES.includes(f.stage)) groups.acts.push(f)
+    // Совместимость: старые stage-ID только если файл в папке Документы
+    else if (['stage1_signed', 'stage2_signed', 'stage3_signed'].includes(f.stage) && f.yandex_path?.includes('Документы')) groups.actsSigned.push(f)
+    else if (['stage1', 'stage2_concept', 'stage3'].includes(f.stage) && f.yandex_path?.includes('Документы')) groups.acts.push(f)
   }
   return groups
 })
 
 const STAGE_LABELS = {
+  act_pr: 'Акт ПР', act_pr_signed: 'Акт ПР (подписанный)',
+  act_kd: 'Акт КД', act_kd_signed: 'Акт КД (подписанный)',
+  act_rch: 'Акт РЧ', act_rch_signed: 'Акт РЧ (подписанный)',
   stage1: 'Акт ПР', stage1_signed: 'Акт ПР (подписанный)',
   stage2_concept: 'Акт КД', stage2_signed: 'Акт КД (подписанный)',
   stage3: 'Акт РЧ', stage3_signed: 'Акт РЧ (подписанный)',
   tech_task: 'Тех. задание', documents: 'Договор',
-  supervision: 'Доп. соглашение',
+  supervision: 'Доп. соглашение', acts: 'Акт',
 }
 function stageLabel(s) { return STAGE_LABELS[s] || s || '' }
 function statusColor(s) { if (!s) return 'grey'; if (s === 'В работе') return 'orange'; if (s.includes('СДАН')) return 'positive'; if (s.includes('РАСТОРГНУТ')) return 'negative'; if (s.includes('НАДЗОР')) return 'purple'; return 'blue' }
@@ -822,6 +830,13 @@ async function deleteContractFile(f) {
         documents: ['contract_file_link', 'contract_file_yandex_path', 'contract_file_name'],
         tech_task: ['tech_task_link', 'tech_task_yandex_path', 'tech_task_file_name'],
         measurement: ['measurement_image_link', 'measurement_yandex_path', 'measurement_file_name'],
+        act_pr: ['act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'],
+        act_kd: ['act_concept_link', 'act_concept_yandex_path', 'act_concept_file_name'],
+        act_rch: ['act_final_link', 'act_final_yandex_path', 'act_final_file_name'],
+        act_pr_signed: ['act_planning_signed_link', 'act_planning_signed_yandex_path', 'act_planning_signed_file_name'],
+        act_kd_signed: ['act_concept_signed_link', 'act_concept_signed_yandex_path', 'act_concept_signed_file_name'],
+        act_rch_signed: ['act_final_signed_link', 'act_final_signed_yandex_path', 'act_final_signed_file_name'],
+        // Обратная совместимость для старых записей
         stage1: ['act_planning_link', 'act_planning_yandex_path', 'act_planning_file_name'],
         stage2_concept: ['act_concept_link', 'act_concept_yandex_path', 'act_concept_file_name'],
         stage3: ['act_final_link', 'act_final_yandex_path', 'act_final_file_name'],
@@ -959,12 +974,12 @@ async function handleFileUpload(event) {
       documents: 'Документы',                         // Файл договора
       tech_task: 'Анкета',                            // Техническое задание
       measurement: 'Замер',                           // Замер
-      stage1: 'Документы/Акты',                       // Акт ПР (без подписи)
-      stage2_concept: 'Документы/Акты',               // Акт КД (без подписи)
-      stage3: 'Документы/Акты',                       // Акт РЧ (без подписи)
-      stage1_signed: 'Документы/Акты',                // Акт ПР (с подписью)
-      stage2_signed: 'Документы/Акты',                // Акт КД (с подписью)
-      stage3_signed: 'Документы/Акты',                // Акт РЧ (с подписью)
+      act_pr: 'Документы/Акты',                       // Акт ПР (без подписи)
+      act_kd: 'Документы/Акты',                       // Акт КД (без подписи)
+      act_rch: 'Документы/Акты',                      // Акт РЧ (без подписи)
+      act_pr_signed: 'Документы/Акты',                // Акт ПР (с подписью)
+      act_kd_signed: 'Документы/Акты',                // Акт КД (с подписью)
+      act_rch_signed: 'Документы/Акты',               // Акт РЧ (с подписью)
       supervision: 'Документы/Доп. соглашения',       // Доп. соглашения
       references: 'Референсы',
       photo_documentation: 'Фотофиксация',
@@ -986,12 +1001,12 @@ async function handleFileUpload(event) {
       documents: { link: 'contract_file_link', path: 'contract_file_yandex_path', name: 'contract_file_name' },
       tech_task: { link: 'tech_task_link', path: 'tech_task_yandex_path', name: 'tech_task_file_name' },
       measurement: { link: 'measurement_image_link', path: 'measurement_yandex_path', name: 'measurement_file_name' },
-      stage1: { link: 'act_planning_link', path: 'act_planning_yandex_path', name: 'act_planning_file_name' },
-      stage2_concept: { link: 'act_concept_link', path: 'act_concept_yandex_path', name: 'act_concept_file_name' },
-      stage3: { link: 'act_final_link', path: 'act_final_yandex_path', name: 'act_final_file_name' },
-      stage1_signed: { link: 'act_planning_signed_link', path: 'act_planning_signed_yandex_path', name: 'act_planning_signed_file_name' },
-      stage2_signed: { link: 'act_concept_signed_link', path: 'act_concept_signed_yandex_path', name: 'act_concept_signed_file_name' },
-      stage3_signed: { link: 'act_final_signed_link', path: 'act_final_signed_yandex_path', name: 'act_final_signed_file_name' },
+      act_pr: { link: 'act_planning_link', path: 'act_planning_yandex_path', name: 'act_planning_file_name' },
+      act_kd: { link: 'act_concept_link', path: 'act_concept_yandex_path', name: 'act_concept_file_name' },
+      act_rch: { link: 'act_final_link', path: 'act_final_yandex_path', name: 'act_final_file_name' },
+      act_pr_signed: { link: 'act_planning_signed_link', path: 'act_planning_signed_yandex_path', name: 'act_planning_signed_file_name' },
+      act_kd_signed: { link: 'act_concept_signed_link', path: 'act_concept_signed_yandex_path', name: 'act_concept_signed_file_name' },
+      act_rch_signed: { link: 'act_final_signed_link', path: 'act_final_signed_yandex_path', name: 'act_final_signed_file_name' },
       supervision: { link: 'additional_agreement_link', path: 'additional_agreement_yandex_path', name: 'additional_agreement_file_name' },
     }
     const fieldMap = CONTRACT_FIELD_MAP[uploadStage.value]
