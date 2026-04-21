@@ -3548,7 +3548,8 @@ class CardEditDialog(QDialog):
 
                 # Обновляем label
                 if file_url:
-                    self.tech_task_file_label.setText(f'<a href="{file_url}">{file_url}</a>')
+                    display_url = self.truncate_filename(file_url.split("/")[-1] or "Файл ТЗ")
+                    self.tech_task_file_label.setText(f'<a href="{file_url}" title="{file_url}">{display_url}</a>')
                 else:
                     self.tech_task_file_label.setText("Не загружен")
 
@@ -4042,6 +4043,7 @@ class CardEditDialog(QDialog):
         """)
         self.project_data_tz_file_label.setWordWrap(False)
         self.project_data_tz_file_label.setFixedHeight(28)  # Фиксированная высота для выравнивания
+        self.project_data_tz_file_label.setMinimumWidth(0)  # Разрешаем сжатие ниже sizeHint
         self.project_data_tz_file_label.setTextFormat(Qt.RichText)  # Поддержка HTML для отображения ссылок
         self.project_data_tz_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction | Qt.LinksAccessibleByMouse)
         self.project_data_tz_file_label.setOpenExternalLinks(True)
@@ -4191,6 +4193,7 @@ class CardEditDialog(QDialog):
         """)
         self.project_data_survey_file_label.setWordWrap(False)
         self.project_data_survey_file_label.setFixedHeight(28)
+        self.project_data_survey_file_label.setMinimumWidth(0)  # Разрешаем сжатие ниже sizeHint
         self.project_data_survey_file_label.setTextFormat(Qt.RichText)  # Поддержка HTML для отображения ссылок
         self.project_data_survey_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction | Qt.LinksAccessibleByMouse)
         self.project_data_survey_file_label.setOpenExternalLinks(True)

@@ -636,6 +636,7 @@ class ContractDialog(QDialog):
         """)
         self.contract_file_label.setWordWrap(False)
         self.contract_file_label.setFixedHeight(28)
+        self.contract_file_label.setMinimumWidth(0)  # Разрешаем сжатие ниже sizeHint
         self.contract_file_label.setOpenExternalLinks(True)
         self.contract_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         # Обрезаем длинный текст с многоточием
@@ -937,6 +938,7 @@ class ContractDialog(QDialog):
         """)
         self.template_contract_file_label.setWordWrap(False)
         self.template_contract_file_label.setFixedHeight(28)
+        self.template_contract_file_label.setMinimumWidth(0)  # Разрешаем сжатие ниже sizeHint
         self.template_contract_file_label.setOpenExternalLinks(True)
         self.template_contract_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.template_contract_file_label.setTextFormat(Qt.RichText)
@@ -1127,6 +1129,7 @@ class ContractDialog(QDialog):
         """)
         self.tech_task_file_label.setWordWrap(False)
         self.tech_task_file_label.setFixedHeight(28)
+        self.tech_task_file_label.setMinimumWidth(0)  # Разрешаем сжатие ниже sizeHint
         self.tech_task_file_label.setOpenExternalLinks(True)
         self.tech_task_file_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.tech_task_file_label.setTextFormat(Qt.RichText)

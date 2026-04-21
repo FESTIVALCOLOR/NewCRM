@@ -604,6 +604,63 @@ def _migrate_new_permissions(db: Session):
             POSITION_STUDIO_DIRECTOR,
             POSITION_SENIOR_MANAGER,
         ],
+        # Права чата — добавлены после первичного сидирования прав
+        "chat.employee.view": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+            POSITION_DAN,
+            "Дизайнер",
+            "Чертёжник",
+        ],
+        "chat.employee.send": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+            POSITION_DAN,
+            "Дизайнер",
+            "Чертёжник",
+        ],
+        "chat.employee.upload_to_data": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            "Дизайнер",
+            "Чертёжник",
+        ],
+        "chat.employee.manage": [
+            POSITION_SENIOR_MANAGER,
+        ],
+        "chat.client.view": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.client.send": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.client.manage": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_MANAGER,
+        ],
+        "chat.client.send_script": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
+        "chat.client.show_phone": [
+            POSITION_SENIOR_MANAGER,
+            POSITION_SDP,
+            POSITION_GAP,
+            POSITION_MANAGER,
+        ],
     }
 
     # Проверяем, есть ли уже записи в role_default_permissions

@@ -166,6 +166,64 @@
                   >
                     {{ item.msgs[0].sender_display_name }}
                   </div>
+                  <!-- 3-точки для галереи -->
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    icon="more_vert"
+                    color="grey-6"
+                    style="margin: -4px -6px -2px 2px; flex-shrink: 0"
+                  >
+                    <q-menu auto-close>
+                      <q-list dense style="min-width: 180px; font-size: 12px">
+                        <q-item clickable dense @click="togglePin(item.msgs[0])">
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="push_pin" size="14px" :color="item.msgs[0].is_pinned ? 'orange-8' : 'grey-8'" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            {{ item.msgs[0].is_pinned ? 'Открепить' : 'Закрепить' }}
+                          </q-item-section>
+                        </q-item>
+                        <q-separator />
+                        <q-item clickable dense @click="openForwardDialog(item.msgs[0])">
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="forward" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            Переслать
+                          </q-item-section>
+                        </q-item>
+                        <q-item
+                          v-if="item.msgs.some(m => m.yandex_path) && chat && chat.crm_card_id"
+                          clickable
+                          dense
+                          @click="openCopyToCard(item.msgs.find(m => m.yandex_path))"
+                        >
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="drive_file_move" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section style="font-size: 12px">
+                            Скопировать в карточку
+                          </q-item-section>
+                        </q-item>
+                        <q-item
+                          v-if="isOwn(item.msgs[0])"
+                          clickable
+                          dense
+                          @click="deleteMsg(item.msgs[0])"
+                        >
+                          <q-item-section avatar style="min-width: 28px">
+                            <q-icon name="delete_outline" size="14px" color="grey-8" />
+                          </q-item-section>
+                          <q-item-section class="text-red-7" style="font-size: 12px">
+                            Удалить
+                          </q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-menu>
+                  </q-btn>
                 </div>
                 <div :class="galleryGridClass(item.msgs.length)">
                   <a
@@ -262,7 +320,7 @@
                       style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                     >
                       <q-menu auto-close>
-                        <q-list dense style="min-width: 150px; font-size: 12px">
+                        <q-list dense style="min-width: 180px; font-size: 12px">
                           <q-item
                             clickable
                             dense
