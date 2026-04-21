@@ -1533,7 +1533,7 @@ class InternalChatDetailResponse(InternalChatResponse):
     members: list[InternalChatMemberResponse] = []
     messages: list[InternalMessageResponse] = []
     first_unread_message_id: Optional[int] = None
-    pinned_message: Optional[InternalMessageResponse] = None
+    pinned_messages: list[InternalMessageResponse] = []
 
 
 class InternalMessageCreate(BaseModel):

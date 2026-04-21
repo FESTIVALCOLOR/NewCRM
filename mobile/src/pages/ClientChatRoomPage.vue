@@ -57,6 +57,46 @@
       </q-btn>
     </div>
 
+    <!-- Закреплённые сообщения (до 10, Telegram-стиль) -->
+    <div
+      v-if="pinnedMsgs.length"
+      class="row items-center q-px-md q-py-xs bg-white"
+      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; cursor: pointer; gap: 8px"
+      @click="cyclePinned"
+    >
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; align-self: stretch; justify-content: center">
+        <div
+          v-for="(_, i) in pinnedMsgs"
+          :key="i"
+          :style="{
+            width: '3px',
+            height: `${Math.max(4, 28 / pinnedMsgs.length - 2)}px`,
+            borderRadius: '2px',
+            background: i === pinnedIdx ? '#E65100' : '#E0E0E0',
+            transition: 'background 0.2s',
+          }"
+        />
+      </div>
+      <q-icon name="push_pin" size="14px" color="orange-8" style="flex-shrink: 0" />
+      <div style="flex: 1; min-width: 0; overflow: hidden">
+        <div class="text-caption text-weight-bold" style="color: #E65100; font-size: 10px">
+          Закреплено{{ pinnedMsgs.length > 1 ? ` • ${pinnedIdx + 1} из ${pinnedMsgs.length}` : '' }}
+        </div>
+        <div class="text-caption ellipsis" style="font-size: 11px; color: #333">
+          {{ pinnedMsgs[pinnedIdx]?.content || pinnedMsgs[pinnedIdx]?.file_name || 'Файл' }}
+        </div>
+      </div>
+      <q-btn
+        flat
+        round
+        dense
+        size="xs"
+        icon="close"
+        color="grey-6"
+        @click.stop="togglePin(pinnedMsgs[pinnedIdx])"
+      />
+    </div>
+
     <!-- Список сообщений -->
     <div
       ref="messagesEl"
@@ -146,7 +186,7 @@
                   style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                 >
                   <q-menu auto-close>
-                    <q-list dense style="min-width: 150px; font-size: 12px">
+                    <q-list dense style="min-width: 180px; font-size: 12px">
                       <q-item
                         v-if="isOwn(msg) && msg.message_type === 'text'"
                         clickable
@@ -161,16 +201,28 @@
                         </q-item-section>
                       </q-item>
                       <q-item
-                        v-if="isOwn(msg)"
                         clickable
                         dense
-                        @click="deleteMsg(msg)"
+                        @click="togglePin(msg)"
                       >
                         <q-item-section avatar style="min-width: 28px">
-                          <q-icon name="delete_outline" size="14px" color="grey-8" />
+                          <q-icon :name="msg.is_pinned ? 'push_pin' : 'push_pin'" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
                         </q-item-section>
-                        <q-item-section class="text-red-7" style="font-size: 12px">
-                          Удалить
+                        <q-item-section style="font-size: 12px">
+                          {{ msg.is_pinned ? 'Открепить' : 'Закрепить' }}
+                        </q-item-section>
+                      </q-item>
+                      <q-item
+                        v-if="(msg.message_type === 'image' || msg.message_type === 'file') && chatCrmCardId"
+                        clickable
+                        dense
+                        @click="openCopyToCard(msg)"
+                      >
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="file_copy" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          В карточку
                         </q-item-section>
                       </q-item>
                       <q-item
@@ -183,6 +235,19 @@
                         </q-item-section>
                         <q-item-section style="font-size: 12px">
                           Переслать
+                        </q-item-section>
+                      </q-item>
+                      <q-item
+                        v-if="isOwn(msg)"
+                        clickable
+                        dense
+                        @click="deleteMsg(msg)"
+                      >
+                        <q-item-section avatar style="min-width: 28px">
+                          <q-icon name="delete_outline" size="14px" color="grey-8" />
+                        </q-item-section>
+                        <q-item-section class="text-red-7" style="font-size: 12px">
+                          Удалить
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -621,6 +686,159 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Диалог: скопировать в карточку -->
+    <q-dialog v-model="showCopyToCard" persistent>
+      <q-card style="min-width: 300px; max-width: 420px; width: 92vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-subtitle2">
+            {{ copyStep === 1 ? 'Скопировать в карточку' : 'Выбрать вариацию' }}
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+
+        <template v-if="copyStep === 1">
+          <q-card-section class="q-pt-sm">
+            <div class="text-caption text-grey-6 q-mb-sm">
+              Файл будет скопирован в папку карточки на Яндекс.Диске и сохранён в выбранном поле.
+            </div>
+            <div style="max-height: 52vh; overflow-y: auto">
+              <q-expansion-item
+                v-for="group in COPY_DESTINATIONS"
+                :key="group.group"
+                :label="group.group"
+                :model-value="group.items.some(d => d.value === selectedDestination)"
+                dense
+                dense-toggle
+                header-class="text-caption text-weight-bold text-grey-8 q-px-xs"
+                class="q-mb-xs"
+              >
+                <q-list dense>
+                  <q-item
+                    v-for="dest in group.items"
+                    :key="dest.value"
+                    clickable
+                    :active="selectedDestination === dest.value"
+                    active-class="bg-green-1 text-green-9"
+                    class="rounded-borders q-pl-md"
+                    style="min-height: 34px"
+                    @click="selectedDestination = dest.value"
+                  >
+                    <q-item-section avatar style="min-width: 24px">
+                      <q-icon
+                        :name="selectedDestination === dest.value ? 'radio_button_checked' : 'radio_button_unchecked'"
+                        size="16px"
+                        :color="selectedDestination === dest.value ? 'green-7' : 'grey-5'"
+                      />
+                    </q-item-section>
+                    <q-item-section style="font-size: 13px">
+                      {{ dest.label }}
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-expansion-item>
+            </div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn
+              v-close-popup
+              flat
+              no-caps
+              label="Отмена"
+              color="grey-7"
+            />
+            <q-btn
+              unelevated
+              no-caps
+              :label="STAGE_KEYS.has(selectedDestination) ? 'Далее' : 'Скопировать'"
+              color="green-7"
+              :disable="!selectedDestination"
+              :loading="copyingToCard || loadingVariations"
+              @click="goToVariationStep"
+            />
+          </q-card-actions>
+        </template>
+
+        <template v-else>
+          <q-card-section class="q-pt-sm">
+            <div class="text-caption text-grey-6 q-mb-sm">
+              Выберите вариацию для добавления файла или создайте новую.
+            </div>
+            <q-list dense>
+              <q-item
+                v-for="v in stageVariations"
+                :key="v.variation"
+                clickable
+                :active="selectedVariation === v.variation"
+                active-class="bg-green-1 text-green-9"
+                class="rounded-borders"
+                style="min-height: 36px"
+                @click="selectedVariation = v.variation"
+              >
+                <q-item-section avatar style="min-width: 24px">
+                  <q-icon
+                    :name="selectedVariation === v.variation ? 'radio_button_checked' : 'radio_button_unchecked'"
+                    size="16px"
+                    :color="selectedVariation === v.variation ? 'green-7' : 'grey-5'"
+                  />
+                </q-item-section>
+                <q-item-section>
+                  <div style="font-size: 13px">
+                    Вариация {{ v.variation }}
+                  </div>
+                  <div class="text-caption text-grey-6" style="font-size: 11px">
+                    {{ v.files.slice(0, 2).join(', ') }}{{ v.files.length > 2 ? ` +${v.files.length - 2}` : '' }}
+                  </div>
+                </q-item-section>
+              </q-item>
+              <q-item
+                clickable
+                :active="selectedVariation === null"
+                active-class="bg-green-1 text-green-9"
+                class="rounded-borders"
+                style="min-height: 36px"
+                @click="selectedVariation = null"
+              >
+                <q-item-section avatar style="min-width: 24px">
+                  <q-icon
+                    :name="selectedVariation === null ? 'radio_button_checked' : 'radio_button_unchecked'"
+                    size="16px"
+                    :color="selectedVariation === null ? 'green-7' : 'grey-5'"
+                  />
+                </q-item-section>
+                <q-item-section style="font-size: 13px">
+                  Создать новую (Вариация {{ nextVariation }})
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn
+              flat
+              no-caps
+              label="Назад"
+              color="grey-7"
+              @click="copyStep = 1"
+            />
+            <q-btn
+              unelevated
+              no-caps
+              label="Скопировать"
+              color="green-7"
+              :loading="copyingToCard"
+              @click="confirmCopyToCard"
+            />
+          </q-card-actions>
+        </template>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -681,6 +899,57 @@ const filteredForwardChats = computed(() => {
 
 // Первое непрочитанное сообщение
 const firstUnreadId = ref(null)
+// Закреплённые сообщения (до 10, как в Telegram)
+const pinnedMsgs = ref([])
+const pinnedIdx = ref(0)
+// Копирование в карточку
+const showCopyToCard = ref(false)
+const copyToCardMsg = ref(null)
+const selectedDestination = ref(null)
+const copyingToCard = ref(false)
+const copyStep = ref(1)
+const stageVariations = ref([])
+const nextVariation = ref(1)
+const selectedVariation = ref(null)
+const loadingVariations = ref(false)
+
+const STAGE_KEYS = new Set(['stage_1', 'stage_2', 'stage_3'])
+
+const COPY_DESTINATIONS = [
+  { group: 'Договор', items: [
+    { label: 'Договор', value: 'contract_file_yandex_path' },
+    { label: 'Доп. соглашение', value: 'additional_agreement_yandex_path' },
+  ] },
+  { group: 'Акты', items: [
+    { label: 'Акт планировочного', value: 'act_planning_yandex_path' },
+    { label: 'Акт концептуального', value: 'act_concept_yandex_path' },
+    { label: 'Акт финального', value: 'act_final_yandex_path' },
+    { label: 'Информационное письмо', value: 'info_letter_yandex_path' },
+    { label: 'Акт планировочного (подписанный)', value: 'act_planning_signed_yandex_path' },
+    { label: 'Акт концептуального (подписанный)', value: 'act_concept_signed_yandex_path' },
+    { label: 'Акт финального (подписанный)', value: 'act_final_signed_yandex_path' },
+    { label: 'Информационное письмо (подписанное)', value: 'info_letter_signed_yandex_path' },
+  ] },
+  { group: 'Чеки', items: [
+    { label: 'Чек аванса', value: 'advance_receipt_yandex_path' },
+    { label: 'Чек доплаты', value: 'additional_receipt_yandex_path' },
+    { label: 'Чек (3-й платёж)', value: 'third_receipt_yandex_path' },
+  ] },
+  { group: 'Общие данные', items: [
+    { label: 'ТЗ', value: 'tech_task_yandex_path' },
+    { label: 'Фотофиксация', value: 'photo_documentation_yandex_path' },
+    { label: 'Референсы', value: 'references_yandex_path' },
+    { label: 'Замер', value: 'measurement_yandex_path' },
+  ] },
+  { group: 'Стадии', items: [
+    { label: 'Стадия 1: Планировочное решение', value: 'stage_1' },
+    { label: 'Стадия 1: Правки', value: 'stage_1_revisions' },
+    { label: 'Стадия 2: Концепция дизайна', value: 'stage_2' },
+    { label: 'Стадия 2: Правки', value: 'stage_2_revisions' },
+    { label: 'Стадия 3: Чертёжная документация', value: 'stage_3' },
+    { label: 'Стадия 3: Правки', value: 'stage_3_revisions' },
+  ] },
+]
 
 function recalcChatH() {
   const vh = window.visualViewport?.height ?? window.innerHeight
@@ -810,6 +1079,90 @@ async function deleteMsg(msg) {
   }
 }
 
+// ── Pin / Unpin ────────────────────────────────────────────────────────────
+async function togglePin(msg) {
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/messages/${msg.id}/pin`)
+    const localIdx = messages.value.findIndex(m => m.id === msg.id)
+    if (localIdx !== -1) messages.value[localIdx] = { ...messages.value[localIdx], is_pinned: data.pinned }
+    if (data.pinned) {
+      const msgObj = messages.value.find(m => m.id === msg.id) || msg
+      if (!pinnedMsgs.value.find(m => m.id === msgObj.id)) {
+        pinnedMsgs.value.unshift(msgObj)
+      }
+      pinnedIdx.value = 0
+    } else {
+      const pi = pinnedMsgs.value.findIndex(m => m.id === msg.id)
+      if (pi !== -1) pinnedMsgs.value.splice(pi, 1)
+      if (pinnedIdx.value >= pinnedMsgs.value.length) pinnedIdx.value = Math.max(0, pinnedMsgs.value.length - 1)
+    }
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка закрепления' })
+  }
+}
+
+function cyclePinned() {
+  if (!pinnedMsgs.value.length) return
+  pinnedIdx.value = (pinnedIdx.value + 1) % pinnedMsgs.value.length
+  nextTick(() => {
+    const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsgs.value[pinnedIdx.value]?.id}"]`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
+// ── Copy to card ──────────────────────────────────────────────────────────
+function openCopyToCard(msg) {
+  copyToCardMsg.value = msg
+  selectedDestination.value = null
+  copyStep.value = 1
+  stageVariations.value = []
+  selectedVariation.value = null
+  showCopyToCard.value = true
+}
+
+async function goToVariationStep() {
+  if (!selectedDestination.value || !chatCrmCardId.value) return
+  if (!STAGE_KEYS.has(selectedDestination.value)) {
+    await confirmCopyToCard()
+    return
+  }
+  loadingVariations.value = true
+  try {
+    const { data } = await api.get(`/api/v1/chats/${chatId}/card-stage-variations`, {
+      params: { crm_card_id: chatCrmCardId.value, destination: selectedDestination.value },
+    })
+    stageVariations.value = data.variations || []
+    nextVariation.value = data.next_variation || 1
+    selectedVariation.value = stageVariations.value.length > 0 ? stageVariations.value[0].variation : null
+    copyStep.value = 2
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка загрузки вариаций' })
+  } finally {
+    loadingVariations.value = false
+  }
+}
+
+async function confirmCopyToCard() {
+  if (!selectedDestination.value || !copyToCardMsg.value || !chatCrmCardId.value) return
+  copyingToCard.value = true
+  try {
+    const body = { crm_card_id: chatCrmCardId.value, destination: selectedDestination.value }
+    if (STAGE_KEYS.has(selectedDestination.value) && selectedVariation.value !== null) {
+      body.variation = selectedVariation.value
+    }
+    await api.post(
+      `/api/v1/chats/${chatId}/messages/${copyToCardMsg.value.id}/copy-to-card`,
+      body,
+    )
+    $q.notify({ type: 'positive', message: 'Файл скопирован в карточку' })
+    showCopyToCard.value = false
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Ошибка копирования' })
+  } finally {
+    copyingToCard.value = false
+  }
+}
+
 function imgStreamUrl(msg) {
   if (!msg.yandex_path) return ''
   const path = msg.yandex_path.replace(/^disk:/, '')
@@ -859,6 +1212,8 @@ async function loadMessages() {
     members.value = data.members || []
     clientToken.value = data.client_access_token || ''
     firstUnreadId.value = data.first_unread_message_id || null
+    pinnedMsgs.value = data.pinned_messages || []
+    pinnedIdx.value = 0
     scrollToFirstUnread()
 
     if (messages.value.length) {

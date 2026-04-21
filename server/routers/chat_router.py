@@ -555,10 +555,15 @@ async def upload_file(
     if len(file_bytes) > MAX_FILE_SIZE_MB * 1024 * 1024:
         raise HTTPException(413, f"Файл превышает {MAX_FILE_SIZE_MB} МБ")
 
-    # Путь: disk:{contract_folder}/Чат .../filename
+    # Путь: disk:{contract_folder}/Чат .../[group_id[:8]/]filename
     safe_name = os.path.basename(file.filename or "unnamed")
     folder_clean = chat.yandex_folder_path.replace("disk:", "").rstrip("/") if chat.yandex_folder_path else f"/CRM/Chats/{chat_id}"
-    yd_path = f"{folder_clean}/{safe_name}"
+    # Если файл часть медиа-группы — создаём подпапку по первым 8 символам group_id
+    if group_id:
+        target_folder = f"{folder_clean}/{group_id[:8]}"
+    else:
+        target_folder = folder_clean
+    yd_path = f"{target_folder}/{safe_name}"
 
     try:
         from yandex_disk_service import get_yandex_disk_service
@@ -566,7 +571,7 @@ async def upload_file(
         yd = get_yandex_disk_service()
         if not yd or not yd.token:
             raise HTTPException(503, "Яндекс.Диск не настроен")
-        _ensure_yd_folder(f"disk:{folder_clean}")
+        _ensure_yd_folder(f"disk:{target_folder}")
         yd.upload_file_from_bytes(file_bytes, yd_path)
         public_url = yd.get_public_link(yd_path) or ""
     except HTTPException:
@@ -932,8 +937,8 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
         )
     first_unread_id = get_first_unread_message_id(db, chat.id, employee_id)
 
-    # Найти закреплённое сообщение (если есть)
-    pinned_msg_obj = (
+    # Найти закреплённые сообщения (до 10, как в Telegram)
+    pinned_objs = (
         db.query(InternalChatMessage)
         .filter(
             InternalChatMessage.chat_id == chat.id,
@@ -941,16 +946,17 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
             InternalChatMessage.is_deleted == False,  # noqa: E712
         )
         .order_by(InternalChatMessage.id.desc())
-        .first()
+        .limit(10)
+        .all()
     )
     from schemas import InternalMessageResponse
 
-    pinned_msg_response = InternalMessageResponse.model_validate(pinned_msg_obj) if pinned_msg_obj else None
+    pinned_responses = [InternalMessageResponse.model_validate(p) for p in pinned_objs]
 
     return InternalChatDetailResponse(
         **base.model_dump(),
         members=member_responses,
         messages=msgs,
         first_unread_message_id=first_unread_id,
-        pinned_message=pinned_msg_response,
+        pinned_messages=pinned_responses,
     )

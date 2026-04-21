@@ -28,28 +28,32 @@ registerRoute(
 )
 
 // === Кеш изображений и файлов из Yandex Disk (chat) ===
-// ВАЖНО: этот route должен быть ПЕРЕД общим /api/v1/ route
-// Ключ кеша = только yandex_path (без token), чтобы изображения кешировались
-// независимо от смены JWT-токена. TTL = 7 дней, до 300 файлов.
+// ВАЖНО: эти routes должны быть ПЕРЕД общим /api/v1/ route
+// Ключ кеша = только yandex_path (без token/URL-токена), TTL = 7 дней, до 300 файлов.
+const imagesCachePlugin = [
+  {
+    cacheKeyWillBeUsed: async ({ request }) => {
+      const url = new URL(request.url)
+      const path = url.searchParams.get('yandex_path') || ''
+      return `${url.origin}/stream-cache?yandex_path=${encodeURIComponent(path)}`
+    },
+  },
+  new ExpirationPlugin({
+    maxEntries: 300,
+    maxAgeSeconds: 7 * 24 * 60 * 60,
+  }),
+]
+
+// /api/v1/files/stream — для сотрудников
 registerRoute(
   ({ url }) => url.pathname === '/api/v1/files/stream',
-  new CacheFirst({
-    cacheName: 'chat-images-v1',
-    plugins: [
-      {
-        // Кастомный ключ: только yandex_path, без token
-        cacheKeyWillBeUsed: async ({ request }) => {
-          const url = new URL(request.url)
-          const path = url.searchParams.get('yandex_path') || ''
-          return `${url.origin}/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}`
-        },
-      },
-      new ExpirationPlugin({
-        maxEntries: 300,
-        maxAgeSeconds: 7 * 24 * 60 * 60, // 7 дней
-      }),
-    ],
-  }),
+  new CacheFirst({ cacheName: 'chat-images-v1', plugins: imagesCachePlugin }),
+)
+
+// /api/v1/client-chat/{token}/stream — для клиентского чата (без JWT, только yandex_path)
+registerRoute(
+  ({ url }) => /^\/api\/v1\/client-chat\/[^/]+\/stream$/.test(url.pathname),
+  new CacheFirst({ cacheName: 'chat-images-v1', plugins: imagesCachePlugin }),
 )
 
 // Runtime caching для остальных API запросов

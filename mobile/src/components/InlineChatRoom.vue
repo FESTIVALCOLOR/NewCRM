@@ -96,20 +96,33 @@
       style="flex-shrink: 0"
     />
 
-    <!-- Закреплённое сообщение -->
+    <!-- Закреплённые сообщения (до 10, Telegram-стиль) -->
     <div
-      v-if="pinnedMsg"
+      v-if="pinnedMsgs.length"
       class="row items-center q-px-sm q-py-xs bg-white"
       style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0; cursor: pointer; gap: 6px"
-      @click="scrollToPinned"
+      @click="cyclePinned"
     >
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; align-self: stretch; justify-content: center">
+        <div
+          v-for="(_, i) in pinnedMsgs"
+          :key="i"
+          :style="{
+            width: '3px',
+            height: `${Math.max(4, 28 / pinnedMsgs.length - 2)}px`,
+            borderRadius: '2px',
+            background: i === pinnedIdx ? '#E65100' : '#E0E0E0',
+            transition: 'background 0.2s',
+          }"
+        />
+      </div>
       <q-icon name="push_pin" size="13px" color="orange-8" style="flex-shrink: 0" />
       <div style="flex: 1; min-width: 0; overflow: hidden">
         <div class="text-caption text-weight-bold" style="color: #E65100; font-size: 10px">
-          Закреплено
+          Закреплено{{ pinnedMsgs.length > 1 ? ` • ${pinnedIdx + 1} из ${pinnedMsgs.length}` : '' }}
         </div>
         <div class="text-caption ellipsis" style="font-size: 11px; color: #333">
-          {{ pinnedMsg.content || pinnedMsg.file_name || 'Файл' }}
+          {{ pinnedMsgs[pinnedIdx]?.content || pinnedMsgs[pinnedIdx]?.file_name || 'Файл' }}
         </div>
       </div>
       <q-btn
@@ -119,7 +132,7 @@
         size="xs"
         icon="close"
         color="grey-6"
-        @click.stop="togglePin(pinnedMsg)"
+        @click.stop="togglePin(pinnedMsgs[pinnedIdx])"
       />
     </div>
 
@@ -196,10 +209,10 @@
                           </q-item-section>
                         </q-item>
                         <q-item
-                          v-if="chat && chat.yandex_folder_path"
+                          v-if="item.msgs.some(m => m.yandex_path)"
                           clickable
                           dense
-                          @click="openInGallery(chat)"
+                          @click="openInGallery(item.msgs.find(m => m.yandex_path)?.yandex_path)"
                         >
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="photo_library" size="14px" color="grey-8" />
@@ -240,7 +253,7 @@
                 </div>
                 <div :class="galleryGridClass(item.msgs.length)">
                   <a
-                    v-for="gm in item.msgs"
+                    v-for="(gm, gi) in item.msgs"
                     :key="gm.id"
                     :href="gm.file_url"
                     target="_blank"
@@ -249,7 +262,7 @@
                     <q-img
                       v-if="imgStreamUrl(gm)"
                       :src="imgStreamUrl(gm)"
-                      style="width: 100%; height: 110px; display: block"
+                      :style="galleryImgStyle(item.msgs.length, gi)"
                       fit="cover"
                       spinner-color="grey-4"
                       spinner-size="18px"
@@ -969,8 +982,9 @@ const containerHeight = ref('calc(100vh - 270px)')
 const clientChatId = ref(null)
 const uploadProgress = ref(0)
 
-// Закреплённое сообщение
-const pinnedMsg = ref(null)
+// Закреплённые сообщения (до 10, как в Telegram)
+const pinnedMsgs = ref([])
+const pinnedIdx = ref(0)
 // Ожидающие отправки файлы + подпись
 const pendingFiles = ref([])
 const pendingCaption = ref('')
@@ -1020,6 +1034,14 @@ function galleryGridClass(count) {
   if (count === 2) return 'media-grid-2'
   if (count === 3) return 'media-grid-3'
   return 'media-grid-4plus'
+}
+
+function galleryImgStyle(count, index) {
+  const base = 'width: 100%; display: block;'
+  if (count <= 1) return `${base} height: clamp(140px, 42vw, 340px);`
+  if (count === 2) return `${base} height: 170px;`
+  if (count === 3) return index === 0 ? `${base} height: 184px;` : `${base} height: 91px;`
+  return `${base} height: 130px;`
 }
 
 function groupCaption(msgs) {
@@ -1197,7 +1219,8 @@ async function openChat(chatId) {
     messages.value = data.messages || []
     chatMembers.value = data.members || []
     firstUnreadId.value = data.first_unread_message_id || null
-    pinnedMsg.value = data.pinned_message || null
+    pinnedMsgs.value = data.pinned_messages || []
+    pinnedIdx.value = 0
     scrollToFirstUnread()
     chatUnreadStore.markChatRead(chatId)
 
@@ -1606,30 +1629,39 @@ async function togglePin(msg) {
   if (!chat.value) return
   try {
     const { data } = await api.post(`/api/v1/chats/${chat.value.id}/messages/${msg.id}/pin`)
-    messages.value.forEach((m, i) => {
-      if (m.is_pinned && m.id !== msg.id) messages.value[i] = { ...m, is_pinned: false }
-    })
-    const idx = messages.value.findIndex(m => m.id === msg.id)
-    if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_pinned: data.pinned }
-    pinnedMsg.value = data.pinned ? (messages.value.find(m => m.id === msg.id) || null) : null
+    const localIdx = messages.value.findIndex(m => m.id === msg.id)
+    if (localIdx !== -1) messages.value[localIdx] = { ...messages.value[localIdx], is_pinned: data.pinned }
+    if (data.pinned) {
+      const msgObj = messages.value.find(m => m.id === msg.id) || msg
+      if (!pinnedMsgs.value.find(m => m.id === msgObj.id)) {
+        pinnedMsgs.value.unshift(msgObj)
+      }
+      pinnedIdx.value = 0
+    } else {
+      const pi = pinnedMsgs.value.findIndex(m => m.id === msg.id)
+      if (pi !== -1) pinnedMsgs.value.splice(pi, 1)
+      if (pinnedIdx.value >= pinnedMsgs.value.length) pinnedIdx.value = Math.max(0, pinnedMsgs.value.length - 1)
+    }
   } catch {
     $q.notify({ type: 'negative', message: 'Ошибка закрепления' })
   }
 }
 
-function scrollToPinned() {
-  if (!pinnedMsg.value) return
+function cyclePinned() {
+  if (!pinnedMsgs.value.length) return
+  pinnedIdx.value = (pinnedIdx.value + 1) % pinnedMsgs.value.length
   nextTick(() => {
-    const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsg.value.id}"]`)
+    const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsgs.value[pinnedIdx.value]?.id}"]`)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   })
 }
 
-function openInGallery(chatObj) {
-  const ydPath = chatObj?.yandex_folder_path
-  if (!ydPath) return
-  const path = ydPath.startsWith('disk:') ? ydPath.slice(5) : ydPath
-  const encoded = path.split('/').map(seg => encodeURIComponent(seg)).join('/')
+function openInGallery(filePath) {
+  if (!filePath) return
+  // Берём директорию файла (подпапка group_id или папка чата)
+  const clean = filePath.startsWith('disk:') ? filePath.slice(5) : filePath
+  const dir = clean.substring(0, clean.lastIndexOf('/'))
+  const encoded = dir.split('/').map(seg => encodeURIComponent(seg)).join('/')
   window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
 }
 
@@ -1684,7 +1716,7 @@ onUnmounted(() => {
   border-radius: 12px 12px 2px 12px;
   overflow: hidden;
   min-width: 160px;
-  max-width: 280px;
+  max-width: min(85vw, 440px);
 }
 .bubble-img-other {
   background: #fff;
@@ -1692,11 +1724,27 @@ onUnmounted(() => {
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
   min-width: 160px;
-  max-width: 280px;
+  max-width: min(85vw, 440px);
 }
-/* Медиа-галерея */
+/* Медиа-галерея (Telegram-стиль) */
 .media-grid-1 { display: block; }
-.media-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
-.media-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; }
-.media-grid-4plus { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.media-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 170px;
+  gap: 2px;
+}
+.media-grid-3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 91px 91px;
+  gap: 2px;
+}
+.media-grid-3 > a:first-child { grid-row: span 2; }
+.media-grid-4plus {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 130px;
+  gap: 2px;
+}
 </style>

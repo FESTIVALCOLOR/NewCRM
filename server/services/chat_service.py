@@ -535,8 +535,12 @@ def add_file_message(
     return msg
 
 
+MAX_PINNED_MESSAGES = 10
+
+
 def pin_message(db: Session, chat_id: int, message_id: int) -> Optional[dict]:
-    """Закрепить/открепить сообщение. Один чат = одно закреплённое сообщение."""
+    """Закрепить/открепить сообщение. До 10 закреплённых на чат (как в Telegram).
+    При добавлении 11-го самое старое открепляется автоматически."""
     msg = (
         db.query(InternalChatMessage)
         .filter(
@@ -556,11 +560,28 @@ def pin_message(db: Session, chat_id: int, message_id: int) -> Optional[dict]:
         db.commit()
         return {"pinned": False, "message_id": message_id}
     else:
-        # Снять все старые закрепления в этом чате
-        db.query(InternalChatMessage).filter(
-            InternalChatMessage.chat_id == chat_id,
-            InternalChatMessage.is_pinned == True,  # noqa: E712
-        ).update({InternalChatMessage.is_pinned: False}, synchronize_session=False)
+        # Считаем текущее кол-во закреплённых
+        pinned_count = (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.chat_id == chat_id,
+                InternalChatMessage.is_pinned == True,  # noqa: E712
+            )
+            .count()
+        )
+        if pinned_count >= MAX_PINNED_MESSAGES:
+            # Открепить самое старое (наименьший id)
+            oldest = (
+                db.query(InternalChatMessage)
+                .filter(
+                    InternalChatMessage.chat_id == chat_id,
+                    InternalChatMessage.is_pinned == True,  # noqa: E712
+                )
+                .order_by(InternalChatMessage.id.asc())
+                .first()
+            )
+            if oldest:
+                oldest.is_pinned = False
         msg.is_pinned = True
         db.commit()
         db.refresh(msg)
