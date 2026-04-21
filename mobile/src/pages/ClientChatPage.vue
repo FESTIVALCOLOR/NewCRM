@@ -125,12 +125,15 @@
               </template>
               <template v-else-if="msg.message_type === 'image'">
                 <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
-                  <img
+                  <q-img
                     v-if="imgStreamUrl(msg)"
                     :src="imgStreamUrl(msg)"
-                    style="max-width: 100%; max-height: 200px; border-radius: 6px; display: block; cursor: pointer"
-                    @error="$event.target.style.display='none'"
-                  >
+                    style="max-width: 220px; border-radius: 6px; cursor: pointer"
+                    :ratio="4/3"
+                    fit="contain"
+                    spinner-color="grey-4"
+                    spinner-size="24px"
+                  />
                   <div class="row items-center q-gutter-xs q-mt-xs">
                     <q-icon name="image" size="16px" color="grey-6" />
                     <span class="text-caption text-grey-7 ellipsis" style="max-width: 200px">

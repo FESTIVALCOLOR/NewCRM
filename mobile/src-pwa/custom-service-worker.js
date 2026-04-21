@@ -8,7 +8,7 @@
 
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
-import { NetworkFirst } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { clientsClaim } from 'workbox-core'
 
@@ -20,7 +20,32 @@ clientsClaim()
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
-// Runtime caching для API запросов
+// === Кеш изображений и файлов из Yandex Disk (chat) ===
+// ВАЖНО: этот route должен быть ПЕРЕД общим /api/v1/ route
+// Ключ кеша = только yandex_path (без token), чтобы изображения кешировались
+// независимо от смены JWT-токена. TTL = 7 дней, до 300 файлов.
+registerRoute(
+  ({ url }) => url.pathname === '/api/v1/files/stream',
+  new CacheFirst({
+    cacheName: 'chat-images-v1',
+    plugins: [
+      {
+        // Кастомный ключ: только yandex_path, без token
+        cacheKeyWillBeUsed: async ({ request }) => {
+          const url = new URL(request.url)
+          const path = url.searchParams.get('yandex_path') || ''
+          return `${url.origin}/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}`
+        },
+      },
+      new ExpirationPlugin({
+        maxEntries: 300,
+        maxAgeSeconds: 7 * 24 * 60 * 60, // 7 дней
+      }),
+    ],
+  }),
+)
+
+// Runtime caching для остальных API запросов
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/v1/'),
   new NetworkFirst({
