@@ -78,11 +78,16 @@
             <!-- Обычные сообщения -->
             <div
               v-else
-              :class="isOwn(msg) ? 'bubble-own' : 'bubble-other'"
+              :class="msg.message_type === 'image'
+                ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
+                : (isOwn(msg) ? 'bubble-own' : 'bubble-other')"
               style="max-width: 75%"
             >
               <!-- Верхняя строка: имя отправителя + кнопка меню -->
-              <div class="row no-wrap items-center justify-between q-mb-xs" style="min-height: 16px; gap: 2px">
+              <div
+                class="row no-wrap items-center justify-between q-mb-xs"
+                :style="msg.message_type === 'image' ? 'min-height:16px;gap:2px;padding:6px 10px 4px' : 'min-height:16px;gap:2px'"
+              >
                 <div
                   class="text-caption text-weight-bold"
                   :style="{ color: isOwn(msg) ? '#999' : '#1565C0' }"
@@ -165,21 +170,20 @@
                   <span class="text-caption text-grey-6" style="word-break: break-word">{{ msg.file_name }}…</span>
                 </div>
               </template>
-              <!-- Файл -->
+              <!-- Изображение — Telegram-стиль -->
               <template v-else-if="msg.message_type === 'image'">
                 <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                   <q-img
                     v-if="imgStreamUrl(msg)"
                     :src="imgStreamUrl(msg)"
-                    style="max-width: 220px; border-radius: 6px; cursor: pointer"
-                    :ratio="4/3"
+                    style="width: 100%; max-height: 320px; display: block; cursor: pointer; min-height: 80px"
                     fit="contain"
                     spinner-color="grey-4"
-                    spinner-size="24px"
+                    spinner-size="28px"
                   />
-                  <div class="row items-center q-gutter-xs q-mt-xs">
-                    <q-icon name="image" size="16px" color="grey-6" />
-                    <span class="text-caption text-grey-7 ellipsis" style="max-width: 200px">
+                  <div class="row items-center q-gutter-xs" style="padding: 4px 10px 2px">
+                    <q-icon name="image" size="14px" color="grey-6" />
+                    <span class="text-caption text-grey-7 ellipsis" style="max-width: 220px">
                       {{ msg.file_name || 'Изображение' }}
                     </span>
                   </div>
@@ -253,7 +257,11 @@
               </div>
 
               <!-- Нижняя строка: время -->
-              <div class="row no-wrap items-center q-mt-xs" :class="isOwn(msg) ? 'justify-end' : 'justify-start'">
+              <div
+                class="row no-wrap items-center"
+                :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
+                :style="msg.message_type === 'image' ? 'padding: 2px 10px 6px; margin-top: 0' : 'margin-top: 4px'"
+              >
                 <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
                 <div class="text-caption" style="color: #888; font-size: 10px">
                   {{ formatTime(msg.created_at) }}
@@ -1213,6 +1221,22 @@ onUnmounted(() => {
   border-radius: 12px 12px 12px 2px;
   padding: 8px 12px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+/* Telegram-стиль: картинка на всю ширину пузыря, без внутреннего padding */
+.bubble-img-own {
+  background: #E8F5E9;
+  border-radius: 12px 12px 2px 12px;
+  overflow: hidden;
+  min-width: 160px;
+  max-width: 280px;
+}
+.bubble-img-other {
+  background: #fff;
+  border-radius: 12px 12px 12px 2px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  min-width: 160px;
+  max-width: 280px;
 }
 .hidden {
   display: none;
