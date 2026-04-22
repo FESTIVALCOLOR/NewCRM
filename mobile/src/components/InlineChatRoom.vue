@@ -251,7 +251,7 @@
                     </q-menu>
                   </q-btn>
                 </div>
-                <div :class="galleryGridClass(item.msgs.length)">
+                <div :class="galleryGridClass(item.msgs.length)" :style="galleryGridStyle(item.msgs.length)">
                   <a
                     v-for="(gm, gi) in item.msgs"
                     :key="gm.id"
@@ -1033,7 +1033,18 @@ function galleryGridClass(count) {
   if (count <= 1) return 'media-grid-1'
   if (count === 2) return 'media-grid-2'
   if (count === 3) return 'media-grid-3'
-  return 'media-grid-4plus'
+  return 'media-grid-dynamic'
+}
+
+function galleryCols(count) {
+  // Число колонок: sqrt(count) с округлением вверх, от 2 до 6
+  return Math.min(Math.max(2, Math.ceil(Math.sqrt(count))), 6)
+}
+
+function galleryGridStyle(count) {
+  if (count < 4) return undefined
+  const cols = galleryCols(count)
+  return `display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 2px;`
 }
 
 function galleryImgStyle(count, index) {
@@ -1041,7 +1052,10 @@ function galleryImgStyle(count, index) {
   if (count <= 1) return `${base} height: clamp(140px, 42vw, 340px);`
   if (count === 2) return `${base} height: 170px;`
   if (count === 3) return index === 0 ? `${base} height: 184px;` : `${base} height: 91px;`
-  return `${base} height: 130px;`
+  // 4+ — высота зависит от числа колонок
+  const cols = galleryCols(count)
+  const h = cols <= 2 ? 130 : cols <= 3 ? 110 : cols <= 4 ? 90 : 75
+  return `${base} height: ${h}px;`
 }
 
 function groupCaption(msgs) {
@@ -1745,10 +1759,6 @@ onUnmounted(() => {
   gap: 2px;
 }
 .media-grid-3 > a:first-child { grid-row: span 2; }
-.media-grid-4plus {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-auto-rows: 130px;
-  gap: 2px;
-}
+/* media-grid-dynamic — колонки задаются через galleryGridStyle() */
+.media-grid-dynamic { overflow: hidden; }
 </style>
