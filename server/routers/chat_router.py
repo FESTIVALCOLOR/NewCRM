@@ -616,10 +616,14 @@ async def get_gallery_public_link(
 ):
     """Опубликовать папку галереи на ЯД и вернуть публичную ссылку."""
     _get_chat_or_404(db, chat_id)
-    msg = db.query(InternalChatMessage).filter(
-        InternalChatMessage.id == msg_id,
-        InternalChatMessage.chat_id == chat_id,
-    ).first()
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == msg_id,
+            InternalChatMessage.chat_id == chat_id,
+        )
+        .first()
+    )
     if not msg or not msg.yandex_path:
         raise HTTPException(404, "Сообщение не найдено или нет пути на ЯД")
 
