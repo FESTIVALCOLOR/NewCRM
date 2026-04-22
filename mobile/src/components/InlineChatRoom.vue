@@ -169,7 +169,7 @@
             >
               <div
                 :class="isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
-                style="max-width: 80%"
+                style="min-width: 0"
               >
                 <div class="row no-wrap items-center justify-between" style="padding: 5px 8px 3px; min-height: 16px; gap: 2px">
                   <div
@@ -312,7 +312,7 @@
                   :class="msg.message_type === 'image'
                     ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
                     : (isOwn(msg) ? 'bubble-own' : 'bubble-other')"
-                  style="max-width: 80%"
+                  style="min-width: 0"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
                   <div
@@ -1704,12 +1704,14 @@ onUnmounted(() => {
   background: #E8F5E9;
   border-radius: 12px 12px 2px 12px;
   padding: 6px 10px;
+  max-width: 80%;
 }
 .bubble-other {
   background: #fff;
   border-radius: 12px 12px 12px 2px;
   padding: 6px 10px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  max-width: 80%;
 }
 .bubble-img-own {
   background: #E8F5E9;

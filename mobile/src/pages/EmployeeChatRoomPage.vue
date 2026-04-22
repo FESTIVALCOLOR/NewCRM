@@ -111,7 +111,7 @@
             >
               <div
                 :class="isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
-                style="max-width: 75%"
+                style="min-width: 0"
               >
                 <div class="row no-wrap items-center justify-between" style="padding: 6px 10px 4px; min-height: 16px; gap: 2px">
                   <div
@@ -254,7 +254,7 @@
                   :class="msg.message_type === 'image'
                     ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
                     : (isOwn(msg) ? 'bubble-own' : 'bubble-other')"
-                  style="max-width: 75%"
+                  style="min-width: 0"
                 >
                   <!-- Верхняя строка: имя отправителя + кнопка меню -->
                   <div
@@ -1581,12 +1581,14 @@ onUnmounted(() => {
   background: #E8F5E9;
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
+  max-width: 80%;
 }
 .bubble-other {
   background: #fff;
   border-radius: 12px 12px 12px 2px;
   padding: 8px 12px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  max-width: 80%;
 }
 /* Telegram-стиль: картинка на всю ширину пузыря, без внутреннего padding */
 .bubble-img-own {

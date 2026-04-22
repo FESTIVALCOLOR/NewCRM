@@ -294,8 +294,8 @@
             <q-item-section avatar>
               <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
             </q-item-section>
-            <q-item-section>
-              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 180px)">
+            <q-item-section style="min-width: 0; overflow: hidden">
+              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
                 {{ f.file_name }}
               </q-item-label>
             </q-item-section>
@@ -353,8 +353,8 @@
             <q-item-section avatar>
               <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
             </q-item-section>
-            <q-item-section>
-              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 180px)">
+            <q-item-section style="min-width: 0; overflow: hidden">
+              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
                 {{ f.file_name }}
               </q-item-label>
             </q-item-section>
@@ -412,8 +412,8 @@
             <q-item-section avatar>
               <q-icon :name="fileIconByName(f.file_name)" :color="fileColorByName(f.file_name)" />
             </q-item-section>
-            <q-item-section>
-              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 180px)">
+            <q-item-section style="min-width: 0; overflow: hidden">
+              <q-item-label style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
                 {{ f.file_name }}
               </q-item-label>
             </q-item-section>

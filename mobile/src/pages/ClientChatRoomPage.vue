@@ -143,7 +143,7 @@
               :class="msg.message_type === 'image'
                 ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
                 : (isOwn(msg) ? 'bubble-own' : 'bubble-other')"
-              style="max-width: 75%"
+              style="min-width: 0"
             >
               <!-- Верхняя строка: имя + меню -->
               <div
@@ -222,7 +222,7 @@
                           <q-icon name="file_copy" size="14px" color="grey-8" />
                         </q-item-section>
                         <q-item-section style="font-size: 12px">
-                          В карточку
+                          Скопировать в карточку
                         </q-item-section>
                       </q-item>
                       <q-item
@@ -1479,19 +1479,21 @@ onUnmounted(() => {
   background: #E8F5E9;
   border-radius: 12px 12px 2px 12px;
   padding: 8px 12px;
+  max-width: 75%;
 }
 .bubble-other {
   background: #fff;
   border-radius: 12px 12px 12px 2px;
   padding: 8px 12px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  max-width: 75%;
 }
 .bubble-img-own {
   background: #E8F5E9;
   border-radius: 12px 12px 2px 12px;
   overflow: hidden;
   min-width: 160px;
-  max-width: 280px;
+  max-width: min(85vw, 440px);
 }
 .bubble-img-other {
   background: #fff;
@@ -1499,7 +1501,7 @@ onUnmounted(() => {
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
   min-width: 160px;
-  max-width: 280px;
+  max-width: min(85vw, 440px);
 }
 .hidden {
   display: none;
