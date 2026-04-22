@@ -258,6 +258,7 @@
                     :href="gm.file_url"
                     target="_blank"
                     style="display: block; text-decoration: none; overflow: hidden"
+                    :style="galleryItemSpanStyle(item.msgs.length, gi)"
                   >
                     <q-img
                       v-if="imgStreamUrl(gm)"
@@ -1037,13 +1038,22 @@ function galleryGridClass(count) {
 }
 
 function galleryCols(count) {
-  // Число колонок: sqrt(count) с округлением вверх, от 2 до 6
-  return Math.min(Math.max(2, Math.ceil(Math.sqrt(count))), 6)
+  // Выбираем число колонок 2-4 так, чтобы минимизировать пустые ячейки в последнем ряду.
+  // Приоритет: нулевой остаток (полные ряды) > остаток ≥ 2 > остаток 1 (одинокая картинка).
+  const minCols = Math.max(2, Math.ceil(count / 4))  // не более 4 рядов
+  const maxCols = Math.min(4, count - 1)
+  let best = null
+  for (let c = minCols; c <= maxCols; c++) {
+    const r = count % c
+    const priority = r === 0 ? 0 : r === 1 ? 2 : 1
+    if (!best || priority < best.priority || (priority === best.priority && c > best.c)) {
+      best = { c, priority }
+    }
+  }
+  return best ? best.c : minCols
 }
 
 function galleryBubbleStyle(count) {
-  // Вычисляем ширину пузыря на основе числа колонок.
-  // CSS grid с fr-единицами сам не раскрывает контейнер — нужна явная width.
   const cols = count <= 3 ? 2 : galleryCols(count)
   const targetW = cols * 140 + (cols - 1) * 2
   return `min-width: 0; width: min(50vw, ${targetW}px); max-width: min(50vw, ${targetW}px)`
@@ -1055,14 +1065,26 @@ function galleryGridStyle(count) {
   return `display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 2px;`
 }
 
+// Возвращает grid-column: span X для элементов последнего неполного ряда
+function galleryItemSpanStyle(count, index) {
+  if (count <= 3) return undefined
+  const cols = galleryCols(count)
+  const remainder = count % cols
+  if (remainder === 0) return undefined
+  if (index < count - remainder) return undefined
+  const pos = index - (count - remainder)
+  const baseSpan = Math.floor(cols / remainder)
+  const extra = cols - baseSpan * remainder
+  return { gridColumn: `span ${pos < extra ? baseSpan + 1 : baseSpan}` }
+}
+
 function galleryImgStyle(count, index) {
   const base = 'width: 100%; display: block;'
   if (count <= 1) return `${base} height: clamp(140px, 42vw, 340px);`
   if (count === 2) return `${base} height: 170px;`
   if (count === 3) return index === 0 ? `${base} height: 184px;` : `${base} height: 91px;`
-  // 4+ — высота зависит от числа колонок
   const cols = galleryCols(count)
-  const h = cols <= 2 ? 130 : cols <= 3 ? 110 : cols <= 4 ? 90 : 75
+  const h = cols <= 2 ? 140 : cols <= 3 ? 120 : 100
   return `${base} height: ${h}px;`
 }
 
