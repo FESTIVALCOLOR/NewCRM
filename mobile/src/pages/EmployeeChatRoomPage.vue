@@ -193,25 +193,67 @@
                     </q-menu>
                   </q-btn>
                 </div>
-                <div :class="galleryGridClass(item.msgs.length)" :style="galleryGridStyle(item.msgs.length)">
-                  <a
-                    v-for="(gm, gi) in item.msgs"
-                    :key="gm.id"
-                    :href="gm.file_url"
-                    target="_blank"
-                    style="display: block; text-decoration: none; overflow: hidden"
-                    :style="galleryItemSpanStyle(item.msgs.length, gi)"
-                  >
-                    <q-img
-                      v-if="imgStreamUrl(gm)"
-                      :src="imgStreamUrl(gm)"
-                      :style="galleryImgStyle(item.msgs.length, gi)"
-                      fit="cover"
-                      spinner-color="grey-4"
-                      spinner-size="20px"
-                    />
-                  </a>
-                </div>
+                <template v-if="item.msgs.length < 4">
+                  <div :class="galleryGridClass(item.msgs.length)" :style="galleryGridStyle(item.msgs.length)">
+                    <a
+                      v-for="(gm, gi) in item.msgs"
+                      :key="gm.id"
+                      :href="gm.file_url"
+                      target="_blank"
+                      style="display: block; text-decoration: none; overflow: hidden"
+                    >
+                      <q-img
+                        v-if="imgStreamUrl(gm)"
+                        :src="imgStreamUrl(gm)"
+                        :style="galleryImgStyle(item.msgs.length, gi)"
+                        fit="cover"
+                        spinner-color="grey-4"
+                        spinner-size="20px"
+                      />
+                    </a>
+                  </div>
+                </template>
+                <template v-else>
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px;">
+                      <a
+                        v-for="(gm, gi) in item.msgs.slice(0, 2)"
+                        :key="gm.id"
+                        :href="gm.file_url"
+                        target="_blank"
+                        style="display: block; text-decoration: none; overflow: hidden"
+                      >
+                        <q-img
+                          v-if="imgStreamUrl(gm)"
+                          :src="imgStreamUrl(gm)"
+                          style="width: 100%; display: block; height: 180px"
+                          fit="cover"
+                          spinner-color="grey-4"
+                          spinner-size="20px"
+                        />
+                      </a>
+                    </div>
+                    <div v-if="item.msgs.length > 2" :style="galleryThumbGridStyle(item.msgs.length)">
+                      <a
+                        v-for="(gm, gi) in item.msgs.slice(2)"
+                        :key="gm.id"
+                        :href="gm.file_url"
+                        target="_blank"
+                        style="display: block; text-decoration: none; overflow: hidden"
+                        :style="galleryItemSpanStyle(item.msgs.length - 2, gi)"
+                      >
+                        <q-img
+                          v-if="imgStreamUrl(gm)"
+                          :src="imgStreamUrl(gm)"
+                          style="width: 100%; display: block; height: 90px"
+                          fit="cover"
+                          spinner-color="grey-4"
+                          spinner-size="20px"
+                        />
+                      </a>
+                    </div>
+                  </div>
+                </template>
                 <div v-if="groupCaption(item.msgs)" class="text-body2" style="padding: 4px 10px 2px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
                   {{ groupCaption(item.msgs) }}
                 </div>
@@ -984,7 +1026,7 @@ function galleryGridClass(count) {
 
 function galleryCols(count) {
   const minCols = Math.max(2, Math.ceil(count / 4))
-  const maxCols = Math.min(4, count - 1)
+  const maxCols = Math.min(4, count)
   let best = null
   for (let c = minCols; c <= maxCols; c++) {
     const r = count % c
@@ -997,24 +1039,34 @@ function galleryCols(count) {
 }
 
 function galleryBubbleStyle(count) {
-  const cols = count <= 3 ? 2 : galleryCols(count)
-  const targetW = cols * 140 + (cols - 1) * 2
+  if (count <= 3) return `min-width: 0; width: min(50vw, 282px); max-width: min(50vw, 282px)`
+  const thumbCount = count - 2
+  const cols = thumbCount > 0 ? galleryCols(thumbCount) : 2
+  const effectiveCols = Math.max(2, cols)
+  const targetW = effectiveCols * 140 + (effectiveCols - 1) * 2
   return `min-width: 0; width: min(50vw, ${targetW}px); max-width: min(50vw, ${targetW}px)`
 }
 
 function galleryGridStyle(count) {
-  if (count < 4) return undefined
-  const cols = galleryCols(count)
+  if (count === 2) return 'display: grid; grid-template-columns: 1fr 1fr; gap: 2px;'
+  if (count === 3) return 'display: grid; grid-template-columns: 2fr 1fr; gap: 2px;'
+  return undefined
+}
+
+function galleryThumbGridStyle(count) {
+  const thumbCount = count - 2
+  if (thumbCount <= 0) return undefined
+  const cols = galleryCols(thumbCount)
   return `display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 2px;`
 }
 
-function galleryItemSpanStyle(count, index) {
-  if (count <= 3) return undefined
-  const cols = galleryCols(count)
-  const remainder = count % cols
+function galleryItemSpanStyle(thumbCount, index) {
+  if (thumbCount <= 0) return undefined
+  const cols = galleryCols(thumbCount)
+  const remainder = thumbCount % cols
   if (remainder === 0) return undefined
-  if (index < count - remainder) return undefined
-  const pos = index - (count - remainder)
+  if (index < thumbCount - remainder) return undefined
+  const pos = index - (thumbCount - remainder)
   const baseSpan = Math.floor(cols / remainder)
   const extra = cols - baseSpan * remainder
   return { gridColumn: `span ${pos < extra ? baseSpan + 1 : baseSpan}` }
@@ -1025,9 +1077,7 @@ function galleryImgStyle(count, index) {
   if (count <= 1) return `${base} height: clamp(140px, 42vw, 340px);`
   if (count === 2) return `${base} height: 170px;`
   if (count === 3) return index === 0 ? `${base} height: 184px;` : `${base} height: 91px;`
-  const cols = galleryCols(count)
-  const h = cols <= 2 ? 140 : cols <= 3 ? 120 : 100
-  return `${base} height: ${h}px;`
+  return base
 }
 
 function groupCaption(msgs) {
