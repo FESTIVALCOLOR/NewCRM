@@ -169,7 +169,7 @@
             >
               <div
                 :class="isOwn(item.msgs[0]) ? 'bubble-img-own' : 'bubble-img-other'"
-                style="min-width: 0"
+                :style="galleryBubbleStyle(item.msgs.length)"
               >
                 <div class="row no-wrap items-center justify-between" style="padding: 5px 8px 3px; min-height: 16px; gap: 2px">
                   <div
@@ -1039,6 +1039,14 @@ function galleryGridClass(count) {
 function galleryCols(count) {
   // Число колонок: sqrt(count) с округлением вверх, от 2 до 6
   return Math.min(Math.max(2, Math.ceil(Math.sqrt(count))), 6)
+}
+
+function galleryBubbleStyle(count) {
+  // Вычисляем ширину пузыря на основе числа колонок.
+  // CSS grid с fr-единицами сам не раскрывает контейнер — нужна явная width.
+  const cols = count <= 3 ? 2 : galleryCols(count)
+  const targetW = cols * 140 + (cols - 1) * 2
+  return `min-width: 0; width: min(50vw, ${targetW}px); max-width: min(50vw, ${targetW}px)`
 }
 
 function galleryGridStyle(count) {
