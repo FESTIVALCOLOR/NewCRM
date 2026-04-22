@@ -212,7 +212,7 @@
                           v-if="item.msgs.some(m => m.yandex_path)"
                           clickable
                           dense
-                          @click="openInGallery(item.msgs.find(m => m.yandex_path)?.yandex_path)"
+                          @click="openInGallery(item.msgs.find(m => m.yandex_path))"
                         >
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="photo_library" size="14px" color="grey-8" />
@@ -1656,13 +1656,15 @@ function cyclePinned() {
   })
 }
 
-function openInGallery(filePath) {
-  if (!filePath) return
-  // Берём директорию файла (подпапка group_id или папка чата)
-  const clean = filePath.startsWith('disk:') ? filePath.slice(5) : filePath
-  const dir = clean.substring(0, clean.lastIndexOf('/'))
-  const encoded = dir.split('/').map(seg => encodeURIComponent(seg)).join('/')
-  window.open(`https://disk.yandex.ru/client/disk${encoded}`, '_blank')
+async function openInGallery(msg) {
+  if (!msg?.id || !chat.value?.id) return
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chat.value.id}/messages/${msg.id}/gallery-link`)
+    if (data.public_url) window.open(data.public_url, '_blank')
+    else $q.notify({ type: 'warning', message: 'Не удалось получить ссылку на галерею' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка публикации галереи' })
+  }
 }
 
 function copyClientLink() {

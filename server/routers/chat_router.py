@@ -603,6 +603,46 @@ async def upload_file(
 
 
 # ==============================================================
+# REST — публичная ссылка на папку галереи
+# ==============================================================
+
+
+@router.post("/{chat_id}/messages/{msg_id}/gallery-link")
+async def get_gallery_public_link(
+    chat_id: int,
+    msg_id: int,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Опубликовать папку галереи на ЯД и вернуть публичную ссылку."""
+    _get_chat_or_404(db, chat_id)
+    msg = db.query(InternalChatMessage).filter(
+        InternalChatMessage.id == msg_id,
+        InternalChatMessage.chat_id == chat_id,
+    ).first()
+    if not msg or not msg.yandex_path:
+        raise HTTPException(404, "Сообщение не найдено или нет пути на ЯД")
+
+    clean = msg.yandex_path.replace("disk:", "").rstrip("/")
+    folder_path = "disk:" + clean.rsplit("/", 1)[0]
+
+    try:
+        from yandex_disk_service import get_yandex_disk_service
+
+        yd = get_yandex_disk_service()
+        if not yd or not yd.token:
+            raise HTTPException(503, "Яндекс.Диск не настроен")
+        public_url = yd.get_public_link(folder_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Ошибка публикации папки галереи: {e}")
+        raise HTTPException(500, "Ошибка публикации папки на Яндекс.Диск")
+
+    return {"public_url": public_url}
+
+
+# ==============================================================
 # REST — закрепление сообщения
 # ==============================================================
 
