@@ -448,19 +448,19 @@ def register_guest(db: Session, guest_token: str, name: str, phone: str) -> Inte
 
 
 def get_messages(db: Session, chat_id: int, limit: int = 50, offset: int = 0) -> list:
-    """Получить историю сообщений (пагинация)."""
+    """Получить историю сообщений (пагинация). Возвращает последние limit сообщений в хронологическом порядке."""
     msgs = (
         db.query(InternalChatMessage)
         .filter(
             InternalChatMessage.chat_id == chat_id,
             InternalChatMessage.is_deleted == False,
         )
-        .order_by(InternalChatMessage.created_at.asc())
+        .order_by(InternalChatMessage.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
-    return msgs
+    return list(reversed(msgs))
 
 
 def add_text_message(

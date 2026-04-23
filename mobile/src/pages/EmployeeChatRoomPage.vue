@@ -70,7 +70,7 @@
         size="xs"
         icon="close"
         color="grey-6"
-        @click.stop="togglePin(pinnedMsgs[pinnedIdx])"
+        @click.stop="confirmUnpin(pinnedMsgs[pinnedIdx])"
       />
     </div>
 
@@ -142,7 +142,7 @@
                           </q-item-section>
                         </q-item>
                         <q-separator />
-                        <q-item clickable dense @click="openForwardDialog(item.msgs[0])">
+                        <q-item clickable dense @click="openForwardDialog(item.msgs)">
                           <q-item-section avatar style="min-width: 28px">
                             <q-icon name="forward" size="14px" color="grey-8" />
                           </q-item-section>
@@ -394,9 +394,17 @@
 
                   <!-- Загрузка файла (оптимистичное сообщение) -->
                   <template v-if="msg._uploading">
-                    <div class="row items-center q-gutter-xs">
-                      <q-spinner size="14px" color="grey-5" />
+                    <div v-if="msg._previewUrl">
+                      <q-img :src="msg._previewUrl" style="width: 100%; max-height: 200px; display: block" fit="cover" />
+                      <div class="row items-center q-gutter-xs" style="padding: 4px 10px 2px; opacity: 0.7">
+                        <q-spinner size="10px" color="grey-5" />
+                        <span class="text-caption text-grey-6">{{ msg.file_name }}</span>
+                      </div>
+                    </div>
+                    <div v-else class="row items-center q-gutter-xs">
+                      <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'upload'" size="16px" :color="isPdf(msg) ? 'red-5' : 'grey-5'" />
                       <span class="text-caption text-grey-6" style="word-break: break-word">{{ msg.file_name }}…</span>
+                      <q-spinner size="12px" color="grey-5" />
                     </div>
                   </template>
                   <!-- Изображение — Telegram-стиль -->
@@ -422,12 +430,10 @@
                     </a>
                   </template>
                   <template v-else-if="msg.message_type === 'file'">
-                    <div class="row items-center q-gutter-xs">
-                      <q-icon name="attach_file" size="20px" />
-                      <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 180px; color: inherit">
-                        {{ msg.file_name || 'Файл' }}
-                      </a>
-                    </div>
+                    <a :href="msg.file_url" target="_blank" class="row items-center q-gutter-xs" style="text-decoration: none; color: inherit">
+                      <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '20px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
+                      <span class="text-body2 ellipsis" style="max-width: 180px">{{ msg.file_name || 'Файл' }}</span>
+                    </a>
                   </template>
 
                   <!-- Голосовое -->
@@ -979,7 +985,7 @@ const chatPageH = ref('100dvh')
 const uploadProgress = ref(0)
 // Диалог пересылки
 const showForwardDialog = ref(false)
-const forwardingMsg = ref(null)
+const forwardingMsgs = ref([])
 const forwardTargetChats = ref([])
 const loadingForwardChats = ref(false)
 const selectedForwardChatId = ref(null)
@@ -1039,7 +1045,7 @@ function galleryCols(count) {
 }
 
 function galleryBubbleStyle(count) {
-  if (count <= 3) return `min-width: 0; width: min(50vw, 282px); max-width: min(50vw, 282px)`
+  if (count <= 3) return 'min-width: 0; width: min(50vw, 282px); max-width: min(50vw, 282px)'
   const thumbCount = count - 2
   const cols = thumbCount > 0 ? galleryCols(thumbCount) : 2
   const effectiveCols = Math.max(2, cols)
@@ -1181,10 +1187,15 @@ function isOwn(msg) {
 }
 
 function imgStreamUrl(msg) {
+  if (msg._previewUrl) return msg._previewUrl
   if (!msg.yandex_path) return ''
   const path = msg.yandex_path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
   return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
+function isPdf(msg) {
+  return msg.file_name?.toLowerCase().endsWith('.pdf')
 }
 
 function formatTime(dt) {
@@ -1267,8 +1278,8 @@ async function loadClientChat(cardId) {
   }
 }
 
-async function openForwardDialog(msg) {
-  forwardingMsg.value = msg
+async function openForwardDialog(msgOrMsgs) {
+  forwardingMsgs.value = Array.isArray(msgOrMsgs) ? msgOrMsgs : [msgOrMsgs]
   selectedForwardChatId.value = null
   forwardSearchQuery.value = ''
   showForwardDialog.value = true
@@ -1285,10 +1296,12 @@ async function openForwardDialog(msg) {
 }
 
 async function doForward() {
-  if (!forwardingMsg.value || !selectedForwardChatId.value) return
+  if (!forwardingMsgs.value.length || !selectedForwardChatId.value) return
   sendingForward.value = true
   try {
-    await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: forwardingMsg.value.id })
+    for (const msg of forwardingMsgs.value) {
+      await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: msg.id })
+    }
     $q.notify({ type: 'positive', message: 'Переслано' })
     showForwardDialog.value = false
   } catch (e) {
@@ -1480,6 +1493,7 @@ async function sendWithAttachment() {
 async function _uploadSingleFile(file, groupId = null, caption = null) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const msgType = IMAGE_EXTS.includes(ext) ? 'image' : 'file'
+  const previewUrl = msgType === 'image' ? URL.createObjectURL(file) : null
   const tempId = `temp_${Date.now()}_${Math.random()}`
   messages.value.push({
     id: tempId,
@@ -1497,6 +1511,7 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
     is_pinned: false,
     created_at: new Date().toISOString(),
     _uploading: true,
+    _previewUrl: previewUrl,
   })
   scrollToBottom()
   try {
@@ -1519,10 +1534,21 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
   } catch {
     messages.value = messages.value.filter(m => m.id !== tempId)
     throw new Error(file.name)
+  } finally {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
   }
 }
 
 // ── Pin / Unpin ────────────────────────────────────────────────────────────
+function confirmUnpin(msg) {
+  $q.dialog({
+    title: 'Открепить сообщение?',
+    message: 'Сообщение будет удалено из закреплённых.',
+    cancel: { label: 'Отмена', flat: true },
+    ok: { label: 'Открепить', color: 'orange-8', unelevated: true },
+  }).onOk(() => togglePin(msg))
+}
+
 async function togglePin(msg) {
   try {
     const { data } = await api.post(`/api/v1/chats/${chatId}/messages/${msg.id}/pin`)
