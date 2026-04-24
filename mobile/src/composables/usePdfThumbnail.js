@@ -28,7 +28,7 @@ export async function getPdfThumbnail(source, cacheKey) {
     const lib = await ensurePdfJs()
     const loadingTask =
       typeof source === 'string'
-        ? lib.getDocument({ url: source, withCredentials: false })
+        ? lib.getDocument({ url: source, withCredentials: false, disableRange: true, disableStream: true })
         : lib.getDocument({ data: await source.arrayBuffer() })
 
     const pdf = await loadingTask.promise

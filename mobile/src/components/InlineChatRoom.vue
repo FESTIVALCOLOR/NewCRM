@@ -463,66 +463,68 @@
                       <q-spinner size="12px" color="grey-5" />
                     </div>
                   </template>
-                  <!-- Цитата (ответ на сообщение) -->
-                  <div
-                    v-if="msg.reply_preview"
-                    class="q-mb-xs"
-                    style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
-                    @click="scrollToMsg(msg.reply_preview.id)"
-                  >
-                    <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
-                      {{ msg.reply_preview.sender_display_name }}
-                    </div>
-                    <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
-                      {{ msg.reply_preview.content }}
-                    </div>
-                  </div>
-
-                  <template v-else-if="msg.message_type === 'image'">
-                    <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
-                      <q-img
-                        v-if="imgStreamUrl(msg)"
-                        :src="imgStreamUrl(msg)"
-                        style="width: 100%; max-height: clamp(140px, 30vh, 420px); display: block; cursor: pointer; min-height: 70px"
-                        fit="contain"
-                        spinner-color="grey-4"
-                        spinner-size="24px"
-                      />
-                      <div class="row items-center q-gutter-xs" style="padding: 3px 8px 2px">
-                        <q-icon name="image" size="13px" color="grey-6" />
-                        <span class="text-caption text-grey-7 ellipsis" style="max-width: 200px; font-size: 11px">
-                          {{ msg.file_name || 'Изображение' }}
-                        </span>
+                  <template v-else>
+                    <!-- Цитата (ответ на сообщение) -->
+                    <div
+                      v-if="msg.reply_preview"
+                      class="reply-quote q-mb-xs"
+                      style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
+                      @click="scrollToMsg(msg.reply_preview.id)"
+                    >
+                      <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                        {{ msg.reply_preview.sender_display_name }}
                       </div>
-                      <div v-if="msg.content" class="text-body2" style="padding: 2px 8px 3px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
+                      <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+                        {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                      </div>
+                    </div>
+
+                    <template v-if="msg.message_type === 'image'">
+                      <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
+                        <q-img
+                          v-if="imgStreamUrl(msg)"
+                          :src="imgStreamUrl(msg)"
+                          style="width: 100%; max-height: clamp(140px, 30vh, 420px); display: block; cursor: pointer; min-height: 70px"
+                          fit="contain"
+                          spinner-color="grey-4"
+                          spinner-size="24px"
+                        />
+                        <div class="row items-center q-gutter-xs" style="padding: 3px 8px 2px">
+                          <q-icon name="image" size="13px" color="grey-6" />
+                          <span class="text-caption text-grey-7 ellipsis" style="max-width: 200px; font-size: 11px">
+                            {{ msg.file_name || 'Изображение' }}
+                          </span>
+                        </div>
+                        <div v-if="msg.content" class="text-body2" style="padding: 2px 8px 3px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
+                          {{ msg.content }}
+                        </div>
+                      </a>
+                    </template>
+                    <template v-else-if="msg.message_type === 'file'">
+                      <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:block">
+                        <q-img
+                          :src="pdfThumbnails[msg.id]"
+                          style="width:100%;max-height:200px;display:block"
+                          fit="contain"
+                          spinner-color="grey-4"
+                          spinner-size="20px"
+                        />
+                        <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px">
+                          <q-icon name="picture_as_pdf" size="14px" color="red-6" />
+                          <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Документ' }}</a>
+                        </div>
+                      </div>
+                      <div v-else class="row items-center q-gutter-xs">
+                        <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
+                        <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
+                      </div>
+                    </template>
+
+                    <template v-else>
+                      <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
                         {{ msg.content }}
                       </div>
-                    </a>
-                  </template>
-                  <template v-else-if="msg.message_type === 'file'">
-                    <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:block">
-                      <q-img
-                        :src="pdfThumbnails[msg.id]"
-                        style="width:100%;max-height:200px;display:block"
-                        fit="contain"
-                        spinner-color="grey-4"
-                        spinner-size="20px"
-                      />
-                      <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px">
-                        <q-icon name="picture_as_pdf" size="14px" color="red-6" />
-                        <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Документ' }}</a>
-                      </div>
-                    </div>
-                    <div v-else class="row items-center q-gutter-xs">
-                      <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
-                      <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
-                    </div>
-                  </template>
-
-                  <template v-else>
-                    <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
-                      {{ msg.content }}
-                    </div>
+                    </template>
                   </template>
 
                   <!-- Редактирование сообщения -->
@@ -1814,6 +1816,7 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
     if (idx !== -1) {
       const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
       alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
+      if (!alreadyAdded && isPdf(savedMsg)) loadPdfThumbnail(savedMsg)
     }
   } catch {
     messages.value = messages.value.filter(m => m.id !== tempId)
