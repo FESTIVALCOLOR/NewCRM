@@ -74,8 +74,10 @@ export function useChatWebSocket() {
   /**
    * Отправить текстовое сообщение.
    */
-  function sendMessage(content, messageType = 'text') {
-    _send({ type: 'message', content, message_type: messageType })
+  function sendMessage(content, replyToId = null, messageType = 'text') {
+    const payload = { type: 'message', content, message_type: messageType }
+    if (replyToId) payload.reply_to_id = replyToId
+    _send(payload)
   }
 
   /**
@@ -95,8 +97,6 @@ export function useChatWebSocket() {
   function sendRead(lastMessageId) {
     _send({ type: 'read', last_message_id: lastMessageId })
   }
-
-  // ========== внутренние ==========
 
   function _send(data) {
     if (ws && ws.readyState === WebSocket.OPEN) {

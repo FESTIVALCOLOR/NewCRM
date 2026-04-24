@@ -145,6 +145,24 @@ def _ensure_yd_folder(folder_path: str) -> bool:
 
 
 def _message_to_dict(msg: InternalChatMessage) -> dict:
+    reply_to_id = getattr(msg, "reply_to_id", None)
+    reply_preview = None
+    if reply_to_id:
+        try:
+            from sqlalchemy.orm import object_session
+
+            session = object_session(msg)
+            if session:
+                r = session.get(InternalChatMessage, reply_to_id)
+                if r and not r.is_deleted:
+                    reply_preview = {
+                        "id": r.id,
+                        "sender_display_name": r.sender_display_name,
+                        "content": r.content or ("[Изображение]" if r.message_type == "image" else "[Файл]"),
+                        "message_type": r.message_type,
+                    }
+        except Exception:
+            pass
     return {
         "id": msg.id,
         "chat_id": msg.chat_id,
@@ -162,6 +180,8 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "is_deleted": msg.is_deleted,
         "is_edited": getattr(msg, "is_edited", False),
         "created_at": (msg.created_at.isoformat() + "Z") if msg.created_at else None,
+        "reply_to_id": reply_to_id,
+        "reply_preview": reply_preview,
     }
 
 
@@ -464,7 +484,13 @@ def get_messages(db: Session, chat_id: int, limit: int = 50, offset: int = 0) ->
 
 
 def add_text_message(
-    db: Session, chat_id: int, content: str, sender_employee_id: Optional[int] = None, sender_guest_token: Optional[str] = None, sender_display_name: Optional[str] = None
+    db: Session,
+    chat_id: int,
+    content: str,
+    sender_employee_id: Optional[int] = None,
+    sender_guest_token: Optional[str] = None,
+    sender_display_name: Optional[str] = None,
+    reply_to_id: Optional[int] = None,
 ) -> InternalChatMessage:
     """Сохранить текстовое сообщение."""
     if not sender_display_name:
@@ -484,6 +510,7 @@ def add_text_message(
         sender_display_name=sender_display_name,
         message_type="text",
         content=content,
+        reply_to_id=reply_to_id if reply_to_id else None,
     )
     db.add(msg)
     db.commit()

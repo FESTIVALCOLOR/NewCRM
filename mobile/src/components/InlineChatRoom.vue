@@ -340,6 +340,7 @@
                 <div class="col" style="height: 1px; background: #E53935" />
               </div>
               <div
+                :id="`msg-${msg.id}`"
                 :data-msg-id="msg.id"
                 class="q-mb-sm"
                 :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
@@ -392,11 +393,7 @@
                     >
                       <q-menu auto-close>
                         <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
-                          <q-item
-                            clickable
-                            dense
-                            @click="togglePin(msg)"
-                          >
+                          <q-item clickable dense @click="togglePin(msg)">
                             <q-item-section avatar style="min-width: 28px">
                               <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
                             </q-item-section>
@@ -404,13 +401,16 @@
                               {{ msg.is_pinned ? 'Открепить' : 'Закрепить' }}
                             </q-item-section>
                           </q-item>
+                          <q-item clickable dense @click="replyingTo = msg">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="reply" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section style="font-size: 12px">
+                              Ответить
+                            </q-item-section>
+                          </q-item>
                           <q-separator />
-                          <q-item
-                            v-if="isOwn(msg) && msg.message_type === 'text'"
-                            clickable
-                            dense
-                            @click="startEdit(msg)"
-                          >
+                          <q-item v-if="isOwn(msg) && msg.message_type === 'text'" clickable dense @click="startEdit(msg)">
                             <q-item-section avatar style="min-width: 28px">
                               <q-icon name="edit" size="14px" color="grey-8" />
                             </q-item-section>
@@ -418,24 +418,7 @@
                               Редактировать
                             </q-item-section>
                           </q-item>
-                          <q-item
-                            v-if="isOwn(msg)"
-                            clickable
-                            dense
-                            @click="deleteMsg(msg)"
-                          >
-                            <q-item-section avatar style="min-width: 28px">
-                              <q-icon name="delete_outline" size="14px" color="grey-8" />
-                            </q-item-section>
-                            <q-item-section class="text-red-7" style="font-size: 12px">
-                              Удалить
-                            </q-item-section>
-                          </q-item>
-                          <q-item
-                            clickable
-                            dense
-                            @click="openForwardDialog(msg)"
-                          >
+                          <q-item clickable dense @click="openForwardDialog(msg)">
                             <q-item-section avatar style="min-width: 28px">
                               <q-icon name="forward" size="14px" color="grey-8" />
                             </q-item-section>
@@ -443,17 +426,21 @@
                               Переслать
                             </q-item-section>
                           </q-item>
-                          <q-item
-                            v-if="msg.yandex_path && chat && chat.crm_card_id"
-                            clickable
-                            dense
-                            @click="openCopyToCard(msg)"
-                          >
+                          <q-item v-if="msg.yandex_path && chat && chat.crm_card_id" clickable dense @click="openCopyToCard(msg)">
                             <q-item-section avatar style="min-width: 28px">
                               <q-icon name="drive_file_move" size="14px" color="grey-8" />
                             </q-item-section>
                             <q-item-section style="font-size: 12px">
                               Скопировать в карточку
+                            </q-item-section>
+                          </q-item>
+                          <q-separator v-if="isOwn(msg)" />
+                          <q-item v-if="isOwn(msg)" clickable dense @click="deleteMsg(msg)">
+                            <q-item-section avatar style="min-width: 28px">
+                              <q-icon name="delete_outline" size="14px" color="grey-8" />
+                            </q-item-section>
+                            <q-item-section class="text-red-7" style="font-size: 12px">
+                              Удалить
                             </q-item-section>
                           </q-item>
                         </q-list>
@@ -476,6 +463,21 @@
                       <q-spinner size="12px" color="grey-5" />
                     </div>
                   </template>
+                  <!-- Цитата (ответ на сообщение) -->
+                  <div
+                    v-if="msg.reply_preview"
+                    class="q-mb-xs"
+                    style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
+                    @click="scrollToMsg(msg.reply_preview.id)"
+                  >
+                    <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                      {{ msg.reply_preview.sender_display_name }}
+                    </div>
+                    <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+                      {{ msg.reply_preview.content }}
+                    </div>
+                  </div>
+
                   <template v-else-if="msg.message_type === 'image'">
                     <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                       <q-img
@@ -599,6 +601,32 @@
           <span class="ellipsis" style="font-size: 11px; max-width: 100px">{{ f.name }}</span>
         </q-chip>
       </div>
+    </div>
+
+    <!-- Reply-бар: ответ на сообщение -->
+    <div
+      v-if="replyingTo"
+      class="row no-wrap items-center q-px-md q-py-xs"
+      style="background: #F3F6FF; border-top: 1px solid #D0D9F0; flex-shrink: 0; gap: 8px"
+    >
+      <q-icon name="reply" size="16px" color="blue-7" />
+      <div style="flex: 1; min-width: 0">
+        <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+          {{ replyingTo.sender_display_name }}
+        </div>
+        <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+          {{ replyingTo.content || '[Медиафайл]' }}
+        </div>
+      </div>
+      <q-btn
+        flat
+        round
+        dense
+        icon="close"
+        size="xs"
+        color="grey-6"
+        @click="replyingTo = null"
+      />
     </div>
 
     <!-- Панель ввода -->
@@ -1051,6 +1079,8 @@ const pendingFiles = ref([])
 const pendingCaption = ref('')
 // Диалог пересылки
 const showForwardDialog = ref(false)
+const replyingTo = ref(null)
+
 const forwardingMsgs = ref([])  // массив: для галереи — все фото, для одиночного — [msg]
 const forwardTargetChats = ref([])
 const loadingForwardChats = ref(false)
@@ -1291,12 +1321,28 @@ async function loadPdfThumbnail(msg) {
 
 function formatTime(dt) {
   if (!dt) return ''
-  return new Date(dt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const d = new Date(dt)
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return `${day}.${month}.${year} ${time}`
 }
 
 function scrollToBottom() {
   nextTick(() => {
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  })
+}
+
+function scrollToMsg(id) {
+  nextTick(() => {
+    const el = document.getElementById(`msg-${id}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('msg-highlight')
+      setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+    }
   })
 }
 
@@ -1550,7 +1596,8 @@ async function createChat() {
 function sendText() {
   const text = inputText.value.trim()
   if (!text) return
-  sendMessage(text)
+  sendMessage(text, replyingTo.value?.id || null)
+  replyingTo.value = null
   inputText.value = ''
 }
 
@@ -1908,4 +1955,9 @@ onUnmounted(() => {
 .media-grid-3 > a:first-child { grid-row: span 2; }
 /* media-grid-dynamic — колонки задаются через galleryGridStyle() */
 .media-grid-dynamic { overflow: hidden; }
+@keyframes msg-highlight-pulse {
+  0% { background: rgba(255, 214, 0, 0.45); }
+  100% { background: transparent; }
+}
+.msg-highlight { animation: msg-highlight-pulse 1.5s ease-out; border-radius: 8px; }
 </style>

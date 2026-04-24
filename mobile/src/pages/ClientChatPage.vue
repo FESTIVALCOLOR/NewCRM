@@ -54,6 +54,7 @@
             <div class="col" style="height: 1px; background: #E53935" />
           </div>
           <div
+            :id="`msg-${msg.id}`"
             :data-msg-id="msg.id"
             class="q-mb-sm"
             :class="isOwn(msg) ? 'row justify-end' : 'row justify-start'"
@@ -85,7 +86,7 @@
                   {{ msg.sender_display_name || (isOwn(msg) ? clientName : '') }}
                 </div>
                 <q-btn
-                  v-if="isOwn(msg) && !msg.is_deleted"
+                  v-if="!msg.is_deleted"
                   flat
                   round
                   dense
@@ -95,30 +96,55 @@
                   style="margin: -4px -6px -2px 2px; flex-shrink: 0"
                 >
                   <q-menu auto-close>
-                    <q-list dense style="min-width: 150px">
+                    <q-list dense style="min-width: 210px; white-space: nowrap">
+                      <q-item clickable @click="replyingTo = msg">
+                        <q-item-section avatar>
+                          <q-icon name="reply" size="16px" color="grey-7" />
+                        </q-item-section>
+                        <q-item-section style="font-size: 12px">
+                          Ответить
+                        </q-item-section>
+                      </q-item>
+                      <q-separator v-if="isOwn(msg)" />
                       <q-item
-                        v-if="msg.message_type === 'text'"
+                        v-if="isOwn(msg) && msg.message_type === 'text'"
                         clickable
                         @click="startClientEdit(msg)"
                       >
                         <q-item-section avatar>
                           <q-icon name="edit" size="16px" color="grey-7" />
                         </q-item-section>
-                        <q-item-section style="font-size: 13px">
+                        <q-item-section style="font-size: 12px">
                           Редактировать
                         </q-item-section>
                       </q-item>
-                      <q-item clickable @click="deleteClientMsg(msg)">
+                      <q-separator v-if="isOwn(msg)" />
+                      <q-item v-if="isOwn(msg)" clickable @click="deleteClientMsg(msg)">
                         <q-item-section avatar>
                           <q-icon name="delete_outline" size="16px" color="red-5" />
                         </q-item-section>
-                        <q-item-section class="text-red-6" style="font-size: 13px">
+                        <q-item-section class="text-red-6" style="font-size: 12px">
                           Удалить
                         </q-item-section>
                       </q-item>
                     </q-list>
                   </q-menu>
                 </q-btn>
+              </div>
+
+              <!-- Цитата (reply preview) -->
+              <div
+                v-if="msg.reply_preview"
+                class="reply-quote q-mb-xs"
+                style="cursor: pointer"
+                @click="scrollToMsg(msg.reply_preview.id)"
+              >
+                <div class="text-caption text-weight-bold" style="color: #1565C0; line-height: 1.2">
+                  {{ msg.reply_preview.sender_display_name }}
+                </div>
+                <div class="text-caption ellipsis" style="color: #555; line-height: 1.3">
+                  {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                </div>
               </div>
 
               <!-- Загрузка файла (оптимистичное сообщение) -->
@@ -241,6 +267,32 @@
       style="flex-shrink: 0"
     />
 
+    <!-- Панель ответа -->
+    <div
+      v-if="replyingTo"
+      class="row items-center q-px-md q-py-xs bg-white"
+      style="border-top: 1px solid #E0E0E0; flex-shrink: 0; gap: 8px"
+    >
+      <q-icon name="reply" size="16px" color="grey-5" />
+      <div class="col" style="min-width: 0">
+        <div class="text-caption text-weight-bold text-blue-8 ellipsis">
+          {{ replyingTo.sender_display_name }}
+        </div>
+        <div class="text-caption text-grey-7 ellipsis">
+          {{ replyingTo.message_type === 'image' ? '[Изображение]' : replyingTo.message_type === 'file' ? '[Файл]' : replyingTo.content }}
+        </div>
+      </div>
+      <q-btn
+        flat
+        round
+        dense
+        size="xs"
+        icon="close"
+        color="grey-5"
+        @click="replyingTo = null"
+      />
+    </div>
+
     <!-- Панель ввода -->
     <div class="q-pa-sm bg-white" style="border-top: 1px solid #E0E0E0; flex-shrink: 0">
       <div class="row items-center q-gutter-xs">
@@ -308,6 +360,7 @@ const chatTitle = ref('Чат с бюро')
 const messages = ref([])
 const inputText = ref('')
 const pdfThumbnails = ref({})
+const replyingTo = ref(null)
 const loadingMessages = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
@@ -378,12 +431,30 @@ async function loadPdfThumbnail(msg) {
 
 function formatTime(dt) {
   if (!dt) return ''
-  return new Date(dt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const d = new Date(dt)
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return `${day}.${month}.${year} ${time}`
 }
 
 function scrollToBottom() {
   nextTick(() => {
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  })
+}
+
+function scrollToMsg(id) {
+  nextTick(() => {
+    const el = document.getElementById(`msg-${id}`)
+    if (!el || !messagesEl.value) return
+    const container = messagesEl.value
+    const containerRect = container.getBoundingClientRect()
+    const elRect = el.getBoundingClientRect()
+    container.scrollTop = container.scrollTop + (elRect.top - containerRect.top) - 60
+    el.classList.add('msg-highlight')
+    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
   })
 }
 
@@ -450,9 +521,9 @@ async function loadMessages() {
 function sendText() {
   const text = inputText.value.trim()
   if (!text) return
-  sendMessage(text)
+  sendMessage(text, replyingTo.value?.id || null)
   inputText.value = ''
-  // Сообщение придёт обратно через WS broadcast (сервер отправляет всем, включая отправителя)
+  replyingTo.value = null
 }
 
 let typingTimer = null
@@ -631,5 +702,22 @@ onUnmounted(() => {
 }
 .hidden {
   display: none;
+}
+.reply-quote {
+  border-left: 3px solid #1565C0;
+  background: rgba(21,101,192,0.07);
+  border-radius: 4px;
+  padding: 3px 8px;
+  max-width: 100%;
+  overflow: hidden;
+}
+@keyframes msg-highlight-pulse {
+  0%   { background-color: rgba(255,214,0,0.45); }
+  70%  { background-color: rgba(255,214,0,0.25); }
+  100% { background-color: transparent; }
+}
+.msg-highlight {
+  animation: msg-highlight-pulse 1.5s ease-out;
+  border-radius: 8px;
 }
 </style>

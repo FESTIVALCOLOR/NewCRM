@@ -247,6 +247,7 @@ async def send_message(
         chat_id,
         data.content,
         sender_employee_id=current_user.id,
+        reply_to_id=getattr(data, "reply_to_id", None),
     )
     # Рассылка по WebSocket
     await ws_manager.broadcast(

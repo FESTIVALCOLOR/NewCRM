@@ -1541,6 +1541,7 @@ class InternalMessageCreate(BaseModel):
 
     content: str
     message_type: str = "text"
+    reply_to_id: Optional[int] = None
 
 
 class ForwardRequest(BaseModel):

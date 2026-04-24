@@ -147,6 +147,7 @@ async def client_send_message(
         data.content,
         sender_guest_token=token,
         sender_display_name=guest.guest_name,
+        reply_to_id=getattr(data, "reply_to_id", None),
     )
     await ws_manager.broadcast(
         chat.id,
@@ -381,6 +382,7 @@ async def ws_employee_chat(
                     data.get("content", ""),
                     sender_employee_id=employee_id,
                     sender_display_name=_get_employee_display_name(emp),
+                    reply_to_id=data.get("reply_to_id"),
                 )
                 await ws_manager.broadcast(
                     chat_id,
@@ -480,6 +482,7 @@ async def ws_client_chat(
                     data.get("content", ""),
                     sender_guest_token=access_token,
                     sender_display_name=guest.guest_name,
+                    reply_to_id=data.get("reply_to_id"),
                 )
                 await ws_manager.broadcast(
                     chat.id,

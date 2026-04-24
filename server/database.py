@@ -1170,6 +1170,9 @@ class InternalChatMessage(Base):
     # Путь внутри папки карточки: {contract.yandex_folder_path}/Чат сотрудников/...
     yandex_path = Column(String, nullable=True)
 
+    # Ответ на сообщение
+    reply_to_id = Column(Integer, ForeignKey("internal_chat_messages.id", ondelete="SET NULL"), nullable=True)
+
     # Группировка медиа (несколько изображений одной отправкой)
     group_id = Column(String(36), nullable=True, index=True)
     # Закреплённое сообщение
