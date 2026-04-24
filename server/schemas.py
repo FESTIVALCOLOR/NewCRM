@@ -1549,6 +1549,12 @@ class ForwardRequest(BaseModel):
     msg_id: int
 
 
+class ForwardGroupRequest(BaseModel):
+    """Пересылка группы сообщений (галереи) в другой чат"""
+
+    msg_ids: list[int]
+
+
 class GuestRegistration(BaseModel):
     """Регистрация гостя (клиента) при первом входе по ссылке"""
 

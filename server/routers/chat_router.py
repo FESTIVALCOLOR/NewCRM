@@ -44,6 +44,7 @@ from pydantic import BaseModel as PydanticBaseModel
 from schemas import (
     ChatInviteLinkResponse,
     FileUploadToDataRequest,
+    ForwardGroupRequest,
     ForwardRequest,
     GuestRegistration,
     InternalChatCreate,
@@ -192,10 +193,10 @@ def get_chat(
     current_user: Employee = Depends(require_permission("chat.employee.view")),
     db: Session = Depends(get_db),
 ):
-    """Детали чата с участниками и последними 50 сообщениями."""
+    """Детали чата с участниками и последними 5000 сообщениями."""
     chat = _get_chat_or_404(db, chat_id)
     _check_member(db, chat_id, current_user.id)
-    msgs = get_messages(db, chat_id, limit=50)
+    msgs = get_messages(db, chat_id, limit=5000)
     return _chat_to_detail_response(db, chat, current_user.id, msgs)
 
 
@@ -221,7 +222,7 @@ def remove_chat(
 @router.get("/{chat_id}/messages", response_model=list[InternalMessageResponse])
 def list_messages(
     chat_id: int,
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(5000, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     current_user: Employee = Depends(require_permission("chat.employee.view")),
     db: Session = Depends(get_db),
@@ -860,6 +861,72 @@ async def forward_message(
         },
     )
     return {"status": "ok", "new_message_id": new_msg.id}
+
+
+@router.post("/{chat_id}/forward-group/{target_chat_id}")
+async def forward_message_group(
+    chat_id: int,
+    target_chat_id: int,
+    data: ForwardGroupRequest,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Переслать группу сообщений (галерею) как единую медиа-группу."""
+    _get_chat_or_404(db, chat_id)
+    _get_chat_or_404(db, target_chat_id)
+    _check_member(db, chat_id, current_user.id)
+
+    import uuid
+
+    new_group_id = str(uuid.uuid4())
+    fwd_display = f"{_get_employee_display_name(current_user)} (переслано)"
+    new_msgs = []
+
+    for msg_id in data.msg_ids:
+        src_msg = (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.id == msg_id,
+                InternalChatMessage.chat_id == chat_id,
+                InternalChatMessage.is_deleted == False,
+            )
+            .first()
+        )
+        if not src_msg:
+            continue
+        if src_msg.message_type == "text":
+            new_msg = add_text_message(
+                db,
+                target_chat_id,
+                content=src_msg.content or "",
+                sender_employee_id=current_user.id,
+                sender_display_name=fwd_display,
+            )
+        else:
+            new_msg = add_file_message(
+                db,
+                target_chat_id,
+                file_url=src_msg.file_url or "",
+                file_name=src_msg.file_name or "",
+                yandex_path=src_msg.yandex_path or "",
+                file_size=src_msg.file_size,
+                message_type=src_msg.message_type,
+                sender_employee_id=current_user.id,
+                sender_display_name=fwd_display,
+                group_id=new_group_id,
+            )
+        new_msgs.append(new_msg)
+
+    for new_msg in new_msgs:
+        await ws_manager.broadcast(
+            target_chat_id,
+            {
+                "type": "new_message",
+                "message": _message_to_dict(new_msg),
+            },
+        )
+
+    return {"status": "ok", "forwarded": len(new_msgs), "group_id": new_group_id}
 
 
 # ==============================================================

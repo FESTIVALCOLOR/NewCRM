@@ -430,10 +430,23 @@
                     </a>
                   </template>
                   <template v-else-if="msg.message_type === 'file'">
-                    <a :href="msg.file_url" target="_blank" class="row items-center q-gutter-xs" style="text-decoration: none; color: inherit">
-                      <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '20px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
-                      <span class="text-body2 ellipsis" style="max-width: 180px">{{ msg.file_name || 'Файл' }}</span>
-                    </a>
+                    <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:block">
+                      <q-img
+                        :src="pdfThumbnails[msg.id]"
+                        style="width:100%;max-height:200px;display:block"
+                        fit="contain"
+                        spinner-color="grey-4"
+                        spinner-size="20px"
+                      />
+                      <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px">
+                        <q-icon name="picture_as_pdf" size="14px" color="red-6" />
+                        <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Документ' }}</a>
+                      </div>
+                    </div>
+                    <div v-else class="row items-center q-gutter-xs">
+                      <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
+                      <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
+                    </div>
                   </template>
 
                   <!-- Голосовое -->
@@ -954,6 +967,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
+import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import { useAuthStore } from 'src/stores/auth'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
 import { useQuasar } from 'quasar'
@@ -983,6 +997,7 @@ const fileInput = ref(null)
 const clientChatId = ref(null)
 const chatPageH = ref('100dvh')
 const uploadProgress = ref(0)
+const pdfThumbnails = ref({})
 // Диалог пересылки
 const showForwardDialog = ref(false)
 const forwardingMsgs = ref([])
@@ -1198,6 +1213,16 @@ function isPdf(msg) {
   return msg.file_name?.toLowerCase().endsWith('.pdf')
 }
 
+async function loadPdfThumbnail(msg) {
+  if (pdfThumbnails.value[msg.id]) return
+  if (!isPdf(msg) || !msg.yandex_path) return
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  const url = `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+  const thumb = await getPdfThumbnail(url, String(msg.id))
+  if (thumb) pdfThumbnails.value[msg.id] = thumb
+}
+
 function formatTime(dt) {
   if (!dt) return ''
   const d = new Date(dt)
@@ -1250,6 +1275,10 @@ async function loadMessages() {
     }
     chatUnreadStore.markChatRead(chatId)
 
+    messages.value
+      .filter(m => isPdf(m) && m.yandex_path && !m._uploading)
+      .forEach(m => loadPdfThumbnail(m))
+
     chatCrmCardId.value = data.crm_card_id || null
     chatYdFolder.value = data.yandex_folder_path || null
 
@@ -1299,8 +1328,10 @@ async function doForward() {
   if (!forwardingMsgs.value.length || !selectedForwardChatId.value) return
   sendingForward.value = true
   try {
-    for (const msg of forwardingMsgs.value) {
-      await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: msg.id })
+    if (forwardingMsgs.value.length === 1) {
+      await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: forwardingMsgs.value[0].id })
+    } else {
+      await api.post(`/api/v1/chats/${chatId}/forward-group/${selectedForwardChatId.value}`, { msg_ids: forwardingMsgs.value.map(m => m.id) })
     }
     $q.notify({ type: 'positive', message: 'Переслано' })
     showForwardDialog.value = false
@@ -1494,6 +1525,7 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const msgType = IMAGE_EXTS.includes(ext) ? 'image' : 'file'
   const previewUrl = msgType === 'image' ? URL.createObjectURL(file) : null
+  const isPdfUpload = ext === 'pdf'
   const tempId = `temp_${Date.now()}_${Math.random()}`
   messages.value.push({
     id: tempId,
@@ -1513,6 +1545,14 @@ async function _uploadSingleFile(file, groupId = null, caption = null) {
     _uploading: true,
     _previewUrl: previewUrl,
   })
+  if (isPdfUpload) {
+    getPdfThumbnail(file).then(thumb => {
+      if (thumb) {
+        const m = messages.value.find(m2 => m2.id === tempId)
+        if (m) m._previewUrl = thumb
+      }
+    })
+  }
   scrollToBottom()
   try {
     const formData = new FormData()
@@ -1658,6 +1698,7 @@ onMounted(() => {
         const exists = messages.value.some(m => m.id === msg.id)
         if (!exists) {
           messages.value.push(msg)
+          if (isPdf(msg)) loadPdfThumbnail(msg)
           scrollToBottom()
           sendRead(msg.id)
         }

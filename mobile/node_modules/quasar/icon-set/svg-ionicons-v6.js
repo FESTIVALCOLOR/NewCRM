@@ -78,7 +78,7 @@ import {
   mdiNumeric6Box,
   mdiNumeric7Box,
   mdiFormatFont
-} from '@quasar/extras/mdi-v6'
+} from '@quasar/extras/mdi-v7'
 
 export default {
   name: 'svg-ionicons-v6',

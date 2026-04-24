@@ -93,7 +93,7 @@
         size="xs"
         icon="close"
         color="grey-6"
-        @click.stop="togglePin(pinnedMsgs[pinnedIdx])"
+        @click.stop="confirmUnpin(pinnedMsgs[pinnedIdx])"
       />
     </div>
 
@@ -255,7 +255,21 @@
                 </q-btn>
               </div>
 
-              <template v-if="msg.message_type === 'image'">
+              <template v-if="msg._uploading">
+                <div v-if="msg._previewUrl">
+                  <q-img :src="msg._previewUrl" style="width:100%;max-height:200px;display:block" fit="cover" />
+                  <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px;opacity:0.7">
+                    <q-spinner size="10px" color="grey-5" />
+                    <span class="text-caption text-grey-6">{{ msg.file_name }}</span>
+                  </div>
+                </div>
+                <div v-else class="row items-center q-gutter-xs">
+                  <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'upload'" size="16px" :color="isPdf(msg) ? 'red-5' : 'grey-5'" />
+                  <span class="text-caption text-grey-6" style="word-break:break-word">{{ msg.file_name }}…</span>
+                  <q-spinner size="12px" color="grey-5" />
+                </div>
+              </template>
+              <template v-else-if="msg.message_type === 'image'">
                 <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
                   <q-img
                     v-if="imgStreamUrl(msg)"
@@ -274,11 +288,22 @@
                 </a>
               </template>
               <template v-else-if="msg.message_type === 'file'">
-                <div class="row items-center q-gutter-xs">
-                  <q-icon name="attach_file" size="20px" />
-                  <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 200px; color: inherit">
-                    {{ msg.file_name || 'Файл' }}
-                  </a>
+                <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:block">
+                  <q-img
+                    :src="pdfThumbnails[msg.id]"
+                    style="width:100%;max-height:200px;display:block"
+                    fit="contain"
+                    spinner-color="grey-4"
+                    spinner-size="20px"
+                  />
+                  <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px">
+                    <q-icon name="picture_as_pdf" size="14px" color="red-6" />
+                    <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Документ' }}</a>
+                  </div>
+                </div>
+                <div v-else class="row items-center q-gutter-xs">
+                  <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
+                  <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
                 </div>
               </template>
 
@@ -847,6 +872,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from 'src/boot/axios'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
+import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import { usePermission } from 'src/composables/usePermission'
 import { useAuthStore } from 'src/stores/auth'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
@@ -885,7 +911,7 @@ const editContent = ref('')
 const savingEdit = ref(false)
 // Пересылка сообщений
 const showForwardDialog = ref(false)
-const forwardingMsg = ref(null)
+const forwardingMsgs = ref([])
 const forwardTargetChats = ref([])
 const loadingForwardChats = ref(false)
 const selectedForwardChatId = ref(null)
@@ -902,6 +928,7 @@ const firstUnreadId = ref(null)
 // Закреплённые сообщения (до 10, как в Telegram)
 const pinnedMsgs = ref([])
 const pinnedIdx = ref(0)
+const pdfThumbnails = ref({})
 // Копирование в карточку
 const showCopyToCard = ref(false)
 const copyToCardMsg = ref(null)
@@ -1033,8 +1060,8 @@ async function saveEdit() {
   }
 }
 
-async function openForwardDialog(msg) {
-  forwardingMsg.value = msg
+async function openForwardDialog(msgOrMsgs) {
+  forwardingMsgs.value = Array.isArray(msgOrMsgs) ? msgOrMsgs : [msgOrMsgs]
   selectedForwardChatId.value = null
   forwardSearchQuery.value = ''
   showForwardDialog.value = true
@@ -1051,10 +1078,14 @@ async function openForwardDialog(msg) {
 }
 
 async function doForward() {
-  if (!forwardingMsg.value || !selectedForwardChatId.value) return
+  if (!forwardingMsgs.value.length || !selectedForwardChatId.value) return
   sendingForward.value = true
   try {
-    await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: forwardingMsg.value.id })
+    if (forwardingMsgs.value.length === 1) {
+      await api.post(`/api/v1/chats/${chatId}/forward/${selectedForwardChatId.value}`, { msg_id: forwardingMsgs.value[0].id })
+    } else {
+      await api.post(`/api/v1/chats/${chatId}/forward-group/${selectedForwardChatId.value}`, { msg_ids: forwardingMsgs.value.map(m => m.id) })
+    }
     $q.notify({ type: 'positive', message: 'Переслано' })
     showForwardDialog.value = false
   } catch (e) {
@@ -1080,6 +1111,15 @@ async function deleteMsg(msg) {
 }
 
 // ── Pin / Unpin ────────────────────────────────────────────────────────────
+function confirmUnpin(msg) {
+  $q.dialog({
+    title: 'Открепить сообщение',
+    message: 'Убрать из закреплённых?',
+    cancel: true,
+    persistent: false,
+  }).onOk(() => togglePin(msg))
+}
+
 async function togglePin(msg) {
   try {
     const { data } = await api.post(`/api/v1/chats/${chatId}/messages/${msg.id}/pin`)
@@ -1164,10 +1204,25 @@ async function confirmCopyToCard() {
 }
 
 function imgStreamUrl(msg) {
+  if (msg._previewUrl) return msg._previewUrl
   if (!msg.yandex_path) return ''
   const path = msg.yandex_path.replace(/^disk:/, '')
   const token = localStorage.getItem('access_token') || ''
   return `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+}
+
+function isPdf(msg) {
+  return msg.file_name?.toLowerCase().endsWith('.pdf')
+}
+
+async function loadPdfThumbnail(msg) {
+  if (pdfThumbnails.value[msg.id]) return
+  if (!isPdf(msg) || !msg.yandex_path) return
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  const token = localStorage.getItem('access_token') || ''
+  const url = `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
+  const thumb = await getPdfThumbnail(url, String(msg.id))
+  if (thumb) pdfThumbnails.value[msg.id] = thumb
 }
 
 function isGuest(msg) {
@@ -1227,6 +1282,9 @@ async function loadMessages() {
     if (data.crm_card_id) {
       loadCardData(data.crm_card_id)
     }
+    messages.value
+      .filter(m => isPdf(m) && m.yandex_path && !m._uploading)
+      .forEach(m => loadPdfThumbnail(m))
   } catch (e) {
     console.error('[ClientChatRoom] Ошибка:', e)
   } finally {
@@ -1300,29 +1358,75 @@ function pickFile() {
 }
 
 async function onFileSelected(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  try {
-    const ext = file.name.split('.').pop()?.toLowerCase() || ''
-    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
-    const msgType = imageExts.includes(ext) ? 'image' : 'file'
+  const files = [...(event.target.files || [])]
+  if (!files.length) return
+  const errors = []
+  for (const file of files) {
+    try { await _uploadSingleFile(file) } catch { errors.push(file.name) }
+  }
+  event.target.value = ''
+  if (errors.length) $q.notify({ type: 'negative', message: `Ошибка загрузки: ${errors.join(', ')}` })
+}
 
+async function _uploadSingleFile(file) {
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+  const msgType = IMAGE_EXTS.includes(ext) ? 'image' : 'file'
+  const isPdfUpload = ext === 'pdf'
+  const tempId = `temp_${Date.now()}_${Math.random()}`
+  const previewUrl = msgType === 'image' ? URL.createObjectURL(file) : null
+
+  messages.value.push({
+    id: tempId,
+    sender_employee_id: null,
+    sender_display_name: 'Вы',
+    message_type: msgType,
+    content: null,
+    file_url: '',
+    file_name: file.name,
+    file_size: file.size,
+    yandex_path: null,
+    is_deleted: false,
+    is_edited: false,
+    is_pinned: false,
+    created_at: new Date().toISOString(),
+    _uploading: true,
+    _previewUrl: previewUrl,
+  })
+  scrollToBottom()
+
+  if (isPdfUpload) {
+    getPdfThumbnail(file).then(thumb => {
+      if (thumb) {
+        const m = messages.value.find(m2 => m2.id === tempId)
+        if (m) m._previewUrl = thumb
+      }
+    })
+  }
+
+  try {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('message_type', msgType)
-
     uploadProgress.value = 1
-    await api.post(`/api/v1/chats/${chatId}/files`, formData, {
+    const { data: savedMsg } = await api.post(`/api/v1/chats/${chatId}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         uploadProgress.value = e.total ? Math.round((e.loaded / e.total) * 100) : 50
       },
     })
+    const idx = messages.value.findIndex(m => m.id === tempId)
+    if (idx !== -1) {
+      const alreadyAdded = messages.value.some(m => m.id === savedMsg.id)
+      alreadyAdded ? messages.value.splice(idx, 1) : messages.value.splice(idx, 1, savedMsg)
+    }
   } catch (e) {
+    messages.value = messages.value.filter(m => m.id !== tempId)
     $q.notify({ type: 'negative', message: 'Ошибка загрузки файла' })
+    throw e
   } finally {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
     uploadProgress.value = 0
-    event.target.value = ''
   }
 }
 
@@ -1460,6 +1564,7 @@ onMounted(() => {
         if (!exists) {
           messages.value.push(msg)
           scrollToBottom()
+          if (isPdf(msg)) loadPdfThumbnail(msg)
         }
       },
     })

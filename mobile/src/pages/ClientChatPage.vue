@@ -123,9 +123,17 @@
 
               <!-- Загрузка файла (оптимистичное сообщение) -->
               <template v-if="msg._uploading">
-                <div class="row items-center q-gutter-xs">
-                  <q-spinner size="14px" color="grey-5" />
-                  <span class="text-caption text-grey-6" style="word-break: break-word">{{ msg.file_name }}…</span>
+                <div v-if="msg._previewUrl">
+                  <q-img :src="msg._previewUrl" style="width:100%;max-height:200px;display:block" fit="cover" />
+                  <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px;opacity:0.7">
+                    <q-spinner size="10px" color="grey-5" />
+                    <span class="text-caption text-grey-6">{{ msg.file_name }}</span>
+                  </div>
+                </div>
+                <div v-else class="row items-center q-gutter-xs">
+                  <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'upload'" size="16px" :color="isPdf(msg) ? 'red-5' : 'grey-5'" />
+                  <span class="text-caption text-grey-6" style="word-break:break-word">{{ msg.file_name }}…</span>
+                  <q-spinner size="12px" color="grey-5" />
                 </div>
               </template>
               <template v-else-if="msg.message_type === 'image'">
@@ -147,11 +155,22 @@
                 </a>
               </template>
               <template v-else-if="msg.message_type === 'file'">
-                <div class="row items-center q-gutter-xs">
-                  <q-icon name="attach_file" size="20px" />
-                  <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width: 200px; color: inherit">
-                    {{ msg.file_name || 'Файл' }}
-                  </a>
+                <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:block">
+                  <q-img
+                    :src="pdfThumbnails[msg.id]"
+                    style="width:100%;max-height:200px;display:block"
+                    fit="contain"
+                    spinner-color="grey-4"
+                    spinner-size="20px"
+                  />
+                  <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px">
+                    <q-icon name="picture_as_pdf" size="14px" color="red-6" />
+                    <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Документ' }}</a>
+                  </div>
+                </div>
+                <div v-else class="row items-center q-gutter-xs">
+                  <q-icon :name="isPdf(msg) ? 'picture_as_pdf' : 'attach_file'" :size="isPdf(msg) ? '28px' : '18px'" :color="isPdf(msg) ? 'red-6' : 'grey-7'" />
+                  <a :href="msg.file_url" target="_blank" class="text-body2 ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Файл' }}</a>
                 </div>
               </template>
 
@@ -271,6 +290,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { useQuasar } from 'quasar'
+import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import axios from 'axios'
 import PwaInstallBanner from 'src/components/PwaInstallBanner.vue'
 
@@ -287,6 +307,7 @@ const { isConnected: wsConnected, connectClient, disconnect, sendMessage, sendTy
 const chatTitle = ref('Чат с бюро')
 const messages = ref([])
 const inputText = ref('')
+const pdfThumbnails = ref({})
 const loadingMessages = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
@@ -336,9 +357,23 @@ function isOwn(msg) {
 }
 
 function imgStreamUrl(msg) {
+  if (msg._previewUrl) return msg._previewUrl
   if (!msg.yandex_path) return ''
   const path = msg.yandex_path.replace(/^disk:/, '')
   return `/api/v1/client-chat/${activeToken}/stream?yandex_path=${encodeURIComponent(path)}`
+}
+
+function isPdf(msg) {
+  return msg.file_name?.toLowerCase().endsWith('.pdf')
+}
+
+async function loadPdfThumbnail(msg) {
+  if (pdfThumbnails.value[msg.id]) return
+  if (!isPdf(msg) || !msg.yandex_path) return
+  const path = msg.yandex_path.replace(/^disk:/, '')
+  const url = `/api/v1/client-chat/${activeToken}/stream?yandex_path=${encodeURIComponent(path)}`
+  const thumb = await getPdfThumbnail(url, String(msg.id))
+  if (thumb) pdfThumbnails.value[msg.id] = thumb
 }
 
 function formatTime(dt) {
@@ -398,6 +433,9 @@ async function loadMessages() {
       localStorage.setItem(_lastReadKey, String(lastId))
       if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {})
     }
+    messages.value
+      .filter(m => isPdf(m) && m.yandex_path && !m._uploading)
+      .forEach(m => loadPdfThumbnail(m))
   } catch (e) {
     if (e.response?.status === 404) {
       $q.notify({ type: 'negative', message: 'Ссылка недействительна' })
@@ -470,7 +508,9 @@ async function _uploadClientFile(file) {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
   const msgType = imageExts.includes(ext) ? 'image' : 'file'
+  const isPdfUpload = ext === 'pdf'
   const tempId = `temp_${Date.now()}_${Math.random()}`
+  const previewUrl = msgType === 'image' ? URL.createObjectURL(file) : null
   messages.value.push({
     id: tempId,
     sender_guest_token: activeToken,
@@ -485,8 +525,17 @@ async function _uploadClientFile(file) {
     is_edited: false,
     created_at: new Date().toISOString(),
     _uploading: true,
+    _previewUrl: previewUrl,
   })
   scrollToBottom()
+  if (isPdfUpload) {
+    getPdfThumbnail(file).then(thumb => {
+      if (thumb) {
+        const m = messages.value.find(m2 => m2.id === tempId)
+        if (m) m._previewUrl = thumb
+      }
+    })
+  }
   try {
     const baseURL = window.location.origin
     const formData = new FormData()
@@ -505,6 +554,8 @@ async function _uploadClientFile(file) {
   } catch {
     messages.value = messages.value.filter(m => m.id !== tempId)
     throw new Error(file.name)
+  } finally {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
   }
 }
 
@@ -532,6 +583,7 @@ onMounted(async () => {
       if (!exists) {
         messages.value.push(msg)
         scrollToBottom()
+        if (isPdf(msg)) loadPdfThumbnail(msg)
         // Если новое сообщение от сотрудника — обновить бейдж иконки
         if (!msg.sender_guest_token && 'setAppBadge' in navigator) {
           const lastRead = parseInt(localStorage.getItem(_lastReadKey) || '0', 10)

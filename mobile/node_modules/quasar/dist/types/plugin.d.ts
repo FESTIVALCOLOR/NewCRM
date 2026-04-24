@@ -1,5 +1,5 @@
 import { QuasarUIConfiguration } from "./config";
-import { QuasarIconSet } from "./extras";
+import { QuasarIconSet } from "./icon-set";
 import { GlobalQuasarIconMapFn } from "./globals";
 import { QuasarLanguage } from "./lang";
 

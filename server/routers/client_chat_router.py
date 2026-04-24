@@ -83,7 +83,7 @@ def client_get_chat(
         raise HTTPException(404, "Чат не найден или ссылка устарела")
     guest = get_guest_by_token(db, token)
     requires_registration = not (guest and guest.guest_name)
-    msgs = [] if requires_registration else [_message_to_dict(m) for m in get_messages(db, chat.id, limit=50)]
+    msgs = [] if requires_registration else [_message_to_dict(m) for m in get_messages(db, chat.id, limit=5000)]
     return {
         "chat_id": chat.id,
         "title": chat.title,
