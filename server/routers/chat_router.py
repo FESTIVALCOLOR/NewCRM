@@ -1063,12 +1063,12 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
     )
     from schemas import InternalMessageResponse
 
-    pinned_responses = [InternalMessageResponse.model_validate(p) for p in pinned_objs]
+    pinned_responses = [InternalMessageResponse.model_validate(_message_to_dict(p)) for p in pinned_objs]
 
     return InternalChatDetailResponse(
         **base.model_dump(),
         members=member_responses,
-        messages=msgs,
+        messages=[_message_to_dict(m) for m in msgs],
         first_unread_message_id=first_unread_id,
         pinned_messages=pinned_responses,
     )

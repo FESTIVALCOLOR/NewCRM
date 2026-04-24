@@ -139,11 +139,22 @@
                 style="cursor: pointer"
                 @click="scrollToMsg(msg.reply_preview.id)"
               >
-                <div class="text-caption text-weight-bold" style="color: #1565C0; line-height: 1.2">
-                  {{ msg.reply_preview.sender_display_name }}
-                </div>
-                <div class="text-caption ellipsis" style="color: #555; line-height: 1.3">
-                  {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                <div class="row no-wrap items-center" style="gap: 6px">
+                  <q-img
+                    v-if="msg.reply_preview.message_type === 'image' && msg.reply_preview.yandex_path"
+                    :src="imgStreamUrl({ yandex_path: msg.reply_preview.yandex_path })"
+                    style="width: 36px; height: 36px; border-radius: 3px; flex-shrink: 0"
+                    fit="cover"
+                    spinner-size="12px"
+                  />
+                  <div style="min-width: 0">
+                    <div class="text-caption text-weight-bold" style="color: #1565C0; line-height: 1.2">
+                      {{ msg.reply_preview.sender_display_name }}
+                    </div>
+                    <div class="text-caption ellipsis" style="color: #555; line-height: 1.3">
+                      {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -424,9 +435,14 @@ async function loadPdfThumbnail(msg) {
   if (pdfThumbnails.value[msg.id]) return
   if (!isPdf(msg) || !msg.yandex_path) return
   const path = msg.yandex_path.replace(/^disk:/, '')
-  const url = `/api/v1/client-chat/${activeToken}/stream?yandex_path=${encodeURIComponent(path)}`
-  const thumb = await getPdfThumbnail(url, String(msg.id))
-  if (thumb) pdfThumbnails.value[msg.id] = thumb
+  try {
+    const { data } = await axios.get(`/api/v1/client-chat/${activeToken}/stream`, {
+      params: { yandex_path: path },
+      responseType: 'arraybuffer',
+    })
+    const thumb = await getPdfThumbnail(data, String(msg.id))
+    if (thumb) pdfThumbnails.value[msg.id] = thumb
+  } catch { }
 }
 
 function formatTime(dt) {

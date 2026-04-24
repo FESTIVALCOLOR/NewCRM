@@ -265,11 +265,22 @@
                   style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
                   @click="scrollToMsg(msg.reply_preview.id)"
                 >
-                  <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
-                    {{ msg.reply_preview.sender_display_name }}
-                  </div>
-                  <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
-                    {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                  <div class="row no-wrap items-center" style="gap: 6px">
+                    <q-img
+                      v-if="msg.reply_preview.message_type === 'image' && msg.reply_preview.yandex_path"
+                      :src="imgStreamUrl({ yandex_path: msg.reply_preview.yandex_path })"
+                      style="width: 36px; height: 36px; border-radius: 3px; flex-shrink: 0"
+                      fit="cover"
+                      spinner-size="12px"
+                    />
+                    <div style="min-width: 0">
+                      <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                        {{ msg.reply_preview.sender_display_name }}
+                      </div>
+                      <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+                        {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1252,10 +1263,14 @@ async function loadPdfThumbnail(msg) {
   if (pdfThumbnails.value[msg.id]) return
   if (!isPdf(msg) || !msg.yandex_path) return
   const path = msg.yandex_path.replace(/^disk:/, '')
-  const token = localStorage.getItem('access_token') || ''
-  const url = `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
-  const thumb = await getPdfThumbnail(url, String(msg.id))
-  if (thumb) pdfThumbnails.value[msg.id] = thumb
+  try {
+    const { data } = await api.get('/api/v1/files/stream', {
+      params: { yandex_path: path, token: localStorage.getItem('access_token') || '' },
+      responseType: 'arraybuffer',
+    })
+    const thumb = await getPdfThumbnail(data, String(msg.id))
+    if (thumb) pdfThumbnails.value[msg.id] = thumb
+  } catch { }
 }
 
 function isGuest(msg) {

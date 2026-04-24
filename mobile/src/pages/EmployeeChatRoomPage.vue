@@ -402,11 +402,22 @@
                       style="border-left: 3px solid #1565C0; background: rgba(21,101,192,0.07); border-radius: 4px; padding: 4px 8px; cursor: pointer"
                       @click="scrollToMsg(msg.reply_preview.id)"
                     >
-                      <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
-                        {{ msg.reply_preview.sender_display_name }}
-                      </div>
-                      <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
-                        {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                      <div class="row no-wrap items-center" style="gap: 6px">
+                        <q-img
+                          v-if="msg.reply_preview.message_type === 'image' && msg.reply_preview.yandex_path"
+                          :src="imgStreamUrl({ yandex_path: msg.reply_preview.yandex_path })"
+                          style="width: 36px; height: 36px; border-radius: 3px; flex-shrink: 0"
+                          fit="cover"
+                          spinner-size="12px"
+                        />
+                        <div style="min-width: 0">
+                          <div class="text-caption text-weight-bold" style="color: #1565C0; font-size: 11px">
+                            {{ msg.reply_preview.sender_display_name }}
+                          </div>
+                          <div class="text-caption text-grey-7 ellipsis" style="font-size: 11px">
+                            {{ msg.reply_preview.message_type === 'image' ? '[Изображение]' : msg.reply_preview.message_type === 'file' ? '[Файл]' : msg.reply_preview.content }}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -545,19 +556,40 @@
       style="border-top: 1px solid #BBDEFB; flex-shrink: 0"
     >
       <div class="row items-center q-gutter-xs">
-        <q-chip
+        <div
           v-for="(f, i) in pendingFiles"
           :key="i"
-          dense
-          removable
-          color="blue-2"
-          text-color="blue-9"
-          :icon="isImageFile(f) ? 'image' : 'attach_file'"
-          style="max-width: 160px"
-          @remove="removePendingFile(i)"
+          class="relative-position"
         >
-          <span class="ellipsis" style="font-size: 11px; max-width: 120px">{{ f.name }}</span>
-        </q-chip>
+          <template v-if="isImageFile(f) && pendingPreviews[i]">
+            <img
+              :src="pendingPreviews[i]"
+              style="width: 52px; height: 52px; object-fit: cover; border-radius: 6px; display: block"
+            >
+            <q-btn
+              round
+              unelevated
+              dense
+              icon="close"
+              size="7px"
+              color="grey-9"
+              style="position: absolute; top: -5px; right: -5px; opacity: 0.9"
+              @click="removePendingFile(i)"
+            />
+          </template>
+          <q-chip
+            v-else
+            dense
+            removable
+            color="blue-2"
+            text-color="blue-9"
+            :icon="isImageFile(f) ? 'image' : 'attach_file'"
+            style="max-width: 160px"
+            @remove="removePendingFile(i)"
+          >
+            <span class="ellipsis" style="font-size: 11px; max-width: 120px">{{ f.name }}</span>
+          </q-chip>
+        </div>
       </div>
     </div>
 
@@ -1143,8 +1175,9 @@ function groupCaption(msgs) {
 // Первое непрочитанное сообщение
 const firstUnreadId = ref(null)
 
-// Ожидающие отправки файлы + подпись
+// Ожидающие отправки файлы + подпись + превью
 const pendingFiles = ref([])
+const pendingPreviews = ref([])
 const pendingCaption = ref('')
 
 // Закреплённые сообщения (до 10, как в Telegram)
@@ -1249,10 +1282,14 @@ async function loadPdfThumbnail(msg) {
   if (pdfThumbnails.value[msg.id]) return
   if (!isPdf(msg) || !msg.yandex_path) return
   const path = msg.yandex_path.replace(/^disk:/, '')
-  const token = localStorage.getItem('access_token') || ''
-  const url = `/api/v1/files/stream?yandex_path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
-  const thumb = await getPdfThumbnail(url, String(msg.id))
-  if (thumb) pdfThumbnails.value[msg.id] = thumb
+  try {
+    const { data } = await api.get('/api/v1/files/stream', {
+      params: { yandex_path: path, token: localStorage.getItem('access_token') || '' },
+      responseType: 'arraybuffer',
+    })
+    const thumb = await getPdfThumbnail(data, String(msg.id))
+    if (thumb) pdfThumbnails.value[msg.id] = thumb
+  } catch { }
 }
 
 function formatTime(dt) {
@@ -1530,18 +1567,26 @@ function pickFile() {
 function onFileSelected(event) {
   const files = [...(event.target.files || [])]
   if (!files.length) return
+  const newPreviews = files.map(f => isImageFile(f) ? URL.createObjectURL(f) : null)
   const combined = [...pendingFiles.value, ...files]
+  const combinedPreviews = [...pendingPreviews.value, ...newPreviews]
   if (combined.length > 20) {
     $q.notify({ type: 'warning', message: 'Максимум 20 файлов за раз', timeout: 2500 })
+    combinedPreviews.slice(20).forEach(url => url && URL.revokeObjectURL(url))
     pendingFiles.value = combined.slice(0, 20)
+    pendingPreviews.value = combinedPreviews.slice(0, 20)
   } else {
     pendingFiles.value = combined
+    pendingPreviews.value = combinedPreviews
   }
   event.target.value = ''
 }
 
 function removePendingFile(idx) {
+  const url = pendingPreviews.value[idx]
+  if (url) URL.revokeObjectURL(url)
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx)
+  pendingPreviews.value = pendingPreviews.value.filter((_, i) => i !== idx)
   if (!pendingFiles.value.length) pendingCaption.value = ''
 }
 
@@ -1554,6 +1599,8 @@ async function sendWithAttachment() {
   const groupId = (files.length > 1 && allImages) ? crypto.randomUUID() : null
 
   pendingFiles.value = []
+  pendingPreviews.value.forEach(url => url && URL.revokeObjectURL(url))
+  pendingPreviews.value = []
   pendingCaption.value = ''
 
   uploadProgress.value = 1

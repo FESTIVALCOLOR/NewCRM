@@ -160,6 +160,8 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
                         "sender_display_name": r.sender_display_name,
                         "content": r.content or ("[Изображение]" if r.message_type == "image" else "[Файл]"),
                         "message_type": r.message_type,
+                        "yandex_path": r.yandex_path,
+                        "file_name": r.file_name,
                     }
         except Exception:
             pass

@@ -1494,6 +1494,8 @@ class InternalMessageResponse(BaseModel):
     is_deleted: bool = False
     is_edited: bool = False
     created_at: datetime
+    reply_to_id: Optional[int] = None
+    reply_preview: Optional[dict] = None
 
     model_config = {"from_attributes": True}
 
