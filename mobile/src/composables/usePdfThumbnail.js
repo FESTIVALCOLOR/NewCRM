@@ -1,5 +1,14 @@
 // PDF-thumbnail: рендерит первую страницу PDF в JPEG через PDF.js
 // Используется для превью PDF при загрузке и в пузырях сообщений
+
+// Полифилл для Map.prototype.getOrInsertComputed (TC39, pdfjs-dist 5.x, нет в Chrome<136/Safari<18)
+if (typeof Map !== 'undefined' && !Map.prototype.getOrInsertComputed) {
+  Map.prototype.getOrInsertComputed = function (key, compute) {
+    if (!this.has(key)) this.set(key, compute(key))
+    return this.get(key)
+  }
+}
+
 let pdfjsLib = null
 const cache = new Map()
 

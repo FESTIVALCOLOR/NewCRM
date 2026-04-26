@@ -1305,7 +1305,8 @@ function formatTime(dt) {
   if (isToday) return time
   const day = String(d.getDate()).padStart(2, '0')
   const month = String(d.getMonth() + 1).padStart(2, '0')
-  return `${day}.${month} ${time}`
+  const year = d.getFullYear()
+  return `${day}.${month}.${year} ${time}`
 }
 
 function scrollToBottom() {
