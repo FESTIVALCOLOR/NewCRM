@@ -192,14 +192,14 @@
                 </a>
               </template>
               <template v-else-if="msg.message_type === 'file'">
-                <div v-if="isPdf(msg) && pdfThumbnails[msg.id]">
-                  <a :href="msg.file_url" target="_blank" style="display:block;text-decoration:none">
+                <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:flex;flex-direction:column">
+                  <a :href="msg.file_url" target="_blank" style="display:block;text-decoration:none;align-self:flex-start">
                     <img
                       :src="pdfThumbnails[msg.id]"
                       style="display:block;max-height:200px;width:auto;max-width:min(85vw,440px);cursor:pointer"
                     >
                   </a>
-                  <div style="padding:3px 8px 2px;display:flex;align-items:center;gap:4px;overflow:hidden">
+                  <div style="padding:3px 8px 2px;display:flex;align-items:center;gap:4px;overflow:hidden;min-width:0">
                     <q-icon name="picture_as_pdf" size="14px" color="red-6" style="flex-shrink:0" />
                     <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:inherit">{{ msg.file_name || 'Документ' }}</a>
                   </div>
