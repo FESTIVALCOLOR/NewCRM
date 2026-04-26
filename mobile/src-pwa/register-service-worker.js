@@ -19,6 +19,8 @@ register(process.env.SERVICE_WORKER_FILE, {
 
   updated(/* registration */) {
     console.log('Доступен новый контент — обновите страницу.')
+    // SW с skipWaiting() уже взял управление — перезагрузка подгрузит новые файлы
+    window.location.reload()
   },
 
   offline() {
