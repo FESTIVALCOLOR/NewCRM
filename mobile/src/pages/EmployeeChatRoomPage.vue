@@ -1295,11 +1295,14 @@ async function loadPdfThumbnail(msg) {
 function formatTime(dt) {
   if (!dt) return ''
   const d = new Date(dt)
+  if (isNaN(d.getTime())) return ''
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const now = new Date()
+  const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  if (isToday) return time
   const day = String(d.getDate()).padStart(2, '0')
   const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
-  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-  return `${day}.${month}.${year} ${time}`
+  return `${day}.${month} ${time}`
 }
 
 function scrollToBottom() {
