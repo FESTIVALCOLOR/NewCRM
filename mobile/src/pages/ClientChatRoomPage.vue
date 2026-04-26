@@ -141,7 +141,7 @@
 
             <div
               v-else
-              :class="msg.message_type === 'image'
+              :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
                 ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-other')
                 : (isOwn(msg) ? 'bubble-own' : 'bubble-other')"
               style="min-width: 0"
@@ -149,7 +149,7 @@
               <!-- Верхняя строка: имя + меню -->
               <div
                 class="row no-wrap items-center justify-between q-mb-xs"
-                :style="msg.message_type === 'image' ? 'min-height:16px;gap:2px;padding:6px 10px 4px' : 'min-height:16px;gap:2px'"
+                :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'min-height:16px;gap:2px;padding:6px 10px 4px' : 'min-height:16px;gap:2px'"
               >
                 <div
                   class="text-caption text-weight-bold"
@@ -368,7 +368,7 @@
               <div
                 class="row no-wrap items-center"
                 :class="isOwn(msg) ? 'justify-end' : 'justify-start'"
-                :style="msg.message_type === 'image' ? 'padding:2px 10px 6px;color:#888;font-size:10px' : 'margin-top:4px;color:#888;font-size:10px'"
+                :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'padding:2px 10px 6px;color:#888;font-size:10px' : 'margin-top:4px;color:#888;font-size:10px'"
               >
                 <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
                 <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
