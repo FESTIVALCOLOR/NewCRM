@@ -8,7 +8,7 @@
 
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching'
 import { registerRoute, NavigationRoute } from 'workbox-routing'
-import { CacheFirst, NetworkFirst } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { clientsClaim } from 'workbox-core'
 
@@ -27,6 +27,18 @@ registerRoute(
   }),
 )
 
+// Runtime caching для тяжёлых JS-чанков (исключены из precache)
+// CacheFirst: загружается один раз, потом всегда из кеша
+registerRoute(
+  ({ url }) => /\/(pdf|BarChart)-[^/]+\.m?js$/.test(url.pathname),
+  new CacheFirst({
+    cacheName: 'heavy-chunks-v1',
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 30 * 24 * 60 * 60 }),
+    ],
+  }),
+)
+
 // === Кеш изображений и файлов из Yandex Disk (chat) ===
 // ВАЖНО: эти routes должны быть ПЕРЕД общим /api/v1/ route
 // Ключ кеша = только yandex_path (без token/URL-токена), TTL = 7 дней, до 300 файлов.
@@ -36,6 +48,13 @@ const imagesCachePlugin = [
       const url = new URL(request.url)
       const path = url.searchParams.get('yandex_path') || ''
       return `${url.origin}/stream-cache?yandex_path=${encodeURIComponent(path)}`
+    },
+  },
+  {
+    // Кешировать только успешные ответы (status 200) — иначе Cache.put() бросает NetworkError
+    cacheWillUpdate: async ({ response }) => {
+      if (response && response.status === 200) return response
+      return null
     },
   },
   new ExpirationPlugin({

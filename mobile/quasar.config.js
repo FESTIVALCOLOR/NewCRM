@@ -88,8 +88,14 @@ export default configure(function (/* ctx */) {
       useCredentialsForManifestTag: false,
 
       extendInjectManifestOptions(cfg) {
-        // Входной файл SW — src-pwa/custom-service-worker.js (по умолчанию в Quasar)
-        // Никаких дополнительных настроек не требуется
+        // Исключаем тяжёлые чанки из precache (pdf.js ~433KB, BarChart ~181KB) —
+        // они будут закешированы через runtime CacheFirst при первом обращении
+        cfg.globIgnores = cfg.globIgnores || []
+        cfg.globIgnores.push(
+          '**/pdf-*.js',
+          '**/pdf-*.mjs',
+          '**/BarChart-*.js',
+        )
       },
 
       extendManifestJson(json) {
