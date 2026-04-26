@@ -10,25 +10,34 @@ if (typeof Map !== 'undefined' && !Map.prototype.getOrInsertComputed) {
 }
 
 let pdfjsLib = null
+let workerBlobUrl = null
 const cache = new Map()
 
 async function ensurePdfJs() {
   if (pdfjsLib) return pdfjsLib
   const mod = await import('pdfjs-dist')
-  mod.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-  ).toString()
+
+  if (!workerBlobUrl) {
+    // Браузерный HTTP-кеш может хранить воркер с application/octet-stream (immutable, 1 год).
+    // fetch() читает тело без MIME-проверки; Blob с явным type обходит ограничение модульных воркеров.
+    const rawUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+    try {
+      const resp = await fetch(rawUrl)
+      if (resp.ok) {
+        const buf = await resp.arrayBuffer()
+        workerBlobUrl = URL.createObjectURL(new Blob([buf], { type: 'application/javascript' }))
+      }
+    } catch (e) {
+      console.warn('[PdfThumbnail] Worker blob failed, fallback to URL:', e)
+    }
+    if (!workerBlobUrl) workerBlobUrl = rawUrl
+  }
+
+  mod.GlobalWorkerOptions.workerSrc = workerBlobUrl
   pdfjsLib = mod
   return pdfjsLib
 }
 
-/**
- * Рендерит первую страницу PDF в base64 JPEG.
- * @param {File|string} source - File-объект или URL (строка)
- * @param {string} [cacheKey] - ключ кэша (опционально)
- * @returns {Promise<string|null>} data URL или null при ошибке
- */
 export async function getPdfThumbnail(source, cacheKey) {
   const key = cacheKey || (typeof source === 'string' ? source : null)
   if (key && cache.has(key)) return cache.get(key)
@@ -60,9 +69,6 @@ export async function getPdfThumbnail(source, cacheKey) {
   }
 }
 
-/**
- * Очищает кэш (вызывать при необходимости освободить память)
- */
 export function clearPdfCache() {
   cache.clear()
 }
