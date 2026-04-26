@@ -8,7 +8,7 @@
 
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching'
 import { registerRoute, NavigationRoute } from 'workbox-routing'
-import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst, StaleWhileRevalidate, NetworkOnly } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { clientsClaim } from 'workbox-core'
 
@@ -25,6 +25,12 @@ registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
     denylist: [/^\/api/],
   }),
+)
+
+// PDF worker — всегда через сеть (MIME application/javascript обязателен для module worker)
+registerRoute(
+  ({ url }) => /\/pdf\.worker\.min-[^/]+\.mjs$/.test(url.pathname),
+  new NetworkOnly(),
 )
 
 // Runtime caching для тяжёлых JS-чанков (исключены из precache)

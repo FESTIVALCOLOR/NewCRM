@@ -268,17 +268,19 @@
                 <div v-if="groupCaption(item.msgs)" class="text-body2" style="padding: 4px 10px 2px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
                   {{ groupCaption(item.msgs) }}
                 </div>
-                <div class="row no-wrap items-center justify-between" style="padding: 2px 10px 6px; margin-top: 0">
+                <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 4px 2px; margin-top: 0">
                   <q-btn
                     v-if="item.msgs.some(m => m.yandex_path)"
                     flat
                     dense
                     no-caps
+                    unelevated
                     size="xs"
                     icon="photo_library"
                     label="Открыть в галерее"
                     color="grey-6"
-                    style="margin: -2px 0; font-size: 10px"
+                    class="gallery-open-btn"
+                    style="font-size: 10px; padding: 0 4px"
                     @click.stop="openInGallery(item.msgs.find(m => m.yandex_path))"
                   />
                   <div v-else />
@@ -1929,4 +1931,6 @@ onUnmounted(() => {
   100% { background: transparent; }
 }
 .msg-highlight { animation: msg-highlight-pulse 1.5s ease-out; border-radius: 8px; }
+.gallery-open-btn :deep(.q-focus-helper) { display: none; }
+.gallery-open-btn :deep(.q-btn__content) { gap: 3px; }
 </style>

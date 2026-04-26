@@ -94,6 +94,7 @@ export default configure(function (/* ctx */) {
         cfg.globIgnores.push(
           '**/pdf-*.js',
           '**/pdf-*.mjs',
+          '**/pdf.worker.min-*.mjs',
           '**/BarChart-*.js',
         )
       },
