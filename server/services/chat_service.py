@@ -181,7 +181,7 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "is_pinned": getattr(msg, "is_pinned", False),
         "is_deleted": msg.is_deleted,
         "is_edited": getattr(msg, "is_edited", False),
-        "created_at": (msg.created_at.isoformat() + "Z") if msg.created_at else None,
+        "created_at": (msg.created_at.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z") if msg.created_at else None,
         "reply_to_id": reply_to_id,
         "reply_preview": reply_preview,
     }

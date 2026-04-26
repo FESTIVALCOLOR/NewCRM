@@ -447,7 +447,9 @@ async function loadPdfThumbnail(msg) {
 
 function formatTime(dt) {
   if (!dt) return ''
-  const d = new Date(dt)
+  let s = String(dt).replace(' ', 'T')
+  s = s.replace(/([+-]\d{2}:\d{2})Z$/, '$1')
+  const d = new Date(s)
   if (isNaN(d.getTime())) return ''
   const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
   const now = new Date()
