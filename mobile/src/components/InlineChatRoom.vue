@@ -317,7 +317,20 @@
                 <div v-if="groupCaption(item.msgs)" class="text-body2" style="padding: 3px 8px 2px; white-space: pre-wrap; word-break: break-word; font-size: 13px">
                   {{ groupCaption(item.msgs) }}
                 </div>
-                <div class="row no-wrap items-center" :class="isOwn(item.msgs[0]) ? 'justify-end' : 'justify-start'" style="padding: 2px 8px 5px; margin-top: 0">
+                <div class="row no-wrap items-center justify-between" style="padding: 2px 8px 5px; margin-top: 0">
+                  <q-btn
+                    v-if="item.msgs.some(m => m.yandex_path)"
+                    flat
+                    dense
+                    no-caps
+                    size="xs"
+                    icon="photo_library"
+                    label="Открыть в галерее"
+                    color="grey-6"
+                    style="margin: -2px 0; font-size: 10px"
+                    @click.stop="openInGallery(item.msgs.find(m => m.yandex_path))"
+                  />
+                  <div v-else />
                   <div class="text-caption" style="color: #888; font-size: 10px">
                     {{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}
                   </div>

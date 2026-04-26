@@ -272,16 +272,15 @@
                   <q-btn
                     v-if="item.msgs.some(m => m.yandex_path)"
                     flat
-                    round
                     dense
+                    no-caps
                     size="xs"
                     icon="photo_library"
+                    label="Открыть в галерее"
                     color="grey-6"
-                    style="margin: -2px 0"
+                    style="margin: -2px 0; font-size: 10px"
                     @click.stop="openInGallery(item.msgs.find(m => m.yandex_path))"
-                  >
-                    <q-tooltip>Открыть в галерее</q-tooltip>
-                  </q-btn>
+                  />
                   <div v-else />
                   <div class="text-caption" style="color: #888; font-size: 10px">
                     {{ formatTime(item.msgs[item.msgs.length - 1].created_at) }}
