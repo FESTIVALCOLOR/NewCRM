@@ -1501,8 +1501,8 @@ class InternalMessageResponse(BaseModel):
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: datetime) -> str:
-        """Всегда возвращаем UTC с суффиксом Z, чтобы браузер корректно конвертировал в локальное время."""
-        return dt.isoformat() + "Z"
+        """Возвращаем UTC с суффиксом Z (strftime убирает tzinfo-суффикс, избегаем двойного +00:00Z)."""
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
 
 class InternalChatResponse(BaseModel):
