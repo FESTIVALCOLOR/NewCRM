@@ -35,12 +35,6 @@ export function useChatWebSocket() {
     return `${protocol}//${host}/api/v1/ws/chat/${chatId}?token=${encodeURIComponent(tokenOrAccessToken)}`
   }
 
-  /**
-   * Подключиться как сотрудник.
-   * @param {number} chatId
-   * @param {string} jwtToken
-   * @param {object} handlers — { onMessage, onTyping, onRead, onConnect, onDisconnect }
-   */
   function connectEmployee(chatId, jwtToken, handlers = {}) {
     _url = _buildUrl(chatId, jwtToken, false)
     _handlers = handlers
@@ -48,11 +42,6 @@ export function useChatWebSocket() {
     _doConnect()
   }
 
-  /**
-   * Подключиться как клиент (PWA без JWT).
-   * @param {string} accessToken — UUID токен из URL /c/{token}
-   * @param {object} handlers
-   */
   function connectClient(accessToken, handlers = {}) {
     _url = _buildUrl(null, accessToken, true)
     _handlers = handlers
@@ -71,18 +60,12 @@ export function useChatWebSocket() {
     isConnected.value = false
   }
 
-  /**
-   * Отправить текстовое сообщение.
-   */
   function sendMessage(content, replyToId = null, messageType = 'text') {
     const payload = { type: 'message', content, message_type: messageType }
     if (replyToId) payload.reply_to_id = replyToId
     _send(payload)
   }
 
-  /**
-   * Отправить событие "печатает".
-   */
   function sendTypingStart() {
     _send({ type: 'typing_start' })
   }
@@ -91,9 +74,6 @@ export function useChatWebSocket() {
     _send({ type: 'typing_stop' })
   }
 
-  /**
-   * Отметить сообщения как прочитанные.
-   */
   function sendRead(lastMessageId) {
     _send({ type: 'read', last_message_id: lastMessageId })
   }
@@ -152,6 +132,11 @@ export function useChatWebSocket() {
         messages.value.push(messageData)
         if (_handlers.onMessage) _handlers.onMessage(messageData)
       }
+    } else if (type === 'new_message_group') {
+      const batchMsgs = msg.messages
+      if (!Array.isArray(batchMsgs) || !batchMsgs.length) return
+      if (_handlers.onMessageGroup) _handlers.onMessageGroup(batchMsgs)
+      else batchMsgs.forEach(m => { messages.value.push(m); if (_handlers.onMessage) _handlers.onMessage(m) })
     } else if (type === 'typing_start') {
       const sn = msg.sender_name
       if (sn && !typingUsers.value.find(u => u.name === sn)) typingUsers.value.push({ name: sn })

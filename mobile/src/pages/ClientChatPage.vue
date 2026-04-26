@@ -72,7 +72,7 @@
               :class="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id]))
                 ? (isOwn(msg) ? 'bubble-img-own' : 'bubble-img-staff')
                 : (isOwn(msg) ? 'bubble-own' : 'bubble-staff')"
-              style="max-width: 80%"
+              :style="(isPdf(msg) && pdfThumbnails[msg.id]) ? 'width: fit-content; max-width: min(85vw, 440px); min-width: 0' : 'max-width: 80%'"
             >
               <!-- Верхняя строка: имя отправителя + кнопка меню -->
               <div
@@ -192,17 +192,16 @@
                 </a>
               </template>
               <template v-else-if="msg.message_type === 'file'">
-                <div v-if="isPdf(msg) && pdfThumbnails[msg.id]" style="display:block">
-                  <q-img
-                    :src="pdfThumbnails[msg.id]"
-                    style="width:100%;max-height:200px;display:block"
-                    fit="contain"
-                    spinner-color="grey-4"
-                    spinner-size="20px"
-                  />
-                  <div class="row items-center q-gutter-xs" style="padding:3px 8px 2px">
-                    <q-icon name="picture_as_pdf" size="14px" color="red-6" />
-                    <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="max-width:200px;color:inherit">{{ msg.file_name || 'Документ' }}</a>
+                <div v-if="isPdf(msg) && pdfThumbnails[msg.id]">
+                  <a :href="msg.file_url" target="_blank" style="display:block;text-decoration:none">
+                    <img
+                      :src="pdfThumbnails[msg.id]"
+                      style="display:block;max-height:200px;width:auto;max-width:min(85vw,440px);cursor:pointer"
+                    >
+                  </a>
+                  <div style="padding:3px 8px 2px;display:flex;align-items:center;gap:4px;overflow:hidden">
+                    <q-icon name="picture_as_pdf" size="14px" color="red-6" style="flex-shrink:0" />
+                    <a :href="msg.file_url" target="_blank" class="text-caption ellipsis" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:inherit">{{ msg.file_name || 'Документ' }}</a>
                   </div>
                 </div>
                 <div v-else class="row items-center q-gutter-xs">

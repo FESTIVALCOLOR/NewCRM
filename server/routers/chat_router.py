@@ -833,6 +833,45 @@ async def forward_message(
         raise HTTPException(404, "Сообщение не найдено")
 
     fwd_display = f"{_get_employee_display_name(current_user)} (переслано)"
+
+    # Если пересылаемое сообщение — ответ на другое, сначала пересылаем оригинал
+    fwd_reply_to_id = None
+    if src_msg.reply_to_id:
+        reply_src = (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.id == src_msg.reply_to_id,
+                InternalChatMessage.is_deleted == False,
+            )
+            .first()
+        )
+        if reply_src:
+            if reply_src.message_type == "text":
+                fwd_reply = add_text_message(
+                    db,
+                    target_chat_id,
+                    content=reply_src.content or "",
+                    sender_employee_id=current_user.id,
+                    sender_display_name=fwd_display,
+                )
+            else:
+                fwd_reply = add_file_message(
+                    db,
+                    target_chat_id,
+                    file_url=reply_src.file_url or "",
+                    file_name=reply_src.file_name or "",
+                    yandex_path=reply_src.yandex_path or "",
+                    file_size=reply_src.file_size,
+                    message_type=reply_src.message_type,
+                    sender_employee_id=current_user.id,
+                    sender_display_name=fwd_display,
+                )
+            fwd_reply_to_id = fwd_reply.id
+            await ws_manager.broadcast(
+                target_chat_id,
+                {"type": "new_message", "message": _message_to_dict(fwd_reply)},
+            )
+
     if src_msg.message_type == "text":
         new_msg = add_text_message(
             db,
@@ -840,6 +879,7 @@ async def forward_message(
             content=src_msg.content or "",
             sender_employee_id=current_user.id,
             sender_display_name=fwd_display,
+            reply_to_id=fwd_reply_to_id,
         )
     else:
         new_msg = add_file_message(
@@ -852,14 +892,12 @@ async def forward_message(
             message_type=src_msg.message_type,
             sender_employee_id=current_user.id,
             sender_display_name=fwd_display,
+            reply_to_id=fwd_reply_to_id,
         )
 
     await ws_manager.broadcast(
         target_chat_id,
-        {
-            "type": "new_message",
-            "message": _message_to_dict(new_msg),
-        },
+        {"type": "new_message", "message": _message_to_dict(new_msg)},
     )
     return {"status": "ok", "new_message_id": new_msg.id}
 
@@ -918,14 +956,14 @@ async def forward_message_group(
             )
         new_msgs.append(new_msg)
 
-    for new_msg in new_msgs:
-        await ws_manager.broadcast(
-            target_chat_id,
-            {
-                "type": "new_message",
-                "message": _message_to_dict(new_msg),
-            },
-        )
+    # Батч-трансляция: одно событие new_message_group со всеми сообщениями
+    await ws_manager.broadcast(
+        target_chat_id,
+        {
+            "type": "new_message_group",
+            "messages": [_message_to_dict(m) for m in new_msgs],
+        },
+    )
 
     return {"status": "ok", "forwarded": len(new_msgs), "group_id": new_group_id}
 

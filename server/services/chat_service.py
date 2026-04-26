@@ -533,6 +533,7 @@ def add_file_message(
     sender_display_name: Optional[str] = None,
     group_id: Optional[str] = None,
     content: Optional[str] = None,
+    reply_to_id: Optional[int] = None,
 ) -> InternalChatMessage:
     """Сохранить сообщение с файлом/голосом/изображением."""
     if not sender_display_name:
@@ -557,6 +558,7 @@ def add_file_message(
         file_size=file_size,
         yandex_path=yandex_path,
         group_id=group_id,
+        reply_to_id=reply_to_id or None,
     )
     db.add(msg)
     db.commit()
