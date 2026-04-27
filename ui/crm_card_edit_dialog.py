@@ -685,7 +685,7 @@ class CardEditDialog(QDialog):
                 self.senior_manager.addItem(manager["full_name"], manager["id"])
             senior_mgr_row.addWidget(self.senior_manager, 1)
             self._invite_sm_btn = self._make_invite_btn("Старший менеджер")
-            self._invite_sm_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.senior_manager, "Старший менеджер"))
+            self._invite_sm_btn.clicked.connect(lambda: self._invite_employee_show_menu(self.senior_manager, "Старший менеджер", self._invite_sm_btn))
             self._invite_sm_btn.setEnabled(can_invite_to_chat)
             senior_mgr_row.addWidget(self._invite_sm_btn)
             team_layout.addLayout(senior_mgr_row)
@@ -709,7 +709,7 @@ class CardEditDialog(QDialog):
                     self.sdp.addItem(sdp["full_name"], sdp["id"])
                 sdp_row.addWidget(self.sdp, 1)
                 self._invite_sdp_btn = self._make_invite_btn("СДП")
-                self._invite_sdp_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.sdp, "СДП"))
+                self._invite_sdp_btn.clicked.connect(lambda: self._invite_employee_show_menu(self.sdp, "СДП", self._invite_sdp_btn))
                 self._invite_sdp_btn.setEnabled(can_invite_to_chat)
                 sdp_row.addWidget(self._invite_sdp_btn)
                 team_layout.addLayout(sdp_row)
@@ -732,7 +732,7 @@ class CardEditDialog(QDialog):
                 self.gap.addItem(gap["full_name"], gap["id"])
             gap_row.addWidget(self.gap, 1)
             self._invite_gap_btn = self._make_invite_btn("ГАП")
-            self._invite_gap_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.gap, "ГАП"))
+            self._invite_gap_btn.clicked.connect(lambda: self._invite_employee_show_menu(self.gap, "ГАП", self._invite_gap_btn))
             self._invite_gap_btn.setEnabled(can_invite_to_chat)
             gap_row.addWidget(self._invite_gap_btn)
             team_layout.addLayout(gap_row)
@@ -758,7 +758,7 @@ class CardEditDialog(QDialog):
                 self.manager.addItem(mgr["full_name"], mgr["id"])
             manager_row.addWidget(self.manager, 1)
             self._invite_mgr_btn = self._make_invite_btn("Менеджер")
-            self._invite_mgr_btn.clicked.connect(lambda: self._invite_employee_to_chat(self.manager, "Менеджер"))
+            self._invite_mgr_btn.clicked.connect(lambda: self._invite_employee_show_menu(self.manager, "Менеджер", self._invite_mgr_btn))
             self._invite_mgr_btn.setEnabled(can_invite_to_chat)
             manager_row.addWidget(self._invite_mgr_btn)
             team_layout.addLayout(manager_row)
@@ -1146,17 +1146,7 @@ class CardEditDialog(QDialog):
             self._payments_placeholder = QWidget()
             self.payments_tab_index = self.tabs.addTab(self._payments_placeholder, "Оплаты")
 
-        # === Чат сотрудников ===
-        self._employee_chat_tab_index = -1
-        if _has_perm(self.employee, self.api_client, "chat.employee.view"):
-            self._employee_chat_placeholder = QWidget()
-            self._employee_chat_tab_index = self.tabs.addTab(self._employee_chat_placeholder, "Чат сотрудников")
-
-        # === Чат с клиентом ===
-        self._client_chat_tab_index = -1
-        if _has_perm(self.employee, self.api_client, "chat.client.view"):
-            self._client_chat_placeholder = QWidget()
-            self._client_chat_tab_index = self.tabs.addTab(self._client_chat_placeholder, "Чат с клиентом")
+        # Чаты открываются из кнопок внизу карточки (не вкладки)
 
         # Для исполнителей открываем сразу вкладку "Данные по проекту"
         if is_executor:
@@ -1238,8 +1228,41 @@ class CardEditDialog(QDialog):
             # Stretch для центровки кнопок чата
             buttons_layout.addStretch()
 
-            # --- Кнопки чата (только для руководителей, менеджеров, СДП, ГАП) ---
-            if not is_executor:
+            # --- Кнопки внутренних чатов карточки ---
+            self._has_chat_buttons = False
+            self._need_chat_init = True  # Загружаем данные мессенджера для кнопок приглашения
+
+            if _has_perm(self.employee, self.api_client, "chat.employee.view"):
+                self._card_employee_chat_btn = IconLoader.create_icon_button("message-circle", "Чат сотрудников", "Открыть чат сотрудников по этой карточке", icon_size=14)
+                self._card_employee_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E8F5E9; color: #1B5E20;
+                        padding: 0px 12px; border-radius: 4px; border: 1px solid #81C784;
+                        font-weight: 500; max-height: 36px; min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #C8E6C9; border-color: #4CAF50; }
+                    QPushButton:pressed { background-color: #A5D6A7; }
+                """)
+                self._card_employee_chat_btn.setFixedHeight(36)
+                self._card_employee_chat_btn.clicked.connect(self._open_card_employee_chat)
+                buttons_layout.addWidget(self._card_employee_chat_btn)
+
+            if _has_perm(self.employee, self.api_client, "chat.client.view"):
+                self._card_client_chat_btn = IconLoader.create_icon_button("message-circle", "Чат с клиентом", "Открыть чат с клиентом по этой карточке", icon_size=14)
+                self._card_client_chat_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E3F2FD; color: #0D47A1;
+                        padding: 0px 12px; border-radius: 4px; border: 1px solid #90CAF9;
+                        font-weight: 500; max-height: 36px; min-height: 36px;
+                    }
+                    QPushButton:hover { background-color: #BBDEFB; border-color: #42A5F5; }
+                    QPushButton:pressed { background-color: #90CAF9; }
+                """)
+                self._card_client_chat_btn.setFixedHeight(36)
+                self._card_client_chat_btn.clicked.connect(self._open_card_client_chat)
+                buttons_layout.addWidget(self._card_client_chat_btn)
+
+            if False:  # Telegram-блок удалён; оставлен placeholder для совместимости атрибутов
                 self._has_chat_buttons = True
                 self.create_chat_btn = IconLoader.create_icon_button("message-circle", "Создать чат", "Создать чат в мессенджере", icon_size=14)
                 self.create_chat_btn.setStyleSheet("""
@@ -1374,11 +1397,8 @@ class CardEditDialog(QDialog):
 
                 # Кнопка "Настройки чатов" перенесена в Администрирование (ui/admin_dialog.py)
 
-                # Флаг для отложенной инициализации чата (после setLayout)
+                # Telegram-блок удалён (оставлен placeholder для совместимости)
                 self._need_chat_init = True
-            else:
-                self._has_chat_buttons = False
-                self._need_chat_init = False
 
             buttons_layout.addStretch()
 
@@ -1480,15 +1500,6 @@ class CardEditDialog(QDialog):
 
         # Инициализация кнопок чата после setLayout (чтобы виджеты имели parent)
         if getattr(self, "_need_chat_init", False):
-            _can_create = _has_perm(self.employee, self.data.api_client, "messenger.create_chat")
-            _can_view = _has_perm(self.employee, self.data.api_client, "messenger.view_chat")
-            _can_delete = _has_perm(self.employee, self.data.api_client, "messenger.delete_chat")
-            self.create_chat_btn.setVisible(_can_create)
-            self.open_chat_btn.setVisible(_can_view)
-            self.delete_chat_btn.setVisible(_can_delete)
-            # Кнопки скриптов: видимы если есть право просмотра чатов
-            self.start_script_btn.setVisible(_can_view)
-            self.end_script_btn.setVisible(_can_view)
             self._messenger_chat_data = None
             self._load_messenger_chat_state()
 
@@ -6752,64 +6763,33 @@ class CardEditDialog(QDialog):
         has_chat = self._messenger_chat_data is not None and self._messenger_chat_data.get("chat", {}).get("is_active", False)
         is_online = self.data.is_multi_user
 
-        if hasattr(self, "create_chat_btn"):
-            self.create_chat_btn.setEnabled(not has_chat and is_online)
-            self.open_chat_btn.setEnabled(has_chat)
-            self.delete_chat_btn.setEnabled(has_chat and is_online)
-            if hasattr(self, "invite_client_btn"):
-                # Активна если есть чат + invite_link + договор + клиент с email
-                has_invite_link = bool(self._messenger_chat_data and self._messenger_chat_data.get("chat", {}).get("invite_link"))
-                # Проверка договора и email клиента (руководство notifications-guide.md)
-                has_client_email = False
-                if self.card_data:
-                    contract_data = self.card_data.get("contract") or {}
-                    client_data = contract_data.get("client") or {}
-                    has_client_email = bool(client_data.get("email"))
-                self.invite_client_btn.setEnabled(has_chat and has_invite_link and is_online and has_client_email)
+        # Кнопки приглашения — активны если сотрудник назначен и онлайн
+        telegram_member_ids = set()
+        if has_chat and self._messenger_chat_data:
+            for m in self._messenger_chat_data.get("members", []):
+                if m.get("member_type") == "employee":
+                    telegram_member_ids.add(m.get("member_id"))
 
-            # Кнопки скриптов доступны только при наличии чата, подключении к серверу И разрешённой должности
-            if hasattr(self, "start_script_btn"):
-                user_pos = (self.employee or {}).get("position", "")
-                _can_scripts = user_pos in ("Руководитель студии", "Старший менеджер проектов", "Менеджер")
-                self.start_script_btn.setEnabled(has_chat and is_online and _can_scripts)
-                self.end_script_btn.setEnabled(has_chat and is_online and _can_scripts)
-
-            # Кнопки приглашения сотрудников — активны если чат создан и сотрудник ещё не в чате
-            chat_member_ids = set()
-            if has_chat and self._messenger_chat_data:
-                for m in self._messenger_chat_data.get("members", []):
-                    if m.get("member_type") == "employee":
-                        chat_member_ids.add(m.get("member_id"))
-
-            invite_btn_combo_map = {
-                "_invite_sm_btn": "senior_manager",
-                "_invite_sdp_btn": "sdp",
-                "_invite_gap_btn": "gap",
-                "_invite_mgr_btn": "manager",
-            }
-            for btn_name, combo_name in invite_btn_combo_map.items():
-                btn = getattr(self, btn_name, None)
-                combo = getattr(self, combo_name, None)
-                if btn and combo:
-                    emp_id = combo.currentData()
-                    already_in_chat = emp_id in chat_member_ids if emp_id else False
-                    _can_invite = (self.employee or {}).get("position", "") in ("Руководитель студии", "Старший менеджер проектов", "Менеджер")
-                    btn.setEnabled(has_chat and is_online and bool(emp_id) and not already_in_chat and _can_invite)
-                    if already_in_chat:
-                        btn.setToolTip("Уже в чате")
-                    elif not emp_id:
-                        btn.setToolTip("Сотрудник не назначен")
-                    else:
-                        btn.setToolTip(f"Пригласить в чат")
-
-            if not is_online:
-                self.create_chat_btn.setToolTip("Требуется подключение к серверу")
-                self.delete_chat_btn.setToolTip("Требуется подключение к серверу")
-            elif has_chat:
-                self.create_chat_btn.setToolTip("Чат уже создан")
-            else:
-                self.delete_chat_btn.setToolTip("Чат не создан")
-                self.open_chat_btn.setToolTip("Чат не создан")
+        invite_btn_combo_map = {
+            "_invite_sm_btn": "senior_manager",
+            "_invite_sdp_btn": "sdp",
+            "_invite_gap_btn": "gap",
+            "_invite_mgr_btn": "manager",
+        }
+        _can_invite_pos = (self.employee or {}).get("position", "") in ("Руководитель студии", "Старший менеджер проектов", "Менеджер")
+        for btn_name, combo_name in invite_btn_combo_map.items():
+            btn = getattr(self, btn_name, None)
+            combo = getattr(self, combo_name, None)
+            if btn and combo:
+                emp_id = combo.currentData()
+                # Кнопка активна если сотрудник назначен, онлайн и есть право приглашать
+                btn.setEnabled(is_online and bool(emp_id) and _can_invite_pos)
+                if not emp_id:
+                    btn.setToolTip("Сотрудник не назначен")
+                elif emp_id in telegram_member_ids:
+                    btn.setToolTip("Пригласить в чат (в Telegram уже добавлен)")
+                else:
+                    btn.setToolTip("Пригласить во внутренний чат / Telegram")
 
     def _on_create_chat(self):
         """Обработчик кнопки 'Создать чат'"""
@@ -7005,7 +6985,7 @@ class CardEditDialog(QDialog):
         """Блокировка кнопок чата + прогресс-бар"""
         self._chat_action_running = True
         self._show_chat_progress(True)
-        for btn_name in ("invite_client_btn", "start_script_btn", "end_script_btn", "delete_chat_btn", "create_chat_btn", "_invite_sm_btn", "_invite_sdp_btn", "_invite_gap_btn", "_invite_mgr_btn"):
+        for btn_name in ("_invite_sm_btn", "_invite_sdp_btn", "_invite_gap_btn", "_invite_mgr_btn"):
             btn = getattr(self, btn_name, None)
             if btn:
                 btn.setEnabled(False)
@@ -7024,16 +7004,16 @@ class CardEditDialog(QDialog):
             CustomMessageBox(self, "Готово", msg, "success").exec_()
 
     def _make_invite_btn(self, role_name: str) -> QPushButton:
-        """Создать кнопку приглашения сотрудника в чат."""
+        """Создать кнопку приглашения сотрудника в чат (внутренний или Telegram)."""
         btn = QPushButton()
         btn.setFixedSize(24, 24)
-        btn.setToolTip(f"Пригласить в чат ({role_name})")
+        btn.setToolTip(f"Пригласить во внутренний чат / Telegram ({role_name})")
         btn.setEnabled(False)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        icon = IconLoader.load("telegram", size=14)
+        icon = IconLoader.load("message-circle", size=13)
         if icon and not icon.isNull():
             btn.setIcon(icon)
-            btn.setIconSize(QSize(14, 14))
+            btn.setIconSize(QSize(13, 13))
         btn.setStyleSheet("""
             QPushButton {
                 min-height: 24px; max-height: 24px;
@@ -7101,6 +7081,150 @@ class CardEditDialog(QDialog):
                     error = err_str
             self._chat_action_finished.emit(msg, error)
 
+        threading.Thread(target=_worker, daemon=True).start()
+
+    # ====== Диалоги внутренних чатов карточки ======
+
+    def _open_card_employee_chat(self):
+        """Открыть окно чата сотрудников по данной карточке."""
+        self._open_card_chat_dialog("employee")
+
+    def _open_card_client_chat(self):
+        """Открыть окно чата с клиентом по данной карточке."""
+        self._open_card_chat_dialog("client")
+
+    def _open_card_chat_dialog(self, chat_type: str):
+        from PyQt5.QtCore import Qt as _Qt
+        from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
+        from ui.card_chat_widget import CardChatWidget
+        from ui.custom_title_bar import CustomTitleBar
+
+        crm_card_id = self.card_data.get("id")
+        if not crm_card_id:
+            return
+
+        title = "Чат сотрудников" if chat_type == "employee" else "Чат с клиентом"
+        attr = f"_card_chat_dlg_{chat_type}"
+        existing = getattr(self, attr, None)
+        if existing:
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+        dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+        dlg.setMinimumSize(700, 500)
+        dlg.resize(820, 600)
+
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(1, 1, 1, 1)
+        outer.setSpacing(0)
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet("""
+            QFrame#borderFrame {
+                background: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+            }
+        """)
+        outer.addWidget(frame)
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(0)
+
+        title_bar = CustomTitleBar(dlg, title, simple_mode=True)
+        title_bar.setStyleSheet("""
+            CustomTitleBar {
+                background: #FFFFFF; border-bottom: 1px solid #E0E0E0;
+                border-top-left-radius: 10px; border-top-right-radius: 10px;
+            }
+        """)
+        fl.addWidget(title_bar)
+
+        widget = CardChatWidget(
+            contract_id=crm_card_id,
+            chat_type=chat_type,
+            employee=self.employee,
+            api_client=self.api_client,
+            parent=dlg,
+        )
+        widget.setStyleSheet("""
+            CardChatWidget {
+                border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
+            }
+        """)
+        fl.addWidget(widget)
+
+        dlg.destroyed.connect(lambda: setattr(self, attr, None))
+        setattr(self, attr, dlg)
+        dlg.exec_()
+
+    # ====== Двойная функция приглашения в чат ======
+
+    def _invite_employee_show_menu(self, combo: QComboBox, role: str, btn: QPushButton):
+        """Показать меню выбора: внутренний чат или Telegram."""
+        from PyQt5.QtWidgets import QMenu
+
+        emp_id = combo.currentData()
+        if not emp_id:
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu { background: #fff; border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 0; }
+            QMenu::item { padding: 6px 16px; font-size: 12px; }
+            QMenu::item:selected { background: #E3F2FD; }
+        """)
+
+        act_internal = menu.addAction("Во внутренний чат (сотрудников)")
+        has_telegram = bool(getattr(self, "_messenger_chat_data", None) and self._messenger_chat_data.get("chat", {}).get("is_active"))
+        act_telegram = None
+        if has_telegram:
+            menu.addSeparator()
+            act_telegram = menu.addAction("В Telegram-чат")
+
+        chosen = menu.exec_(btn.mapToGlobal(btn.rect().bottomLeft()))
+        if chosen == act_internal:
+            self._invite_employee_to_internal_chat(combo, role)
+        elif act_telegram and chosen == act_telegram:
+            self._invite_employee_to_chat(combo, role)
+
+    def _invite_employee_to_internal_chat(self, combo: QComboBox, role: str):
+        """Добавить сотрудника участником внутреннего чата сотрудников для данной карточки."""
+        from ui.custom_message_box import CustomMessageBox
+
+        emp_id = combo.currentData()
+        if not emp_id:
+            return
+        crm_card_id = self.card_data.get("id")
+        if not crm_card_id:
+            return
+
+        import threading
+
+        def _worker():
+            error = None
+            msg = None
+            try:
+                chats = self.api_client.get_internal_chats(chat_type="employee", crm_card_id=crm_card_id)
+                active = next((c for c in (chats or []) if c.get("is_active", True)), None)
+                if not active:
+                    error = "Чат сотрудников не создан для этой карточки"
+                else:
+                    ok = self.api_client.add_chat_member(active["id"], emp_id)
+                    if ok:
+                        msg = f"{combo.currentText()} добавлен во внутренний чат сотрудников"
+                    else:
+                        error = "Не удалось добавить участника"
+            except Exception as e:
+                err_str = str(e)
+                error = err_str.split("): ", 1)[1] if "): " in err_str else err_str
+            self._chat_action_finished.emit(msg, error)
+
+        self._start_chat_action()
         threading.Thread(target=_worker, daemon=True).start()
 
     def _on_chat_admin(self):
@@ -8013,42 +8137,8 @@ class CardEditDialog(QDialog):
                 self.deadline_display.setText(d.toString("dd.MM.yyyy"))
 
     def _init_card_chat_tabs(self):
-        """Инициализация чат-вкладок в карточке CRM."""
-        contract_id = self.card_data.get("contract_id") or self.card_data.get("id")
-        if not contract_id:
-            return
-        try:
-            from ui.card_chat_widget import CardChatWidget
-        except ImportError:
-            return
-
-        if self._employee_chat_tab_index >= 0:
-            try:
-                w = CardChatWidget(
-                    contract_id=contract_id,
-                    chat_type="employee",
-                    employee=self.employee,
-                    api_client=self.api_client,
-                    parent=self,
-                )
-                self.tabs.removeTab(self._employee_chat_tab_index)
-                self.tabs.insertTab(self._employee_chat_tab_index, w, "Чат сотрудников")
-            except Exception as e:
-                print(f"[CardEditDialog] Ошибка чат-вкладки (employee): {e}")
-
-        if self._client_chat_tab_index >= 0:
-            try:
-                w = CardChatWidget(
-                    contract_id=contract_id,
-                    chat_type="client",
-                    employee=self.employee,
-                    api_client=self.api_client,
-                    parent=self,
-                )
-                self.tabs.removeTab(self._client_chat_tab_index)
-                self.tabs.insertTab(self._client_chat_tab_index, w, "Чат с клиентом")
-            except Exception as e:
-                print(f"[CardEditDialog] Ошибка чат-вкладки (client): {e}")
+        """Чаты теперь открываются кнопками внизу, не вкладками."""
+        pass
 
     def _update_project_data_file_labels(self):
         """Обновить labels файлов ТЗ/замер/референсов из кэшированного контракта.

@@ -263,6 +263,31 @@ class MainWindow(QMainWindow):
         info_label.setStyleSheet("font-size: 11px; color: #999; font-weight: 400;")
         info_bar_layout.addWidget(info_label)
 
+        _btn_css = """
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; padding: 0;
+            }
+            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
+        """
+
+        # Кнопки чатов — первыми, перед настройками
+        if EmployeeChatsTab and _has_perm(self.employee, self.api_client, "chat.employee.view"):
+            emp_chat_btn = _IconLoader.create_icon_button("message-circle", "", "Чат сотрудников", icon_size=12)
+            emp_chat_btn.setFixedSize(22, 22)
+            emp_chat_btn.setStyleSheet(_btn_css)
+            emp_chat_btn.setCursor(Qt.PointingHandCursor)
+            emp_chat_btn.clicked.connect(self._open_employee_chat_window)
+            info_bar_layout.addWidget(emp_chat_btn)
+
+        if ClientChatsTab and _has_perm(self.employee, self.api_client, "chat.client.view"):
+            cli_chat_btn = _IconLoader.create_icon_button("message-circle", "", "Чат с клиентами", icon_size=12)
+            cli_chat_btn.setFixedSize(22, 22)
+            cli_chat_btn.setStyleSheet(_btn_css)
+            cli_chat_btn.setCursor(Qt.PointingHandCursor)
+            cli_chat_btn.clicked.connect(self._open_client_chat_window)
+            info_bar_layout.addWidget(cli_chat_btn)
+
         # Маленькая квадратная кнопка настроек уведомлений — после имени
         notif_btn = _IconLoader.create_icon_button("settings", "", "Настройки уведомлений", icon_size=12)
         notif_btn.setFixedSize(22, 22)
@@ -1298,15 +1323,7 @@ class MainWindow(QMainWindow):
 
         # Аналитика сотрудников интегрирована в «Отчеты по сотрудникам»
 
-        # === Чаты сотрудников ===
-        if EmployeeChatsTab and _has_perm(self.employee, self.api_client, "chat.employee.view"):
-            self.employee_chats_tab = None
-            tab_configs.append(("  Чат сотрудников  ", "employee_chats_tab", lambda: EmployeeChatsTab(self.employee, api_client=self.api_client, parent=self), None))
-
-        # === Чаты с клиентами ===
-        if ClientChatsTab and _has_perm(self.employee, self.api_client, "chat.client.view"):
-            self.client_chats_tab = None
-            tab_configs.append(("  Чат с клиентами  ", "client_chats_tab", lambda: ClientChatsTab(self.employee, api_client=self.api_client, parent=self), None))
+        # Чаты вынесены в кнопки info_bar (открываются отдельными окнами)
 
         # Первую вкладку создаём сразу, остальные — lazy placeholder
         for i, (tab_label, attr_name, factory, sync_info) in enumerate(tab_configs):
@@ -1788,6 +1805,107 @@ class MainWindow(QMainWindow):
         border_layout.addWidget(widget)
 
         dlg.exec_()
+
+    # ========== ОКНА ЧАТОВ ==========
+    def _open_employee_chat_window(self):
+        """Открыть окно чата сотрудников (singleton, немодальный)."""
+        if not getattr(self, "_employee_chat_win", None):
+            try:
+                from ui.employee_chats_tab import EmployeeChatsTab
+            except ImportError:
+                return
+            from PyQt5.QtCore import Qt as _Qt
+            from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
+            from ui.custom_title_bar import CustomTitleBar
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Чат сотрудников")
+            dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+            dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+            dlg.setMinimumSize(860, 560)
+            dlg.resize(960, 640)
+
+            outer = QVBoxLayout(dlg)
+            outer.setContentsMargins(1, 1, 1, 1)
+            outer.setSpacing(0)
+            frame = QFrame()
+            frame.setObjectName("borderFrame")
+            frame.setStyleSheet("""
+                QFrame#borderFrame {
+                    background: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+                }
+            """)
+            outer.addWidget(frame)
+            fl = QVBoxLayout(frame)
+            fl.setContentsMargins(0, 0, 0, 0)
+            fl.setSpacing(0)
+            title_bar = CustomTitleBar(dlg, "Чат сотрудников", simple_mode=True)
+            title_bar.setStyleSheet("""
+                CustomTitleBar {
+                    background: #FFFFFF; border-bottom: 1px solid #E0E0E0;
+                    border-top-left-radius: 10px; border-top-right-radius: 10px;
+                }
+            """)
+            fl.addWidget(title_bar)
+            tab = EmployeeChatsTab(self.employee, api_client=self.api_client, parent=dlg)
+            fl.addWidget(tab)
+            dlg.destroyed.connect(lambda: setattr(self, "_employee_chat_win", None))
+            self._employee_chat_win = dlg
+
+        self._employee_chat_win.show()
+        self._employee_chat_win.raise_()
+        self._employee_chat_win.activateWindow()
+
+    def _open_client_chat_window(self):
+        """Открыть окно чата с клиентами (singleton, немодальный)."""
+        if not getattr(self, "_client_chat_win", None):
+            try:
+                from ui.client_chats_tab import ClientChatsTab
+            except ImportError:
+                return
+            from PyQt5.QtCore import Qt as _Qt
+            from PyQt5.QtWidgets import QDialog, QFrame, QVBoxLayout
+
+            from ui.custom_title_bar import CustomTitleBar
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Чат с клиентами")
+            dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
+            dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
+            dlg.setMinimumSize(860, 560)
+            dlg.resize(960, 640)
+
+            outer = QVBoxLayout(dlg)
+            outer.setContentsMargins(1, 1, 1, 1)
+            outer.setSpacing(0)
+            frame = QFrame()
+            frame.setObjectName("borderFrame")
+            frame.setStyleSheet("""
+                QFrame#borderFrame {
+                    background: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 10px;
+                }
+            """)
+            outer.addWidget(frame)
+            fl = QVBoxLayout(frame)
+            fl.setContentsMargins(0, 0, 0, 0)
+            fl.setSpacing(0)
+            title_bar = CustomTitleBar(dlg, "Чат с клиентами", simple_mode=True)
+            title_bar.setStyleSheet("""
+                CustomTitleBar {
+                    background: #FFFFFF; border-bottom: 1px solid #E0E0E0;
+                    border-top-left-radius: 10px; border-top-right-radius: 10px;
+                }
+            """)
+            fl.addWidget(title_bar)
+            tab = ClientChatsTab(self.employee, api_client=self.api_client, parent=dlg)
+            fl.addWidget(tab)
+            dlg.destroyed.connect(lambda: setattr(self, "_client_chat_win", None))
+            self._client_chat_win = dlg
+
+        self._client_chat_win.show()
+        self._client_chat_win.raise_()
+        self._client_chat_win.activateWindow()
 
     # ========== СИСТЕМА ОБНОВЛЕНИЯ ПРОГРАММЫ ==========
     def check_for_updates_manual(self):
