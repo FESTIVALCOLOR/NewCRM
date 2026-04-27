@@ -148,9 +148,11 @@ class CardChatWidget(QWidget):
 
     def _replace_content(self, new_widget):
         """Заменяем содержимое на новый виджет."""
-        old = self._layout.itemAt(0)
-        if old and old.widget():
-            old.widget().deleteLater()
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            w = item.widget()
+            if w and w is not new_widget:
+                w.deleteLater()
         self._layout.addWidget(new_widget)
 
     def _create_chat(self):

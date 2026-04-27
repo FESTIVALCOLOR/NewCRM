@@ -307,8 +307,6 @@ class ChatRoomWidget(QWidget):
         self._render_all_messages()
 
     def _render_all_messages(self):
-        # Stretch стоит на позиции 0 (прижимает сообщения к низу).
-        # Удаляем всё после stretch (позиции 1, 2, …).
         layout = self._messages_layout
         while layout.count() > 1:
             item = layout.takeAt(1)
@@ -319,18 +317,23 @@ class ChatRoomWidget(QWidget):
         for msg in self._messages:
             is_own = msg.get("sender_employee_id") == my_id
             bubble = ChatMessageBubble(msg, is_own)
-            layout.addWidget(bubble)  # добавляем после stretch
+            layout.addWidget(bubble)
 
+        self._messages_widget.update()
         self._scroll_to_bottom()
 
     def _append_message(self, msg: dict):
         """Добавить одно новое сообщение без перерисовки всех."""
+        msg_id = msg.get("id")
+        if msg_id and any(m.get("id") == msg_id for m in self._messages):
+            return
         my_id = self._employee.get("id")
         is_own = msg.get("sender_employee_id") == my_id
         bubble = ChatMessageBubble(msg, is_own)
         layout = self._messages_layout
-        layout.addWidget(bubble)  # добавляем в конец (после всех сообщений)
+        layout.addWidget(bubble)
         self._messages.append(msg)
+        self._messages_widget.update()
         self._scroll_to_bottom()
 
     def _scroll_to_bottom(self):
