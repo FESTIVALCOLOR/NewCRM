@@ -307,10 +307,11 @@ class ChatRoomWidget(QWidget):
         self._render_all_messages()
 
     def _render_all_messages(self):
-        # Удаляем старые пузыри (кроме stretch в конце)
+        # Stretch стоит на позиции 0 (прижимает сообщения к низу).
+        # Удаляем всё после stretch (позиции 1, 2, …).
         layout = self._messages_layout
         while layout.count() > 1:
-            item = layout.takeAt(0)
+            item = layout.takeAt(1)
             if item.widget():
                 item.widget().deleteLater()
 
@@ -318,7 +319,7 @@ class ChatRoomWidget(QWidget):
         for msg in self._messages:
             is_own = msg.get("sender_employee_id") == my_id
             bubble = ChatMessageBubble(msg, is_own)
-            layout.insertWidget(layout.count() - 1, bubble)
+            layout.addWidget(bubble)  # добавляем после stretch
 
         self._scroll_to_bottom()
 
@@ -328,7 +329,7 @@ class ChatRoomWidget(QWidget):
         is_own = msg.get("sender_employee_id") == my_id
         bubble = ChatMessageBubble(msg, is_own)
         layout = self._messages_layout
-        layout.insertWidget(layout.count() - 1, bubble)
+        layout.addWidget(bubble)  # добавляем в конец (после всех сообщений)
         self._messages.append(msg)
         self._scroll_to_bottom()
 
