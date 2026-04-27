@@ -161,5 +161,5 @@ class ChatMixin:
     def get_chat_ws_url(self, chat_id: int) -> str:
         """Вернуть URL для WebSocket подключения сотрудника."""
         base = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
-        token = getattr(self, "_token", "") or ""
+        token = getattr(self, "token", "") or ""
         return f"{base}/api/v1/ws/chat/{chat_id}?token={token}"
