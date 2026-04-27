@@ -137,11 +137,12 @@ class CardChatWidget(QWidget):
 
         room = ChatRoomWidget(
             chat_id=chat_info["id"],
-            title=chat_info.get("title", "Чат"),
+            chat_type=self._chat_type,
             employee=self._employee,
             api_client=self._api_client,
             parent=self,
         )
+        room.set_title(chat_info.get("title", "Чат"))
         self._chat_room = room
         self._replace_content(room)
 
