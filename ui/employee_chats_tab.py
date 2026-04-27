@@ -9,7 +9,7 @@
 
 import threading
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -34,12 +34,15 @@ class EmployeeChatsTab(QWidget):
     api_client : APIClient
     """
 
+    _sig_chats = pyqtSignal(object)  # list[dict] — thread-safe обновление списка чатов
+
     def __init__(self, employee: dict, api_client, parent=None):
         super().__init__(parent)
         self._employee = employee
         self._api = api_client
         self._chats = []
         self._current_room: ChatRoomWidget | None = None
+        self._sig_chats.connect(self._fill_list)
         self._setup_ui()
         self._load_chats()
 
@@ -145,7 +148,7 @@ class EmployeeChatsTab(QWidget):
     def _load_chats(self):
         def _worker():
             chats = self._api.get_internal_chats(chat_type="employee")
-            QTimer.singleShot(0, lambda: self._fill_list(chats))
+            self._sig_chats.emit(chats or [])  # thread-safe через сигнал
 
         threading.Thread(target=_worker, daemon=True).start()
 

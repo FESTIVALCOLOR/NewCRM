@@ -10,7 +10,8 @@ ChatRoomWidget — основной виджет чат-комнаты.
   - Загружает историю (REST) при открытии
   - Поддерживает отправку текста, файлов, голосовых
   - Подключается к WebSocket для real-time сообщений
-  - PyQt Signal Safety: WS-сообщения приходят через QTimer.singleShot(0, ...)
+  - PyQt Signal Safety: все UI-обновления из фоновых потоков — через pyqtSignal,
+    НЕ через QTimer.singleShot (он не срабатывает из threading.Thread в PyQt5 5.15)
 """
 
 import io
@@ -53,7 +54,7 @@ except ImportError:
 
 
 class ChatWebSocketWorker(threading.Thread):
-    """Фоновый поток WebSocket. Emit через signal_bridge для thread safety."""
+    """Фоновый поток WebSocket."""
 
     def __init__(self, url: str, on_message, on_error, on_close, on_open):
         super().__init__(daemon=True)
@@ -81,7 +82,7 @@ class ChatWebSocketWorker(threading.Thread):
             except Exception as e:
                 logger.warning(f"WS error: {e}")
             if self._running:
-                time.sleep(5)  # Переподключение через 5 сек
+                time.sleep(5)
 
     def send(self, data: dict):
         if self._ws:
@@ -111,8 +112,15 @@ class ChatRoomWidget(QWidget):
     api_client : APIClient
     """
 
-    # Сигнал: новое непрочитанное сообщение (для бейджа в списке)
+    # Публичный сигнал: новое непрочитанное сообщение
     unread_changed = pyqtSignal(int, int)  # (chat_id, unread_count)
+
+    # Приватные сигналы для thread-safe передачи данных из фоновых потоков.
+    # QTimer.singleShot НЕ работает из threading.Thread в PyQt5 5.15 —
+    # только pyqtSignal гарантированно доставляется в GUI-поток.
+    _sig_messages_ready = pyqtSignal(object, object)  # (chat_dict|None, msgs_list)
+    _sig_new_msg = pyqtSignal(object)  # msg dict
+    _sig_ws_data = pyqtSignal(object)  # ws event dict
 
     def __init__(self, chat_id: int, chat_type: str, employee: dict, api_client, parent=None):
         super().__init__(parent)
@@ -121,9 +129,15 @@ class ChatRoomWidget(QWidget):
         self._employee = employee
         self._api = api_client
         self._ws_worker: Optional[ChatWebSocketWorker] = None
-        self._messages = []  # кэш сообщений
+        self._messages = []
         self._typing_timer = None
         self._is_typing = False
+
+        # Подключаем сигналы ДО setup_ui, чтобы они были готовы когда придут данные
+        self._sig_messages_ready.connect(self._on_messages_loaded)
+        self._sig_new_msg.connect(self._append_message)
+        self._sig_ws_data.connect(self._handle_ws_event)
+
         self._setup_ui()
         self._load_messages()
         self._connect_websocket()
@@ -155,7 +169,6 @@ class ChatRoomWidget(QWidget):
 
         h_layout.addStretch()
 
-        # Кнопка участников
         members_btn = QPushButton("Участники")
         members_btn.setFixedHeight(28)
         members_btn.setStyleSheet("""
@@ -182,16 +195,14 @@ class ChatRoomWidget(QWidget):
         # ---------- MESSAGES AREA ----------
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        self._scroll.setStyleSheet("""
-            QScrollArea { border: none; background: #FFFFFF; }
-        """)
+        self._scroll.setStyleSheet("QScrollArea { border: none; background: #FFFFFF; }")
 
         self._messages_widget = QWidget()
         self._messages_widget.setStyleSheet("background: #FFFFFF;")
         self._messages_layout = QVBoxLayout(self._messages_widget)
         self._messages_layout.setContentsMargins(8, 8, 8, 8)
         self._messages_layout.setSpacing(2)
-        self._messages_layout.addStretch()  # прижимает сообщения к низу
+        self._messages_layout.addStretch()  # index 0 — прижимает сообщения к низу
 
         self._scroll.setWidget(self._messages_widget)
         main_layout.addWidget(self._scroll, stretch=1)
@@ -209,11 +220,9 @@ class ChatRoomWidget(QWidget):
         i_layout.setContentsMargins(8, 6, 8, 6)
         i_layout.setSpacing(4)
 
-        # Строка ввода
         row = QHBoxLayout()
         row.setSpacing(6)
 
-        # Скрепка — выбор файла
         attach_btn = QPushButton("📎")
         attach_btn.setFixedSize(32, 32)
         attach_btn.setToolTip("Прикрепить файл")
@@ -227,7 +236,6 @@ class ChatRoomWidget(QWidget):
         attach_btn.clicked.connect(self._attach_file)
         row.addWidget(attach_btn)
 
-        # Голосовое
         voice_btn = QPushButton("🎤")
         voice_btn.setFixedSize(32, 32)
         voice_btn.setCheckable(True)
@@ -244,7 +252,6 @@ class ChatRoomWidget(QWidget):
         self._voice_btn = voice_btn
         row.addWidget(voice_btn)
 
-        # Поле ввода
         self._input = QTextEdit()
         self._input.setFixedHeight(44)
         self._input.setPlaceholderText("Введите сообщение... (Enter — отправить, Shift+Enter — перенос)")
@@ -260,7 +267,6 @@ class ChatRoomWidget(QWidget):
         self._input.textChanged.connect(self._on_input_changed)
         row.addWidget(self._input, stretch=1)
 
-        # Кнопка отправить
         send_btn = QPushButton("Отправить")
         send_btn.setFixedHeight(44)
         send_btn.setStyleSheet("""
@@ -281,7 +287,6 @@ class ChatRoomWidget(QWidget):
         i_layout.addLayout(row)
         main_layout.addWidget(input_frame)
 
-        # Enter — отправить, Shift+Enter — перенос строки
         send_shortcut = QShortcut(QKeySequence(Qt.Key_Return), self._input)
         send_shortcut.activated.connect(self._send_text)
 
@@ -290,24 +295,24 @@ class ChatRoomWidget(QWidget):
     # ===========================================================
 
     def _load_messages(self):
-        """Загрузить историю через REST."""
+        """Загрузить историю через REST. Результат передаётся через сигнал."""
 
         def _worker():
             chat = self._api.get_internal_chat(self._chat_id)
             msgs = self._api.get_chat_messages(self._chat_id, limit=50)
-            QTimer.singleShot(0, lambda: self._on_messages_loaded(chat, msgs))
+            self._sig_messages_ready.emit(chat, msgs or [])
 
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
+        threading.Thread(target=_worker, daemon=True).start()
 
-    def _on_messages_loaded(self, chat: Optional[dict], msgs: list):
+    def _on_messages_loaded(self, chat, msgs):
         if chat:
             self._title_lbl.setText(chat.get("title") or "Чат")
-        self._messages = msgs or []
+        self._messages = list(msgs) if msgs else []
         self._render_all_messages()
 
     def _render_all_messages(self):
         layout = self._messages_layout
+        # Оставляем stretch на позиции 0, удаляем все пузыри (позиции 1+)
         while layout.count() > 1:
             item = layout.takeAt(1)
             if item.widget():
@@ -322,21 +327,23 @@ class ChatRoomWidget(QWidget):
         self._messages_widget.update()
         self._scroll_to_bottom()
 
-    def _append_message(self, msg: dict):
-        """Добавить одно новое сообщение без перерисовки всех."""
+    def _append_message(self, msg):
+        """Добавить одно сообщение. Вызывается из GUI-потока через сигнал."""
+        if not isinstance(msg, dict):
+            return
         msg_id = msg.get("id")
         if msg_id and any(m.get("id") == msg_id for m in self._messages):
             return
         my_id = self._employee.get("id")
         is_own = msg.get("sender_employee_id") == my_id
         bubble = ChatMessageBubble(msg, is_own)
-        layout = self._messages_layout
-        layout.addWidget(bubble)
+        self._messages_layout.addWidget(bubble)
         self._messages.append(msg)
         self._messages_widget.update()
         self._scroll_to_bottom()
 
     def _scroll_to_bottom(self):
+        # Вызывается из GUI-потока — QTimer здесь работает корректно
         QTimer.singleShot(50, lambda: self._scroll.verticalScrollBar().setValue(self._scroll.verticalScrollBar().maximum()))
 
     # ===========================================================
@@ -345,7 +352,6 @@ class ChatRoomWidget(QWidget):
 
     def _connect_websocket(self):
         if not _WS_AVAILABLE:
-            # Fallback: polling каждые 10 сек
             self._poll_timer = QTimer(self)
             self._poll_timer.timeout.connect(self._poll_new_messages)
             self._poll_timer.start(10000)
@@ -358,8 +364,7 @@ class ChatRoomWidget(QWidget):
                 data = json.loads(raw)
             except Exception:
                 return
-            # Thread safety: передаём в UI через QTimer
-            QTimer.singleShot(0, lambda d=data: self._handle_ws_event(d))
+            self._sig_ws_data.emit(data)  # thread-safe через сигнал
 
         def on_error(err):
             logger.warning(f"Chat WS error: {err}")
@@ -373,15 +378,16 @@ class ChatRoomWidget(QWidget):
         self._ws_worker = ChatWebSocketWorker(ws_url, on_message, on_error, on_close, on_open)
         self._ws_worker.start()
 
-    def _handle_ws_event(self, data: dict):
+    def _handle_ws_event(self, data):
+        if not isinstance(data, dict):
+            return
         event = data.get("type")
         if event == "new_message":
             msg = data.get("message", {})
             self._append_message(msg)
         elif event == "typing":
             if data.get("is_typing"):
-                name = data.get("name", "")
-                self._typing_lbl.setText(f"{name} печатает…")
+                self._typing_lbl.setText(f"{data.get('name', '')} печатает…")
             else:
                 self._typing_lbl.setText("")
         elif event == "message_deleted":
@@ -398,8 +404,8 @@ class ChatRoomWidget(QWidget):
         def _worker():
             msgs = self._api.get_chat_messages(self._chat_id, limit=50)
             if msgs and len(msgs) > len(self._messages):
-                new = msgs[len(self._messages) :]
-                QTimer.singleShot(0, lambda: [self._append_message(m) for m in new])
+                for m in msgs[len(self._messages) :]:
+                    self._sig_new_msg.emit(m)  # thread-safe через сигнал
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -413,7 +419,6 @@ class ChatRoomWidget(QWidget):
             self._is_typing = True
             if self._ws_worker:
                 self._ws_worker.send({"type": "typing_start"})
-        # Таймер окончания печати
         if self._typing_timer:
             self._typing_timer.stop()
         self._typing_timer = QTimer(self)
@@ -437,7 +442,7 @@ class ChatRoomWidget(QWidget):
         def _worker():
             msg = self._api.send_chat_message(self._chat_id, text)
             if msg:
-                QTimer.singleShot(0, lambda: self._append_message(msg))
+                self._sig_new_msg.emit(msg)  # thread-safe через сигнал
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -454,12 +459,11 @@ class ChatRoomWidget(QWidget):
                 data = f.read()
             result = self._api.upload_chat_file(self._chat_id, data, fname, message_type=msg_type)
             if result:
-                QTimer.singleShot(0, lambda: self._append_message(result))
+                self._sig_new_msg.emit(result)  # thread-safe через сигнал
 
         threading.Thread(target=_worker, daemon=True).start()
 
     def _toggle_voice(self):
-        """Запись голосового — заглушка, реализуется через VoiceRecorder."""
         from PyQt5.QtWidgets import QMessageBox
 
         self._voice_btn.setChecked(False)
@@ -480,7 +484,6 @@ class ChatRoomWidget(QWidget):
     # ===========================================================
 
     def refresh(self):
-        """Перезагрузить сообщения."""
         self._load_messages()
 
     def set_title(self, title: str):
@@ -496,9 +499,7 @@ class ChatRoomWidget(QWidget):
         super().closeEvent(event)
 
     def hideEvent(self, event):
-        """Останавливаем WS при скрытии вкладки."""
         super().hideEvent(event)
 
     def showEvent(self, event):
-        """Переподключаемся при показе."""
         super().showEvent(event)

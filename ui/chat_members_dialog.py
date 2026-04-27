@@ -4,7 +4,7 @@
 
 import threading
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -24,6 +24,9 @@ from ui.custom_title_bar import CustomTitleBar
 class ChatMembersDialog(QDialog):
     """Просмотр и добавление участников чата."""
 
+    _sig_data = pyqtSignal(object, object)  # (members_list, employees_list)
+    _sig_reload = pyqtSignal()  # сигнал перезагрузить данные
+
     def __init__(self, chat_id: int, chat_type: str, employee: dict, api_client, parent=None):
         super().__init__(parent)
         self._chat_id = chat_id
@@ -36,6 +39,8 @@ class ChatMembersDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumWidth(400)
+        self._sig_data.connect(self._fill_data)
+        self._sig_reload.connect(self._load_data)
         self._setup_ui()
         self._load_data()
 
@@ -141,7 +146,7 @@ class ChatMembersDialog(QDialog):
             chat = self._api.get_internal_chat(self._chat_id)
             members = chat.get("members", []) if chat else []
             employees = self._api.get_employees() or []
-            QTimer.singleShot(0, lambda: self._fill_data(members, employees))
+            self._sig_data.emit(members, employees)  # thread-safe через сигнал
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -180,7 +185,7 @@ class ChatMembersDialog(QDialog):
 
         def _worker():
             self._api.add_chat_member(self._chat_id, emp_id)
-            QTimer.singleShot(0, self._load_data)
+            self._sig_reload.emit()  # thread-safe — перезагрузить список
 
         threading.Thread(target=_worker, daemon=True).start()
         self._add_panel.setVisible(False)

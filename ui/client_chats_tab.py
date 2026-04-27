@@ -39,6 +39,8 @@ class ClientChatsTab(QWidget):
     api_client : APIClient
     """
 
+    _sig_chats = pyqtSignal(object)  # list[dict] — thread-safe обновление списка
+
     def __init__(self, employee: dict, api_client, parent=None):
         super().__init__(parent)
         self._employee = employee
@@ -48,6 +50,7 @@ class ClientChatsTab(QWidget):
         self._current_chat: dict | None = None
         self._can_manage = _has_perm(employee, api_client, "chat.client.manage")
         self._can_script = _has_perm(employee, api_client, "chat.client.send_script")
+        self._sig_chats.connect(self._fill_list)
         self._setup_ui()
         self._load_chats()
 
@@ -234,7 +237,7 @@ class ClientChatsTab(QWidget):
     def _load_chats(self):
         def _worker():
             chats = self._api.get_internal_chats(chat_type="client")
-            QTimer.singleShot(0, lambda c=chats: self._fill_list(c))
+            self._sig_chats.emit(chats or [])  # thread-safe через сигнал
 
         threading.Thread(target=_worker, daemon=True).start()
 
