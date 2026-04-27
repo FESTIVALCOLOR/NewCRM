@@ -98,11 +98,16 @@ class CardChatWidget(QWidget):
             QTimer.singleShot(50, self._load_chat)
 
     def _load_chat(self):
-        """Ищем активный чат для данного contract_id."""
+        """Ищем активный чат для данного crm_card_id.
+
+        Передаём crm_card_id явно — сервер использует get_card_chat_for_employee,
+        которая автоматически добавляет сотрудника в участники при первом доступе.
+        """
         try:
+            # ВАЖНО: crm_card_id (не contract_id!) — сервер применяет auto-membership
             chats = self._api_client.get_internal_chats(
                 chat_type=self._chat_type,
-                contract_id=self._contract_id,
+                crm_card_id=self._contract_id,
             )
         except Exception as e:
             print(f"[CardChatWidget] Ошибка загрузки чатов: {e}")
@@ -153,12 +158,12 @@ class CardChatWidget(QWidget):
             if self._chat_type == "employee":
                 result = self._api_client.create_internal_chat(
                     chat_type="employee",
-                    contract_id=self._contract_id,
+                    crm_card_id=self._contract_id,
                 )
             else:
                 result = self._api_client.create_internal_chat(
                     chat_type="client",
-                    contract_id=self._contract_id,
+                    crm_card_id=self._contract_id,
                 )
             if result:
                 self._open_room(result)

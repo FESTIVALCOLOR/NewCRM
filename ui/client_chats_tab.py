@@ -78,10 +78,24 @@ class ClientChatsTab(QWidget):
         hdr.setFixedHeight(48)
         hdr.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
         hh = QHBoxLayout(hdr)
-        hh.setContentsMargins(12, 0, 12, 0)
+        hh.setContentsMargins(12, 0, 8, 0)
         title = QLabel("Чаты с клиентами")
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
-        hh.addWidget(title)
+        hh.addWidget(title, stretch=1)
+        from PyQt5.QtWidgets import QPushButton
+
+        refresh_btn = QPushButton("↻")
+        refresh_btn.setFixedSize(28, 28)
+        refresh_btn.setToolTip("Обновить список чатов")
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid transparent;
+                border-radius: 4px; font-size: 14px; color: #666;
+            }
+            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
+        """)
+        refresh_btn.clicked.connect(self._load_chats)
+        hh.addWidget(refresh_btn)
         lv.addWidget(hdr)
 
         # Поиск
@@ -208,6 +222,10 @@ class ClientChatsTab(QWidget):
             h.addWidget(invite_btn)
 
         return panel
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._load_chats()
 
     # ===========================================================
     # Загрузка и фильтрация
