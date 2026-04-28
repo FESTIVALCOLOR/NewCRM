@@ -327,11 +327,7 @@ class ClientChatsTab(QWidget):
         """Обновить панель управления для выбранного чата."""
         token = chat.get("client_access_token", "")
         if token:
-            # Формируем URL клиентского чата
-            from config import SERVER_URL
-
-            base = SERVER_URL.rstrip("/")
-            # Для PWA используем mobile-порт или тот же домен
+            base = self._api.base_url.rstrip("/")
             link = f"{base}/c/{token}"
             short = link[:50] + "…" if len(link) > 50 else link
             self._link_value.setText(short)
@@ -372,9 +368,7 @@ class ClientChatsTab(QWidget):
             result = self._api.create_client_invite_link(self._current_chat["id"])
             if result:
                 token = result.get("access_token", "")
-                from config import SERVER_URL
-
-                link = f"{SERVER_URL.rstrip('/')}/c/{token}"
+                link = f"{self._api.base_url.rstrip('/')}/c/{token}"
                 InviteLinkDialog(link=link, parent=self).exec_()
         except Exception as e:
             print(f"[ClientChatsTab] Ошибка создания ссылки-приглашения: {e}")
