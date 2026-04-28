@@ -12,6 +12,8 @@ message_type:
     system — серый курсив по центру
 """
 
+from datetime import datetime
+
 from PyQt5.QtCore import Qt, QTimer, QUrl
 from PyQt5.QtGui import QDesktopServices, QFont, QPixmap
 from PyQt5.QtWidgets import (
@@ -87,7 +89,8 @@ class ChatMessageBubble(QWidget):
         bubble.setObjectName("bubble")
         bubble.setStyleSheet(_STYLE_OWN if self._is_own else _STYLE_OTHER)
         bubble.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        bubble.setMaximumWidth(420)
+        bubble.setMinimumWidth(120)
+        bubble.setMaximumWidth(460)
 
         v = QVBoxLayout(bubble)
         v.setContentsMargins(10, 6, 10, 6)
@@ -113,8 +116,8 @@ class ChatMessageBubble(QWidget):
 
         # Время
         ts = self._msg.get("created_at", "")
-        if ts and len(ts) >= 16:
-            time_str = ts[11:16]  # HH:MM из ISO строки
+        if ts:
+            time_str = self._format_ts(ts)
             time_lbl = QLabel(time_str)
             time_lbl.setStyleSheet("font-size: 9px; color: #999;")
             time_lbl.setAlignment(Qt.AlignRight)
@@ -128,6 +131,24 @@ class ChatMessageBubble(QWidget):
             outer.addWidget(spacer)
 
     # ----------------------------------------------------------
+    @staticmethod
+    def _format_ts(ts: str) -> str:
+        """UTC ISO → локальное время. Если не сегодня — добавляет дд.мм."""
+        try:
+            clean = ts.rstrip("Z").replace("+00:00", "")
+            dt_utc = datetime.fromisoformat(clean).replace(tzinfo=None)
+            # fromisoformat без tzinfo → считаем UTC, конвертируем в local
+            import time as _time
+
+            epoch = (dt_utc - datetime(1970, 1, 1)).total_seconds()
+            local_dt = datetime.fromtimestamp(epoch)
+            today = datetime.now().date()
+            if local_dt.date() == today:
+                return local_dt.strftime("%H:%M")
+            return local_dt.strftime("%d.%m %H:%M")
+        except Exception:
+            return ts[11:16] if len(ts) >= 16 else ts
+
     def _build_system(self, outer: QHBoxLayout):
         lbl = QLabel(self._msg.get("content", ""))
         lbl.setAlignment(Qt.AlignCenter)

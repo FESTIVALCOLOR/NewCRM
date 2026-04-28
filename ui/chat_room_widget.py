@@ -196,6 +196,7 @@ class ChatRoomWidget(QWidget):
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setStyleSheet("QScrollArea { border: none; background: #FFFFFF; }")
+        self._scroll.viewport().setStyleSheet("background: #FFFFFF;")
 
         self._messages_widget = QWidget()
         self._messages_widget.setStyleSheet("background: #FFFFFF;")
