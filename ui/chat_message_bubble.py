@@ -14,13 +14,14 @@ message_type:
 
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtCore import Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QPixmap
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -62,11 +63,30 @@ class ChatMessageBubble(QWidget):
         False → левая (чужое)
     """
 
+    edit_requested = pyqtSignal(dict)
+    delete_requested = pyqtSignal(dict)
+    reply_requested = pyqtSignal(dict)
+
     def __init__(self, message: dict, is_own: bool, parent=None):
         super().__init__(parent)
         self._msg = message
         self._is_own = is_own
         self._setup_ui()
+
+    def contextMenuEvent(self, event):
+        if self._msg.get("message_type") == "system":
+            return
+        menu = QMenu(self)
+        reply_act = menu.addAction("Ответить")
+        reply_act.triggered.connect(lambda: self.reply_requested.emit(self._msg))
+        if self._is_own and not self._msg.get("is_deleted"):
+            if self._msg.get("message_type", "text") == "text":
+                edit_act = menu.addAction("Редактировать")
+                edit_act.triggered.connect(lambda: self.edit_requested.emit(self._msg))
+            menu.addSeparator()
+            del_act = menu.addAction("Удалить")
+            del_act.triggered.connect(lambda: self.delete_requested.emit(self._msg))
+        menu.exec_(event.globalPos())
 
     # ----------------------------------------------------------
     def _setup_ui(self):
@@ -115,10 +135,12 @@ class ChatMessageBubble(QWidget):
         else:
             self._build_text(v)
 
-        # Время
+        # Время + "изм."
         ts = self._msg.get("created_at", "")
         if ts:
             time_str = self._format_ts(ts)
+            if self._msg.get("is_edited"):
+                time_str = "изм. " + time_str
             time_lbl = QLabel(time_str)
             time_lbl.setStyleSheet("font-size: 9px; color: #999;")
             time_lbl.setAlignment(Qt.AlignRight)
@@ -160,14 +182,40 @@ class ChatMessageBubble(QWidget):
         outer.addStretch()
 
     def _build_text(self, layout: QVBoxLayout):
+        # Reply preview
+        reply = self._msg.get("reply_preview")
+        if reply and not self._msg.get("is_deleted"):
+            rb = QFrame()
+            rb.setStyleSheet("""
+                QFrame {
+                    background: rgba(0,0,0,0.06);
+                    border-left: 3px solid #aaa;
+                    border-radius: 4px;
+                }
+            """)
+            rbl = QVBoxLayout(rb)
+            rbl.setContentsMargins(6, 3, 6, 3)
+            rbl.setSpacing(1)
+            sender_lbl = QLabel(reply.get("sender_display_name", ""))
+            sender_lbl.setStyleSheet("font-weight: bold; font-size: 10px; color: #555;")
+            rbl.addWidget(sender_lbl)
+            rtext = reply.get("content") or ""
+            if reply.get("message_type") in ("image", "file", "voice"):
+                rtext = f"[{reply.get('message_type', 'файл')}]"
+            rtext_lbl = QLabel((rtext[:60] + "…") if len(rtext) > 60 else rtext)
+            rtext_lbl.setStyleSheet("font-size: 10px; color: #666;")
+            rbl.addWidget(rtext_lbl)
+            layout.addWidget(rb)
+
         content = self._msg.get("content") or ""
         if self._msg.get("is_deleted"):
-            content = "🗑 Сообщение удалено"
+            content = "Сообщение удалено"
         lbl = QLabel(content)
         lbl.setWordWrap(True)
         lbl.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         lbl.setOpenExternalLinks(True)
-        lbl.setStyleSheet("font-size: 13px; color: #222;")
+        style = "font-size: 13px; color: #999; font-style: italic;" if self._msg.get("is_deleted") else "font-size: 13px; color: #222;"
+        lbl.setStyleSheet(style)
         layout.addWidget(lbl)
 
     def _build_voice(self, layout: QVBoxLayout):

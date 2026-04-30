@@ -60,9 +60,19 @@ class ChatMixin:
         except Exception:
             return []
 
-    def send_chat_message(self, chat_id: int, content: str) -> Optional[dict[str, Any]]:
+    def send_chat_message(self, chat_id: int, content: str, reply_to_id: int = None) -> Optional[dict[str, Any]]:
         try:
-            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/messages", json={"content": content, "message_type": "text"})
+            payload = {"content": content, "message_type": "text"}
+            if reply_to_id:
+                payload["reply_to_id"] = reply_to_id
+            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/messages", json=payload)
+            return self._handle_response(r)
+        except Exception:
+            return None
+
+    def edit_chat_message(self, chat_id: int, msg_id: int, content: str) -> Optional[dict[str, Any]]:
+        try:
+            r = self._request("PATCH", f"{self.base_url}/api/v1/chats/{chat_id}/messages/{msg_id}", json={"content": content})
             return self._handle_response(r)
         except Exception:
             return None
