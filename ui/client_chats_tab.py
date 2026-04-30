@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
@@ -179,7 +180,10 @@ class ClientChatsTab(QWidget):
         self._link_value.setCursor(Qt.PointingHandCursor)
         self._link_value.setOpenExternalLinks(False)
         self._link_value.mousePressEvent = self._copy_link
-        h.addWidget(self._link_value)
+        self._link_value.setMaximumWidth(240)
+        self._link_value.setMinimumWidth(0)
+        self._link_value.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        h.addWidget(self._link_value, stretch=1)
 
         copy_btn = QPushButton("Копировать")
         copy_btn.setFixedHeight(26)
@@ -262,12 +266,15 @@ class ClientChatsTab(QWidget):
     def _make_chat_item(self, chat: dict, title: str) -> QWidget:
         w = QWidget()
         h = QHBoxLayout(w)
-        h.setContentsMargins(0, 4, 8, 4)
+        h.setContentsMargins(8, 4, 8, 4)
         h.setSpacing(6)
 
         v = QVBoxLayout()
+        v.setSpacing(2)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
+        title_lbl.setMinimumWidth(0)
+        title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
 
         # Показываем количество участников-клиентов
@@ -278,6 +285,8 @@ class ClientChatsTab(QWidget):
             sub += f", {guests} клиент(ов)"
         sub_lbl = QLabel(sub)
         sub_lbl.setStyleSheet("font-size: 10px; color: #888;")
+        sub_lbl.setMinimumWidth(0)
+        sub_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         v.addWidget(sub_lbl)
 
         h.addLayout(v, stretch=1)

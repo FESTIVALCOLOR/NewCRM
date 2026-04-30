@@ -130,6 +130,7 @@ class ChatRoomWidget(QWidget):
         self._api = api_client
         self._ws_worker: Optional[ChatWebSocketWorker] = None
         self._messages = []
+        self._crm_card_id: Optional[int] = None
         self._typing_timer = None
         self._is_typing = False
 
@@ -308,6 +309,7 @@ class ChatRoomWidget(QWidget):
     def _on_messages_loaded(self, chat, msgs):
         if chat:
             self._title_lbl.setText(chat.get("title") or "Чат")
+            self._crm_card_id = chat.get("crm_card_id")
         self._messages = list(msgs) if msgs else []
         self._render_all_messages()
 
@@ -477,7 +479,14 @@ class ChatRoomWidget(QWidget):
     def _show_members_dialog(self):
         from ui.chat_members_dialog import ChatMembersDialog
 
-        dlg = ChatMembersDialog(self._chat_id, self._chat_type, self._employee, self._api, self)
+        dlg = ChatMembersDialog(
+            self._chat_id,
+            self._chat_type,
+            self._employee,
+            self._api,
+            self,
+            crm_card_id=self._crm_card_id,
+        )
         dlg.exec_()
 
     # ===========================================================

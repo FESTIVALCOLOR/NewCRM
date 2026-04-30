@@ -14,8 +14,9 @@ message_type:
 
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, QTimer, QUrl
-from PyQt5.QtGui import QDesktopServices, QFont, QPixmap
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QDesktopServices, QPixmap
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -195,18 +196,37 @@ class ChatMessageBubble(QWidget):
     def _build_image(self, layout: QVBoxLayout):
         url = self._msg.get("file_url", "")
         name = self._msg.get("file_name", "изображение")
+        display_name = name[:28] + ("…" if len(name) > 28 else "")
 
-        img_lbl = QLabel()
-        img_lbl.setFixedSize(200, 150)
+        img_lbl = QLabel(display_name)
+        img_lbl.setFixedSize(240, 180)
         img_lbl.setAlignment(Qt.AlignCenter)
-        img_lbl.setStyleSheet("border: 1px solid #ddd; border-radius: 6px; background: #f9f9f9;")
-        img_lbl.setText("🖼 " + name[:20])
-        img_lbl.setToolTip(url)
+        img_lbl.setStyleSheet("""
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f5f5f5;
+            color: #666;
+            font-size: 11px;
+        """)
+        img_lbl.setToolTip(f"{name}\n(кликните для открытия)")
         img_lbl.setCursor(Qt.PointingHandCursor)
-
-        # Попытка загрузить миниатюру если есть локальный путь
-        # (для упрощения — открываем по клику)
         img_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url))
+
+        if url:
+            self._img_nam = QNetworkAccessManager(self)
+            reply = self._img_nam.get(QNetworkRequest(QUrl(url)))
+
+            def _on_reply():
+                if reply.error() == 0:
+                    data = reply.readAll()
+                    pix = QPixmap()
+                    if pix.loadFromData(data):
+                        img_lbl.setPixmap(pix.scaled(240, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        img_lbl.setToolTip(name)
+                reply.deleteLater()
+
+            reply.finished.connect(_on_reply)
+
         layout.addWidget(img_lbl)
 
     def _build_file(self, layout: QVBoxLayout):

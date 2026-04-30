@@ -9,7 +9,7 @@
 
 import threading
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -173,18 +174,23 @@ class EmployeeChatsTab(QWidget):
     def _make_chat_item(self, chat: dict, title: str) -> QWidget:
         w = QWidget()
         h = QHBoxLayout(w)
-        h.setContentsMargins(0, 4, 8, 4)
+        h.setContentsMargins(8, 4, 8, 4)
         h.setSpacing(6)
 
         v = QVBoxLayout()
+        v.setSpacing(2)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
+        title_lbl.setMinimumWidth(0)
+        title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
 
         last = chat.get("last_message", "")
         if last:
-            last_lbl = QLabel(last[:40] + ("…" if len(last) > 40 else ""))
+            last_lbl = QLabel(last[:50] + ("…" if len(last) > 50 else ""))
             last_lbl.setStyleSheet("font-size: 10px; color: #888;")
+            last_lbl.setMinimumWidth(0)
+            last_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             v.addWidget(last_lbl)
 
         h.addLayout(v, stretch=1)
