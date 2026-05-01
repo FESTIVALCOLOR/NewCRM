@@ -30,16 +30,16 @@ from PyQt5.QtWidgets import (
 
 _STYLE_OWN = """
     QFrame#bubble {
-        background-color: #FFF8DC;
+        background-color: #E8F5E9;
         border-radius: 12px;
-        border-bottom-right-radius: 4px;
+        border-bottom-right-radius: 2px;
     }
 """
 _STYLE_OTHER = """
     QFrame#bubble {
-        background-color: #F5F5F5;
+        background-color: #FFFFFF;
         border-radius: 12px;
-        border-bottom-left-radius: 4px;
+        border-bottom-left-radius: 2px;
     }
 """
 _STYLE_SYSTEM = """
@@ -113,6 +113,16 @@ class ChatMessageBubble(QWidget):
         bubble.setMinimumWidth(120)
         bubble.setMaximumWidth(460)
 
+        if not self._is_own:
+            from PyQt5.QtGui import QColor
+            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+
+            shadow = QGraphicsDropShadowEffect(bubble)
+            shadow.setBlurRadius(6)
+            shadow.setOffset(0, 1)
+            shadow.setColor(QColor(0, 0, 0, 25))
+            bubble.setGraphicsEffect(shadow)
+
         v = QVBoxLayout(bubble)
         v.setContentsMargins(10, 6, 10, 6)
         v.setSpacing(4)
@@ -120,7 +130,7 @@ class ChatMessageBubble(QWidget):
         # Имя отправителя (только для чужих)
         if not self._is_own:
             name_lbl = QLabel(self._msg.get("sender_display_name", ""))
-            name_lbl.setStyleSheet("font-weight: bold; font-size: 11px; color: #555;")
+            name_lbl.setStyleSheet("font-weight: bold; font-size: 11px; color: #1565C0;")
             v.addWidget(name_lbl)
 
         # Содержимое

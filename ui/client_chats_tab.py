@@ -122,9 +122,9 @@ class ClientChatsTab(QWidget):
         self._list = QListWidget()
         self._list.setStyleSheet("""
             QListWidget { border: none; background: #FAFAFA; }
-            QListWidget::item { padding: 10px 12px; border-bottom: 1px solid #EFEFEF; }
+            QListWidget::item { border-bottom: 1px solid #EFEFEF; padding: 0; }
             QListWidget::item:selected { background: #E8F5E9; }
-            QListWidget::item:hover { background: #F5F5F5; }
+            QListWidget::item:hover { background: #F0F0F0; }
         """)
         self._list.itemClicked.connect(self._on_chat_selected)
         lv.addWidget(self._list, stretch=1)
@@ -266,24 +266,43 @@ class ClientChatsTab(QWidget):
     def _make_chat_item(self, chat: dict, title: str) -> QWidget:
         w = QWidget()
         h = QHBoxLayout(w)
-        h.setContentsMargins(8, 4, 8, 4)
-        h.setSpacing(6)
+        h.setContentsMargins(10, 6, 10, 6)
+        h.setSpacing(10)
+
+        # Аватар — круглый зелёный для клиентских чатов
+        avatar = QLabel("К")
+        avatar.setFixedSize(40, 40)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet("""
+            QLabel {
+                background: #E8F5E9;
+                color: #2E7D32;
+                border-radius: 20px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+        """)
+        h.addWidget(avatar)
 
         v = QVBoxLayout()
         v.setSpacing(2)
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
+        title_lbl.setStyleSheet("font-weight: bold; font-size: 12px; color: #212121;")
         title_lbl.setMinimumWidth(0)
         title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
 
-        # Показываем количество участников-клиентов
-        members = chat.get("member_count", 0)
-        guests = chat.get("guest_count", 0)
-        sub = f"{members} уч."
-        if guests:
-            sub += f", {guests} клиент(ов)"
-        sub_lbl = QLabel(sub)
+        # Показываем последнее сообщение или количество участников
+        last = chat.get("last_message", "")
+        if last:
+            sub_lbl = QLabel(last[:50] + ("…" if len(last) > 50 else ""))
+        else:
+            members = chat.get("member_count", 0)
+            guests = chat.get("guest_count", 0)
+            sub = f"{members} уч."
+            if guests:
+                sub += f", {guests} клиент(ов)"
+            sub_lbl = QLabel(sub)
         sub_lbl.setStyleSheet("font-size: 10px; color: #888;")
         sub_lbl.setMinimumWidth(0)
         sub_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
@@ -293,11 +312,11 @@ class ClientChatsTab(QWidget):
 
         unread = chat.get("unread_count", 0)
         if unread:
-            badge = QLabel(str(unread))
+            badge = QLabel(str(unread) if unread < 100 else "99+")
             badge.setFixedSize(20, 20)
             badge.setAlignment(Qt.AlignCenter)
             badge.setStyleSheet("""
-                background: #ff4444; color: #fff;
+                background: #E53935; color: #fff;
                 border-radius: 10px; font-size: 9px; font-weight: bold;
             """)
             h.addWidget(badge)

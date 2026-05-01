@@ -210,11 +210,11 @@ class ChatRoomWidget(QWidget):
         # ---------- MESSAGES AREA ----------
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        self._scroll.setStyleSheet("QScrollArea { border: none; background: #FFFFFF; }")
-        self._scroll.viewport().setStyleSheet("background: #FFFFFF;")
+        self._scroll.setStyleSheet("QScrollArea { border: none; background: #F5F5F5; }")
+        self._scroll.viewport().setStyleSheet("background: #F5F5F5;")
 
         self._messages_widget = QWidget()
-        self._messages_widget.setStyleSheet("background: #FFFFFF;")
+        self._messages_widget.setStyleSheet("background: #F5F5F5;")
         self._messages_layout = QVBoxLayout(self._messages_widget)
         self._messages_layout.setContentsMargins(8, 8, 8, 8)
         self._messages_layout.setSpacing(2)
