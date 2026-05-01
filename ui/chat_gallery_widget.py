@@ -24,8 +24,6 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from utils.icon_loader import IconLoader
-
 _STYLE_OWN = """
     QFrame#bubble {
         background-color: #E8F5E9;
@@ -124,7 +122,7 @@ class ChatGalleryWidget(QWidget):
         outer.setSpacing(0)
 
         spacer = QWidget()
-        spacer.setMinimumWidth(60)
+        spacer.setMinimumWidth(80)
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         spacer.setAutoFillBackground(False)
 
@@ -188,7 +186,7 @@ class ChatGalleryWidget(QWidget):
         name_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         row.addWidget(name_lbl, stretch=1)
 
-        more_btn = QPushButton("...")
+        more_btn = QPushButton("⋮")
         more_btn.setFixedSize(20, 20)
         more_btn.setStyleSheet(
             """
@@ -369,6 +367,9 @@ class ChatGalleryWidget(QWidget):
         reply = nam.get(req)
 
         def _on_finished():
+            if not img_lbl.isVisible():
+                reply.deleteLater()
+                return
             if reply.error() == 0:
                 data = reply.readAll()
                 pix = QPixmap()

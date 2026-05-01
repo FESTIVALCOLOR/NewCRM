@@ -20,19 +20,19 @@ import os
 import threading
 import time
 from typing import Optional
+import uuid
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QShortcut,
     QSizePolicy,
     QTextEdit,
     QVBoxLayout,
@@ -44,6 +44,23 @@ from ui.chat_message_bubble import ChatMessageBubble
 from utils.icon_loader import IconLoader
 
 logger = logging.getLogger(__name__)
+
+
+class ChatInputEdit(QTextEdit):
+    """QTextEdit с перехватом Enter: Enter — отправить, Shift+Enter — перенос строки."""
+
+    send_requested = pyqtSignal()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if event.modifiers() & Qt.ShiftModifier:
+                super().keyPressEvent(event)
+            else:
+                self.send_requested.emit()
+                event.accept()
+        else:
+            super().keyPressEvent(event)
+
 
 try:
     import websocket as _ws_lib
@@ -363,11 +380,32 @@ class ChatRoomWidget(QWidget):
                 border-top: 1px solid #BBDEFB;
             }
         """)
-        self._pending_panel.setFixedHeight(70)
-        pp_layout = QHBoxLayout(self._pending_panel)
-        pp_layout.setContentsMargins(8, 8, 8, 8)
+        self._pending_panel.setFixedHeight(104)
+        pp_vbox = QVBoxLayout(self._pending_panel)
+        pp_vbox.setContentsMargins(8, 4, 8, 6)
+        pp_vbox.setSpacing(4)
+
+        self._caption_input = QLineEdit()
+        self._caption_input.setPlaceholderText("Подпись к файлу…")
+        self._caption_input.setFixedHeight(24)
+        self._caption_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #BBDEFB;
+                border-radius: 12px;
+                padding: 0 10px;
+                font-size: 11px;
+                background: #fff;
+            }
+        """)
+        pp_vbox.addWidget(self._caption_input)
+
+        pp_thumb_widget = QWidget()
+        pp_thumb_widget.setStyleSheet("background: transparent;")
+        pp_layout = QHBoxLayout(pp_thumb_widget)
+        pp_layout.setContentsMargins(0, 0, 0, 0)
         pp_layout.setSpacing(6)
         pp_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        pp_vbox.addWidget(pp_thumb_widget)
         self._pending_thumbnails_layout = pp_layout
         self._pending_panel.setVisible(False)
         main_layout.addWidget(self._pending_panel)
@@ -403,7 +441,7 @@ class ChatRoomWidget(QWidget):
         self._voice_btn = voice_btn
         row.addWidget(voice_btn)
 
-        self._input = QTextEdit()
+        self._input = ChatInputEdit()
         self._input.setFixedHeight(36)
         self._input.setPlaceholderText("Сообщение… (Enter — отправить, Shift+Enter — перенос)")
         self._input.setStyleSheet("""
@@ -416,6 +454,7 @@ class ChatRoomWidget(QWidget):
             }
         """)
         self._input.textChanged.connect(self._on_input_changed)
+        self._input.send_requested.connect(self._send_text)
         row.addWidget(self._input, stretch=1)
 
         self._send_btn = IconLoader.create_action_button(
@@ -433,9 +472,6 @@ class ChatRoomWidget(QWidget):
 
         i_layout.addLayout(row)
         main_layout.addWidget(input_frame)
-
-        send_shortcut = QShortcut(QKeySequence(Qt.Key_Return), self._input)
-        send_shortcut.activated.connect(self._send_text)
 
     # ===========================================================
     # Загрузка данных
@@ -463,6 +499,13 @@ class ChatRoomWidget(QWidget):
         self._on_ws_status(bool(self._ws_worker and self._ws_worker._running))
         self._messages = list(msgs) if msgs else []
         self._render_all_messages()
+        if self._messages:
+            last_id = self._messages[-1].get("id")
+            if last_id:
+                threading.Thread(
+                    target=lambda: self._api.mark_chat_read(self._chat_id, last_id),
+                    daemon=True,
+                ).start()
 
     def _make_bubble(self, msg: dict) -> ChatMessageBubble:
         my_id = self._employee.get("id")
@@ -538,16 +581,16 @@ class ChatRoomWidget(QWidget):
 
         line_l = QFrame()
         line_l.setFrameShape(QFrame.HLine)
-        line_l.setStyleSheet("color: #e57373;")
+        line_l.setStyleSheet("color: #E53935;")
         row.addWidget(line_l, stretch=1)
 
         lbl = QLabel("Новые сообщения")
-        lbl.setStyleSheet("font-size: 10px; color: #e57373; white-space: nowrap;")
+        lbl.setStyleSheet("font-size: 10px; color: #E53935; white-space: nowrap;")
         row.addWidget(lbl)
 
         line_r = QFrame()
         line_r.setFrameShape(QFrame.HLine)
-        line_r.setStyleSheet("color: #e57373;")
+        line_r.setStyleSheet("color: #E53935;")
         row.addWidget(line_r, stretch=1)
 
         return w
@@ -573,7 +616,25 @@ class ChatRoomWidget(QWidget):
             if w and hasattr(w, "_msg") and w._msg.get("id") == msg_id:
                 pos_y = w.mapTo(self._messages_widget, w.rect().topLeft()).y()
                 self._scroll.verticalScrollBar().setValue(max(0, pos_y - 20))
+                QTimer.singleShot(100, lambda w=w: self._highlight_widget(w))
                 return
+
+    def _highlight_widget(self, w: QWidget):
+        """Кратковременная жёлтая подсветка виджета после перехода к цитате."""
+        if not w or not w.isVisible():
+            return
+        from PyQt5.QtGui import QColor
+
+        w.setAutoFillBackground(True)
+        pal = w.palette()
+        pal.setColor(w.backgroundRole(), QColor(255, 245, 157, 160))
+        w.setPalette(pal)
+        QTimer.singleShot(1500, lambda: self._unhighlight_widget(w))
+
+    def _unhighlight_widget(self, w: QWidget):
+        if w and w.isVisible():
+            w.setAutoFillBackground(False)
+            w.setPalette(w.style().standardPalette())
 
     def _append_message(self, msg):
         """Добавить одно сообщение. Вызывается из GUI-потока через сигнал."""
@@ -581,6 +642,11 @@ class ChatRoomWidget(QWidget):
             return
         msg_id = msg.get("id")
         if msg_id and any(m.get("id") == msg_id for m in self._messages):
+            return
+        # Изображения с group_id группируются в галерею — перерисовываем всё
+        if msg.get("group_id") and msg.get("message_type") == "image" and not msg.get("is_deleted"):
+            self._messages.append(msg)
+            self._render_all_messages()
             return
         bubble = self._make_bubble(msg)
         self._messages_layout.addWidget(bubble)
@@ -794,6 +860,7 @@ class ChatRoomWidget(QWidget):
                 self._ws_worker.send({"type": "typing_start"})
         if self._typing_timer:
             self._typing_timer.stop()
+            self._typing_timer.deleteLater()
         self._typing_timer = QTimer(self)
         self._typing_timer.setSingleShot(True)
         self._typing_timer.timeout.connect(self._stop_typing)
@@ -869,8 +936,10 @@ class ChatRoomWidget(QWidget):
 
         while self._pending_thumbnails_layout.count():
             item = self._pending_thumbnails_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            w = item.widget()
+            if w:
+                w.deleteLater()
+            del item
 
         if not self._pending_files:
             self._pending_panel.setVisible(False)
@@ -878,18 +947,18 @@ class ChatRoomWidget(QWidget):
 
         for idx, f in enumerate(self._pending_files):
             cell = QWidget()
-            cell.setFixedSize(60, 54)
+            cell.setFixedSize(72, 58)
             cl = QHBoxLayout(cell)
             cl.setContentsMargins(0, 0, 0, 0)
             cl.setSpacing(3)
 
             thumb = QLabel()
-            thumb.setFixedSize(50, 50)
+            thumb.setFixedSize(52, 52)
             thumb.setAlignment(Qt.AlignCenter)
             if f["type"] == "image":
                 pix = _QPixmap(f["path"])
                 if not pix.isNull():
-                    thumb.setPixmap(pix.scaled(50, 50, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                    thumb.setPixmap(pix.scaled(52, 52, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
                     thumb.setStyleSheet("border-radius: 4px;")
                 else:
                     thumb.setStyleSheet("background: #cce5ff; border-radius: 4px;")
@@ -901,12 +970,12 @@ class ChatRoomWidget(QWidget):
             cl.addWidget(thumb)
 
             rm_btn = QPushButton("×")
-            rm_btn.setFixedSize(14, 14)
+            rm_btn.setFixedSize(20, 20)
             rm_btn.setStyleSheet("""
                 QPushButton {
                     background: #E53935; color: #fff;
-                    border: none; border-radius: 7px;
-                    font-size: 9px; padding: 0;
+                    border: none; border-radius: 10px;
+                    font-size: 10px; padding: 0;
                 }
                 QPushButton:hover { background: #c62828; }
             """)
@@ -927,18 +996,35 @@ class ChatRoomWidget(QWidget):
         if not self._pending_files:
             return
         files = list(self._pending_files)
+        caption = self._caption_input.text().strip()
+        self._caption_input.clear()
         self._pending_files.clear()
         self._refresh_pending_panel()
         self._upload_progress.setVisible(True)
+
+        # Все изображения группируются одним group_id для галереи
+        images = [f for f in files if f["type"] == "image"]
+        group_id = str(uuid.uuid4()) if len(images) > 1 else None
 
         def _worker():
             try:
                 for f in files:
                     with open(f["path"], "rb") as fh:
                         data = fh.read()
-                    result = self._api.upload_chat_file(self._chat_id, data, f["name"], message_type=f["type"])
+                    gid = group_id if f["type"] == "image" and group_id else None
+                    result = self._api.upload_chat_file(
+                        self._chat_id,
+                        data,
+                        f["name"],
+                        message_type=f["type"],
+                        group_id=gid,
+                    )
                     if result:
                         self._sig_new_msg.emit(result)
+                if caption:
+                    msg = self._api.send_chat_message(self._chat_id, caption)
+                    if msg:
+                        self._sig_new_msg.emit(msg)
             finally:
                 self._sig_ws_data.emit({"type": "_hide_progress"})
 

@@ -106,14 +106,17 @@ class ChatMixin:
     # Файлы
     # ----------------------------------------------------------
 
-    def upload_chat_file(self, chat_id: int, file_bytes: bytes, filename: str, message_type: str = "file") -> Optional[dict[str, Any]]:
+    def upload_chat_file(self, chat_id: int, file_bytes: bytes, filename: str, message_type: str = "file", group_id: str = None) -> Optional[dict[str, Any]]:
         """Загрузить файл/голос/изображение в чат."""
         try:
+            data = {"message_type": message_type}
+            if group_id:
+                data["group_id"] = group_id
             r = self._request(
                 "POST",
                 f"{self.base_url}/api/v1/chats/{chat_id}/files",
                 files={"file": (filename, file_bytes)},
-                data={"message_type": message_type},
+                data=data,
             )
             return self._handle_response(r)
         except Exception:
