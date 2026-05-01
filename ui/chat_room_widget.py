@@ -385,7 +385,8 @@ class ChatRoomWidget(QWidget):
     def _make_bubble(self, msg: dict) -> ChatMessageBubble:
         my_id = self._employee.get("id")
         is_own = msg.get("sender_employee_id") == my_id
-        bubble = ChatMessageBubble(msg, is_own)
+        token = getattr(self._api, "token", "") or ""
+        bubble = ChatMessageBubble(msg, is_own, token=token)
         bubble.edit_requested.connect(self._on_edit_requested)
         bubble.delete_requested.connect(self._on_delete_requested)
         bubble.reply_requested.connect(self._on_reply_requested)
