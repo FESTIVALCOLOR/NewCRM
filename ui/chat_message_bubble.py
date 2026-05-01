@@ -69,6 +69,7 @@ class ChatMessageBubble(QWidget):
     delete_requested = pyqtSignal(dict)
     reply_requested = pyqtSignal(dict)
     pin_requested = pyqtSignal(dict)
+    scroll_to_requested = pyqtSignal(int)
 
     def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = ""):
         super().__init__(parent)
@@ -183,11 +184,11 @@ class ChatMessageBubble(QWidget):
         row.addWidget(name_lbl, stretch=1)
 
         more_btn = QPushButton("⋮")
-        more_btn.setFixedSize(18, 18)
+        more_btn.setFixedSize(20, 20)
         more_btn.setStyleSheet("""
             QPushButton {
                 border: none; background: transparent;
-                font-size: 14px; color: #aaa; padding: 0;
+                font-size: 12px; color: #aaa; padding: 0; line-height: 1;
             }
             QPushButton:hover { color: #555; }
         """)
@@ -238,12 +239,22 @@ class ChatMessageBubble(QWidget):
             return ts[11:16] if len(ts) >= 16 else ts
 
     def _build_system(self, outer: QHBoxLayout):
+        chip = QFrame()
+        chip.setStyleSheet("""
+            QFrame {
+                background: #E0E0E0;
+                border-radius: 10px;
+            }
+        """)
+        chip_layout = QHBoxLayout(chip)
+        chip_layout.setContentsMargins(10, 3, 10, 3)
         lbl = QLabel(self._msg.get("content", ""))
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet("font-size: 10px; color: #aaa; font-style: italic; padding: 2px 8px; background: transparent;")
+        lbl.setStyleSheet("font-size: 10px; color: #757575; background: transparent;")
         lbl.setWordWrap(True)
+        chip_layout.addWidget(lbl)
         outer.addStretch()
-        outer.addWidget(lbl)
+        outer.addWidget(chip)
         outer.addStretch()
 
     def _build_text(self, layout: QVBoxLayout):
@@ -270,6 +281,8 @@ class ChatMessageBubble(QWidget):
             rtext_lbl = QLabel((rtext[:60] + "…") if len(rtext) > 60 else rtext)
             rtext_lbl.setStyleSheet("font-size: 10px; color: #555; background: transparent;")
             rbl.addWidget(rtext_lbl)
+            rb.setCursor(Qt.PointingHandCursor)
+            rb.mousePressEvent = lambda e: self.scroll_to_requested.emit(self._msg.get("reply_to_id", 0))
             layout.addWidget(rb)
 
         content = self._msg.get("content") or ""
@@ -291,23 +304,30 @@ class ChatMessageBubble(QWidget):
         row.setSpacing(6)
         row.setAlignment(Qt.AlignVCenter)
 
-        play_btn = QPushButton("▶  Голосовое")
-        play_btn.setFixedHeight(28)
+        from PyQt5.QtCore import QSize
+
+        play_btn = QPushButton()
+        play_icon = IconLoader.load_colored("play", color="#555", size=16)
+        play_btn.setIcon(play_icon)
+        play_btn.setIconSize(QSize(16, 16))
+        play_btn.setFixedSize(32, 32)
         play_btn.setStyleSheet("""
             QPushButton {
                 background: #e8e8e8;
                 border: 1px solid #d9d9d9;
-                border-radius: 4px;
-                padding: 0px 14px;
-                font-size: 12px;
-                max-height: 26px;
+                border-radius: 16px;
+                padding: 0;
             }
             QPushButton:hover { background: #d8d8d8; }
         """)
         url = self._msg.get("file_url", "")
         play_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
 
+        voice_lbl = QLabel("Голосовое сообщение")
+        voice_lbl.setStyleSheet("font-size: 12px; color: #333; background: transparent;")
+
         row.addWidget(play_btn)
+        row.addWidget(voice_lbl)
         row.addStretch()
         layout.addLayout(row)
 
@@ -396,7 +416,6 @@ class ChatMessageBubble(QWidget):
                 padding: 0px 14px;
                 font-size: 12px;
                 color: #555;
-                max-height: 26px;
             }
             QPushButton:hover { background: #f0f0f0; }
         """)

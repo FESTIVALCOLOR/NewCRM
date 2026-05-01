@@ -22,7 +22,7 @@ import time
 from typing import Optional
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ui.chat_gallery_widget import ChatGalleryWidget
 from ui.chat_message_bubble import ChatMessageBubble
 from utils.icon_loader import IconLoader
 
@@ -144,6 +145,12 @@ class ChatRoomWidget(QWidget):
         self._pinned_messages: list = []
         self._pinned_index: int = 0
 
+        # Файлы, ожидающие отправки
+        self._pending_files: list = []
+
+        # Строка с количеством участников для subtitle
+        self._members_count_str: str = ""
+
         # Подключаем сигналы ДО setup_ui, чтобы они были готовы когда придут данные
         self._sig_messages_ready.connect(self._on_messages_loaded)
         self._sig_new_msg.connect(self._append_message)
@@ -194,13 +201,6 @@ class ChatRoomWidget(QWidget):
         h_layout.addLayout(title_col)
         h_layout.setStretch(0, 1)
 
-        # Индикатор WebSocket соединения
-        self._ws_dot = QLabel("●")
-        self._ws_dot.setStyleSheet("color: #ccc; font-size: 14px;")
-        self._ws_dot.setToolTip("WebSocket: нет соединения")
-        self._ws_dot.setFixedWidth(16)
-        h_layout.addWidget(self._ws_dot)
-
         members_btn = QPushButton("Участники")
         members_btn.setFixedHeight(28)
         members_btn.setStyleSheet("""
@@ -222,29 +222,42 @@ class ChatRoomWidget(QWidget):
         self._pinned_bar = QFrame()
         self._pinned_bar.setStyleSheet("""
             QFrame {
-                background: #FFF8DC;
-                border-bottom: 1px solid #f5d84a;
+                background: #fff;
+                border-bottom: 1px solid #E0E0E0;
             }
         """)
-        self._pinned_bar.setFixedHeight(32)
+        self._pinned_bar.setFixedHeight(44)
         pb_layout = QHBoxLayout(self._pinned_bar)
-        pb_layout.setContentsMargins(10, 0, 6, 0)
+        pb_layout.setContentsMargins(10, 4, 6, 4)
         pb_layout.setSpacing(6)
 
-        self._pin_icon_lbl = QLabel("▶")
+        self._pin_icon_lbl = QLabel("|")
         self._pin_icon_lbl.setFixedWidth(12)
-        self._pin_icon_lbl.setStyleSheet("font-size: 9px; color: #c9a700;")
+        self._pin_icon_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #E65100;")
         pb_layout.addWidget(self._pin_icon_lbl)
 
+        pin_text_col = QVBoxLayout()
+        pin_text_col.setSpacing(0)
+        pin_text_col.setContentsMargins(0, 0, 0, 0)
+
+        self._pin_title_lbl = QLabel("Закреплено")
+        self._pin_title_lbl.setStyleSheet("font-size: 10px; font-weight: bold; color: #E65100;")
+        pin_text_col.addWidget(self._pin_title_lbl)
+
         self._pin_text_lbl = QLabel("")
-        self._pin_text_lbl.setStyleSheet("font-size: 11px; color: #555;")
+        self._pin_text_lbl.setStyleSheet("font-size: 11px; color: #333;")
         self._pin_text_lbl.setMinimumWidth(0)
         self._pin_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._pin_text_lbl.setCursor(Qt.PointingHandCursor)
-        pb_layout.addWidget(self._pin_text_lbl)
+        pin_text_col.addWidget(self._pin_text_lbl)
+
+        pin_text_widget = QWidget()
+        pin_text_widget.setLayout(pin_text_col)
+        pin_text_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        pb_layout.addWidget(pin_text_widget)
 
         self._pin_nav_lbl = QLabel("")
-        self._pin_nav_lbl.setStyleSheet("font-size: 10px; color: #888;")
+        self._pin_nav_lbl.setStyleSheet("color: #E65100; font-size: 10px; font-weight: bold;")
         pb_layout.addWidget(self._pin_nav_lbl)
 
         unpin_btn = QPushButton("×")
@@ -252,7 +265,7 @@ class ChatRoomWidget(QWidget):
         unpin_btn.setStyleSheet("""
             QPushButton {
                 border: none; background: transparent;
-                font-size: 14px; color: #aaa;
+                font-size: 12px; line-height: 1; color: #aaa;
             }
             QPushButton:hover { color: #555; }
         """)
@@ -268,8 +281,8 @@ class ChatRoomWidget(QWidget):
 
         # ---------- TYPING INDICATOR ----------
         self._typing_lbl = QLabel("")
-        self._typing_lbl.setFixedHeight(18)
         self._typing_lbl.setStyleSheet("font-size: 10px; color: #888; padding-left: 12px;")
+        self._typing_lbl.setVisible(False)
         main_layout.addWidget(self._typing_lbl)
 
         # ---------- MESSAGES AREA ----------
@@ -282,7 +295,7 @@ class ChatRoomWidget(QWidget):
         self._messages_widget.setStyleSheet("background: #F5F5F5;")
         self._messages_layout = QVBoxLayout(self._messages_widget)
         self._messages_layout.setContentsMargins(8, 8, 8, 8)
-        self._messages_layout.setSpacing(2)
+        self._messages_layout.setSpacing(4)
         self._messages_layout.addStretch()  # index 0 — прижимает сообщения к низу
 
         self._scroll.setWidget(self._messages_widget)
@@ -292,8 +305,8 @@ class ChatRoomWidget(QWidget):
         self._action_bar = QFrame()
         self._action_bar.setStyleSheet("""
             QFrame {
-                background: #FFF8DC;
-                border-top: 1px solid #e6c535;
+                background: #F3F6FF;
+                border-top: 1px solid #D0D9F0;
             }
         """)
         self._action_bar.setFixedHeight(36)
@@ -302,11 +315,11 @@ class ChatRoomWidget(QWidget):
         ab_layout.setSpacing(8)
 
         self._action_icon_lbl = QLabel("↩")
-        self._action_icon_lbl.setStyleSheet("font-size: 14px; color: #888;")
+        self._action_icon_lbl.setStyleSheet("font-size: 16px; color: #1565C0;")
         ab_layout.addWidget(self._action_icon_lbl)
 
         self._action_text_lbl = QLabel("")
-        self._action_text_lbl.setStyleSheet("font-size: 11px; color: #555;")
+        self._action_text_lbl.setStyleSheet("font-size: 11px; color: #1565C0;")
         self._action_text_lbl.setMinimumWidth(0)
         self._action_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         ab_layout.addWidget(self._action_text_lbl)
@@ -316,7 +329,7 @@ class ChatRoomWidget(QWidget):
         cancel_btn.setStyleSheet("""
             QPushButton {
                 border: none; background: transparent;
-                font-size: 16px; color: #888;
+                font-size: 12px; line-height: 1; color: #888;
             }
             QPushButton:hover { color: #333; }
         """)
@@ -342,7 +355,26 @@ class ChatRoomWidget(QWidget):
         self._upload_progress.setVisible(False)
         main_layout.addWidget(self._upload_progress)
 
-        # ---------- INPUT PANEL ----------
+        # ---------- PENDING FILES PREVIEW ----------
+        self._pending_panel = QFrame()
+        self._pending_panel.setStyleSheet("""
+            QFrame {
+                background: #E3F2FD;
+                border-top: 1px solid #BBDEFB;
+            }
+        """)
+        self._pending_panel.setFixedHeight(70)
+        pp_layout = QHBoxLayout(self._pending_panel)
+        pp_layout.setContentsMargins(8, 8, 8, 8)
+        pp_layout.setSpacing(6)
+        pp_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._pending_thumbnails_layout = pp_layout
+        self._pending_panel.setVisible(False)
+        main_layout.addWidget(self._pending_panel)
+
+        self._build_input_panel(main_layout)
+
+    def _build_input_panel(self, main_layout):
         input_frame = QFrame()
         input_frame.setStyleSheet("""
             QFrame {
@@ -386,7 +418,15 @@ class ChatRoomWidget(QWidget):
         self._input.textChanged.connect(self._on_input_changed)
         row.addWidget(self._input, stretch=1)
 
-        self._send_btn = IconLoader.create_action_button("arrow-right-circle", tooltip="Отправить", button_size=36, icon_size=20, bg_color="#ffd93c", hover_color="#f5c800", icon_color="#555")
+        self._send_btn = IconLoader.create_action_button(
+            "arrow-right-circle",
+            tooltip="Отправить",
+            button_size=36,
+            icon_size=20,
+            bg_color="#ffd93c",
+            hover_color="#f5c800",
+            icon_color="#555",
+        )
         self._send_btn.setStyleSheet(self._send_btn.styleSheet() + "QPushButton { border-radius: 18px; border: none; } QPushButton:pressed { background: #e6b800; }")
         self._send_btn.clicked.connect(self._send_text)
         row.addWidget(self._send_btn)
@@ -417,11 +457,10 @@ class ChatRoomWidget(QWidget):
             self._crm_card_id = chat.get("crm_card_id")
             self._first_unread_id = chat.get("first_unread_message_id")
             member_count = chat.get("member_count")
-            if member_count:
-                self._member_count_lbl.setText(f"• {member_count} уч.")
-                self._member_count_lbl.setVisible(True)
+            self._members_count_str = f"{member_count} уч." if member_count else ""
             self._pinned_messages = chat.get("pinned_messages") or []
             self._update_pinned_bar()
+        self._on_ws_status(bool(self._ws_worker and self._ws_worker._running))
         self._messages = list(msgs) if msgs else []
         self._render_all_messages()
 
@@ -435,34 +474,60 @@ class ChatRoomWidget(QWidget):
         bubble.delete_requested.connect(self._on_delete_requested)
         bubble.reply_requested.connect(self._on_reply_requested)
         bubble.pin_requested.connect(self._on_pin_requested)
+        bubble.scroll_to_requested.connect(self._scroll_to_message)
         return bubble
 
     def _render_all_messages(self):
         layout = self._messages_layout
-        # Оставляем stretch на позиции 0, удаляем все пузыри (позиции 1+)
         while layout.count() > 1:
             item = layout.takeAt(1)
             if item.widget():
                 item.widget().deleteLater()
 
         unread_divider_shown = False
-        for msg in self._messages:
-            # Разделитель "Новые сообщения" перед первым непрочитанным
+        i = 0
+        while i < len(self._messages):
+            msg = self._messages[i]
+
             if self._first_unread_id and msg.get("id") == self._first_unread_id and not unread_divider_shown:
                 divider = self._make_unread_divider()
                 layout.addWidget(divider)
                 unread_divider_shown = True
 
-            bubble = self._make_bubble(msg)
-            layout.addWidget(bubble)
+            gid = msg.get("group_id")
+            if gid and msg.get("message_type") == "image" and not msg.get("is_deleted"):
+                group = [msg]
+                j = i + 1
+                while j < len(self._messages) and self._messages[j].get("group_id") == gid and not self._messages[j].get("is_deleted"):
+                    group.append(self._messages[j])
+                    j += 1
+                if len(group) > 1:
+                    layout.addWidget(self._make_gallery(group))
+                    i = j
+                    continue
+
+            layout.addWidget(self._make_bubble(msg))
+            i += 1
 
         self._messages_widget.update()
 
-        # Скроллим к первому непрочитанному или к концу
         if self._first_unread_id and unread_divider_shown:
             QTimer.singleShot(80, self._scroll_to_first_unread)
         else:
             self._scroll_to_bottom()
+
+    def _make_gallery(self, msgs: list) -> ChatGalleryWidget:
+        my_id = self._employee.get("id")
+        is_own = msgs[0].get("sender_employee_id") == my_id
+        token = getattr(self._api, "token", "") or ""
+        base_url = getattr(self._api, "base_url", "") or ""
+        gallery = ChatGalleryWidget(msgs, is_own, token=token, base_url=base_url, parent=self)
+        gallery.edit_requested.connect(self._on_edit_requested)
+        gallery.delete_requested.connect(self._on_delete_requested)
+        gallery.reply_requested.connect(self._on_reply_requested)
+        gallery.pin_requested.connect(self._on_pin_requested)
+        gallery.scroll_to_requested.connect(self._scroll_to_message)
+        return gallery
 
     def _make_unread_divider(self) -> QWidget:
         w = QWidget()
@@ -498,6 +563,18 @@ class ChatRoomWidget(QWidget):
                 return
         self._scroll_to_bottom()
 
+    def _scroll_to_message(self, msg_id: int):
+        if not msg_id:
+            return
+        layout = self._messages_layout
+        for i in range(1, layout.count()):
+            item = layout.itemAt(i)
+            w = item.widget() if item else None
+            if w and hasattr(w, "_msg") and w._msg.get("id") == msg_id:
+                pos_y = w.mapTo(self._messages_widget, w.rect().topLeft()).y()
+                self._scroll.verticalScrollBar().setValue(max(0, pos_y - 20))
+                return
+
     def _append_message(self, msg):
         """Добавить одно сообщение. Вызывается из GUI-потока через сигнал."""
         if not isinstance(msg, dict):
@@ -527,7 +604,6 @@ class ChatRoomWidget(QWidget):
         preview = (content[:50] + "…") if len(content) > 50 else content
         self._action_icon_lbl.setText("↩")
         self._action_text_lbl.setText(f"Ответить {sender}: {preview}")
-        self._send_btn.setText("Отправить")
         self._action_bar.setVisible(True)
         self._input.setFocus()
 
@@ -537,7 +613,6 @@ class ChatRoomWidget(QWidget):
         content = msg.get("content") or ""
         self._action_icon_lbl.setText("✎")
         self._action_text_lbl.setText(f"Редактировать: {(content[:60] + '…') if len(content) > 60 else content}")
-        self._send_btn.setText("Сохранить")
         self._action_bar.setVisible(True)
         self._input.setPlainText(content)
         self._input.setFocus()
@@ -598,7 +673,6 @@ class ChatRoomWidget(QWidget):
         self._reply_to_msg = None
         self._edit_msg_id = None
         self._action_bar.setVisible(False)
-        self._send_btn.setText("Отправить")
         self._input.clear()
 
     # ===========================================================
@@ -637,11 +711,13 @@ class ChatRoomWidget(QWidget):
 
     def _on_ws_status(self, connected: bool):
         if connected:
-            self._ws_dot.setStyleSheet("color: #4caf50; font-size: 14px;")
-            self._ws_dot.setToolTip("WebSocket: подключено")
+            suffix = (f" • {self._members_count_str}") if self._members_count_str else ""
+            self._member_count_lbl.setText(f"● онлайн{suffix}")
+            self._member_count_lbl.setStyleSheet("font-size: 10px; color: #4caf50;")
         else:
-            self._ws_dot.setStyleSheet("color: #ccc; font-size: 14px;")
-            self._ws_dot.setToolTip("WebSocket: нет соединения")
+            self._member_count_lbl.setText("○ оффлайн")
+            self._member_count_lbl.setStyleSheet("font-size: 10px; color: #999;")
+        self._member_count_lbl.setVisible(True)
 
     def _handle_ws_event(self, data):
         if not isinstance(data, dict):
@@ -675,8 +751,10 @@ class ChatRoomWidget(QWidget):
         elif event == "typing":
             if data.get("is_typing"):
                 self._typing_lbl.setText(f"{data.get('name', '')} печатает…")
+                self._typing_lbl.setVisible(True)
             else:
                 self._typing_lbl.setText("")
+                self._typing_lbl.setVisible(False)
 
         elif event == "message_deleted":
             msg_id = data.get("message_id")
@@ -728,6 +806,12 @@ class ChatRoomWidget(QWidget):
                 self._ws_worker.send({"type": "typing_stop"})
 
     def _send_text(self):
+        if self._pending_files:
+            self._send_pending_files()
+            self._input.clear()
+            self._stop_typing()
+            return
+
         text = self._input.toPlainText().strip()
         if not text:
             return
@@ -765,27 +849,96 @@ class ChatRoomWidget(QWidget):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _attach_file(self):
-        path, _ = QFileDialog.getOpenFileName(
+        paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Выберите файл",
+            "Выберите файлы",
             "",
             "Все файлы (*);;Изображения (*.jpg *.jpeg *.png *.gif *.webp);;PDF (*.pdf)",
         )
-        if not path:
+        if not paths:
             return
-        fname = os.path.basename(path)
-        ext = os.path.splitext(fname)[1].lower()
-        msg_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "file"
+        for path in paths:
+            fname = os.path.basename(path)
+            ext = os.path.splitext(fname)[1].lower()
+            msg_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "file"
+            self._pending_files.append({"path": path, "name": fname, "type": msg_type})
+        self._refresh_pending_panel()
 
+    def _refresh_pending_panel(self):
+        from PyQt5.QtGui import QPixmap as _QPixmap
+
+        while self._pending_thumbnails_layout.count():
+            item = self._pending_thumbnails_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not self._pending_files:
+            self._pending_panel.setVisible(False)
+            return
+
+        for idx, f in enumerate(self._pending_files):
+            cell = QWidget()
+            cell.setFixedSize(60, 54)
+            cl = QHBoxLayout(cell)
+            cl.setContentsMargins(0, 0, 0, 0)
+            cl.setSpacing(3)
+
+            thumb = QLabel()
+            thumb.setFixedSize(50, 50)
+            thumb.setAlignment(Qt.AlignCenter)
+            if f["type"] == "image":
+                pix = _QPixmap(f["path"])
+                if not pix.isNull():
+                    thumb.setPixmap(pix.scaled(50, 50, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                    thumb.setStyleSheet("border-radius: 4px;")
+                else:
+                    thumb.setStyleSheet("background: #cce5ff; border-radius: 4px;")
+            else:
+                nm = f["name"]
+                thumb.setText((nm[:7] + "…") if len(nm) > 7 else nm)
+                thumb.setStyleSheet("background: #e0e0e0; border-radius: 4px; font-size: 9px; color: #555;")
+                thumb.setWordWrap(True)
+            cl.addWidget(thumb)
+
+            rm_btn = QPushButton("×")
+            rm_btn.setFixedSize(14, 14)
+            rm_btn.setStyleSheet("""
+                QPushButton {
+                    background: #E53935; color: #fff;
+                    border: none; border-radius: 7px;
+                    font-size: 9px; padding: 0;
+                }
+                QPushButton:hover { background: #c62828; }
+            """)
+            rm_btn.clicked.connect(lambda checked, i=idx: self._remove_pending_file(i))
+            cl.addWidget(rm_btn)
+
+            self._pending_thumbnails_layout.addWidget(cell)
+
+        self._pending_thumbnails_layout.addStretch()
+        self._pending_panel.setVisible(True)
+
+    def _remove_pending_file(self, index: int):
+        if 0 <= index < len(self._pending_files):
+            self._pending_files.pop(index)
+        self._refresh_pending_panel()
+
+    def _send_pending_files(self):
+        if not self._pending_files:
+            return
+        files = list(self._pending_files)
+        self._pending_files.clear()
+        self._refresh_pending_panel()
         self._upload_progress.setVisible(True)
 
         def _worker():
             try:
-                with open(path, "rb") as f:
-                    data = f.read()
-                result = self._api.upload_chat_file(self._chat_id, data, fname, message_type=msg_type)
-                if result:
-                    self._sig_new_msg.emit(result)
+                for f in files:
+                    with open(f["path"], "rb") as fh:
+                        data = fh.read()
+                    result = self._api.upload_chat_file(self._chat_id, data, f["name"], message_type=f["type"])
+                    if result:
+                        self._sig_new_msg.emit(result)
             finally:
                 self._sig_ws_data.emit({"type": "_hide_progress"})
 
@@ -831,7 +984,7 @@ class ChatRoomWidget(QWidget):
         if msg.get("message_type") in ("image", "file", "voice"):
             content = f"[{msg.get('message_type', 'файл')}]"
         preview = (content[:55] + "…") if len(content) > 55 else content
-        self._pin_text_lbl.setText(f"Закреплено: {preview}")
+        self._pin_text_lbl.setText(preview)
         if total > 1:
             self._pin_nav_lbl.setText(f"{idx + 1}/{total}")
             self._pin_nav_lbl.setVisible(True)
