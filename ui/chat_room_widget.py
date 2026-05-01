@@ -285,20 +285,21 @@ class ChatRoomWidget(QWidget):
                 border-top: 1px solid #E0E0E0;
             }
         """)
-        input_frame.setFixedHeight(90)
+        input_frame.setFixedHeight(56)
         i_layout = QVBoxLayout(input_frame)
-        i_layout.setContentsMargins(8, 6, 8, 6)
-        i_layout.setSpacing(4)
+        i_layout.setContentsMargins(8, 8, 8, 8)
+        i_layout.setSpacing(0)
 
         row = QHBoxLayout()
         row.setSpacing(6)
+        row.setAlignment(Qt.AlignVCenter)
 
         attach_btn = QPushButton("📎")
-        attach_btn.setFixedSize(32, 32)
+        attach_btn.setFixedSize(36, 36)
         attach_btn.setToolTip("Прикрепить файл")
         attach_btn.setStyleSheet("""
             QPushButton {
-                border: 1px solid #d9d9d9; border-radius: 4px;
+                border: 1px solid #d9d9d9; border-radius: 18px;
                 font-size: 16px; background: #fff;
             }
             QPushButton:hover { background: #f5f5f5; }
@@ -307,12 +308,12 @@ class ChatRoomWidget(QWidget):
         row.addWidget(attach_btn)
 
         voice_btn = QPushButton("🎤")
-        voice_btn.setFixedSize(32, 32)
+        voice_btn.setFixedSize(36, 36)
         voice_btn.setCheckable(True)
         voice_btn.setToolTip("Голосовое сообщение")
         voice_btn.setStyleSheet("""
             QPushButton {
-                border: 1px solid #d9d9d9; border-radius: 4px;
+                border: 1px solid #d9d9d9; border-radius: 18px;
                 font-size: 16px; background: #fff;
             }
             QPushButton:hover { background: #f5f5f5; }
@@ -323,13 +324,13 @@ class ChatRoomWidget(QWidget):
         row.addWidget(voice_btn)
 
         self._input = QTextEdit()
-        self._input.setFixedHeight(44)
-        self._input.setPlaceholderText("Введите сообщение... (Enter — отправить, Shift+Enter — перенос)")
+        self._input.setFixedHeight(36)
+        self._input.setPlaceholderText("Сообщение… (Enter — отправить, Shift+Enter — перенос)")
         self._input.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #d9d9d9;
-                border-radius: 6px;
-                padding: 6px 10px;
+                border-radius: 18px;
+                padding: 6px 12px;
                 font-size: 13px;
                 background: #fff;
             }
@@ -337,16 +338,16 @@ class ChatRoomWidget(QWidget):
         self._input.textChanged.connect(self._on_input_changed)
         row.addWidget(self._input, stretch=1)
 
-        self._send_btn = QPushButton("Отправить")
-        self._send_btn.setFixedHeight(44)
+        self._send_btn = QPushButton("➤")
+        self._send_btn.setFixedSize(36, 36)
+        self._send_btn.setToolTip("Отправить")
         self._send_btn.setStyleSheet("""
             QPushButton {
                 background: #ffd93c;
                 border: none;
-                border-radius: 6px;
-                padding: 0 18px;
+                border-radius: 18px;
+                font-size: 16px;
                 font-weight: bold;
-                font-size: 13px;
             }
             QPushButton:hover { background: #f5c800; }
             QPushButton:pressed { background: #e6b800; }
@@ -386,7 +387,8 @@ class ChatRoomWidget(QWidget):
         my_id = self._employee.get("id")
         is_own = msg.get("sender_employee_id") == my_id
         token = getattr(self._api, "token", "") or ""
-        bubble = ChatMessageBubble(msg, is_own, token=token)
+        base_url = getattr(self._api, "base_url", "") or ""
+        bubble = ChatMessageBubble(msg, is_own, token=token, base_url=base_url)
         bubble.edit_requested.connect(self._on_edit_requested)
         bubble.delete_requested.connect(self._on_delete_requested)
         bubble.reply_requested.connect(self._on_reply_requested)

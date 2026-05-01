@@ -67,11 +67,12 @@ class ChatMessageBubble(QWidget):
     delete_requested = pyqtSignal(dict)
     reply_requested = pyqtSignal(dict)
 
-    def __init__(self, message: dict, is_own: bool, parent=None, token: str = ""):
+    def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = ""):
         super().__init__(parent)
         self._msg = message
         self._is_own = is_own
         self._token = token
+        self._base_url = base_url.rstrip("/")
         self.setAutoFillBackground(False)
         self._setup_ui()
 
@@ -280,6 +281,7 @@ class ChatMessageBubble(QWidget):
     def _build_voice(self, layout: QVBoxLayout):
         row = QHBoxLayout()
         row.setSpacing(6)
+        row.setAlignment(Qt.AlignVCenter)
 
         play_btn = QPushButton("▶  Голосовое")
         play_btn.setFixedHeight(28)
@@ -321,21 +323,14 @@ class ChatMessageBubble(QWidget):
         img_lbl.setCursor(Qt.PointingHandCursor)
         img_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url))
 
-        # Если есть yandex_path — используем streaming endpoint (как мобильная версия)
-        load_url = url
-        if yandex_path and self._token:
+        # Если есть yandex_path и api base_url — используем streaming endpoint (как мобильная версия)
+        load_url = ""
+        if yandex_path and self._token and self._base_url:
             path = yandex_path.replace("disk:", "", 1)
             encoded = quote(path, safe="/")
-            # Определяем base_url из file_url
-            try:
-                from urllib.parse import urlparse
-
-                parsed = urlparse(url)
-                base = f"{parsed.scheme}://{parsed.netloc}"
-            except Exception:
-                base = ""
-            if base:
-                load_url = f"{base}/api/v1/files/stream?yandex_path={encoded}&token={quote(self._token, safe='')}"
+            load_url = f"{self._base_url}/api/v1/files/stream?yandex_path={encoded}&token={quote(self._token, safe='')}"
+        elif url:
+            load_url = url
 
         if load_url:
             self._img_nam = QNetworkAccessManager(self)
@@ -363,6 +358,7 @@ class ChatMessageBubble(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(8)
+        row.setAlignment(Qt.AlignVCenter)
 
         icon_lbl = QLabel("📎")
         icon_lbl.setStyleSheet("font-size: 20px; background: transparent;")
