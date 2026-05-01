@@ -85,6 +85,15 @@ class ChatMixin:
         except Exception:
             return False
 
+    def pin_chat_message(self, chat_id: int, msg_id: int) -> bool:
+        """Закрепить / открепить сообщение (toggle)."""
+        try:
+            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/messages/{msg_id}/pin")
+            self._handle_response(r)
+            return True
+        except Exception:
+            return False
+
     def mark_chat_read(self, chat_id: int, last_message_id: int) -> bool:
         try:
             r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/messages/{last_message_id}/read")

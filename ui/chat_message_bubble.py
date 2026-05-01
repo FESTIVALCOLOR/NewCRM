@@ -30,6 +30,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from utils.icon_loader import IconLoader
+
 _STYLE_OWN = """
     QFrame#bubble {
         background-color: #E8F5E9;
@@ -66,6 +68,7 @@ class ChatMessageBubble(QWidget):
     edit_requested = pyqtSignal(dict)
     delete_requested = pyqtSignal(dict)
     reply_requested = pyqtSignal(dict)
+    pin_requested = pyqtSignal(dict)
 
     def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = ""):
         super().__init__(parent)
@@ -85,6 +88,11 @@ class ChatMessageBubble(QWidget):
         menu = QMenu(self)
         reply_act = menu.addAction("Ответить")
         reply_act.triggered.connect(lambda: self.reply_requested.emit(self._msg))
+
+        pin_label = "Открепить" if self._msg.get("is_pinned") else "Закрепить"
+        pin_act = menu.addAction(pin_label)
+        pin_act.triggered.connect(lambda: self.pin_requested.emit(self._msg))
+
         if self._is_own and not self._msg.get("is_deleted"):
             if self._msg.get("message_type", "text") == "text":
                 edit_act = menu.addAction("Редактировать")
@@ -310,7 +318,9 @@ class ChatMessageBubble(QWidget):
         display_name = name[:28] + ("…" if len(name) > 28 else "")
 
         img_lbl = QLabel(display_name)
-        img_lbl.setFixedSize(240, 180)
+        img_lbl.setMinimumSize(120, 80)
+        img_lbl.setMaximumWidth(380)
+        img_lbl.setFixedHeight(200)
         img_lbl.setAlignment(Qt.AlignCenter)
         img_lbl.setStyleSheet("""
             border: 1px solid #ddd;
@@ -319,6 +329,7 @@ class ChatMessageBubble(QWidget):
             color: #666;
             font-size: 11px;
         """)
+        img_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         img_lbl.setToolTip(f"{name}\n(кликните для открытия)")
         img_lbl.setCursor(Qt.PointingHandCursor)
         img_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url))
@@ -344,7 +355,12 @@ class ChatMessageBubble(QWidget):
                     data = reply.readAll()
                     pix = QPixmap()
                     if pix.loadFromData(data):
-                        img_lbl.setPixmap(pix.scaled(240, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        w = min(pix.width(), 380)
+                        h = min(int(pix.height() * w / max(pix.width(), 1)), 320)
+                        h = max(h, 80)
+                        img_lbl.setFixedHeight(h)
+                        img_lbl.setPixmap(pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        img_lbl.setStyleSheet("border-radius: 6px; background: transparent;")
                         img_lbl.setToolTip(name)
                 reply.deleteLater()
 
@@ -360,8 +376,10 @@ class ChatMessageBubble(QWidget):
         row.setSpacing(8)
         row.setAlignment(Qt.AlignVCenter)
 
-        icon_lbl = QLabel("📎")
-        icon_lbl.setStyleSheet("font-size: 20px; background: transparent;")
+        icon_lbl = QLabel()
+        file_icon = IconLoader.load_colored("file-text", color="#555", size=20)
+        icon_lbl.setPixmap(file_icon.pixmap(20, 20))
+        icon_lbl.setStyleSheet("background: transparent;")
         row.addWidget(icon_lbl)
 
         name_lbl = QLabel(name[:30] + ("…" if len(name) > 30 else ""))

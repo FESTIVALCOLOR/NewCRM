@@ -40,6 +40,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.chat_message_bubble import ChatMessageBubble
+from utils.icon_loader import IconLoader
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,10 @@ class ChatRoomWidget(QWidget):
         self._edit_msg_id: Optional[int] = None
         self._first_unread_id: Optional[int] = None
 
+        # Закреплённые сообщения
+        self._pinned_messages: list = []
+        self._pinned_index: int = 0
+
         # Подключаем сигналы ДО setup_ui, чтобы они были готовы когда придут данные
         self._sig_messages_ready.connect(self._on_messages_loaded)
         self._sig_new_msg.connect(self._append_message)
@@ -171,11 +176,23 @@ class ChatRoomWidget(QWidget):
         h_layout.setContentsMargins(12, 0, 12, 0)
         h_layout.setSpacing(8)
 
+        title_col = QVBoxLayout()
+        title_col.setSpacing(0)
+        title_col.setContentsMargins(0, 0, 0, 0)
+
         self._title_lbl = QLabel("Чат")
         self._title_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
         self._title_lbl.setMinimumWidth(0)
         self._title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        h_layout.addWidget(self._title_lbl)
+        title_col.addWidget(self._title_lbl)
+
+        self._member_count_lbl = QLabel("")
+        self._member_count_lbl.setStyleSheet("font-size: 10px; color: #888;")
+        self._member_count_lbl.setVisible(False)
+        title_col.addWidget(self._member_count_lbl)
+
+        h_layout.addLayout(title_col)
+        h_layout.setStretch(0, 1)
 
         # Индикатор WebSocket соединения
         self._ws_dot = QLabel("●")
@@ -200,6 +217,54 @@ class ChatRoomWidget(QWidget):
         h_layout.addWidget(members_btn)
 
         main_layout.addWidget(header)
+
+        # ---------- PINNED MESSAGE BAR ----------
+        self._pinned_bar = QFrame()
+        self._pinned_bar.setStyleSheet("""
+            QFrame {
+                background: #FFF8DC;
+                border-bottom: 1px solid #f5d84a;
+            }
+        """)
+        self._pinned_bar.setFixedHeight(32)
+        pb_layout = QHBoxLayout(self._pinned_bar)
+        pb_layout.setContentsMargins(10, 0, 6, 0)
+        pb_layout.setSpacing(6)
+
+        self._pin_icon_lbl = QLabel("▶")
+        self._pin_icon_lbl.setFixedWidth(12)
+        self._pin_icon_lbl.setStyleSheet("font-size: 9px; color: #c9a700;")
+        pb_layout.addWidget(self._pin_icon_lbl)
+
+        self._pin_text_lbl = QLabel("")
+        self._pin_text_lbl.setStyleSheet("font-size: 11px; color: #555;")
+        self._pin_text_lbl.setMinimumWidth(0)
+        self._pin_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._pin_text_lbl.setCursor(Qt.PointingHandCursor)
+        pb_layout.addWidget(self._pin_text_lbl)
+
+        self._pin_nav_lbl = QLabel("")
+        self._pin_nav_lbl.setStyleSheet("font-size: 10px; color: #888;")
+        pb_layout.addWidget(self._pin_nav_lbl)
+
+        unpin_btn = QPushButton("×")
+        unpin_btn.setFixedSize(20, 20)
+        unpin_btn.setStyleSheet("""
+            QPushButton {
+                border: none; background: transparent;
+                font-size: 14px; color: #aaa;
+            }
+            QPushButton:hover { color: #555; }
+        """)
+        unpin_btn.setToolTip("Открепить сообщение")
+        unpin_btn.clicked.connect(self._unpin_current)
+        pb_layout.addWidget(unpin_btn)
+
+        self._pinned_bar.setVisible(False)
+        self._pinned_bar.mousePressEvent = lambda e: self._scroll_to_pinned()
+        self._pinned_messages = []
+        self._pinned_index = 0
+        main_layout.addWidget(self._pinned_bar)
 
         # ---------- TYPING INDICATOR ----------
         self._typing_lbl = QLabel("")
@@ -294,31 +359,14 @@ class ChatRoomWidget(QWidget):
         row.setSpacing(6)
         row.setAlignment(Qt.AlignVCenter)
 
-        attach_btn = QPushButton("📎")
-        attach_btn.setFixedSize(36, 36)
-        attach_btn.setToolTip("Прикрепить файл")
-        attach_btn.setStyleSheet("""
-            QPushButton {
-                border: 1px solid #d9d9d9; border-radius: 18px;
-                font-size: 16px; background: #fff;
-            }
-            QPushButton:hover { background: #f5f5f5; }
-        """)
+        attach_btn = IconLoader.create_action_button("upload", tooltip="Прикрепить файл", button_size=36, icon_size=18, icon_color="#666")
+        attach_btn.setStyleSheet(attach_btn.styleSheet() + "QPushButton { border-radius: 18px; }")
         attach_btn.clicked.connect(self._attach_file)
         row.addWidget(attach_btn)
 
-        voice_btn = QPushButton("🎤")
-        voice_btn.setFixedSize(36, 36)
+        voice_btn = IconLoader.create_action_button("message-circle", tooltip="Голосовое (только мобиль)", button_size=36, icon_size=18, icon_color="#888")
         voice_btn.setCheckable(True)
-        voice_btn.setToolTip("Голосовое сообщение")
-        voice_btn.setStyleSheet("""
-            QPushButton {
-                border: 1px solid #d9d9d9; border-radius: 18px;
-                font-size: 16px; background: #fff;
-            }
-            QPushButton:hover { background: #f5f5f5; }
-            QPushButton:checked { background: #ffd93c; border-color: #e6c535; }
-        """)
+        voice_btn.setStyleSheet(voice_btn.styleSheet() + "QPushButton { border-radius: 18px; } QPushButton:checked { background: #ffd93c; border-color: #e6c535; }")
         voice_btn.clicked.connect(self._toggle_voice)
         self._voice_btn = voice_btn
         row.addWidget(voice_btn)
@@ -338,20 +386,8 @@ class ChatRoomWidget(QWidget):
         self._input.textChanged.connect(self._on_input_changed)
         row.addWidget(self._input, stretch=1)
 
-        self._send_btn = QPushButton("➤")
-        self._send_btn.setFixedSize(36, 36)
-        self._send_btn.setToolTip("Отправить")
-        self._send_btn.setStyleSheet("""
-            QPushButton {
-                background: #ffd93c;
-                border: none;
-                border-radius: 18px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #f5c800; }
-            QPushButton:pressed { background: #e6b800; }
-        """)
+        self._send_btn = IconLoader.create_action_button("arrow-right-circle", tooltip="Отправить", button_size=36, icon_size=20, bg_color="#ffd93c", hover_color="#f5c800", icon_color="#555")
+        self._send_btn.setStyleSheet(self._send_btn.styleSheet() + "QPushButton { border-radius: 18px; border: none; } QPushButton:pressed { background: #e6b800; }")
         self._send_btn.clicked.connect(self._send_text)
         row.addWidget(self._send_btn)
 
@@ -380,6 +416,12 @@ class ChatRoomWidget(QWidget):
             self._title_lbl.setText(chat.get("title") or "Чат")
             self._crm_card_id = chat.get("crm_card_id")
             self._first_unread_id = chat.get("first_unread_message_id")
+            member_count = chat.get("member_count")
+            if member_count:
+                self._member_count_lbl.setText(f"• {member_count} уч.")
+                self._member_count_lbl.setVisible(True)
+            self._pinned_messages = chat.get("pinned_messages") or []
+            self._update_pinned_bar()
         self._messages = list(msgs) if msgs else []
         self._render_all_messages()
 
@@ -392,6 +434,7 @@ class ChatRoomWidget(QWidget):
         bubble.edit_requested.connect(self._on_edit_requested)
         bubble.delete_requested.connect(self._on_delete_requested)
         bubble.reply_requested.connect(self._on_reply_requested)
+        bubble.pin_requested.connect(self._on_pin_requested)
         return bubble
 
     def _render_all_messages(self):
@@ -530,6 +573,27 @@ class ChatRoomWidget(QWidget):
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    def _on_pin_requested(self, msg: dict):
+        msg_id = msg.get("id")
+        if not msg_id:
+            return
+
+        def _worker():
+            self._api.pin_chat_message(self._chat_id, msg_id)
+            chat = self._api.get_internal_chat(self._chat_id)
+            if chat:
+                self._pinned_messages = chat.get("pinned_messages") or []
+                self._pinned_index = 0
+                # Обновить is_pinned в self._messages
+                pinned_ids = {m.get("id") for m in self._pinned_messages}
+                for i, m in enumerate(self._messages):
+                    if m.get("id") == msg_id:
+                        self._messages[i] = dict(m, is_pinned=(msg_id in pinned_ids))
+                        break
+                self._sig_ws_data.emit({"type": "_update_pinned"})
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     def _cancel_action(self):
         self._reply_to_msg = None
         self._edit_msg_id = None
@@ -586,6 +650,20 @@ class ChatRoomWidget(QWidget):
 
         if event == "_hide_progress":
             self._upload_progress.setVisible(False)
+
+        elif event == "_update_pinned":
+            self._update_pinned_bar()
+
+        elif event == "message_pinned":
+            # WS-событие: msg_id закреплён/откреплён — перезагрузить из API
+            def _reload_pinned():
+                chat = self._api.get_internal_chat(self._chat_id)
+                if chat:
+                    self._pinned_messages = chat.get("pinned_messages") or []
+                    self._pinned_index = 0
+                    self._sig_ws_data.emit({"type": "_update_pinned"})
+
+            threading.Thread(target=_reload_pinned, daemon=True).start()
 
         elif event == "_rerender":
             self._render_all_messages()
@@ -737,6 +815,69 @@ class ChatRoomWidget(QWidget):
             crm_card_id=self._crm_card_id,
         )
         dlg.exec_()
+
+    # ===========================================================
+    # Закреплённые сообщения
+    # ===========================================================
+
+    def _update_pinned_bar(self):
+        if not self._pinned_messages:
+            self._pinned_bar.setVisible(False)
+            return
+        total = len(self._pinned_messages)
+        idx = max(0, min(self._pinned_index, total - 1))
+        msg = self._pinned_messages[idx]
+        content = msg.get("content") or ""
+        if msg.get("message_type") in ("image", "file", "voice"):
+            content = f"[{msg.get('message_type', 'файл')}]"
+        preview = (content[:55] + "…") if len(content) > 55 else content
+        self._pin_text_lbl.setText(f"Закреплено: {preview}")
+        if total > 1:
+            self._pin_nav_lbl.setText(f"{idx + 1}/{total}")
+            self._pin_nav_lbl.setVisible(True)
+        else:
+            self._pin_nav_lbl.setVisible(False)
+        self._pinned_bar.setVisible(True)
+
+    def _scroll_to_pinned(self):
+        if not self._pinned_messages:
+            return
+        total = len(self._pinned_messages)
+        self._pinned_index = (self._pinned_index + 1) % total
+        self._update_pinned_bar()
+        # Прокрутка к сообщению
+        idx = self._pinned_index
+        msg_id = self._pinned_messages[idx].get("id")
+        if not msg_id:
+            return
+        layout = self._messages_layout
+        for i in range(1, layout.count()):
+            item = layout.itemAt(i)
+            w = item.widget() if item else None
+            if w and hasattr(w, "_msg") and w._msg.get("id") == msg_id:
+                pos_y = w.mapTo(self._messages_widget, w.rect().topLeft()).y()
+                self._scroll.verticalScrollBar().setValue(max(0, pos_y - 20))
+                return
+
+    def _unpin_current(self):
+        if not self._pinned_messages:
+            return
+        idx = max(0, min(self._pinned_index, len(self._pinned_messages) - 1))
+        msg = self._pinned_messages[idx]
+        msg_id = msg.get("id")
+        if not msg_id:
+            return
+
+        def _worker():
+            self._api.pin_chat_message(self._chat_id, msg_id)
+            # Обновить список закреплённых
+            chat = self._api.get_internal_chat(self._chat_id)
+            if chat:
+                self._pinned_messages = chat.get("pinned_messages") or []
+                self._pinned_index = 0
+                self._sig_ws_data.emit({"type": "_update_pinned"})
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ===========================================================
     # Публичные методы
