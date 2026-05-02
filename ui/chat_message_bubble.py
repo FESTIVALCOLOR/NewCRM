@@ -171,6 +171,10 @@ class ChatMessageBubble(QWidget):
         # Строка заголовка: имя отправителя + кнопка "⋮"
         self._build_header(v)
 
+        # Маркер пересланного сообщения
+        if "(переслано)" in (self._msg.get("sender_display_name") or ""):
+            self._build_forwarded_marker(v)
+
         # Содержимое
         if msg_type == "text":
             self._build_text(v)
@@ -192,6 +196,13 @@ class ChatMessageBubble(QWidget):
         else:
             outer.addWidget(bubble)
             outer.addWidget(spacer)
+
+    # ----------------------------------------------------------
+    def _build_forwarded_marker(self, layout: QVBoxLayout):
+        """Серая метка «→ Переслано» между именем отправителя и контентом."""
+        fwd = QLabel("→ Переслано")
+        fwd.setStyleSheet("font-size: 10px; color: #888; font-style: italic; background: transparent; padding: 0 0 2px 0;")
+        layout.addWidget(fwd)
 
     # ----------------------------------------------------------
     def _build_header(self, layout: QVBoxLayout):

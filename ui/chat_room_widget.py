@@ -14,6 +14,7 @@ ChatRoomWidget — основной виджет чат-комнаты.
     НЕ через QTimer.singleShot (он не срабатывает из threading.Thread в PyQt5 5.15)
 """
 
+from datetime import datetime, timedelta
 import json
 import logging
 import os
@@ -531,9 +532,16 @@ class ChatRoomWidget(QWidget):
                 item.widget().deleteLater()
 
         unread_divider_shown = False
+        last_date = None
         i = 0
         while i < len(self._messages):
             msg = self._messages[i]
+
+            # Дата-разделитель при смене дня
+            msg_date = self._msg_local_date(msg)
+            if msg_date and msg_date != last_date:
+                layout.addWidget(self._make_date_divider(self._date_label(msg_date)))
+                last_date = msg_date
 
             if self._first_unread_id and msg.get("id") == self._first_unread_id and not unread_divider_shown:
                 divider = self._make_unread_divider()
@@ -575,6 +583,53 @@ class ChatRoomWidget(QWidget):
         gallery.scroll_to_requested.connect(self._scroll_to_message)
         gallery.forward_requested.connect(self._on_forward_requested)
         return gallery
+
+    @staticmethod
+    def _msg_local_date(msg: dict):
+        """Вернуть локальную дату сообщения или None при ошибке."""
+        ts = msg.get("created_at", "")
+        if not ts:
+            return None
+        try:
+            clean = ts.rstrip("Z").replace("+00:00", "")
+            dt_utc = datetime.fromisoformat(clean).replace(tzinfo=None)
+            epoch = (dt_utc - datetime(1970, 1, 1)).total_seconds()
+            return datetime.fromtimestamp(epoch).date()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _date_label(d) -> str:
+        """Человекочитаемая метка для дня: Сегодня / Вчера / «12 мая»."""
+        today = datetime.now().date()
+        if d == today:
+            return "Сегодня"
+        if d == today - timedelta(days=1):
+            return "Вчера"
+        months = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+        return f"{d.day} {months[d.month - 1]}"
+
+    def _make_date_divider(self, label: str) -> QWidget:
+        w = QWidget()
+        row = QHBoxLayout(w)
+        row.setContentsMargins(8, 8, 8, 4)
+        row.setSpacing(8)
+
+        line_l = QFrame()
+        line_l.setFrameShape(QFrame.HLine)
+        line_l.setStyleSheet("color: #E0E0E0;")
+        row.addWidget(line_l, stretch=1)
+
+        lbl = QLabel(label)
+        lbl.setStyleSheet("font-size: 10px; color: #999; white-space: nowrap; background: transparent;")
+        row.addWidget(lbl)
+
+        line_r = QFrame()
+        line_r.setFrameShape(QFrame.HLine)
+        line_r.setStyleSheet("color: #E0E0E0;")
+        row.addWidget(line_r, stretch=1)
+
+        return w
 
     def _make_unread_divider(self) -> QWidget:
         w = QWidget()
