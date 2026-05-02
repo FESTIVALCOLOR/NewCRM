@@ -235,67 +235,7 @@ class ChatRoomWidget(QWidget):
         h_layout.addWidget(members_btn)
 
         main_layout.addWidget(header)
-
-        # ---------- PINNED MESSAGE BAR ----------
-        self._pinned_bar = QFrame()
-        self._pinned_bar.setStyleSheet("""
-            QFrame {
-                background: #fff;
-                border-bottom: 1px solid #E0E0E0;
-            }
-        """)
-        self._pinned_bar.setFixedHeight(44)
-        pb_layout = QHBoxLayout(self._pinned_bar)
-        pb_layout.setContentsMargins(10, 4, 6, 4)
-        pb_layout.setSpacing(6)
-
-        self._pin_icon_lbl = QLabel("|")
-        self._pin_icon_lbl.setFixedWidth(12)
-        self._pin_icon_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #E65100;")
-        pb_layout.addWidget(self._pin_icon_lbl)
-
-        pin_text_col = QVBoxLayout()
-        pin_text_col.setSpacing(0)
-        pin_text_col.setContentsMargins(0, 0, 0, 0)
-
-        self._pin_title_lbl = QLabel("Закреплено")
-        self._pin_title_lbl.setStyleSheet("font-size: 10px; font-weight: bold; color: #E65100;")
-        pin_text_col.addWidget(self._pin_title_lbl)
-
-        self._pin_text_lbl = QLabel("")
-        self._pin_text_lbl.setStyleSheet("font-size: 11px; color: #333;")
-        self._pin_text_lbl.setMinimumWidth(0)
-        self._pin_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self._pin_text_lbl.setCursor(Qt.PointingHandCursor)
-        pin_text_col.addWidget(self._pin_text_lbl)
-
-        pin_text_widget = QWidget()
-        pin_text_widget.setLayout(pin_text_col)
-        pin_text_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        pb_layout.addWidget(pin_text_widget)
-
-        self._pin_nav_lbl = QLabel("")
-        self._pin_nav_lbl.setStyleSheet("color: #E65100; font-size: 10px; font-weight: bold;")
-        pb_layout.addWidget(self._pin_nav_lbl)
-
-        unpin_btn = QPushButton("×")
-        unpin_btn.setFixedSize(20, 20)
-        unpin_btn.setStyleSheet("""
-            QPushButton {
-                border: none; background: transparent;
-                font-size: 12px; line-height: 1; color: #aaa;
-            }
-            QPushButton:hover { color: #555; }
-        """)
-        unpin_btn.setToolTip("Открепить сообщение")
-        unpin_btn.clicked.connect(self._unpin_current)
-        pb_layout.addWidget(unpin_btn)
-
-        self._pinned_bar.setVisible(False)
-        self._pinned_bar.mousePressEvent = lambda e: self._scroll_to_pinned()
-        self._pinned_messages = []
-        self._pinned_index = 0
-        main_layout.addWidget(self._pinned_bar)
+        self._build_pinned_bar(main_layout)
 
         # ---------- TYPING INDICATOR ----------
         self._typing_lbl = QLabel("")
@@ -319,87 +259,122 @@ class ChatRoomWidget(QWidget):
         self._scroll.setWidget(self._messages_widget)
         main_layout.addWidget(self._scroll, stretch=1)
 
-        # ---------- ACTION BAR (ответ / редактирование) ----------
-        self._action_bar = QFrame()
-        self._action_bar.setStyleSheet("""
-            QFrame {
-                background: #F3F6FF;
-                border-top: 1px solid #D0D9F0;
+        # ---------- FLOATING SCROLL-TO-BOTTOM BUTTON ----------
+        self._scroll_btn = QPushButton("↓", self._scroll)
+        self._scroll_btn.setFixedSize(32, 32)
+        self._scroll_btn.setToolTip("Прокрутить вниз")
+        self._scroll_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,220);
+                border: 1px solid #D0D0D0;
+                border-radius: 16px;
+                font-size: 14px;
+                color: #555;
+            }
+            QPushButton:hover {
+                background: #FFF8DC;
+                border-color: #ffd93c;
+                color: #333;
             }
         """)
+        self._scroll_btn.clicked.connect(self._scroll_to_bottom)
+        self._scroll_btn.hide()
+        self._scroll.verticalScrollBar().valueChanged.connect(self._on_scroll_value_changed)
+
+        self._build_action_area(main_layout)
+        self._build_input_panel(main_layout)
+
+    def _build_pinned_bar(self, main_layout):
+        self._pinned_bar = QFrame()
+        self._pinned_bar.setStyleSheet("QFrame { background: #fff; border-bottom: 1px solid #E0E0E0; }")
+        self._pinned_bar.setFixedHeight(44)
+        pb_layout = QHBoxLayout(self._pinned_bar)
+        pb_layout.setContentsMargins(10, 4, 6, 4)
+        pb_layout.setSpacing(6)
+
+        self._pin_icon_lbl = QLabel("|")
+        self._pin_icon_lbl.setFixedWidth(12)
+        self._pin_icon_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #E65100;")
+        pb_layout.addWidget(self._pin_icon_lbl)
+
+        pin_text_col = QVBoxLayout()
+        pin_text_col.setSpacing(0)
+        pin_text_col.setContentsMargins(0, 0, 0, 0)
+        self._pin_title_lbl = QLabel("Закреплено")
+        self._pin_title_lbl.setStyleSheet("font-size: 10px; font-weight: bold; color: #E65100;")
+        pin_text_col.addWidget(self._pin_title_lbl)
+        self._pin_text_lbl = QLabel("")
+        self._pin_text_lbl.setStyleSheet("font-size: 11px; color: #333;")
+        self._pin_text_lbl.setMinimumWidth(0)
+        self._pin_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._pin_text_lbl.setCursor(Qt.PointingHandCursor)
+        pin_text_col.addWidget(self._pin_text_lbl)
+        pin_text_widget = QWidget()
+        pin_text_widget.setLayout(pin_text_col)
+        pin_text_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        pb_layout.addWidget(pin_text_widget)
+
+        self._pin_nav_lbl = QLabel("")
+        self._pin_nav_lbl.setStyleSheet("color: #E65100; font-size: 10px; font-weight: bold;")
+        pb_layout.addWidget(self._pin_nav_lbl)
+
+        unpin_btn = QPushButton("×")
+        unpin_btn.setFixedSize(20, 20)
+        unpin_btn.setStyleSheet("QPushButton { border: none; background: transparent; font-size: 12px; line-height: 1; color: #aaa; }QPushButton:hover { color: #555; }")
+        unpin_btn.setToolTip("Открепить сообщение")
+        unpin_btn.clicked.connect(self._unpin_current)
+        pb_layout.addWidget(unpin_btn)
+
+        self._pinned_bar.setVisible(False)
+        self._pinned_bar.mousePressEvent = lambda e: self._scroll_to_pinned()
+        self._pinned_messages = []
+        self._pinned_index = 0
+        main_layout.addWidget(self._pinned_bar)
+
+    def _build_action_area(self, main_layout):
+        # ACTION BAR (ответ / редактирование)
+        self._action_bar = QFrame()
+        self._action_bar.setStyleSheet("QFrame { background: #F3F6FF; border-top: 1px solid #D0D9F0; }")
         self._action_bar.setFixedHeight(36)
         ab_layout = QHBoxLayout(self._action_bar)
         ab_layout.setContentsMargins(12, 0, 8, 0)
         ab_layout.setSpacing(8)
-
         self._action_icon_lbl = QLabel("↩")
         self._action_icon_lbl.setStyleSheet("font-size: 16px; color: #1565C0;")
         ab_layout.addWidget(self._action_icon_lbl)
-
         self._action_text_lbl = QLabel("")
         self._action_text_lbl.setStyleSheet("font-size: 11px; color: #1565C0;")
         self._action_text_lbl.setMinimumWidth(0)
         self._action_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         ab_layout.addWidget(self._action_text_lbl)
-
         cancel_btn = QPushButton("×")
         cancel_btn.setFixedSize(24, 24)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                border: none; background: transparent;
-                font-size: 12px; line-height: 1; color: #888;
-            }
-            QPushButton:hover { color: #333; }
-        """)
+        cancel_btn.setStyleSheet("QPushButton { border: none; background: transparent; font-size: 12px; line-height: 1; color: #888; }QPushButton:hover { color: #333; }")
         cancel_btn.clicked.connect(self._cancel_action)
         ab_layout.addWidget(cancel_btn)
-
         self._action_bar.setVisible(False)
         main_layout.addWidget(self._action_bar)
 
-        # ---------- UPLOAD PROGRESS ----------
+        # UPLOAD PROGRESS
         self._upload_progress = QProgressBar()
         self._upload_progress.setFixedHeight(4)
-        self._upload_progress.setRange(0, 0)  # indeterminate
-        self._upload_progress.setStyleSheet("""
-            QProgressBar {
-                border: none;
-                background: #f0f0f0;
-            }
-            QProgressBar::chunk {
-                background: #ffd93c;
-            }
-        """)
+        self._upload_progress.setRange(0, 0)
+        self._upload_progress.setStyleSheet("QProgressBar { border: none; background: #f0f0f0; }QProgressBar::chunk { background: #ffd93c; }")
         self._upload_progress.setVisible(False)
         main_layout.addWidget(self._upload_progress)
 
-        # ---------- PENDING FILES PREVIEW ----------
+        # PENDING FILES PREVIEW
         self._pending_panel = QFrame()
-        self._pending_panel.setStyleSheet("""
-            QFrame {
-                background: #E3F2FD;
-                border-top: 1px solid #BBDEFB;
-            }
-        """)
+        self._pending_panel.setStyleSheet("QFrame { background: #E3F2FD; border-top: 1px solid #BBDEFB; }")
         self._pending_panel.setFixedHeight(104)
         pp_vbox = QVBoxLayout(self._pending_panel)
         pp_vbox.setContentsMargins(8, 4, 8, 6)
         pp_vbox.setSpacing(4)
-
         self._caption_input = QLineEdit()
         self._caption_input.setPlaceholderText("Подпись к файлу…")
         self._caption_input.setFixedHeight(24)
-        self._caption_input.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #BBDEFB;
-                border-radius: 12px;
-                padding: 0 10px;
-                font-size: 11px;
-                background: #fff;
-            }
-        """)
+        self._caption_input.setStyleSheet("QLineEdit { border: 1px solid #BBDEFB; border-radius: 12px; padding: 0 10px; font-size: 11px; background: #fff; }")
         pp_vbox.addWidget(self._caption_input)
-
         pp_thumb_widget = QWidget()
         pp_thumb_widget.setStyleSheet("background: transparent;")
         pp_layout = QHBoxLayout(pp_thumb_widget)
@@ -410,8 +385,6 @@ class ChatRoomWidget(QWidget):
         self._pending_thumbnails_layout = pp_layout
         self._pending_panel.setVisible(False)
         main_layout.addWidget(self._pending_panel)
-
-        self._build_input_panel(main_layout)
 
     def _build_input_panel(self, main_layout):
         input_frame = QFrame()
@@ -716,6 +689,20 @@ class ChatRoomWidget(QWidget):
     def _scroll_to_bottom(self):
         # Вызывается из GUI-потока — QTimer здесь работает корректно
         QTimer.singleShot(50, lambda: self._scroll.verticalScrollBar().setValue(self._scroll.verticalScrollBar().maximum()))
+
+    def _on_scroll_value_changed(self, value: int):
+        sb = self._scroll.verticalScrollBar()
+        near_bottom = sb.maximum() == 0 or value >= sb.maximum() - 120
+        self._scroll_btn.setVisible(not near_bottom)
+        if not near_bottom:
+            self._reposition_scroll_btn()
+
+    def _reposition_scroll_btn(self):
+        btn = self._scroll_btn
+        x = self._scroll.width() - btn.width() - 14
+        y = self._scroll.height() - btn.height() - 14
+        btn.move(x, y)
+        btn.raise_()
 
     # ===========================================================
     # Действия над сообщениями
@@ -1484,6 +1471,11 @@ class ChatRoomWidget(QWidget):
         if self._ws_worker:
             self._ws_worker.stop()
         super().closeEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_scroll_btn") and self._scroll_btn.isVisible():
+            self._reposition_scroll_btn()
 
     def hideEvent(self, event):
         super().hideEvent(event)
