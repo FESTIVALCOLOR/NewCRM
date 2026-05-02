@@ -1823,8 +1823,8 @@ class MainWindow(QMainWindow):
             dlg.setWindowTitle("Чат сотрудников")
             dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
             dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
-            dlg.setMinimumSize(860, 560)
-            dlg.resize(960, 640)
+            dlg.setMinimumSize(1120, 728)
+            dlg.resize(1248, 832)
 
             outer = QVBoxLayout(dlg)
             outer.setContentsMargins(1, 1, 1, 1)
@@ -1873,8 +1873,8 @@ class MainWindow(QMainWindow):
             dlg.setWindowTitle("Чат с клиентами")
             dlg.setWindowFlags(_Qt.FramelessWindowHint | _Qt.Dialog)
             dlg.setAttribute(_Qt.WA_TranslucentBackground, True)
-            dlg.setMinimumSize(860, 560)
-            dlg.resize(960, 640)
+            dlg.setMinimumSize(1120, 728)
+            dlg.resize(1248, 832)
 
             outer = QVBoxLayout(dlg)
             outer.setContentsMargins(1, 1, 1, 1)

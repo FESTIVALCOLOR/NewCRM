@@ -70,8 +70,8 @@ class ClientChatsTab(QWidget):
 
         # ------- LEFT: список чатов -------
         left = QWidget()
-        left.setMinimumWidth(260)
-        left.setMaximumWidth(360)
+        left.setMinimumWidth(320)
+        left.setMaximumWidth(460)
         left.setStyleSheet("background: #FAFAFA; border-right: 1px solid #E0E0E0;")
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
@@ -153,7 +153,7 @@ class ClientChatsTab(QWidget):
         rv.addWidget(self._right, stretch=1)
 
         splitter.addWidget(right_outer)
-        splitter.setSizes([280, 700])
+        splitter.setSizes([360, 900])
 
         layout.addWidget(splitter)
 
