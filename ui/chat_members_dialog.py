@@ -4,7 +4,7 @@
 
 import threading
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QSize, Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QDialog,
     QFrame,
@@ -207,9 +207,11 @@ class ChatMembersDialog(QDialog):
             label_text = f"{display}  ({role})" if role else display
 
             row = QWidget()
+            row.setFixedHeight(36)
             rl = QHBoxLayout(row)
-            rl.setContentsMargins(8, 3, 8, 3)
+            rl.setContentsMargins(8, 0, 8, 0)
             rl.setSpacing(8)
+            rl.setAlignment(Qt.AlignVCenter)
 
             lbl = QLabel(label_text)
             lbl.setStyleSheet("font-size: 12px;")
@@ -219,12 +221,12 @@ class ChatMembersDialog(QDialog):
             emp_id = m.get("employee_id")
             if member_id and emp_id and emp_id != self._employee.get("id"):
                 del_btn = QPushButton("×")
-                del_btn.setFixedSize(22, 22)
+                del_btn.setFixedSize(24, 24)
                 del_btn.setToolTip("Удалить из чата")
                 del_btn.setStyleSheet("""
                     QPushButton {
                         background: transparent; border: 1px solid #ffcccc;
-                        border-radius: 4px; color: #cc0000; font-size: 15px;
+                        border-radius: 4px; color: #cc0000; font-size: 14px;
                         font-weight: bold; padding: 0;
                     }
                     QPushButton:hover { background: #ffeeee; }
@@ -234,7 +236,7 @@ class ChatMembersDialog(QDialog):
 
             item = QListWidgetItem()
             item.setData(Qt.UserRole, m)
-            item.setSizeHint(row.sizeHint())
+            item.setSizeHint(QSize(0, 36))
             self._members_list.addItem(item)
             self._members_list.setItemWidget(item, row)
 

@@ -128,7 +128,7 @@ class ChatMixin:
 
     def add_chat_member(self, chat_id: int, employee_id: int) -> bool:
         try:
-            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/members", data={"employee_id": employee_id})
+            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/members", json={"employee_id": employee_id})
             self._handle_response(r)
             return True
         except Exception:

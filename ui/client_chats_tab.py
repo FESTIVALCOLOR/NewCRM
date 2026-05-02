@@ -385,6 +385,8 @@ class ClientChatsTab(QWidget):
         dlg = ScriptSendDialog(
             chat_id=self._current_chat["id"],
             api_client=self._api,
+            employee=self._employee,
+            crm_card_id=self._current_chat.get("crm_card_id"),
             parent=self,
         )
         dlg.exec_()
@@ -418,17 +420,27 @@ class ClientChatsTab(QWidget):
 
 
 class ScriptSendDialog(QDialog):
-    """Диалог отправки скрипта в клиентский чат."""
+    """Двухэтапный диалог отправки скрипта: выбор из списка → редактирование → отправка."""
 
-    def __init__(self, chat_id: int, api_client, parent=None):
+    _sig_data = pyqtSignal(object, object)  # (scripts_list, card_dict)
+
+    def __init__(self, chat_id: int, api_client, employee: dict = None, crm_card_id: int = None, parent=None):
         super().__init__(parent)
         self._chat_id = chat_id
         self._api = api_client
+        self._employee = employee or {}
+        self._crm_card_id = crm_card_id
+        self._card_data: dict = {}
+
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setMinimumWidth(480)
-        self.setMinimumHeight(320)
+        self.setMinimumWidth(500)
 
+        self._sig_data.connect(self._fill_data)
+        self._setup_ui()
+        self._load_data()
+
+    def _setup_ui(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
@@ -449,45 +461,233 @@ class ScriptSendDialog(QDialog):
         cl.setContentsMargins(16, 14, 16, 16)
         cl.setSpacing(8)
 
-        lbl = QLabel("Текст скрипта:")
-        lbl.setStyleSheet("font-size: 12px; color: #555; font-weight: bold;")
-        cl.addWidget(lbl)
+        # ── Этап 1: список скриптов ──────────────────────────────
+        self._stage1 = QWidget()
+        s1 = QVBoxLayout(self._stage1)
+        s1.setContentsMargins(0, 0, 0, 0)
+        s1.setSpacing(6)
 
-        self._text = QTextEdit()
-        self._text.setPlaceholderText("Введите текст скрипта…")
-        self._text.setStyleSheet("QTextEdit { border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff; padding:4px; }")
-        cl.addWidget(self._text, stretch=1)
+        s1_lbl = QLabel("Выберите скрипт:")
+        s1_lbl.setStyleSheet("font-size: 12px; color: #555; font-weight: bold;")
+        s1.addWidget(s1_lbl)
 
-        btns = QHBoxLayout()
-        btns.addStretch()
+        self._loading_lbl = QLabel("Загрузка скриптов…")
+        self._loading_lbl.setAlignment(Qt.AlignCenter)
+        self._loading_lbl.setStyleSheet("font-size: 12px; color: #888; padding: 20px 0;")
+        s1.addWidget(self._loading_lbl)
+
+        self._scripts_list = QListWidget()
+        self._scripts_list.setVisible(False)
+        self._scripts_list.setFixedHeight(200)
+        self._scripts_list.setStyleSheet("""
+            QListWidget { border:1px solid #E0E0E0; border-radius:4px; background:#fff; }
+            QListWidget::item { border-bottom:1px solid #f0f0f0; padding:6px 8px; }
+            QListWidget::item:selected { background:#FFF8DC; }
+            QListWidget::item:hover { background:#f5f5f5; }
+        """)
+        self._scripts_list.currentRowChanged.connect(lambda i: self._select_btn.setEnabled(i >= 0))
+        self._scripts_list.itemDoubleClicked.connect(lambda _: self._on_select())
+        s1.addWidget(self._scripts_list)
+        cl.addWidget(self._stage1)
+
+        # ── Этап 2: редактор текста ──────────────────────────────
+        self._stage2 = QWidget()
+        self._stage2.setVisible(False)
+        s2 = QVBoxLayout(self._stage2)
+        s2.setContentsMargins(0, 0, 0, 0)
+        s2.setSpacing(6)
+
+        self._script_name_lbl = QLabel("")
+        self._script_name_lbl.setStyleSheet("font-size: 11px; color: #888; font-style: italic;")
+        s2.addWidget(self._script_name_lbl)
+
+        edit_lbl = QLabel("Текст (можно отредактировать перед отправкой):")
+        edit_lbl.setStyleSheet("font-size: 12px; color: #555; font-weight: bold;")
+        s2.addWidget(edit_lbl)
+
+        self._text_edit = QTextEdit()
+        self._text_edit.setStyleSheet("QTextEdit { border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff; padding:4px; }")
+        self._text_edit.setMinimumHeight(150)
+        s2.addWidget(self._text_edit)
+        cl.addWidget(self._stage2)
+
+        # ── Кнопки ───────────────────────────────────────────────
+        btn_row = QHBoxLayout()
+
+        self._back_btn = QPushButton("← Назад")
+        self._back_btn.setFixedHeight(28)
+        self._back_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:12px; padding:0 14px; background:#fff; max-height:26px; } QPushButton:hover { background:#f5f5f5; }"
+        )
+        self._back_btn.setVisible(False)
+        self._back_btn.clicked.connect(self._show_stage1)
+        btn_row.addWidget(self._back_btn)
+        btn_row.addStretch()
+
         cancel_btn = QPushButton("Отмена")
         cancel_btn.setFixedHeight(28)
         cancel_btn.setStyleSheet(
             "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:12px; padding:0 14px; background:#fff; max-height:26px; } QPushButton:hover { background:#f5f5f5; }"
         )
         cancel_btn.clicked.connect(self.reject)
-        btns.addWidget(cancel_btn)
+        btn_row.addWidget(cancel_btn)
 
-        send_btn = QPushButton("Отправить")
-        send_btn.setFixedHeight(28)
-        send_btn.setStyleSheet("QPushButton { background:#2196F3; color:#fff; border-radius:4px; border:none; padding:0 20px; max-height:26px; } QPushButton:hover { background:#1565C0; }")
-        send_btn.clicked.connect(self._send)
-        btns.addWidget(send_btn)
-        cl.addLayout(btns)
+        self._select_btn = QPushButton("Выбрать →")
+        self._select_btn.setFixedHeight(28)
+        self._select_btn.setStyleSheet(
+            "QPushButton { background:#ffd93c; border:none; border-radius:4px; font-size:12px; font-weight:bold; padding:0 14px; max-height:26px; } QPushButton:hover { background:#f5c800; } QPushButton:disabled { background:#f0f0f0; color:#aaa; }"
+        )
+        self._select_btn.setEnabled(False)
+        self._select_btn.clicked.connect(self._on_select)
+        btn_row.addWidget(self._select_btn)
 
+        self._send_btn = QPushButton("Отправить")
+        self._send_btn.setFixedHeight(28)
+        self._send_btn.setStyleSheet(
+            "QPushButton { background:#2196F3; color:#fff; border-radius:4px; border:none; padding:0 16px; max-height:26px; font-size:12px; } QPushButton:hover { background:#1565C0; } QPushButton:disabled { background:#ccc; color:#fff; }"
+        )
+        self._send_btn.setVisible(False)
+        self._send_btn.clicked.connect(self._send)
+        btn_row.addWidget(self._send_btn)
+
+        cl.addLayout(btn_row)
         fl.addWidget(content)
         outer.addWidget(frame)
 
+    # ── Загрузка данных ─────────────────────────────────────────
+
+    def _load_data(self):
+        def _worker():
+            scripts = []
+            card = {}
+            try:
+                scripts = self._api.get_messenger_scripts() or []
+            except Exception:
+                pass
+            if self._crm_card_id:
+                try:
+                    card = self._api.get_crm_card(self._crm_card_id) or {}
+                except Exception:
+                    pass
+            self._sig_data.emit(scripts, card)
+
+        import threading as _t
+
+        _t.Thread(target=_worker, daemon=True).start()
+
+    def _fill_data(self, scripts, card):
+        self._card_data = card or {}
+        self._loading_lbl.setVisible(False)
+
+        if not scripts:
+            self._loading_lbl.setText("Скрипты не найдены")
+            self._loading_lbl.setVisible(True)
+            return
+
+        self._scripts_list.setVisible(True)
+        for s in scripts:
+            name = s.get("name") or s.get("script_type") or "Скрипт"
+            preview = (s.get("message_template") or "")[:80]
+            if len(s.get("message_template") or "") > 80:
+                preview += "…"
+            from PyQt5.QtWidgets import QListWidgetItem
+
+            item = QListWidgetItem(f"{name}\n{preview}")
+            item.setData(Qt.UserRole, s)
+            self._scripts_list.addItem(item)
+
+    # ── Навигация ────────────────────────────────────────────────
+
+    def _on_select(self):
+        item = self._scripts_list.currentItem()
+        if not item:
+            return
+        s = item.data(Qt.UserRole)
+        name = s.get("name") or s.get("script_type") or "Скрипт"
+        template = s.get("message_template") or ""
+        filled = self._fill_vars(template)
+        self._script_name_lbl.setText(f"Скрипт: {name}")
+        self._text_edit.setPlainText(filled)
+        self._show_stage2()
+
+    def _show_stage1(self):
+        self._stage1.setVisible(True)
+        self._stage2.setVisible(False)
+        self._back_btn.setVisible(False)
+        self._select_btn.setVisible(True)
+        self._send_btn.setVisible(False)
+        self.adjustSize()
+
+    def _show_stage2(self):
+        self._stage1.setVisible(False)
+        self._stage2.setVisible(True)
+        self._back_btn.setVisible(True)
+        self._select_btn.setVisible(False)
+        self._send_btn.setVisible(True)
+        self.adjustSize()
+
+    # ── Подстановка переменных ───────────────────────────────────
+
+    def _fill_vars(self, template: str) -> str:
+        """Заменить {переменные} данными карточки. Строки с пустыми переменными удаляются."""
+        import re
+
+        if not template:
+            return ""
+        d = self._card_data
+        client = d.get("client") or {}
+        client_name = (client.get("full_name") if isinstance(client, dict) else "") or d.get("client_name", "")
+        parts = client_name.split()
+        client_first = parts[1] if len(parts) > 1 else (parts[0] if parts else "")
+
+        area = d.get("area")
+        vars_map = {
+            "client_name": client_name,
+            "client_first_name": client_first,
+            "address": d.get("address", ""),
+            "area": f"{area} м²" if area else "",
+            "contract_number": d.get("contract_number", ""),
+            "deadline": d.get("deadline", ""),
+            "deadline_date": d.get("deadline", ""),
+            "senior_manager": d.get("senior_manager_name", ""),
+            "senior_manager_username": d.get("senior_manager_name", ""),
+            "manager_name": d.get("manager_name", ""),
+            "manager_username": d.get("manager_name", ""),
+            "sdp": d.get("sdp_name", ""),
+            "sdp_username": d.get("sdp_name", ""),
+            "sender_name": self._employee.get("full_name", ""),
+            "role_name": self._employee.get("position", ""),
+        }
+
+        result = []
+        for line in template.split("\n"):
+            keys = re.findall(r"\{(\w+)\}", line)
+            if not keys:
+                result.append(line)
+                continue
+            has_empty = [False]
+
+            def _rep(m, _map=vars_map, _flag=has_empty):
+                key = m.group(1)
+                val = _map.get(key, m.group(0))
+                if key in _map and not val:
+                    _flag[0] = True
+                return val
+
+            substituted = re.sub(r"\{(\w+)\}", _rep, line)
+            if not has_empty[0]:
+                result.append(substituted)
+
+        return "\n".join(result).strip()
+
+    # ── Отправка ─────────────────────────────────────────────────
+
     def _send(self):
-        text = self._text.toPlainText().strip()
+        text = self._text_edit.toPlainText().strip()
         if not text:
             return
         try:
-            self._api.send_chat_message(
-                chat_id=self._chat_id,
-                content=text,
-                message_type="system",
-            )
+            self._api.send_chat_message(chat_id=self._chat_id, content=text)
             self.accept()
         except Exception as e:
             print(f"[ScriptSendDialog] Ошибка отправки: {e}")

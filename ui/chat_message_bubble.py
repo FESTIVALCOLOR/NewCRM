@@ -433,7 +433,15 @@ class ChatMessageBubble(QWidget):
     def _build_file(self, layout: QVBoxLayout):
         name = self._msg.get("file_name") or "файл"
         url = self._build_open_url()
+        is_pdf = name.lower().endswith(".pdf")
 
+        if is_pdf:
+            self._build_pdf_preview(layout, name, url)
+        else:
+            self._build_file_row(layout, name, url)
+
+    def _build_file_row(self, layout: QVBoxLayout, name: str, url: str):
+        """Обычный файл: иконка + имя + кнопка Открыть."""
         row = QHBoxLayout()
         row.setSpacing(8)
         row.setAlignment(Qt.AlignVCenter)
@@ -465,6 +473,93 @@ class ChatMessageBubble(QWidget):
         row.addWidget(open_btn)
 
         layout.addLayout(row)
+
+    def _build_pdf_preview(self, layout: QVBoxLayout, name: str, url: str):
+        """PDF: превью первой страницы (через fitz) + кнопка Открыть."""
+        container = QFrame()
+        container.setStyleSheet("""
+            QFrame {
+                border: 1px solid #E0E0E0;
+                border-radius: 6px;
+                background: #fafafa;
+            }
+        """)
+        c_layout = QVBoxLayout(container)
+        c_layout.setContentsMargins(6, 6, 6, 6)
+        c_layout.setSpacing(4)
+
+        # Превью (сначала placeholder)
+        preview_lbl = QLabel("PDF")
+        preview_lbl.setAlignment(Qt.AlignCenter)
+        preview_lbl.setFixedHeight(120)
+        preview_lbl.setMaximumWidth(240)
+        preview_lbl.setStyleSheet("""
+            background: #E53935;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 22px;
+            font-weight: bold;
+        """)
+        c_layout.addWidget(preview_lbl, alignment=Qt.AlignHCenter)
+
+        # Имя файла + кнопка
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        name_lbl = QLabel(name[:28] + ("…" if len(name) > 28 else ""))
+        name_lbl.setStyleSheet("font-size: 11px; color: #555; background: transparent;")
+        row.addWidget(name_lbl, stretch=1)
+
+        open_btn = QPushButton("Открыть")
+        open_btn.setFixedHeight(24)
+        open_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid #d9d9d9;
+                border-radius: 4px; font-size: 11px; color: #555; padding: 0 10px;
+            }
+            QPushButton:hover { background: #f0f0f0; }
+        """)
+        open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)) if url else None)
+        row.addWidget(open_btn)
+        c_layout.addLayout(row)
+
+        layout.addWidget(container)
+
+        # Асинхронная загрузка и рендер превью
+        if url:
+            self._pdf_nam = QNetworkAccessManager(self)
+            req = QNetworkRequest(QUrl(url))
+            reply = self._pdf_nam.get(req)
+
+            def _on_pdf_done():
+                if reply.error() == 0:
+                    try:
+                        import fitz  # noqa: PLC0415
+
+                        pdf_bytes = reply.readAll().data()
+                        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                        page = doc[0]
+                        mat = fitz.Matrix(1.0, 1.0)
+                        pix = page.get_pixmap(matrix=mat)
+                        img_data = pix.tobytes("png")
+                        doc.close()
+
+                        qt_pix = QPixmap()
+                        if qt_pix.loadFromData(img_data):
+                            w = min(qt_pix.width(), 240)
+                            h = min(int(qt_pix.height() * w / max(qt_pix.width(), 1)), 200)
+                            h = max(h, 60)
+                            preview_lbl.setFixedWidth(w)
+                            preview_lbl.setFixedHeight(h)
+                            scaled = qt_pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            preview_lbl.setPixmap(scaled)
+                            preview_lbl.setStyleSheet("border-radius: 4px; background: transparent;")
+                            preview_lbl.setCursor(Qt.PointingHandCursor)
+                            preview_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url)) if url else None
+                    except Exception:
+                        pass
+                reply.deleteLater()
+
+            reply.finished.connect(_on_pdf_done)
 
     def _build_open_url(self) -> str:
         """Вернуть URL для открытия файла: streaming endpoint (ЯД) или прямой file_url."""
