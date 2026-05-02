@@ -97,7 +97,7 @@ class EmployeeChatsTab(QWidget):
         # Поиск
         self._search = QLineEdit()
         self._search.setPlaceholderText("Поиск по адресу объекта…")
-        self._search.setFixedHeight(32)
+        self._search.setFixedHeight(28)
         self._search.setStyleSheet("""
             QLineEdit {
                 border: none;
@@ -213,11 +213,11 @@ class EmployeeChatsTab(QWidget):
         unread = chat.get("unread_count", 0)
         if unread:
             badge = QLabel(str(unread) if unread < 100 else "99+")
-            badge.setFixedSize(20, 20)
+            badge.setFixedSize(24, 24)
             badge.setAlignment(Qt.AlignCenter)
             badge.setStyleSheet("""
                 background: #E53935; color: #fff;
-                border-radius: 10px; font-size: 9px; font-weight: bold;
+                border-radius: 12px; font-size: 9px; font-weight: bold;
             """)
             h.addWidget(badge)
 

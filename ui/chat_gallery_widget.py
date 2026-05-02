@@ -202,12 +202,12 @@ class ChatGalleryWidget(QWidget):
         row.addWidget(name_lbl, stretch=1)
 
         more_btn = QPushButton("⋮")
-        more_btn.setFixedSize(20, 20)
+        more_btn.setFixedSize(24, 24)
         more_btn.setStyleSheet(
             """
             QPushButton {
                 border: none; background: transparent;
-                font-size: 12px; color: #aaa; padding: 0; line-height: 1;
+                font-size: 14px; color: #aaa; padding: 0; line-height: 1;
             }
             QPushButton:hover { color: #555; }
         """
@@ -260,7 +260,7 @@ class ChatGalleryWidget(QWidget):
         grid_widget.setStyleSheet("background: transparent;")
         grid = QGridLayout(grid_widget)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(2)
+        grid.setSpacing(4)
 
         for col, msg in enumerate(msgs):
             img_lbl = self._make_photo_label(msg, fixed_height=160, max_width=190)
@@ -280,7 +280,7 @@ class ChatGalleryWidget(QWidget):
         grid_widget.setStyleSheet("background: transparent;")
         grid = QGridLayout(grid_widget)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(2)
+        grid.setSpacing(4)
 
         # Крупное фото слева, занимает 2 строки
         big = self._make_photo_label(msgs[0], fixed_height=184, max_width=200)
@@ -305,7 +305,7 @@ class ChatGalleryWidget(QWidget):
         grid_widget.setStyleSheet("background: transparent;")
         grid = QGridLayout(grid_widget)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(2)
+        grid.setSpacing(4)
 
         # Первые 2 широких
         for i in range(min(2, len(msgs))):

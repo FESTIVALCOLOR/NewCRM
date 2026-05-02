@@ -42,6 +42,7 @@ from PyQt5.QtWidgets import (
 
 from ui.chat_gallery_widget import ChatGalleryWidget
 from ui.chat_message_bubble import ChatMessageBubble
+from ui.custom_title_bar import CustomTitleBar
 from utils.icon_loader import IconLoader
 
 logger = logging.getLogger(__name__)
@@ -228,6 +229,7 @@ class ChatRoomWidget(QWidget):
                 padding: 0 14px;
                 font-size: 12px;
                 background: #fff;
+                max-height: 26px;
             }
             QPushButton:hover { background: #f5f5f5; }
         """)
@@ -319,8 +321,8 @@ class ChatRoomWidget(QWidget):
         pb_layout.addWidget(self._pin_nav_lbl)
 
         unpin_btn = QPushButton("×")
-        unpin_btn.setFixedSize(20, 20)
-        unpin_btn.setStyleSheet("QPushButton { border: none; background: transparent; font-size: 12px; line-height: 1; color: #aaa; }QPushButton:hover { color: #555; }")
+        unpin_btn.setFixedSize(24, 24)
+        unpin_btn.setStyleSheet("QPushButton { border: none; background: transparent; font-size: 14px; line-height: 1; color: #aaa; }QPushButton:hover { color: #555; }")
         unpin_btn.setToolTip("Открепить сообщение")
         unpin_btn.clicked.connect(self._unpin_current)
         pb_layout.addWidget(unpin_btn)
@@ -372,8 +374,8 @@ class ChatRoomWidget(QWidget):
         pp_vbox.setSpacing(4)
         self._caption_input = QLineEdit()
         self._caption_input.setPlaceholderText("Подпись к файлу…")
-        self._caption_input.setFixedHeight(24)
-        self._caption_input.setStyleSheet("QLineEdit { border: 1px solid #BBDEFB; border-radius: 12px; padding: 0 10px; font-size: 11px; background: #fff; }")
+        self._caption_input.setFixedHeight(28)
+        self._caption_input.setStyleSheet("QLineEdit { border: 1px solid #BBDEFB; border-radius: 14px; padding: 0 10px; font-size: 11px; background: #fff; }")
         pp_vbox.addWidget(self._caption_input)
         pp_thumb_widget = QWidget()
         pp_thumb_widget.setStyleSheet("background: transparent;")
@@ -1083,12 +1085,12 @@ class ChatRoomWidget(QWidget):
             cl.addWidget(thumb)
 
             rm_btn = QPushButton("×")
-            rm_btn.setFixedSize(20, 20)
+            rm_btn.setFixedSize(22, 22)
             rm_btn.setStyleSheet("""
                 QPushButton {
                     background: #E53935; color: #fff;
-                    border: none; border-radius: 10px;
-                    font-size: 10px; padding: 0;
+                    border: none; border-radius: 11px;
+                    font-size: 11px; padding: 0;
                 }
                 QPushButton:hover { background: #c62828; }
             """)
@@ -1251,33 +1253,73 @@ class ChatRoomWidget(QWidget):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _show_forward_dialog(self, msg_ids: list, chats: list):
-        from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QVBoxLayout
+        from PyQt5.QtWidgets import QDialog, QListWidget, QListWidgetItem, QVBoxLayout
 
         if not msg_ids:
             return
-        dlg = QDialog(self)
         is_group = len(msg_ids) > 1
-        dlg.setWindowTitle("Переслать галерею" if is_group else "Переслать сообщение")
-        dlg.setMinimumWidth(320)
-        vb = QVBoxLayout(dlg)
-        hint = f"Переслать {len(msg_ids)} файлов. Выберите чат:" if is_group else "Выберите чат:"
-        lbl = QLabel(hint)
+        title_text = "Переслать галерею" if is_group else "Переслать сообщение"
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setAttribute(Qt.WA_TranslucentBackground, True)
+        dlg.setMinimumWidth(340)
+
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet("QFrame#borderFrame { background:#fff; border:1px solid #E0E0E0; border-radius:10px; }")
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(0)
+
+        title_bar = CustomTitleBar(dlg, title_text, simple_mode=True)
+        title_bar.setStyleSheet("CustomTitleBar { background:#fff; border-bottom:1px solid #E0E0E0; border-top-left-radius:10px; border-top-right-radius:10px; }")
+        fl.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background:#F9FAFB; border-bottom-left-radius:10px; border-bottom-right-radius:10px;")
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(16, 14, 16, 16)
+        cl.setSpacing(8)
+
+        hint_text = f"Переслать {len(msg_ids)} файлов. Выберите чат:" if is_group else "Выберите чат:"
+        lbl = QLabel(hint_text)
         lbl.setStyleSheet("font-size: 12px; color: #333;")
-        vb.addWidget(lbl)
+        cl.addWidget(lbl)
 
         lst = QListWidget()
-        lst.setStyleSheet("border: 1px solid #E0E0E0; border-radius: 4px;")
+        lst.setStyleSheet("border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff;")
+        lst.setFixedHeight(180)
         for chat in chats:
-            title = chat.get("title") or f"Чат #{chat['id']}"
-            item = QListWidgetItem(title)
+            chat_title = chat.get("title") or f"Чат #{chat['id']}"
+            item = QListWidgetItem(chat_title)
             item.setData(Qt.UserRole, chat.get("id"))
             lst.addItem(item)
-        vb.addWidget(lst)
+        cl.addWidget(lst)
 
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.accepted.connect(dlg.accept)
-        bb.rejected.connect(dlg.reject)
-        vb.addWidget(bb)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:12px; padding:0 14px; background:#fff; max-height:26px; } QPushButton:hover { background:#f5f5f5; }"
+        )
+        cancel_btn.clicked.connect(dlg.reject)
+        ok_btn = QPushButton("Переслать")
+        ok_btn.setFixedHeight(28)
+        ok_btn.setStyleSheet(
+            "QPushButton { background:#ffd93c; border:none; border-radius:4px; font-size:12px; font-weight:bold; padding:0 14px; max-height:26px; } QPushButton:hover { background:#f5c800; }"
+        )
+        ok_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(ok_btn)
+        cl.addLayout(btn_row)
+
+        fl.addWidget(content)
+        outer.addWidget(frame)
 
         if dlg.exec_() == QDialog.Accepted and lst.currentItem():
             target_chat_id = lst.currentItem().data(Qt.UserRole)
@@ -1349,45 +1391,60 @@ class ChatRoomWidget(QWidget):
     def _show_copy_to_card_dialog(self, msg_id: int, msg_type: str, variations: list, next_variation: int):
         from PyQt5.QtWidgets import (
             QDialog,
-            QDialogButtonBox,
             QGroupBox,
             QListWidget,
             QListWidgetItem,
             QRadioButton,
-            QScrollArea,
             QVBoxLayout,
             QWidget,
         )
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Скопировать в карточку")
-        dlg.setMinimumWidth(380)
-        vb = QVBoxLayout(dlg)
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setAttribute(Qt.WA_TranslucentBackground, True)
+        dlg.setMinimumWidth(400)
+
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet("QFrame#borderFrame { background:#fff; border:1px solid #E0E0E0; border-radius:10px; }")
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(0)
+
+        title_bar = CustomTitleBar(dlg, "Скопировать в карточку", simple_mode=True)
+        title_bar.setStyleSheet("CustomTitleBar { background:#fff; border-bottom:1px solid #E0E0E0; border-top-left-radius:10px; border-top-right-radius:10px; }")
+        fl.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background:#F9FAFB; border-bottom-left-radius:10px; border-bottom-right-radius:10px;")
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(16, 14, 16, 16)
+        cl.setSpacing(8)
 
         lbl = QLabel("Выберите назначение файла:")
-        lbl.setStyleSheet("font-size: 12px; color: #333; font-weight: bold; margin-bottom: 4px;")
-        vb.addWidget(lbl)
+        lbl.setStyleSheet("font-size: 12px; color: #333; font-weight: bold;")
+        cl.addWidget(lbl)
 
         lst = QListWidget()
-        lst.setStyleSheet("border: 1px solid #E0E0E0; border-radius: 4px; font-size: 12px;")
-        lst.setFixedHeight(260)
+        lst.setStyleSheet("border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff;")
+        lst.setFixedHeight(240)
 
-        # Стадии
         for key in ("stage_1", "stage_2", "stage_3", "stage_1_revisions", "stage_2_revisions", "stage_3_revisions"):
             item = QListWidgetItem(self._DESTINATION_LABELS[key])
             item.setData(Qt.UserRole, key)
             lst.addItem(item)
 
-        # Документы
         doc_keys = [k for k in self._DESTINATION_LABELS if k not in ("stage_1", "stage_2", "stage_3", "stage_1_revisions", "stage_2_revisions", "stage_3_revisions")]
         for key in doc_keys:
             item = QListWidgetItem(self._DESTINATION_LABELS[key])
             item.setData(Qt.UserRole, key)
             lst.addItem(item)
 
-        vb.addWidget(lst)
+        cl.addWidget(lst)
 
-        # Панель вариаций (только для stage_2)
         var_group = QGroupBox("Вариация (для 2 стадии):")
         var_group.setStyleSheet("font-size: 11px; color: #555;")
         var_vb = QVBoxLayout(var_group)
@@ -1411,7 +1468,7 @@ class ChatRoomWidget(QWidget):
         _var_radios.append(rb_new)
 
         var_group.setVisible(False)
-        vb.addWidget(var_group)
+        cl.addWidget(var_group)
 
         def _on_dest_changed():
             item = lst.currentItem()
@@ -1421,12 +1478,26 @@ class ChatRoomWidget(QWidget):
 
         lst.currentItemChanged.connect(lambda *_: _on_dest_changed())
 
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.button(QDialogButtonBox.Ok).setText("Скопировать")
-        bb.button(QDialogButtonBox.Cancel).setText("Отмена")
-        bb.accepted.connect(dlg.accept)
-        bb.rejected.connect(dlg.reject)
-        vb.addWidget(bb)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:12px; padding:0 14px; background:#fff; max-height:26px; } QPushButton:hover { background:#f5f5f5; }"
+        )
+        cancel_btn.clicked.connect(dlg.reject)
+        ok_btn = QPushButton("Скопировать")
+        ok_btn.setFixedHeight(28)
+        ok_btn.setStyleSheet(
+            "QPushButton { background:#ffd93c; border:none; border-radius:4px; font-size:12px; font-weight:bold; padding:0 14px; max-height:26px; } QPushButton:hover { background:#f5c800; }"
+        )
+        ok_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(ok_btn)
+        cl.addLayout(btn_row)
+
+        fl.addWidget(content)
+        outer.addWidget(frame)
 
         if dlg.exec_() != QDialog.Accepted:
             return

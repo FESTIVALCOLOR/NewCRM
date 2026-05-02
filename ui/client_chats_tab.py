@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.chat_room_widget import ChatRoomWidget
+from ui.custom_title_bar import CustomTitleBar
 from utils.permissions import _has_perm
 
 
@@ -105,7 +106,7 @@ class ClientChatsTab(QWidget):
         # Поиск
         self._search = QLineEdit()
         self._search.setPlaceholderText("Поиск по адресу объекта…")
-        self._search.setFixedHeight(32)
+        self._search.setFixedHeight(28)
         self._search.setStyleSheet("""
             QLineEdit {
                 border: none;
@@ -313,11 +314,11 @@ class ClientChatsTab(QWidget):
         unread = chat.get("unread_count", 0)
         if unread:
             badge = QLabel(str(unread) if unread < 100 else "99+")
-            badge.setFixedSize(20, 20)
+            badge.setFixedSize(24, 24)
             badge.setAlignment(Qt.AlignCenter)
             badge.setStyleSheet("""
                 background: #E53935; color: #fff;
-                border-radius: 10px; font-size: 9px; font-weight: bold;
+                border-radius: 12px; font-size: 9px; font-weight: bold;
             """)
             h.addWidget(badge)
 
@@ -420,40 +421,62 @@ class ScriptSendDialog(QDialog):
     """Диалог отправки скрипта в клиентский чат."""
 
     def __init__(self, chat_id: int, api_client, parent=None):
-        super().__init__(parent, Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        super().__init__(parent)
         self._chat_id = chat_id
         self._api = api_client
-        self.setWindowTitle("Отправить скрипт клиенту")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumWidth(480)
         self.setMinimumHeight(320)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
 
-        layout.addWidget(QLabel("Текст скрипта:"))
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet("QFrame#borderFrame { background:#fff; border:1px solid #E0E0E0; border-radius:10px; }")
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(0)
+
+        title_bar = CustomTitleBar(self, "Отправить скрипт клиенту", simple_mode=True)
+        title_bar.setStyleSheet("CustomTitleBar { background:#fff; border-bottom:1px solid #E0E0E0; border-top-left-radius:10px; border-top-right-radius:10px; }")
+        fl.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background:#F9FAFB; border-bottom-left-radius:10px; border-bottom-right-radius:10px;")
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(16, 14, 16, 16)
+        cl.setSpacing(8)
+
+        lbl = QLabel("Текст скрипта:")
+        lbl.setStyleSheet("font-size: 12px; color: #555; font-weight: bold;")
+        cl.addWidget(lbl)
+
         self._text = QTextEdit()
         self._text.setPlaceholderText("Введите текст скрипта…")
-        layout.addWidget(self._text, stretch=1)
+        self._text.setStyleSheet("QTextEdit { border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff; padding:4px; }")
+        cl.addWidget(self._text, stretch=1)
 
         btns = QHBoxLayout()
         btns.addStretch()
         cancel_btn = QPushButton("Отмена")
-        cancel_btn.setFixedHeight(30)
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:12px; padding:0 14px; background:#fff; max-height:26px; } QPushButton:hover { background:#f5f5f5; }"
+        )
         cancel_btn.clicked.connect(self.reject)
         btns.addWidget(cancel_btn)
 
         send_btn = QPushButton("Отправить")
-        send_btn.setFixedHeight(30)
-        send_btn.setStyleSheet("""
-            QPushButton {
-                background: #2196F3; color: #fff;
-                border-radius: 4px; border: none; padding: 0 20px;
-            }
-            QPushButton:hover { background: #1565C0; }
-        """)
+        send_btn.setFixedHeight(28)
+        send_btn.setStyleSheet("QPushButton { background:#2196F3; color:#fff; border-radius:4px; border:none; padding:0 20px; max-height:26px; } QPushButton:hover { background:#1565C0; }")
         send_btn.clicked.connect(self._send)
         btns.addWidget(send_btn)
-        layout.addLayout(btns)
+        cl.addLayout(btns)
+
+        fl.addWidget(content)
+        outer.addWidget(frame)
 
     def _send(self):
         text = self._text.toPlainText().strip()
@@ -474,31 +497,60 @@ class InviteLinkDialog(QDialog):
     """Показывает ссылку-приглашение для клиента."""
 
     def __init__(self, link: str, parent=None):
-        super().__init__(parent, Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        self.setWindowTitle("Ссылка для клиента")
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumWidth(480)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
 
-        layout.addWidget(QLabel("Отправьте клиенту эту ссылку для входа в чат:"))
+        frame = QFrame()
+        frame.setObjectName("borderFrame")
+        frame.setStyleSheet("QFrame#borderFrame { background:#fff; border:1px solid #E0E0E0; border-radius:10px; }")
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(0)
+
+        title_bar = CustomTitleBar(self, "Ссылка для клиента", simple_mode=True)
+        title_bar.setStyleSheet("CustomTitleBar { background:#fff; border-bottom:1px solid #E0E0E0; border-top-left-radius:10px; border-top-right-radius:10px; }")
+        fl.addWidget(title_bar)
+
+        content = QWidget()
+        content.setStyleSheet("background:#F9FAFB; border-bottom-left-radius:10px; border-bottom-right-radius:10px;")
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(16, 14, 16, 16)
+        cl.setSpacing(8)
+
+        lbl = QLabel("Отправьте клиенту эту ссылку для входа в чат:")
+        lbl.setStyleSheet("font-size: 12px; color: #555;")
+        cl.addWidget(lbl)
 
         link_edit = QLineEdit(link)
         link_edit.setReadOnly(True)
-        link_edit.setStyleSheet("font-size: 12px; padding: 4px;")
-        layout.addWidget(link_edit)
+        link_edit.setFixedHeight(28)
+        link_edit.setStyleSheet("QLineEdit { font-size:12px; padding:0 8px; border:1px solid #E0E0E0; border-radius:4px; background:#fff; }")
+        cl.addWidget(link_edit)
 
         btns = QHBoxLayout()
         btns.addStretch()
 
         copy_btn = QPushButton("Копировать")
-        copy_btn.setFixedHeight(30)
+        copy_btn.setFixedHeight(28)
+        copy_btn.setStyleSheet(
+            "QPushButton { border:1px solid #d9d9d9; border-radius:4px; font-size:12px; padding:0 14px; background:#fff; max-height:26px; } QPushButton:hover { background:#f5f5f5; }"
+        )
         copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(link))
         btns.addWidget(copy_btn)
 
         close_btn = QPushButton("Закрыть")
-        close_btn.setFixedHeight(30)
+        close_btn.setFixedHeight(28)
+        close_btn.setStyleSheet(
+            "QPushButton { background:#ffd93c; border:none; border-radius:4px; font-size:12px; font-weight:bold; padding:0 14px; max-height:26px; } QPushButton:hover { background:#f5c800; }"
+        )
         close_btn.clicked.connect(self.accept)
         btns.addWidget(close_btn)
+        cl.addLayout(btns)
 
-        layout.addLayout(btns)
+        fl.addWidget(content)
+        outer.addWidget(frame)
