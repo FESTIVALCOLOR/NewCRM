@@ -793,31 +793,56 @@ class ChatRoomWidget(QWidget):
         if not isinstance(data, dict):
             return
         event = data.get("type")
+        _internal = {
+            "_hide_progress",
+            "_forward_pick",
+            "_update_pinned",
+            "_rerender",
+            "_update_member_count",
+            "_copy_to_card_pick",
+            "_copy_success",
+            "_copy_error",
+        }
+        if event in _internal:
+            self._ws_internal(event, data)
+        elif event in ("new_message", "new_message_group"):
+            self._ws_on_message(event, data)
+        elif event in ("member_added", "member_removed"):
+            self._ws_reload_member_count()
+        elif event == "message_pinned":
+            self._ws_reload_pinned()
+        elif event == "typing":
+            self._ws_on_typing(data)
+        elif event in ("message_deleted", "message_edited"):
+            self._ws_on_message_mutated(event, data)
 
+    def _ws_internal(self, event: str, data: dict):
         if event == "_hide_progress":
             self._upload_progress.setVisible(False)
-
         elif event == "_forward_pick":
-            self._show_forward_dialog(data.get("msg_id"), data.get("chats", []))
-
+            self._show_forward_dialog(data.get("msg_ids", []), data.get("chats", []))
         elif event == "_update_pinned":
             self._update_pinned_bar()
-
-        elif event == "message_pinned":
-            # WS-событие: msg_id закреплён/откреплён — перезагрузить из API
-            def _reload_pinned():
-                chat = self._api.get_internal_chat(self._chat_id)
-                if chat:
-                    self._pinned_messages = chat.get("pinned_messages") or []
-                    self._pinned_index = 0
-                    self._sig_ws_data.emit({"type": "_update_pinned"})
-
-            threading.Thread(target=_reload_pinned, daemon=True).start()
-
         elif event == "_rerender":
             self._render_all_messages()
+        elif event == "_update_member_count":
+            count = data.get("count", 0)
+            self._members_count_str = f"{count} уч." if count else ""
+            self._on_ws_status(bool(self._ws_worker and self._ws_worker._running))
+        elif event == "_copy_to_card_pick":
+            self._show_copy_to_card_dialog(
+                data.get("msg_id"),
+                data.get("msg_type"),
+                data.get("variations"),
+                data.get("next_variation", 1),
+            )
+        elif event == "_copy_success":
+            QMessageBox.information(self, "Готово", "Файл скопирован в карточку CRM.")
+        elif event == "_copy_error":
+            QMessageBox.warning(self, "Ошибка", "Не удалось скопировать файл в карточку.")
 
-        elif event == "new_message":
+    def _ws_on_message(self, event: str, data: dict):
+        if event == "new_message":
             msg = data.get("message", {})
             self._append_message(msg)
             msg_id = msg.get("id") if isinstance(msg, dict) else None
@@ -827,8 +852,7 @@ class ChatRoomWidget(QWidget):
                     daemon=True,
                 ).start()
                 self.unread_changed.emit(self._chat_id, 0)
-
-        elif event == "new_message_group":
+        else:
             messages = data.get("messages", [])
             for msg in messages:
                 self._messages.append(msg)
@@ -842,37 +866,44 @@ class ChatRoomWidget(QWidget):
                 ).start()
                 self.unread_changed.emit(self._chat_id, 0)
 
-        elif event == "_copy_to_card_pick":
-            self._show_copy_to_card_dialog(data.get("msg_id"), data.get("msg_type"), data.get("variations"), data.get("next_variation", 1))
+    def _ws_reload_member_count(self):
+        def _worker():
+            chat = self._api.get_internal_chat(self._chat_id)
+            if chat:
+                self._sig_ws_data.emit({"type": "_update_member_count", "count": chat.get("member_count", 0)})
 
-        elif event == "_copy_success":
-            QMessageBox.information(self, "Готово", "Файл скопирован в карточку CRM.")
+        threading.Thread(target=_worker, daemon=True).start()
 
-        elif event == "_copy_error":
-            QMessageBox.warning(self, "Ошибка", "Не удалось скопировать файл в карточку.")
+    def _ws_reload_pinned(self):
+        def _worker():
+            chat = self._api.get_internal_chat(self._chat_id)
+            if chat:
+                self._pinned_messages = chat.get("pinned_messages") or []
+                self._pinned_index = 0
+                self._sig_ws_data.emit({"type": "_update_pinned"})
 
-        elif event == "typing":
-            if data.get("is_typing"):
-                self._typing_lbl.setText(f"{data.get('name', '')} печатает…")
-                self._typing_lbl.setVisible(True)
-            else:
-                self._typing_lbl.setText("")
-                self._typing_lbl.setVisible(False)
+        threading.Thread(target=_worker, daemon=True).start()
 
-        elif event == "message_deleted":
-            msg_id = data.get("message_id")
+    def _ws_on_typing(self, data: dict):
+        if data.get("is_typing"):
+            self._typing_lbl.setText(f"{data.get('name', '')} печатает…")
+            self._typing_lbl.setVisible(True)
+        else:
+            self._typing_lbl.setText("")
+            self._typing_lbl.setVisible(False)
+
+    def _ws_on_message_mutated(self, event: str, data: dict):
+        msg_id = data.get("message_id")
+        if event == "message_deleted":
             for i, m in enumerate(self._messages):
                 if m.get("id") == msg_id:
                     self._messages[i] = dict(m, is_deleted=True, content="Сообщение удалено")
-            self._render_all_messages()
-
-        elif event == "message_edited":
-            msg_id = data.get("message_id")
+        else:
             new_content = data.get("content", "")
             for i, m in enumerate(self._messages):
                 if m.get("id") == msg_id:
                     self._messages[i] = dict(m, content=new_content, is_edited=True)
-            self._render_all_messages()
+        self._render_all_messages()
 
     def _poll_new_messages(self):
         """Fallback polling при отсутствии websocket-client."""
@@ -1159,26 +1190,36 @@ class ChatRoomWidget(QWidget):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _on_forward_requested(self, msg: dict):
-        """Переслать сообщение в другой чат (выбор из списка)."""
+        """Переслать сообщение (или группу) в другой чат."""
         msg_id = msg.get("id")
         if not msg_id:
             return
+        # Для галереи собираем все msg_ids группы
+        group_id = msg.get("group_id")
+        if group_id:
+            msg_ids = [m.get("id") for m in self._messages if m.get("group_id") == group_id and m.get("id") and not m.get("is_deleted")]
+        else:
+            msg_ids = [msg_id]
 
         def _worker():
             chats = self._api.get_internal_chats() or []
             chats = [c for c in chats if c.get("id") != self._chat_id]
-            self._sig_ws_data.emit({"type": "_forward_pick", "msg_id": msg_id, "chats": chats})
+            self._sig_ws_data.emit({"type": "_forward_pick", "msg_ids": msg_ids, "chats": chats})
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _show_forward_dialog(self, msg_id: int, chats: list):
+    def _show_forward_dialog(self, msg_ids: list, chats: list):
         from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QVBoxLayout
 
+        if not msg_ids:
+            return
         dlg = QDialog(self)
-        dlg.setWindowTitle("Переслать сообщение")
+        is_group = len(msg_ids) > 1
+        dlg.setWindowTitle("Переслать галерею" if is_group else "Переслать сообщение")
         dlg.setMinimumWidth(320)
         vb = QVBoxLayout(dlg)
-        lbl = QLabel("Выберите чат:")
+        hint = f"Переслать {len(msg_ids)} файлов. Выберите чат:" if is_group else "Выберите чат:"
+        lbl = QLabel(hint)
         lbl.setStyleSheet("font-size: 12px; color: #333;")
         vb.addWidget(lbl)
 
@@ -1198,10 +1239,16 @@ class ChatRoomWidget(QWidget):
 
         if dlg.exec_() == QDialog.Accepted and lst.currentItem():
             target_chat_id = lst.currentItem().data(Qt.UserRole)
-            threading.Thread(
-                target=lambda: self._api.forward_chat_message(self._chat_id, msg_id, target_chat_id),
-                daemon=True,
-            ).start()
+            if is_group:
+                threading.Thread(
+                    target=lambda: self._api.forward_chat_message_group(self._chat_id, target_chat_id, msg_ids),
+                    daemon=True,
+                ).start()
+            else:
+                threading.Thread(
+                    target=lambda: self._api.forward_chat_message(self._chat_id, msg_ids[0], target_chat_id),
+                    daemon=True,
+                ).start()
 
     # ===========================================================
     # Копирование файла в карточку CRM
