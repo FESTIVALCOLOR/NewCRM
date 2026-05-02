@@ -320,8 +320,8 @@ class ChatMessageBubble(QWidget):
             }
             QPushButton:hover { background: #d8d8d8; }
         """)
-        url = self._msg.get("file_url", "")
-        play_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
+        open_url = self._build_open_url()
+        play_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(open_url)) if open_url else None)
 
         voice_lbl = QLabel("Голосовое сообщение")
         voice_lbl.setStyleSheet("font-size: 12px; color: #333; background: transparent;")
@@ -352,7 +352,8 @@ class ChatMessageBubble(QWidget):
         img_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         img_lbl.setToolTip(f"{name}\n(кликните для открытия)")
         img_lbl.setCursor(Qt.PointingHandCursor)
-        img_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url))
+        _open_url = self._build_open_url()
+        img_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(_open_url)) if _open_url else None
 
         # Если есть yandex_path и api base_url — используем streaming endpoint (как мобильная версия)
         load_url = ""
@@ -390,7 +391,7 @@ class ChatMessageBubble(QWidget):
 
     def _build_file(self, layout: QVBoxLayout):
         name = self._msg.get("file_name") or "файл"
-        url = self._msg.get("file_url", "")
+        url = self._build_open_url()
 
         row = QHBoxLayout()
         row.setSpacing(8)
@@ -419,7 +420,18 @@ class ChatMessageBubble(QWidget):
             }
             QPushButton:hover { background: #f0f0f0; }
         """)
-        open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
+        open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)) if url else None)
         row.addWidget(open_btn)
 
         layout.addLayout(row)
+
+    def _build_open_url(self) -> str:
+        """Вернуть URL для открытия файла: streaming endpoint (ЯД) или прямой file_url."""
+        from urllib.parse import quote as _quote
+
+        yandex_path = self._msg.get("yandex_path", "")
+        if yandex_path and self._token and self._base_url:
+            path = yandex_path.replace("disk:", "", 1)
+            encoded = _quote(path, safe="/")
+            return f"{self._base_url}/api/v1/files/stream?yandex_path={encoded}&token={_quote(self._token, safe='')}"
+        return self._msg.get("file_url", "")

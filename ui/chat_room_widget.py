@@ -813,6 +813,13 @@ class ChatRoomWidget(QWidget):
         elif event == "new_message":
             msg = data.get("message", {})
             self._append_message(msg)
+            msg_id = msg.get("id") if isinstance(msg, dict) else None
+            if msg_id and self.isVisible():
+                threading.Thread(
+                    target=lambda: self._api.mark_chat_read(self._chat_id, msg_id),
+                    daemon=True,
+                ).start()
+                self.unread_changed.emit(self._chat_id, 0)
 
         elif event == "typing":
             if data.get("is_typing"):
