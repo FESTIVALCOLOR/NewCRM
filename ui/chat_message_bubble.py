@@ -70,6 +70,7 @@ class ChatMessageBubble(QWidget):
     reply_requested = pyqtSignal(dict)
     pin_requested = pyqtSignal(dict)
     scroll_to_requested = pyqtSignal(int)
+    forward_requested = pyqtSignal(dict)
 
     def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = ""):
         super().__init__(parent)
@@ -90,6 +91,19 @@ class ChatMessageBubble(QWidget):
         reply_act = menu.addAction("Ответить")
         reply_act.triggered.connect(lambda: self.reply_requested.emit(self._msg))
 
+        # Скопировать текст (только для text-сообщений с контентом)
+        content = self._msg.get("content") or ""
+        if content and not self._msg.get("is_deleted"):
+            copy_act = menu.addAction("Скопировать текст")
+            copy_act.triggered.connect(lambda: self._copy_text(content))
+
+        # Переслать
+        if not self._msg.get("is_deleted"):
+            fwd_act = menu.addAction("Переслать")
+            fwd_act.triggered.connect(lambda: self.forward_requested.emit(self._msg))
+
+        menu.addSeparator()
+
         pin_label = "Открепить" if self._msg.get("is_pinned") else "Закрепить"
         pin_act = menu.addAction(pin_label)
         pin_act.triggered.connect(lambda: self.pin_requested.emit(self._msg))
@@ -102,6 +116,12 @@ class ChatMessageBubble(QWidget):
             del_act = menu.addAction("Удалить")
             del_act.triggered.connect(lambda: self.delete_requested.emit(self._msg))
         menu.exec_(global_pos)
+
+    @staticmethod
+    def _copy_text(text: str):
+        from PyQt5.QtWidgets import QApplication
+
+        QApplication.clipboard().setText(text)
 
     # ----------------------------------------------------------
     def _setup_ui(self):
@@ -340,7 +360,7 @@ class ChatMessageBubble(QWidget):
         img_lbl = QLabel(display_name)
         img_lbl.setMinimumSize(120, 80)
         img_lbl.setMaximumWidth(380)
-        img_lbl.setFixedHeight(200)
+        img_lbl.setFixedHeight(160)
         img_lbl.setAlignment(Qt.AlignCenter)
         img_lbl.setStyleSheet("""
             border: 1px solid #ddd;
@@ -349,7 +369,7 @@ class ChatMessageBubble(QWidget):
             color: #666;
             font-size: 11px;
         """)
-        img_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        img_lbl.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         img_lbl.setToolTip(f"{name}\n(кликните для открытия)")
         img_lbl.setCursor(Qt.PointingHandCursor)
         _open_url = self._build_open_url()
@@ -379,7 +399,9 @@ class ChatMessageBubble(QWidget):
                         w = min(pix.width(), 380)
                         h = min(int(pix.height() * w / max(pix.width(), 1)), 320)
                         h = max(h, 80)
+                        img_lbl.setFixedWidth(w)
                         img_lbl.setFixedHeight(h)
+                        img_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                         img_lbl.setPixmap(pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
                         img_lbl.setStyleSheet("border-radius: 6px; background: transparent;")
                         img_lbl.setToolTip(name)

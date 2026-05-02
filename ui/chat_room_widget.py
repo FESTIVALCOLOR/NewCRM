@@ -518,6 +518,7 @@ class ChatRoomWidget(QWidget):
         bubble.reply_requested.connect(self._on_reply_requested)
         bubble.pin_requested.connect(self._on_pin_requested)
         bubble.scroll_to_requested.connect(self._scroll_to_message)
+        bubble.forward_requested.connect(self._on_forward_requested)
         return bubble
 
     def _render_all_messages(self):
@@ -792,6 +793,9 @@ class ChatRoomWidget(QWidget):
 
         if event == "_hide_progress":
             self._upload_progress.setVisible(False)
+
+        elif event == "_forward_pick":
+            self._show_forward_dialog(data.get("msg_id"), data.get("chats", []))
 
         elif event == "_update_pinned":
             self._update_pinned_bar()
@@ -1124,6 +1128,51 @@ class ChatRoomWidget(QWidget):
                 self._sig_ws_data.emit({"type": "_update_pinned"})
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_forward_requested(self, msg: dict):
+        """Переслать сообщение в другой чат (выбор из списка)."""
+        msg_id = msg.get("id")
+        if not msg_id:
+            return
+
+        def _worker():
+            chats = self._api.get_internal_chats() or []
+            chats = [c for c in chats if c.get("id") != self._chat_id]
+            self._sig_ws_data.emit({"type": "_forward_pick", "msg_id": msg_id, "chats": chats})
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _show_forward_dialog(self, msg_id: int, chats: list):
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QVBoxLayout
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Переслать сообщение")
+        dlg.setMinimumWidth(320)
+        vb = QVBoxLayout(dlg)
+        lbl = QLabel("Выберите чат:")
+        lbl.setStyleSheet("font-size: 12px; color: #333;")
+        vb.addWidget(lbl)
+
+        lst = QListWidget()
+        lst.setStyleSheet("border: 1px solid #E0E0E0; border-radius: 4px;")
+        for chat in chats:
+            title = chat.get("title") or f"Чат #{chat['id']}"
+            item = QListWidgetItem(title)
+            item.setData(Qt.UserRole, chat.get("id"))
+            lst.addItem(item)
+        vb.addWidget(lst)
+
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        vb.addWidget(bb)
+
+        if dlg.exec_() == QDialog.Accepted and lst.currentItem():
+            target_chat_id = lst.currentItem().data(Qt.UserRole)
+            threading.Thread(
+                target=lambda: self._api.forward_chat_message(self._chat_id, msg_id, target_chat_id),
+                daemon=True,
+            ).start()
 
     # ===========================================================
     # Публичные методы

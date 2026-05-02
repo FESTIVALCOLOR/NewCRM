@@ -73,17 +73,20 @@ class ChatMembersDialog(QDialog):
         fl.addWidget(title_bar)
 
         content = QWidget()
-        content.setStyleSheet("background: #fff; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
+        content.setAutoFillBackground(True)
+        content.setStyleSheet("background: #F9FAFB; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;")
         cl = QVBoxLayout(content)
-        cl.setContentsMargins(16, 12, 16, 16)
-        cl.setSpacing(10)
+        cl.setContentsMargins(16, 14, 16, 16)
+        cl.setSpacing(8)
 
         # --- Текущие участники ---
-        cl.addWidget(QLabel("Текущие участники:"))
+        sect_lbl = QLabel("Текущие участники:")
+        sect_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #555;")
+        cl.addWidget(sect_lbl)
         self._members_list = QListWidget()
         self._members_list.setFixedHeight(180)
         self._members_list.setStyleSheet("""
-            QListWidget { border: 1px solid #E0E0E0; border-radius: 4px; background: #fafafa; }
+            QListWidget { border: 1px solid #E0E0E0; border-radius: 4px; background: #fff; }
             QListWidget::item { border-bottom: 1px solid #f0f0f0; }
             QListWidget::item:hover { background: #f5f5f5; }
         """)
@@ -91,11 +94,12 @@ class ChatMembersDialog(QDialog):
 
         # --- Кнопка добавить ---
         self._add_btn = QPushButton("Добавить участника")
-        self._add_btn.setFixedHeight(32)
+        self._add_btn.setFixedHeight(28)
         self._add_btn.setStyleSheet("""
             QPushButton {
                 background: #ffd93c; border: none; border-radius: 4px;
                 font-weight: bold; font-size: 12px; padding: 0 16px;
+                max-height: 26px;
             }
             QPushButton:hover { background: #f5c800; }
             QPushButton:disabled { background: #f0f0f0; color: #aaa; }
@@ -110,13 +114,13 @@ class ChatMembersDialog(QDialog):
         add_pl.setSpacing(6)
 
         self._add_hint = QLabel("Выберите сотрудника:")
-        self._add_hint.setStyleSheet("font-size: 12px; color: #555;")
+        self._add_hint.setStyleSheet("font-size: 11px; font-weight: bold; color: #555;")
         add_pl.addWidget(self._add_hint)
 
         self._add_list = QListWidget()
         self._add_list.setFixedHeight(140)
         self._add_list.setStyleSheet("""
-            QListWidget { border: 1px solid #E0E0E0; border-radius: 4px; }
+            QListWidget { border: 1px solid #E0E0E0; border-radius: 4px; background: #fff; }
             QListWidget::item { padding: 4px 8px; }
             QListWidget::item:selected { background: #FFF8DC; }
             QListWidget::item:hover { background: #F5F5F5; }
@@ -143,11 +147,12 @@ class ChatMembersDialog(QDialog):
 
         # --- Закрыть ---
         close_btn = QPushButton("Закрыть")
-        close_btn.setFixedHeight(32)
+        close_btn.setFixedHeight(28)
         close_btn.setStyleSheet("""
             QPushButton {
                 border: 1px solid #d9d9d9; border-radius: 4px;
                 font-size: 12px; padding: 0 16px; background: #fff;
+                max-height: 26px;
             }
             QPushButton:hover { background: #f5f5f5; }
         """)

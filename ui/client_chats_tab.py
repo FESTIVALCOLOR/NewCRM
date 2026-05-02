@@ -160,7 +160,7 @@ class ClientChatsTab(QWidget):
     def _build_ctrl_panel(self) -> QFrame:
         """Верхняя панель: ссылка-приглашение + кнопки управления."""
         panel = QFrame()
-        panel.setFixedHeight(40)
+        panel.setFixedHeight(44)
         panel.setStyleSheet("background: #f0f7f0; border-bottom: 1px solid #C8E6C9;")
         panel.setVisible(False)  # показывается при выборе чата
 
@@ -186,10 +186,10 @@ class ClientChatsTab(QWidget):
         h.addWidget(self._link_value, stretch=1)
 
         copy_btn = QPushButton("Копировать")
-        copy_btn.setFixedHeight(26)
+        copy_btn.setFixedHeight(28)
         copy_btn.setStyleSheet("""
             QPushButton {
-                font-size: 11px; padding: 0 10px;
+                font-size: 11px; padding: 0 10px; max-height: 26px;
                 border: 1px solid #81C784; border-radius: 4px;
                 background: #fff;
             }
@@ -202,10 +202,10 @@ class ClientChatsTab(QWidget):
 
         if self._can_script:
             script_btn = QPushButton("Отправить скрипт")
-            script_btn.setFixedHeight(26)
+            script_btn.setFixedHeight(28)
             script_btn.setStyleSheet("""
                 QPushButton {
-                    font-size: 11px; padding: 0 12px;
+                    font-size: 11px; padding: 0 12px; max-height: 26px;
                     border: 1px solid #2196F3; border-radius: 4px;
                     background: #fff; color: #1565C0;
                 }
@@ -216,10 +216,10 @@ class ClientChatsTab(QWidget):
 
         if self._can_manage:
             invite_btn = QPushButton("Добавить участника")
-            invite_btn.setFixedHeight(26)
+            invite_btn.setFixedHeight(28)
             invite_btn.setStyleSheet("""
                 QPushButton {
-                    font-size: 11px; padding: 0 12px;
+                    font-size: 11px; padding: 0 12px; max-height: 26px;
                     border: 1px solid #4CAF50; border-radius: 4px;
                     background: #fff; color: #2E7D32;
                 }
