@@ -176,6 +176,55 @@ class ChatMixin:
         except Exception:
             return False
 
+    def get_gallery_public_link(self, chat_id: int, msg_id: int) -> Optional[str]:
+        """Получить публичную ссылку на папку галереи (Яндекс.Диск)."""
+        try:
+            r = self._request("POST", f"{self.base_url}/api/v1/chats/{chat_id}/messages/{msg_id}/gallery-link")
+            result = self._handle_response(r)
+            return result.get("public_url") if result else None
+        except Exception:
+            return None
+
+    def get_card_stage_variations(self, chat_id: int, crm_card_id: int, destination: str) -> dict:
+        """Получить вариации стадии карточки для копирования файла."""
+        try:
+            r = self._request(
+                "GET",
+                f"{self.base_url}/api/v1/chats/{chat_id}/card-stage-variations",
+                params={"crm_card_id": crm_card_id, "destination": destination},
+            )
+            return self._handle_response(r) or {"variations": [], "next_variation": 1}
+        except Exception:
+            return {"variations": [], "next_variation": 1}
+
+    def copy_message_to_card(self, chat_id: int, msg_id: int, crm_card_id: int, destination: str, variation: int = None) -> Optional[dict]:
+        """Скопировать файл из сообщения в поле/стадию CRM-карточки."""
+        try:
+            payload = {"crm_card_id": crm_card_id, "destination": destination}
+            if variation is not None:
+                payload["variation"] = variation
+            r = self._request(
+                "POST",
+                f"{self.base_url}/api/v1/chats/{chat_id}/messages/{msg_id}/copy-to-card",
+                json=payload,
+            )
+            return self._handle_response(r)
+        except Exception:
+            return None
+
+    def forward_chat_message_group(self, chat_id: int, target_chat_id: int, msg_ids: list) -> bool:
+        """Переслать группу сообщений (галерею) как единую медиа-группу."""
+        try:
+            r = self._request(
+                "POST",
+                f"{self.base_url}/api/v1/chats/{chat_id}/forward-group/{target_chat_id}",
+                json={"msg_ids": msg_ids},
+            )
+            self._handle_response(r)
+            return True
+        except Exception:
+            return False
+
     # ----------------------------------------------------------
     # WebSocket URL
     # ----------------------------------------------------------

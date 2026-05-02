@@ -71,6 +71,7 @@ class ChatMessageBubble(QWidget):
     pin_requested = pyqtSignal(dict)
     scroll_to_requested = pyqtSignal(int)
     forward_requested = pyqtSignal(dict)
+    copy_to_card_requested = pyqtSignal(dict)
 
     def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = ""):
         super().__init__(parent)
@@ -101,6 +102,13 @@ class ChatMessageBubble(QWidget):
         if not self._msg.get("is_deleted"):
             fwd_act = menu.addAction("Переслать")
             fwd_act.triggered.connect(lambda: self.forward_requested.emit(self._msg))
+
+        # Скопировать в карточку (для файлов/изображений)
+        msg_type = self._msg.get("message_type", "text")
+        has_file = bool(self._msg.get("yandex_path") or self._msg.get("file_url"))
+        if msg_type in ("image", "file") and has_file and not self._msg.get("is_deleted"):
+            copy_card_act = menu.addAction("Скопировать в карточку")
+            copy_card_act.triggered.connect(lambda: self.copy_to_card_requested.emit(self._msg))
 
         menu.addSeparator()
 

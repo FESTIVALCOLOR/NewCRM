@@ -519,6 +519,8 @@ class ChatRoomWidget(QWidget):
         bubble.pin_requested.connect(self._on_pin_requested)
         bubble.scroll_to_requested.connect(self._scroll_to_message)
         bubble.forward_requested.connect(self._on_forward_requested)
+        if self._crm_card_id:
+            bubble.copy_to_card_requested.connect(self._on_copy_to_card_requested)
         return bubble
 
     def _render_all_messages(self):
@@ -565,12 +567,13 @@ class ChatRoomWidget(QWidget):
         is_own = msgs[0].get("sender_employee_id") == my_id
         token = getattr(self._api, "token", "") or ""
         base_url = getattr(self._api, "base_url", "") or ""
-        gallery = ChatGalleryWidget(msgs, is_own, token=token, base_url=base_url, parent=self)
+        gallery = ChatGalleryWidget(msgs, is_own, token=token, base_url=base_url, chat_id=self._chat_id, parent=self)
         gallery.edit_requested.connect(self._on_edit_requested)
         gallery.delete_requested.connect(self._on_delete_requested)
         gallery.reply_requested.connect(self._on_reply_requested)
         gallery.pin_requested.connect(self._on_pin_requested)
         gallery.scroll_to_requested.connect(self._scroll_to_message)
+        gallery.forward_requested.connect(self._on_forward_requested)
         return gallery
 
     def _make_unread_divider(self) -> QWidget:
@@ -825,6 +828,29 @@ class ChatRoomWidget(QWidget):
                 ).start()
                 self.unread_changed.emit(self._chat_id, 0)
 
+        elif event == "new_message_group":
+            messages = data.get("messages", [])
+            for msg in messages:
+                self._messages.append(msg)
+            self._render_all_messages()
+            self._scroll_to_bottom()
+            last_id = messages[-1].get("id") if messages else None
+            if last_id and self.isVisible():
+                threading.Thread(
+                    target=lambda: self._api.mark_chat_read(self._chat_id, last_id),
+                    daemon=True,
+                ).start()
+                self.unread_changed.emit(self._chat_id, 0)
+
+        elif event == "_copy_to_card_pick":
+            self._show_copy_to_card_dialog(data.get("msg_id"), data.get("msg_type"), data.get("variations"), data.get("next_variation", 1))
+
+        elif event == "_copy_success":
+            QMessageBox.information(self, "Готово", "Файл скопирован в карточку CRM.")
+
+        elif event == "_copy_error":
+            QMessageBox.warning(self, "Ошибка", "Не удалось скопировать файл в карточку.")
+
         elif event == "typing":
             if data.get("is_typing"):
                 self._typing_lbl.setText(f"{data.get('name', '')} печатает…")
@@ -936,6 +962,9 @@ class ChatRoomWidget(QWidget):
         if not paths:
             return
         for path in paths:
+            if len(self._pending_files) >= 20:
+                QMessageBox.information(self, "Лимит файлов", "Можно прикрепить не более 20 файлов за раз.")
+                break
             fname = os.path.basename(path)
             ext = os.path.splitext(fname)[1].lower()
             msg_type = "image" if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"} else "file"
@@ -1173,6 +1202,167 @@ class ChatRoomWidget(QWidget):
                 target=lambda: self._api.forward_chat_message(self._chat_id, msg_id, target_chat_id),
                 daemon=True,
             ).start()
+
+    # ===========================================================
+    # Копирование файла в карточку CRM
+    # ===========================================================
+
+    # Читаемые названия назначений (ключи = значения destination для API)
+    _DESTINATION_LABELS = {
+        # Стадии
+        "stage_1": "1 стадия — Планировочное решение",
+        "stage_2": "2 стадия — Концепция дизайна",
+        "stage_3": "3 стадия — Чертежный проект",
+        "stage_1_revisions": "1 стадия — Правки",
+        "stage_2_revisions": "2 стадия — Правки концепции",
+        "stage_3_revisions": "3 стадия — Правки чертежей",
+        # Документы договора
+        "contract_file_yandex_path": "Договор",
+        "additional_agreement_yandex_path": "Дополнительное соглашение",
+        "act_planning_yandex_path": "Акт — Планировочное решение",
+        "act_concept_yandex_path": "Акт — Концепция",
+        "act_final_yandex_path": "Акт — Финал",
+        "info_letter_yandex_path": "Информационное письмо",
+        "act_planning_signed_yandex_path": "Акт подписанный — Планировочное",
+        "act_concept_signed_yandex_path": "Акт подписанный — Концепция",
+        "act_final_signed_yandex_path": "Акт подписанный — Финал",
+        "info_letter_signed_yandex_path": "Информационное письмо (подписанное)",
+        "advance_receipt_yandex_path": "Чек — Аванс",
+        "additional_receipt_yandex_path": "Чек — Доп. оплата",
+        "third_receipt_yandex_path": "Чек — 3-я оплата",
+        "tech_task_yandex_path": "Техническое задание",
+        "photo_documentation_yandex_path": "Фотофиксация",
+        "references_yandex_path": "Референсы",
+        "measurement_yandex_path": "Замер",
+    }
+
+    def _on_copy_to_card_requested(self, msg: dict):
+        """Загружаем вариации стадии (для stage_2) и открываем диалог выбора назначения."""
+        msg_id = msg.get("id")
+        msg_type = msg.get("message_type", "file")
+        if not msg_id or not self._crm_card_id:
+            return
+
+        def _worker():
+            variations_data = self._api.get_card_stage_variations(self._chat_id, self._crm_card_id, "stage_2")
+            self._sig_ws_data.emit(
+                {
+                    "type": "_copy_to_card_pick",
+                    "msg_id": msg_id,
+                    "msg_type": msg_type,
+                    "variations": variations_data.get("variations", []),
+                    "next_variation": variations_data.get("next_variation", 1),
+                }
+            )
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _show_copy_to_card_dialog(self, msg_id: int, msg_type: str, variations: list, next_variation: int):
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QDialogButtonBox,
+            QGroupBox,
+            QListWidget,
+            QListWidgetItem,
+            QRadioButton,
+            QScrollArea,
+            QVBoxLayout,
+            QWidget,
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Скопировать в карточку")
+        dlg.setMinimumWidth(380)
+        vb = QVBoxLayout(dlg)
+
+        lbl = QLabel("Выберите назначение файла:")
+        lbl.setStyleSheet("font-size: 12px; color: #333; font-weight: bold; margin-bottom: 4px;")
+        vb.addWidget(lbl)
+
+        lst = QListWidget()
+        lst.setStyleSheet("border: 1px solid #E0E0E0; border-radius: 4px; font-size: 12px;")
+        lst.setFixedHeight(260)
+
+        # Стадии
+        for key in ("stage_1", "stage_2", "stage_3", "stage_1_revisions", "stage_2_revisions", "stage_3_revisions"):
+            item = QListWidgetItem(self._DESTINATION_LABELS[key])
+            item.setData(Qt.UserRole, key)
+            lst.addItem(item)
+
+        # Документы
+        doc_keys = [k for k in self._DESTINATION_LABELS if k not in ("stage_1", "stage_2", "stage_3", "stage_1_revisions", "stage_2_revisions", "stage_3_revisions")]
+        for key in doc_keys:
+            item = QListWidgetItem(self._DESTINATION_LABELS[key])
+            item.setData(Qt.UserRole, key)
+            lst.addItem(item)
+
+        vb.addWidget(lst)
+
+        # Панель вариаций (только для stage_2)
+        var_group = QGroupBox("Вариация (для 2 стадии):")
+        var_group.setStyleSheet("font-size: 11px; color: #555;")
+        var_vb = QVBoxLayout(var_group)
+        var_vb.setSpacing(4)
+
+        _var_radios = []
+        for v in variations:
+            files_hint = ", ".join(v.get("files", [])[:2])
+            label = f"Вариация {v['variation']}" + (f" ({files_hint})" if files_hint else "")
+            rb = QRadioButton(label)
+            rb.setProperty("variation", v["variation"])
+            rb.setStyleSheet("font-size: 11px;")
+            var_vb.addWidget(rb)
+            _var_radios.append(rb)
+
+        rb_new = QRadioButton(f"Новая вариация {next_variation}")
+        rb_new.setProperty("variation", next_variation)
+        rb_new.setChecked(True)
+        rb_new.setStyleSheet("font-size: 11px;")
+        var_vb.addWidget(rb_new)
+        _var_radios.append(rb_new)
+
+        var_group.setVisible(False)
+        vb.addWidget(var_group)
+
+        def _on_dest_changed():
+            item = lst.currentItem()
+            dest = item.data(Qt.UserRole) if item else ""
+            var_group.setVisible(dest == "stage_2")
+            dlg.adjustSize()
+
+        lst.currentItemChanged.connect(lambda *_: _on_dest_changed())
+
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Скопировать")
+        bb.button(QDialogButtonBox.Cancel).setText("Отмена")
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        vb.addWidget(bb)
+
+        if dlg.exec_() != QDialog.Accepted:
+            return
+
+        item = lst.currentItem()
+        if not item:
+            return
+        destination = item.data(Qt.UserRole)
+        variation = None
+        if destination == "stage_2":
+            for rb in _var_radios:
+                if rb.isChecked():
+                    variation = rb.property("variation")
+                    break
+
+        card_id = self._crm_card_id
+
+        def _do_copy():
+            result = self._api.copy_message_to_card(self._chat_id, msg_id, card_id, destination, variation)
+            if result:
+                self._sig_ws_data.emit({"type": "_copy_success"})
+            else:
+                self._sig_ws_data.emit({"type": "_copy_error"})
+
+        threading.Thread(target=_do_copy, daemon=True).start()
 
     # ===========================================================
     # Публичные методы

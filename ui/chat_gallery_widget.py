@@ -62,6 +62,7 @@ class ChatGalleryWidget(QWidget):
     reply_requested = pyqtSignal(dict)
     pin_requested = pyqtSignal(dict)
     scroll_to_requested = pyqtSignal(int)
+    forward_requested = pyqtSignal(dict)
 
     def __init__(
         self,
@@ -69,6 +70,7 @@ class ChatGalleryWidget(QWidget):
         is_own: bool,
         token: str = "",
         base_url: str = "",
+        chat_id: int = 0,
         parent=None,
     ):
         super().__init__(parent)
@@ -76,6 +78,7 @@ class ChatGalleryWidget(QWidget):
         self._is_own = is_own
         self._token = token
         self._base_url = base_url.rstrip("/")
+        self._chat_id = chat_id
         # Первое сообщение группы — источник заголовка и контекстного меню
         self._primary_msg = messages[0] if messages else {}
         # _msg — алиас для совместимости со _scroll_to_message / _scroll_to_pinned
@@ -100,6 +103,18 @@ class ChatGalleryWidget(QWidget):
 
         reply_act = menu.addAction("Ответить")
         reply_act.triggered.connect(lambda: self.reply_requested.emit(msg))
+
+        # Переслать
+        if not msg.get("is_deleted"):
+            fwd_act = menu.addAction("Переслать")
+            fwd_act.triggered.connect(lambda: self.forward_requested.emit(msg))
+
+        # Открыть галерею в браузере (только для групп с yandex_path)
+        if self._primary_msg.get("yandex_path") and self._base_url and self._token:
+            gallery_act = menu.addAction("Открыть галерею")
+            gallery_act.triggered.connect(self._open_gallery_link)
+
+        menu.addSeparator()
 
         pin_label = "Открепить" if msg.get("is_pinned") else "Закрепить"
         pin_act = menu.addAction(pin_label)
@@ -312,6 +327,45 @@ class ChatGalleryWidget(QWidget):
     # ------------------------------------------------------------------
     # Вспомогательные методы
     # ------------------------------------------------------------------
+
+    def _open_gallery_link(self):
+        """Получить публичную ссылку галереи и открыть в браузере."""
+        msg_id = self._primary_msg.get("id")
+        chat_id = getattr(self, "_chat_id", None)
+        if not msg_id:
+            return
+        # Открываем в фоне через NAM POST запрос
+        from urllib.parse import quote as _q
+
+        from PyQt5.QtNetwork import QNetworkRequest
+
+        url = f"{self._base_url}/api/v1/chats/{chat_id}/messages/{msg_id}/gallery-link"
+        if not chat_id:
+            # Если chat_id нет — открыть файл напрямую
+            from PyQt5.QtGui import QDesktopServices
+
+            QDesktopServices.openUrl(QUrl(self._primary_msg.get("file_url", "")))
+            return
+        nam = QNetworkAccessManager(self)
+        self._nam_list.append(nam)
+        req = QNetworkRequest(QUrl(url))
+        req.setRawHeader(b"Authorization", f"Bearer {self._token}".encode())
+        req.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
+        reply = nam.post(req, b"")
+
+        def _on_done():
+            if reply.error() == 0:
+                import json as _json
+
+                data = _json.loads(reply.readAll().data().decode("utf-8", errors="ignore"))
+                pub_url = data.get("public_url", "")
+                if pub_url:
+                    from PyQt5.QtGui import QDesktopServices
+
+                    QDesktopServices.openUrl(QUrl(pub_url))
+            reply.deleteLater()
+
+        reply.finished.connect(_on_done)
 
     def _make_photo_label(self, msg: dict, fixed_height: int, max_width: int) -> QLabel:
         """Создать QLabel-заглушку и запустить async-загрузку изображения."""
