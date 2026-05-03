@@ -23,7 +23,8 @@ import time
 from typing import Optional
 import uuid
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -219,6 +220,25 @@ class ChatRoomWidget(QWidget):
 
         h_layout.addLayout(title_col)
         h_layout.setStretch(0, 1)
+
+        # Кнопка папки Яндекс.Диска (скрыта, показывается если у чата есть yandex_folder_path)
+        self._yd_folder_btn = QPushButton("Папка ЯД")
+        self._yd_folder_btn.setFixedHeight(28)
+        self._yd_folder_btn.setStyleSheet("""
+            QPushButton {
+                border: 1px solid #FFCA28;
+                border-radius: 4px;
+                padding: 0 10px;
+                font-size: 11px;
+                background: #FFFDE7;
+                color: #795548;
+                max-height: 26px;
+            }
+            QPushButton:hover { background: #FFF9C4; }
+        """)
+        self._yd_folder_btn.setVisible(False)
+        self._yd_folder_btn.clicked.connect(self._open_yd_folder)
+        h_layout.addWidget(self._yd_folder_btn)
 
         members_btn = QPushButton("Участники")
         members_btn.setFixedHeight(28)
@@ -472,6 +492,9 @@ class ChatRoomWidget(QWidget):
             self._members_count_str = f"{member_count} уч." if member_count else ""
             self._pinned_messages = chat.get("pinned_messages") or []
             self._update_pinned_bar()
+            yd_path = chat.get("yandex_folder_path") or ""
+            self._yd_folder_path = yd_path
+            self._yd_folder_btn.setVisible(bool(yd_path))
         self._on_ws_status(bool(self._ws_worker and self._ws_worker._running))
         self._messages = list(msgs) if msgs else []
         self._render_all_messages()
@@ -865,6 +888,7 @@ class ChatRoomWidget(QWidget):
     def _ws_internal(self, event: str, data: dict):
         if event == "_hide_progress":
             self._upload_progress.setVisible(False)
+            self._remove_upload_placeholders()
         elif event == "_forward_pick":
             self._show_forward_dialog(data.get("msg_ids", []), data.get("chats", []))
         elif event == "_update_pinned":
@@ -1109,6 +1133,59 @@ class ChatRoomWidget(QWidget):
             self._pending_files.pop(index)
         self._refresh_pending_panel()
 
+    def _add_upload_placeholders(self, files: list):
+        """Добавляет временные пузыри-плейсхолдеры в ленту пока файлы загружаются."""
+        from PyQt5.QtGui import QPixmap as _QPixmap
+
+        self._upload_placeholders = []
+        layout = self._messages_layout
+        for f in files:
+            ph = QFrame()
+            ph.setObjectName("bubble")
+            ph.setStyleSheet("QFrame#bubble { background: #E8F5E9; border-radius: 12px; border-bottom-right-radius: 2px; }")
+            ph.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+            ph.setMaximumWidth(300)
+            ph_l = QVBoxLayout(ph)
+            ph_l.setContentsMargins(10, 6, 10, 6)
+            ph_l.setSpacing(4)
+            if f["type"] == "image":
+                pix = _QPixmap(f["path"])
+                if not pix.isNull():
+                    img_lbl = QLabel()
+                    img_lbl.setPixmap(pix.scaled(180, 120, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                    img_lbl.setFixedSize(180, 120)
+                    img_lbl.setStyleSheet("border-radius: 6px;")
+                    ph_l.addWidget(img_lbl)
+            else:
+                name_lbl = QLabel(f["name"][:30] + ("…" if len(f["name"]) > 30 else ""))
+                name_lbl.setStyleSheet("font-size: 12px; color: #555;")
+                ph_l.addWidget(name_lbl)
+            status_lbl = QLabel("Загрузка...")
+            status_lbl.setStyleSheet("font-size: 10px; color: #888; font-style: italic;")
+            ph_l.addWidget(status_lbl)
+
+            row = QWidget()
+            row.setAutoFillBackground(False)
+            row_l = QHBoxLayout(row)
+            row_l.setContentsMargins(4, 2, 4, 2)
+            row_l.setSpacing(0)
+            spacer = QWidget()
+            spacer.setMinimumWidth(80)
+            spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            row_l.addWidget(spacer)
+            row_l.addWidget(ph)
+            layout.addWidget(row)
+            self._upload_placeholders.append(row)
+
+        self._scroll_to_bottom()
+
+    def _remove_upload_placeholders(self):
+        """Удаляет временные пузыри после завершения загрузки."""
+        for ph in getattr(self, "_upload_placeholders", []):
+            self._messages_layout.removeWidget(ph)
+            ph.deleteLater()
+        self._upload_placeholders = []
+
     def _send_pending_files(self):
         if not self._pending_files:
             return
@@ -1117,6 +1194,7 @@ class ChatRoomWidget(QWidget):
         self._caption_input.clear()
         self._pending_files.clear()
         self._refresh_pending_panel()
+        self._add_upload_placeholders(files)
         self._upload_progress.setVisible(True)
 
         # Все изображения группируются одним group_id для галереи
@@ -1154,6 +1232,16 @@ class ChatRoomWidget(QWidget):
             "Голосовое",
             "Запись голосовых доступна в мобильной версии.\nНа десктопе используйте прикрепление файла (.webm, .mp3).",
         )
+
+    def _open_yd_folder(self):
+        from urllib.parse import quote as _quote
+
+        path = getattr(self, "_yd_folder_path", "") or ""
+        if not path:
+            return
+        clean = path[len("disk:") :] if path.startswith("disk:") else path
+        url = f"https://disk.yandex.ru/client/disk{_quote(clean, safe='/')}"
+        QDesktopServices.openUrl(QUrl(url))
 
     # ===========================================================
     # Диалог участников

@@ -204,18 +204,41 @@ class ChatMembersDialog(QDialog):
         for m in members:
             display = m.get("display_name") or m.get("guest_name") or "—"
             role = m.get("role_in_project", "")
-            label_text = f"{display}  ({role})" if role else display
+            is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
 
             row = QWidget()
-            row.setFixedHeight(36)
+            row.setFixedHeight(40)
+            row.setStyleSheet("background: #F0FFF0;" if is_guest else "background: transparent;")
             rl = QHBoxLayout(row)
-            rl.setContentsMargins(8, 0, 8, 0)
-            rl.setSpacing(8)
+            rl.setContentsMargins(8, 2, 8, 2)
+            rl.setSpacing(6)
             rl.setAlignment(Qt.AlignVCenter)
 
+            # Цветной маркер типа участника
+            dot = QLabel("К" if is_guest else "С")
+            dot.setFixedSize(20, 20)
+            dot.setAlignment(Qt.AlignCenter)
+            dot.setStyleSheet(
+                "background: #43A047; color: #fff; border-radius: 10px; font-size: 9px; font-weight: bold;"
+                if is_guest
+                else "background: #1565C0; color: #fff; border-radius: 10px; font-size: 9px; font-weight: bold;"
+            )
+            rl.addWidget(dot)
+
+            name_col = QVBoxLayout()
+            name_col.setSpacing(0)
+            name_col.setContentsMargins(0, 0, 0, 0)
+            label_text = f"{display}  ({role})" if role else display
             lbl = QLabel(label_text)
-            lbl.setStyleSheet("font-size: 12px;")
-            rl.addWidget(lbl, stretch=1)
+            lbl.setStyleSheet("font-size: 12px; background: transparent;")
+            name_col.addWidget(lbl)
+            phone = m.get("guest_phone") or ""
+            if phone and is_guest:
+                ph_lbl = QLabel(phone)
+                ph_lbl.setStyleSheet("font-size: 10px; color: #666; background: transparent;")
+                ph_lbl.setToolTip(f"Телефон клиента: {phone}")
+                name_col.addWidget(ph_lbl)
+            rl.addLayout(name_col, stretch=1)
 
             member_id = m.get("id")
             emp_id = m.get("employee_id")
@@ -234,9 +257,11 @@ class ChatMembersDialog(QDialog):
                 del_btn.clicked.connect(lambda checked, mid=member_id: self._remove_member(mid))
                 rl.addWidget(del_btn)
 
+            row_h = 52 if (phone and is_guest) else 40
             item = QListWidgetItem()
             item.setData(Qt.UserRole, m)
-            item.setSizeHint(QSize(0, 36))
+            item.setSizeHint(QSize(0, row_h))
+            row.setFixedHeight(row_h)
             self._members_list.addItem(item)
             self._members_list.setItemWidget(item, row)
 

@@ -320,18 +320,50 @@ class ChatMessageBubble(QWidget):
                     border-radius: 4px;
                 }
             """)
-            rbl = QVBoxLayout(rb)
+            rbl = QHBoxLayout(rb)
             rbl.setContentsMargins(6, 3, 6, 3)
-            rbl.setSpacing(1)
+            rbl.setSpacing(6)
+
+            # Текстовая часть цитаты
+            rtext_col = QVBoxLayout()
+            rtext_col.setSpacing(1)
             sender_lbl = QLabel(reply.get("sender_display_name", ""))
             sender_lbl.setStyleSheet("font-weight: bold; font-size: 10px; color: #1565C0; background: transparent;")
-            rbl.addWidget(sender_lbl)
+            rtext_col.addWidget(sender_lbl)
             rtext = reply.get("content") or ""
             if reply.get("message_type") in ("image", "file", "voice"):
                 rtext = f"[{reply.get('message_type', 'файл')}]"
             rtext_lbl = QLabel((rtext[:60] + "…") if len(rtext) > 60 else rtext)
             rtext_lbl.setStyleSheet("font-size: 10px; color: #555; background: transparent;")
-            rbl.addWidget(rtext_lbl)
+            rtext_col.addWidget(rtext_lbl)
+            rbl.addLayout(rtext_col, stretch=1)
+
+            # Миниатюра изображения (если цитируется image с yandex_path)
+            yp = reply.get("yandex_path")
+            if yp and reply.get("message_type") == "image" and self._base_url and self._token:
+                thumb_lbl = QLabel()
+                thumb_lbl.setFixedSize(40, 40)
+                thumb_lbl.setStyleSheet("border-radius: 4px; background: #e8e8e8;")
+                rbl.addWidget(thumb_lbl)
+                path = yp[len("disk:") :] if yp.startswith("disk:") else yp
+                from urllib.parse import quote as _quote
+
+                stream_url = f"{self._base_url}/api/v1/yadisk/stream?path={_quote(path, safe='/')}&token={self._token}"
+                nam = QNetworkAccessManager(self)
+                self._nam_list = getattr(self, "_nam_list", [])
+                self._nam_list.append(nam)
+                req = QNetworkRequest(QUrl(stream_url))
+                reply_obj = nam.get(req)
+
+                def _on_thumb(r=reply_obj, lbl=thumb_lbl):
+                    data = r.readAll().data()
+                    pix = QPixmap()
+                    pix.loadFromData(data)
+                    if not pix.isNull():
+                        lbl.setPixmap(pix.scaled(40, 40, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+
+                reply_obj.finished.connect(_on_thumb)
+
             rb.setCursor(Qt.PointingHandCursor)
             rb.mousePressEvent = lambda e: self.scroll_to_requested.emit(self._msg.get("reply_to_id", 0))
             layout.addWidget(rb)
@@ -464,9 +496,23 @@ class ChatMessageBubble(QWidget):
         icon_lbl.setStyleSheet("background: transparent;")
         row.addWidget(icon_lbl)
 
+        file_col = QVBoxLayout()
+        file_col.setSpacing(1)
         name_lbl = QLabel(name[:30] + ("…" if len(name) > 30 else ""))
         name_lbl.setStyleSheet("font-size: 12px; color: #333; background: transparent;")
-        row.addWidget(name_lbl, stretch=1)
+        file_col.addWidget(name_lbl)
+        size_bytes = self._msg.get("file_size")
+        if size_bytes:
+            if size_bytes >= 1_048_576:
+                size_str = f"{size_bytes / 1_048_576:.1f} МБ"
+            elif size_bytes >= 1024:
+                size_str = f"{size_bytes / 1024:.0f} КБ"
+            else:
+                size_str = f"{size_bytes} Б"
+            size_lbl = QLabel(size_str)
+            size_lbl.setStyleSheet("font-size: 10px; color: #999; background: transparent;")
+            file_col.addWidget(size_lbl)
+        row.addLayout(file_col, stretch=1)
 
         open_btn = QPushButton("Открыть")
         open_btn.setFixedHeight(28)

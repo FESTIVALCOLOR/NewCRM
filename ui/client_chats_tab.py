@@ -663,6 +663,8 @@ class ScriptSendDialog(QDialog):
             "manager_username": d.get("manager_name", ""),
             "sdp": d.get("sdp_name", ""),
             "sdp_username": d.get("sdp_name", ""),
+            "gap": d.get("gap_name", ""),
+            "surveyor": d.get("surveyor_name", ""),
             "sender_name": self._employee.get("full_name", ""),
             "role_name": self._employee.get("position", ""),
         }
