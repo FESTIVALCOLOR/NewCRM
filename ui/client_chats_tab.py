@@ -87,9 +87,32 @@ class ClientChatsTab(QWidget):
         title = QLabel("Чаты с клиентами")
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
         hh.addWidget(title, stretch=1)
-        from PyQt5.QtWidgets import QPushButton
+        lv.addWidget(hdr)
 
-        refresh_btn = QPushButton("↻")
+        # Поиск + кнопка обновления в одном ряду
+        search_row = QFrame()
+        search_row.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
+        sr = QHBoxLayout(search_row)
+        sr.setContentsMargins(0, 0, 4, 0)
+        sr.setSpacing(0)
+
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Поиск по адресу объекта…")
+        self._search.setFixedHeight(28)
+        self._search.setStyleSheet("""
+            QLineEdit {
+                border: none;
+                padding: 0 12px;
+                font-size: 12px;
+                background: #fff;
+            }
+        """)
+        self._search.textChanged.connect(self._filter_list)
+        sr.addWidget(self._search, stretch=1)
+
+        from PyQt5.QtWidgets import QPushButton as _QPushButton
+
+        refresh_btn = _QPushButton("↻")
         refresh_btn.setFixedSize(28, 28)
         refresh_btn.setToolTip("Обновить список чатов")
         refresh_btn.setStyleSheet("""
@@ -100,24 +123,8 @@ class ClientChatsTab(QWidget):
             QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
         """)
         refresh_btn.clicked.connect(self._load_chats)
-        hh.addWidget(refresh_btn)
-        lv.addWidget(hdr)
-
-        # Поиск
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("Поиск по адресу объекта…")
-        self._search.setFixedHeight(28)
-        self._search.setStyleSheet("""
-            QLineEdit {
-                border: none;
-                border-bottom: 1px solid #E0E0E0;
-                padding: 0 12px;
-                font-size: 12px;
-                background: #fff;
-            }
-        """)
-        self._search.textChanged.connect(self._filter_list)
-        lv.addWidget(self._search)
+        sr.addWidget(refresh_btn)
+        lv.addWidget(search_row)
 
         # Список
         self._list = QListWidget()
@@ -168,6 +175,7 @@ class ClientChatsTab(QWidget):
         h = QHBoxLayout(panel)
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
+        h.setAlignment(Qt.AlignVCenter)
 
         self._link_label = QLabel("Ссылка клиента:")
         self._link_label.setStyleSheet("font-size: 11px; color: #555;")
@@ -411,7 +419,7 @@ class ClientChatsTab(QWidget):
         try:
             result = self._api.create_client_invite_link(self._current_chat["id"])
             if result:
-                link = result.get("invite_link", "")
+                link = result.get("url", "") or result.get("invite_link", "")
                 InviteLinkDialog(link=link, parent=self).exec_()
         except Exception as e:
             print(f"[ClientChatsTab] Ошибка создания ссылки-приглашения: {e}")

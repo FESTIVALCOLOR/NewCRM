@@ -78,6 +78,29 @@ class EmployeeChatsTab(QWidget):
         title = QLabel("Чаты сотрудников")
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
         hh.addWidget(title, stretch=1)
+        lv.addWidget(hdr)
+
+        # Поиск + кнопка обновления в одном ряду
+        search_row = QFrame()
+        search_row.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
+        sr = QHBoxLayout(search_row)
+        sr.setContentsMargins(0, 0, 4, 0)
+        sr.setSpacing(0)
+
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Поиск по адресу объекта…")
+        self._search.setFixedHeight(28)
+        self._search.setStyleSheet("""
+            QLineEdit {
+                border: none;
+                padding: 0 12px;
+                font-size: 12px;
+                background: #fff;
+            }
+        """)
+        self._search.textChanged.connect(self._filter_list)
+        sr.addWidget(self._search, stretch=1)
+
         from PyQt5.QtWidgets import QPushButton
 
         refresh_btn = QPushButton("↻")
@@ -91,24 +114,8 @@ class EmployeeChatsTab(QWidget):
             QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
         """)
         refresh_btn.clicked.connect(self._load_chats)
-        hh.addWidget(refresh_btn)
-        lv.addWidget(hdr)
-
-        # Поиск
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("Поиск по адресу объекта…")
-        self._search.setFixedHeight(28)
-        self._search.setStyleSheet("""
-            QLineEdit {
-                border: none;
-                border-bottom: 1px solid #E0E0E0;
-                padding: 0 12px;
-                font-size: 12px;
-                background: #fff;
-            }
-        """)
-        self._search.textChanged.connect(self._filter_list)
-        lv.addWidget(self._search)
+        sr.addWidget(refresh_btn)
+        lv.addWidget(search_row)
 
         # Список
         self._list = QListWidget()
@@ -167,7 +174,11 @@ class EmployeeChatsTab(QWidget):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, chat)
             widget = self._make_chat_item(chat, title)
-            item.setSizeHint(widget.sizeHint())
+            from PyQt5.QtCore import QSize
+
+            lines = max(1, (len(title) + 39) // 40)
+            row_h = max(56, 32 + lines * 18)
+            item.setSizeHint(QSize(0, row_h))
             self._list.addItem(item)
             self._list.setItemWidget(item, widget)
 
@@ -196,16 +207,16 @@ class EmployeeChatsTab(QWidget):
         v.setSpacing(2)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-weight: bold; font-size: 12px; color: #212121;")
-        title_lbl.setMinimumWidth(0)
-        title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        title_lbl.setWordWrap(True)
+        title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
 
         last = chat.get("last_message", "")
         if last:
             last_lbl = QLabel(last[:50] + ("…" if len(last) > 50 else ""))
             last_lbl.setStyleSheet("font-size: 10px; color: #888;")
-            last_lbl.setMinimumWidth(0)
-            last_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            last_lbl.setWordWrap(True)
+            last_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             v.addWidget(last_lbl)
 
         h.addLayout(v, stretch=1)

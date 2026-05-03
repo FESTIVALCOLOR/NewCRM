@@ -801,6 +801,41 @@ def list_links(
     ]
 
 
+@router.delete("/{chat_id}/invite-links/{member_id}")
+async def revoke_invite_link(
+    chat_id: int,
+    member_id: int,
+    current_user: Employee = Depends(require_permission("chat.client.manage")),
+    db: Session = Depends(get_db),
+):
+    """Аннулировать доступ клиента (гостя) к чату."""
+    member = (
+        db.query(InternalChatMember)
+        .filter(
+            InternalChatMember.id == member_id,
+            InternalChatMember.chat_id == chat_id,
+            InternalChatMember.member_type == "client_guest",
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(404, "Участник не найден")
+    member.is_active = False
+    display_name = member.guest_name or "Клиент"
+    sys_msg = InternalChatMessage(
+        chat_id=chat_id,
+        sender_display_name="Система",
+        message_type="system",
+        content=f"Доступ клиента {display_name} аннулирован",
+    )
+    db.add(sys_msg)
+    db.commit()
+    db.refresh(sys_msg)
+    await ws_manager.broadcast(chat_id, {"type": "new_message", "message": _message_to_dict(sys_msg)})
+    await ws_manager.broadcast(chat_id, {"type": "member_removed", "member_id": member_id})
+    return {"status": "ok"}
+
+
 # ==============================================================
 # REST — пересылка
 # ==============================================================

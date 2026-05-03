@@ -160,6 +160,14 @@ class ChatMixin:
         except Exception:
             return []
 
+    def revoke_client_access(self, chat_id: int, member_id: int) -> bool:
+        try:
+            r = self._request("DELETE", f"{self.base_url}/api/v1/chats/{chat_id}/invite-links/{member_id}")
+            self._handle_response(r)
+            return True
+        except Exception:
+            return False
+
     # ----------------------------------------------------------
     # Пересылка
     # ----------------------------------------------------------

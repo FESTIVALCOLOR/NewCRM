@@ -250,20 +250,31 @@ class ChatMembersDialog(QDialog):
 
             member_id = m.get("id")
             emp_id = m.get("employee_id")
+            _del_style = """
+                QPushButton {
+                    background: transparent; border: 1px solid #ffcccc;
+                    border-radius: 4px; color: #cc0000; font-size: 16px;
+                    font-weight: bold; padding: 0;
+                    min-width: 28px; max-width: 28px;
+                    min-height: 28px; max-height: 28px;
+                }
+                QPushButton:hover { background: #ffeeee; }
+            """
             if member_id and emp_id and emp_id != self._employee.get("id"):
                 del_btn = QPushButton("×")
-                del_btn.setFixedSize(24, 24)
+                del_btn.setFixedSize(28, 28)
                 del_btn.setToolTip("Удалить из чата")
-                del_btn.setStyleSheet("""
-                    QPushButton {
-                        background: transparent; border: 1px solid #ffcccc;
-                        border-radius: 4px; color: #cc0000; font-size: 14px;
-                        font-weight: bold; padding: 0;
-                    }
-                    QPushButton:hover { background: #ffeeee; }
-                """)
+                del_btn.setStyleSheet(_del_style)
                 del_btn.clicked.connect(lambda checked, mid=member_id: self._remove_member(mid))
                 rl.addWidget(del_btn)
+            elif member_id and is_guest and self._chat_type == "client":
+                # Кнопка аннулирования доступа клиента
+                revoke_btn = QPushButton("×")
+                revoke_btn.setFixedSize(28, 28)
+                revoke_btn.setToolTip("Аннулировать доступ клиента")
+                revoke_btn.setStyleSheet(_del_style)
+                revoke_btn.clicked.connect(lambda checked, mid=member_id: self._revoke_guest(mid))
+                rl.addWidget(revoke_btn)
 
             row_h = 52 if (phone and is_guest and self._show_phone) else 40
             item = QListWidgetItem()
@@ -323,6 +334,25 @@ class ChatMembersDialog(QDialog):
 
             def _worker():
                 self._api.remove_chat_member(self._chat_id, member_id)
+                self._sig_reload.emit()
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+    def _revoke_guest(self, member_id: int):
+        from PyQt5.QtWidgets import QMessageBox
+
+        if (
+            QMessageBox.question(
+                self,
+                "Аннулировать доступ",
+                "Аннулировать ссылку-приглашение и удалить клиента из чата?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            == QMessageBox.Yes
+        ):
+
+            def _worker():
+                self._api.revoke_client_access(self._chat_id, member_id)
                 self._sig_reload.emit()
 
             threading.Thread(target=_worker, daemon=True).start()
