@@ -91,9 +91,10 @@ class ClientChatsTab(QWidget):
 
         # Поиск + кнопка обновления в одном ряду
         search_row = QFrame()
+        search_row.setFixedHeight(34)
         search_row.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
         sr = QHBoxLayout(search_row)
-        sr.setContentsMargins(0, 0, 4, 0)
+        sr.setContentsMargins(0, 3, 4, 3)
         sr.setSpacing(0)
 
         self._search = QLineEdit()
@@ -173,9 +174,8 @@ class ClientChatsTab(QWidget):
         panel.setVisible(False)  # показывается при выборе чата
 
         h = QHBoxLayout(panel)
-        h.setContentsMargins(12, 0, 12, 0)
+        h.setContentsMargins(12, 8, 12, 8)
         h.setSpacing(8)
-        h.setAlignment(Qt.AlignVCenter)
 
         self._link_label = QLabel("Ссылка клиента:")
         self._link_label.setStyleSheet("font-size: 11px; color: #555;")
@@ -198,7 +198,7 @@ class ClientChatsTab(QWidget):
         copy_btn.setFixedHeight(28)
         copy_btn.setStyleSheet("""
             QPushButton {
-                font-size: 11px; padding: 0 10px; max-height: 26px;
+                font-size: 11px; padding: 0 10px;
                 border: 1px solid #d9d9d9; border-radius: 4px;
                 background: #fff;
             }
@@ -214,7 +214,7 @@ class ClientChatsTab(QWidget):
             script_btn.setFixedHeight(28)
             script_btn.setStyleSheet("""
                 QPushButton {
-                    font-size: 11px; padding: 0 12px; max-height: 26px;
+                    font-size: 11px; padding: 0 12px;
                     border: 1px solid #d9d9d9; border-radius: 4px;
                     background: #fff; color: #333;
                 }
@@ -228,7 +228,7 @@ class ClientChatsTab(QWidget):
             invite_btn.setFixedHeight(28)
             invite_btn.setStyleSheet("""
                 QPushButton {
-                    font-size: 11px; padding: 0 12px; max-height: 26px;
+                    font-size: 11px; padding: 0 12px;
                     border: 1px solid #d9d9d9; border-radius: 4px;
                     background: #fff; color: #333;
                 }

@@ -82,9 +82,10 @@ class EmployeeChatsTab(QWidget):
 
         # Поиск + кнопка обновления в одном ряду
         search_row = QFrame()
+        search_row.setFixedHeight(34)
         search_row.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
         sr = QHBoxLayout(search_row)
-        sr.setContentsMargins(0, 0, 4, 0)
+        sr.setContentsMargins(0, 3, 4, 3)
         sr.setSpacing(0)
 
         self._search = QLineEdit()

@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import sip
 
 from utils.icon_loader import IconLoader
 
@@ -470,9 +471,11 @@ class ChatMessageBubble(QWidget):
                         img_lbl.setStyleSheet("border-radius: 6px; background: transparent;")
                         img_lbl.setToolTip(name)
                         # Сжать пузырь до ширины изображения (+ горизонтальные отступы 10+10)
-                        bubble_frame = layout.parentWidget()
-                        if bubble_frame:
-                            bubble_frame.setMaximumWidth(w + 20)
+                        if not sip.isdeleted(layout):
+                            bubble_frame = layout.parentWidget()
+                            if bubble_frame and not sip.isdeleted(bubble_frame):
+                                bubble_frame.setMaximumWidth(w + 20)
+                                bubble_frame.updateGeometry()
                 reply.deleteLater()
 
             reply.finished.connect(_on_reply)
@@ -619,10 +622,13 @@ class ChatMessageBubble(QWidget):
                             preview_lbl.setCursor(Qt.PointingHandCursor)
                             preview_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url)) if url else None
                             # Сжать контейнер и пузырь до ширины превью
-                            container.setMaximumWidth(w + 12)  # 6+6 отступы контейнера
-                            bubble_frame = layout.parentWidget()
-                            if bubble_frame:
-                                bubble_frame.setMaximumWidth(w + 12 + 20)  # +20 отступы пузыря
+                            if not sip.isdeleted(container):
+                                container.setMaximumWidth(w + 12)
+                            if not sip.isdeleted(layout):
+                                bubble_frame = layout.parentWidget()
+                                if bubble_frame and not sip.isdeleted(bubble_frame):
+                                    bubble_frame.setMaximumWidth(w + 12 + 20)
+                                    bubble_frame.updateGeometry()
                     except Exception:
                         pass
                 reply.deleteLater()

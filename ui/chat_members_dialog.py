@@ -215,10 +215,9 @@ class ChatMembersDialog(QDialog):
             is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
 
             row = QWidget()
-            row.setFixedHeight(40)
             row.setStyleSheet("background: #F0FFF0;" if is_guest else "background: transparent;")
             rl = QHBoxLayout(row)
-            rl.setContentsMargins(8, 2, 8, 2)
+            rl.setContentsMargins(8, 4, 8, 4)
             rl.setSpacing(6)
             rl.setAlignment(Qt.AlignVCenter)
 
@@ -279,7 +278,7 @@ class ChatMembersDialog(QDialog):
             row_h = 52 if (phone and is_guest and self._show_phone) else 40
             item = QListWidgetItem()
             item.setData(Qt.UserRole, m)
-            item.setSizeHint(QSize(0, row_h))
+            item.setSizeHint(QSize(0, row_h + 1))  # +1 для border-bottom разделителя
             row.setFixedHeight(row_h)
             self._members_list.addItem(item)
             self._members_list.setItemWidget(item, row)
