@@ -210,12 +210,12 @@ class ChatGalleryWidget(QWidget):
         row.addWidget(name_lbl, stretch=1)
 
         more_btn = QPushButton("⋮")
-        more_btn.setFixedSize(24, 24)
+        more_btn.setFixedSize(28, 28)
         more_btn.setStyleSheet(
             """
             QPushButton {
                 border: none; background: transparent;
-                font-size: 14px; color: #aaa; padding: 0; line-height: 1;
+                font-size: 16px; color: #aaa; padding: 0; line-height: 1;
             }
             QPushButton:hover { color: #555; }
         """
