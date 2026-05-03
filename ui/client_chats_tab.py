@@ -349,8 +349,16 @@ class ClientChatsTab(QWidget):
             parent=self._right,
         )
         room.set_title(title)
+        room.unread_changed.connect(self._on_unread_changed)
         self._right.layout().addWidget(room)
         self._current_room = room
+
+    def _on_unread_changed(self, chat_id: int, unread_count: int):
+        for i, chat in enumerate(self._chats):
+            if chat.get("id") == chat_id:
+                self._chats[i] = dict(chat, unread_count=unread_count)
+                break
+        self._filter_list(self._search.text())
 
     def _update_ctrl_panel(self, chat: dict):
         """Обновить панель управления для выбранного чата."""

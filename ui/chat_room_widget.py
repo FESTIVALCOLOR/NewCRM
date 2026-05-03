@@ -550,13 +550,15 @@ class ChatRoomWidget(QWidget):
         is_own = msgs[0].get("sender_employee_id") == my_id
         token = getattr(self._api, "token", "") or ""
         base_url = getattr(self._api, "base_url", "") or ""
-        gallery = ChatGalleryWidget(msgs, is_own, token=token, base_url=base_url, chat_id=self._chat_id, parent=self)
+        gallery = ChatGalleryWidget(msgs, is_own, token=token, base_url=base_url, chat_id=self._chat_id, crm_card_id=self._crm_card_id or 0, parent=self)
         gallery.edit_requested.connect(self._on_edit_requested)
         gallery.delete_requested.connect(self._on_delete_requested)
         gallery.reply_requested.connect(self._on_reply_requested)
         gallery.pin_requested.connect(self._on_pin_requested)
         gallery.scroll_to_requested.connect(self._scroll_to_message)
         gallery.forward_requested.connect(self._on_forward_requested)
+        if self._crm_card_id:
+            gallery.copy_to_card_requested.connect(self._on_copy_to_card_requested)
         return gallery
 
     @staticmethod

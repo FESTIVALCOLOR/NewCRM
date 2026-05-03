@@ -63,6 +63,7 @@ class ChatGalleryWidget(QWidget):
     pin_requested = pyqtSignal(dict)
     scroll_to_requested = pyqtSignal(int)
     forward_requested = pyqtSignal(dict)
+    copy_to_card_requested = pyqtSignal(dict)
 
     def __init__(
         self,
@@ -71,6 +72,7 @@ class ChatGalleryWidget(QWidget):
         token: str = "",
         base_url: str = "",
         chat_id: int = 0,
+        crm_card_id: int = 0,
         parent=None,
     ):
         super().__init__(parent)
@@ -79,6 +81,7 @@ class ChatGalleryWidget(QWidget):
         self._token = token
         self._base_url = base_url.rstrip("/")
         self._chat_id = chat_id
+        self._crm_card_id = crm_card_id
         # Первое сообщение группы — источник заголовка и контекстного меню
         self._primary_msg = messages[0] if messages else {}
         # _msg — алиас для совместимости со _scroll_to_message / _scroll_to_pinned
@@ -113,6 +116,11 @@ class ChatGalleryWidget(QWidget):
         if self._primary_msg.get("yandex_path") and self._base_url and self._token:
             gallery_act = menu.addAction("Открыть галерею")
             gallery_act.triggered.connect(self._open_gallery_link)
+
+        # Скопировать в карточку (только если есть yandex_path и crm_card_id)
+        if self._primary_msg.get("yandex_path") and self._crm_card_id:
+            copy_card_act = menu.addAction("Скопировать в карточку")
+            copy_card_act.triggered.connect(lambda: self.copy_to_card_requested.emit(msg))
 
         menu.addSeparator()
 

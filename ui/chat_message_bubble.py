@@ -222,6 +222,18 @@ class ChatMessageBubble(QWidget):
         name_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         row.addWidget(name_lbl, stretch=1)
 
+        # Чип «клиент» для сообщений от гостей (клиентов по ссылке-приглашению)
+        if self._msg.get("sender_guest_token"):
+            guest_chip = QLabel("клиент")
+            guest_chip.setStyleSheet("font-size: 9px; font-weight: bold; color: #fff; background: #43A047; border-radius: 3px; padding: 1px 5px;")
+            row.addWidget(guest_chip)
+            phone = self._msg.get("sender_phone") or ""
+            if phone:
+                phone_lbl = QLabel(phone)
+                phone_lbl.setStyleSheet("font-size: 9px; color: #777; background: transparent;")
+                phone_lbl.setToolTip(f"Телефон клиента: {phone}")
+                row.addWidget(phone_lbl)
+
         more_btn = QPushButton("⋮")
         more_btn.setFixedSize(24, 24)
         more_btn.setStyleSheet("""
