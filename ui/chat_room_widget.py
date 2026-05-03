@@ -45,6 +45,7 @@ from ui.chat_gallery_widget import ChatGalleryWidget
 from ui.chat_message_bubble import ChatMessageBubble
 from ui.custom_title_bar import CustomTitleBar
 from utils.icon_loader import IconLoader
+from utils.permissions import _has_perm
 
 logger = logging.getLogger(__name__)
 
@@ -90,20 +91,28 @@ class ChatWebSocketWorker(threading.Thread):
     def run(self):
         if not _WS_AVAILABLE:
             return
+        delay = 1
         while self._running:
+            _connected = [False]
+
+            def _on_open_cb(_c=_connected):
+                _c[0] = True
+                self._on_open()
+
             try:
                 self._ws = _ws_lib.WebSocketApp(
                     self._url,
                     on_message=lambda ws, msg: self._on_message(msg),
                     on_error=lambda ws, err: self._on_error(err),
                     on_close=lambda ws, *a: self._on_close(),
-                    on_open=lambda ws: self._on_open(),
+                    on_open=lambda ws: _on_open_cb(),
                 )
                 self._ws.run_forever(ping_interval=30)
             except Exception as e:
                 logger.warning(f"WS error: {e}")
             if self._running:
-                time.sleep(5)
+                time.sleep(delay)
+                delay = 1 if _connected[0] else min(delay * 2, 30)
 
     def send(self, data: dict):
         if self._ws:
@@ -155,6 +164,8 @@ class ChatRoomWidget(QWidget):
         self._crm_card_id: Optional[int] = None
         self._typing_timer = None
         self._is_typing = False
+        # Право просмотра телефона клиента (только для client-чатов)
+        self._show_phone = _has_perm(employee, api_client, "chat.client.show_phone") if chat_type == "client" else False
 
         # Режим ответа / редактирования
         self._reply_to_msg: Optional[dict] = None
@@ -511,7 +522,7 @@ class ChatRoomWidget(QWidget):
         is_own = msg.get("sender_employee_id") == my_id
         token = getattr(self._api, "token", "") or ""
         base_url = getattr(self._api, "base_url", "") or ""
-        bubble = ChatMessageBubble(msg, is_own, token=token, base_url=base_url)
+        bubble = ChatMessageBubble(msg, is_own, token=token, base_url=base_url, show_phone=self._show_phone)
         bubble.edit_requested.connect(self._on_edit_requested)
         bubble.delete_requested.connect(self._on_delete_requested)
         bubble.reply_requested.connect(self._on_reply_requested)
@@ -1380,15 +1391,28 @@ class ChatRoomWidget(QWidget):
         lbl.setStyleSheet("font-size: 12px; color: #333;")
         cl.addWidget(lbl)
 
+        search = QLineEdit()
+        search.setPlaceholderText("Поиск по чатам…")
+        search.setStyleSheet("QLineEdit { border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 8px; font-size: 12px; background: #fff; }")
+        cl.addWidget(search)
+
         lst = QListWidget()
         lst.setStyleSheet("border:1px solid #E0E0E0; border-radius:4px; font-size:12px; background:#fff;")
-        lst.setFixedHeight(180)
+        lst.setFixedHeight(160)
         for chat in chats:
             chat_title = chat.get("title") or f"Чат #{chat['id']}"
             item = QListWidgetItem(chat_title)
             item.setData(Qt.UserRole, chat.get("id"))
             lst.addItem(item)
         cl.addWidget(lst)
+
+        def _filter_chats(text):
+            lo = text.lower()
+            for i in range(lst.count()):
+                it = lst.item(i)
+                it.setHidden(lo not in it.text().lower())
+
+        search.textChanged.connect(_filter_chats)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()

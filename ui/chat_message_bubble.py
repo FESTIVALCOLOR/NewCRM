@@ -73,12 +73,13 @@ class ChatMessageBubble(QWidget):
     forward_requested = pyqtSignal(dict)
     copy_to_card_requested = pyqtSignal(dict)
 
-    def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = ""):
+    def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = "", show_phone: bool = True):
         super().__init__(parent)
         self._msg = message
         self._is_own = is_own
         self._token = token
         self._base_url = base_url.rstrip("/")
+        self._show_phone = show_phone
         self.setAutoFillBackground(False)
         self._setup_ui()
 
@@ -228,7 +229,7 @@ class ChatMessageBubble(QWidget):
             guest_chip.setStyleSheet("font-size: 9px; font-weight: bold; color: #fff; background: #43A047; border-radius: 3px; padding: 1px 5px;")
             row.addWidget(guest_chip)
             phone = self._msg.get("sender_phone") or ""
-            if phone:
+            if phone and self._show_phone:
                 phone_lbl = QLabel(phone)
                 phone_lbl.setStyleSheet("font-size: 9px; color: #777; background: transparent;")
                 phone_lbl.setToolTip(f"Телефон клиента: {phone}")

@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.custom_title_bar import CustomTitleBar
+from utils.permissions import _has_perm
 
 
 class ChatMembersDialog(QDialog):
@@ -35,6 +36,7 @@ class ChatMembersDialog(QDialog):
         self._crm_card_id = crm_card_id
         self._members = []
         self._all_employees = []
+        self._show_phone = _has_perm(employee, api_client, "chat.client.show_phone") if chat_type == "client" else False
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -233,7 +235,7 @@ class ChatMembersDialog(QDialog):
             lbl.setStyleSheet("font-size: 12px; background: transparent;")
             name_col.addWidget(lbl)
             phone = m.get("guest_phone") or ""
-            if phone and is_guest:
+            if phone and is_guest and self._show_phone:
                 ph_lbl = QLabel(phone)
                 ph_lbl.setStyleSheet("font-size: 10px; color: #666; background: transparent;")
                 ph_lbl.setToolTip(f"Телефон клиента: {phone}")
@@ -257,7 +259,7 @@ class ChatMembersDialog(QDialog):
                 del_btn.clicked.connect(lambda checked, mid=member_id: self._remove_member(mid))
                 rl.addWidget(del_btn)
 
-            row_h = 52 if (phone and is_guest) else 40
+            row_h = 52 if (phone and is_guest and self._show_phone) else 40
             item = QListWidgetItem()
             item.setData(Qt.UserRole, m)
             item.setSizeHint(QSize(0, row_h))
