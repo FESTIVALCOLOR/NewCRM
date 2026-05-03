@@ -162,7 +162,7 @@ class ClientChatsTab(QWidget):
         """Верхняя панель: ссылка-приглашение + кнопки управления."""
         panel = QFrame()
         panel.setFixedHeight(44)
-        panel.setStyleSheet("background: #f0f7f0; border-bottom: 1px solid #C8E6C9;")
+        panel.setStyleSheet("background: #FAFAFA; border-bottom: 1px solid #E0E0E0;")
         panel.setVisible(False)  # показывается при выборе чата
 
         h = QHBoxLayout(panel)
@@ -191,10 +191,10 @@ class ClientChatsTab(QWidget):
         copy_btn.setStyleSheet("""
             QPushButton {
                 font-size: 11px; padding: 0 10px; max-height: 26px;
-                border: 1px solid #81C784; border-radius: 4px;
+                border: 1px solid #d9d9d9; border-radius: 4px;
                 background: #fff;
             }
-            QPushButton:hover { background: #E8F5E9; }
+            QPushButton:hover { background: #f5f5f5; }
         """)
         copy_btn.clicked.connect(self._on_copy_link)
         h.addWidget(copy_btn)
@@ -207,10 +207,10 @@ class ClientChatsTab(QWidget):
             script_btn.setStyleSheet("""
                 QPushButton {
                     font-size: 11px; padding: 0 12px; max-height: 26px;
-                    border: 1px solid #2196F3; border-radius: 4px;
-                    background: #fff; color: #1565C0;
+                    border: 1px solid #d9d9d9; border-radius: 4px;
+                    background: #fff; color: #333;
                 }
-                QPushButton:hover { background: #E3F2FD; }
+                QPushButton:hover { background: #f5f5f5; }
             """)
             script_btn.clicked.connect(self._send_script)
             h.addWidget(script_btn)
@@ -221,10 +221,10 @@ class ClientChatsTab(QWidget):
             invite_btn.setStyleSheet("""
                 QPushButton {
                     font-size: 11px; padding: 0 12px; max-height: 26px;
-                    border: 1px solid #4CAF50; border-radius: 4px;
-                    background: #fff; color: #2E7D32;
+                    border: 1px solid #d9d9d9; border-radius: 4px;
+                    background: #fff; color: #333;
                 }
-                QPushButton:hover { background: #E8F5E9; }
+                QPushButton:hover { background: #f5f5f5; }
             """)
             invite_btn.clicked.connect(self._add_client_member)
             h.addWidget(invite_btn)
@@ -260,7 +260,12 @@ class ClientChatsTab(QWidget):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, chat)
             widget = self._make_chat_item(chat, title)
-            item.setSizeHint(widget.sizeHint())
+            # Динамическая высота: минимум 56px, увеличивается при переносе названия
+            from PyQt5.QtCore import QSize
+
+            lines = max(1, (len(title) + 39) // 40)  # приблизительный подсчёт строк
+            row_h = max(56, 32 + lines * 18)
+            item.setSizeHint(QSize(0, row_h))
             self._list.addItem(item)
             self._list.setItemWidget(item, widget)
 
@@ -289,8 +294,8 @@ class ClientChatsTab(QWidget):
         v.setSpacing(2)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-weight: bold; font-size: 12px; color: #212121;")
-        title_lbl.setMinimumWidth(0)
-        title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        title_lbl.setWordWrap(True)
+        title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         v.addWidget(title_lbl)
 
         # Показываем последнее сообщение или количество участников
@@ -305,8 +310,8 @@ class ClientChatsTab(QWidget):
                 sub += f", {guests} клиент(ов)"
             sub_lbl = QLabel(sub)
         sub_lbl.setStyleSheet("font-size: 10px; color: #888;")
-        sub_lbl.setMinimumWidth(0)
-        sub_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        sub_lbl.setWordWrap(True)
+        sub_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         v.addWidget(sub_lbl)
 
         h.addLayout(v, stretch=1)
@@ -406,8 +411,7 @@ class ClientChatsTab(QWidget):
         try:
             result = self._api.create_client_invite_link(self._current_chat["id"])
             if result:
-                token = result.get("access_token", "")
-                link = f"{self._api.base_url.rstrip('/')}/c/{token}"
+                link = result.get("invite_link", "")
                 InviteLinkDialog(link=link, parent=self).exec_()
         except Exception as e:
             print(f"[ClientChatsTab] Ошибка создания ссылки-приглашения: {e}")
@@ -595,12 +599,9 @@ class ScriptSendDialog(QDialog):
         self._scripts_list.setVisible(True)
         for s in scripts:
             name = s.get("name") or s.get("script_type") or "Скрипт"
-            preview = (s.get("message_template") or "")[:80]
-            if len(s.get("message_template") or "") > 80:
-                preview += "…"
             from PyQt5.QtWidgets import QListWidgetItem
 
-            item = QListWidgetItem(f"{name}\n{preview}")
+            item = QListWidgetItem(name)
             item.setData(Qt.UserRole, s)
             self._scripts_list.addItem(item)
 

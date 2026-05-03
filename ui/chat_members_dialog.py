@@ -203,7 +203,13 @@ class ChatMembersDialog(QDialog):
         self._members_list.clear()
         member_ids = set()
 
-        for m in members:
+        # Сортировка: сотрудники первыми, гости (клиенты) последними; внутри — по роли
+        def _member_sort_key(m):
+            is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
+            role = (m.get("role_in_project") or "").lower()
+            return (1 if is_guest else 0, role)
+
+        for m in sorted(members, key=_member_sort_key):
             display = m.get("display_name") or m.get("guest_name") or "—"
             role = m.get("role_in_project", "")
             is_guest = m.get("member_type") == "guest" or not m.get("employee_id")
