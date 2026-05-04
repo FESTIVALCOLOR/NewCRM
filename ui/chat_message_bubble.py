@@ -73,6 +73,7 @@ class ChatMessageBubble(QWidget):
     scroll_to_requested = pyqtSignal(int)
     forward_requested = pyqtSignal(dict)
     copy_to_card_requested = pyqtSignal(dict)
+    height_changed = pyqtSignal(int)  # delta px когда async-загрузка меняет высоту пузыря
 
     def __init__(self, message: dict, is_own: bool, parent=None, token: str = "", base_url: str = "", show_phone: bool = True):
         super().__init__(parent)
@@ -464,6 +465,7 @@ class ChatMessageBubble(QWidget):
                         w = min(pix.width(), 380)
                         h = min(int(pix.height() * w / max(pix.width(), 1)), 320)
                         h = max(h, 80)
+                        old_h = img_lbl.height()
                         img_lbl.setFixedWidth(w)
                         img_lbl.setFixedHeight(h)
                         img_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -479,6 +481,9 @@ class ChatMessageBubble(QWidget):
                                 bubble_frame.updateGeometry()
                         if not sip.isdeleted(self):
                             self.updateGeometry()
+                            delta = h - old_h
+                            if delta != 0:
+                                self.height_changed.emit(delta)
                 reply.deleteLater()
 
             reply.finished.connect(_on_reply)
@@ -626,6 +631,7 @@ class ChatMessageBubble(QWidget):
                                 w = min(qt_pix.width(), 240)
                                 h = min(int(qt_pix.height() * w / max(qt_pix.width(), 1)), 200)
                                 h = max(h, 60)
+                                old_h = preview_lbl.height()
                                 preview_lbl.setFixedWidth(w)
                                 preview_lbl.setFixedHeight(h)
                                 scaled = qt_pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -642,6 +648,10 @@ class ChatMessageBubble(QWidget):
                                         bubble_frame.setMaximumWidth(w + 12 + 20)
                                         bubble_frame.setMinimumWidth(min(w + 12 + 20, 120))
                                         bubble_frame.updateGeometry()
+                                if not sip.isdeleted(self):
+                                    delta = h - old_h
+                                    if delta != 0:
+                                        self.height_changed.emit(delta)
                         except Exception:
                             pass
                 except RuntimeError:

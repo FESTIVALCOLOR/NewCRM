@@ -539,9 +539,17 @@ class ChatRoomWidget(QWidget):
         bubble.pin_requested.connect(self._on_pin_requested)
         bubble.scroll_to_requested.connect(self._scroll_to_message)
         bubble.forward_requested.connect(self._on_forward_requested)
+        bubble.height_changed.connect(self._on_bubble_height_changed)
         if self._crm_card_id:
             bubble.copy_to_card_requested.connect(self._on_copy_to_card_requested)
         return bubble
+
+    def _on_bubble_height_changed(self, delta: int):
+        """Компенсировать сдвиг скролла при async-загрузке изображений/превью."""
+        sb = self._scroll.verticalScrollBar()
+        near_bottom = sb.maximum() == 0 or sb.value() >= sb.maximum() - 120
+        if not near_bottom:
+            sb.setValue(sb.value() + delta)
 
     def _render_all_messages(self):
         layout = self._messages_layout
@@ -732,7 +740,10 @@ class ChatRoomWidget(QWidget):
         self._messages_layout.addWidget(bubble)
         self._messages.append(msg)
         self._messages_widget.update()
-        self._scroll_to_bottom()
+        sb = self._scroll.verticalScrollBar()
+        near_bottom = sb.maximum() == 0 or sb.value() >= sb.maximum() - 120
+        if near_bottom:
+            self._scroll_to_bottom()
 
     def _scroll_to_bottom(self):
         # Вызывается из GUI-потока — QTimer здесь работает корректно
