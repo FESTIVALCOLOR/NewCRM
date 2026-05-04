@@ -571,7 +571,10 @@ class ChatMessageBubble(QWidget):
         # Имя файла + кнопка
         row = QHBoxLayout()
         row.setSpacing(6)
+        row.setAlignment(Qt.AlignVCenter)
         name_lbl = QLabel(name[:28] + ("…" if len(name) > 28 else ""))
+        name_lbl.setFixedHeight(24)
+        name_lbl.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         name_lbl.setStyleSheet("font-size: 11px; color: #555; background: transparent;")
         row.addWidget(name_lbl, stretch=1)
 
