@@ -117,6 +117,21 @@
       class="col q-pa-md"
       style="overflow-y: auto; background: #F5F5F5"
     >
+      <!-- Кнопка загрузки предыдущих сообщений -->
+      <div v-if="hasMoreMessages && !loadingMessages" class="text-center q-mb-md">
+        <q-btn
+          flat
+          dense
+          no-caps
+          size="sm"
+          icon="expand_less"
+          label="Показать предыдущие"
+          color="grey-7"
+          :loading="loadingOlder"
+          @click="loadOlderMessages"
+        />
+      </div>
+
       <div v-if="loadingMessages" class="text-center q-mt-lg">
         <q-spinner size="24px" color="grey" />
       </div>
@@ -948,6 +963,8 @@ const messages = ref([])
 const members = ref([])
 const inputText = ref('')
 const loadingMessages = ref(false)
+const hasMoreMessages = ref(false)
+const loadingOlder = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
 const clientToken = ref('')
@@ -1208,10 +1225,7 @@ async function togglePin(msg) {
 function cyclePinned() {
   if (!pinnedMsgs.value.length) return
   pinnedIdx.value = (pinnedIdx.value + 1) % pinnedMsgs.value.length
-  nextTick(() => {
-    const el = messagesEl.value?.querySelector(`[data-msg-id="${pinnedMsgs.value[pinnedIdx.value]?.id}"]`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  })
+  scrollToPinnedMsg(pinnedMsgs.value[pinnedIdx.value])
 }
 
 // ── Copy to card ──────────────────────────────────────────────────────────
@@ -1354,6 +1368,7 @@ async function loadMessages() {
     const { data } = await api.get(`/api/v1/chats/${chatId}`)
     chatTitle.value = data.title || `Чат #${chatId}`
     messages.value = data.messages || []
+    hasMoreMessages.value = data.has_more_messages || false
     members.value = data.members || []
     clientToken.value = data.client_access_token || ''
     firstUnreadId.value = data.first_unread_message_id || null
@@ -1380,6 +1395,49 @@ async function loadMessages() {
   } finally {
     loadingMessages.value = false
   }
+}
+
+async function loadOlderMessages() {
+  if (!hasMoreMessages.value || loadingOlder.value || !messages.value.length) return
+  loadingOlder.value = true
+  const firstId = messages.value[0].id
+  try {
+    const { data } = await api.get(`/api/v1/chats/${chatId}/messages`, {
+      params: { limit: 150, before_id: firstId },
+    })
+    if (!data.length) {
+      hasMoreMessages.value = false
+      return
+    }
+    if (data.length < 150) hasMoreMessages.value = false
+    const existingIds = new Set(messages.value.map(m => m.id))
+    const newMsgs = data.filter(m => !existingIds.has(m.id))
+    messages.value = [...newMsgs, ...messages.value]
+    newMsgs.filter(m => isPdf(m) && m.yandex_path && !m._uploading)
+      .forEach(m => loadPdfThumbnail(m))
+  } catch (e) {
+    console.error('[ClientChatRoom] Ошибка загрузки старых:', e)
+  } finally {
+    loadingOlder.value = false
+  }
+}
+
+async function scrollToPinnedMsg(msg) {
+  const found = messages.value.find(m => m.id === msg.id)
+  if (found) {
+    await nextTick()
+    const el = document.getElementById(`msg-${msg.id}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  let attempts = 0
+  while (hasMoreMessages.value && !messages.value.find(m => m.id === msg.id) && attempts < 20) {
+    await loadOlderMessages()
+    attempts++
+  }
+  await nextTick()
+  const el = document.getElementById(`msg-${msg.id}`)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 async function loadCardData(cardId) {

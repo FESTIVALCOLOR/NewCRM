@@ -83,7 +83,22 @@ def client_get_chat(
         raise HTTPException(404, "Чат не найден или ссылка устарела")
     guest = get_guest_by_token(db, token)
     requires_registration = not (guest and guest.guest_name)
-    msgs = [] if requires_registration else [_message_to_dict(m) for m in get_messages(db, chat.id, limit=5000)]
+    msgs_objs = [] if requires_registration else get_messages(db, chat.id, limit=150)
+    has_more = False
+    if msgs_objs:
+        from database import InternalChatMessage
+
+        has_more = (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.chat_id == chat.id,
+                InternalChatMessage.is_deleted == False,  # noqa: E712
+                InternalChatMessage.id < msgs_objs[0].id,
+            )
+            .first()
+            is not None
+        )
+    msgs = [_message_to_dict(m) for m in msgs_objs]
     return {
         "chat_id": chat.id,
         "title": chat.title,
@@ -91,6 +106,7 @@ def client_get_chat(
         "requires_registration": requires_registration,
         "guest_name": guest.guest_name if guest else None,
         "messages": msgs,
+        "has_more_messages": has_more,
     }
 
 
@@ -116,15 +132,16 @@ def client_register(
 @router.get("/client-chat/{token}/messages")
 def client_list_messages(
     token: str,
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(150, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    before_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
-    """История сообщений для клиента."""
+    """История сообщений для клиента (поддерживает cursor через before_id)."""
     chat = get_chat_by_token(db, token)
     if not chat:
         raise HTTPException(404, "Чат не найден")
-    msgs = get_messages(db, chat.id, limit=limit, offset=offset)
+    msgs = get_messages(db, chat.id, limit=limit, offset=offset, before_id=before_id)
     return [_message_to_dict(m) for m in msgs]
 
 
@@ -202,6 +219,43 @@ async def client_edit_message(
     updated = _message_to_dict(msg)
     await ws_manager.broadcast(chat.id, {"type": "message_edited", "message": updated})
     return updated
+
+
+@router.delete("/client-chat/{token}/messages/{msg_id}")
+async def client_delete_message(
+    token: str,
+    msg_id: int,
+    db: Session = Depends(get_db),
+):
+    """Клиент удаляет своё сообщение (мягкое удаление)."""
+    from database import InternalChatMessage
+
+    chat = get_chat_by_token(db, token)
+    if not chat:
+        raise HTTPException(404, "Чат не найден")
+    guest = get_guest_by_token(db, token)
+    if not guest or not guest.guest_name:
+        raise HTTPException(403, "Сначала пройдите регистрацию")
+
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.id == msg_id,
+            InternalChatMessage.chat_id == chat.id,
+            InternalChatMessage.sender_guest_token == token,
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено или не принадлежит вам")
+
+    msg.is_deleted = True
+    msg.content = "[Сообщение удалено]"
+    db.commit()
+
+    await ws_manager.broadcast(chat.id, {"type": "message_deleted", "message_id": msg_id})
+    return {"status": "ok"}
 
 
 @router.post("/client-chat/{token}/files")
@@ -306,6 +360,19 @@ async def client_stream_file(
         tmp_path = tmp.name
         tmp.close()
         yd_svc.download_file(f"disk:{clean_path}", tmp_path)
+
+        async def _cleanup_tmp():
+            import asyncio
+
+            await asyncio.sleep(2)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        import asyncio
+
+        asyncio.create_task(_cleanup_tmp())
         return _FileResponse(tmp_path, media_type=ct, filename=os.path.basename(clean_path))
     except HTTPException:
         raise

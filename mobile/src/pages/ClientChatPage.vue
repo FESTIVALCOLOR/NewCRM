@@ -30,6 +30,21 @@
       class="col q-pa-md"
       style="overflow-y: auto; background: #F5F5F5"
     >
+      <!-- Кнопка загрузки предыдущих сообщений -->
+      <div v-if="hasMoreMessages && !loadingMessages" class="text-center q-mb-md">
+        <q-btn
+          flat
+          dense
+          no-caps
+          size="sm"
+          icon="expand_less"
+          label="Показать предыдущие"
+          color="grey-7"
+          :loading="loadingOlder"
+          @click="loadOlderMessages"
+        />
+      </div>
+
       <div v-if="loadingMessages" class="text-center q-mt-lg">
         <q-spinner size="24px" color="grey" />
       </div>
@@ -379,6 +394,8 @@ function pdfBubbleStyle(msg) {
 }
 const replyingTo = ref(null)
 const loadingMessages = ref(false)
+const hasMoreMessages = ref(false)
+const loadingOlder = ref(false)
 const messagesEl = ref(null)
 const fileInput = ref(null)
 const clientName = localStorage.getItem('client_name') || 'Клиент'
@@ -516,6 +533,7 @@ async function loadMessages() {
     }
     chatTitle.value = data.title || 'Чат с бюро'
     messages.value = data.messages || []
+    hasMoreMessages.value = data.has_more_messages || false
 
     // Находим первое непрочитанное (localStorage-based, т.к. гость не имеет серверного трекинга)
     const lastRead = parseInt(localStorage.getItem(_lastReadKey) || '0', 10)
@@ -543,6 +561,32 @@ async function loadMessages() {
     }
   } finally {
     loadingMessages.value = false
+  }
+}
+
+async function loadOlderMessages() {
+  if (!hasMoreMessages.value || loadingOlder.value || !messages.value.length) return
+  loadingOlder.value = true
+  const firstId = messages.value[0].id
+  try {
+    const baseURL = window.location.origin
+    const { data } = await axios.get(`${baseURL}/api/v1/client-chat/${activeToken}/messages`, {
+      params: { limit: 150, before_id: firstId },
+    })
+    if (!data.length) {
+      hasMoreMessages.value = false
+      return
+    }
+    if (data.length < 150) hasMoreMessages.value = false
+    const existingIds = new Set(messages.value.map(m => m.id))
+    const newMsgs = data.filter(m => !existingIds.has(m.id))
+    messages.value = [...newMsgs, ...messages.value]
+    newMsgs.filter(m => isPdf(m) && m.yandex_path && !m._uploading)
+      .forEach(m => loadPdfThumbnail(m))
+  } catch (e) {
+    console.error('[ClientChatPage] Ошибка загрузки старых:', e)
+  } finally {
+    loadingOlder.value = false
   }
 }
 
@@ -596,10 +640,14 @@ async function saveClientEdit() {
 }
 
 async function deleteClientMsg(msg) {
-  // Клиент не имеет JWT — только локально скрываем (сервер не поддерживает delete без JWT)
-  const idx = messages.value.findIndex(m => m.id === msg.id)
-  if (idx !== -1) {
-    messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+  try {
+    const baseURL = window.location.origin
+    await axios.delete(`${baseURL}/api/v1/client-chat/${activeToken}/messages/${msg.id}`)
+    messages.value = messages.value.filter(m => m.id !== msg.id)
+  } catch (e) {
+    console.error('[ClientChat] Ошибка удаления:', e)
+    // Локальное скрытие если сервер недоступен
+    messages.value = messages.value.filter(m => m.id !== msg.id)
   }
 }
 

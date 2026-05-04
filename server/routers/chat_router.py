@@ -193,10 +193,10 @@ def get_chat(
     current_user: Employee = Depends(require_permission("chat.employee.view")),
     db: Session = Depends(get_db),
 ):
-    """Детали чата с участниками и последними 5000 сообщениями."""
+    """Детали чата с участниками и последними 150 сообщениями."""
     chat = _get_chat_or_404(db, chat_id)
     _check_member(db, chat_id, current_user.id)
-    msgs = get_messages(db, chat_id, limit=5000)
+    msgs = get_messages(db, chat_id, limit=150)
     return _chat_to_detail_response(db, chat, current_user.id, msgs)
 
 
@@ -222,14 +222,15 @@ def remove_chat(
 @router.get("/{chat_id}/messages", response_model=list[InternalMessageResponse])
 def list_messages(
     chat_id: int,
-    limit: int = Query(5000, ge=1, le=10000),
+    limit: int = Query(150, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    before_id: Optional[int] = Query(None, ge=1),
     current_user: Employee = Depends(require_permission("chat.employee.view")),
     db: Session = Depends(get_db),
 ):
     _get_chat_or_404(db, chat_id)
     _check_member(db, chat_id, current_user.id)
-    msgs = get_messages(db, chat_id, limit=limit, offset=offset)
+    msgs = get_messages(db, chat_id, limit=limit, offset=offset, before_id=before_id)
     return msgs
 
 
@@ -1138,10 +1139,26 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
 
     pinned_responses = [InternalMessageResponse.model_validate(_message_to_dict(p)) for p in pinned_objs]
 
+    has_more = (
+        (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.chat_id == chat.id,
+                InternalChatMessage.is_deleted == False,  # noqa: E712
+                InternalChatMessage.id < msgs[0].id,
+            )
+            .first()
+            is not None
+        )
+        if msgs
+        else False
+    )
+
     return InternalChatDetailResponse(
         **base.model_dump(),
         members=member_responses,
         messages=[_message_to_dict(m) for m in msgs],
         first_unread_message_id=first_unread_id,
         pinned_messages=pinned_responses,
+        has_more_messages=has_more,
     )

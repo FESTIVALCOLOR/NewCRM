@@ -58,6 +58,9 @@ export function useChatWebSocket() {
       ws = null
     }
     isConnected.value = false
+    // Очистить все таймеры typing
+    typingUsers.value.forEach(u => { if (u._timer) clearTimeout(u._timer) })
+    typingUsers.value = []
   }
 
   function sendMessage(content, replyToId = null, messageType = 'text') {
@@ -139,11 +142,21 @@ export function useChatWebSocket() {
       else batchMsgs.forEach(m => { messages.value.push(m); if (_handlers.onMessage) _handlers.onMessage(m) })
     } else if (type === 'typing_start') {
       const sn = msg.sender_name
-      if (sn && !typingUsers.value.find(u => u.name === sn)) typingUsers.value.push({ name: sn })
+      if (sn) {
+        typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
+        const timer = setTimeout(() => {
+          typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
+        }, 6000)
+        typingUsers.value.push({ name: sn, _timer: timer })
+      }
       if (_handlers.onTyping) _handlers.onTyping(msg, true)
     } else if (type === 'typing_stop') {
       const sn = msg.sender_name
-      if (sn) typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
+      if (sn) {
+        const user = typingUsers.value.find(u => u.name === sn)
+        if (user?._timer) clearTimeout(user._timer)
+        typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
+      }
       if (_handlers.onTyping) _handlers.onTyping(msg, false)
     } else if (type === 'read') {
       if (_handlers.onRead) _handlers.onRead(msg)

@@ -469,19 +469,19 @@ def register_guest(db: Session, guest_token: str, name: str, phone: str) -> Inte
 # =========================
 
 
-def get_messages(db: Session, chat_id: int, limit: int = 50, offset: int = 0) -> list:
-    """Получить историю сообщений (пагинация). Возвращает последние limit сообщений в хронологическом порядке."""
-    msgs = (
-        db.query(InternalChatMessage)
-        .filter(
-            InternalChatMessage.chat_id == chat_id,
-            InternalChatMessage.is_deleted == False,
-        )
-        .order_by(InternalChatMessage.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
+def get_messages(db: Session, chat_id: int, limit: int = 50, offset: int = 0, before_id: Optional[int] = None) -> list:
+    """Получить историю сообщений. Поддерживает cursor-пагинацию через before_id.
+
+    before_id: если передан — вернуть сообщения с id < before_id (для подгрузки истории).
+    Возвращает последние limit сообщений в хронологическом порядке.
+    """
+    q = db.query(InternalChatMessage).filter(
+        InternalChatMessage.chat_id == chat_id,
+        InternalChatMessage.is_deleted == False,
     )
+    if before_id is not None:
+        q = q.filter(InternalChatMessage.id < before_id)
+    msgs = q.order_by(InternalChatMessage.id.desc()).limit(limit).all()
     return list(reversed(msgs))
 
 

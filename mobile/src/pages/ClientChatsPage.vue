@@ -47,12 +47,26 @@
         </q-item-section>
 
         <q-item-section side>
-          <q-badge
-            v-if="chat.unread_count"
-            color="negative"
-            :label="chat.unread_count"
-            rounded
-          />
+          <div class="row items-center no-wrap" style="gap: 4px">
+            <q-btn
+              v-if="canAddInvite"
+              flat
+              round
+              dense
+              size="xs"
+              icon="link"
+              color="grey-6"
+              @click.stop="openLinkDialog(chat)"
+            >
+              <q-tooltip>Ссылка для клиента</q-tooltip>
+            </q-btn>
+            <q-badge
+              v-if="chat.unread_count"
+              color="negative"
+              :label="chat.unread_count"
+              rounded
+            />
+          </div>
         </q-item-section>
       </q-item>
     </q-list>
@@ -151,6 +165,12 @@ async function loadChats() {
 
 function openChat(chat) {
   router.push({ name: 'client-chat-room', params: { chatId: chat.id } })
+}
+
+function openLinkDialog(chat) {
+  activeChatId.value = chat.id
+  inviteLink.value = ''
+  showLinkDialog.value = true
 }
 
 async function createInviteLink() {
