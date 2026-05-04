@@ -177,7 +177,7 @@ class ChatMixin:
             r = self._request(
                 "POST",
                 f"{self.base_url}/api/v1/chats/{chat_id}/forward/{target_chat_id}",
-                data={"msg_id": msg_id},
+                json={"msg_id": msg_id},
             )
             self._handle_response(r)
             return True

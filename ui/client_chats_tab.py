@@ -113,15 +113,16 @@ class ClientChatsTab(QWidget):
 
         from PyQt5.QtWidgets import QPushButton as _QPushButton
 
-        refresh_btn = _QPushButton("↻")
+        refresh_btn = _QPushButton("⟳")
         refresh_btn.setFixedSize(28, 28)
         refresh_btn.setToolTip("Обновить список чатов")
         refresh_btn.setStyleSheet("""
             QPushButton {
                 background: transparent; border: 1px solid transparent;
-                border-radius: 4px; font-size: 14px; color: #666;
+                border-radius: 4px; font-size: 16px; color: #666;
+                padding: 0; qproperty-alignment: AlignCenter;
             }
-            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
+            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; color: #333; }
         """)
         refresh_btn.clicked.connect(self._load_chats)
         sr.addWidget(refresh_btn)
@@ -169,71 +170,63 @@ class ClientChatsTab(QWidget):
     def _build_ctrl_panel(self) -> QFrame:
         """Верхняя панель: ссылка-приглашение + кнопки управления."""
         panel = QFrame()
-        panel.setFixedHeight(44)
+        panel.setFixedHeight(38)
         panel.setStyleSheet("background: #FAFAFA; border-bottom: 1px solid #E0E0E0;")
         panel.setVisible(False)  # показывается при выборе чата
 
         h = QHBoxLayout(panel)
-        h.setContentsMargins(12, 8, 12, 8)
-        h.setSpacing(8)
+        h.setContentsMargins(10, 4, 10, 4)
+        h.setSpacing(6)
+
+        # Блок ссылки с лёгкой рамкой
+        link_frame = QFrame()
+        link_frame.setStyleSheet("QFrame { background: #fff; border: 1px solid #E8E8E8; border-radius: 4px; }")
+        lf = QHBoxLayout(link_frame)
+        lf.setContentsMargins(6, 0, 4, 0)
+        lf.setSpacing(4)
 
         self._link_label = QLabel("Ссылка клиента:")
-        self._link_label.setStyleSheet("font-size: 11px; color: #555;")
-        h.addWidget(self._link_label)
+        self._link_label.setStyleSheet("font-size: 10px; color: #888; background: transparent; border: none;")
+        lf.addWidget(self._link_label)
 
         self._link_value = QLabel("")
-        self._link_value.setStyleSheet("""
-            font-size: 11px; color: #1565C0;
-            text-decoration: underline;
-        """)
+        self._link_value.setStyleSheet("font-size: 10px; color: #1565C0; text-decoration: underline; background: transparent; border: none;")
         self._link_value.setCursor(Qt.PointingHandCursor)
         self._link_value.setOpenExternalLinks(False)
         self._link_value.mousePressEvent = self._copy_link
-        self._link_value.setMaximumWidth(240)
+        self._link_value.setMaximumWidth(200)
         self._link_value.setMinimumWidth(0)
         self._link_value.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        h.addWidget(self._link_value, stretch=1)
+        lf.addWidget(self._link_value, stretch=1)
 
-        copy_btn = QPushButton("Копировать")
-        copy_btn.setFixedHeight(28)
-        copy_btn.setStyleSheet("""
+        _btn_style = """
             QPushButton {
-                font-size: 11px; padding: 0 10px;
-                border: 1px solid #d9d9d9; border-radius: 4px;
-                background: #fff;
+                font-size: 10px; padding: 0 8px;
+                border: 1px solid #d9d9d9; border-radius: 3px;
+                background: #fff; color: #333;
+                min-height: 22px; max-height: 22px;
             }
             QPushButton:hover { background: #f5f5f5; }
-        """)
+        """
+        copy_btn = QPushButton("Копировать")
+        copy_btn.setFixedHeight(22)
+        copy_btn.setStyleSheet(_btn_style)
         copy_btn.clicked.connect(self._on_copy_link)
-        h.addWidget(copy_btn)
+        lf.addWidget(copy_btn)
 
-        h.addStretch()
+        h.addWidget(link_frame, stretch=1)
 
         if self._can_script:
             script_btn = QPushButton("Отправить скрипт")
-            script_btn.setFixedHeight(28)
-            script_btn.setStyleSheet("""
-                QPushButton {
-                    font-size: 11px; padding: 0 12px;
-                    border: 1px solid #d9d9d9; border-radius: 4px;
-                    background: #fff; color: #333;
-                }
-                QPushButton:hover { background: #f5f5f5; }
-            """)
+            script_btn.setFixedHeight(22)
+            script_btn.setStyleSheet(_btn_style)
             script_btn.clicked.connect(self._send_script)
             h.addWidget(script_btn)
 
         if self._can_manage:
             invite_btn = QPushButton("Добавить участника")
-            invite_btn.setFixedHeight(28)
-            invite_btn.setStyleSheet("""
-                QPushButton {
-                    font-size: 11px; padding: 0 12px;
-                    border: 1px solid #d9d9d9; border-radius: 4px;
-                    background: #fff; color: #333;
-                }
-                QPushButton:hover { background: #f5f5f5; }
-            """)
+            invite_btn.setFixedHeight(22)
+            invite_btn.setStyleSheet(_btn_style)
             invite_btn.clicked.connect(self._add_client_member)
             h.addWidget(invite_btn)
 
@@ -347,6 +340,7 @@ class ClientChatsTab(QWidget):
 
     def _open_room(self, chat_id: int, title: str):
         if self._current_room:
+            self._current_room.cleanup()
             self._current_room.hide()
             self._right.layout().removeWidget(self._current_room)
             self._current_room.deleteLater()

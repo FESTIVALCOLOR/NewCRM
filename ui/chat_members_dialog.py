@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ui.custom_message_box import CustomQuestionBox
 from ui.custom_title_bar import CustomTitleBar
 from utils.permissions import _has_perm
 
@@ -265,7 +266,7 @@ class ChatMembersDialog(QDialog):
                 del_btn.setToolTip("Удалить из чата")
                 del_btn.setStyleSheet(_del_style)
                 del_btn.clicked.connect(lambda checked, mid=member_id: self._remove_member(mid))
-                rl.addWidget(del_btn)
+                rl.addWidget(del_btn, 0, Qt.AlignVCenter)
             elif member_id and is_guest and self._chat_type == "client":
                 # Кнопка аннулирования доступа клиента
                 revoke_btn = QPushButton("×")
@@ -273,7 +274,7 @@ class ChatMembersDialog(QDialog):
                 revoke_btn.setToolTip("Аннулировать доступ клиента")
                 revoke_btn.setStyleSheet(_del_style)
                 revoke_btn.clicked.connect(lambda checked, mid=member_id: self._revoke_guest(mid))
-                rl.addWidget(revoke_btn)
+                rl.addWidget(revoke_btn, 0, Qt.AlignVCenter)
 
             row_h = 52 if (phone and is_guest and self._show_phone) else 40
             item = QListWidgetItem()
@@ -302,8 +303,13 @@ class ChatMembersDialog(QDialog):
         self._add_btn.setEnabled(available > 0)
 
     def _show_add_panel(self):
-        self._add_panel.setVisible(not self._add_panel.isVisible())
-        self.adjustSize()
+        visible = not self._add_panel.isVisible()
+        self._add_panel.setVisible(visible)
+        # Плавное расширение без прыжка: задаём минимальную высоту
+        if visible:
+            self.setMinimumHeight(520)
+        else:
+            self.setMinimumHeight(0)
 
     def _confirm_add(self):
         item = self._add_list.currentItem()
@@ -319,39 +325,23 @@ class ChatMembersDialog(QDialog):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _remove_member(self, member_id: int):
-        from PyQt5.QtWidgets import QMessageBox
+        dlg = CustomQuestionBox(self, "Удалить участника", "Удалить участника из чата?")
+        if dlg.exec_() != dlg.Accepted:
+            return
 
-        if (
-            QMessageBox.question(
-                self,
-                "Удалить участника",
-                "Удалить участника из чата?",
-                QMessageBox.Yes | QMessageBox.No,
-            )
-            == QMessageBox.Yes
-        ):
+        def _worker():
+            self._api.remove_chat_member(self._chat_id, member_id)
+            self._sig_reload.emit()
 
-            def _worker():
-                self._api.remove_chat_member(self._chat_id, member_id)
-                self._sig_reload.emit()
-
-            threading.Thread(target=_worker, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _revoke_guest(self, member_id: int):
-        from PyQt5.QtWidgets import QMessageBox
+        dlg = CustomQuestionBox(self, "Аннулировать доступ", "Аннулировать ссылку-приглашение и удалить клиента из чата?")
+        if dlg.exec_() != dlg.Accepted:
+            return
 
-        if (
-            QMessageBox.question(
-                self,
-                "Аннулировать доступ",
-                "Аннулировать ссылку-приглашение и удалить клиента из чата?",
-                QMessageBox.Yes | QMessageBox.No,
-            )
-            == QMessageBox.Yes
-        ):
+        def _worker():
+            self._api.revoke_client_access(self._chat_id, member_id)
+            self._sig_reload.emit()
 
-            def _worker():
-                self._api.revoke_client_access(self._chat_id, member_id)
-                self._sig_reload.emit()
-
-            threading.Thread(target=_worker, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True).start()

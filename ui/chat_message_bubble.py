@@ -475,7 +475,10 @@ class ChatMessageBubble(QWidget):
                             bubble_frame = layout.parentWidget()
                             if bubble_frame and not sip.isdeleted(bubble_frame):
                                 bubble_frame.setMaximumWidth(w + 20)
+                                bubble_frame.setMinimumWidth(min(w + 20, 120))
                                 bubble_frame.updateGeometry()
+                        if not sip.isdeleted(self):
+                            self.updateGeometry()
                 reply.deleteLater()
 
             reply.finished.connect(_on_reply)
@@ -568,27 +571,28 @@ class ChatMessageBubble(QWidget):
         """)
         c_layout.addWidget(preview_lbl, alignment=Qt.AlignHCenter)
 
-        # Имя файла + кнопка
+        # Имя файла + кнопка — одинаковая высота 26px
         row = QHBoxLayout()
         row.setSpacing(6)
         row.setAlignment(Qt.AlignVCenter)
         name_lbl = QLabel(name[:28] + ("…" if len(name) > 28 else ""))
-        name_lbl.setFixedHeight(24)
+        name_lbl.setFixedHeight(26)
         name_lbl.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         name_lbl.setStyleSheet("font-size: 11px; color: #555; background: transparent;")
         row.addWidget(name_lbl, stretch=1)
 
         open_btn = QPushButton("Открыть")
-        open_btn.setFixedHeight(24)
+        open_btn.setFixedHeight(26)
         open_btn.setStyleSheet("""
             QPushButton {
                 background: transparent; border: 1px solid #d9d9d9;
-                border-radius: 4px; font-size: 11px; color: #555; padding: 0 10px;
+                border-radius: 4px; font-size: 11px; color: #555;
+                padding: 0 10px; max-height: 26px; min-height: 26px;
             }
             QPushButton:hover { background: #f0f0f0; }
         """)
         open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)) if url else None)
-        row.addWidget(open_btn)
+        row.addWidget(open_btn, 0, Qt.AlignVCenter)
         c_layout.addLayout(row)
 
         layout.addWidget(container)
@@ -600,41 +604,53 @@ class ChatMessageBubble(QWidget):
             reply = self._pdf_nam.get(req)
 
             def _on_pdf_done():
-                if reply.error() == 0:
+                try:
+                    if sip.isdeleted(preview_lbl):
+                        return
+                    if reply.error() == 0:
+                        try:
+                            import fitz  # noqa: PLC0415
+
+                            pdf_bytes = reply.readAll().data()
+                            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                            page = doc[0]
+                            mat = fitz.Matrix(1.0, 1.0)
+                            pix = page.get_pixmap(matrix=mat)
+                            img_data = pix.tobytes("png")
+                            doc.close()
+
+                            if sip.isdeleted(preview_lbl):
+                                return
+                            qt_pix = QPixmap()
+                            if qt_pix.loadFromData(img_data):
+                                w = min(qt_pix.width(), 240)
+                                h = min(int(qt_pix.height() * w / max(qt_pix.width(), 1)), 200)
+                                h = max(h, 60)
+                                preview_lbl.setFixedWidth(w)
+                                preview_lbl.setFixedHeight(h)
+                                scaled = qt_pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                                preview_lbl.setPixmap(scaled)
+                                preview_lbl.setStyleSheet("border-radius: 4px; background: transparent;")
+                                preview_lbl.setCursor(Qt.PointingHandCursor)
+                                preview_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url)) if url else None
+                                # Сжать контейнер и пузырь до ширины превью
+                                if not sip.isdeleted(container):
+                                    container.setMaximumWidth(w + 12)
+                                if not sip.isdeleted(layout):
+                                    bubble_frame = layout.parentWidget()
+                                    if bubble_frame and not sip.isdeleted(bubble_frame):
+                                        bubble_frame.setMaximumWidth(w + 12 + 20)
+                                        bubble_frame.setMinimumWidth(min(w + 12 + 20, 120))
+                                        bubble_frame.updateGeometry()
+                        except Exception:
+                            pass
+                except RuntimeError:
+                    pass
+                finally:
                     try:
-                        import fitz  # noqa: PLC0415
-
-                        pdf_bytes = reply.readAll().data()
-                        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-                        page = doc[0]
-                        mat = fitz.Matrix(1.0, 1.0)
-                        pix = page.get_pixmap(matrix=mat)
-                        img_data = pix.tobytes("png")
-                        doc.close()
-
-                        qt_pix = QPixmap()
-                        if qt_pix.loadFromData(img_data):
-                            w = min(qt_pix.width(), 240)
-                            h = min(int(qt_pix.height() * w / max(qt_pix.width(), 1)), 200)
-                            h = max(h, 60)
-                            preview_lbl.setFixedWidth(w)
-                            preview_lbl.setFixedHeight(h)
-                            scaled = qt_pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                            preview_lbl.setPixmap(scaled)
-                            preview_lbl.setStyleSheet("border-radius: 4px; background: transparent;")
-                            preview_lbl.setCursor(Qt.PointingHandCursor)
-                            preview_lbl.mousePressEvent = lambda _e: QDesktopServices.openUrl(QUrl(url)) if url else None
-                            # Сжать контейнер и пузырь до ширины превью
-                            if not sip.isdeleted(container):
-                                container.setMaximumWidth(w + 12)
-                            if not sip.isdeleted(layout):
-                                bubble_frame = layout.parentWidget()
-                                if bubble_frame and not sip.isdeleted(bubble_frame):
-                                    bubble_frame.setMaximumWidth(w + 12 + 20)
-                                    bubble_frame.updateGeometry()
-                    except Exception:
+                        reply.deleteLater()
+                    except RuntimeError:
                         pass
-                reply.deleteLater()
 
             reply.finished.connect(_on_pdf_done)
 

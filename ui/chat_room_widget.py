@@ -31,7 +31,6 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -43,6 +42,7 @@ from PyQt5.QtWidgets import (
 
 from ui.chat_gallery_widget import ChatGalleryWidget
 from ui.chat_message_bubble import ChatMessageBubble
+from ui.custom_message_box import CustomMessageBox, CustomQuestionBox
 from ui.custom_title_bar import CustomTitleBar
 from utils.icon_loader import IconLoader
 from utils.permissions import _has_perm
@@ -293,21 +293,25 @@ class ChatRoomWidget(QWidget):
         main_layout.addWidget(self._scroll, stretch=1)
 
         # ---------- FLOATING SCROLL-TO-BOTTOM BUTTON ----------
-        self._scroll_btn = QPushButton("↓", self._scroll)
-        self._scroll_btn.setFixedSize(32, 32)
+        self._scroll_btn = QPushButton("▼", self._scroll)
+        self._scroll_btn.setFixedSize(36, 36)
         self._scroll_btn.setToolTip("Прокрутить вниз")
         self._scroll_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(255,255,255,220);
-                border: 1px solid #D0D0D0;
-                border-radius: 16px;
-                font-size: 14px;
+                background: #ffd93c;
+                border: none;
+                border-radius: 18px;
+                font-size: 13px;
+                font-weight: bold;
                 color: #555;
+                letter-spacing: 0px;
             }
             QPushButton:hover {
-                background: #FFF8DC;
-                border-color: #ffd93c;
-                color: #333;
+                background: #f5c800;
+                color: #222;
+            }
+            QPushButton:pressed {
+                background: #e6b800;
             }
         """)
         self._scroll_btn.clicked.connect(self._scroll_to_bottom)
@@ -341,10 +345,13 @@ class ChatRoomWidget(QWidget):
         self._pin_text_lbl.setMinimumWidth(0)
         self._pin_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._pin_text_lbl.setCursor(Qt.PointingHandCursor)
+        self._pin_text_lbl.mousePressEvent = lambda e: self._scroll_to_pinned()
         pin_text_col.addWidget(self._pin_text_lbl)
         pin_text_widget = QWidget()
         pin_text_widget.setLayout(pin_text_col)
         pin_text_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        pin_text_widget.setCursor(Qt.PointingHandCursor)
+        pin_text_widget.mousePressEvent = lambda e: self._scroll_to_pinned()
         pb_layout.addWidget(pin_text_widget)
 
         self._pin_nav_lbl = QLabel("")
@@ -381,8 +388,8 @@ class ChatRoomWidget(QWidget):
         self._action_text_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         ab_layout.addWidget(self._action_text_lbl)
         cancel_btn = QPushButton("×")
-        cancel_btn.setFixedSize(24, 24)
-        cancel_btn.setStyleSheet("QPushButton { border: none; background: transparent; font-size: 12px; line-height: 1; color: #888; }QPushButton:hover { color: #333; }")
+        cancel_btn.setFixedSize(28, 28)
+        cancel_btn.setStyleSheet("QPushButton { border: none; background: transparent; font-size: 16px; line-height: 1; color: #888; }QPushButton:hover { color: #333; }")
         cancel_btn.clicked.connect(self._cancel_action)
         ab_layout.addWidget(cancel_btn)
         self._action_bar.setVisible(False)
@@ -427,7 +434,9 @@ class ChatRoomWidget(QWidget):
                 border-top: 1px solid #E0E0E0;
             }
         """)
-        input_frame.setFixedHeight(56)
+        input_frame.setMinimumHeight(56)
+        input_frame.setMaximumHeight(180)
+        self._input_frame = input_frame
         i_layout = QVBoxLayout(input_frame)
         i_layout.setContentsMargins(8, 8, 8, 8)
         i_layout.setSpacing(0)
@@ -449,7 +458,8 @@ class ChatRoomWidget(QWidget):
         row.addWidget(voice_btn)
 
         self._input = ChatInputEdit()
-        self._input.setFixedHeight(36)
+        self._input.setMinimumHeight(36)
+        self._input.setMaximumHeight(120)
         self._input.setPlaceholderText("Сообщение… (Enter — отправить, Shift+Enter — перенос)")
         self._input.setStyleSheet("""
             QTextEdit {
@@ -775,15 +785,8 @@ class ChatRoomWidget(QWidget):
         msg_id = msg.get("id")
         if not msg_id:
             return
-        if (
-            QMessageBox.question(
-                self,
-                "Удалить сообщение",
-                "Удалить это сообщение?",
-                QMessageBox.Yes | QMessageBox.No,
-            )
-            != QMessageBox.Yes
-        ):
+        dlg = CustomQuestionBox(self, "Удалить сообщение", "Удалить это сообщение?")
+        if dlg.exec_() != dlg.Accepted:
             return
 
         def _worker():
@@ -837,24 +840,36 @@ class ChatRoomWidget(QWidget):
             return
 
         ws_url = self._api.get_chat_ws_url(self._chat_id)
+        # Захватываем сигналы локально — при удалении виджета обращение к self вызовет RuntimeError
+        _sig_data = self._sig_ws_data
+        _sig_status = self._sig_ws_status
 
         def on_message(raw: str):
             try:
                 data = json.loads(raw)
             except Exception:
                 return
-            self._sig_ws_data.emit(data)
+            try:
+                _sig_data.emit(data)
+            except RuntimeError:
+                pass
 
         def on_error(err):
             logger.warning(f"Chat WS error: {err}")
 
         def on_close():
             logger.debug(f"Chat WS closed: chat_id={self._chat_id}")
-            self._sig_ws_status.emit(False)
+            try:
+                _sig_status.emit(False)
+            except RuntimeError:
+                pass
 
         def on_open():
             logger.debug(f"Chat WS opened: chat_id={self._chat_id}")
-            self._sig_ws_status.emit(True)
+            try:
+                _sig_status.emit(True)
+            except RuntimeError:
+                pass
 
         self._ws_worker = ChatWebSocketWorker(ws_url, on_message, on_error, on_close, on_open)
         self._ws_worker.start()
@@ -918,9 +933,9 @@ class ChatRoomWidget(QWidget):
                 data.get("next_variation", 1),
             )
         elif event == "_copy_success":
-            QMessageBox.information(self, "Готово", "Файл скопирован в карточку CRM.")
+            CustomMessageBox(self, "Готово", "Файл скопирован в карточку CRM.", icon_type="success").exec_()
         elif event == "_copy_error":
-            QMessageBox.warning(self, "Ошибка", "Не удалось скопировать файл в карточку.")
+            CustomMessageBox(self, "Ошибка", "Не удалось скопировать файл в карточку.", icon_type="error").exec_()
 
     def _ws_on_message(self, event: str, data: dict):
         if event == "new_message":
@@ -1002,6 +1017,14 @@ class ChatRoomWidget(QWidget):
     # ===========================================================
 
     def _on_input_changed(self):
+        # Динамическая высота поля ввода (до 4 строк)
+        doc_h = int(self._input.document().size().height())
+        new_h = max(36, min(doc_h + 14, 120))
+        if self._input.height() != new_h:
+            self._input.setFixedHeight(new_h)
+            frame_h = max(56, new_h + 20)
+            self._input_frame.setFixedHeight(frame_h)
+
         text = self._input.toPlainText()
         if text and not self._is_typing:
             self._is_typing = True
@@ -1053,13 +1076,28 @@ class ChatRoomWidget(QWidget):
 
         # Режим ответа
         reply_to_id = None
+        reply_msg_snapshot = None
         if self._reply_to_msg is not None:
             reply_to_id = self._reply_to_msg.get("id")
+            reply_msg_snapshot = dict(self._reply_to_msg)
             self._cancel_action()
 
         def _worker():
             msg = self._api.send_chat_message(self._chat_id, text, reply_to_id=reply_to_id)
             if msg:
+                # Сервер может не возвращать reply_preview в POST-ответе — добавляем локально
+                if reply_msg_snapshot and not msg.get("reply_preview"):
+                    reply_type = reply_msg_snapshot.get("message_type", "text")
+                    reply_content = reply_msg_snapshot.get("content") or ("[Изображение]" if reply_type == "image" else "[Файл]")
+                    msg["reply_preview"] = {
+                        "id": reply_msg_snapshot.get("id"),
+                        "sender_display_name": reply_msg_snapshot.get("sender_display_name"),
+                        "content": reply_content,
+                        "message_type": reply_type,
+                        "yandex_path": reply_msg_snapshot.get("yandex_path"),
+                        "file_name": reply_msg_snapshot.get("file_name"),
+                    }
+                    msg["reply_to_id"] = reply_to_id
                 self._sig_new_msg.emit(msg)
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -1075,7 +1113,7 @@ class ChatRoomWidget(QWidget):
             return
         for path in paths:
             if len(self._pending_files) >= 20:
-                QMessageBox.information(self, "Лимит файлов", "Можно прикрепить не более 20 файлов за раз.")
+                CustomMessageBox(self, "Лимит файлов", "Можно прикрепить не более 20 файлов за раз.", icon_type="info").exec_()
                 break
             fname = os.path.basename(path)
             ext = os.path.splitext(fname)[1].lower()
@@ -1238,11 +1276,12 @@ class ChatRoomWidget(QWidget):
 
     def _toggle_voice(self):
         self._voice_btn.setChecked(False)
-        QMessageBox.information(
+        CustomMessageBox(
             self,
             "Голосовое",
             "Запись голосовых доступна в мобильной версии.\nНа десктопе используйте прикрепление файла (.webm, .mp3).",
-        )
+            icon_type="info",
+        ).exec_()
 
     def _open_yd_folder(self):
         from urllib.parse import quote as _quote
@@ -1652,9 +1691,21 @@ class ChatRoomWidget(QWidget):
     # Cleanup
     # ===========================================================
 
-    def closeEvent(self, event):
+    def cleanup(self):
+        """Остановить WS и отключить сигналы перед удалением виджета."""
         if self._ws_worker:
             self._ws_worker.stop()
+            self._ws_worker = None
+        try:
+            self._sig_messages_ready.disconnect()
+            self._sig_new_msg.disconnect()
+            self._sig_ws_data.disconnect()
+            self._sig_ws_status.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+
+    def closeEvent(self, event):
+        self.cleanup()
         super().closeEvent(event)
 
     def resizeEvent(self, event):

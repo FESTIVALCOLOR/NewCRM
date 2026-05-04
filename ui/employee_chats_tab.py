@@ -104,15 +104,16 @@ class EmployeeChatsTab(QWidget):
 
         from PyQt5.QtWidgets import QPushButton
 
-        refresh_btn = QPushButton("↻")
+        refresh_btn = QPushButton("⟳")
         refresh_btn.setFixedSize(28, 28)
         refresh_btn.setToolTip("Обновить список чатов")
         refresh_btn.setStyleSheet("""
             QPushButton {
                 background: transparent; border: 1px solid transparent;
-                border-radius: 4px; font-size: 14px; color: #666;
+                border-radius: 4px; font-size: 16px; color: #666;
+                padding: 0; qproperty-alignment: AlignCenter;
             }
-            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; }
+            QPushButton:hover { background: #f0f0f0; border-color: #d9d9d9; color: #333; }
         """)
         refresh_btn.clicked.connect(self._load_chats)
         sr.addWidget(refresh_btn)
@@ -244,6 +245,7 @@ class EmployeeChatsTab(QWidget):
     def _open_room(self, chat_id: int, title: str):
         # Останавливаем предыдущий виджет
         if self._current_room:
+            self._current_room.cleanup()
             self._current_room.hide()
             self._right.layout().removeWidget(self._current_room)
             self._current_room.deleteLater()
