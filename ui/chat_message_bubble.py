@@ -268,7 +268,7 @@ class ChatMessageBubble(QWidget):
         if not reactions:
             return
         row = QHBoxLayout()
-        row.setContentsMargins(0, 2, 0, 0)
+        row.setContentsMargins(6, 2, 6, 0)
         row.setSpacing(4)
         if self._is_own:
             row.addStretch()

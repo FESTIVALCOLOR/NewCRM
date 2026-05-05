@@ -1347,7 +1347,9 @@ class ChatRoomWidget(QWidget):
                 continue
             w = item.widget()
             if isinstance(w, ChatMessageBubble) and w.msg_id == msg_id:
-                self._scroll.ensureWidgetVisible(w)
+                from PyQt5.QtCore import QTimer
+
+                QTimer.singleShot(0, lambda _w=w: self._scroll.ensureWidgetVisible(_w))
                 return
         # Если не нашли (может быть вне загруженных) — показываем подсказку
         self._search_result_lbl.setText(f"Сообщение #{msg_id} вне загруженной истории")

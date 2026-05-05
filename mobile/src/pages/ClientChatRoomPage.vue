@@ -484,7 +484,7 @@
               <div
                 v-if="msg.reactions && Object.keys(msg.reactions).length"
                 class="row items-center q-gutter-xs"
-                style="margin-top: 4px; flex-wrap: wrap"
+                :style="(msg.message_type === 'image' || (isPdf(msg) && pdfThumbnails[msg.id])) ? 'margin-top: 0; padding: 0 10px 4px; flex-wrap: wrap' : 'margin-top: 4px; flex-wrap: wrap'"
               >
                 <button
                   v-for="(reactors, emoji) in msg.reactions"
@@ -1774,10 +1774,14 @@ async function startRecording() {
       const mimeType = _mediaRecorder.mimeType || 'audio/webm'
       const ext = mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.m4a' : '.webm'
       const blob = new Blob(_audioChunks, { type: mimeType })
+      if (blob.size === 0) {
+        $q.notify({ type: 'negative', message: 'Запись пуста — попробуйте ещё раз', timeout: 2000 })
+        return
+      }
       const file = new File([blob], `voice${ext}`, { type: mimeType })
       await _uploadVoice(file)
     }
-    _mediaRecorder.start()
+    _mediaRecorder.start(250)
     isRecording.value = true
     recordSeconds.value = 0
     _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)
@@ -1826,6 +1830,7 @@ async function goToSearchResult(msg) {
   showSearch.value = false
   searchQuery.value = ''
   searchResults.value = []
+  await nextTick()
   await scrollToPinnedMsg(msg)
 }
 
