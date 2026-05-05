@@ -270,6 +270,21 @@
                 >
                   <q-menu auto-close>
                     <q-list dense style="min-width: 210px; font-size: 12px; white-space: nowrap">
+                      <!-- Быстрые реакции -->
+                      <q-item dense style="padding: 4px 8px 2px">
+                        <div class="row items-center">
+                          <button
+                            v-for="em in QUICK_EMOJIS"
+                            :key="em"
+                            class="react-quick-btn"
+                            :class="{ 'react-quick-btn--active': isOwnReaction(msg, em) }"
+                            @click.stop="sendReaction(msg, em)"
+                          >
+                            {{ em }}
+                          </button>
+                        </div>
+                      </q-item>
+                      <q-separator />
                       <q-item clickable dense @click="togglePin(msg)">
                         <q-item-section avatar style="min-width: 28px">
                           <q-icon name="push_pin" size="14px" :color="msg.is_pinned ? 'orange-8' : 'grey-8'" />
@@ -404,6 +419,16 @@
                   </div>
                 </template>
 
+                <!-- Голосовое -->
+                <template v-else-if="msg.message_type === 'voice'">
+                  <audio
+                    controls
+                    preload="none"
+                    :src="msg.file_url || imgStreamUrl(msg)"
+                    style="height: 36px; width: 220px; display: block; border-radius: 8px"
+                  />
+                </template>
+
                 <template v-else>
                   <div class="text-body2" style="white-space: pre-wrap; word-break: break-word; font-size: 13px">
                     {{ msg.content }}
@@ -454,6 +479,22 @@
               >
                 <span v-if="msg.is_edited" class="text-caption text-grey-5 q-mr-xs" style="font-size: 9px">изм.</span>
                 <span class="text-caption">{{ formatTime(msg.created_at) }}</span>
+              </div>
+              <!-- Реакции -->
+              <div
+                v-if="msg.reactions && Object.keys(msg.reactions).length"
+                class="row items-center q-gutter-xs"
+                style="margin-top: 4px; flex-wrap: wrap"
+              >
+                <button
+                  v-for="(reactors, emoji) in msg.reactions"
+                  :key="emoji"
+                  class="reaction-chip"
+                  :class="{ 'reaction-chip--own': isOwnReaction(msg, emoji) }"
+                  @click="sendReaction(msg, emoji)"
+                >
+                  {{ emoji }} {{ reactors.length }}
+                </button>
               </div>
             </div>
           </div>
@@ -509,7 +550,32 @@
           <q-tooltip>Прикрепить файл</q-tooltip>
         </q-btn>
         <input ref="fileInput" type="file" class="hidden" @change="onFileSelected">
+        <!-- Запись голоса -->
+        <q-btn
+          v-if="!inputText.trim() && !isRecording"
+          flat
+          round
+          dense
+          icon="mic"
+          color="grey-7"
+          @click="startRecording"
+        >
+          <q-tooltip>Записать голосовое</q-tooltip>
+        </q-btn>
+        <q-btn
+          v-if="isRecording"
+          flat
+          round
+          dense
+          icon="stop"
+          color="red-6"
+          @click="stopRecording"
+        />
+        <div v-if="isRecording" class="text-caption text-red-6 q-mx-xs" style="flex: 1">
+          ● Запись {{ recordSeconds }}с
+        </div>
         <q-input
+          v-if="!isRecording"
           v-model="inputText"
           outlined
           dense
@@ -521,6 +587,7 @@
           @input="onTyping"
         />
         <q-btn
+          v-if="!isRecording"
           round
           dense
           icon="send"
@@ -1069,6 +1136,18 @@ function pdfBubbleStyle(msg) {
   const w = pdfImgWidths[msg.id]
   return w ? `width: ${w}px; min-width: 0` : 'width: fit-content; max-width: min(85vw, 440px); min-width: 0'
 }
+const chatYdFolder = ref(null)
+
+// Emoji реакции
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+
+// Голосовая запись
+const isRecording = ref(false)
+const recordSeconds = ref(0)
+let _mediaRecorder = null
+let _audioChunks = []
+let _recordTimer = null
+
 // Копирование в карточку
 const showCopyToCard = ref(false)
 const copyToCardMsg = ref(null)
@@ -1430,6 +1509,7 @@ async function loadMessages() {
     hasMoreMessages.value = data.has_more_messages || false
     members.value = data.members || []
     clientToken.value = data.client_access_token || ''
+    chatYdFolder.value = data.yandex_folder_path || null
     firstUnreadId.value = data.first_unread_message_id || null
     pinnedMsgs.value = data.pinned_messages || []
     pinnedIdx.value = 0
@@ -1668,6 +1748,67 @@ async function loadScripts() {
   }
 }
 
+async function sendReaction(msg, emoji) {
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/messages/${msg.id}/react`, { emoji })
+    const idx = messages.value.findIndex(m => m.id === msg.id)
+    if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+  } catch (e) {
+    console.warn('[reaction]', e)
+  }
+}
+
+function isOwnReaction(msg, emoji) {
+  const reactors = msg.reactions?.[emoji] || []
+  return reactors.some(r => r.employee_id === authStore.user?.id)
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    _audioChunks = []
+    _mediaRecorder = new MediaRecorder(stream)
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data) }
+    _mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop())
+      const mimeType = _mediaRecorder.mimeType || 'audio/webm'
+      const ext = mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.m4a' : '.webm'
+      const blob = new Blob(_audioChunks, { type: mimeType })
+      const file = new File([blob], `voice${ext}`, { type: mimeType })
+      await _uploadVoice(file)
+    }
+    _mediaRecorder.start()
+    isRecording.value = true
+    recordSeconds.value = 0
+    _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Нет доступа к микрофону', timeout: 2000 })
+  }
+}
+
+function stopRecording() {
+  clearInterval(_recordTimer)
+  isRecording.value = false
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop()
+}
+
+async function _uploadVoice(file) {
+  const folder = chatYdFolder.value
+  if (!folder) return
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('message_type', 'voice')
+  try {
+    const { data } = await api.post(`/api/v1/chats/${chatId}/files`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    const exists = messages.value.some(m => m.id === data.id)
+    if (!exists) { messages.value.push(data); scrollToBottom() }
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки голосового', timeout: 2000 })
+  }
+}
+
 let _searchTimer = null
 async function doSearch(val) {
   clearTimeout(_searchTimer)
@@ -1823,6 +1964,27 @@ onMounted(() => {
         scrollToBottom()
         if (msgs.length) sendRead(msgs[msgs.length - 1].id)
       },
+      onMessageUpdated: (msg) => {
+        const idx = messages.value.findIndex(m => m.id === msg.id)
+        if (idx !== -1) messages.value.splice(idx, 1, msg)
+      },
+      onMessageDeleted: (msgId) => {
+        const idx = messages.value.findIndex(m => m.id === msgId)
+        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_deleted: true, content: '[Сообщение удалено]' }
+      },
+      onPinned: (evt) => {
+        const idx = messages.value.findIndex(m => m.id === evt.message_id)
+        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], is_pinned: evt.pinned }
+        if (evt.pinned && evt.message) {
+          if (!pinnedMsgs.value.some(p => p.id === evt.message_id)) pinnedMsgs.value.push(evt.message)
+        } else {
+          pinnedMsgs.value = pinnedMsgs.value.filter(p => p.id !== evt.message_id)
+        }
+      },
+      onReactionUpdated: (evt) => {
+        const idx = messages.value.findIndex(m => m.id === evt.message_id)
+        if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+      },
     })
   }
 })
@@ -1873,4 +2035,32 @@ onUnmounted(() => {
   100% { background: transparent; }
 }
 .msg-highlight { animation: msg-highlight-pulse 1.5s ease-out; border-radius: 8px; }
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  border: 1px solid #E0E0E0;
+  background: #F5F5F5;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.reaction-chip--own {
+  background: #E3F2FD;
+  border-color: #90CAF9;
+}
+.react-quick-btn {
+  font-size: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 6px;
+  line-height: 1.3;
+  transition: background 0.15s;
+}
+.react-quick-btn:hover { background: #F0F0F0; }
+.react-quick-btn--active { background: #E3F2FD; }
 </style>

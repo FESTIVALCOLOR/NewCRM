@@ -24,18 +24,20 @@ from services.chat_service import (
     _message_to_dict,
     add_file_message,
     add_text_message,
+    get_batch_reactions,
     get_chat_by_token,
     get_guest_by_token,
     get_messages,
     mark_read,
     register_guest,
+    toggle_reaction,
 )
 from services.chat_service import (
     manager as ws_manager,
 )
 from sqlalchemy.orm import Session
 
-from database import Employee, InternalChatMember, get_db
+from database import Employee, InternalChatMember, InternalChatMessage, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -375,6 +377,32 @@ async def client_stream_file(
     except Exception as e:
         logger.exception(f"Ошибка стриминга файла клиента: {e}")
         raise HTTPException(500, "Ошибка получения файла")
+
+
+@router.post("/client-chat/{token}/messages/{msg_id}/react")
+async def client_react_to_message(
+    token: str,
+    msg_id: int,
+    emoji: str,
+    db: Session = Depends(get_db),
+):
+    """Гость ставит / убирает emoji-реакцию на сообщение."""
+    chat = get_chat_by_token(db, token)
+    if not chat:
+        raise HTTPException(404, "Чат не найден")
+    guest = get_guest_by_token(db, token)
+    if not guest or not guest.guest_name:
+        raise HTTPException(403, "Сначала пройдите регистрацию")
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(InternalChatMessage.id == msg_id, InternalChatMessage.chat_id == chat.id, InternalChatMessage.is_deleted == False)  # noqa: E712
+        .first()
+    )
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено")
+    reactions = toggle_reaction(db, msg_id, emoji, guest_token=token)
+    await ws_manager.broadcast(chat.id, {"type": "reaction_updated", "message_id": msg_id, "reactions": reactions})
+    return {"reactions": reactions}
 
 
 # ==============================================================

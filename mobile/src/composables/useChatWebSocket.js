@@ -58,7 +58,6 @@ export function useChatWebSocket() {
       ws = null
     }
     isConnected.value = false
-    // Очистить все таймеры typing
     typingUsers.value.forEach(u => { if (u._timer) clearTimeout(u._timer) })
     typingUsers.value = []
   }
@@ -72,7 +71,6 @@ export function useChatWebSocket() {
   function sendTypingStart() {
     _send({ type: 'typing_start' })
   }
-
   function sendTypingStop() {
     _send({ type: 'typing_stop' })
   }
@@ -120,55 +118,60 @@ export function useChatWebSocket() {
       }
     }
 
-    ws.onerror = () => {
-      // onclose будет вызван автоматически
+    ws.onerror = () => {}
+  }
+
+  function _onNewMessage(msg) {
+    const messageData = msg.message
+    if (!messageData) return
+    messages.value.push(messageData)
+    if (_handlers.onMessage) _handlers.onMessage(messageData)
+  }
+
+  function _onNewMessageGroup(msg) {
+    const batchMsgs = msg.messages
+    if (!Array.isArray(batchMsgs) || !batchMsgs.length) return
+    if (_handlers.onMessageGroup) { _handlers.onMessageGroup(batchMsgs); return }
+    batchMsgs.forEach(m => { messages.value.push(m); if (_handlers.onMessage) _handlers.onMessage(m) })
+  }
+
+  function _onTypingStart(msg) {
+    const sn = msg.sender_name
+    if (sn) {
+      typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
+      const timer = setTimeout(() => { typingUsers.value = typingUsers.value.filter(u => u.name !== sn) }, 6000)
+      typingUsers.value.push({ name: sn, _timer: timer })
     }
+    if (_handlers.onTyping) _handlers.onTyping(msg, true)
+  }
+
+  function _onTypingStop(msg) {
+    const sn = msg.sender_name
+    if (sn) {
+      const user = typingUsers.value.find(u => u.name === sn)
+      if (user?._timer) clearTimeout(user._timer)
+      typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
+    }
+    if (_handlers.onTyping) _handlers.onTyping(msg, false)
+  }
+
+  const _EVENT_MAP = {
+    new_message: _onNewMessage,
+    new_message_group: _onNewMessageGroup,
+    typing_start: _onTypingStart,
+    typing_stop: _onTypingStop,
+    read: msg => { if (_handlers.onRead) _handlers.onRead(msg) },
+    message_updated: msg => { if (msg.message && _handlers.onMessageUpdated) _handlers.onMessageUpdated(msg.message) },
+    message_deleted: msg => { if (msg.message_id && _handlers.onMessageDeleted) _handlers.onMessageDeleted(msg.message_id) },
+    member_added: msg => { if (_handlers.onMemberAdded) _handlers.onMemberAdded(msg) },
+    member_removed: msg => { if (_handlers.onMemberRemoved) _handlers.onMemberRemoved(msg) },
+    message_pinned: msg => { if (_handlers.onPinned) _handlers.onPinned(msg) },
+    reaction_updated: msg => { if (_handlers.onReactionUpdated) _handlers.onReactionUpdated(msg) },
   }
 
   function _handleEvent(msg) {
-    const { type } = msg
-
-    // Сервер отправляет type: "new_message", data в поле msg.message
-    if (type === 'new_message') {
-      const messageData = msg.message
-      if (messageData) {
-        messages.value.push(messageData)
-        if (_handlers.onMessage) _handlers.onMessage(messageData)
-      }
-    } else if (type === 'new_message_group') {
-      const batchMsgs = msg.messages
-      if (!Array.isArray(batchMsgs) || !batchMsgs.length) return
-      if (_handlers.onMessageGroup) _handlers.onMessageGroup(batchMsgs)
-      else batchMsgs.forEach(m => { messages.value.push(m); if (_handlers.onMessage) _handlers.onMessage(m) })
-    } else if (type === 'typing_start') {
-      const sn = msg.sender_name
-      if (sn) {
-        typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
-        const timer = setTimeout(() => {
-          typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
-        }, 6000)
-        typingUsers.value.push({ name: sn, _timer: timer })
-      }
-      if (_handlers.onTyping) _handlers.onTyping(msg, true)
-    } else if (type === 'typing_stop') {
-      const sn = msg.sender_name
-      if (sn) {
-        const user = typingUsers.value.find(u => u.name === sn)
-        if (user?._timer) clearTimeout(user._timer)
-        typingUsers.value = typingUsers.value.filter(u => u.name !== sn)
-      }
-      if (_handlers.onTyping) _handlers.onTyping(msg, false)
-    } else if (type === 'read') {
-      if (_handlers.onRead) _handlers.onRead(msg)
-    } else if (type === 'message_updated') {
-      if (msg.message && _handlers.onMessageUpdated) _handlers.onMessageUpdated(msg.message)
-    } else if (type === 'message_deleted') {
-      if (msg.message_id && _handlers.onMessageDeleted) _handlers.onMessageDeleted(msg.message_id)
-    } else if (type === 'member_added') {
-      if (_handlers.onMemberAdded) _handlers.onMemberAdded(msg)
-    } else if (type === 'member_removed') {
-      if (_handlers.onMemberRemoved) _handlers.onMemberRemoved(msg)
-    }
+    const handler = _EVENT_MAP[msg.type]
+    if (handler) handler(msg)
   }
 
   function _scheduleReconnect() {

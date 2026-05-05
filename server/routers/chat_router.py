@@ -69,6 +69,7 @@ from services.chat_service import (
     get_all_accessible_chats,
     get_batch_last_messages,
     get_batch_member_counts,
+    get_batch_reactions,
     get_batch_unread_counts,
     get_card_chat_for_employee,
     get_chat_by_card,
@@ -81,6 +82,7 @@ from services.chat_service import (
     mark_read,
     pin_message,
     register_guest,
+    toggle_reaction,
 )
 from services.chat_service import (
     manager as ws_manager,
@@ -240,7 +242,12 @@ def list_messages(
     _get_chat_or_404(db, chat_id)
     _check_member(db, chat_id, current_user.id)
     msgs = get_messages(db, chat_id, limit=limit, offset=offset, before_id=before_id)
-    return msgs
+    msg_dicts = [_message_to_dict(m) for m in msgs]
+    if msg_dicts:
+        reactions_map = get_batch_reactions(db, [d["id"] for d in msg_dicts])
+        for d in msg_dicts:
+            d["reactions"] = reactions_map.get(d["id"], {})
+    return msg_dicts
 
 
 @router.post("/{chat_id}/messages", response_model=InternalMessageResponse)
@@ -712,6 +719,32 @@ async def pin_message_endpoint(
         },
     )
     return result
+
+
+class ReactBody(PydanticBaseModel):
+    emoji: str
+
+
+@router.post("/{chat_id}/messages/{msg_id}/react")
+async def react_to_message(
+    chat_id: int,
+    msg_id: int,
+    body: ReactBody,
+    current_user: Employee = Depends(require_permission("chat.employee.send")),
+    db: Session = Depends(get_db),
+):
+    """Добавить / убрать emoji-реакцию (toggle). Рассылает reaction_updated через WS."""
+    _check_member(db, chat_id, current_user.id)
+    msg = (
+        db.query(InternalChatMessage)
+        .filter(InternalChatMessage.id == msg_id, InternalChatMessage.chat_id == chat_id, InternalChatMessage.is_deleted == False)  # noqa: E712
+        .first()
+    )
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено")
+    reactions = toggle_reaction(db, msg_id, body.emoji, employee_id=current_user.id)
+    await ws_manager.broadcast(chat_id, {"type": "reaction_updated", "message_id": msg_id, "reactions": reactions})
+    return {"reactions": reactions}
 
 
 # ==============================================================
@@ -1205,10 +1238,16 @@ def _chat_to_detail_response(db: Session, chat: InternalChat, employee_id: int, 
         else False
     )
 
+    msg_dicts = [_message_to_dict(m) for m in msgs]
+    if msg_dicts:
+        reactions_map = get_batch_reactions(db, [d["id"] for d in msg_dicts])
+        for d in msg_dicts:
+            d["reactions"] = reactions_map.get(d["id"], {})
+
     return InternalChatDetailResponse(
         **base.model_dump(),
         members=member_responses,
-        messages=[_message_to_dict(m) for m in msgs],
+        messages=msg_dicts,
         first_unread_message_id=first_unread_id,
         pinned_messages=pinned_responses,
         has_more_messages=has_more,

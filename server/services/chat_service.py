@@ -26,6 +26,7 @@ from database import (
     InternalChat,
     InternalChatMember,
     InternalChatMessage,
+    InternalChatMessageReaction,
     StageExecutor,
     SupervisionCard,
 )
@@ -184,7 +185,71 @@ def _message_to_dict(msg: InternalChatMessage) -> dict:
         "created_at": (msg.created_at.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z") if msg.created_at else None,
         "reply_to_id": reply_to_id,
         "reply_preview": reply_preview,
+        "reactions": {},
     }
+
+
+def _reactions_summary(reactions: list) -> dict:
+    """Сгруппировать список ORM-объектов реакций в dict {emoji: [reactor, ...]}."""
+    result: dict = {}
+    for r in reactions:
+        if r.emoji not in result:
+            result[r.emoji] = []
+        result[r.emoji].append(
+            {
+                "employee_id": r.employee_id,
+                "guest_token": r.guest_token,
+            }
+        )
+    return result
+
+
+def get_reactions_for_message(db: Session, message_id: int) -> dict:
+    """Вернуть реакции для одного сообщения."""
+    rows = db.query(InternalChatMessageReaction).filter(InternalChatMessageReaction.message_id == message_id).all()
+    return _reactions_summary(rows)
+
+
+def get_batch_reactions(db: Session, message_ids: list) -> dict:
+    """Загрузить реакции для списка сообщений одним запросом. Возвращает {message_id: {emoji: [...]}}."""
+    if not message_ids:
+        return {}
+    rows = db.query(InternalChatMessageReaction).filter(InternalChatMessageReaction.message_id.in_(message_ids)).all()
+    result: dict = {}
+    for r in rows:
+        if r.message_id not in result:
+            result[r.message_id] = {}
+        if r.emoji not in result[r.message_id]:
+            result[r.message_id][r.emoji] = []
+        result[r.message_id][r.emoji].append(
+            {
+                "employee_id": r.employee_id,
+                "guest_token": r.guest_token,
+            }
+        )
+    return result
+
+
+def toggle_reaction(db: Session, message_id: int, emoji: str, employee_id: int = None, guest_token: str = None) -> dict:
+    """Добавить реакцию если её нет, удалить если есть. Возвращает обновлённые реакции."""
+    q = db.query(InternalChatMessageReaction).filter(
+        InternalChatMessageReaction.message_id == message_id,
+        InternalChatMessageReaction.emoji == emoji,
+    )
+    if employee_id is not None:
+        q = q.filter(InternalChatMessageReaction.employee_id == employee_id)
+    elif guest_token is not None:
+        q = q.filter(InternalChatMessageReaction.guest_token == guest_token)
+    else:
+        return get_reactions_for_message(db, message_id)
+
+    existing = q.first()
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(InternalChatMessageReaction(message_id=message_id, employee_id=employee_id, guest_token=guest_token, emoji=emoji))
+    db.commit()
+    return get_reactions_for_message(db, message_id)
 
 
 def _get_assigned_employee_ids(db: Session, crm_card_id: int) -> list:

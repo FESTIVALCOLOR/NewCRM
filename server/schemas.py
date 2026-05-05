@@ -1496,6 +1496,7 @@ class InternalMessageResponse(BaseModel):
     created_at: datetime
     reply_to_id: Optional[int] = None
     reply_preview: Optional[dict] = None
+    reactions: dict = {}
 
     model_config = {"from_attributes": True}
 

@@ -201,6 +201,9 @@ class ChatMessageBubble(QWidget):
         # Нижняя строка: "изм." + время
         self._build_footer(v)
 
+        # Реакции
+        self._build_reactions(v)
+
         if self._is_own:
             outer.addWidget(spacer)
             outer.addWidget(bubble)
@@ -257,6 +260,30 @@ class ChatMessageBubble(QWidget):
         more_btn.clicked.connect(lambda: self._show_action_menu(more_btn.mapToGlobal(more_btn.rect().bottomLeft())))
         row.addWidget(more_btn)
 
+        layout.addLayout(row)
+
+    def _build_reactions(self, layout: QVBoxLayout):
+        """Строка emoji-реакций под временем сообщения."""
+        reactions: dict = self._msg.get("reactions") or {}
+        if not reactions:
+            return
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 2, 0, 0)
+        row.setSpacing(4)
+        if self._is_own:
+            row.addStretch()
+        for emoji, reactors in reactions.items():
+            count = len(reactors)
+            btn = QPushButton(f"{emoji} {count}")
+            btn.setFixedHeight(22)
+            btn.setStyleSheet(
+                "QPushButton { border: 1px solid #E0E0E0; border-radius: 11px; "
+                "background: #F5F5F5; font-size: 12px; padding: 0 8px; color: #333; }"
+                "QPushButton:hover { background: #E3F2FD; border-color: #90CAF9; }"
+            )
+            row.addWidget(btn)
+        if not self._is_own:
+            row.addStretch()
         layout.addLayout(row)
 
     def _build_footer(self, layout: QVBoxLayout):

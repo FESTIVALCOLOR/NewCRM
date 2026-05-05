@@ -103,6 +103,21 @@
                 >
                   <q-menu auto-close>
                     <q-list dense style="min-width: 210px; white-space: nowrap">
+                      <!-- Быстрые реакции -->
+                      <q-item dense style="padding: 4px 8px 2px">
+                        <div class="row items-center">
+                          <button
+                            v-for="em in QUICK_EMOJIS"
+                            :key="em"
+                            class="react-quick-btn"
+                            :class="{ 'react-quick-btn--active': isOwnGuestReaction(msg, em) }"
+                            @click.stop="sendGuestReaction(msg, em)"
+                          >
+                            {{ em }}
+                          </button>
+                        </div>
+                      </q-item>
+                      <q-separator />
                       <q-item clickable @click="replyingTo = msg">
                         <q-item-section avatar>
                           <q-icon name="reply" size="16px" color="grey-7" />
@@ -217,6 +232,16 @@
                 </div>
               </template>
 
+              <!-- Голосовое -->
+              <template v-else-if="msg.message_type === 'voice'">
+                <audio
+                  controls
+                  preload="none"
+                  :src="msg.file_url || imgStreamUrl(msg)"
+                  style="height: 36px; width: 220px; display: block; border-radius: 8px"
+                />
+              </template>
+
               <template v-else>
                 <div class="text-body2" style="white-space: pre-wrap; word-break: break-word">
                   {{ msg.content }}
@@ -269,6 +294,22 @@
                 <div class="text-caption" style="color: #888; font-size: 10px">
                   {{ formatTime(msg.created_at) }}
                 </div>
+              </div>
+              <!-- Реакции -->
+              <div
+                v-if="msg.reactions && Object.keys(msg.reactions).length"
+                class="row items-center q-gutter-xs"
+                style="margin-top: 4px; flex-wrap: wrap"
+              >
+                <button
+                  v-for="(reactors, emoji) in msg.reactions"
+                  :key="emoji"
+                  class="reaction-chip"
+                  :class="{ 'reaction-chip--own': isOwnGuestReaction(msg, emoji) }"
+                  @click="sendGuestReaction(msg, emoji)"
+                >
+                  {{ emoji }} {{ reactors.length }}
+                </button>
               </div>
             </div>
           </div>
@@ -330,7 +371,32 @@
           class="hidden"
           @change="onFileSelected"
         >
+        <!-- Запись голоса -->
+        <q-btn
+          v-if="!inputText.trim() && !isRecording"
+          flat
+          round
+          dense
+          icon="mic"
+          color="grey-7"
+          @click="startRecording"
+        >
+          <q-tooltip>Записать голосовое</q-tooltip>
+        </q-btn>
+        <q-btn
+          v-if="isRecording"
+          flat
+          round
+          dense
+          icon="stop"
+          color="red-6"
+          @click="stopRecording"
+        />
+        <div v-if="isRecording" class="text-caption text-red-6 q-mx-xs" style="flex: 1">
+          ● Запись {{ recordSeconds }}с
+        </div>
         <q-input
+          v-if="!isRecording"
           v-model="inputText"
           outlined
           dense
@@ -342,6 +408,7 @@
           @input="onTyping"
         />
         <q-btn
+          v-if="!isRecording"
           round
           dense
           icon="send"
@@ -450,6 +517,16 @@ const uploadProgress = ref(0)
 const editingClientMsgId = ref(null)
 const editClientContent = ref('')
 const savingClientEdit = ref(false)
+
+// Emoji реакции (гостевые)
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+
+// Голосовая запись
+const isRecording = ref(false)
+const recordSeconds = ref(0)
+let _mediaRecorder = null
+let _audioChunks = []
+let _recordTimer = null
 
 // Ключ хранения последнего прочитанного сообщения в localStorage
 const _lastReadKey = `chat_last_read_${activeToken}`
@@ -806,6 +883,10 @@ onMounted(async () => {
         }
       }
     },
+    onReactionUpdated: (evt) => {
+      const idx = messages.value.findIndex(m => m.id === evt.message_id)
+      if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: evt.reactions }
+    },
   })
 })
 
@@ -815,7 +896,71 @@ onUnmounted(() => {
   window.removeEventListener('resize', recalcChatH)
   window.visualViewport?.removeEventListener('resize', recalcChatH)
   if (typingTimer) clearTimeout(typingTimer)
+  clearInterval(_recordTimer)
 })
+
+// ---- Emoji реакции (гость) ----
+
+async function sendGuestReaction(msg, emoji) {
+  try {
+    const { data } = await axios.post(
+      `/api/v1/client-chat/${activeToken}/messages/${msg.id}/react?emoji=${encodeURIComponent(emoji)}`,
+    )
+    const idx = messages.value.findIndex(m => m.id === msg.id)
+    if (idx !== -1) messages.value[idx] = { ...messages.value[idx], reactions: data.reactions }
+  } catch (e) {
+    console.warn('[reaction]', e)
+  }
+}
+
+function isOwnGuestReaction(msg, emoji) {
+  const reactors = msg.reactions?.[emoji] || []
+  return reactors.some(r => r.guest_token === activeToken)
+}
+
+// ---- Голосовая запись (гость) ----
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    _audioChunks = []
+    _mediaRecorder = new MediaRecorder(stream)
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data) }
+    _mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop())
+      const mimeType = _mediaRecorder.mimeType || 'audio/webm'
+      const ext = mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.m4a' : '.webm'
+      const blob = new Blob(_audioChunks, { type: mimeType })
+      const file = new File([blob], `voice${ext}`, { type: mimeType })
+      await _uploadGuestVoice(file)
+    }
+    _mediaRecorder.start()
+    isRecording.value = true
+    recordSeconds.value = 0
+    _recordTimer = setInterval(() => { recordSeconds.value++ }, 1000)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Нет доступа к микрофону', timeout: 2000 })
+  }
+}
+
+function stopRecording() {
+  clearInterval(_recordTimer)
+  isRecording.value = false
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop()
+}
+
+async function _uploadGuestVoice(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('message_type', 'voice')
+  try {
+    const { data } = await axios.post(`/api/v1/client-chat/${activeToken}/files`, fd)
+    const exists = messages.value.some(m => m.id === data.id)
+    if (!exists) { messages.value.push(data); scrollToBottom() }
+  } catch {
+    $q.notify({ type: 'negative', message: 'Ошибка загрузки голосового', timeout: 2000 })
+  }
+}
 </script>
 
 <style scoped>
@@ -865,4 +1010,32 @@ onUnmounted(() => {
   animation: msg-highlight-pulse 1.5s ease-out;
   border-radius: 8px;
 }
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  border: 1px solid #E0E0E0;
+  background: #F5F5F5;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.reaction-chip--own {
+  background: #E3F2FD;
+  border-color: #90CAF9;
+}
+.react-quick-btn {
+  font-size: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 6px;
+  line-height: 1.3;
+}
+.react-quick-btn:hover { background: #F0F0F0; }
+.react-quick-btn--active { background: #E3F2FD; }
+.hidden { display: none; }
 </style>

@@ -1186,6 +1186,19 @@ class InternalChatMessage(Base):
     sender = relationship("Employee", foreign_keys=[sender_employee_id])
 
 
+class InternalChatMessageReaction(Base):
+    """Emoji-реакции на сообщения чата"""
+
+    __tablename__ = "internal_chat_message_reactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("internal_chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=True)
+    guest_token = Column(String(36), nullable=True)
+    emoji = Column(String(10), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def _auto_migrate_columns():
     """Автоматически добавляет недостающие столбцы в существующие таблицы.
 
