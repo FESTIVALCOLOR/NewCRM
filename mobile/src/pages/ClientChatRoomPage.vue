@@ -179,19 +179,10 @@
       class="col q-pa-md"
       style="overflow-y: auto; background: #F5F5F5"
     >
-      <!-- Кнопка загрузки предыдущих сообщений -->
-      <div v-if="hasMoreMessages && !loadingMessages" class="text-center q-mb-md">
-        <q-btn
-          flat
-          dense
-          no-caps
-          size="sm"
-          icon="expand_less"
-          label="Показать предыдущие"
-          color="grey-7"
-          :loading="loadingOlder"
-          @click="loadOlderMessages"
-        />
+      <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
+      <div ref="topSentinelEl" style="height: 2px" />
+      <div v-if="loadingOlder" class="text-center q-mb-sm">
+        <q-spinner size="20px" color="grey-5" />
       </div>
 
       <div v-if="loadingMessages" class="text-center q-mt-lg">
@@ -1028,6 +1019,8 @@ const loadingMessages = ref(false)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 const messagesEl = ref(null)
+const topSentinelEl = ref(null)
+let _topObserver = null
 const fileInput = ref(null)
 const clientToken = ref('')
 const showScriptDialog = ref(false)
@@ -1456,6 +1449,7 @@ async function loadMessages() {
     messages.value
       .filter(m => isPdf(m) && m.yandex_path && !m._uploading)
       .forEach(m => loadPdfThumbnail(m))
+    nextTick(() => setupTopObserver())
   } catch (e) {
     console.error('[ClientChatRoom] Ошибка:', e)
   } finally {
@@ -1467,25 +1461,40 @@ async function loadOlderMessages() {
   if (!hasMoreMessages.value || loadingOlder.value || !messages.value.length) return
   loadingOlder.value = true
   const firstId = messages.value[0].id
+  const container = messagesEl.value
+  const prevScrollHeight = container?.scrollHeight ?? 0
   try {
     const { data } = await api.get(`/api/v1/chats/${chatId}/messages`, {
       params: { limit: 150, before_id: firstId },
     })
-    if (!data.length) {
-      hasMoreMessages.value = false
-      return
-    }
+    if (!data.length) { hasMoreMessages.value = false; return }
     if (data.length < 150) hasMoreMessages.value = false
     const existingIds = new Set(messages.value.map(m => m.id))
     const newMsgs = data.filter(m => !existingIds.has(m.id))
     messages.value = [...newMsgs, ...messages.value]
     newMsgs.filter(m => isPdf(m) && m.yandex_path && !m._uploading)
       .forEach(m => loadPdfThumbnail(m))
+    await nextTick()
+    if (container) container.scrollTop += container.scrollHeight - prevScrollHeight
   } catch (e) {
     console.error('[ClientChatRoom] Ошибка загрузки старых:', e)
   } finally {
     loadingOlder.value = false
   }
+}
+
+function setupTopObserver() {
+  if (_topObserver) _topObserver.disconnect()
+  if (!topSentinelEl.value || !messagesEl.value) return
+  _topObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && hasMoreMessages.value && !loadingOlder.value) {
+        loadOlderMessages()
+      }
+    },
+    { root: messagesEl.value, threshold: 0 },
+  )
+  _topObserver.observe(topSentinelEl.value)
 }
 
 async function scrollToPinnedMsg(msg) {
@@ -1820,6 +1829,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   disconnect()
+  if (_topObserver) _topObserver.disconnect()
   window.removeEventListener('resize', recalcChatH)
   window.visualViewport?.removeEventListener('resize', recalcChatH)
   if (typingTimer) clearTimeout(typingTimer)
