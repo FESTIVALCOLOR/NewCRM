@@ -143,10 +143,30 @@ const activeChatId = ref(null)
 
 const canAddInvite = computed(() => can('chat.client.manage'))
 
+function fuzzyScore(str, query) {
+  if (!query) return 3
+  const s = str.toLowerCase()
+  const q = query.toLowerCase()
+  if (s === q) return 4
+  if (s.startsWith(q)) return 3
+  if (s.includes(q)) return 2
+  let si = 0
+  for (let qi = 0; qi < q.length; qi++) {
+    while (si < s.length && s[si] !== q[qi]) si++
+    if (si >= s.length) return -1
+    si++
+  }
+  return 1
+}
+
 const filteredChats = computed(() => {
-  const q = searchText.value?.toLowerCase() || ''
+  const q = searchText.value?.trim() || ''
   if (!q) return chats.value
-  return chats.value.filter(c => (c.title || '').toLowerCase().includes(q))
+  return chats.value
+    .map(c => ({ c, score: fuzzyScore(c.title || `Чат #${c.id}`, q) }))
+    .filter(({ score }) => score >= 1)
+    .sort((a, b) => b.score - a.score)
+    .map(({ c }) => c)
 })
 
 async function loadChats() {

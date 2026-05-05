@@ -30,19 +30,10 @@
       class="col q-pa-md"
       style="overflow-y: auto; background: #F5F5F5"
     >
-      <!-- Кнопка загрузки предыдущих сообщений -->
-      <div v-if="hasMoreMessages && !loadingMessages" class="text-center q-mb-md">
-        <q-btn
-          flat
-          dense
-          no-caps
-          size="sm"
-          icon="expand_less"
-          label="Показать предыдущие"
-          color="grey-7"
-          :loading="loadingOlder"
-          @click="loadOlderMessages"
-        />
+      <!-- Sentinel для Intersection Observer (автозагрузка при скролле вверх) -->
+      <div ref="topSentinelEl" style="height: 2px" />
+      <div v-if="loadingOlder" class="text-center q-mb-sm">
+        <q-spinner size="20px" color="grey-5" />
       </div>
 
       <div v-if="loadingMessages" class="text-center q-mt-lg">
@@ -189,11 +180,11 @@
                 </div>
               </template>
               <template v-else-if="msg.message_type === 'image'">
-                <a :href="msg.file_url" target="_blank" style="display: block; text-decoration: none; color: inherit">
+                <div style="display: block; text-decoration: none; color: inherit; cursor: pointer" @click="openGallery(msg)">
                   <q-img
                     v-if="imgStreamUrl(msg)"
                     :src="imgStreamUrl(msg)"
-                    style="width: 100%; max-height: clamp(160px, 35vh, 480px); display: block; cursor: pointer; min-height: 80px"
+                    style="width: 100%; max-height: clamp(160px, 35vh, 480px); display: block; min-height: 80px"
                     fit="contain"
                     spinner-color="grey-4"
                     spinner-size="28px"
@@ -204,7 +195,7 @@
                       {{ msg.file_name || 'Изображение' }}
                     </span>
                   </div>
-                </a>
+                </div>
               </template>
               <template v-else-if="msg.message_type === 'file'">
                 <div v-if="isPdf(msg) && pdfThumbnails[msg.id]">
@@ -360,6 +351,55 @@
         />
       </div>
     </div>
+    <!-- Галерея изображений -->
+    <q-dialog v-model="galleryOpen" maximized>
+      <div class="column" style="background: #000; width: 100%; height: 100%">
+        <div class="row items-center justify-between q-pa-sm" style="flex-shrink: 0">
+          <q-btn
+            flat
+            round
+            dense
+            icon="close"
+            color="white"
+            @click="galleryOpen = false"
+          />
+          <span class="text-caption text-white">{{ galleryIndex + 1 }} / {{ galleryImages.length }}</span>
+          <a :href="galleryImages[galleryIndex]?.file_url" target="_blank" style="text-decoration: none">
+            <q-btn
+              flat
+              round
+              dense
+              icon="open_in_new"
+              color="white"
+            />
+          </a>
+        </div>
+        <q-carousel
+          v-model="galleryIndex"
+          animated
+          swipeable
+          navigation
+          infinite
+          style="flex: 1; background: #000"
+          control-color="white"
+        >
+          <q-carousel-slide
+            v-for="(img, idx) in galleryImages"
+            :key="img.id"
+            :name="idx"
+            style="padding: 0; display: flex; align-items: center; justify-content: center"
+          >
+            <q-img
+              :src="imgStreamUrl(img)"
+              style="max-width: 100%; max-height: 100%"
+              fit="contain"
+              spinner-color="grey-4"
+              spinner-size="32px"
+            />
+          </q-carousel-slide>
+        </q-carousel>
+      </div>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -397,6 +437,12 @@ const loadingMessages = ref(false)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 const messagesEl = ref(null)
+const topSentinelEl = ref(null)
+let _topObserver = null
+// Галерея
+const galleryOpen = ref(false)
+const galleryIndex = ref(0)
+const galleryImages = computed(() => messages.value.filter(m => m.message_type === 'image' && m.yandex_path && !m.is_deleted && !m._uploading))
 const fileInput = ref(null)
 const clientName = localStorage.getItem('client_name') || 'Клиент'
 const chatPageH = ref('100dvh')
@@ -553,6 +599,7 @@ async function loadMessages() {
     messages.value
       .filter(m => isPdf(m) && m.yandex_path && !m._uploading)
       .forEach(m => loadPdfThumbnail(m))
+    nextTick(() => setupTopObserver())
   } catch (e) {
     if (e.response?.status === 404) {
       $q.notify({ type: 'negative', message: 'Ссылка недействительна' })
@@ -568,26 +615,47 @@ async function loadOlderMessages() {
   if (!hasMoreMessages.value || loadingOlder.value || !messages.value.length) return
   loadingOlder.value = true
   const firstId = messages.value[0].id
+  const container = messagesEl.value
+  const prevScrollHeight = container?.scrollHeight ?? 0
   try {
     const baseURL = window.location.origin
     const { data } = await axios.get(`${baseURL}/api/v1/client-chat/${activeToken}/messages`, {
       params: { limit: 150, before_id: firstId },
     })
-    if (!data.length) {
-      hasMoreMessages.value = false
-      return
-    }
+    if (!data.length) { hasMoreMessages.value = false; return }
     if (data.length < 150) hasMoreMessages.value = false
     const existingIds = new Set(messages.value.map(m => m.id))
     const newMsgs = data.filter(m => !existingIds.has(m.id))
     messages.value = [...newMsgs, ...messages.value]
     newMsgs.filter(m => isPdf(m) && m.yandex_path && !m._uploading)
       .forEach(m => loadPdfThumbnail(m))
+    await nextTick()
+    if (container) container.scrollTop += container.scrollHeight - prevScrollHeight
   } catch (e) {
     console.error('[ClientChatPage] Ошибка загрузки старых:', e)
   } finally {
     loadingOlder.value = false
   }
+}
+
+function setupTopObserver() {
+  if (_topObserver) _topObserver.disconnect()
+  if (!topSentinelEl.value || !messagesEl.value) return
+  _topObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && hasMoreMessages.value && !loadingOlder.value) {
+        loadOlderMessages()
+      }
+    },
+    { root: messagesEl.value, threshold: 0 },
+  )
+  _topObserver.observe(topSentinelEl.value)
+}
+
+function openGallery(msg) {
+  const idx = galleryImages.value.findIndex(m => m.id === msg.id)
+  galleryIndex.value = idx >= 0 ? idx : 0
+  galleryOpen.value = true
 }
 
 function sendText() {
@@ -743,6 +811,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnect()
+  if (_topObserver) _topObserver.disconnect()
   window.removeEventListener('resize', recalcChatH)
   window.visualViewport?.removeEventListener('resize', recalcChatH)
   if (typingTimer) clearTimeout(typingTimer)
