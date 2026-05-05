@@ -207,7 +207,6 @@ class ChatRoomWidget(QWidget):
         header.setStyleSheet("""
             QFrame {
                 background: #FAFAFA;
-                border-bottom: 1px solid #E0E0E0;
             }
         """)
         h_layout = QHBoxLayout(header)
@@ -276,7 +275,7 @@ class ChatRoomWidget(QWidget):
 
         # ---------- SEARCH PANEL (скрыта по умолчанию) ----------
         self._search_panel = QFrame()
-        self._search_panel.setStyleSheet("QFrame { background: #FAFAFA; border-bottom: 1px solid #E0E0E0; }")
+        self._search_panel.setStyleSheet("QFrame { background: #FAFAFA; }")
         self._search_panel.setVisible(False)
         sp_layout = QVBoxLayout(self._search_panel)
         sp_layout.setContentsMargins(12, 6, 12, 6)
@@ -347,7 +346,7 @@ class ChatRoomWidget(QWidget):
 
     def _build_pinned_bar(self, main_layout):
         self._pinned_bar = QFrame()
-        self._pinned_bar.setStyleSheet("QFrame { background: #fff; border-bottom: 1px solid #E0E0E0; }")
+        self._pinned_bar.setStyleSheet("QFrame { background: #fff; }")
         self._pinned_bar.setFixedHeight(44)
         pb_layout = QHBoxLayout(self._pinned_bar)
         pb_layout.setContentsMargins(10, 4, 6, 4)
@@ -398,7 +397,7 @@ class ChatRoomWidget(QWidget):
     def _build_action_area(self, main_layout):
         # ACTION BAR (ответ / редактирование)
         self._action_bar = QFrame()
-        self._action_bar.setStyleSheet("QFrame { background: #F3F6FF; border-top: 1px solid #D0D9F0; }")
+        self._action_bar.setStyleSheet("QFrame { background: #F3F6FF; }")
         self._action_bar.setFixedHeight(36)
         ab_layout = QHBoxLayout(self._action_bar)
         ab_layout.setContentsMargins(12, 0, 8, 0)
@@ -429,7 +428,7 @@ class ChatRoomWidget(QWidget):
 
         # PENDING FILES PREVIEW
         self._pending_panel = QFrame()
-        self._pending_panel.setStyleSheet("QFrame { background: #E3F2FD; border-top: 1px solid #BBDEFB; }")
+        self._pending_panel.setStyleSheet("QFrame { background: #E3F2FD; }")
         self._pending_panel.setFixedHeight(104)
         pp_vbox = QVBoxLayout(self._pending_panel)
         pp_vbox.setContentsMargins(8, 4, 8, 6)
@@ -455,7 +454,6 @@ class ChatRoomWidget(QWidget):
         input_frame.setStyleSheet("""
             QFrame {
                 background: #FAFAFA;
-                border-top: 1px solid #E0E0E0;
             }
         """)
         input_frame.setMinimumHeight(56)
@@ -666,21 +664,11 @@ class ChatRoomWidget(QWidget):
         w = QWidget()
         row = QHBoxLayout(w)
         row.setContentsMargins(8, 8, 8, 4)
-        row.setSpacing(8)
-
-        line_l = QFrame()
-        line_l.setFrameShape(QFrame.HLine)
-        line_l.setStyleSheet("color: #E0E0E0;")
-        row.addWidget(line_l, stretch=1)
+        row.setAlignment(Qt.AlignCenter)
 
         lbl = QLabel(label)
-        lbl.setStyleSheet("font-size: 10px; color: #999; white-space: nowrap; background: transparent;")
+        lbl.setStyleSheet("font-size: 10px; color: #bbb; white-space: nowrap; background: transparent;")
         row.addWidget(lbl)
-
-        line_r = QFrame()
-        line_r.setFrameShape(QFrame.HLine)
-        line_r.setStyleSheet("color: #E0E0E0;")
-        row.addWidget(line_r, stretch=1)
 
         return w
 
@@ -689,21 +677,11 @@ class ChatRoomWidget(QWidget):
         w.setObjectName("unreadDivider")
         row = QHBoxLayout(w)
         row.setContentsMargins(8, 4, 8, 4)
-        row.setSpacing(8)
-
-        line_l = QFrame()
-        line_l.setFrameShape(QFrame.HLine)
-        line_l.setStyleSheet("color: #E53935;")
-        row.addWidget(line_l, stretch=1)
+        row.setAlignment(Qt.AlignCenter)
 
         lbl = QLabel("Новые сообщения")
         lbl.setStyleSheet("font-size: 10px; color: #E53935; white-space: nowrap;")
         row.addWidget(lbl)
-
-        line_r = QFrame()
-        line_r.setFrameShape(QFrame.HLine)
-        line_r.setStyleSheet("color: #E53935;")
-        row.addWidget(line_r, stretch=1)
 
         return w
 

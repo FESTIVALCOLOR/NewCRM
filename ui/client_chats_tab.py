@@ -73,7 +73,7 @@ class ClientChatsTab(QWidget):
         left = QWidget()
         left.setMinimumWidth(320)
         left.setMaximumWidth(460)
-        left.setStyleSheet("background: #FAFAFA; border-right: 1px solid #E0E0E0;")
+        left.setStyleSheet("background: #FAFAFA;")
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
         lv.setSpacing(0)
@@ -81,7 +81,7 @@ class ClientChatsTab(QWidget):
         # Заголовок
         hdr = QFrame()
         hdr.setFixedHeight(48)
-        hdr.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
+        hdr.setStyleSheet("background: #fff;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(12, 0, 8, 0)
         title = QLabel("Чаты с клиентами")
@@ -92,7 +92,7 @@ class ClientChatsTab(QWidget):
         # Поиск + кнопка обновления в одном ряду
         search_row = QFrame()
         search_row.setFixedHeight(34)
-        search_row.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
+        search_row.setStyleSheet("background: #fff;")
         sr = QHBoxLayout(search_row)
         sr.setContentsMargins(0, 3, 4, 3)
         sr.setSpacing(0)
@@ -132,7 +132,7 @@ class ClientChatsTab(QWidget):
         self._list = QListWidget()
         self._list.setStyleSheet("""
             QListWidget { border: none; background: #FAFAFA; }
-            QListWidget::item { border-bottom: 1px solid #EFEFEF; padding: 0; }
+            QListWidget::item { padding: 0; }
             QListWidget::item:selected { background: #E8F5E9; }
             QListWidget::item:hover { background: #F0F0F0; }
         """)
@@ -171,7 +171,7 @@ class ClientChatsTab(QWidget):
         """Верхняя панель: ссылка-приглашение + кнопки управления."""
         panel = QFrame()
         panel.setFixedHeight(38)
-        panel.setStyleSheet("background: #FAFAFA; border-bottom: 1px solid #E0E0E0;")
+        panel.setStyleSheet("background: #FAFAFA;")
         panel.setVisible(False)  # показывается при выборе чата
 
         h = QHBoxLayout(panel)
@@ -180,7 +180,7 @@ class ClientChatsTab(QWidget):
 
         # Блок ссылки с лёгкой рамкой
         link_frame = QFrame()
-        link_frame.setStyleSheet("QFrame { background: #fff; border: 1px solid #E8E8E8; border-radius: 4px; }")
+        link_frame.setStyleSheet("QFrame { background: transparent; }")
         lf = QHBoxLayout(link_frame)
         lf.setContentsMargins(6, 0, 4, 0)
         lf.setSpacing(4)
@@ -190,7 +190,7 @@ class ClientChatsTab(QWidget):
         lf.addWidget(self._link_label)
 
         self._link_value = QLabel("")
-        self._link_value.setStyleSheet("font-size: 10px; color: #1565C0; text-decoration: underline; background: transparent; border: none;")
+        self._link_value.setStyleSheet("font-size: 10px; color: #1565C0; background: transparent; border: none;")
         self._link_value.setCursor(Qt.PointingHandCursor)
         self._link_value.setOpenExternalLinks(False)
         self._link_value.mousePressEvent = self._copy_link
@@ -495,7 +495,7 @@ class ScriptSendDialog(QDialog):
         self._scripts_list.setFixedHeight(200)
         self._scripts_list.setStyleSheet("""
             QListWidget { border:1px solid #E0E0E0; border-radius:4px; background:#fff; }
-            QListWidget::item { border-bottom:1px solid #f0f0f0; padding:6px 8px; }
+            QListWidget::item { padding:6px 8px; }
             QListWidget::item:selected { background:#FFF8DC; }
             QListWidget::item:hover { background:#f5f5f5; }
         """)

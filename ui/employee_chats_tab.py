@@ -64,7 +64,7 @@ class EmployeeChatsTab(QWidget):
         left = QWidget()
         left.setMinimumWidth(320)
         left.setMaximumWidth(460)
-        left.setStyleSheet("background: #FAFAFA; border-right: 1px solid #E0E0E0;")
+        left.setStyleSheet("background: #FAFAFA;")
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
         lv.setSpacing(0)
@@ -72,7 +72,7 @@ class EmployeeChatsTab(QWidget):
         # Заголовок
         hdr = QFrame()
         hdr.setFixedHeight(48)
-        hdr.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
+        hdr.setStyleSheet("background: #fff;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(12, 0, 8, 0)
         title = QLabel("Чаты сотрудников")
@@ -83,7 +83,7 @@ class EmployeeChatsTab(QWidget):
         # Поиск + кнопка обновления в одном ряду
         search_row = QFrame()
         search_row.setFixedHeight(34)
-        search_row.setStyleSheet("background: #fff; border-bottom: 1px solid #E0E0E0;")
+        search_row.setStyleSheet("background: #fff;")
         sr = QHBoxLayout(search_row)
         sr.setContentsMargins(0, 3, 4, 3)
         sr.setSpacing(0)
@@ -123,7 +123,7 @@ class EmployeeChatsTab(QWidget):
         self._list = QListWidget()
         self._list.setStyleSheet("""
             QListWidget { border: none; background: #FAFAFA; }
-            QListWidget::item { border-bottom: 1px solid #EFEFEF; padding: 0; }
+            QListWidget::item { padding: 0; }
             QListWidget::item:selected { background: #FFF8DC; }
             QListWidget::item:hover { background: #F0F0F0; }
         """)
