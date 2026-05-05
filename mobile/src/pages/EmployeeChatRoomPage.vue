@@ -35,6 +35,25 @@
         </div>
       </div>
       <q-btn
+        v-if="canScript"
+        flat
+        round
+        dense
+        icon="text_snippet"
+        @click="showScriptDialog = true"
+      >
+        <q-tooltip>Отправить скрипт</q-tooltip>
+      </q-btn>
+      <q-btn
+        flat
+        round
+        dense
+        icon="search"
+        @click="showSearch = !showSearch"
+      >
+        <q-tooltip>Поиск в чате</q-tooltip>
+      </q-btn>
+      <q-btn
         flat
         round
         dense
@@ -43,6 +62,57 @@
       >
         <q-tooltip>Участники</q-tooltip>
       </q-btn>
+    </div>
+
+    <!-- Панель поиска -->
+    <div
+      v-if="showSearch"
+      class="q-px-md q-py-xs bg-white"
+      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0"
+    >
+      <q-input
+        v-model="searchQuery"
+        dense
+        outlined
+        clearable
+        placeholder="Поиск в чате…"
+        @update:model-value="doSearch"
+        @clear="searchResults = []"
+      >
+        <template #prepend>
+          <q-icon name="search" />
+        </template>
+      </q-input>
+      <div v-if="searchLoading" class="text-center q-py-xs">
+        <q-spinner size="20px" color="primary" />
+      </div>
+      <q-list v-else-if="searchResults.length" separator dense style="max-height: 200px; overflow-y: auto">
+        <q-item
+          v-for="r in searchResults"
+          :key="r.id"
+          v-ripple
+          clickable
+          dense
+          @click="goToSearchResult(r)"
+        >
+          <q-item-section>
+            <q-item-label class="text-caption text-weight-bold">
+              {{ r.sender_display_name }}
+            </q-item-label>
+            <q-item-label caption lines="1">
+              {{ r.content }}
+            </q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-item-label caption>
+              {{ new Date(r.created_at).toLocaleDateString('ru') }}
+            </q-item-label>
+          </q-item-section>
+        </q-item>
+      </q-list>
+      <div v-else-if="searchQuery?.length >= 2 && !searchLoading" class="text-caption text-grey q-py-xs q-px-sm">
+        Ничего не найдено
+      </div>
     </div>
 
     <!-- Закреплённые сообщения (до 10, Telegram-стиль) -->
@@ -720,6 +790,83 @@
       </div>
     </div>
 
+    <!-- Диалог: скрипты -->
+    <q-dialog v-model="showScriptDialog" @show="loadScripts">
+      <q-card style="min-width: 380px; max-width: 520px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">
+            Отправить скрипт
+          </div>
+          <q-space />
+          <q-btn
+            v-close-popup
+            flat
+            round
+            dense
+            icon="close"
+          />
+        </q-card-section>
+        <q-separator />
+
+        <q-card-section v-if="!selectedScript" class="q-pb-sm">
+          <div v-if="loadingScripts" class="text-center q-pa-md">
+            <q-spinner size="24px" color="primary" />
+          </div>
+          <q-list v-else separator>
+            <q-item
+              v-for="s in scripts"
+              :key="s.id"
+              v-ripple
+              clickable
+              @click="selectScript(s)"
+            >
+              <q-item-section>
+                <q-item-label>{{ s.name || s.script_type }}</q-item-label>
+                <q-item-label caption lines="2">
+                  {{ s.message_template?.substring(0, 80) }}…
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-icon name="chevron_right" color="grey" />
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!scripts.length">
+              <q-item-section>
+                <q-item-label class="text-grey">
+                  Скрипты не найдены
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-card-section v-else class="q-pt-sm">
+          <div class="text-caption text-grey q-mb-sm">
+            {{ selectedScript.name || selectedScript.script_type }}
+          </div>
+          <q-input
+            v-model="scriptText"
+            type="textarea"
+            outlined
+            label="Текст (можно отредактировать)"
+            rows="6"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn v-if="selectedScript" flat label="Назад" @click="selectedScript = null" />
+          <q-btn v-close-popup flat label="Отмена" />
+          <q-btn
+            v-if="selectedScript"
+            color="primary"
+            label="Отправить"
+            :disable="!scriptText.trim()"
+            @click="sendScript"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Диалог: переслать сообщение -->
     <q-dialog v-model="showForwardDialog">
       <q-card style="min-width: 300px; max-width: 400px; width: 90vw">
@@ -1073,6 +1220,7 @@ import { useChatWebSocket } from 'src/composables/useChatWebSocket'
 import { getPdfThumbnail } from 'src/composables/usePdfThumbnail'
 import { useAuthStore } from 'src/stores/auth'
 import { useChatUnreadStore } from 'src/stores/chatUnread'
+import { usePermission } from 'src/composables/usePermission'
 import { useQuasar } from 'quasar'
 
 const route = useRoute()
@@ -1082,6 +1230,7 @@ const $q = useQuasar()
 const chatId = Number(route.params.chatId)
 
 const { isConnected: wsConnected, connectEmployee, disconnect, sendMessage, sendTypingStart, sendTypingStop, sendRead, typingUsers } = useChatWebSocket()
+const { can } = usePermission()
 
 const chatTitle = ref('Чат сотрудников')
 const messages = ref([])
@@ -1109,6 +1258,41 @@ function pdfBubbleStyle(msg) {
   const w = pdfImgWidths[msg.id]
   return w ? `width: ${w}px; min-width: 0` : 'width: fit-content; max-width: min(85vw, 440px); min-width: 0'
 }
+// Поиск по сообщениям
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchResults = ref([])
+const searchLoading = ref(false)
+let _searchTimer = null
+
+async function doSearch(val) {
+  clearTimeout(_searchTimer)
+  if (!val || val.length < 2) { searchResults.value = []; return }
+  _searchTimer = setTimeout(async () => {
+    searchLoading.value = true
+    try {
+      const { data } = await api.get(`/api/v1/chats/${chatId}/messages/search`, { params: { q: val, limit: 20 } })
+      searchResults.value = Array.isArray(data) ? data : []
+    } catch { searchResults.value = [] } finally { searchLoading.value = false }
+  }, 400)
+}
+
+async function goToSearchResult(msg) {
+  showSearch.value = false
+  searchQuery.value = ''
+  searchResults.value = []
+  await scrollToPinnedMsg(msg)
+}
+
+// Диалог скриптов
+const showScriptDialog = ref(false)
+const scripts = ref([])
+const loadingScripts = ref(false)
+const selectedScript = ref(null)
+const scriptText = ref('')
+const cardData = ref(null)
+const canScript = computed(() => can('chat.client.send_script') && !!chatCrmCardId.value)
+
 // Диалог пересылки
 const showForwardDialog = ref(false)
 const replyingTo = ref(null)
@@ -1526,6 +1710,76 @@ async function doForward() {
   } finally {
     sendingForward.value = false
   }
+}
+
+async function loadScripts() {
+  if (scripts.value.length) return
+  loadingScripts.value = true
+  try {
+    const { data } = await api.get('/api/v1/messenger/scripts')
+    scripts.value = Array.isArray(data) ? data : (data.items || [])
+  } catch {
+    scripts.value = []
+  } finally {
+    loadingScripts.value = false
+  }
+}
+
+async function _ensureCardData() {
+  if (cardData.value || !chatCrmCardId.value) return
+  try {
+    const { data } = await api.get(`/api/v1/crm/cards/${chatCrmCardId.value}`)
+    cardData.value = data
+  } catch { /* нет данных карточки — переменные не заменятся */ }
+}
+
+function fillScriptVars(template) {
+  if (!template) return ''
+  const d = cardData.value || {}
+  const clientFullName = d.client_name || ''
+  const clientFirstName = clientFullName.split(' ').filter(Boolean)[1] || clientFullName.split(' ')[0] || ''
+  const vars = {
+    client_name: clientFullName,
+    client_first_name: clientFirstName,
+    address: d.address || '',
+    area: d.area ? `${d.area} м²` : '',
+    contract_number: d.contract_number || '',
+    deadline: d.deadline || '',
+    deadline_date: d.deadline || '',
+    senior_manager: d.senior_manager_name || '',
+    manager_name: d.manager_name || '',
+    sdp: d.sdp_name || '',
+    sender_name: authStore.user?.full_name || '',
+    role_name: authStore.user?.position || '',
+  }
+  return template.split('\n').map(line => {
+    const varMatches = [...line.matchAll(/\{(\w+)\}/g)]
+    if (!varMatches.length) return line
+    let hasEmptyVar = false
+    const substituted = line.replace(/\{(\w+)\}/g, (_, key) => {
+      if (key in vars) {
+        if (!vars[key]) hasEmptyVar = true
+        return vars[key]
+      }
+      return `{${key}}`
+    })
+    return hasEmptyVar ? null : substituted
+  }).filter(line => line !== null).join('\n').trim()
+}
+
+async function selectScript(s) {
+  await _ensureCardData()
+  selectedScript.value = s
+  scriptText.value = fillScriptVars(s.message_template || '')
+}
+
+async function sendScript() {
+  const text = scriptText.value.trim()
+  if (!text) return
+  sendMessage(text, null)
+  scriptText.value = ''
+  selectedScript.value = null
+  showScriptDialog.value = false
 }
 
 function sendText() {

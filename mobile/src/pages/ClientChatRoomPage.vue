@@ -59,6 +59,17 @@
         <q-tooltip>Отправить скрипт</q-tooltip>
       </q-btn>
 
+      <!-- Кнопка: поиск -->
+      <q-btn
+        flat
+        round
+        dense
+        icon="search"
+        @click="showSearch = !showSearch"
+      >
+        <q-tooltip>Поиск в чате</q-tooltip>
+      </q-btn>
+
       <!-- Кнопка: участники -->
       <q-btn
         flat
@@ -69,6 +80,57 @@
       >
         <q-tooltip>Участники</q-tooltip>
       </q-btn>
+    </div>
+
+    <!-- Панель поиска -->
+    <div
+      v-if="showSearch"
+      class="q-px-md q-py-xs bg-white"
+      style="border-bottom: 1px solid #E0E0E0; flex-shrink: 0"
+    >
+      <q-input
+        v-model="searchQuery"
+        dense
+        outlined
+        clearable
+        placeholder="Поиск в чате…"
+        @update:model-value="doSearch"
+        @clear="searchResults = []"
+      >
+        <template #prepend>
+          <q-icon name="search" />
+        </template>
+      </q-input>
+      <div v-if="searchLoading" class="text-center q-py-xs">
+        <q-spinner size="20px" color="primary" />
+      </div>
+      <q-list v-else-if="searchResults.length" separator dense style="max-height: 200px; overflow-y: auto">
+        <q-item
+          v-for="r in searchResults"
+          :key="r.id"
+          v-ripple
+          clickable
+          dense
+          @click="goToSearchResult(r)"
+        >
+          <q-item-section>
+            <q-item-label class="text-caption text-weight-bold">
+              {{ r.sender_display_name }}
+            </q-item-label>
+            <q-item-label caption lines="1">
+              {{ r.content }}
+            </q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-item-label caption>
+              {{ new Date(r.created_at).toLocaleDateString('ru') }}
+            </q-item-label>
+          </q-item-section>
+        </q-item>
+      </q-list>
+      <div v-else-if="searchQuery?.length >= 2 && !searchLoading" class="text-caption text-grey q-py-xs q-px-sm">
+        Ничего не найдено
+      </div>
     </div>
 
     <!-- Закреплённые сообщения (до 10, Telegram-стиль) -->
@@ -971,6 +1033,10 @@ const clientToken = ref('')
 const showScriptDialog = ref(false)
 const showInviteMenu = ref(false)
 const showMembers = ref(false)
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchResults = ref([])
+const searchLoading = ref(false)
 const scriptText = ref('')
 const chatPageH = ref('100dvh')
 const uploadProgress = ref(0)
@@ -1591,6 +1657,26 @@ async function loadScripts() {
   } finally {
     loadingScripts.value = false
   }
+}
+
+let _searchTimer = null
+async function doSearch(val) {
+  clearTimeout(_searchTimer)
+  if (!val || val.length < 2) { searchResults.value = []; return }
+  _searchTimer = setTimeout(async () => {
+    searchLoading.value = true
+    try {
+      const { data } = await api.get(`/api/v1/chats/${chatId}/messages/search`, { params: { q: val, limit: 20 } })
+      searchResults.value = Array.isArray(data) ? data : []
+    } catch { searchResults.value = [] } finally { searchLoading.value = false }
+  }, 400)
+}
+
+async function goToSearchResult(msg) {
+  showSearch.value = false
+  searchQuery.value = ''
+  searchResults.value = []
+  await scrollToPinnedMsg(msg)
 }
 
 function selectScript(s) {

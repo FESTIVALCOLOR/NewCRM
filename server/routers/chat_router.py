@@ -67,6 +67,9 @@ from services.chat_service import (
     delete_message,
     edit_message,
     get_all_accessible_chats,
+    get_batch_last_messages,
+    get_batch_member_counts,
+    get_batch_unread_counts,
     get_card_chat_for_employee,
     get_chat_by_card,
     get_chat_by_token,
@@ -184,7 +187,13 @@ def list_chats(
     chats = get_all_accessible_chats(db, current_user.id, chat_type=chat_type)
     if crm_card_id:
         chats = [c for c in chats if c.crm_card_id == crm_card_id]
-    return [_chat_to_response(db, c, current_user.id) for c in chats]
+
+    chat_ids = [c.id for c in chats]
+    last_msgs = get_batch_last_messages(db, chat_ids)
+    member_counts = get_batch_member_counts(db, chat_ids)
+    unread_counts = get_batch_unread_counts(db, chat_ids, current_user.id)
+
+    return [_chat_to_response(db, c, current_user.id, last_msgs, member_counts, unread_counts) for c in chats]
 
 
 @router.get("/{chat_id}", response_model=InternalChatDetailResponse)
@@ -259,6 +268,32 @@ async def send_message(
         },
     )
     return msg
+
+
+@router.get("/{chat_id}/messages/search", response_model=list[InternalMessageResponse])
+def search_messages(
+    chat_id: int,
+    q: str = Query(..., min_length=2, max_length=200),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: Employee = Depends(require_permission("chat.employee.view")),
+    db: Session = Depends(get_db),
+):
+    """Полнотекстовый поиск по сообщениям чата (PostgreSQL ilike)."""
+    _get_chat_or_404(db, chat_id)
+    _check_member(db, chat_id, current_user.id)
+    msgs = (
+        db.query(InternalChatMessage)
+        .filter(
+            InternalChatMessage.chat_id == chat_id,
+            InternalChatMessage.is_deleted == False,
+            InternalChatMessage.message_type == "text",
+            InternalChatMessage.content.ilike(f"%{q}%"),
+        )
+        .order_by(InternalChatMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return list(reversed(msgs))
 
 
 @router.delete("/{chat_id}/messages/{msg_id}")
@@ -1045,26 +1080,42 @@ def _require_perm(user: Employee, perm: str, db: Session):
         raise HTTPException(403, f"Нет права: {perm}")
 
 
-def _chat_to_response(db: Session, chat: InternalChat, employee_id: int) -> InternalChatResponse:
-    # Последнее сообщение
-    last_msg = (
-        db.query(InternalChatMessage)
-        .filter(
-            InternalChatMessage.chat_id == chat.id,
-            InternalChatMessage.is_deleted == False,
+def _chat_to_response(
+    db: Session,
+    chat: InternalChat,
+    employee_id: int,
+    last_msgs: Optional[dict] = None,
+    member_counts: Optional[dict] = None,
+    unread_counts: Optional[dict] = None,
+) -> InternalChatResponse:
+    # Используем preloaded данные если переданы, иначе lazy-запрос (для единичных вызовов)
+    if last_msgs is not None:
+        last_msg = last_msgs.get(chat.id)
+    else:
+        last_msg = (
+            db.query(InternalChatMessage)
+            .filter(
+                InternalChatMessage.chat_id == chat.id,
+                InternalChatMessage.is_deleted == False,
+            )
+            .order_by(InternalChatMessage.id.desc())
+            .first()
         )
-        .order_by(InternalChatMessage.created_at.desc())
-        .first()
-    )
-    member_count = (
-        db.query(InternalChatMember)
-        .filter(
-            InternalChatMember.chat_id == chat.id,
-            InternalChatMember.is_active == True,
+    if member_counts is not None:
+        member_count = member_counts.get(chat.id, 0)
+    else:
+        member_count = (
+            db.query(InternalChatMember)
+            .filter(
+                InternalChatMember.chat_id == chat.id,
+                InternalChatMember.is_active == True,
+            )
+            .count()
         )
-        .count()
-    )
-    unread = get_unread_count(db, chat.id, employee_id)
+    if unread_counts is not None:
+        unread = unread_counts.get(chat.id, 0)
+    else:
+        unread = get_unread_count(db, chat.id, employee_id)
 
     return InternalChatResponse(
         id=chat.id,

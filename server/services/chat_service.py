@@ -16,7 +16,7 @@ from typing import Dict, Optional, Set
 import uuid
 
 from fastapi import WebSocket
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from database import (
@@ -894,6 +894,98 @@ def get_guest_by_token(db: Session, guest_token: str) -> Optional[InternalChatMe
         )
         .first()
     )
+
+
+# =========================
+# Batch-запросы для списка чатов (устраняем N+1)
+# =========================
+
+
+def get_batch_unread_counts(db: Session, chat_ids: list[int], employee_id: int) -> dict[int, int]:
+    """Количество непрочитанных для всех чатов за 2 запроса вместо N×2."""
+    if not chat_ids:
+        return {}
+
+    # 1. Получить last_read_message_id для каждого чата одним запросом
+    rows = (
+        db.query(InternalChatMember.chat_id, InternalChatMember.last_read_message_id)
+        .filter(
+            InternalChatMember.chat_id.in_(chat_ids),
+            InternalChatMember.employee_id == employee_id,
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .all()
+    )
+    last_read_map: dict[int, int] = {r.chat_id: (r.last_read_message_id or 0) for r in rows}
+
+    # 2. Для каждого чата считаем unread через GROUP BY — один запрос
+    # Фильтруем id > last_read через CASE...WHEN per chat_id (через Python post-filter)
+    # Альтернатива через subquery невозможна без lateral join в SQLAlchemy легко,
+    # поэтому загружаем по одному запросу на группу last_read значений.
+    # Быстрее N+1 т.к. группируем по уникальным last_read значениям.
+    unread_map: dict[int, int] = dict.fromkeys(chat_ids, 0)
+
+    unique_last_reads = {}
+    for cid in chat_ids:
+        lr = last_read_map.get(cid, 0)
+        unique_last_reads.setdefault(lr, []).append(cid)
+
+    for last_read, ids in unique_last_reads.items():
+        counts = (
+            db.query(InternalChatMessage.chat_id, func.count(InternalChatMessage.id).label("cnt"))
+            .filter(
+                InternalChatMessage.chat_id.in_(ids),
+                InternalChatMessage.id > last_read,
+                InternalChatMessage.is_deleted == False,  # noqa: E712
+                InternalChatMessage.sender_employee_id.is_distinct_from(employee_id),
+                InternalChatMessage.message_type != "system",
+            )
+            .group_by(InternalChatMessage.chat_id)
+            .all()
+        )
+        for row in counts:
+            unread_map[row.chat_id] = row.cnt
+
+    return unread_map
+
+
+def get_batch_last_messages(db: Session, chat_ids: list[int]) -> dict[int, Optional[InternalChatMessage]]:
+    """Последнее сообщение для каждого чата — один запрос через ROW_NUMBER."""
+    if not chat_ids:
+        return {}
+    from sqlalchemy import text
+
+    # Используем subquery с MAX(id) per chat_id — простой и эффективный подход
+    subq = (
+        db.query(
+            InternalChatMessage.chat_id,
+            func.max(InternalChatMessage.id).label("max_id"),
+        )
+        .filter(
+            InternalChatMessage.chat_id.in_(chat_ids),
+            InternalChatMessage.is_deleted == False,  # noqa: E712
+        )
+        .group_by(InternalChatMessage.chat_id)
+        .subquery()
+    )
+    msgs = db.query(InternalChatMessage).join(subq, InternalChatMessage.id == subq.c.max_id).all()
+    return {m.chat_id: m for m in msgs}
+
+
+def get_batch_member_counts(db: Session, chat_ids: list[int]) -> dict[int, int]:
+    """Количество участников для каждого чата — один запрос."""
+    if not chat_ids:
+        return {}
+    rows = (
+        db.query(InternalChatMember.chat_id, func.count(InternalChatMember.id).label("cnt"))
+        .filter(
+            InternalChatMember.chat_id.in_(chat_ids),
+            InternalChatMember.is_active == True,  # noqa: E712
+        )
+        .group_by(InternalChatMember.chat_id)
+        .all()
+    )
+    return {r.chat_id: r.cnt for r in rows}
 
 
 # =========================
