@@ -267,7 +267,31 @@ class ChatRoomWidget(QWidget):
         members_btn.clicked.connect(self._show_members_dialog)
         h_layout.addWidget(members_btn)
 
+        search_btn = IconLoader.create_icon_button("search", "", "Поиск в чате")
+        search_btn.setFixedSize(28, 28)
+        search_btn.clicked.connect(self._toggle_search)
+        h_layout.addWidget(search_btn)
+
         main_layout.addWidget(header)
+
+        # ---------- SEARCH PANEL (скрыта по умолчанию) ----------
+        self._search_panel = QFrame()
+        self._search_panel.setStyleSheet("QFrame { background: #FAFAFA; border-bottom: 1px solid #E0E0E0; }")
+        self._search_panel.setVisible(False)
+        sp_layout = QVBoxLayout(self._search_panel)
+        sp_layout.setContentsMargins(12, 6, 12, 6)
+        sp_layout.setSpacing(4)
+        self._search_input = QLineEdit()
+        self._search_input.setPlaceholderText("Поиск в чате…")
+        self._search_input.setStyleSheet("QLineEdit { border: 1px solid #E0E0E0; border-radius: 4px; padding: 4px 8px; font-size: 12px; background: #fff; }")
+        self._search_input.returnPressed.connect(self._do_search)
+        sp_layout.addWidget(self._search_input)
+        self._search_result_lbl = QLabel("")
+        self._search_result_lbl.setStyleSheet("font-size: 10px; color: #888;")
+        self._search_result_lbl.setVisible(False)
+        sp_layout.addWidget(self._search_result_lbl)
+        main_layout.addWidget(self._search_panel)
+
         self._build_pinned_bar(main_layout)
 
         # ---------- TYPING INDICATOR ----------
@@ -1303,6 +1327,52 @@ class ChatRoomWidget(QWidget):
         clean = path[len("disk:") :] if path.startswith("disk:") else path
         url = f"https://disk.yandex.ru/client/disk{_quote(clean, safe='/')}"
         QDesktopServices.openUrl(QUrl(url))
+
+    # ===========================================================
+    # Поиск по сообщениям
+    # ===========================================================
+
+    def _toggle_search(self):
+        visible = not self._search_panel.isVisible()
+        self._search_panel.setVisible(visible)
+        if visible:
+            self._search_input.setFocus()
+            self._search_input.selectAll()
+        else:
+            self._search_input.clear()
+            self._search_result_lbl.setVisible(False)
+
+    def _do_search(self):
+        q = self._search_input.text().strip()
+        if not q or len(q) < 2:
+            return
+        if not self._chat_id or not self._api_client:
+            return
+        results = self._api_client.search_chat_messages(self._chat_id, q)
+        if not results:
+            self._search_result_lbl.setText("Ничего не найдено")
+            self._search_result_lbl.setVisible(True)
+            return
+        self._search_result_lbl.setText(f"Найдено: {len(results)} сообщ. — переход к последнему")
+        self._search_result_lbl.setVisible(True)
+        # Прокрутить к последнему результату (самому новому после reverse на сервере)
+        target_id = results[-1].get("id")
+        if target_id:
+            self._scroll_to_msg_id(target_id)
+
+    def _scroll_to_msg_id(self, msg_id: int):
+        """Найти пузырь с данным msg_id и прокрутить к нему."""
+        layout = self._messages_layout
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if not item:
+                continue
+            w = item.widget()
+            if isinstance(w, ChatMessageBubble) and w.msg_id == msg_id:
+                self._scroll.ensureWidgetVisible(w)
+                return
+        # Если не нашли (может быть вне загруженных) — показываем подсказку
+        self._search_result_lbl.setText(f"Сообщение #{msg_id} вне загруженной истории")
 
     # ===========================================================
     # Диалог участников

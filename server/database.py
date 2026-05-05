@@ -1221,11 +1221,43 @@ def _auto_migrate_columns():
         logger.warning(f"auto-migrate warning: {e}")
 
 
+def _ensure_chat_indexes():
+    """Создать составные индексы для таблиц чата если не существуют."""
+    if engine.dialect.name != "postgresql":
+        return
+    import logging
+
+    from sqlalchemy import text as _text
+
+    logger = logging.getLogger(__name__)
+    indexes = [
+        (
+            "idx_internal_chat_messages_chat_id_desc",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_internal_chat_messages_chat_id_desc ON internal_chat_messages(chat_id, id DESC) WHERE is_deleted = FALSE",
+        ),
+        (
+            "idx_internal_chat_members_chat_employee",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_internal_chat_members_chat_employee ON internal_chat_members(chat_id, employee_id) WHERE is_active = TRUE",
+        ),
+    ]
+    try:
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            for name, sql in indexes:
+                try:
+                    conn.execute(_text(sql))
+                    logger.debug(f"index ensured: {name}")
+                except Exception as e:
+                    logger.debug(f"index hint ({name}): {e}")
+    except Exception as e:
+        logger.warning(f"_ensure_chat_indexes warning: {e}")
+
+
 def init_db():
     """Инициализация базы данных"""
     try:
         Base.metadata.create_all(bind=engine)
         _auto_migrate_columns()
+        _ensure_chat_indexes()
     except Exception as e:
         # Race condition при 2+ workers: один уже создал таблицы
         import logging

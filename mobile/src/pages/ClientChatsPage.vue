@@ -184,6 +184,7 @@ async function loadChats() {
 }
 
 function openChat(chat) {
+  activeChatId.value = chat.id
   router.push({ name: 'client-chat-room', params: { chatId: chat.id } })
 }
 

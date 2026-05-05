@@ -102,6 +102,14 @@ class ChatMixin:
         except Exception:
             return False
 
+    def search_chat_messages(self, chat_id: int, q: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Полнотекстовый поиск по сообщениям чата."""
+        try:
+            r = self._request("GET", f"{self.base_url}/api/v1/chats/{chat_id}/messages/search", params={"q": q, "limit": limit})
+            return self._handle_response(r) or []
+        except Exception:
+            return []
+
     # ----------------------------------------------------------
     # Файлы
     # ----------------------------------------------------------

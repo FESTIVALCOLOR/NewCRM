@@ -16,7 +16,7 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from schemas import GuestRegistration, InternalMessageCreate
 from services.chat_service import (
     _ensure_yd_folder,
@@ -325,6 +325,7 @@ async def client_upload_file(
 async def client_stream_file(
     token: str,
     yandex_path: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Стримить файл чата для клиента (аутентификация по chat-токену, без JWT)."""
@@ -361,19 +362,14 @@ async def client_stream_file(
         tmp.close()
         yd_svc.download_file(f"disk:{clean_path}", tmp_path)
 
-        async def _cleanup_tmp():
-            import asyncio
-
-            await asyncio.sleep(2)
+        def _cleanup_tmp():
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
 
-        import asyncio
-
-        asyncio.create_task(_cleanup_tmp())
-        return _FileResponse(tmp_path, media_type=ct, filename=os.path.basename(clean_path))
+        background_tasks.add_task(_cleanup_tmp)
+        return _FileResponse(tmp_path, media_type=ct, filename=os.path.basename(clean_path), background=background_tasks)
     except HTTPException:
         raise
     except Exception as e:

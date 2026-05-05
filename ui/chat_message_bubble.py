@@ -12,6 +12,7 @@ message_type:
     system — серый курсив по центру
 """
 
+from collections import OrderedDict
 from datetime import datetime
 from urllib.parse import quote
 
@@ -32,6 +33,9 @@ from PyQt5.QtWidgets import (
 import sip
 
 from utils.icon_loader import IconLoader
+
+_IMAGE_CACHE: "OrderedDict[str, QPixmap]" = OrderedDict()
+_IMAGE_CACHE_MAX = 60
 
 _STYLE_OWN = """
     QFrame#bubble {
@@ -84,6 +88,10 @@ class ChatMessageBubble(QWidget):
         self._show_phone = show_phone
         self.setAutoFillBackground(False)
         self._setup_ui()
+
+    @property
+    def msg_id(self) -> int:
+        return self._msg.get("id", 0)
 
     def contextMenuEvent(self, event):
         self._show_action_menu(event.globalPos())
@@ -352,20 +360,29 @@ class ChatMessageBubble(QWidget):
                 from urllib.parse import quote as _quote
 
                 stream_url = f"{self._base_url}/api/v1/yadisk/stream?path={_quote(path, safe='/')}&token={self._token}"
-                nam = QNetworkAccessManager(self)
-                self._nam_list = getattr(self, "_nam_list", [])
-                self._nam_list.append(nam)
-                req = QNetworkRequest(QUrl(stream_url))
-                reply_obj = nam.get(req)
+                if stream_url in _IMAGE_CACHE:
+                    _IMAGE_CACHE.move_to_end(stream_url)
+                    pix = _IMAGE_CACHE[stream_url]
+                    thumb_lbl.setPixmap(pix.scaled(40, 40, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                else:
+                    nam = QNetworkAccessManager(self)
+                    self._nam_list = getattr(self, "_nam_list", [])
+                    self._nam_list.append(nam)
+                    req = QNetworkRequest(QUrl(stream_url))
+                    reply_obj = nam.get(req)
 
-                def _on_thumb(r=reply_obj, lbl=thumb_lbl):
-                    data = r.readAll().data()
-                    pix = QPixmap()
-                    pix.loadFromData(data)
-                    if not pix.isNull():
-                        lbl.setPixmap(pix.scaled(40, 40, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                    def _on_thumb(r=reply_obj, lbl=thumb_lbl, url=stream_url):
+                        data = r.readAll().data()
+                        pix = QPixmap()
+                        pix.loadFromData(data)
+                        if not pix.isNull() and not sip.isdeleted(lbl):
+                            _IMAGE_CACHE[url] = pix
+                            _IMAGE_CACHE.move_to_end(url)
+                            while len(_IMAGE_CACHE) > _IMAGE_CACHE_MAX:
+                                _IMAGE_CACHE.popitem(last=False)
+                            lbl.setPixmap(pix.scaled(40, 40, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
 
-                reply_obj.finished.connect(_on_thumb)
+                    reply_obj.finished.connect(_on_thumb)
 
             rb.setCursor(Qt.PointingHandCursor)
             rb.mousePressEvent = lambda e: self.scroll_to_requested.emit(self._msg.get("reply_to_id", 0))
@@ -451,42 +468,55 @@ class ChatMessageBubble(QWidget):
             load_url = url
 
         if load_url:
-            self._img_nam = QNetworkAccessManager(self)
-            req = QNetworkRequest(QUrl(load_url))
-            if self._token and not yandex_path:
-                req.setRawHeader(b"Authorization", f"Bearer {self._token}".encode())
-            reply = self._img_nam.get(req)
 
-            def _on_reply():
-                if reply.error() == 0:
-                    data = reply.readAll()
-                    pix = QPixmap()
-                    if pix.loadFromData(data):
-                        w = min(pix.width(), 380)
-                        h = min(int(pix.height() * w / max(pix.width(), 1)), 320)
-                        h = max(h, 80)
-                        old_h = img_lbl.height()
-                        img_lbl.setFixedWidth(w)
-                        img_lbl.setFixedHeight(h)
-                        img_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-                        img_lbl.setPixmap(pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                        img_lbl.setStyleSheet("border-radius: 6px; background: transparent;")
-                        img_lbl.setToolTip(name)
-                        # Сжать пузырь до ширины изображения (+ горизонтальные отступы 10+10)
-                        if not sip.isdeleted(layout):
-                            bubble_frame = layout.parentWidget()
-                            if bubble_frame and not sip.isdeleted(bubble_frame):
-                                bubble_frame.setMaximumWidth(w + 20)
-                                bubble_frame.setMinimumWidth(min(w + 20, 120))
-                                bubble_frame.updateGeometry()
-                        if not sip.isdeleted(self):
-                            self.updateGeometry()
-                            delta = h - old_h
-                            if delta != 0:
-                                self.height_changed.emit(delta)
-                reply.deleteLater()
+            def _apply_pixmap(pix: QPixmap):
+                if sip.isdeleted(img_lbl):
+                    return
+                w = min(pix.width(), 380)
+                h = min(int(pix.height() * w / max(pix.width(), 1)), 320)
+                h = max(h, 80)
+                old_h = img_lbl.height()
+                img_lbl.setFixedWidth(w)
+                img_lbl.setFixedHeight(h)
+                img_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                img_lbl.setPixmap(pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                img_lbl.setStyleSheet("border-radius: 6px; background: transparent;")
+                img_lbl.setToolTip(name)
+                if not sip.isdeleted(layout):
+                    bubble_frame = layout.parentWidget()
+                    if bubble_frame and not sip.isdeleted(bubble_frame):
+                        bubble_frame.setMaximumWidth(w + 20)
+                        bubble_frame.setMinimumWidth(min(w + 20, 120))
+                        bubble_frame.updateGeometry()
+                if not sip.isdeleted(self):
+                    self.updateGeometry()
+                    delta = h - old_h
+                    if delta != 0:
+                        self.height_changed.emit(delta)
 
-            reply.finished.connect(_on_reply)
+            if load_url in _IMAGE_CACHE:
+                _IMAGE_CACHE.move_to_end(load_url)
+                _apply_pixmap(_IMAGE_CACHE[load_url])
+            else:
+                self._img_nam = QNetworkAccessManager(self)
+                req = QNetworkRequest(QUrl(load_url))
+                if self._token and not yandex_path:
+                    req.setRawHeader(b"Authorization", f"Bearer {self._token}".encode())
+                reply = self._img_nam.get(req)
+
+                def _on_reply():
+                    if reply.error() == 0:
+                        data = reply.readAll()
+                        pix = QPixmap()
+                        if pix.loadFromData(data):
+                            _IMAGE_CACHE[load_url] = pix
+                            _IMAGE_CACHE.move_to_end(load_url)
+                            while len(_IMAGE_CACHE) > _IMAGE_CACHE_MAX:
+                                _IMAGE_CACHE.popitem(last=False)
+                            _apply_pixmap(pix)
+                    reply.deleteLater()
+
+                reply.finished.connect(_on_reply)
 
         layout.addWidget(img_lbl)
 
