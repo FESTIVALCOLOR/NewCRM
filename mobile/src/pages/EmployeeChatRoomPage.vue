@@ -1309,6 +1309,7 @@ let _audioChunks = []
 let _recordTimer = null
 let _cancelRequested = false
 let _pressStartTime = 0
+let _holdTimer = null
 
 // Поиск по сообщениям
 const showSearch = ref(false)
@@ -1616,11 +1617,15 @@ function scrollToMsg(id) {
   nextTick(() => {
     const el = document.getElementById(`msg-${id}`) ||
                document.querySelector(`[data-msg-id="${id}"]`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      el.classList.add('msg-highlight')
-      setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+    if (!el) return
+    const container = messagesEl.value
+    if (container) {
+      const cRect = container.getBoundingClientRect()
+      const eRect = el.getBoundingClientRect()
+      container.scrollTop = Math.max(0, container.scrollTop + (eRect.top - cRect.top) - cRect.height / 2 + eRect.height / 2)
     }
+    el.classList.add('msg-highlight')
+    setTimeout(() => el.classList.remove('msg-highlight'), 1500)
   })
 }
 
@@ -2170,20 +2175,35 @@ function _getVoiceMimeType() {
 
 function onVoiceBtnDown() {
   _pressStartTime = Date.now()
-  startRecording()
+  _cancelRequested = false
+  // Начать запись только если удержано >= 300мс
+  _holdTimer = setTimeout(() => {
+    _holdTimer = null
+    startRecording()
+  }, 300)
 }
 
 function onVoiceBtnUp() {
-  if (!isRecording.value) return
-  if (Date.now() - _pressStartTime < 300) {
-    cancelRecording()
-    $q.notify({ type: 'info', message: 'Удерживайте кнопку для записи', timeout: 1500 })
-  } else {
-    stopRecording()
+  if (_holdTimer !== null) {
+    // Отпущено до старта записи — просто отменить таймер
+    clearTimeout(_holdTimer)
+    _holdTimer = null
+    return
   }
+  if (!isRecording.value) {
+    // getUserMedia ещё не завершился — пометить как отменённое
+    _cancelRequested = true
+    return
+  }
+  stopRecording()
 }
 
 function onVoiceBtnCancel() {
+  if (_holdTimer !== null) {
+    clearTimeout(_holdTimer)
+    _holdTimer = null
+    return
+  }
   if (isRecording.value) cancelRecording()
 }
 
@@ -2198,8 +2218,12 @@ function cancelRecording() {
 async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // Проверить, не отменил ли пользователь пока шёл getUserMedia
+    if (_cancelRequested) {
+      stream.getTracks().forEach(t => t.stop())
+      return
+    }
     _audioChunks = []
-    _cancelRequested = false
     const mimeType = _getVoiceMimeType()
     _mediaRecorder = new MediaRecorder(stream, ...(mimeType ? [{ mimeType }] : []))
     _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data) }
@@ -2239,13 +2263,16 @@ async function _uploadVoice(file) {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('message_type', 'voice')
+  const dismiss = $q.notify({ group: false, spinner: true, message: 'Отправка голосового…', timeout: 0 })
   try {
     const { data } = await api.post(`/api/v1/chats/${chatId}/files`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    dismiss()
     const exists = messages.value.some(m => m.id === data.id)
     if (!exists) { messages.value.push(data); scrollToBottom() }
-  } catch (e) {
+  } catch {
+    dismiss()
     $q.notify({ type: 'negative', message: 'Ошибка загрузки голосового', timeout: 2000 })
   }
 }

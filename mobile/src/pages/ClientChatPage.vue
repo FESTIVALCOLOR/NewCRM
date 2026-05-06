@@ -524,6 +524,7 @@ let _audioChunks = []
 let _recordTimer = null
 let _cancelRequested = false
 let _pressStartTime = 0
+let _holdTimer = null
 
 // Ключ хранения последнего прочитанного сообщения в localStorage
 const _lastReadKey = `chat_last_read_${activeToken}`
@@ -925,20 +926,32 @@ function _getVoiceMimeType() {
 
 function onVoiceBtnDown() {
   _pressStartTime = Date.now()
-  startRecording()
+  _cancelRequested = false
+  _holdTimer = setTimeout(() => {
+    _holdTimer = null
+    startRecording()
+  }, 300)
 }
 
 function onVoiceBtnUp() {
-  if (!isRecording.value) return
-  if (Date.now() - _pressStartTime < 300) {
-    cancelRecording()
-    $q.notify({ type: 'info', message: 'Удерживайте кнопку для записи', timeout: 1500 })
-  } else {
-    stopRecording()
+  if (_holdTimer !== null) {
+    clearTimeout(_holdTimer)
+    _holdTimer = null
+    return
   }
+  if (!isRecording.value) {
+    _cancelRequested = true
+    return
+  }
+  stopRecording()
 }
 
 function onVoiceBtnCancel() {
+  if (_holdTimer !== null) {
+    clearTimeout(_holdTimer)
+    _holdTimer = null
+    return
+  }
   if (isRecording.value) cancelRecording()
 }
 
@@ -953,8 +966,11 @@ function cancelRecording() {
 async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    if (_cancelRequested) {
+      stream.getTracks().forEach(t => t.stop())
+      return
+    }
     _audioChunks = []
-    _cancelRequested = false
     const mimeType = _getVoiceMimeType()
     _mediaRecorder = new MediaRecorder(stream, ...(mimeType ? [{ mimeType }] : []))
     _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data) }
@@ -990,11 +1006,14 @@ async function _uploadGuestVoice(file) {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('message_type', 'voice')
+  const dismiss = $q.notify({ group: false, spinner: true, message: 'Отправка голосового…', timeout: 0 })
   try {
     const { data } = await axios.post(`/api/v1/client-chat/${activeToken}/files`, fd)
+    dismiss()
     const exists = messages.value.some(m => m.id === data.id)
     if (!exists) { messages.value.push(data); scrollToBottom() }
   } catch {
+    dismiss()
     $q.notify({ type: 'negative', message: 'Ошибка загрузки голосового', timeout: 2000 })
   }
 }
