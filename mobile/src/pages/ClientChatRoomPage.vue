@@ -1832,7 +1832,7 @@ async function goToSearchResult(msg) {
   searchQuery.value = ''
   searchResults.value = []
   await nextTick()
-  await scrollToPinnedMsg(msg)
+  scrollToMsg(msg.id)
 }
 
 function selectScript(s) {
