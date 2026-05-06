@@ -423,7 +423,7 @@
                 <template v-else-if="msg.message_type === 'voice'">
                   <audio
                     controls
-                    preload="none"
+                    preload="metadata"
                     :src="msg.file_url || imgStreamUrl(msg)"
                     style="height: 36px; width: 220px; display: block; border-radius: 8px"
                   />
@@ -1771,6 +1771,21 @@ function _getVoiceMimeType() {
   return candidates.find(t => MediaRecorder.isTypeSupported(t)) || ''
 }
 
+async function _fixWebmDuration(blob, durationSec) {
+  try {
+    const buf = await blob.arrayBuffer()
+    const u8 = new Uint8Array(buf)
+    for (let i = 0; i < u8.length - 11; i++) {
+      if (u8[i] === 0x44 && u8[i + 1] === 0x89 && u8[i + 2] === 0x88) {
+        const view = new DataView(buf)
+        view.setFloat64(i + 3, durationSec * 1000, false)
+        return new Blob([buf], { type: blob.type })
+      }
+    }
+  } catch {}
+  return blob
+}
+
 function onVoiceBtnDown(e) {
   try { e?.currentTarget?.setPointerCapture(e.pointerId) } catch {}
   _pressStartTime = Date.now()
@@ -1826,11 +1841,12 @@ async function startRecording() {
       stream.getTracks().forEach(t => t.stop())
       if (_cancelRequested) return
       const mt = _mediaRecorder.mimeType || mimeType || 'audio/webm'
-      const blob = new Blob(_audioChunks, { type: mt })
-      if (blob.size === 0) {
+      const rawBlob = new Blob(_audioChunks, { type: mt })
+      if (rawBlob.size === 0) {
         $q.notify({ type: 'negative', message: 'Запись пуста — попробуйте ещё раз', timeout: 2000 })
         return
       }
+      const blob = await _fixWebmDuration(rawBlob, recordSeconds.value)
       const ext = mt.includes('ogg') ? '.ogg' : mt.includes('mp4') ? '.m4a' : '.webm'
       const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
       const file = new File([blob], `voice_${ts}${ext}`, { type: mt })
@@ -1907,9 +1923,7 @@ async function goToSearchResult(msg) {
   const el = container.querySelector(`#msg-${msg.id}`) ||
              container.querySelector(`[data-msg-id="${msg.id}"]`)
   if (!el) { setupTopObserver(); return }
-  const cRect = container.getBoundingClientRect()
-  const eRect = el.getBoundingClientRect()
-  container.scrollTop = Math.max(0, container.scrollTop + (eRect.top - cRect.top) - cRect.height / 2 + eRect.height / 2)
+  el.scrollIntoView({ block: 'center', behavior: 'instant' })
   el.classList.add('msg-highlight')
   setTimeout(() => el.classList.remove('msg-highlight'), 1500)
   setTimeout(() => setupTopObserver(), 300)
