@@ -236,10 +236,13 @@
               <template v-else-if="msg.message_type === 'voice'">
                 <audio
                   controls
-                  preload="metadata"
-                  :src="msg.file_url || imgStreamUrl(msg)"
+                  preload="none"
+                  :src="imgStreamUrl(msg)"
                   style="height: 36px; width: 220px; display: block; border-radius: 8px"
                 />
+                <div v-if="msg.content" class="text-caption text-grey-6" style="margin-top: 2px; font-size: 11px">
+                  {{ fmtDuration(msg.content) }}
+                </div>
               </template>
 
               <template v-else>
@@ -555,6 +558,12 @@ const typingText = computed(() => {
   if (names.length === 1) return `${names[0]} печатает…`
   return `${names.join(', ')} печатают…`
 })
+
+function fmtDuration(sec) {
+  const s = parseInt(sec) || 0
+  const m = Math.floor(s / 60)
+  return `${m}:${String(s % 60).padStart(2, '0')}`
+}
 
 function isOwn(msg) {
   // Сравниваем по персональному токену (после регистрации) или основной ссылке
@@ -1022,6 +1031,7 @@ async function _uploadGuestVoice(file) {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('message_type', 'voice')
+  fd.append('caption', String(recordSeconds.value))
   const dismiss = $q.notify({ group: false, spinner: true, message: 'Отправка голосового…', timeout: 0 })
   try {
     const { data } = await axios.post(`/api/v1/client-chat/${activeToken}/files`, fd)

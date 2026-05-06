@@ -265,6 +265,7 @@ async def client_upload_file(
     token: str,
     file: UploadFile = File(...),
     message_type: str = Form("file"),
+    caption: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Клиент загружает файл/голос/фото."""
@@ -312,6 +313,7 @@ async def client_upload_file(
         message_type=message_type,
         sender_guest_token=token,
         sender_display_name=guest.guest_name,
+        content=caption.strip() if caption else None,
     )
     await ws_manager.broadcast(
         chat.id,
